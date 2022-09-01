@@ -1,0 +1,17 @@
+[package]
+name = "zero_eth_trie_utils"
+description = "Types and utility functions for building/working with partial Ethereum tries."
+version = "0.1.0"
+authors = ["Polygon Zero <bgluth@polygon.technology>"]
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.64"
+ethereum-types = "0.13.1"
+itertools = "0.10.3"
+log = "0.4.17"
+num-traits = "0.2.15"
+hex = "0.4.3"
+
+[dev-dependencies]
+pretty_env_logger = "0.4.0"
