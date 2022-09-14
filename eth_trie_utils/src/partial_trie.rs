@@ -1,11 +1,11 @@
-use std::{fmt::Display, ops::Range};
+use std::{fmt::Debug, fmt::Display, ops::Range};
 
 use ethereum_types::U256;
 
 use crate::{
     trie_builder::Nibble,
     types::EthAddress,
-    utils::{create_mask_of_1s, is_even},
+    utils::{create_mask_of_1s, is_even, u256_as_hex_string},
 };
 
 #[derive(Clone, Debug)]
@@ -32,7 +32,7 @@ pub enum PartialTrie {
     Leaf { nibbles: Nibbles, value: Vec<u8> },
 }
 
-#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 /// A sequence of nibbles.
 pub struct Nibbles {
     /// The number of nibbles in this sequence.
@@ -44,7 +44,17 @@ pub struct Nibbles {
 
 impl Display for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "0x{}", self.packed)
+        write!(f, "{}", u256_as_hex_string(&self.packed))
+    }
+}
+
+// Manual impl in order to print `packed` nicely.
+impl Debug for Nibbles {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Nibbles")
+            .field("count", &self.count)
+            .field("packed", &u256_as_hex_string(&self.packed))
+            .finish()
     }
 }
 
