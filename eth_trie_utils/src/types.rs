@@ -23,12 +23,7 @@ mod tests {
         let addr = EthAddress::from(0x12);
         let nib = Nibbles::from(addr);
 
-        // 0x1F vs 0x21
-
-        // 0x12 --> 0001 0010
-        //  8
-
         assert_eq!(nib.count, 2);
-        assert_eq!(nib.packed, EthAddress::from(0x21));
+        assert_eq!(nib.packed, EthAddress::from(0x12));
     }
 }

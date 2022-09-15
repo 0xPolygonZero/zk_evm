@@ -120,9 +120,9 @@ impl Nibbles {
     }
 
     /// Splits the `Nibbles` at the given index, returning two `Nibbles`.
-    /// Specifically, if `0x1234` is split at `1`, we get `0x1` and `0x234`.
+    /// Specifically, if `0x1234` is split at `1`, we get `0x12` and `0x34`.
     pub fn split_at_idx(&self, idx: usize) -> (Nibbles, Nibbles) {
-        let post_count = self.count - idx;
+        let post_count = self.count - idx - 1;
         let post_mask = create_mask_of_1s(post_count * 4);
 
         let post = Nibbles {
@@ -133,7 +133,7 @@ impl Nibbles {
         let pre_mask = !post_mask;
         let pre_shift_amt = post_count * 4;
         let pre = Nibbles {
-            count: idx,
+            count: idx + 1,
             packed: (self.packed & pre_mask) >> pre_shift_amt,
         };
 
@@ -141,17 +141,19 @@ impl Nibbles {
     }
 
     pub fn split_at_idx_prefix(&self, idx: usize) -> Nibbles {
-        let shift_amt = (self.count - idx) * 4;
-        let pre_mask = create_mask_of_1s(idx * 4) << shift_amt;
+        let adj_idx = idx + 1;
+        let shift_amt = (self.count - adj_idx) * 4;
+        let pre_mask = create_mask_of_1s(adj_idx * 4) << shift_amt;
 
         Nibbles {
-            count: idx,
+            count: adj_idx,
             packed: (self.packed & pre_mask) >> shift_amt,
         }
     }
 
     pub fn split_at_idx_postfix(&self, idx: usize) -> Nibbles {
-        let postfix_count = self.count - idx;
+        let adj_idx = idx + 1;
+        let postfix_count = self.count - adj_idx;
         let mask = create_mask_of_1s(postfix_count * 4);
 
         Nibbles {
@@ -248,28 +250,28 @@ mod tests {
     fn split_at_idx_works() {
         let n = nibbles(0x1234);
 
-        assert_eq!(n.split_at_idx(0), (nibbles(0x0), nibbles(0x1234)));
-        assert_eq!(n.split_at_idx(1), (nibbles(0x1), nibbles(0x234)));
-        assert_eq!(n.split_at_idx(2), (nibbles(0x12), nibbles(0x34)));
-        assert_eq!(n.split_at_idx(3), (nibbles(0x123), nibbles(0x4)));
+        assert_eq!(n.split_at_idx(0), (nibbles(0x1), nibbles(0x234)));
+        assert_eq!(n.split_at_idx(1), (nibbles(0x12), nibbles(0x34)));
+        assert_eq!(n.split_at_idx(2), (nibbles(0x123), nibbles(0x4)));
+        assert_eq!(n.split_at_idx(3), (nibbles(0x1234), nibbles(0x0)));
     }
 
     #[test]
     fn split_at_idx_prefix_works() {
         let n = nibbles(0x1234);
 
-        assert_eq!(n.split_at_idx_prefix(0), nibbles(0x0));
-        assert_eq!(n.split_at_idx_prefix(1), nibbles(0x1));
-        assert_eq!(n.split_at_idx_prefix(3), nibbles(0x123));
+        assert_eq!(n.split_at_idx_prefix(0), nibbles(0x1));
+        assert_eq!(n.split_at_idx_prefix(1), nibbles(0x12));
+        assert_eq!(n.split_at_idx_prefix(3), nibbles(0x1234));
     }
 
     #[test]
     fn split_at_idx_postfix_works() {
         let n = nibbles(0x1234);
 
-        assert_eq!(n.split_at_idx_postfix(0), nibbles(0x1234));
-        assert_eq!(n.split_at_idx_postfix(1), nibbles(0x234));
-        assert_eq!(n.split_at_idx_postfix(3), nibbles(0x4));
+        assert_eq!(n.split_at_idx_postfix(0), nibbles(0x234));
+        assert_eq!(n.split_at_idx_postfix(1), nibbles(0x34));
+        assert_eq!(n.split_at_idx_postfix(3), nibbles(0x0));
     }
 
     #[test]

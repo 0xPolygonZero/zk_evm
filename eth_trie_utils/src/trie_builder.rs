@@ -4,10 +4,7 @@ use ethereum_types::U256;
 use itertools::Itertools;
 use log::trace;
 
-use crate::{
-    partial_trie::{Nibbles, PartialTrie},
-    types::EthAddress,
-};
+use crate::partial_trie::{Nibbles, PartialTrie};
 
 // Use a whole byte for a Nibble just for convenience
 pub(crate) type Nibble = u8;
@@ -152,42 +149,36 @@ fn insert_into_trie_rec(
             // Note: Child is guaranteed to be a branch.
             assert!(matches!(**child, PartialTrie::Branch { .. }), "Extension node child should be guaranteed to be a branch, but wasn't! (Ext node: {:?})", node);
 
-            let new_node_nibbles_at_position = new_node.nibbles.get_nibble_range(0..nibbles.count);
+            let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
 
-            // If the nibbles match, then there is no need to split the extension node.
-            match *nibbles == new_node_nibbles_at_position {
-                false => {
-                    return Some(split_extension_node(
-                        child.clone(),
-                        new_node,
-                        nibbles,
-                        &new_node_nibbles_at_position,
-                    ));
-                }
-                true => {
-                    // No change. Keep traversing.
-                    let num_ext_nibbles = nibbles.count;
-                    new_node.truncate_n_nibbles(num_ext_nibbles);
+            let updated_existing_node = match info.new_postfix.count {
+                0 => child.clone(),
+                _ => Box::new(PartialTrie::Extension {
+                    nibbles: info.new_postfix,
+                    child: child.clone(),
+                }),
+            };
 
-                    if let Some(updated_node) = insert_into_trie_rec(child, new_node) {
-                        *child = updated_node;
-                    }
-                }
-            }
-        }
-        PartialTrie::Leaf { nibbles, value } => {
-            // // Assume that the leaf and new entry key differ?
-            // let new_node_nibbles_at_depth =
-            //     Nibbles::get_nibble_range_from_eth_addr(&new_node.nibbles, depth..(depth
-            // + nibbles.count));
-
-            assert!(*nibbles != new_node.nibbles, "Tried inserting a node that already existed in the trie! (new: {:?}, existing: {:?})", new_node, node);
-            let existing_leaf_nibbles = *nibbles;
-
-            return Some(split_leaf_node(
-                value.clone(),
+            return Some(place_branch_and_potentially_ext_prefix(
+                &info,
+                updated_existing_node,
                 new_node,
-                &existing_leaf_nibbles,
+            ));
+        }
+        PartialTrie::Leaf { nibbles, value: _ } => {
+            // Assume that the leaf and new entry key differ?
+            assert!(*nibbles != new_node.nibbles, "Tried inserting a node that already existed in the trie! (new: {:?}, existing: {:?})", new_node, node);
+
+            let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
+
+            // This existing leaf is going in a branch, so we need to truncate the first
+            // nibble since it's going to be represented by the branch.
+            *nibbles = nibbles.truncate_n_nibbles(2);
+
+            return Some(place_branch_and_potentially_ext_prefix(
+                &info,
+                Box::new(node.clone()),
+                new_node,
             ));
         }
         PartialTrie::Hash(_) => unreachable!(
@@ -198,136 +189,61 @@ fn insert_into_trie_rec(
     None
 }
 
-fn split_extension_node(
-    existing_ext_child: Box<PartialTrie>,
-    new_node: TrieEntry,
-    existing_ext_nibbles: &Nibbles,
-    _new_node_nibbles_at_depth: &Nibbles,
-) -> Box<PartialTrie> {
-    let (pre, post) =
-        new_node
-            .nibbles
-            .split_at_idx(Nibbles::find_nibble_idx_that_differs_between_nibbles(
-                &new_node.nibbles,
-                existing_ext_nibbles,
-            ));
-    let lower_extension_nibbles = post.truncate_n_nibbles(1);
-
-    let node_that_goes_into_new_branch = match lower_extension_nibbles.count > 0 {
-        false => {
-            // The new branch we insert will cover the one nibble that we would
-            // otherwise have an extension node for.
-            existing_ext_child
-        }
-        true => {
-            trace!("CREATING EXT NODE!");
-
-            // We need to create another extension node after the branch to cover
-            // the repeated nibbles.
-            Box::new(PartialTrie::Extension {
-                nibbles: lower_extension_nibbles,
-                child: existing_ext_child,
-            })
-        }
-    };
-
-    split_common(node_that_goes_into_new_branch, new_node, pre, post)
-}
-
-fn split_leaf_node(
-    existing_leaf_data: Vec<u8>,
-    new_node: TrieEntry,
-    existing_leaf_nibbles: &Nibbles,
-) -> Box<PartialTrie> {
+fn get_pre_and_postfixes_for_existing_and_new_nodes(
+    existing_node_nibbles: &Nibbles,
+    new_node_nibbles: &Nibbles,
+) -> ExistingAndNewNodePreAndPost {
     let nib_idx_of_difference = Nibbles::find_nibble_idx_that_differs_between_nibbles(
-        existing_leaf_nibbles,
-        &new_node.nibbles,
+        existing_node_nibbles,
+        new_node_nibbles,
     );
 
-    let common_prefix = existing_leaf_nibbles.split_at_idx_prefix(nib_idx_of_difference);
-    let existing_leaf_postfix = existing_leaf_nibbles.split_at_idx_postfix(nib_idx_of_difference);
-    let _new_node_postfix = new_node.nibbles.split_at_idx_postfix(nib_idx_of_difference);
+    let (common_prefix, existing_postfix) =
+        existing_node_nibbles.split_at_idx(nib_idx_of_difference);
+    let new_postfix = new_node_nibbles.split_at_idx_postfix(nib_idx_of_difference);
 
-    trace!(
-        "EXISTING LEAF POSTFIX: {}",
-        nibbles_to_human_readable_string(&existing_leaf_postfix)
-    );
-
-    // Remove one nibble since the new branch is going to contain one nibble of the
-    // leaf.
-    let updated_leaf_nibbles = existing_leaf_postfix.truncate_n_nibbles(1);
-
-    let updated_existing_leaf = Box::new(PartialTrie::Leaf {
-        nibbles: updated_leaf_nibbles,
-        value: existing_leaf_data,
-    });
-
-    trace!(
-        "Updated existing leaf: {}",
-        node_to_human_readable_string(&updated_existing_leaf)
-    );
-
-    split_common(
-        updated_existing_leaf,
-        new_node,
+    ExistingAndNewNodePreAndPost {
         common_prefix,
-        existing_leaf_postfix,
-    )
+        existing_postfix,
+        new_postfix,
+    }
 }
 
-fn split_common(
-    updated_existing_node_that_goes_into_new_branch: Box<PartialTrie>,
+struct ExistingAndNewNodePreAndPost {
+    common_prefix: Nibbles,
+    existing_postfix: Nibbles,
+    new_postfix: Nibbles,
+}
+
+fn place_branch_and_potentially_ext_prefix(
+    info: &ExistingAndNewNodePreAndPost,
+    existing_node: Box<PartialTrie>,
     new_node: TrieEntry,
-    pre: Nibbles,
-    post: Nibbles,
 ) -> Box<PartialTrie> {
-    // Where they differ, insert a branch node.
-    let mut branch_children = new_branch_child_arr();
-    let first_nibble_of_post = post.get_nibble(0);
-    branch_children[first_nibble_of_post as usize] =
-        updated_existing_node_that_goes_into_new_branch;
+    // `1` since the first nibble is being represented by the branch.
+    let existing_first_nibble = info.existing_postfix.get_nibble(0);
+    let new_first_nibble = info.new_postfix.get_nibble(0);
 
-    let first_nibble_of_ins_node = new_node.nibbles.get_nibble(0);
-
-    // Guaranteed to not collide with other node, so we can also insert directly.
-    assert!(matches!(
-        &*branch_children[first_nibble_of_ins_node as usize],
-        &PartialTrie::Empty
-    ));
-
-    branch_children[first_nibble_of_ins_node as usize] = Box::new(PartialTrie::Leaf {
-        nibbles: new_node.nibbles.truncate_n_nibbles(1),
+    let mut children = new_branch_child_arr();
+    children[existing_first_nibble as usize] = existing_node;
+    children[new_first_nibble as usize] = Box::new(PartialTrie::Leaf {
+        nibbles: new_node.nibbles.truncate_n_nibbles(2),
         value: new_node.v,
     });
-
     let branch = Box::new(PartialTrie::Branch {
-        children: branch_children,
+        children,
         value: None,
     });
 
-    let new_first_node = match pre.count > 0 {
-        false => {
-            // Replace ext node with a branch.
-            branch
-        }
-        true => {
-            // Keep ext node, but shorten it and insert a branch at the diverge
-            // point.
-            Box::new(PartialTrie::Extension {
-                nibbles: pre,
-                child: branch,
-            })
-        }
-    };
-
-    trace!(
-        "Split into a:\n{}",
-        node_to_human_readable_string(&new_first_node)
-    );
-
-    // The redundant let binding I think helps with readability here.
-    #[allow(clippy::let_and_return)]
-    new_first_node
+    trace!("COMMON PREFIX: {}", info.common_prefix);
+    match info.common_prefix.count {
+        0 => branch,
+        // TODO: Remove the redundant clone...
+        _ => Box::new(PartialTrie::Extension {
+            nibbles: info.common_prefix,
+            child: branch,
+        }),
+    }
 }
 
 fn new_branch_child_arr() -> [Box<PartialTrie>; 16] {
@@ -351,19 +267,6 @@ fn new_branch_child_arr() -> [Box<PartialTrie>; 16] {
         Box::new(PartialTrie::Empty),
         Box::new(PartialTrie::Empty),
     ]
-}
-
-fn shift_nibbles_out(n: &mut Nibbles, amt: usize) {
-    n.packed >>= 4 * amt;
-    n.count -= 1;
-}
-
-fn eth_addr_to_nibbles(addr: EthAddress) -> Nibbles {
-    // Note: `bits()` is always >= 1.
-    Nibbles {
-        count: (addr.bits() + 3) / 4,
-        packed: addr,
-    }
 }
 
 fn node_to_human_readable_string(node: &PartialTrie) -> String {
@@ -415,7 +318,6 @@ mod tests {
     use super::{construct_trie_from_inserts, Nibble, TrieEntry};
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
-        trie_builder::{nibbles_to_human_readable_string, TrieNodeType},
         types::EthAddress,
     };
 
@@ -456,10 +358,7 @@ mod tests {
         seen_entries: &mut HashSet<TrieEntry>,
         curr_k: Nibbles,
     ) {
-        trace!(
-            "Entry collection traversed node type: {:?}",
-            TrieNodeType::from(trie)
-        );
+        trace!("Entry collection traversed node: {:?}", trie);
 
         match trie {
             PartialTrie::Empty => (),
@@ -468,8 +367,6 @@ mod tests {
                 trace!("Branch loop start");
                 for (branch_nib, child) in children.iter().enumerate() {
                     let new_k = append_nibble_to_nibbles(&curr_k, branch_nib as u8);
-                    // let new_k = create_nibbles_by_shifting_out(&curr_k.packed, 1);
-                    trace!("New nibble after branch: {}", nibbles_to_human_readable_string(&new_k));
                     get_entries_in_trie_rec(child, seen_entries, new_k);
                 }
                 trace!("Branch loop end");
