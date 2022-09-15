@@ -120,9 +120,9 @@ impl Nibbles {
     }
 
     /// Splits the `Nibbles` at the given index, returning two `Nibbles`.
-    /// Specifically, if `0x1234` is split at `1`, we get `0x12` and `0x34`.
+    /// Specifically, if `0x1234` is split at `1`, we get `0x1` and `0x234`.
     pub fn split_at_idx(&self, idx: usize) -> (Nibbles, Nibbles) {
-        let post_count = self.count - idx - 1;
+        let post_count = self.count - idx;
         let post_mask = create_mask_of_1s(post_count * 4);
 
         let post = Nibbles {
@@ -133,7 +133,7 @@ impl Nibbles {
         let pre_mask = !post_mask;
         let pre_shift_amt = post_count * 4;
         let pre = Nibbles {
-            count: idx + 1,
+            count: idx,
             packed: (self.packed & pre_mask) >> pre_shift_amt,
         };
 
@@ -141,19 +141,17 @@ impl Nibbles {
     }
 
     pub fn split_at_idx_prefix(&self, idx: usize) -> Nibbles {
-        let adj_idx = idx + 1;
-        let shift_amt = (self.count - adj_idx) * 4;
-        let pre_mask = create_mask_of_1s(adj_idx * 4) << shift_amt;
+        let shift_amt = (self.count - idx) * 4;
+        let pre_mask = create_mask_of_1s(idx * 4) << shift_amt;
 
         Nibbles {
-            count: adj_idx,
+            count: idx,
             packed: (self.packed & pre_mask) >> shift_amt,
         }
     }
 
     pub fn split_at_idx_postfix(&self, idx: usize) -> Nibbles {
-        let adj_idx = idx + 1;
-        let postfix_count = self.count - adj_idx;
+        let postfix_count = self.count - idx;
         let mask = create_mask_of_1s(postfix_count * 4);
 
         Nibbles {
@@ -172,14 +170,20 @@ impl Nibbles {
 
     /// Finds the nibble idx that differs between two nibbles.
     pub fn find_nibble_idx_that_differs_between_nibbles(n1: &Nibbles, n2: &Nibbles) -> usize {
-        let mut curr_mask: U256 = 0xf.into();
+        // Good assumption?
+        assert_eq!(
+            n1.count, n2.count,
+            "Tried finding the differing nibble between two nibbles with different sizes! ({}, {})",
+            n1, n2
+        );
 
-        for i in 0..64 {
+        let mut curr_mask: U256 = (U256::from(0xf)) << ((n1.count - 1) * 4);
+        for i in 0..n1.count {
             if n1.packed & curr_mask != n2.packed & curr_mask {
                 return i;
             }
 
-            curr_mask <<= 4;
+            curr_mask >>= 4;
         }
 
         panic!(
@@ -250,28 +254,28 @@ mod tests {
     fn split_at_idx_works() {
         let n = nibbles(0x1234);
 
-        assert_eq!(n.split_at_idx(0), (nibbles(0x1), nibbles(0x234)));
-        assert_eq!(n.split_at_idx(1), (nibbles(0x12), nibbles(0x34)));
-        assert_eq!(n.split_at_idx(2), (nibbles(0x123), nibbles(0x4)));
-        assert_eq!(n.split_at_idx(3), (nibbles(0x1234), nibbles(0x0)));
+        assert_eq!(n.split_at_idx(0), (nibbles(0x0), nibbles(0x1234)));
+        assert_eq!(n.split_at_idx(1), (nibbles(0x1), nibbles(0x234)));
+        assert_eq!(n.split_at_idx(2), (nibbles(0x12), nibbles(0x34)));
+        assert_eq!(n.split_at_idx(3), (nibbles(0x123), nibbles(0x4)));
     }
 
     #[test]
     fn split_at_idx_prefix_works() {
         let n = nibbles(0x1234);
 
-        assert_eq!(n.split_at_idx_prefix(0), nibbles(0x1));
-        assert_eq!(n.split_at_idx_prefix(1), nibbles(0x12));
-        assert_eq!(n.split_at_idx_prefix(3), nibbles(0x1234));
+        assert_eq!(n.split_at_idx_prefix(0), nibbles(0x0));
+        assert_eq!(n.split_at_idx_prefix(1), nibbles(0x1));
+        assert_eq!(n.split_at_idx_prefix(3), nibbles(0x123));
     }
 
     #[test]
     fn split_at_idx_postfix_works() {
         let n = nibbles(0x1234);
 
-        assert_eq!(n.split_at_idx_postfix(0), nibbles(0x234));
-        assert_eq!(n.split_at_idx_postfix(1), nibbles(0x34));
-        assert_eq!(n.split_at_idx_postfix(3), nibbles(0x0));
+        assert_eq!(n.split_at_idx_postfix(0), nibbles(0x1234));
+        assert_eq!(n.split_at_idx_postfix(1), nibbles(0x234));
+        assert_eq!(n.split_at_idx_postfix(3), nibbles(0x4));
     }
 
     #[test]
@@ -289,5 +293,30 @@ mod tests {
         assert_eq!(nibbles(0x12).merge(&nibbles(0x0)), nibbles(0x12));
         assert_eq!(nibbles(0x0).merge(&nibbles(0x34)), nibbles(0x34));
         assert_eq!(nibbles(0x0).merge(&nibbles(0x0)), nibbles(0x0));
+    }
+
+    #[test]
+    fn find_nibble_idx_that_differs_between_nibbles_works() {
+        assert_eq!(
+            Nibbles::find_nibble_idx_that_differs_between_nibbles(
+                &nibbles(0x1234),
+                &nibbles(0x2567)
+            ),
+            0
+        );
+        assert_eq!(
+            Nibbles::find_nibble_idx_that_differs_between_nibbles(
+                &nibbles(0x1234),
+                &nibbles(0x1256)
+            ),
+            2
+        );
+        assert_eq!(
+            Nibbles::find_nibble_idx_that_differs_between_nibbles(
+                &nibbles(0x1234),
+                &nibbles(0x1235)
+            ),
+            3
+        );
     }
 }

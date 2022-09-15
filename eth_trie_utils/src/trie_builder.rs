@@ -173,7 +173,7 @@ fn insert_into_trie_rec(
 
             // This existing leaf is going in a branch, so we need to truncate the first
             // nibble since it's going to be represented by the branch.
-            *nibbles = nibbles.truncate_n_nibbles(2);
+            *nibbles = nibbles.truncate_n_nibbles(info.common_prefix.count + 1);
 
             return Some(place_branch_and_potentially_ext_prefix(
                 &info,
@@ -202,6 +202,9 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
         existing_node_nibbles.split_at_idx(nib_idx_of_difference);
     let new_postfix = new_node_nibbles.split_at_idx_postfix(nib_idx_of_difference);
 
+    trace!("IDX OF DIFF: {}", nib_idx_of_difference);
+    trace!("COMMON: {}", common_prefix);
+
     ExistingAndNewNodePreAndPost {
         common_prefix,
         existing_postfix,
@@ -227,7 +230,9 @@ fn place_branch_and_potentially_ext_prefix(
     let mut children = new_branch_child_arr();
     children[existing_first_nibble as usize] = existing_node;
     children[new_first_nibble as usize] = Box::new(PartialTrie::Leaf {
-        nibbles: new_node.nibbles.truncate_n_nibbles(2),
+        nibbles: new_node
+            .nibbles
+            .truncate_n_nibbles(info.common_prefix.count + 1),
         value: new_node.v,
     });
     let branch = Box::new(PartialTrie::Branch {
@@ -428,7 +433,7 @@ mod tests {
         common_setup();
         let entries = [entry(0x1234), entry(0x5678)];
 
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries)
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
 
     #[test]
@@ -436,12 +441,15 @@ mod tests {
         common_setup();
         let entries = [entry(0x1234), entry(0x1567)];
 
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries)
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
 
     #[test]
     fn two_inserts_that_differ_on_last_nibble_works() {
-        todo!()
+        common_setup();
+        let entries = [entry(0x1234), entry(0x1235)];
+
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
 
     #[test]
