@@ -2,10 +2,10 @@ use std::fmt::Display;
 
 use log::trace;
 
-use crate::partial_trie::{Nibbles, PartialTrie};
-
-// Use a whole byte for a Nibble just for convenience
-pub(crate) type Nibble = u8;
+use crate::{
+    partial_trie::{Nibbles, PartialTrie},
+    types::EthAddress,
+};
 
 #[derive(Debug)]
 /// Simplified trie node type to make logging cleaner.
@@ -30,20 +30,27 @@ impl From<&PartialTrie> for TrieNodeType {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct TrieEntry {
+pub struct InsertEntry {
     pub nibbles: Nibbles,
     pub v: Vec<u8>,
 }
 
-impl Display for TrieEntry {
+impl Display for InsertEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "TrieEntry: (k: {}, v: {:?})", &self.nibbles, self.v)
     }
 }
 
-impl TrieEntry {
+impl InsertEntry {
     pub(crate) fn truncate_n_nibbles(&mut self, n: usize) {
         self.nibbles = self.nibbles.truncate_n_nibbles(n);
+    }
+
+    pub fn from_eth_addr_and_bytes(addr: EthAddress, v: Vec<u8>) -> Self {
+        Self {
+            nibbles: addr.into(),
+            v,
+        }
     }
 }
 
@@ -55,7 +62,9 @@ struct ExistingAndNewNodePreAndPost {
 }
 
 impl PartialTrie {
-    pub fn construct_trie_from_inserts(nodes: impl Iterator<Item = TrieEntry>) -> Box<PartialTrie> {
+    pub fn construct_trie_from_inserts(
+        nodes: impl Iterator<Item = InsertEntry>,
+    ) -> Box<PartialTrie> {
         let mut root = Box::new(PartialTrie::Empty);
 
         for new_entry in nodes {
@@ -69,7 +78,7 @@ impl PartialTrie {
 
     pub fn insert_into_trie(
         root: &mut Box<PartialTrie>,
-        new_entry: TrieEntry,
+        new_entry: InsertEntry,
     ) -> Option<Box<PartialTrie>> {
         trace!("Inserting new leaf node {:?}...", new_entry);
         insert_into_trie_rec(root, new_entry)
@@ -78,7 +87,7 @@ impl PartialTrie {
 
 fn insert_into_trie_rec(
     node: &mut PartialTrie,
-    mut new_node: TrieEntry,
+    mut new_node: InsertEntry,
 ) -> Option<Box<PartialTrie>> {
     trace!("Insert: Traversed {:?}", TrieNodeType::from(&*node));
 
@@ -161,11 +170,6 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
     existing_node_nibbles: &Nibbles,
     new_node_nibbles: &Nibbles,
 ) -> ExistingAndNewNodePreAndPost {
-    trace!(
-        "Existing: {:?}, new: {:?}",
-        existing_node_nibbles,
-        new_node_nibbles
-    );
     let nib_idx_of_difference = Nibbles::find_nibble_idx_that_differs_between_nibbles(
         existing_node_nibbles,
         &new_node_nibbles.get_nibble_range(0..existing_node_nibbles.count),
@@ -174,9 +178,6 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
     let (common_prefix, existing_postfix) =
         existing_node_nibbles.split_at_idx(nib_idx_of_difference);
     let new_postfix = new_node_nibbles.split_at_idx_postfix(nib_idx_of_difference);
-
-    trace!("IDX OF DIFF: {}", nib_idx_of_difference);
-    trace!("COMMON: {}", common_prefix);
 
     ExistingAndNewNodePreAndPost {
         common_prefix,
@@ -188,7 +189,7 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
 fn place_branch_and_potentially_ext_prefix(
     info: &ExistingAndNewNodePreAndPost,
     existing_node: Box<PartialTrie>,
-    new_node: TrieEntry,
+    new_node: InsertEntry,
 ) -> Box<PartialTrie> {
     // `1` since the first nibble is being represented by the branch.
     let existing_first_nibble = info.existing_postfix.get_nibble(0);
@@ -248,28 +249,28 @@ mod tests {
     use ethereum_types::U256;
     use log::info;
 
-    use super::{Nibble, TrieEntry};
+    use super::InsertEntry;
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
         testing_utils::{common_setup, generate_n_random_trie_entries},
-        types::EthAddress,
+        types::{EthAddress, Nibble},
         utils::create_mask_of_1s,
     };
 
     const NUM_RANDOM_INSERTS: usize = 1000;
 
-    fn entry<K: Into<U256>>(k: K) -> TrieEntry {
-        TrieEntry {
+    fn entry<K: Into<U256>>(k: K) -> InsertEntry {
+        InsertEntry {
             nibbles: (k.into()).into(),
             v: Vec::new(),
         }
     }
 
-    fn create_trie_from_inserts(ins: impl Iterator<Item = TrieEntry>) -> Box<PartialTrie> {
+    fn create_trie_from_inserts(ins: impl Iterator<Item = InsertEntry>) -> Box<PartialTrie> {
         PartialTrie::construct_trie_from_inserts(ins)
     }
 
-    fn get_entries_in_trie(trie: &PartialTrie) -> HashSet<TrieEntry> {
+    fn get_entries_in_trie(trie: &PartialTrie) -> HashSet<InsertEntry> {
         info!("Collecting all entries inserted into trie...");
 
         let mut seen_entries = HashSet::new();
@@ -287,7 +288,7 @@ mod tests {
 
     fn get_entries_in_trie_rec(
         trie: &PartialTrie,
-        seen_entries: &mut HashSet<TrieEntry>,
+        seen_entries: &mut HashSet<InsertEntry>,
         curr_k: Nibbles,
     ) {
         match trie {
@@ -307,12 +308,12 @@ mod tests {
             },
             PartialTrie::Leaf { nibbles, value } => {
                 let final_key = curr_k.merge(nibbles);
-                add_entry_to_seen_entries(TrieEntry { nibbles: final_key, v: value.clone() }, seen_entries);
+                add_entry_to_seen_entries(InsertEntry { nibbles: final_key, v: value.clone() }, seen_entries);
             },
         }
     }
 
-    fn add_entry_to_seen_entries(e: TrieEntry, seen_entries: &mut HashSet<TrieEntry>) {
+    fn add_entry_to_seen_entries(e: InsertEntry, seen_entries: &mut HashSet<InsertEntry>) {
         assert!(
             !seen_entries.contains(&e),
             "A duplicate entry exists in the trie! {:?}",
@@ -332,7 +333,7 @@ mod tests {
         }
     }
 
-    fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[TrieEntry]) {
+    fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[InsertEntry]) {
         let trie = create_trie_from_inserts(entries.iter().cloned());
         let entries_in_trie = get_entries_in_trie(&trie);
 

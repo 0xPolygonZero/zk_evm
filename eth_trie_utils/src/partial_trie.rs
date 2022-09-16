@@ -3,8 +3,7 @@ use std::{fmt::Debug, fmt::Display, ops::Range};
 use ethereum_types::U256;
 
 use crate::{
-    trie_builder::Nibble,
-    types::EthAddress,
+    types::{EthAddress, Nibble},
     utils::{create_mask_of_1s, is_even},
 };
 
@@ -61,6 +60,16 @@ impl Debug for Nibbles {
 impl From<Nibbles> for EthAddress {
     fn from(n: Nibbles) -> Self {
         n.packed
+    }
+}
+
+impl From<EthAddress> for Nibbles {
+    fn from(addr: EthAddress) -> Self {
+        Self {
+            count: 64, /* Always 64, since we are assuming fixed sized keys and `0`s can make up
+                        * a key. */
+            packed: addr,
+        }
     }
 }
 
@@ -247,7 +256,7 @@ impl Nibbles {
 mod tests {
 
     use super::Nibbles;
-    use crate::{testing_utils::eth_addr, utils::nibbles};
+    use crate::{testing_utils::eth_addr, types::EthAddress, utils::nibbles};
 
     #[test]
     fn get_nibble_works() {
@@ -382,5 +391,14 @@ mod tests {
         assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x4)));
         assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x5)));
         assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x13)));
+    }
+
+    #[test]
+    fn eth_addr_to_nibbles_works() {
+        let addr = EthAddress::from(0x12);
+        let nib = Nibbles::from(addr);
+
+        assert_eq!(nib.count, 64);
+        assert_eq!(nib.packed, EthAddress::from(0x12));
     }
 }
