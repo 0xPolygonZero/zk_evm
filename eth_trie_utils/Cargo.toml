@@ -1,5 +1,5 @@
 [package]
-name = "zero_eth_trie_utils"
+name = "eth-trie-utils"
 description = "Types and utility functions for building/working with partial Ethereum tries."
 version = "0.1.0"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
