@@ -1,10 +1,11 @@
 use ethereum_types::U256;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use crate::{partial_trie::Nibbles, trie_builder::TrieEntry, types::EthAddress};
+use crate::{trie_builder::TrieEntry, types::EthAddress};
 
-pub(crate) fn nibbles(addr: u64) -> Nibbles {
-    eth_addr(addr).into()
+pub(crate) fn common_setup() {
+    // Try init since multiple tests calling `init` will cause an error.
+    let _ = pretty_env_logger::try_init();
 }
 
 pub(crate) fn eth_addr(addr: u64) -> EthAddress {

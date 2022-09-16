@@ -150,7 +150,7 @@ fn insert_into_trie_rec(
 
             let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
 
-            if nibbles.nibbles_are_substring_of_the_other(&new_node.nibbles) {
+            if nibbles.nibbles_are_identical_up_to_smallest_count(&new_node.nibbles) {
                 new_node.truncate_n_nibbles(nibbles.count);
                 if let Some(updated_node) = insert_into_trie_rec(child, new_node) {
                     *child = updated_node;
@@ -159,12 +159,16 @@ fn insert_into_trie_rec(
                 return None;
             }
 
+            // Drop one since branch will cover one nibble.
+            // Also note that the postfix is always >= 1.
+            let existing_postfix_adjusted_for_branch = info.existing_postfix.truncate_n_nibbles(1);
+
             // If we split an extension node, we may need to place an extension node after
             // the branch.
-            let updated_existing_node = match info.new_postfix.count {
+            let updated_existing_node = match existing_postfix_adjusted_for_branch.count {
                 0 => child.clone(),
                 _ => Box::new(PartialTrie::Extension {
-                    nibbles: info.new_postfix,
+                    nibbles: info.existing_postfix,
                     child: child.clone(),
                 }),
             };
@@ -256,7 +260,6 @@ fn place_branch_and_potentially_ext_prefix(
         value: None,
     });
 
-    trace!("COMMON PREFIX: {}", info.common_prefix);
     match info.common_prefix.count {
         0 => branch,
         // TODO: Remove the redundant clone...
@@ -340,13 +343,13 @@ mod tests {
     use super::{construct_trie_from_inserts, Nibble, TrieEntry};
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
-        testing_utils::generate_n_random_trie_entries,
+        testing_utils::{common_setup, generate_n_random_trie_entries},
         trie_builder::TrieNodeType,
         types::EthAddress,
         utils::create_mask_of_1s,
     };
 
-    const NUM_RANDOM_INSERTS: usize = 28;
+    const NUM_RANDOM_INSERTS: usize = 1000;
 
     fn entry<K: Into<U256>>(k: K) -> TrieEntry {
         TrieEntry {
@@ -357,11 +360,6 @@ mod tests {
 
     fn create_trie_from_inserts(ins: impl Iterator<Item = TrieEntry>) -> Box<PartialTrie> {
         construct_trie_from_inserts(ins)
-    }
-
-    fn common_setup() {
-        // Try init since multiple tests calling `init` will cause an error.
-        let _ = pretty_env_logger::try_init();
     }
 
     fn get_entries_in_trie(trie: &PartialTrie) -> HashSet<TrieEntry> {
@@ -451,6 +449,7 @@ mod tests {
             .iter()
             .filter(|e| !entries_in_trie.contains(e))
             .collect();
+
         let additional_entries_inserted: Vec<_> = entries_in_trie
             .iter()
             .filter(|e| !entries.contains(e))
@@ -463,7 +462,7 @@ mod tests {
             println!(
                 "Total retrieved/expected: {}/{}",
                 entries_in_trie.len(),
-                NUM_RANDOM_INSERTS
+                entries.len()
             );
 
             println!("Missing: {:#?}", all_entries_retrieved);
@@ -507,7 +506,7 @@ mod tests {
     #[test]
     fn diagonal_inserts_to_base_of_trie_works() {
         common_setup();
-        let entries: Vec<_> = (0..=64).map(|i| entry(create_mask_of_1s(i * 4))).collect();
+        let entries: Vec<_> = (0..=3).map(|i| entry(create_mask_of_1s(i * 4))).collect();
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }

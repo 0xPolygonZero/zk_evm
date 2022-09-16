@@ -5,7 +5,7 @@ use ethereum_types::U256;
 use crate::{
     trie_builder::Nibble,
     types::EthAddress,
-    utils::{create_mask_of_1s, is_even, u256_as_hex_string},
+    utils::{create_mask_of_1s, is_even},
 };
 
 #[derive(Clone, Debug)]
@@ -44,7 +44,7 @@ pub struct Nibbles {
 
 impl Display for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", u256_as_hex_string(&self.packed))
+        write!(f, "{}", self.as_hex_str())
     }
 }
 
@@ -53,7 +53,7 @@ impl Debug for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Nibbles")
             .field("count", &self.count)
-            .field("packed", &u256_as_hex_string(&self.packed))
+            .field("packed", &self.as_hex_str())
             .finish()
     }
 }
@@ -83,7 +83,7 @@ impl Nibbles {
     /// Pops the next `n` proceeding nibbles.
     pub fn pop_next_nibbles(&mut self, n: usize) -> Nibbles {
         let r = self.get_nibble_range(0..n);
-        self.truncate_n_nibbles(n);
+        self.truncate_n_nibbles_mut(n);
 
         r
     }
@@ -107,11 +107,6 @@ impl Nibbles {
         Self::get_nibble_range_common(&self.packed, range, self.count)
     }
 
-    /// Gets a range of nibbles within the nibbles.
-    pub fn get_nibble_range_from_eth_addr(addr: &EthAddress, range: Range<usize>) -> Nibbles {
-        Self::get_nibble_range_common(addr, range, 64)
-    }
-
     fn get_nibble_range_common(addr: &EthAddress, range: Range<usize>, count: usize) -> Nibbles {
         let range_count = range.end - range.start;
 
@@ -129,7 +124,7 @@ impl Nibbles {
         self.count == 0
     }
 
-    pub fn nibbles_are_substring_of_the_other(&self, other: &Nibbles) -> bool {
+    pub fn nibbles_are_identical_up_to_smallest_count(&self, other: &Nibbles) -> bool {
         let smaller_count = self.count.min(other.count);
         (0..smaller_count).all(|i| self.get_nibble(i) == other.get_nibble(i))
     }
@@ -226,12 +221,33 @@ impl Nibbles {
     pub fn get_num_nibbles_in_addr(addr: &EthAddress) -> usize {
         (addr.bits() + 3) / 4
     }
+
+    // TODO: Make nicer...
+    fn as_hex_str(&self) -> String {
+        let mut byte_buf = [0; 32];
+        self.packed.to_big_endian(&mut byte_buf);
+
+        let count_bytes = (self.count + 1) / 2;
+        let hex_string_raw = hex::encode(&byte_buf[(32 - count_bytes)..32]);
+        let hex_char_iter_raw = hex_string_raw.chars();
+
+        let hex_char_iter = match is_even(self.count) {
+            false => hex_char_iter_raw.skip(1),
+            true => hex_char_iter_raw.skip(0),
+        };
+
+        let mut hex_string = String::from("0x");
+        hex_string.extend(hex_char_iter);
+
+        hex_string
+    }
 }
 
 #[cfg(test)]
 mod tests {
+
     use super::Nibbles;
-    use crate::testing_utils::{eth_addr, nibbles};
+    use crate::{testing_utils::eth_addr, utils::nibbles};
 
     #[test]
     fn get_nibble_works() {
@@ -242,28 +258,36 @@ mod tests {
     }
 
     #[test]
-    fn get_nibble_range_works() {}
+    fn pop_next_nibbles_works() {
+        let nib = nibbles(0x1234);
+
+        assert_pop_nibbles(&nib, 0, nibbles(0x1234), nibbles(0x0));
+        assert_pop_nibbles(&nib, 1, nibbles(0x234), nibbles(0x1));
+        assert_pop_nibbles(&nib, 3, nibbles(0x4), nibbles(0x123));
+        assert_pop_nibbles(&nib, 4, nibbles(0x0), nibbles(0x1234));
+    }
+
+    fn assert_pop_nibbles(
+        orig: &Nibbles,
+        n: usize,
+        expected_orig_after_pop: Nibbles,
+        expected_resulting_nibbles: Nibbles,
+    ) {
+        let mut nib = *orig;
+        let res = nib.pop_next_nibbles(n);
+
+        assert_eq!(nib, expected_orig_after_pop);
+        assert_eq!(res, expected_resulting_nibbles);
+    }
 
     #[test]
-    fn get_nibble_range_of_eth_addr_works() {
-        let a = eth_addr(0x1234);
+    fn get_nibble_range_works() {
+        let n = nibbles(0x1234);
 
-        assert_eq!(
-            Nibbles::get_nibble_range_from_eth_addr(&a, 0..0),
-            nibbles(0x0)
-        );
-        assert_eq!(
-            Nibbles::get_nibble_range_from_eth_addr(&a, 0..1),
-            nibbles(0x1)
-        );
-        assert_eq!(
-            Nibbles::get_nibble_range_from_eth_addr(&a, 0..2),
-            nibbles(0x12)
-        );
-        assert_eq!(
-            Nibbles::get_nibble_range_from_eth_addr(&a, 0..4),
-            nibbles(0x1234)
-        );
+        assert_eq!(n.get_nibble_range(0..0), nibbles(0x0));
+        assert_eq!(n.get_nibble_range(0..1), nibbles(0x1));
+        assert_eq!(n.get_nibble_range(0..2), nibbles(0x12));
+        assert_eq!(n.get_nibble_range(0..4), nibbles(0x1234));
     }
 
     #[test]
@@ -347,16 +371,16 @@ mod tests {
     }
 
     #[test]
-    fn nibbles_are_substring_of_the_other_works() {
+    fn nibbles_are_identical_up_to_smallest_count_works() {
         let n = nibbles(0x1234);
 
-        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x1234)));
-        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x1)));
-        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x12)));
-        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x23)));
-        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x4)));
+        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x1234)));
+        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x1)));
+        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x12)));
 
-        assert!(!n.nibbles_are_substring_of_the_other(&nibbles(0x5)));
-        assert!(!n.nibbles_are_substring_of_the_other(&nibbles(0x13)));
+        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x23)));
+        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x4)));
+        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x5)));
+        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x13)));
     }
 }
