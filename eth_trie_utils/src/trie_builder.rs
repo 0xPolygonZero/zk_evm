@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use ethereum_types::U256;
-use itertools::Itertools;
 use log::trace;
 
 use crate::partial_trie::{Nibbles, PartialTrie};
@@ -13,6 +11,7 @@ pub(crate) type Nibble = u8;
 /// Simplified trie node type to make logging cleaner.
 enum TrieNodeType {
     Empty,
+    Hash,
     Branch,
     Extension,
     Leaf,
@@ -22,9 +21,7 @@ impl From<&PartialTrie> for TrieNodeType {
     fn from(node: &PartialTrie) -> Self {
         match node {
             PartialTrie::Empty => Self::Empty,
-            PartialTrie::Hash(_) => unreachable!(
-                "Hit a Hash node when converting a node type to a debug representation!"
-            ),
+            PartialTrie::Hash(_) => Self::Hash,
             PartialTrie::Branch { .. } => Self::Branch,
             PartialTrie::Extension { .. } => Self::Extension,
             PartialTrie::Leaf { .. } => Self::Leaf,
@@ -32,58 +29,8 @@ impl From<&PartialTrie> for TrieNodeType {
     }
 }
 
-#[derive(Debug)]
-struct NibblesBuilder {
-    nibbles: [Nibble; 64],
-    count: usize,
-}
-
-impl Default for NibblesBuilder {
-    fn default() -> Self {
-        Self {
-            nibbles: [0; 64],
-            count: Default::default(),
-        }
-    }
-}
-
-impl From<NibblesBuilder> for Nibbles {
-    fn from(b: NibblesBuilder) -> Self {
-        // TODO: Not the nicest impl... Make nicer later?
-        let mut nibble_bytes: [u8; 32] = [0; 32];
-        let mut nibble_u64s = [0; 4];
-
-        for (i, byte) in NibblesBuilder::nibbles_to_bytes(b.nibbles.into_iter()).enumerate() {
-            nibble_bytes[i] = byte;
-        }
-
-        nibble_u64s[0] = u64::from_be_bytes(b.nibbles[0..8].try_into().unwrap());
-        nibble_u64s[1] = u64::from_be_bytes(b.nibbles[8..16].try_into().unwrap());
-        nibble_u64s[2] = u64::from_be_bytes(b.nibbles[16..24].try_into().unwrap());
-        nibble_u64s[3] = u64::from_be_bytes(b.nibbles[24..32].try_into().unwrap());
-
-        Self {
-            count: b.count,
-            packed: U256(nibble_u64s),
-        }
-    }
-}
-
-impl NibblesBuilder {
-    pub(crate) fn append_nibble(&mut self, nibble: Nibble) {
-        debug_assert!(nibble < 16, "Got a nibble that was more than 4 bits!");
-
-        self.nibbles[self.count] = nibble;
-        self.count += 1;
-    }
-
-    fn nibbles_to_bytes(nibbles: impl Iterator<Item = Nibble>) -> impl Iterator<Item = u8> {
-        nibbles.tuples().map(|(a, b)| a | (b << 4))
-    }
-}
-
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct TrieEntry {
+pub struct TrieEntry {
     pub nibbles: Nibbles,
     pub v: Vec<u8>,
 }
@@ -100,26 +47,33 @@ impl TrieEntry {
     }
 }
 
-pub(crate) fn insert_into_trie(
-    trie: &mut Box<PartialTrie>,
-    new_entry: TrieEntry,
-) -> Option<Box<PartialTrie>> {
-    trace!("Inserting {:?}...", new_entry);
-    insert_into_trie_rec(trie, new_entry)
+#[derive(Debug)]
+struct ExistingAndNewNodePreAndPost {
+    common_prefix: Nibbles,
+    existing_postfix: Nibbles,
+    new_postfix: Nibbles,
 }
 
-pub(crate) fn construct_trie_from_inserts(
-    nodes: impl Iterator<Item = TrieEntry>,
-) -> Box<PartialTrie> {
-    let mut root = Box::new(PartialTrie::Empty);
+impl PartialTrie {
+    pub fn construct_trie_from_inserts(nodes: impl Iterator<Item = TrieEntry>) -> Box<PartialTrie> {
+        let mut root = Box::new(PartialTrie::Empty);
 
-    for new_entry in nodes {
-        if let Some(updated_root) = insert_into_trie(&mut root, new_entry) {
-            root = updated_root;
+        for new_entry in nodes {
+            if let Some(updated_root) = Self::insert_into_trie(&mut root, new_entry) {
+                root = updated_root;
+            }
         }
+
+        root
     }
 
-    root
+    pub fn insert_into_trie(
+        root: &mut Box<PartialTrie>,
+        new_entry: TrieEntry,
+    ) -> Option<Box<PartialTrie>> {
+        trace!("Inserting new leaf node {:?}...", new_entry);
+        insert_into_trie_rec(root, new_entry)
+    }
 }
 
 fn insert_into_trie_rec(
@@ -196,7 +150,7 @@ fn insert_into_trie_rec(
             ));
         }
         PartialTrie::Hash(_) => unreachable!(
-            "Found a `Hash` node in a partial trie! These should not exist for the Eth tests!"
+            "Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!"
         ),
     }
 
@@ -229,12 +183,6 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
         existing_postfix,
         new_postfix,
     }
-}
-
-struct ExistingAndNewNodePreAndPost {
-    common_prefix: Nibbles,
-    existing_postfix: Nibbles,
-    new_postfix: Nibbles,
 }
 
 fn place_branch_and_potentially_ext_prefix(
@@ -293,58 +241,17 @@ fn new_branch_child_arr() -> [Box<PartialTrie>; 16] {
     ]
 }
 
-fn node_to_human_readable_string(node: &PartialTrie) -> String {
-    let mut string = String::new();
-    node_to_human_readable_string_rec(node, &mut string);
-
-    string
-}
-
-// Inefficient, but that's ok.
-fn node_to_human_readable_string_rec(node: &PartialTrie, string: &mut String) {
-    string.push_str(&format!(" {:?}\n", node));
-
-    match node {
-        PartialTrie::Branch { children, .. } => {
-            for child in children {
-                node_to_human_readable_string_rec(child, string);
-            }
-        }
-        PartialTrie::Extension { nibbles, child } => {
-            string.push_str(&nibbles_to_human_readable_string(nibbles));
-            node_to_human_readable_string_rec(child, string);
-        }
-        PartialTrie::Leaf { nibbles, .. } => {
-            string.push_str(&nibbles_to_human_readable_string(nibbles));
-        }
-        _ => (),
-    }
-}
-
-fn nibbles_to_human_readable_string(n: &Nibbles) -> String {
-    u256_to_human_readable_string(&n.packed)
-}
-
-fn u256_to_human_readable_string(v: &U256) -> String {
-    let mut byte_buf = [0; 32];
-    v.to_big_endian(&mut byte_buf);
-    let hex_string = hex::encode(byte_buf);
-
-    format!("nibbles_hex: 0x{}", hex_string)
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
     use ethereum_types::U256;
-    use log::{info, trace};
+    use log::info;
 
-    use super::{construct_trie_from_inserts, Nibble, TrieEntry};
+    use super::{Nibble, TrieEntry};
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
         testing_utils::{common_setup, generate_n_random_trie_entries},
-        trie_builder::TrieNodeType,
         types::EthAddress,
         utils::create_mask_of_1s,
     };
@@ -359,7 +266,7 @@ mod tests {
     }
 
     fn create_trie_from_inserts(ins: impl Iterator<Item = TrieEntry>) -> Box<PartialTrie> {
-        construct_trie_from_inserts(ins)
+        PartialTrie::construct_trie_from_inserts(ins)
     }
 
     fn get_entries_in_trie(trie: &PartialTrie) -> HashSet<TrieEntry> {
@@ -383,37 +290,23 @@ mod tests {
         seen_entries: &mut HashSet<TrieEntry>,
         curr_k: Nibbles,
     ) {
-        trace!(
-            "Entry collection traversed node type: {:?}",
-            TrieNodeType::from(trie)
-        );
-
         match trie {
             PartialTrie::Empty => (),
             PartialTrie::Hash(_) => unreachable!("Found a Hash node when collecting all entries in a trie! These should not exist for the Eth tests!"),
             PartialTrie::Branch { children, .. } => {
-                trace!("Branch loop start");
                 for (branch_nib, child) in children.iter().enumerate() {
                     let new_k = append_nibble_to_nibbles(&curr_k, branch_nib as u8);
-                    trace!("Branch entry type: {:?}", TrieNodeType::from((*child).as_ref()));
                     get_entries_in_trie_rec(child, seen_entries, new_k);
                 }
-                trace!("Branch loop end");
 
                 // Note: Currently ignoring the `Value` field...
             },
             PartialTrie::Extension { nibbles, child } => {
-                trace!("Extention node with {:?}", nibbles);
                 let new_k = curr_k.merge(nibbles);
                 get_entries_in_trie_rec(child, seen_entries, new_k);
             },
             PartialTrie::Leaf { nibbles, value } => {
                 let final_key = curr_k.merge(nibbles);
-
-                if final_key.count > 64 {
-                    println!("Bigger! curr_k: {:?}, nibbles: {:?}", curr_k, nibbles);
-                }
-
                 add_entry_to_seen_entries(TrieEntry { nibbles: final_key, v: value.clone() }, seen_entries);
             },
         }

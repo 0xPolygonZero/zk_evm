@@ -46,8 +46,8 @@ mod tests {
     use log::debug;
 
     use crate::{
+        partial_trie::PartialTrie,
         testing_utils::{common_setup, generate_n_random_trie_entries},
-        trie_builder::construct_trie_from_inserts,
     };
 
     const TRIE_SIZE: usize = 1000;
@@ -57,7 +57,7 @@ mod tests {
         common_setup();
 
         let random_entries: Vec<_> = generate_n_random_trie_entries(TRIE_SIZE).collect();
-        let t = construct_trie_from_inserts(random_entries.iter().cloned());
+        let t = PartialTrie::construct_trie_from_inserts(random_entries.iter().cloned());
 
         for e in random_entries.iter() {
             debug!("Attempting to retrieve {:?}...", e);
