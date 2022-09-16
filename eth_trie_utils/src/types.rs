@@ -7,7 +7,8 @@ pub(crate) type EthAddress = U256;
 impl From<EthAddress> for Nibbles {
     fn from(addr: EthAddress) -> Self {
         Self {
-            count: (addr.bits() + 3) / 4,
+            count: 64, /* Always 64, since we are assuming fixed sized keys and `0`s can make up
+                        * a key. */
             packed: addr,
         }
     }
@@ -23,7 +24,7 @@ mod tests {
         let addr = EthAddress::from(0x12);
         let nib = Nibbles::from(addr);
 
-        assert_eq!(nib.count, 2);
+        assert_eq!(nib.count, 64);
         assert_eq!(nib.packed, EthAddress::from(0x12));
     }
 }

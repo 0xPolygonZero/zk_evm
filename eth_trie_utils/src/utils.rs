@@ -1,6 +1,6 @@
-use std::ops::BitAnd;
+use std::{convert::TryInto, ops::BitAnd};
 
-use ethereum_types::U256;
+use ethereum_types::{U256, U512};
 use num_traits::PrimInt;
 
 pub(crate) fn is_even<T: PrimInt + BitAnd<Output = T>>(num: T) -> bool {
@@ -8,7 +8,7 @@ pub(crate) fn is_even<T: PrimInt + BitAnd<Output = T>>(num: T) -> bool {
 }
 
 pub(crate) fn create_mask_of_1s(amt: usize) -> U256 {
-    (U256::one() << amt) - 1
+    ((U512::one() << amt) - 1).try_into().unwrap()
 }
 
 pub(crate) fn u256_as_hex_string(v: &U256) -> String {

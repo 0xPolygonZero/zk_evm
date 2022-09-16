@@ -69,6 +69,25 @@ impl Nibbles {
         Self::get_nibble_common(&self.packed, idx, self.count)
     }
 
+    pub fn pop_next_nibble(&mut self) -> Nibble {
+        let n = self.get_nibble(0);
+        self.truncate_n_nibbles_mut(1);
+
+        n
+    }
+
+    pub fn get_next_nibbles(&self, n: usize) -> Nibbles {
+        self.get_nibble_range(0..n)
+    }
+
+    /// Pops the next `n` proceeding nibbles.
+    pub fn pop_next_nibbles(&mut self, n: usize) -> Nibbles {
+        let r = self.get_nibble_range(0..n);
+        self.truncate_n_nibbles(n);
+
+        r
+    }
+
     pub fn get_nibble_of_eth_addr(addr: &EthAddress, idx: usize) -> Nibble {
         let count = Self::get_num_nibbles_in_addr(addr);
         Self::get_nibble_common(addr, idx, count)
@@ -90,14 +109,12 @@ impl Nibbles {
 
     /// Gets a range of nibbles within the nibbles.
     pub fn get_nibble_range_from_eth_addr(addr: &EthAddress, range: Range<usize>) -> Nibbles {
-        let count = Self::get_num_nibbles_in_addr(addr);
-        Self::get_nibble_range_common(addr, range, count)
+        Self::get_nibble_range_common(addr, range, 64)
     }
 
     fn get_nibble_range_common(addr: &EthAddress, range: Range<usize>, count: usize) -> Nibbles {
         let range_count = range.end - range.start;
 
-        // let count = range.end - range.start;
         let shift_amt = (count - range.end) * 4;
         let mask = create_mask_of_1s(range_count * 4) << shift_amt;
         let range_packed = (*addr & mask) >> shift_amt;
@@ -108,15 +125,29 @@ impl Nibbles {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    pub fn nibbles_are_substring_of_the_other(&self, other: &Nibbles) -> bool {
+        let smaller_count = self.count.min(other.count);
+        (0..smaller_count).all(|i| self.get_nibble(i) == other.get_nibble(i))
+    }
+
     /// Drops the next `n` proceeding nibbles.
     pub fn truncate_n_nibbles(&self, n: usize) -> Nibbles {
+        let mut nib = *self;
+        nib.truncate_n_nibbles_mut(n);
+
+        nib
+    }
+
+    pub fn truncate_n_nibbles_mut(&mut self, n: usize) {
         let mask_shift = (self.count - n) * 4;
         let truncate_mask = !(create_mask_of_1s(n * 4) << mask_shift);
 
-        Self {
-            count: self.count - n,
-            packed: self.packed & truncate_mask,
-        }
+        self.count -= n;
+        self.packed = self.packed & truncate_mask;
     }
 
     /// Splits the `Nibbles` at the given index, returning two `Nibbles`.
@@ -200,15 +231,7 @@ impl Nibbles {
 #[cfg(test)]
 mod tests {
     use super::Nibbles;
-    use crate::types::EthAddress;
-
-    fn nibbles(addr: u64) -> Nibbles {
-        eth_addr(addr).into()
-    }
-
-    fn eth_addr(addr: u64) -> EthAddress {
-        EthAddress::from(addr)
-    }
+    use crate::testing_utils::{eth_addr, nibbles};
 
     #[test]
     fn get_nibble_works() {
@@ -217,6 +240,9 @@ mod tests {
         assert_eq!(n.get_nibble(0), 0x1);
         assert_eq!(n.get_nibble(3), 0x4);
     }
+
+    #[test]
+    fn get_nibble_range_works() {}
 
     #[test]
     fn get_nibble_range_of_eth_addr_works() {
@@ -318,5 +344,19 @@ mod tests {
             ),
             3
         );
+    }
+
+    #[test]
+    fn nibbles_are_substring_of_the_other_works() {
+        let n = nibbles(0x1234);
+
+        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x1234)));
+        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x1)));
+        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x12)));
+        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x23)));
+        assert!(n.nibbles_are_substring_of_the_other(&nibbles(0x4)));
+
+        assert!(!n.nibbles_are_substring_of_the_other(&nibbles(0x5)));
+        assert!(!n.nibbles_are_substring_of_the_other(&nibbles(0x13)));
     }
 }

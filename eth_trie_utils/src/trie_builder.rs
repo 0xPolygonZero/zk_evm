@@ -104,7 +104,7 @@ pub(crate) fn insert_into_trie(
     trie: &mut Box<PartialTrie>,
     new_entry: TrieEntry,
 ) -> Option<Box<PartialTrie>> {
-    trace!("Inserting {}...", new_entry);
+    trace!("Inserting {:?}...", new_entry);
     insert_into_trie_rec(trie, new_entry)
 }
 
@@ -136,8 +136,7 @@ fn insert_into_trie_rec(
             }));
         }
         PartialTrie::Branch { children, value: _ } => {
-            let nibble = new_node.nibbles.get_nibble(0);
-            new_node.truncate_n_nibbles(1);
+            let nibble = new_node.nibbles.pop_next_nibble();
 
             if let Some(updated_child) =
                 insert_into_trie_rec(&mut children[nibble as usize], new_node)
@@ -151,6 +150,17 @@ fn insert_into_trie_rec(
 
             let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
 
+            if nibbles.nibbles_are_substring_of_the_other(&new_node.nibbles) {
+                new_node.truncate_n_nibbles(nibbles.count);
+                if let Some(updated_node) = insert_into_trie_rec(child, new_node) {
+                    *child = updated_node;
+                }
+
+                return None;
+            }
+
+            // If we split an extension node, we may need to place an extension node after
+            // the branch.
             let updated_existing_node = match info.new_postfix.count {
                 0 => child.clone(),
                 _ => Box::new(PartialTrie::Extension {
@@ -193,9 +203,14 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
     existing_node_nibbles: &Nibbles,
     new_node_nibbles: &Nibbles,
 ) -> ExistingAndNewNodePreAndPost {
+    trace!(
+        "Existing: {:?}, new: {:?}",
+        existing_node_nibbles,
+        new_node_nibbles
+    );
     let nib_idx_of_difference = Nibbles::find_nibble_idx_that_differs_between_nibbles(
         existing_node_nibbles,
-        new_node_nibbles,
+        &new_node_nibbles.get_nibble_range(0..existing_node_nibbles.count),
     );
 
     let (common_prefix, existing_postfix) =
@@ -235,6 +250,7 @@ fn place_branch_and_potentially_ext_prefix(
             .truncate_n_nibbles(info.common_prefix.count + 1),
         value: new_node.v,
     });
+
     let branch = Box::new(PartialTrie::Branch {
         children,
         value: None,
@@ -318,23 +334,29 @@ fn u256_to_human_readable_string(v: &U256) -> String {
 mod tests {
     use std::collections::HashSet;
 
+    use ethereum_types::U256;
     use log::{info, trace};
 
     use super::{construct_trie_from_inserts, Nibble, TrieEntry};
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
+        testing_utils::generate_n_random_trie_entries,
+        trie_builder::TrieNodeType,
         types::EthAddress,
+        utils::create_mask_of_1s,
     };
 
-    fn entry(k: u64) -> TrieEntry {
+    const NUM_RANDOM_INSERTS: usize = 28;
+
+    fn entry<K: Into<U256>>(k: K) -> TrieEntry {
         TrieEntry {
-            nibbles: EthAddress::from(k).into(),
+            nibbles: (k.into()).into(),
             v: Vec::new(),
         }
     }
 
-    fn create_trie_from_inserts(ins: &[TrieEntry]) -> Box<PartialTrie> {
-        construct_trie_from_inserts(ins.iter().cloned())
+    fn create_trie_from_inserts(ins: impl Iterator<Item = TrieEntry>) -> Box<PartialTrie> {
+        construct_trie_from_inserts(ins)
     }
 
     fn common_setup() {
@@ -363,7 +385,10 @@ mod tests {
         seen_entries: &mut HashSet<TrieEntry>,
         curr_k: Nibbles,
     ) {
-        trace!("Entry collection traversed node: {:?}", trie);
+        trace!(
+            "Entry collection traversed node type: {:?}",
+            TrieNodeType::from(trie)
+        );
 
         match trie {
             PartialTrie::Empty => (),
@@ -372,6 +397,7 @@ mod tests {
                 trace!("Branch loop start");
                 for (branch_nib, child) in children.iter().enumerate() {
                     let new_k = append_nibble_to_nibbles(&curr_k, branch_nib as u8);
+                    trace!("Branch entry type: {:?}", TrieNodeType::from((*child).as_ref()));
                     get_entries_in_trie_rec(child, seen_entries, new_k);
                 }
                 trace!("Branch loop end");
@@ -379,11 +405,17 @@ mod tests {
                 // Note: Currently ignoring the `Value` field...
             },
             PartialTrie::Extension { nibbles, child } => {
+                trace!("Extention node with {:?}", nibbles);
                 let new_k = curr_k.merge(nibbles);
                 get_entries_in_trie_rec(child, seen_entries, new_k);
             },
             PartialTrie::Leaf { nibbles, value } => {
                 let final_key = curr_k.merge(nibbles);
+
+                if final_key.count > 64 {
+                    println!("Bigger! curr_k: {:?}, nibbles: {:?}", curr_k, nibbles);
+                }
+
                 add_entry_to_seen_entries(TrieEntry { nibbles: final_key, v: value.clone() }, seen_entries);
             },
         }
@@ -410,13 +442,33 @@ mod tests {
     }
 
     fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[TrieEntry]) {
-        let trie = create_trie_from_inserts(entries);
+        let trie = create_trie_from_inserts(entries.iter().cloned());
         let entries_in_trie = get_entries_in_trie(&trie);
 
-        println!("{:#?}", entries_in_trie);
+        trie.get(EthAddress::max_value());
 
-        let all_entries_retrievable_from_trie = entries.iter().all(|e| entries_in_trie.contains(e));
-        let no_additional_entries_inserted = entries.iter().all(|e| entries.contains(e));
+        let all_entries_retrieved: Vec<_> = entries
+            .iter()
+            .filter(|e| !entries_in_trie.contains(e))
+            .collect();
+        let additional_entries_inserted: Vec<_> = entries_in_trie
+            .iter()
+            .filter(|e| !entries.contains(e))
+            .collect();
+
+        let all_entries_retrievable_from_trie = all_entries_retrieved.is_empty();
+        let no_additional_entries_inserted = additional_entries_inserted.is_empty();
+
+        if !all_entries_retrievable_from_trie || !no_additional_entries_inserted {
+            println!(
+                "Total retrieved/expected: {}/{}",
+                entries_in_trie.len(),
+                NUM_RANDOM_INSERTS
+            );
+
+            println!("Missing: {:#?}", all_entries_retrieved);
+            println!("Unexpected retrieved: {:#?}", additional_entries_inserted);
+        }
 
         assert!(all_entries_retrievable_from_trie);
         assert!(no_additional_entries_inserted);
@@ -453,7 +505,18 @@ mod tests {
     }
 
     #[test]
+    fn diagonal_inserts_to_base_of_trie_works() {
+        common_setup();
+        let entries: Vec<_> = (0..=64).map(|i| entry(create_mask_of_1s(i * 4))).collect();
+
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
+    }
+
+    #[test]
     fn mass_inserts_all_entries_are_retrievable() {
-        todo!()
+        common_setup();
+        let entries: Vec<_> = generate_n_random_trie_entries(NUM_RANDOM_INSERTS).collect();
+
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
 }
