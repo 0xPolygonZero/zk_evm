@@ -1,13 +1,14 @@
 use std::{fmt::Debug, fmt::Display, ops::Range};
 
 use ethereum_types::U256;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     types::{EthAddress, Nibble},
     utils::{create_mask_of_1s, is_even},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// A partial trie, or a sub-trie thereof. This mimics the structure of an
 /// Ethereum trie, except with an additional `Hash` node type, representing a
 /// node whose data is not needed to process our transaction.
@@ -31,7 +32,7 @@ pub enum PartialTrie {
     Leaf { nibbles: Nibbles, value: Vec<u8> },
 }
 
-#[derive(Copy, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 /// A sequence of nibbles.
 pub struct Nibbles {
     /// The number of nibbles in this sequence.
