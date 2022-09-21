@@ -20,7 +20,7 @@ pub enum PartialTrie {
     /// A branch node, which consists of 16 children and an optional value.
     Branch {
         children: [Box<PartialTrie>; 16],
-        value: Option<U256>,
+        value: Vec<u8>,
     },
     /// An extension node, which consists of a list of nibbles and a single
     /// child.
