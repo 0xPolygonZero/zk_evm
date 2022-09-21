@@ -32,6 +32,49 @@ pub enum PartialTrie {
     Leaf { nibbles: Nibbles, value: Vec<u8> },
 }
 
+impl Eq for PartialTrie {}
+
+/// `PartialTrie` equality means all nodes through the trie are equivalent.
+impl PartialEq for PartialTrie {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (PartialTrie::Empty, PartialTrie::Empty) => true,
+            (PartialTrie::Hash(h1), PartialTrie::Hash(h2)) => h1 == h2,
+            (
+                PartialTrie::Branch {
+                    children: c1,
+                    value: v1,
+                },
+                PartialTrie::Branch {
+                    children: c2,
+                    value: v2,
+                },
+            ) => v1 == v2 && (0..16).all(|i| c1[i] != c2[i]),
+            (
+                PartialTrie::Extension {
+                    nibbles: n1,
+                    child: c1,
+                },
+                PartialTrie::Extension {
+                    nibbles: n2,
+                    child: c2,
+                },
+            ) => n1 == n2 && c1 == c2,
+            (
+                PartialTrie::Leaf {
+                    nibbles: n1,
+                    value: v1,
+                },
+                PartialTrie::Leaf {
+                    nibbles: n2,
+                    value: v2,
+                },
+            ) => n1 == n2 && v1 == v2,
+            (_, _) => false,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 /// A sequence of nibbles.
 pub struct Nibbles {

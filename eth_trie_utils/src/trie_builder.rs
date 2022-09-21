@@ -425,4 +425,18 @@ mod tests {
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
+
+    #[test]
+    fn equivalency_check_works() {
+        assert_eq!(PartialTrie::Empty, PartialTrie::Empty);
+
+        let entries = generate_n_random_trie_entries(NUM_RANDOM_INSERTS, 0);
+        let big_trie_1 = create_trie_from_inserts(entries);
+        assert_eq!(big_trie_1, big_trie_1);
+
+        let entries = generate_n_random_trie_entries(NUM_RANDOM_INSERTS, 1);
+        let big_trie_2 = create_trie_from_inserts(entries);
+
+        assert_ne!(big_trie_1, big_trie_2)
+    }
 }
