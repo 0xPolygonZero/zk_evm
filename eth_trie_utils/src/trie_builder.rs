@@ -217,7 +217,7 @@ fn place_branch_and_potentially_ext_prefix(
 
     let branch = Box::new(PartialTrie::Branch {
         children,
-        value: None,
+        value: vec![],
     });
 
     match info.common_prefix.count {
