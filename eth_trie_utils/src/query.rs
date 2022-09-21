@@ -14,7 +14,10 @@ impl PartialTrie {
 
     fn get_intern(&self, curr_nib: &mut Nibbles) -> Option<&[u8]> {
         match self {
-            PartialTrie::Empty | PartialTrie::Hash(_) => None,
+            PartialTrie::Empty | PartialTrie::Hash(_) => {
+                trace!("Get traversed {:?}", self);
+                None
+            }
             // Note: If we end up supporting non-fixed sized keys, then we need to also check value.
             PartialTrie::Branch { children, .. } => {
                 let nib = curr_nib.pop_next_nibble();
@@ -50,13 +53,13 @@ mod tests {
         testing_utils::{common_setup, generate_n_random_trie_entries},
     };
 
-    const TRIE_SIZE: usize = 1000;
+    const TRIE_SIZE: usize = 100000;
 
     #[test]
     fn get_works() {
         common_setup();
 
-        let random_entries: Vec<_> = generate_n_random_trie_entries(TRIE_SIZE).collect();
+        let random_entries: Vec<_> = generate_n_random_trie_entries(TRIE_SIZE, 9001).collect();
         let t = PartialTrie::construct_trie_from_inserts(random_entries.iter().cloned());
 
         for e in random_entries.iter() {

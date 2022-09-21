@@ -205,6 +205,7 @@ impl Nibbles {
     }
 
     /// Finds the nibble idx that differs between two nibbles.
+    /// If there is no difference, returns the last index.
     pub fn find_nibble_idx_that_differs_between_nibbles(n1: &Nibbles, n2: &Nibbles) -> usize {
         // Good assumption?
         assert_eq!(
@@ -222,10 +223,7 @@ impl Nibbles {
             curr_mask >>= 4;
         }
 
-        panic!(
-            "Unable to find a nibble that differs between the two given nibbles! (n1: {:?}, n2: {:?})",
-            n1, n2
-        );
+        n1.count
     }
 
     pub fn get_num_nibbles_in_addr(addr: &EthAddress) -> usize {
@@ -234,6 +232,11 @@ impl Nibbles {
 
     // TODO: Make nicer...
     fn as_hex_str(&self) -> String {
+        // `hex::encode` will output `0x` for 0.
+        if self.packed == U256::zero() {
+            return "0x0".to_string();
+        }
+
         let mut byte_buf = [0; 32];
         self.packed.to_big_endian(&mut byte_buf);
 
@@ -255,7 +258,6 @@ impl Nibbles {
 
 #[cfg(test)]
 mod tests {
-
     use super::Nibbles;
     use crate::{testing_utils::eth_addr, types::EthAddress, utils::nibbles};
 

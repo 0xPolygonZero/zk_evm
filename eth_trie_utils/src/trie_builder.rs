@@ -5,6 +5,7 @@ use log::trace;
 use crate::{
     partial_trie::{Nibbles, PartialTrie},
     types::EthAddress,
+    utils::nibbles,
 };
 
 #[derive(Debug)]
@@ -89,10 +90,9 @@ fn insert_into_trie_rec(
     node: &mut PartialTrie,
     mut new_node: InsertEntry,
 ) -> Option<Box<PartialTrie>> {
-    trace!("Insert: Traversed {:?}", TrieNodeType::from(&*node));
-
     match node {
         PartialTrie::Empty => {
+            trace!("Insert traversed Empty");
             return Some(Box::new(PartialTrie::Leaf {
                 nibbles: new_node.nibbles,
                 value: new_node.v,
@@ -100,6 +100,10 @@ fn insert_into_trie_rec(
         }
         PartialTrie::Branch { children, value: _ } => {
             let nibble = new_node.nibbles.pop_next_nibble();
+            trace!(
+                "Insert traversed Branch (nibble: {})",
+                nibbles(nibble as u64)
+            );
 
             if let Some(updated_child) =
                 insert_into_trie_rec(&mut children[nibble as usize], new_node)
@@ -108,6 +112,8 @@ fn insert_into_trie_rec(
             }
         }
         PartialTrie::Extension { nibbles, child } => {
+            trace!("Insert traversed Extension (nibbles: {:?})", nibbles);
+
             // Note: Child is guaranteed to be a branch.
             assert!(matches!(**child, PartialTrie::Branch { .. }), "Extension node child should be guaranteed to be a branch, but wasn't! (Ext node: {:?})", node);
 
@@ -131,7 +137,7 @@ fn insert_into_trie_rec(
             let updated_existing_node = match existing_postfix_adjusted_for_branch.count {
                 0 => child.clone(),
                 _ => Box::new(PartialTrie::Extension {
-                    nibbles: info.existing_postfix,
+                    nibbles: existing_postfix_adjusted_for_branch,
                     child: child.clone(),
                 }),
             };
@@ -143,6 +149,8 @@ fn insert_into_trie_rec(
             ));
         }
         PartialTrie::Leaf { nibbles, value: _ } => {
+            trace!("Insert traversed Leaf (nibbles: {:?})", nibbles);
+
             // Assume that the leaf and new entry key differ?
             assert!(*nibbles != new_node.nibbles, "Tried inserting a node that already existed in the trie! (new: {:?}, existing: {:?})", new_node, node);
 
@@ -158,9 +166,12 @@ fn insert_into_trie_rec(
                 new_node,
             ));
         }
-        PartialTrie::Hash(_) => unreachable!(
-            "Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!"
-        ),
+        PartialTrie::Hash(_) => {
+            trace!("Insert traversed {:?}", node);
+            unreachable!(
+                "Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!"
+            )
+        }
     }
 
     None
@@ -257,7 +268,7 @@ mod tests {
         utils::create_mask_of_1s,
     };
 
-    const NUM_RANDOM_INSERTS: usize = 1000;
+    const NUM_RANDOM_INSERTS: usize = 100000;
 
     fn entry<K: Into<U256>>(k: K) -> InsertEntry {
         InsertEntry {
@@ -344,9 +355,11 @@ mod tests {
             .filter(|e| !entries_in_trie.contains(e))
             .collect();
 
+        // HashSet to avoid the linear search below.
+        let entries_hashset: HashSet<InsertEntry> = HashSet::from_iter(entries.iter().cloned());
         let additional_entries_inserted: Vec<_> = entries_in_trie
             .iter()
-            .filter(|e| !entries.contains(e))
+            .filter(|e| !entries_hashset.contains(e))
             .collect();
 
         let all_entries_retrievable_from_trie = all_entries_retrieved.is_empty();
@@ -408,7 +421,7 @@ mod tests {
     #[test]
     fn mass_inserts_all_entries_are_retrievable() {
         common_setup();
-        let entries: Vec<_> = generate_n_random_trie_entries(NUM_RANDOM_INSERTS).collect();
+        let entries: Vec<_> = generate_n_random_trie_entries(NUM_RANDOM_INSERTS, 0).collect();
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
