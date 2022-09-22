@@ -82,6 +82,12 @@ impl PartialEq for PartialTrie {
     }
 }
 
+impl Default for PartialTrie {
+    fn default() -> Self {
+        Self::Empty
+    }
+}
+
 #[derive(Copy, Clone, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 /// A sequence of nibbles.
 pub struct Nibbles {
