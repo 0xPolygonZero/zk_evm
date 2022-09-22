@@ -7,11 +7,14 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.64"
+bytes = "1.2.1"
 ethereum-types = "0.13.1"
+hex = "0.4.3"
 itertools = "0.10.3"
+keccak-hash = "0.10.0"
 log = "0.4.17"
 num-traits = "0.2.15"
-hex = "0.4.3"
+rlp = "0.5.1"
 serde = { version = "1.0.144", features = ["derive"] }
 
 [dev-dependencies]
