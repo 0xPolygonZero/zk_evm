@@ -17,9 +17,7 @@ enum EncodedNode {
 
 impl PartialTrie {
     /// Calculates the hash of a node.
-    /// Since the tries within this library are not rlp encoded, this first rlp
-    /// encodes each node and applies keccak256 hashing for any rlp output that
-    /// is larger than 32 bytes.
+    /// Assumes that all leaf values are already rlp encoded.
     pub fn calc_hash(&self) -> TrieHash {
         let trie_hash_bytes = self.rlp_encode_and_hash_node();
 
@@ -27,6 +25,8 @@ impl PartialTrie {
             EncodedNode::Raw(b) => hash(&b),
             EncodedNode::Hashed(h) => h,
         };
+
+        println!("Bytes before trie finish: {}", hex::encode(h));
 
         keccak_hash::H256::from_slice(&h)
     }
@@ -61,8 +61,9 @@ impl PartialTrie {
                 let hex_prefix_k = nibbles.to_hex_prefix_encoding(true);
 
                 let mut stream = RlpStream::new_list(2);
+                println!("HEX PREFIX LEAF KEY: 0x{}", hex::encode(&hex_prefix_k));
                 stream.append(&hex_prefix_k);
-                stream.append(value);
+                stream.append_raw(value, 1);
 
                 Self::hash_bytes_if_large_enough(stream.out().into())
             }
@@ -95,7 +96,9 @@ mod tests {
     use bytes::BufMut;
     use eth_trie::{EthTrie, MemoryDB, Trie};
     use ethereum_types::{BigEndianHash, U256};
+    use keccak_hash::{KECCAK_EMPTY, KECCAK_NULL_RLP};
     use rand::{rngs::StdRng, SeedableRng};
+    use rlp::Encodable;
 
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
@@ -110,8 +113,63 @@ mod tests {
     const EMPTY_BYTES_HASH_STR: &str =
         "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
 
+    #[derive(Copy, Clone, Debug)]
+    struct U256Rlpable(U256);
+
+    impl From<U256> for U256Rlpable {
+        fn from(v: U256) -> Self {
+            Self(v)
+        }
+    }
+
+    impl Encodable for U256Rlpable {
+        fn rlp_append(&self, s: &mut rlp::RlpStream) {
+            let mut buf = [0; 32];
+            let leading_empty_bytes = self.0.leading_zeros() as usize / 8;
+            self.0.to_big_endian(&mut buf);
+
+            // let x = &buf[leading_empty_bytes..];
+            // s.append(&x);
+            s.encoder().encode_value(&buf[leading_empty_bytes..]);
+
+            // // TODO: Rough hack. Clean up before release...
+            // let mut be_bytes = [0; 32];
+            // self.0.to_big_endian(&mut be_bytes);
+
+            // s.append(&get_slice_removing_any_trailing_zero_bytes_be(&
+            // be_bytes));
+        }
+    }
+
     fn str_to_trie_hash(s: &'static str) -> TrieHash {
         TrieHash::from_uint(&U256::from(s))
+    }
+
+    #[derive(Debug)]
+    struct AccountEntry {
+        nonce: u64,
+        balance: U256Rlpable,
+        storage_root: Option<U256Rlpable>,
+        code_hash: Option<U256Rlpable>,
+    }
+
+    impl Encodable for AccountEntry {
+        fn rlp_append(&self, s: &mut rlp::RlpStream) {
+            s.begin_list(4);
+
+            s.append(&self.nonce);
+            s.append(&self.balance);
+
+            match self.storage_root {
+                Some(v) => s.append(&v),
+                None => s.append(&KECCAK_NULL_RLP.0.as_slice()),
+            };
+
+            match self.code_hash {
+                Some(v) => s.append(&v),
+                None => s.append(&KECCAK_EMPTY.0.as_slice()),
+            };
+        }
     }
 
     /// Gets the root hash for each insert by using an established eth trie
@@ -133,17 +191,6 @@ mod tests {
         })
     }
 
-    fn get_bytes_for_dummy_account_entry(nonce: u32, balance: U256, storage_root: U256) -> Vec<u8> {
-        let mut bytes = Vec::new();
-
-        bytes.extend(nonce.to_be_bytes());
-        append_u256_to_byte_buf(&mut bytes, balance);
-        append_u256_to_byte_buf(&mut bytes, storage_root);
-        append_u256_to_byte_buf(&mut bytes, U256::from_str(EMPTY_BYTES_HASH_STR).unwrap());
-
-        bytes
-    }
-
     fn append_u256_to_byte_buf(buf: &mut Vec<u8>, v: U256) {
         let mut v_bytes = [0; 32];
         v.to_big_endian(&mut v_bytes);
@@ -162,15 +209,22 @@ mod tests {
         let account_entry_key =
             Nibbles::from_str("2fe4900ed4983da6f16363c47c8ee8ee3c327829").unwrap();
 
-        let account_entry_val_bytes = get_bytes_for_dummy_account_entry(
-            1,
-            9001.into(),
-            U256::from_str(EMPTY_BYTES_HASH_STR).unwrap(),
-        );
+        println!("NIB: {}", account_entry_key);
+
+        let acc = AccountEntry {
+            balance: U256::zero().into(),
+            nonce: 0,
+            code_hash: None,
+            storage_root: None,
+        };
+
+        let rlp_bytes = rlp::encode(&acc);
+
+        println!("Rlp bytes: {}", hex::encode(&rlp_bytes));
 
         let ins_entry = InsertEntry {
             nibbles: account_entry_key,
-            v: account_entry_val_bytes,
+            v: rlp_bytes.into(),
         };
 
         let truth_val = get_correct_trie_root_hashes_after_each_insert(once(ins_entry.clone()))

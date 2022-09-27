@@ -114,6 +114,8 @@ impl From<Nibbles> for U256 {
     }
 }
 
+// TODO: Make this an explicit call as it's not clear what the default behavior
+// (in terms of count) should be for this conversion.
 impl From<U256> for Nibbles {
     fn from(k: U256) -> Self {
         Self {

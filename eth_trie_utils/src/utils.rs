@@ -21,3 +21,10 @@ pub(crate) fn nibbles(k: u64) -> Nibbles {
 
     n
 }
+
+pub fn get_slice_removing_any_trailing_zero_bytes_be(bytes: &[u8]) -> &[u8] {
+    match bytes.iter().enumerate().find(|(_, v)| **v != 0) {
+        Some((i, _)) => &bytes[i..],
+        None => &[],
+    }
+}
