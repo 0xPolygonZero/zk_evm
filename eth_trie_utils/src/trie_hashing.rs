@@ -26,8 +26,6 @@ impl PartialTrie {
             EncodedNode::Hashed(h) => h,
         };
 
-        println!("Bytes before trie finish: {}", hex::encode(h));
-
         keccak_hash::H256::from_slice(&h)
     }
 
@@ -59,11 +57,10 @@ impl PartialTrie {
             }
             PartialTrie::Leaf { nibbles, value } => {
                 let hex_prefix_k = nibbles.to_hex_prefix_encoding(true);
-
                 let mut stream = RlpStream::new_list(2);
-                println!("HEX PREFIX LEAF KEY: 0x{}", hex::encode(&hex_prefix_k));
+
                 stream.append(&hex_prefix_k);
-                stream.append_raw(value, 1);
+                stream.append(value);
 
                 Self::hash_bytes_if_large_enough(stream.out().into())
             }
@@ -104,7 +101,7 @@ mod tests {
         partial_trie::{Nibbles, PartialTrie},
         testing_utils::gen_u256,
         trie_builder::InsertEntry,
-        trie_hashing::TrieHash,
+        trie_hashing::{hash, TrieHash},
     };
 
     const NULL_TRIE_HASH_STR: &str =
@@ -209,7 +206,7 @@ mod tests {
         let account_entry_key =
             Nibbles::from_str("2fe4900ed4983da6f16363c47c8ee8ee3c327829").unwrap();
 
-        println!("NIB: {}", account_entry_key);
+        let x = hash(&account_entry_key.bytes().into());
 
         let acc = AccountEntry {
             balance: U256::zero().into(),
@@ -220,10 +217,8 @@ mod tests {
 
         let rlp_bytes = rlp::encode(&acc);
 
-        println!("Rlp bytes: {}", hex::encode(&rlp_bytes));
-
         let ins_entry = InsertEntry {
-            nibbles: account_entry_key,
+            nibbles: Nibbles::from(U256::from(x)),
             v: rlp_bytes.into(),
         };
 
