@@ -1,10 +1,10 @@
 use std::fmt::Display;
 
+use ethereum_types::U256;
 use log::trace;
 
 use crate::{
     partial_trie::{Nibbles, PartialTrie},
-    types::EthAddress,
     utils::nibbles,
 };
 
@@ -47,9 +47,9 @@ impl InsertEntry {
         self.nibbles = self.nibbles.truncate_n_nibbles(n);
     }
 
-    pub fn from_eth_addr_and_bytes(addr: EthAddress, v: Vec<u8>) -> Self {
+    pub fn from_trie_key_and_bytes(k: U256, v: Vec<u8>) -> Self {
         Self {
-            nibbles: addr.into(),
+            nibbles: k.into(),
             v,
         }
     }
@@ -264,7 +264,7 @@ mod tests {
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
         testing_utils::{common_setup, generate_n_random_trie_entries},
-        types::{EthAddress, Nibble},
+        types::Nibble,
         utils::create_mask_of_1s,
     };
 
@@ -290,7 +290,7 @@ mod tests {
             &mut seen_entries,
             Nibbles {
                 count: 0,
-                packed: EthAddress::zero(),
+                packed: U256::zero(),
             },
         );
 
@@ -348,7 +348,7 @@ mod tests {
         let trie = create_trie_from_inserts(entries.iter().cloned());
         let entries_in_trie = get_entries_in_trie(&trie);
 
-        trie.get(EthAddress::max_value());
+        trie.get(U256::max_value());
 
         let all_entries_retrieved: Vec<_> = entries
             .iter()

@@ -1,14 +1,14 @@
+use ethereum_types::U256;
 use log::trace;
 
 use crate::{
     partial_trie::{Nibbles, PartialTrie},
-    types::EthAddress,
     utils::nibbles,
 };
 
 impl PartialTrie {
-    pub fn get(&self, eth_addr: EthAddress) -> Option<&[u8]> {
-        let mut n = eth_addr.into();
+    pub fn get(&self, k: U256) -> Option<&[u8]> {
+        let mut n = k.into();
         self.get_intern(&mut n)
     }
 

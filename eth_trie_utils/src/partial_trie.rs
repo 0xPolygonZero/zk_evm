@@ -1,13 +1,13 @@
 use std::{fmt::Debug, fmt::Display, ops::Range, str::FromStr};
 
 use bytes::{Bytes, BytesMut};
-use ethereum_types::U256;
+use ethereum_types::{H256, U256};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uint::FromHexError;
 
 use crate::{
-    types::{EthAddress, Nibble},
+    types::Nibble,
     utils::{create_mask_of_1s, is_even},
 };
 
@@ -23,7 +23,7 @@ pub enum PartialTrie {
     /// An empty trie.
     Empty,
     /// The digest of trie whose data does not need to be stored.
-    Hash(U256),
+    Hash(H256),
     /// A branch node, which consists of 16 children and an optional value.
     Branch {
         children: [Box<PartialTrie>; 16],
@@ -108,18 +108,18 @@ impl Debug for Nibbles {
     }
 }
 
-impl From<Nibbles> for EthAddress {
+impl From<Nibbles> for U256 {
     fn from(n: Nibbles) -> Self {
         n.packed
     }
 }
 
-impl From<EthAddress> for Nibbles {
-    fn from(addr: EthAddress) -> Self {
+impl From<U256> for Nibbles {
+    fn from(k: U256) -> Self {
         Self {
             count: 64, /* Always 64, since we are assuming fixed sized keys and `0`s can make up
                         * a key. */
-            packed: addr,
+            packed: k,
         }
     }
 }
@@ -131,7 +131,7 @@ impl FromStr for Nibbles {
         let packed = U256::from_str(s)?;
 
         Ok(Self {
-            count: Self::get_num_nibbles_in_addr(&packed),
+            count: Self::get_num_nibbles_in_key(&packed),
             packed,
         })
     }
@@ -161,14 +161,14 @@ impl Nibbles {
         r
     }
 
-    pub fn get_nibble_of_eth_addr(addr: &EthAddress, idx: usize) -> Nibble {
-        let count = Self::get_num_nibbles_in_addr(addr);
-        Self::get_nibble_common(addr, idx, count)
+    pub fn get_nibble_of_key(k: &U256, idx: usize) -> Nibble {
+        let count = Self::get_num_nibbles_in_key(k);
+        Self::get_nibble_common(k, idx, count)
     }
 
-    fn get_nibble_common(addr: &EthAddress, idx: usize, count: usize) -> Nibble {
+    fn get_nibble_common(k: &U256, idx: usize, count: usize) -> Nibble {
         let nib_idx = count - idx - 1;
-        let byte = addr.byte(nib_idx / 2);
+        let byte = k.byte(nib_idx / 2);
 
         match is_even(nib_idx) {
             false => (byte & 0b11110000) >> 4,
@@ -180,12 +180,12 @@ impl Nibbles {
         Self::get_nibble_range_common(&self.packed, range, self.count)
     }
 
-    fn get_nibble_range_common(addr: &EthAddress, range: Range<usize>, count: usize) -> Nibbles {
+    fn get_nibble_range_common(k: &U256, range: Range<usize>, count: usize) -> Nibbles {
         let range_count = range.end - range.start;
 
         let shift_amt = (count - range.end) * 4;
         let mask = create_mask_of_1s(range_count * 4) << shift_amt;
-        let range_packed = (*addr & mask) >> shift_amt;
+        let range_packed = (*k & mask) >> shift_amt;
 
         Self {
             count: range_count,
@@ -288,8 +288,8 @@ impl Nibbles {
         n1.count
     }
 
-    pub fn get_num_nibbles_in_addr(addr: &EthAddress) -> usize {
-        (addr.bits() + 3) / 4
+    pub fn get_num_nibbles_in_key(k: &U256) -> usize {
+        (k.bits() + 3) / 4
     }
 
     // TODO: Make nicer...
@@ -363,8 +363,10 @@ impl Nibbles {
 
 #[cfg(test)]
 mod tests {
+    use ethereum_types::U256;
+
     use super::Nibbles;
-    use crate::{testing_utils::eth_addr, types::EthAddress, utils::nibbles};
+    use crate::{testing_utils::trie_key, utils::nibbles};
 
     #[test]
     fn get_nibble_works() {
@@ -454,12 +456,12 @@ mod tests {
     }
 
     #[test]
-    fn get_nibble_of_eth_addr_works() {
-        let a = eth_addr(0x1234);
+    fn get_nibble_of_trie_key_works() {
+        let a = trie_key(0x1234);
 
-        assert_eq!(Nibbles::get_nibble_of_eth_addr(&a, 0), 0x1);
-        assert_eq!(Nibbles::get_nibble_of_eth_addr(&a, 1), 0x2);
-        assert_eq!(Nibbles::get_nibble_of_eth_addr(&a, 3), 0x4);
+        assert_eq!(Nibbles::get_nibble_of_key(&a, 0), 0x1);
+        assert_eq!(Nibbles::get_nibble_of_key(&a, 1), 0x2);
+        assert_eq!(Nibbles::get_nibble_of_key(&a, 3), 0x4);
     }
 
     #[test]
@@ -517,12 +519,12 @@ mod tests {
     }
 
     #[test]
-    fn eth_addr_to_nibbles_works() {
-        let addr = EthAddress::from(0x12);
-        let nib = Nibbles::from(addr);
+    fn trie_key_to_nibbles_works() {
+        let k = U256::from(0x12);
+        let nib = Nibbles::from(k);
 
         assert_eq!(nib.count, 64);
-        assert_eq!(nib.packed, EthAddress::from(0x12));
+        assert_eq!(nib.packed, U256::from(0x12));
     }
 
     #[test]

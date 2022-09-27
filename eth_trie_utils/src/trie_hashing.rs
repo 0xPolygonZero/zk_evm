@@ -6,7 +6,7 @@ use crate::partial_trie::PartialTrie;
 
 pub type TrieHash = ethereum_types::H256;
 
-/// A node type used for calculating the hash of a trie.
+/// theA node type used for calculating the hash of a trie.
 #[derive(Debug)]
 enum EncodedNode {
     /// Node that is RLPed but not hashed.
@@ -34,13 +34,7 @@ impl PartialTrie {
     fn rlp_encode_and_hash_node(&self) -> EncodedNode {
         match self {
             PartialTrie::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
-            PartialTrie::Hash(h) => {
-                // TODO: Just do a move instead once we move to `H256`...
-                let mut byte_buf = [0; 32];
-                h.to_big_endian(byte_buf.as_mut());
-
-                EncodedNode::Hashed(byte_buf)
-            }
+            PartialTrie::Hash(h) => EncodedNode::Hashed(h.0),
             PartialTrie::Branch { children, value } => {
                 let mut stream = RlpStream::new_list(17);
 

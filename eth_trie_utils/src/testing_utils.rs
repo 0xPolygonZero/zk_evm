@@ -1,15 +1,15 @@
 use ethereum_types::U256;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use crate::{trie_builder::InsertEntry, types::EthAddress};
+use crate::trie_builder::InsertEntry;
 
 pub(crate) fn common_setup() {
     // Try init since multiple tests calling `init` will cause an error.
     let _ = pretty_env_logger::try_init();
 }
 
-pub(crate) fn eth_addr(addr: u64) -> EthAddress {
-    EthAddress::from(addr)
+pub(crate) fn trie_key(k: u64) -> U256 {
+    U256::from(k)
 }
 
 pub(crate) fn generate_n_random_trie_entries(
