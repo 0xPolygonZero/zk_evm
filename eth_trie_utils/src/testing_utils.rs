@@ -26,3 +26,7 @@ pub(crate) fn generate_n_random_trie_entries(
         }
     })
 }
+
+pub(crate) fn gen_u256(rng: &mut StdRng) -> U256 {
+    U256(rng.gen())
+}

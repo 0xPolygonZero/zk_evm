@@ -1,12 +1,19 @@
-use std::{fmt::Debug, fmt::Display, ops::Range};
+use std::{fmt::Debug, fmt::Display, ops::Range, str::FromStr};
 
+use bytes::{Bytes, BytesMut};
 use ethereum_types::U256;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use uint::FromHexError;
 
 use crate::{
     types::{EthAddress, Nibble},
     utils::{create_mask_of_1s, is_even},
 };
+
+#[derive(Error, Debug)]
+#[error(transparent)]
+pub struct StrToNibblesError(#[from] FromHexError);
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 /// A partial trie, or a sub-trie thereof. This mimics the structure of an
@@ -114,6 +121,19 @@ impl From<EthAddress> for Nibbles {
                         * a key. */
             packed: addr,
         }
+    }
+}
+
+impl FromStr for Nibbles {
+    type Err = StrToNibblesError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let packed = U256::from_str(s)?;
+
+        Ok(Self {
+            count: Self::get_num_nibbles_in_addr(&packed),
+            packed,
+        })
     }
 }
 
@@ -248,9 +268,8 @@ impl Nibbles {
     }
 
     /// Finds the nibble idx that differs between two nibbles.
-    /// If there is no difference, returns the last index.
+    /// If there is no difference, returns 1 + the last index.
     pub fn find_nibble_idx_that_differs_between_nibbles(n1: &Nibbles, n2: &Nibbles) -> usize {
-        // Good assumption?
         assert_eq!(
             n1.count, n2.count,
             "Tried finding the differing nibble between two nibbles with different sizes! ({}, {})",
@@ -283,7 +302,7 @@ impl Nibbles {
         let mut byte_buf = [0; 32];
         self.packed.to_big_endian(&mut byte_buf);
 
-        let count_bytes = (self.count + 1) / 2;
+        let count_bytes = self.min_bytes();
         let hex_string_raw = hex::encode(&byte_buf[(32 - count_bytes)..32]);
         let hex_char_iter_raw = hex_string_raw.chars();
 
@@ -296,6 +315,49 @@ impl Nibbles {
         hex_string.extend(hex_char_iter);
 
         hex_string
+    }
+
+    /// Converts `Nibbles` to hex-prefix encoding.
+    /// This appends an extra nibble to the end which encodes if the node is
+    /// even and if it's a leaf (terminator) or not.
+    pub fn to_hex_prefix_encoding(&self, is_leaf: bool) -> Bytes {
+        let num_nibbles = self.count + 1;
+        let num_bytes = (num_nibbles + 1) / 2;
+        let flag_byte_idx = 33 - num_bytes;
+
+        // Needed because `to_big_endian` always writes `32` bytes.
+        let mut bytes = BytesMut::zeroed(33);
+
+        let is_even = is_even(self.count);
+        let odd_bit = match is_even {
+            false => 1,
+            true => 0,
+        };
+
+        let term_bit = match is_leaf {
+            false => 0,
+            true => 1,
+        };
+
+        let flags: u8 = (odd_bit | (term_bit << 1)) << 4;
+        self.packed.to_big_endian(&mut bytes[1..33]);
+
+        bytes[flag_byte_idx] |= flags;
+
+        Bytes::copy_from_slice(&bytes[flag_byte_idx..33])
+    }
+
+    /// Returns the minimum number of bytes needed to represent these `Nibbles`.
+    pub fn min_bytes(&self) -> usize {
+        (self.count + 1) / 2
+    }
+
+    // TODO: Make not terrible once we switch to H256...
+    pub fn bytes(&self) -> Vec<u8> {
+        let mut byte_buf = [0; 32];
+        self.packed.to_big_endian(&mut byte_buf);
+
+        byte_buf[32 - self.min_bytes()..32].to_vec()
     }
 }
 
@@ -333,6 +395,14 @@ mod tests {
 
         assert_eq!(nib, expected_orig_after_pop);
         assert_eq!(res, expected_resulting_nibbles);
+    }
+
+    fn to_hex_prefix_encoding(k: u64, is_leaf: bool) -> u64 {
+        let mut bytes_padded = [0; 8];
+        let bytes = nibbles(k).to_hex_prefix_encoding(is_leaf);
+        bytes_padded[8 - bytes.len()..8].clone_from_slice(&bytes);
+
+        u64::from_be_bytes(bytes_padded)
     }
 
     #[test]
@@ -423,6 +493,13 @@ mod tests {
             ),
             3
         );
+        assert_eq!(
+            Nibbles::find_nibble_idx_that_differs_between_nibbles(
+                &nibbles(0x1234),
+                &nibbles(0x1234)
+            ),
+            4
+        );
     }
 
     #[test]
@@ -446,5 +523,13 @@ mod tests {
 
         assert_eq!(nib.count, 64);
         assert_eq!(nib.packed, EthAddress::from(0x12));
+    }
+
+    #[test]
+    fn nibbles_to_hex_prefix_encoding_works() {
+        assert_eq!(to_hex_prefix_encoding(0x1234, false), 0x1234);
+        assert_eq!(to_hex_prefix_encoding(0x1234, true), 0x201234);
+        assert_eq!(to_hex_prefix_encoding(0x12345, false), 0x112345);
+        assert_eq!(to_hex_prefix_encoding(0x12345, true), 0x312345);
     }
 }
