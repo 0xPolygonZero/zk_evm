@@ -24,3 +24,5 @@ eth_trie = "0.1.0"
 pretty_env_logger = "0.4.0"
 rand = "0.8.5"
 rlp-derive = "0.1.0"
+serde = { version = "1.0.145", features = ["derive"] }
+serde_json = "1.0.85"

@@ -41,8 +41,8 @@ impl PartialTrie {
                 }
 
                 match value.is_empty() {
-                    false => stream.append_empty_data(),
-                    true => stream.append(value),
+                    false => stream.append(value),
+                    true => stream.append_empty_data(),
                 };
 
                 Self::hash_bytes_if_large_enough(stream.out().into())
@@ -76,8 +76,8 @@ impl PartialTrie {
 
     fn append_to_stream(s: &mut RlpStream, node: EncodedNode) {
         match node {
-            EncodedNode::Raw(b) => s.append(&b),
-            EncodedNode::Hashed(h) => s.append_raw(&h, 1),
+            EncodedNode::Raw(b) => s.append_raw(&b, 1),
+            EncodedNode::Hashed(h) => s.append(&h.as_ref()),
         };
     }
 }
@@ -88,27 +88,24 @@ fn hash(bytes: &Bytes) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
-    use std::{iter::once, str::FromStr, sync::Arc};
+    use std::{fs, iter::once, str::FromStr, sync::Arc};
 
-    use bytes::BufMut;
     use eth_trie::{EthTrie, MemoryDB, Trie};
-    use ethereum_types::{BigEndianHash, U256};
-    use keccak_hash::{KECCAK_EMPTY, KECCAK_NULL_RLP};
+    use ethereum_types::{H256, U256};
     use rand::{rngs::StdRng, SeedableRng};
     use rlp::Encodable;
+    use rlp_derive::RlpEncodable;
+    use serde::Deserialize;
 
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
-        testing_utils::gen_u256,
+        testing_utils::{common_setup, gen_u256, generate_n_random_trie_entries},
         trie_builder::InsertEntry,
         trie_hashing::{hash, TrieHash},
     };
 
-    const NULL_TRIE_HASH_STR: &str =
-        "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
-
-    const EMPTY_BYTES_HASH_STR: &str =
-        "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
+    const PYEVM_TRUTH_VALS_JSON_PATH: &str = "pyevm_account_ground_truth.txt";
+    const NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST: usize = 1000;
 
     #[derive(Copy, Clone, Debug)]
     struct U256Rlpable(U256);
@@ -125,53 +122,78 @@ mod tests {
             let leading_empty_bytes = self.0.leading_zeros() as usize / 8;
             self.0.to_big_endian(&mut buf);
 
-            // let x = &buf[leading_empty_bytes..];
-            // s.append(&x);
             s.encoder().encode_value(&buf[leading_empty_bytes..]);
-
-            // // TODO: Rough hack. Clean up before release...
-            // let mut be_bytes = [0; 32];
-            // self.0.to_big_endian(&mut be_bytes);
-
-            // s.append(&get_slice_removing_any_trailing_zero_bytes_be(&
-            // be_bytes));
         }
     }
 
-    fn str_to_trie_hash(s: &'static str) -> TrieHash {
-        TrieHash::from_uint(&U256::from(s))
-    }
-
-    #[derive(Debug)]
+    /// Eth test account entry. As a separate struct to allow easy RLP encoding.
+    #[derive(Debug, RlpEncodable)]
     struct AccountEntry {
         nonce: u64,
         balance: U256Rlpable,
-        storage_root: Option<U256Rlpable>,
-        code_hash: Option<U256Rlpable>,
+        storage_root: H256,
+        code_hash: H256,
     }
 
-    impl Encodable for AccountEntry {
-        fn rlp_append(&self, s: &mut rlp::RlpStream) {
-            s.begin_list(4);
+    /// Raw deserialized JSON parsed from the PyEVM output.
+    #[derive(Debug, Deserialize)]
+    struct PyEvmTrueValEntryRaw {
+        address: String,
+        balance: String,
+        nonce: u64,
+        code_hash: String,
+        storage_root: String,
+        final_state_root: String,
+    }
 
-            s.append(&self.nonce);
-            s.append(&self.balance);
+    impl From<PyEvmTrueValEntryRaw> for PyEvmTrueValEntry {
+        fn from(r: PyEvmTrueValEntryRaw) -> Self {
+            let addr_hash = hash(&Nibbles::from_str(&r.address).unwrap().bytes().into());
 
-            match self.storage_root {
-                Some(v) => s.append(&v),
-                None => s.append(&KECCAK_NULL_RLP.0.as_slice()),
-            };
-
-            match self.code_hash {
-                Some(v) => s.append(&v),
-                None => s.append(&KECCAK_EMPTY.0.as_slice()),
-            };
+            PyEvmTrueValEntry {
+                account_key: U256::from(addr_hash).into(),
+                balance: U256::from_str(&r.balance).unwrap().into(),
+                nonce: r.nonce,
+                code_hash: H256::from_str(&r.code_hash).unwrap(),
+                storage_root: H256::from_str(&r.storage_root).unwrap(),
+                final_state_root: H256::from_str(&r.final_state_root).unwrap(),
+            }
         }
+    }
+
+    /// Parsed PyEVM output in a format that the tests can use.
+    #[derive(Clone, Debug)]
+    struct PyEvmTrueValEntry {
+        account_key: Nibbles,
+        balance: U256Rlpable,
+        nonce: u64,
+        code_hash: H256,
+        storage_root: H256,
+        final_state_root: H256,
+    }
+
+    impl PyEvmTrueValEntry {
+        fn account_entry(&self) -> AccountEntry {
+            AccountEntry {
+                nonce: self.nonce,
+                balance: self.balance,
+                storage_root: self.storage_root,
+                code_hash: self.code_hash,
+            }
+        }
+    }
+
+    // Inefficient, but good enough for tests.
+    fn load_pyevm_truth_vals() -> Vec<PyEvmTrueValEntry> {
+        let bytes = fs::read(PYEVM_TRUTH_VALS_JSON_PATH).unwrap();
+        let raw = serde_json::from_slice::<Vec<PyEvmTrueValEntryRaw>>(&bytes).unwrap();
+
+        raw.into_iter().map(|r| r.into()).collect()
     }
 
     /// Gets the root hash for each insert by using an established eth trie
     /// library as a ground truth.
-    fn get_correct_trie_root_hashes_after_each_insert(
+    fn get_lib_trie_root_hashes_after_each_insert(
         entries: impl Iterator<Item = InsertEntry>,
     ) -> impl Iterator<Item = TrieHash> {
         let db = Arc::new(MemoryDB::new(true));
@@ -188,61 +210,113 @@ mod tests {
         })
     }
 
-    fn append_u256_to_byte_buf(buf: &mut Vec<u8>, v: U256) {
-        let mut v_bytes = [0; 32];
-        v.to_big_endian(&mut v_bytes);
+    fn get_root_hashes_for_our_trie_after_each_insert(
+        entries: impl Iterator<Item = InsertEntry>,
+    ) -> impl Iterator<Item = TrieHash> {
+        let mut trie = Box::new(PartialTrie::Empty);
 
-        buf.put_slice(&v_bytes);
+        entries.map(move |e| {
+            if let Some(updated_root) = PartialTrie::insert_into_trie(&mut trie, e) {
+                trie = updated_root;
+            }
+
+            trie.calc_hash()
+        })
     }
 
     #[test]
     fn empty_hash_is_correct() {
+        common_setup();
+
         let trie = PartialTrie::Empty;
-        assert_eq!(str_to_trie_hash(NULL_TRIE_HASH_STR), trie.calc_hash());
+        assert_eq!(keccak_hash::KECCAK_NULL_RLP, trie.calc_hash());
     }
 
     #[test]
     fn single_account_leaf_hash_is_correct() {
-        let account_entry_key =
-            Nibbles::from_str("2fe4900ed4983da6f16363c47c8ee8ee3c327829").unwrap();
+        common_setup();
 
-        let x = hash(&account_entry_key.bytes().into());
-
-        let acc = AccountEntry {
-            balance: U256::zero().into(),
-            nonce: 0,
-            code_hash: None,
-            storage_root: None,
-        };
-
-        let rlp_bytes = rlp::encode(&acc);
+        let acc_and_hash_entry = &load_pyevm_truth_vals()[0];
+        let acc_entry = acc_and_hash_entry.account_entry();
+        let rlp_bytes = rlp::encode(&acc_entry);
 
         let ins_entry = InsertEntry {
-            nibbles: Nibbles::from(U256::from(x)),
+            nibbles: acc_and_hash_entry.account_key,
             v: rlp_bytes.into(),
         };
 
-        let truth_val = get_correct_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
-            .next()
-            .unwrap();
+        let py_evm_truth_val = acc_and_hash_entry.final_state_root;
+        let eth_trie_lib_truth_val =
+            get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
+                .next()
+                .unwrap();
         let our_hash = PartialTrie::construct_trie_from_inserts(once(ins_entry)).calc_hash();
 
-        assert_eq!(truth_val, our_hash);
+        assert_eq!(py_evm_truth_val, our_hash);
+        assert_eq!(eth_trie_lib_truth_val, our_hash);
     }
 
     #[test]
     fn single_leaf_hash_is_correct() {
+        common_setup();
+
         let mut rng = StdRng::seed_from_u64(0);
         let ins_entry = InsertEntry {
             nibbles: gen_u256(&mut rng).into(),
             v: vec![1],
         };
 
-        let truth_val = get_correct_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
+        let truth_val = get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
             .next()
             .unwrap();
         let our_hash = PartialTrie::construct_trie_from_inserts(once(ins_entry)).calc_hash();
 
         assert_eq!(truth_val, our_hash);
+    }
+
+    #[test]
+    fn massive_random_data_insert_hashes_agree_with_eth_trie() {
+        common_setup();
+
+        let entries: Vec<_> =
+            generate_n_random_trie_entries(NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST, 0)
+                .collect();
+        let our_insert_hashes =
+            get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
+        let lib_insert_hashes = get_lib_trie_root_hashes_after_each_insert(entries.iter().cloned());
+
+        let our_hashes_match_libs = our_insert_hashes
+            .zip(lib_insert_hashes)
+            .all(|(our_h, lib_h)| our_h == lib_h);
+
+        assert!(our_hashes_match_libs)
+    }
+
+    #[test]
+    fn massive_account_insert_hashes_agree_with_eth_trie_and_py_evm() {
+        common_setup();
+
+        let py_evm_truth_vals = load_pyevm_truth_vals();
+
+        let entries: Vec<_> = py_evm_truth_vals
+            .iter()
+            .map(|e| InsertEntry {
+                nibbles: e.account_key,
+                v: rlp::encode(&e.account_entry()).into(),
+            })
+            .collect();
+
+        let our_insert_hashes =
+            get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
+        let lib_insert_hashes = get_lib_trie_root_hashes_after_each_insert(entries.iter().cloned());
+        let pyevm_insert_hashes = py_evm_truth_vals.into_iter().map(|e| e.final_state_root);
+
+        for ((our_h, lib_h), pyevm_h) in our_insert_hashes
+            .zip(lib_insert_hashes)
+            .zip(pyevm_insert_hashes)
+        {
+            assert_eq!(our_h, lib_h);
+            assert_eq!(our_h, pyevm_h);
+        }
     }
 }
