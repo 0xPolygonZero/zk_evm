@@ -49,7 +49,7 @@ impl InsertEntry {
 
     pub fn from_trie_key_and_bytes(k: U256, v: Vec<u8>) -> Self {
         Self {
-            nibbles: k.into(),
+            nibbles: Nibbles::from_u256_fixed(k),
             v,
         }
     }
@@ -272,7 +272,7 @@ mod tests {
 
     fn entry<K: Into<U256>>(k: K) -> InsertEntry {
         InsertEntry {
-            nibbles: (k.into()).into(),
+            nibbles: Nibbles::from_u256_fixed(k.into()),
             v: Vec::new(),
         }
     }

@@ -8,7 +8,7 @@ use crate::{
 
 impl PartialTrie {
     pub fn get(&self, k: U256) -> Option<&[u8]> {
-        let mut n = k.into();
+        let mut n = Nibbles::from_u256_fixed(k);
         self.get_intern(&mut n)
     }
 

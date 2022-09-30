@@ -120,18 +120,7 @@ impl From<Nibbles> for U256 {
     }
 }
 
-// TODO: Make this an explicit call as it's not clear what the default behavior
-// (in terms of count) should be for this conversion.
-impl From<U256> for Nibbles {
-    fn from(k: U256) -> Self {
-        Self {
-            count: 64, /* Always 64, since we are assuming fixed sized keys and `0`s can make up
-                        * a key. */
-            packed: k,
-        }
-    }
-}
-
+// TODO: Make this an explicit method as it's not clear about key fixed size...
 impl FromStr for Nibbles {
     type Err = StrToNibblesError;
 
@@ -301,9 +290,10 @@ impl Nibbles {
     }
 
     // TODO: Make nicer...
+    /// Returns a hex representation of the string.
     fn as_hex_str(&self) -> String {
         // `hex::encode` will output `0x` for 0.
-        if self.packed == U256::zero() {
+        if self.packed == U256::zero() && self.count == 0 {
             return "0x0".to_string();
         }
 
@@ -360,18 +350,44 @@ impl Nibbles {
         (self.count + 1) / 2
     }
 
-    // TODO: Make not terrible once we switch to H256...
+    // TODO: Make not terrible at some point... Consider moving away from `U256`
+    // internally?
     pub fn bytes(&self) -> Vec<u8> {
         let mut byte_buf = [0; 32];
         self.packed.to_big_endian(&mut byte_buf);
 
         byte_buf[32 - self.min_bytes()..32].to_vec()
     }
+
+    pub fn from_string_fixed(s: &str) -> Result<Self, StrToNibblesError> {
+        let packed = U256::from_str(s)?;
+        Ok(Self::from_u256_fixed(packed))
+    }
+
+    pub fn from_string_non_fixed(s: &str) -> Result<Self, StrToNibblesError> {
+        let packed = U256::from_str(s)?;
+        Ok(Self::from_u256_non_fixed(packed))
+    }
+
+    /// Creates `Nibbles` from a fixed size key.
+    pub fn from_u256_fixed(k: U256) -> Self {
+        Self {
+            count: 64,
+            packed: k,
+        }
+    }
+
+    /// Creates `Nibbles` from a variable length key.
+    pub fn from_u256_non_fixed(packed: U256) -> Self {
+        Self {
+            count: Self::get_num_nibbles_in_key(&packed),
+            packed,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use ethereum_types::U256;
 
     use super::Nibbles;
     use crate::{testing_utils::trie_key, utils::nibbles};
@@ -527,19 +543,31 @@ mod tests {
     }
 
     #[test]
-    fn trie_key_to_nibbles_works() {
-        let k = U256::from(0x12);
-        let nib = Nibbles::from(k);
-
-        assert_eq!(nib.count, 64);
-        assert_eq!(nib.packed, U256::from(0x12));
-    }
-
-    #[test]
     fn nibbles_to_hex_prefix_encoding_works() {
         assert_eq!(to_hex_prefix_encoding(0x1234, false), 0x1234);
         assert_eq!(to_hex_prefix_encoding(0x1234, true), 0x201234);
         assert_eq!(to_hex_prefix_encoding(0x12345, false), 0x112345);
         assert_eq!(to_hex_prefix_encoding(0x12345, true), 0x312345);
+    }
+
+    #[test]
+    fn nibbles_from_fixed_works() {
+        assert_eq!(
+            Nibbles::from_u256_fixed(0.into()).as_hex_str(),
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+        assert_eq!(
+            Nibbles::from_u256_fixed(2048.into()).as_hex_str(),
+            "0x0000000000000000000000000000000000000000000000000000000000000800"
+        );
+    }
+
+    #[test]
+    fn nibbles_from_non_fixed_works() {
+        assert_eq!(Nibbles::from_u256_non_fixed(0.into()).as_hex_str(), "0x0");
+        assert_eq!(
+            Nibbles::from_u256_non_fixed(2048.into()).as_hex_str(),
+            "0x800"
+        );
     }
 }

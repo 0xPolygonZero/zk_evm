@@ -151,7 +151,7 @@ mod tests {
             let addr_hash = hash(&Nibbles::from_str(&r.address).unwrap().bytes().into());
 
             PyEvmTrueValEntry {
-                account_key: U256::from(addr_hash).into(),
+                account_key: Nibbles::from_u256_fixed(U256::from(addr_hash)),
                 balance: U256::from_str(&r.balance).unwrap().into(),
                 nonce: r.nonce,
                 code_hash: H256::from_str(&r.code_hash).unwrap(),
@@ -180,6 +180,13 @@ mod tests {
                 storage_root: self.storage_root,
                 code_hash: self.code_hash,
             }
+        }
+    }
+
+    fn non_fixed_key_insert_entry(k: u64) -> InsertEntry {
+        InsertEntry {
+            nibbles: Nibbles::from_u256_non_fixed(k.into()),
+            v: vec![],
         }
     }
 
@@ -262,7 +269,7 @@ mod tests {
 
         let mut rng = StdRng::seed_from_u64(0);
         let ins_entry = InsertEntry {
-            nibbles: gen_u256(&mut rng).into(),
+            nibbles: Nibbles::from_u256_fixed(gen_u256(&mut rng)),
             v: vec![1],
         };
 
