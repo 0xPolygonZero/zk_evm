@@ -185,13 +185,6 @@ mod tests {
         }
     }
 
-    fn non_fixed_key_insert_entry(k: u64) -> InsertEntry {
-        InsertEntry {
-            nibbles: Nibbles::from_u256_variable(k.into()),
-            v: vec![],
-        }
-    }
-
     // Inefficient, but good enough for tests.
     fn load_pyevm_truth_vals() -> Vec<PyEvmTrueValEntry> {
         let bytes = fs::read(PYEVM_TRUTH_VALS_JSON_PATH).unwrap();

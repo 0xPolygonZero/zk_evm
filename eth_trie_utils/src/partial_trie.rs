@@ -200,6 +200,8 @@ impl Nibbles {
     }
 
     /// Drops the next `n` proceeding nibbles.
+    /// If we truncate more nibbles that there are, we will just return the
+    /// `empty` nibble.
     pub fn truncate_n_nibbles(&self, n: usize) -> Nibbles {
         let mut nib = *self;
         nib.truncate_n_nibbles_mut(n);
@@ -208,6 +210,12 @@ impl Nibbles {
     }
 
     pub fn truncate_n_nibbles_mut(&mut self, n: usize) {
+        // If we attempt to truncate more than we have, then just truncate to `0`.
+        let n = match self.count >= n {
+            false => self.count,
+            true => n,
+        };
+
         let mask_shift = (self.count - n) * 4;
         let truncate_mask = !(create_mask_of_1s(n * 4) << mask_shift);
 
@@ -288,6 +296,10 @@ impl Nibbles {
             "Tried finding the differing nibble between two nibbles with different sizes! ({}, {})",
             n1, n2
         );
+
+        if n1.count == 0 {
+            return n1.count;
+        }
 
         let mut curr_mask: U256 = (U256::from(0xf)) << ((n1.count - 1) * 4);
         for i in 0..n1.count {
@@ -469,13 +481,14 @@ mod tests {
     }
 
     #[test]
-    fn truncate_nibble_works() {
+    fn truncate_nibbles_works() {
         let n = nibbles_variable(0x1234);
 
         assert_eq!(n.truncate_n_nibbles(0), n);
         assert_eq!(n.truncate_n_nibbles(1), nibbles_variable(0x234));
         assert_eq!(n.truncate_n_nibbles(2), nibbles_variable(0x34));
         assert_eq!(n.truncate_n_nibbles(4), nibbles_variable(0x0));
+        assert_eq!(n.truncate_n_nibbles(8), nibbles_variable(0x0));
     }
 
     #[test]
