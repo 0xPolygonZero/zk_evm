@@ -3,12 +3,12 @@ use log::trace;
 
 use crate::{
     partial_trie::{Nibbles, PartialTrie},
-    utils::nibbles,
+    utils::nibbles_variable,
 };
 
 impl PartialTrie {
     pub fn get(&self, k: U256) -> Option<&[u8]> {
-        let mut n = Nibbles::from_u256_fixed(k);
+        let mut n = Nibbles::from_u256_variable(k);
         self.get_intern(&mut n)
     }
 
@@ -21,7 +21,10 @@ impl PartialTrie {
             // Note: If we end up supporting non-fixed sized keys, then we need to also check value.
             PartialTrie::Branch { children, .. } => {
                 let nib = curr_nib.pop_next_nibble();
-                trace!("Get traversed Branch (nibble: {})", nibbles(nib as u64));
+                trace!(
+                    "Get traversed Branch (nibble: {})",
+                    nibbles_variable(nib as u64)
+                );
                 children[nib as usize].get_intern(curr_nib)
             }
             PartialTrie::Extension { nibbles, child } => {
@@ -50,7 +53,7 @@ mod tests {
 
     use crate::{
         partial_trie::PartialTrie,
-        testing_utils::{common_setup, generate_n_random_trie_entries},
+        testing_utils::{common_setup, generate_n_random_fixed_trie_entries},
     };
 
     const TRIE_SIZE: usize = 100000;
@@ -59,7 +62,8 @@ mod tests {
     fn get_works() {
         common_setup();
 
-        let random_entries: Vec<_> = generate_n_random_trie_entries(TRIE_SIZE, 9001).collect();
+        let random_entries: Vec<_> =
+            generate_n_random_fixed_trie_entries(TRIE_SIZE, 9001).collect();
         let t = PartialTrie::construct_trie_from_inserts(random_entries.iter().cloned());
 
         for e in random_entries.iter() {

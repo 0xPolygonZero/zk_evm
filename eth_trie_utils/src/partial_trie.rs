@@ -56,7 +56,7 @@ impl PartialEq for PartialTrie {
                     children: c2,
                     value: v2,
                 },
-            ) => v1 == v2 && (0..16).all(|i| c1[i] != c2[i]),
+            ) => v1 == v2 && (0..16).all(|i| c1[i] == c2[i]),
             (
                 PartialTrie::Extension {
                     nibbles: n1,
@@ -264,9 +264,25 @@ impl Nibbles {
         }
     }
 
+    // TODO: Potentially make faster...
     /// Finds the nibble idx that differs between two nibbles.
     /// If there is no difference, returns 1 + the last index.
-    pub fn find_nibble_idx_that_differs_between_nibbles(n1: &Nibbles, n2: &Nibbles) -> usize {
+    pub fn find_nibble_idx_that_differs_between_nibbles_different_lengths(
+        n1: &Nibbles,
+        n2: &Nibbles,
+    ) -> usize {
+        let min_count = n1.count.min(n2.count);
+
+        Self::find_nibble_idx_that_differs_between_nibbles_equal_lengths(
+            &n1.get_nibble_range(0..min_count),
+            &n2.get_nibble_range(0..min_count),
+        )
+    }
+
+    pub fn find_nibble_idx_that_differs_between_nibbles_equal_lengths(
+        n1: &Nibbles,
+        n2: &Nibbles,
+    ) -> usize {
         assert_eq!(
             n1.count, n2.count,
             "Tried finding the differing nibble between two nibbles with different sizes! ({}, {})",
@@ -293,7 +309,7 @@ impl Nibbles {
     /// Returns a hex representation of the string.
     fn as_hex_str(&self) -> String {
         // `hex::encode` will output `0x` for 0.
-        if self.packed == U256::zero() && self.count == 0 {
+        if self.count == 0 {
             return "0x0".to_string();
         }
 
@@ -364,9 +380,9 @@ impl Nibbles {
         Ok(Self::from_u256_fixed(packed))
     }
 
-    pub fn from_string_non_fixed(s: &str) -> Result<Self, StrToNibblesError> {
+    pub fn from_string_variable(s: &str) -> Result<Self, StrToNibblesError> {
         let packed = U256::from_str(s)?;
-        Ok(Self::from_u256_non_fixed(packed))
+        Ok(Self::from_u256_variable(packed))
     }
 
     /// Creates `Nibbles` from a fixed size key.
@@ -378,7 +394,7 @@ impl Nibbles {
     }
 
     /// Creates `Nibbles` from a variable length key.
-    pub fn from_u256_non_fixed(packed: U256) -> Self {
+    pub fn from_u256_variable(packed: U256) -> Self {
         Self {
             count: Self::get_num_nibbles_in_key(&packed),
             packed,
@@ -390,24 +406,35 @@ impl Nibbles {
 mod tests {
 
     use super::Nibbles;
-    use crate::{testing_utils::trie_key, utils::nibbles};
+    use crate::{testing_utils::trie_key, utils::nibbles_variable};
 
     #[test]
     fn get_nibble_works() {
-        let n = nibbles(0x1234);
+        let n = nibbles_variable(0x1234);
 
         assert_eq!(n.get_nibble(0), 0x1);
         assert_eq!(n.get_nibble(3), 0x4);
     }
 
+    fn u64_to_nibbles_and_bytes_back_to_u64(n: u64) -> u64 {
+        let mut byte_buf = [0; 8];
+        let n_bytes = &nibbles_variable(n).bytes();
+
+        for (i, b) in n_bytes.iter().rev().enumerate() {
+            byte_buf[7 - i] = *b;
+        }
+
+        u64::from_be_bytes(byte_buf)
+    }
+
     #[test]
     fn pop_next_nibbles_works() {
-        let nib = nibbles(0x1234);
+        let nib = nibbles_variable(0x1234);
 
-        assert_pop_nibbles(&nib, 0, nibbles(0x1234), nibbles(0x0));
-        assert_pop_nibbles(&nib, 1, nibbles(0x234), nibbles(0x1));
-        assert_pop_nibbles(&nib, 3, nibbles(0x4), nibbles(0x123));
-        assert_pop_nibbles(&nib, 4, nibbles(0x0), nibbles(0x1234));
+        assert_pop_nibbles(&nib, 0, nibbles_variable(0x1234), nibbles_variable(0x0));
+        assert_pop_nibbles(&nib, 1, nibbles_variable(0x234), nibbles_variable(0x1));
+        assert_pop_nibbles(&nib, 3, nibbles_variable(0x4), nibbles_variable(0x123));
+        assert_pop_nibbles(&nib, 4, nibbles_variable(0x0), nibbles_variable(0x1234));
     }
 
     fn assert_pop_nibbles(
@@ -425,7 +452,7 @@ mod tests {
 
     fn to_hex_prefix_encoding(k: u64, is_leaf: bool) -> u64 {
         let mut bytes_padded = [0; 8];
-        let bytes = nibbles(k).to_hex_prefix_encoding(is_leaf);
+        let bytes = nibbles_variable(k).to_hex_prefix_encoding(is_leaf);
         bytes_padded[8 - bytes.len()..8].clone_from_slice(&bytes);
 
         u64::from_be_bytes(bytes_padded)
@@ -433,50 +460,62 @@ mod tests {
 
     #[test]
     fn get_nibble_range_works() {
-        let n = nibbles(0x1234);
+        let n = nibbles_variable(0x1234);
 
-        assert_eq!(n.get_nibble_range(0..0), nibbles(0x0));
-        assert_eq!(n.get_nibble_range(0..1), nibbles(0x1));
-        assert_eq!(n.get_nibble_range(0..2), nibbles(0x12));
-        assert_eq!(n.get_nibble_range(0..4), nibbles(0x1234));
+        assert_eq!(n.get_nibble_range(0..0), nibbles_variable(0x0));
+        assert_eq!(n.get_nibble_range(0..1), nibbles_variable(0x1));
+        assert_eq!(n.get_nibble_range(0..2), nibbles_variable(0x12));
+        assert_eq!(n.get_nibble_range(0..4), nibbles_variable(0x1234));
     }
 
     #[test]
     fn truncate_nibble_works() {
-        let n = nibbles(0x1234);
+        let n = nibbles_variable(0x1234);
 
         assert_eq!(n.truncate_n_nibbles(0), n);
-        assert_eq!(n.truncate_n_nibbles(1), nibbles(0x234));
-        assert_eq!(n.truncate_n_nibbles(2), nibbles(0x34));
-        assert_eq!(n.truncate_n_nibbles(4), nibbles(0x0));
+        assert_eq!(n.truncate_n_nibbles(1), nibbles_variable(0x234));
+        assert_eq!(n.truncate_n_nibbles(2), nibbles_variable(0x34));
+        assert_eq!(n.truncate_n_nibbles(4), nibbles_variable(0x0));
     }
 
     #[test]
     fn split_at_idx_works() {
-        let n = nibbles(0x1234);
+        let n = nibbles_variable(0x1234);
 
-        assert_eq!(n.split_at_idx(0), (nibbles(0x0), nibbles(0x1234)));
-        assert_eq!(n.split_at_idx(1), (nibbles(0x1), nibbles(0x234)));
-        assert_eq!(n.split_at_idx(2), (nibbles(0x12), nibbles(0x34)));
-        assert_eq!(n.split_at_idx(3), (nibbles(0x123), nibbles(0x4)));
+        assert_eq!(
+            n.split_at_idx(0),
+            (nibbles_variable(0x0), nibbles_variable(0x1234))
+        );
+        assert_eq!(
+            n.split_at_idx(1),
+            (nibbles_variable(0x1), nibbles_variable(0x234))
+        );
+        assert_eq!(
+            n.split_at_idx(2),
+            (nibbles_variable(0x12), nibbles_variable(0x34))
+        );
+        assert_eq!(
+            n.split_at_idx(3),
+            (nibbles_variable(0x123), nibbles_variable(0x4))
+        );
     }
 
     #[test]
     fn split_at_idx_prefix_works() {
-        let n = nibbles(0x1234);
+        let n = nibbles_variable(0x1234);
 
-        assert_eq!(n.split_at_idx_prefix(0), nibbles(0x0));
-        assert_eq!(n.split_at_idx_prefix(1), nibbles(0x1));
-        assert_eq!(n.split_at_idx_prefix(3), nibbles(0x123));
+        assert_eq!(n.split_at_idx_prefix(0), nibbles_variable(0x0));
+        assert_eq!(n.split_at_idx_prefix(1), nibbles_variable(0x1));
+        assert_eq!(n.split_at_idx_prefix(3), nibbles_variable(0x123));
     }
 
     #[test]
     fn split_at_idx_postfix_works() {
-        let n = nibbles(0x1234);
+        let n = nibbles_variable(0x1234);
 
-        assert_eq!(n.split_at_idx_postfix(0), nibbles(0x1234));
-        assert_eq!(n.split_at_idx_postfix(1), nibbles(0x234));
-        assert_eq!(n.split_at_idx_postfix(3), nibbles(0x4));
+        assert_eq!(n.split_at_idx_postfix(0), nibbles_variable(0x1234));
+        assert_eq!(n.split_at_idx_postfix(1), nibbles_variable(0x234));
+        assert_eq!(n.split_at_idx_postfix(3), nibbles_variable(0x4));
     }
 
     #[test]
@@ -490,39 +529,58 @@ mod tests {
 
     #[test]
     fn merge_works() {
-        assert_eq!(nibbles(0x12).merge(&nibbles(0x34)), nibbles(0x1234));
-        assert_eq!(nibbles(0x12).merge(&nibbles(0x0)), nibbles(0x12));
-        assert_eq!(nibbles(0x0).merge(&nibbles(0x34)), nibbles(0x34));
-        assert_eq!(nibbles(0x0).merge(&nibbles(0x0)), nibbles(0x0));
+        assert_eq!(
+            nibbles_variable(0x12).merge(&nibbles_variable(0x34)),
+            nibbles_variable(0x1234)
+        );
+        assert_eq!(
+            nibbles_variable(0x12).merge(&nibbles_variable(0x0)),
+            nibbles_variable(0x12)
+        );
+        assert_eq!(
+            nibbles_variable(0x0).merge(&nibbles_variable(0x34)),
+            nibbles_variable(0x34)
+        );
+        assert_eq!(
+            nibbles_variable(0x0).merge(&nibbles_variable(0x0)),
+            nibbles_variable(0x0)
+        );
     }
 
     #[test]
     fn find_nibble_idx_that_differs_between_nibbles_works() {
         assert_eq!(
-            Nibbles::find_nibble_idx_that_differs_between_nibbles(
-                &nibbles(0x1234),
-                &nibbles(0x2567)
+            Nibbles::find_nibble_idx_that_differs_between_nibbles_equal_lengths(
+                &nibbles_variable(0x1234),
+                &nibbles_variable(0x2567)
             ),
             0
         );
         assert_eq!(
-            Nibbles::find_nibble_idx_that_differs_between_nibbles(
-                &nibbles(0x1234),
-                &nibbles(0x1256)
+            Nibbles::find_nibble_idx_that_differs_between_nibbles_equal_lengths(
+                &nibbles_variable(0x1234),
+                &nibbles_variable(0x1256)
             ),
             2
         );
         assert_eq!(
-            Nibbles::find_nibble_idx_that_differs_between_nibbles(
-                &nibbles(0x1234),
-                &nibbles(0x1235)
+            Nibbles::find_nibble_idx_that_differs_between_nibbles_equal_lengths(
+                &nibbles_variable(0x1234),
+                &nibbles_variable(0x1235)
             ),
             3
         );
         assert_eq!(
-            Nibbles::find_nibble_idx_that_differs_between_nibbles(
-                &nibbles(0x1234),
-                &nibbles(0x1234)
+            Nibbles::find_nibble_idx_that_differs_between_nibbles_equal_lengths(
+                &nibbles_variable(0x1234),
+                &nibbles_variable(0x1234)
+            ),
+            4
+        );
+        assert_eq!(
+            Nibbles::find_nibble_idx_that_differs_between_nibbles_different_lengths(
+                &nibbles_variable(0x1234),
+                &nibbles_variable(0x12345)
             ),
             4
         );
@@ -530,16 +588,16 @@ mod tests {
 
     #[test]
     fn nibbles_are_identical_up_to_smallest_count_works() {
-        let n = nibbles(0x1234);
+        let n = nibbles_variable(0x1234);
 
-        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x1234)));
-        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x1)));
-        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x12)));
+        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles_variable(0x1234)));
+        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles_variable(0x1)));
+        assert!(n.nibbles_are_identical_up_to_smallest_count(&nibbles_variable(0x12)));
 
-        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x23)));
-        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x4)));
-        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x5)));
-        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles(0x13)));
+        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles_variable(0x23)));
+        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles_variable(0x4)));
+        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles_variable(0x5)));
+        assert!(!n.nibbles_are_identical_up_to_smallest_count(&nibbles_variable(0x13)));
     }
 
     #[test]
@@ -548,6 +606,22 @@ mod tests {
         assert_eq!(to_hex_prefix_encoding(0x1234, true), 0x201234);
         assert_eq!(to_hex_prefix_encoding(0x12345, false), 0x112345);
         assert_eq!(to_hex_prefix_encoding(0x12345, true), 0x312345);
+    }
+
+    #[test]
+    fn nibbles_to_bytes_works() {
+        assert_eq!(u64_to_nibbles_and_bytes_back_to_u64(0x0), 0x0);
+        assert_eq!(u64_to_nibbles_and_bytes_back_to_u64(0x4), 0x4);
+        assert_eq!(u64_to_nibbles_and_bytes_back_to_u64(0x1234), 0x1234);
+        assert_eq!(u64_to_nibbles_and_bytes_back_to_u64(0x12345), 0x12345);
+        assert_eq!(
+            u64_to_nibbles_and_bytes_back_to_u64(0x123456789001aaa),
+            0x123456789001aaa
+        );
+        assert_eq!(
+            u64_to_nibbles_and_bytes_back_to_u64(0x123456789001aaaa),
+            0x123456789001aaaa
+        );
     }
 
     #[test]
@@ -564,9 +638,9 @@ mod tests {
 
     #[test]
     fn nibbles_from_non_fixed_works() {
-        assert_eq!(Nibbles::from_u256_non_fixed(0.into()).as_hex_str(), "0x0");
+        assert_eq!(Nibbles::from_u256_variable(0.into()).as_hex_str(), "0x0");
         assert_eq!(
-            Nibbles::from_u256_non_fixed(2048.into()).as_hex_str(),
+            Nibbles::from_u256_variable(2048.into()).as_hex_str(),
             "0x800"
         );
     }

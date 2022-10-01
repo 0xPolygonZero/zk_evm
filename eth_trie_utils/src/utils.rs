@@ -15,8 +15,8 @@ pub(crate) fn create_mask_of_1s(amt: usize) -> U256 {
 
 /// Creates nibbles that are easily readable for tests and logging.
 /// Note that these nibbles are not fixed sized like the rest of the codebase.
-pub(crate) fn nibbles(k: u64) -> Nibbles {
-    let mut n: Nibbles = Nibbles::from_u256_non_fixed(k.into());
+pub(crate) fn nibbles_variable(k: u64) -> Nibbles {
+    let mut n: Nibbles = Nibbles::from_u256_variable(k.into());
     n.count = Nibbles::get_num_nibbles_in_key(&(k.into()));
 
     n

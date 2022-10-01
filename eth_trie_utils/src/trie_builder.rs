@@ -5,7 +5,7 @@ use log::trace;
 
 use crate::{
     partial_trie::{Nibbles, PartialTrie},
-    utils::nibbles,
+    utils::nibbles_variable,
 };
 
 #[derive(Debug)]
@@ -102,7 +102,7 @@ fn insert_into_trie_rec(
             let nibble = new_node.nibbles.pop_next_nibble();
             trace!(
                 "Insert traversed Branch (nibble: {})",
-                nibbles(nibble as u64)
+                nibbles_variable(nibble as u64)
             );
 
             if let Some(updated_child) =
@@ -128,6 +128,8 @@ fn insert_into_trie_rec(
                 return None;
             }
 
+            trace!("info: {:#?}", info);
+
             // Drop one since branch will cover one nibble.
             // Also note that the postfix is always >= 1.
             let existing_postfix_adjusted_for_branch = info.existing_postfix.truncate_n_nibbles(1);
@@ -148,11 +150,13 @@ fn insert_into_trie_rec(
                 new_node,
             ));
         }
-        PartialTrie::Leaf { nibbles, value: _ } => {
+        PartialTrie::Leaf { nibbles, value } => {
             trace!("Insert traversed Leaf (nibbles: {:?})", nibbles);
 
-            // Assume that the leaf and new entry key differ?
-            assert!(*nibbles != new_node.nibbles, "Tried inserting a node that already existed in the trie! (new: {:?}, existing: {:?})", new_node, node);
+            if *nibbles == new_node.nibbles {
+                *value = new_node.v;
+                return Some(Box::new(node.clone()));
+            }
 
             let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
 
@@ -181,10 +185,11 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
     existing_node_nibbles: &Nibbles,
     new_node_nibbles: &Nibbles,
 ) -> ExistingAndNewNodePreAndPost {
-    let nib_idx_of_difference = Nibbles::find_nibble_idx_that_differs_between_nibbles(
-        existing_node_nibbles,
-        &new_node_nibbles.get_nibble_range(0..existing_node_nibbles.count),
-    );
+    let nib_idx_of_difference =
+        Nibbles::find_nibble_idx_that_differs_between_nibbles_different_lengths(
+            existing_node_nibbles,
+            new_node_nibbles,
+        );
 
     let (common_prefix, existing_postfix) =
         existing_node_nibbles.split_at_idx(nib_idx_of_difference);
@@ -202,7 +207,6 @@ fn place_branch_and_potentially_ext_prefix(
     existing_node: Box<PartialTrie>,
     new_node: InsertEntry,
 ) -> Box<PartialTrie> {
-    // `1` since the first nibble is being represented by the branch.
     let existing_first_nibble = info.existing_postfix.get_nibble(0);
     let new_first_nibble = info.new_postfix.get_nibble(0);
 
@@ -263,19 +267,15 @@ mod tests {
     use super::InsertEntry;
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
-        testing_utils::{common_setup, generate_n_random_trie_entries},
+        testing_utils::{
+            common_setup, empty_entry_fixed, empty_entry_variable,
+            generate_n_random_fixed_trie_entries,
+        },
         types::Nibble,
         utils::create_mask_of_1s,
     };
 
     const NUM_RANDOM_INSERTS: usize = 100000;
-
-    fn entry<K: Into<U256>>(k: K) -> InsertEntry {
-        InsertEntry {
-            nibbles: Nibbles::from_u256_fixed(k.into()),
-            v: Vec::new(),
-        }
-    }
 
     fn create_trie_from_inserts(ins: impl Iterator<Item = InsertEntry>) -> Box<PartialTrie> {
         PartialTrie::construct_trie_from_inserts(ins)
@@ -383,13 +383,13 @@ mod tests {
     #[test]
     fn single_insert() {
         common_setup();
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&[entry(0x1234)]);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&[empty_entry_variable(0x1234)]);
     }
 
     #[test]
     fn two_disjoint_inserts_works() {
         common_setup();
-        let entries = [entry(0x1234), entry(0x5678)];
+        let entries = [empty_entry_variable(0x1234), empty_entry_variable(0x5678)];
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn two_inserts_that_share_one_nibble_works() {
         common_setup();
-        let entries = [entry(0x1234), entry(0x1567)];
+        let entries = [empty_entry_variable(0x1234), empty_entry_variable(0x1567)];
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -405,7 +405,7 @@ mod tests {
     #[test]
     fn two_inserts_that_differ_on_last_nibble_works() {
         common_setup();
-        let entries = [entry(0x1234), entry(0x1235)];
+        let entries = [empty_entry_variable(0x1234), empty_entry_variable(0x1235)];
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -413,28 +413,42 @@ mod tests {
     #[test]
     fn diagonal_inserts_to_base_of_trie_works() {
         common_setup();
-        let entries: Vec<_> = (0..=3).map(|i| entry(create_mask_of_1s(i * 4))).collect();
+        let entries: Vec<_> = (0..=64)
+            .map(|i| empty_entry_fixed(create_mask_of_1s(i * 4)))
+            .collect();
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
 
     #[test]
-    fn mass_inserts_all_entries_are_retrievable() {
+    fn updating_an_existing_node_works() {
         common_setup();
-        let entries: Vec<_> = generate_n_random_trie_entries(NUM_RANDOM_INSERTS, 0).collect();
+        let mut entries = [empty_entry_variable(0x1234), empty_entry_variable(0x1234)];
+        entries[1].v = vec![100];
+
+        let trie = PartialTrie::construct_trie_from_inserts(entries.into_iter());
+        assert_eq!(trie.get(0x1234.into()), Some([100].as_slice()));
+    }
+
+    #[test]
+    fn mass_inserts_fixed_sized_keys_all_entries_are_retrievable() {
+        common_setup();
+        let entries: Vec<_> = generate_n_random_fixed_trie_entries(NUM_RANDOM_INSERTS, 0).collect();
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
 
     #[test]
     fn equivalency_check_works() {
+        common_setup();
+
         assert_eq!(PartialTrie::Empty, PartialTrie::Empty);
 
-        let entries = generate_n_random_trie_entries(NUM_RANDOM_INSERTS, 0);
+        let entries = generate_n_random_fixed_trie_entries(NUM_RANDOM_INSERTS, 0);
         let big_trie_1 = create_trie_from_inserts(entries);
         assert_eq!(big_trie_1, big_trie_1);
 
-        let entries = generate_n_random_trie_entries(NUM_RANDOM_INSERTS, 1);
+        let entries = generate_n_random_fixed_trie_entries(NUM_RANDOM_INSERTS, 1);
         let big_trie_2 = create_trie_from_inserts(entries);
 
         assert_ne!(big_trie_1, big_trie_2)

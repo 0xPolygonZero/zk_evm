@@ -99,7 +99,9 @@ mod tests {
 
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
-        testing_utils::{common_setup, gen_u256, generate_n_random_trie_entries},
+        testing_utils::{
+            common_setup, empty_entry_variable, gen_u256, generate_n_random_fixed_trie_entries,
+        },
         trie_builder::InsertEntry,
         trie_hashing::{hash, TrieHash},
     };
@@ -185,7 +187,7 @@ mod tests {
 
     fn non_fixed_key_insert_entry(k: u64) -> InsertEntry {
         InsertEntry {
-            nibbles: Nibbles::from_u256_non_fixed(k.into()),
+            nibbles: Nibbles::from_u256_variable(k.into()),
             v: vec![],
         }
     }
@@ -273,12 +275,29 @@ mod tests {
             v: vec![1],
         };
 
-        let truth_val = get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
+        let truth_hash = get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
             .next()
             .unwrap();
         let our_hash = PartialTrie::construct_trie_from_inserts(once(ins_entry)).calc_hash();
 
-        assert_eq!(truth_val, our_hash);
+        assert_eq!(truth_hash, our_hash);
+    }
+
+    #[test]
+    fn two_variable_length_keys_with_overlap_produces_correct_hash() {
+        common_setup();
+
+        let entries = [
+            empty_entry_variable(0x1234),
+            empty_entry_variable(0x12345678),
+        ];
+
+        let truth_hashes = get_lib_trie_root_hashes_after_each_insert(entries.iter().cloned());
+        let our_hashes = get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
+
+        for (our_h, lib_h) in our_hashes.zip(truth_hashes) {
+            assert_eq!(our_h, lib_h)
+        }
     }
 
     #[test]
@@ -286,7 +305,7 @@ mod tests {
         common_setup();
 
         let entries: Vec<_> =
-            generate_n_random_trie_entries(NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST, 0)
+            generate_n_random_fixed_trie_entries(NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST, 0)
                 .collect();
         let our_insert_hashes =
             get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
