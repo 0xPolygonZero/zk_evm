@@ -1,8 +1,9 @@
 use bytes::Bytes;
 use keccak_hash::keccak;
+use log::trace;
 use rlp::RlpStream;
 
-use crate::partial_trie::PartialTrie;
+use crate::{partial_trie::PartialTrie, utils::TrieNodeType};
 
 pub type TrieHash = ethereum_types::H256;
 
@@ -34,20 +35,35 @@ impl PartialTrie {
             PartialTrie::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
             PartialTrie::Hash(h) => EncodedNode::Hashed(h.0),
             PartialTrie::Branch { children, value } => {
+                // println!("HASH TRAVERSAL HIT BRANCH!");
+                // println!("Our branch: {:?}", children.iter().map(|n| TrieNodeType::from(n.as_ref())).collect::<Vec<_>>());
+
                 let mut stream = RlpStream::new_list(17);
 
-                for c in children {
+                for (i, c) in children.iter().enumerate() {
+                    // println!("CHECKING BRANCH AT NIB {:x}", i);
                     Self::append_to_stream(&mut stream, c.rlp_encode_and_hash_node());
                 }
+
+                // println!("DONE HASH BRANCH TRAVERSAL");
 
                 match value.is_empty() {
                     false => stream.append(value),
                     true => stream.append_empty_data(),
                 };
 
-                Self::hash_bytes_if_large_enough(stream.out().into())
+                if !value.is_empty() {
+                    // println!("HIT OUR BRANCH VALUE NODE!");
+                }
+
+                let o = stream.out();
+
+                // println!("Branch rlp: {}", hex::encode(&o));
+
+                Self::hash_bytes_if_large_enough(o.into())
             }
             PartialTrie::Extension { nibbles, child } => {
+                // println!("HIT OUR EXTENSION NODE!!");
                 let mut stream = RlpStream::new_list(2);
 
                 stream.append(&nibbles.to_hex_prefix_encoding(false));
@@ -62,13 +78,18 @@ impl PartialTrie {
                 stream.append(&hex_prefix_k);
                 stream.append(value);
 
-                Self::hash_bytes_if_large_enough(stream.out().into())
+                let o = stream.out();
+
+                // println!("OUR LEAF HEX KEY: {}", hex::encode(&hex_prefix_k));
+                // println!("OUR LEAF RLP: {}", hex::encode(&o));
+
+                Self::hash_bytes_if_large_enough(o.into())
             }
         }
     }
 
     fn hash_bytes_if_large_enough(bytes: Bytes) -> EncodedNode {
-        match bytes.len() > 32 {
+        match bytes.len() >= 32 {
             false => EncodedNode::Raw(bytes),
             true => EncodedNode::Hashed(hash(&bytes)),
         }
@@ -88,11 +109,11 @@ fn hash(bytes: &Bytes) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, iter::once, str::FromStr, sync::Arc};
+    use std::{fs, iter::{once, self}, str::FromStr, sync::Arc};
 
+    use bytes::Bytes;
     use eth_trie::{EthTrie, MemoryDB, Trie};
-    use ethereum_types::{H256, U256};
-    use rand::{rngs::StdRng, SeedableRng};
+    use ethereum_types::{H256, U256, H160};
     use rlp::Encodable;
     use rlp_derive::RlpEncodable;
     use serde::Deserialize;
@@ -100,7 +121,7 @@ mod tests {
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
         testing_utils::{
-            common_setup, empty_entry_variable, gen_u256, generate_n_random_fixed_trie_entries,
+            common_setup, generate_n_random_fixed_trie_entries, empty_entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
         },
         trie_builder::InsertEntry,
         trie_hashing::{hash, TrieHash},
@@ -150,10 +171,14 @@ mod tests {
 
     impl From<PyEvmTrueValEntryRaw> for PyEvmTrueValEntry {
         fn from(r: PyEvmTrueValEntryRaw) -> Self {
-            let addr_hash = hash(&Nibbles::from_str(&r.address).unwrap().bytes().into());
+            let t = H256::from(H160::from_str(&r.address).unwrap());
+            let addr_hash = hash(&Bytes::from_iter(t.as_bytes().iter().cloned()));
+            // let addr_hash = hash(&Nibbles::from_str(&r.address).unwrap().bytes_be().into());
+
+            println!("RAW HASH: {}", hex::encode(&addr_hash));
 
             PyEvmTrueValEntry {
-                account_key: Nibbles::from_u256_fixed(U256::from(addr_hash)),
+                account_key: Nibbles::from_bytes_be(&addr_hash).unwrap(),
                 balance: U256::from_str(&r.balance).unwrap().into(),
                 nonce: r.nonce,
                 code_hash: H256::from_str(&r.code_hash).unwrap(),
@@ -193,16 +218,34 @@ mod tests {
         raw.into_iter().map(|r| r.into()).collect()
     }
 
+    // fn get_lib_trie_root_hash_after_insert(entries: impl Iterator<Item = InsertEntry>) {
+    //     println!("EARLY LIB MASS INSERT!!");
+
+    //     let db = Arc::new(MemoryDB::new(false));
+    //     let mut truth_trie = EthTrie::new(db);
+
+    //     for e in entries {
+    //         println!("\nInsert early e1ntry {}...", e);
+    //         truth_trie.insert(&e.nibbles.bytes_be(), &e.v).unwrap();
+    //     }
+
+    //     println!("Lib root hash: {}\n\n", truth_trie.root_hash().unwrap());
+
+    //     println!("EARLY LIB MASS INSERT FINISH!!");
+
+    // }
+
     /// Gets the root hash for each insert by using an established eth trie
     /// library as a ground truth.
     fn get_lib_trie_root_hashes_after_each_insert(
         entries: impl Iterator<Item = InsertEntry>,
     ) -> impl Iterator<Item = TrieHash> {
-        let db = Arc::new(MemoryDB::new(true));
+        let db = Arc::new(MemoryDB::new(false));
         let mut truth_trie = EthTrie::new(db);
 
         entries.map(move |e| {
-            truth_trie.insert(&e.nibbles.bytes(), &e.v).unwrap();
+            truth_trie.insert(&e.nibbles.bytes_be(), &e.v).unwrap();
+            truth_trie.get(&e.nibbles.bytes_be()).unwrap();
             let h = truth_trie.root_hash().unwrap();
 
             // Kind of silly... Both of these types are identical except that one is
@@ -218,12 +261,23 @@ mod tests {
         let mut trie = Box::new(PartialTrie::Empty);
 
         entries.map(move |e| {
-            if let Some(updated_root) = PartialTrie::insert_into_trie(&mut trie, e) {
+            if let Some(updated_root) = PartialTrie::insert_into_trie(&mut trie, e.clone()) {
                 trie = updated_root;
             }
 
+            trie.get(e.nibbles);
+
             trie.calc_hash()
         })
+    }
+
+    fn insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(entries: &[InsertEntry]) {
+        let truth_hashes = get_lib_trie_root_hashes_after_each_insert(entries.iter().cloned());
+        let our_hashes = get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
+
+        for (our_h, lib_h) in our_hashes.zip(truth_hashes) {
+            assert_eq!(our_h, lib_h)
+        }
     }
 
     #[test]
@@ -241,6 +295,12 @@ mod tests {
         let acc_and_hash_entry = &load_pyevm_truth_vals()[0];
         let acc_entry = acc_and_hash_entry.account_entry();
         let rlp_bytes = rlp::encode(&acc_entry);
+
+        println!("entry: {:#?}", acc_and_hash_entry);
+        println!("RLP BYTES: {}", hex::encode(&rlp_bytes));
+
+                    
+        println!("HASH: {:?}", &acc_and_hash_entry.account_key);
 
         let ins_entry = InsertEntry {
             nibbles: acc_and_hash_entry.account_key,
@@ -261,19 +321,7 @@ mod tests {
     #[test]
     fn single_leaf_hash_is_correct() {
         common_setup();
-
-        let mut rng = StdRng::seed_from_u64(0);
-        let ins_entry = InsertEntry {
-            nibbles: Nibbles::from_u256_fixed(gen_u256(&mut rng)),
-            v: vec![1],
-        };
-
-        let truth_hash = get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
-            .next()
-            .unwrap();
-        let our_hash = PartialTrie::construct_trie_from_inserts(once(ins_entry)).calc_hash();
-
-        assert_eq!(truth_hash, our_hash);
+        insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(&[empty_entry(0x9001)]);
     }
 
     #[test]
@@ -281,34 +329,36 @@ mod tests {
         common_setup();
 
         let entries = [
-            empty_entry_variable(0x1234),
-            empty_entry_variable(0x12345678),
+            empty_entry(0x1234),
+            empty_entry(0x12345678),
         ];
 
-        let truth_hashes = get_lib_trie_root_hashes_after_each_insert(entries.iter().cloned());
-        let our_hashes = get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
-
-        for (our_h, lib_h) in our_hashes.zip(truth_hashes) {
-            assert_eq!(our_h, lib_h)
-        }
+        insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(&entries);
     }
 
     #[test]
-    fn massive_random_data_insert_hashes_agree_with_eth_trie() {
+    fn two_variable_length_keys_with_no_overlap_produces_correct_hash() {
         common_setup();
 
-        let entries: Vec<_> =
-            generate_n_random_fixed_trie_entries(NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST, 0)
-                .collect();
-        let our_insert_hashes =
-            get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
-        let lib_insert_hashes = get_lib_trie_root_hashes_after_each_insert(entries.iter().cloned());
+        let entries = [
+            empty_entry(0x1234),
+            empty_entry(0x5678),
+        ];
 
-        let our_hashes_match_libs = our_insert_hashes
-            .zip(lib_insert_hashes)
-            .all(|(our_h, lib_h)| our_h == lib_h);
+        insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(&entries);
+    }
 
-        assert!(our_hashes_match_libs)
+    #[test]
+    fn massive_random_data_insert_fixed_keys_hashes_agree_with_eth_trie() {
+        common_setup();
+        insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(&generate_n_random_fixed_trie_entries(NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST, 0).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn massive_random_data_insert_variable_keys_hashes_agree_with_eth_trie() {
+        common_setup();
+        // get_lib_trie_root_hash_after_insert(generate_n_random_fixed_even_nibble_padded_trie_entries(NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST, 0));
+        insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(&generate_n_random_fixed_even_nibble_padded_trie_entries(NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST, 0).collect::<Vec<_>>());
     }
 
     #[test]

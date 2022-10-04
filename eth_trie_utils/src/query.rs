@@ -1,18 +1,15 @@
-use ethereum_types::U256;
 use log::trace;
 
 use crate::{
     partial_trie::{Nibbles, PartialTrie},
-    utils::nibbles_variable,
 };
 
 impl PartialTrie {
-    pub fn get(&self, k: U256) -> Option<&[u8]> {
-        let mut n = Nibbles::from_u256_variable(k);
+    pub fn get(&self, mut n: Nibbles) -> Option<&[u8]> {
         self.get_intern(&mut n)
     }
 
-    fn get_intern(&self, curr_nib: &mut Nibbles) -> Option<&[u8]> {
+    fn get_intern(&self, curr_nibbles: &mut Nibbles) -> Option<&[u8]> {
         match self {
             PartialTrie::Empty | PartialTrie::Hash(_) => {
                 trace!("Get traversed {:?}", self);
@@ -20,25 +17,27 @@ impl PartialTrie {
             }
             // Note: If we end up supporting non-fixed sized keys, then we need to also check value.
             PartialTrie::Branch { children, .. } => {
-                let nib = curr_nib.pop_next_nibble();
+                let nib = curr_nibbles.pop_next_nibble();
                 trace!(
-                    "Get traversed Branch (nibble: {})",
-                    nibbles_variable(nib as u64)
+                    "Get traversed Branch (nibble: {:x})", nib
                 );
-                children[nib as usize].get_intern(curr_nib)
+                // println!("Our trie num non empty children: {}", children.iter().filter(|c| !matches!(***c, PartialTrie::Empty)).count());
+                children[nib as usize].get_intern(curr_nibbles)
             }
             PartialTrie::Extension { nibbles, child } => {
                 trace!("Get traversed Extension (nibbles: {:?})", nibbles);
-                let r = curr_nib.pop_next_nibbles(nibbles.count);
+                let r = curr_nibbles.pop_next_nibbles(nibbles.count);
 
                 match r.nibbles_are_identical_up_to_smallest_count(nibbles) {
                     false => None,
-                    true => child.get_intern(curr_nib),
+                    true => child.get_intern(curr_nibbles),
                 }
             }
             PartialTrie::Leaf { nibbles, value } => {
                 trace!("Get traversed Leaf (nibbles: {:?})", nibbles);
-                match nibbles.nibbles_are_identical_up_to_smallest_count(curr_nib) {
+                // println!("Curr nib: {:#?}", curr_nibbles);
+                // println!("Value: {:?}", value);
+                match nibbles.nibbles_are_identical_up_to_smallest_count(curr_nibbles) {
                     false => None,
                     true => Some(value),
                 }
@@ -68,7 +67,7 @@ mod tests {
 
         for e in random_entries.iter() {
             debug!("Attempting to retrieve {:?}...", e);
-            let res = t.get(e.nibbles.into());
+            let res = t.get(e.nibbles);
 
             assert_eq!(res, Some(e.v.as_slice()));
         }

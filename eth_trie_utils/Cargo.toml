@@ -20,7 +20,7 @@ rlp = "0.5.1"
 serde = { version = "1.0.144", features = ["derive"] }
 
 [dev-dependencies]
-eth_trie = "0.1.0"
+eth_trie = { path = "../../unsorted/other_repos/eth-trie.rs" }
 pretty_env_logger = "0.4.0"
 rand = "0.8.5"
 rlp-derive = "0.1.0"
