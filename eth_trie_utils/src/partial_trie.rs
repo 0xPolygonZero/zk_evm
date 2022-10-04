@@ -8,7 +8,7 @@ use uint::FromHexError;
 
 use crate::{
     types::Nibble,
-    utils::{create_mask_of_1s, is_even, num_leading_zero_bytes},
+    utils::{create_mask_of_1s, is_even},
 };
 
 #[derive(Debug, Error)]
@@ -17,7 +17,7 @@ pub enum BytesToNibblesError {
     ZeroSizedKey,
 
     #[error("Tried constructing `Nibbles` from a byte slice with more than 32 bytes (len: {0})")]
-    TooManyBytes(usize)
+    TooManyBytes(usize),
 }
 
 #[derive(Debug, Error)]
@@ -141,15 +141,18 @@ impl From<H256> for Nibbles {
 impl FromStr for Nibbles {
     type Err = StrToNibblesError;
 
+    /// Parses a hex string with or without a preceding "0x".
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let leading_zeros = s.trim_end_matches("0x").chars().position(|c| c != '0').unwrap_or(s.len());
+        let stripped_str = s.strip_prefix("0x").unwrap_or(s);
+        let leading_zeros = stripped_str
+            .chars()
+            .position(|c| c != '0')
+            .unwrap_or(stripped_str.len());
         let packed = U256::from_str(s)?;
-        
-        // println!("{} has {} nibbles", s, leading_zeros + Self::get_num_nibbles_in_key(&packed));
 
         Ok(Self {
             count: leading_zeros + Self::get_num_nibbles_in_key(&packed),
-            packed
+            packed,
         })
     }
 }
@@ -227,8 +230,6 @@ impl Nibbles {
     }
 
     pub fn nibbles_are_identical_up_to_smallest_count(&self, other: &Nibbles) -> bool {
-        // println!("Comparing {:?} vs {:?}", self, other);
-
         let smaller_count = self.count.min(other.count);
         (0..smaller_count).all(|i| self.get_nibble(i) == other.get_nibble(i))
     }
@@ -499,22 +500,10 @@ mod tests {
     fn split_at_idx_works() {
         let n: Nibbles = 0x1234.into();
 
-        assert_eq!(
-            n.split_at_idx(0),
-            (0x0.into(), 0x1234.into())
-        );
-        assert_eq!(
-            n.split_at_idx(1),
-            (0x1.into(), 0x234.into())
-        );
-        assert_eq!(
-            n.split_at_idx(2),
-            (0x12.into(), 0x34.into())
-        );
-        assert_eq!(
-            n.split_at_idx(3),
-            (0x123.into(), 0x4.into())
-        );
+        assert_eq!(n.split_at_idx(0), (0x0.into(), 0x1234.into()));
+        assert_eq!(n.split_at_idx(1), (0x1.into(), 0x234.into()));
+        assert_eq!(n.split_at_idx(2), (0x12.into(), 0x34.into()));
+        assert_eq!(n.split_at_idx(3), (0x123.into(), 0x4.into()));
     }
 
     #[test]
@@ -537,22 +526,10 @@ mod tests {
 
     #[test]
     fn merge_works() {
-        assert_eq!(
-            Nibbles::from(0x12).merge(&(0x34.into())),
-            0x1234.into()
-        );
-        assert_eq!(
-            Nibbles::from(0x12).merge(&(0x0.into())),
-            0x12.into()
-        );
-        assert_eq!(
-            Nibbles::from(0x0).merge(&(0x34.into())),
-            0x34.into()
-        );
-        assert_eq!(
-            Nibbles::from(0x0).merge(&(0x0).into()),
-            0x0.into()
-        );
+        assert_eq!(Nibbles::from(0x12).merge(&(0x34.into())), 0x1234.into());
+        assert_eq!(Nibbles::from(0x12).merge(&(0x0.into())), 0x12.into());
+        assert_eq!(Nibbles::from(0x0).merge(&(0x34.into())), 0x34.into());
+        assert_eq!(Nibbles::from(0x0).merge(&(0x0).into()), 0x0.into());
     }
 
     #[test]
@@ -601,6 +578,7 @@ mod tests {
         assert!(n.nibbles_are_identical_up_to_smallest_count(&(0x1234.into())));
         assert!(n.nibbles_are_identical_up_to_smallest_count(&(0x1.into())));
         assert!(n.nibbles_are_identical_up_to_smallest_count(&(0x12.into())));
+        assert!(n.nibbles_are_identical_up_to_smallest_count(&(0x12345678.into())));
 
         assert!(!n.nibbles_are_identical_up_to_smallest_count(&(0x23.into())));
         assert!(!n.nibbles_are_identical_up_to_smallest_count(&(0x4.into())));
@@ -642,8 +620,6 @@ mod tests {
 
     #[test]
     fn nibbles_from_h256_works() {
-        
-
         assert_eq!(
             Nibbles::from(H256::from_low_u64_be(0)).as_hex_str(),
             "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -657,9 +633,8 @@ mod tests {
     #[test]
     fn nibbles_from_str_works() {
         assert_eq!(Nibbles::from_str("0x0").unwrap().as_hex_str(), "0x0");
-        assert_eq!(
-            Nibbles::from_str("0x800").unwrap().as_hex_str(),
-            "0x800"
-        );
+        assert_eq!(Nibbles::from_str("0").unwrap().as_hex_str(), "0x0");
+        assert_eq!(Nibbles::from_str("0x800").unwrap().as_hex_str(), "0x800");
+        assert_eq!(Nibbles::from_str("800").unwrap().as_hex_str(), "0x800");
     }
 }

@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use ethereum_types::U256;
 use log::trace;
 
 use crate::{
@@ -86,9 +85,7 @@ fn insert_into_trie_rec(
             }
 
             let nibble = new_node.nibbles.pop_next_nibble();
-            trace!(
-                "Insert traversed Branch (nibble: {:x})", nibble
-            );
+            trace!("Insert traversed Branch (nibble: {:x})", nibble);
 
             if let Some(updated_child) =
                 insert_into_trie_rec(&mut children[nibble as usize], new_node)
@@ -136,6 +133,7 @@ fn insert_into_trie_rec(
         PartialTrie::Leaf { nibbles, value } => {
             trace!("Insert traversed Leaf (nibbles: {:?})", nibbles);
 
+            // Update existing node value if already present.
             if *nibbles == new_node.nibbles {
                 *value = new_node.v;
                 return Some(Box::new(node.clone()));
@@ -193,8 +191,6 @@ fn place_branch_and_potentially_ext_prefix(
     let mut children = new_branch_child_arr();
     let mut value = vec![];
 
-    // trace!("Info: {:#?}", info);
-
     match check_if_existing_or_new_node_should_go_in_branch_value_field(
         info,
         existing_node,
@@ -205,8 +201,6 @@ fn place_branch_and_potentially_ext_prefix(
             value = branch_v;
         }
         ExistingOrNewBranchValuePlacement::BothBranchChildren((nib_1, node_1), (nib_2, node_2)) => {
-            trace!("n1: {:?}. n2: {:?}", node_1, node_2);
-            
             children[nib_1 as usize] = node_1;
             children[nib_2 as usize] = node_2;
         }
@@ -300,8 +294,8 @@ mod tests {
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
         testing_utils::{
-            common_setup,
-            generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, empty_entry,
+            common_setup, entry, generate_n_random_fixed_trie_entries,
+            generate_n_random_variable_keys,
         },
         types::Nibble,
         utils::create_mask_of_1s,
@@ -325,8 +319,6 @@ mod tests {
                 packed: U256::zero(),
             },
         );
-
-        
 
         seen_entries
     }
@@ -417,13 +409,13 @@ mod tests {
     #[test]
     fn single_insert() {
         common_setup();
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&[empty_entry(0x1234)]);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&[entry(0x1234)]);
     }
 
     #[test]
     fn two_disjoint_inserts_works() {
         common_setup();
-        let entries = [empty_entry(0x1234), empty_entry(0x5678)];
+        let entries = [entry(0x1234), entry(0x5678)];
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -431,7 +423,7 @@ mod tests {
     #[test]
     fn two_inserts_that_share_one_nibble_works() {
         common_setup();
-        let entries = [empty_entry(0x1234), empty_entry(0x1567)];
+        let entries = [entry(0x1234), entry(0x1567)];
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -439,7 +431,7 @@ mod tests {
     #[test]
     fn two_inserts_that_differ_on_last_nibble_works() {
         common_setup();
-        let entries = [empty_entry(0x1234), empty_entry(0x1235)];
+        let entries = [entry(0x1234), entry(0x1235)];
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -447,9 +439,7 @@ mod tests {
     #[test]
     fn diagonal_inserts_to_base_of_trie_works() {
         common_setup();
-        let entries: Vec<_> = (0..=64)
-            .map(|i| empty_entry(create_mask_of_1s(i * 4)))
-            .collect();
+        let entries: Vec<_> = (0..=64).map(|i| entry(create_mask_of_1s(i * 4))).collect();
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -457,7 +447,7 @@ mod tests {
     #[test]
     fn updating_an_existing_node_works() {
         common_setup();
-        let mut entries = [empty_entry(0x1234), empty_entry(0x1234)];
+        let mut entries = [entry(0x1234), entry(0x1234)];
         entries[1].v = vec![100];
 
         let trie = PartialTrie::construct_trie_from_inserts(entries.into_iter());
