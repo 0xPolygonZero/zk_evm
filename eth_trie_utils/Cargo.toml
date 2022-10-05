@@ -1,9 +1,15 @@
 [package]
-name = "eth-trie-utils"
+name = "eth_trie_utils"
 description = "Types and utility functions for building/working with partial Ethereum tries."
 version = "0.1.0"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
 edition = "2021"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/mir-protocol/eth-trie-utils"
+repository = "https://github.com/mir-protocol/eth-trie-utils"
+keywords = ["ethereum", "trie"]
+categories = ["cryptography::cryptocurrencies", "data-structures"]
 
 [dependencies]
 anyhow = "1.0.64"
