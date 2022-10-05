@@ -12,7 +12,6 @@ keywords = ["ethereum", "trie"]
 categories = ["cryptography::cryptocurrencies", "data-structures"]
 
 [dependencies]
-anyhow = "1.0.64"
 bytes = "1.2.1"
 ethereum-types = "0.14.0"
 hex = "0.4.3"
