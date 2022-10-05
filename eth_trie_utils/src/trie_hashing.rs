@@ -106,7 +106,7 @@ mod tests {
         trie_hashing::hash,
     };
 
-    const PYEVM_TRUTH_VALS_JSON_PATH: &str = "pyevm_account_ground_truth.txt";
+    const PYEVM_TRUTH_VALS_JSON_PATH: &str = "testing/pyevm_account_ground_truth.txt";
     const NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST: usize = 1000;
 
     #[derive(Copy, Clone, Debug)]
