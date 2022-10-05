@@ -11,6 +11,11 @@ repository = "https://github.com/mir-protocol/eth-trie-utils"
 keywords = ["ethereum", "trie"]
 categories = ["cryptography::cryptocurrencies", "data-structures"]
 
+exclude = [
+    "test_data/*"
+]
+
+
 [dependencies]
 bytes = "1.2.1"
 ethereum-types = "0.14.0"
