@@ -111,7 +111,3 @@ fn gen_variable_nibbles(rng: &mut StdRng) -> Nibbles {
 
     U256::from_little_endian(&bytes).into()
 }
-
-pub(crate) fn gen_u256(rng: &mut StdRng) -> U256 {
-    U256(rng.gen())
-}

@@ -5,6 +5,9 @@ use num_traits::PrimInt;
 
 use crate::partial_trie::PartialTrie;
 
+// Use a whole byte for a Nibble just for convenience
+pub type Nibble = u8;
+
 #[derive(Debug)]
 /// Simplified trie node type to make logging cleaner.
 pub(crate) enum TrieNodeType {

@@ -6,10 +6,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uint::FromHexError;
 
-use crate::{
-    types::Nibble,
-    utils::{create_mask_of_1s, is_even},
-};
+use crate::utils::{create_mask_of_1s, is_even, Nibble};
 
 #[derive(Debug, Error)]
 pub enum BytesToNibblesError {

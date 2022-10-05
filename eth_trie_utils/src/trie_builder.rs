@@ -4,9 +4,10 @@ use log::trace;
 
 use crate::{
     partial_trie::{Nibbles, PartialTrie},
-    types::Nibble,
+    utils::Nibble,
 };
 
+/// A entry to be inserted into a `PartialTrie`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct InsertEntry {
     pub nibbles: Nibbles,
@@ -25,6 +26,7 @@ impl InsertEntry {
     }
 }
 
+/// prefix/postfix info when comparing two `Nibbles`.
 #[derive(Debug)]
 struct ExistingAndNewNodePreAndPost {
     common_prefix: Nibbles,
@@ -297,8 +299,7 @@ mod tests {
             common_setup, entry, generate_n_random_fixed_trie_entries,
             generate_n_random_variable_keys,
         },
-        types::Nibble,
-        utils::create_mask_of_1s,
+        utils::{create_mask_of_1s, Nibble},
     };
 
     const NUM_RANDOM_INSERTS: usize = 100000;

@@ -1,10 +1,9 @@
 use bytes::Bytes;
+use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
 use crate::partial_trie::PartialTrie;
-
-pub type TrieHash = ethereum_types::H256;
 
 /// theA node type used for calculating the hash of a trie.
 #[derive(Debug)]
@@ -18,7 +17,7 @@ enum EncodedNode {
 impl PartialTrie {
     /// Calculates the hash of a node.
     /// Assumes that all leaf values are already rlp encoded.
-    pub fn calc_hash(&self) -> TrieHash {
+    pub fn calc_hash(&self) -> H256 {
         let trie_hash_bytes = self.rlp_encode_and_hash_node();
 
         let h = match trie_hash_bytes {
@@ -104,7 +103,7 @@ mod tests {
             generate_n_random_fixed_trie_entries,
         },
         trie_builder::InsertEntry,
-        trie_hashing::{hash, TrieHash},
+        trie_hashing::hash,
     };
 
     const PYEVM_TRUTH_VALS_JSON_PATH: &str = "pyevm_account_ground_truth.txt";
@@ -198,7 +197,7 @@ mod tests {
     /// library as a ground truth.
     fn get_lib_trie_root_hashes_after_each_insert(
         entries: impl Iterator<Item = InsertEntry>,
-    ) -> impl Iterator<Item = TrieHash> {
+    ) -> impl Iterator<Item = H256> {
         let db = Arc::new(MemoryDB::new(false));
         let mut truth_trie = EthTrie::new(db);
 
@@ -216,7 +215,7 @@ mod tests {
 
     fn get_root_hashes_for_our_trie_after_each_insert(
         entries: impl Iterator<Item = InsertEntry>,
-    ) -> impl Iterator<Item = TrieHash> {
+    ) -> impl Iterator<Item = H256> {
         let mut trie = Box::new(PartialTrie::Empty);
 
         entries.map(move |e| {
@@ -278,7 +277,6 @@ mod tests {
     #[test]
     fn two_variable_length_keys_with_overlap_produces_correct_hash() {
         common_setup();
-
         let entries = [entry(0x1234), entry(0x12345678)];
 
         insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(&entries);
@@ -287,7 +285,6 @@ mod tests {
     #[test]
     fn two_variable_length_keys_with_no_overlap_produces_correct_hash() {
         common_setup();
-
         let entries = [entry(0x1234), entry(0x5678)];
 
         insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(&entries);

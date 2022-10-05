@@ -1,5 +1,3 @@
-use core::slice::SlicePattern;
-
 use log::trace;
 
 use crate::partial_trie::{Nibbles, PartialTrie};
