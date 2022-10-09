@@ -15,7 +15,6 @@ exclude = [
     "test_data/*"
 ]
 
-
 [dependencies]
 bytes = "1.2.1"
 ethereum-types = "0.14.0"
@@ -30,7 +29,7 @@ rlp = "0.5.1"
 serde = { version = "1.0.144", features = ["derive"] }
 
 [dev-dependencies]
-eth_trie = { path = "../../unsorted/other_repos/eth-trie.rs" }
+eth_trie = "0.1.0"
 pretty_env_logger = "0.4.0"
 rand = "0.8.5"
 rlp-derive = "0.1.0"
