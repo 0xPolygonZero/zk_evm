@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 
 use log::trace;
 
@@ -6,6 +6,8 @@ use crate::{
     partial_trie::{Nibbles, PartialTrie},
     utils::Nibble,
 };
+
+type Node = Rc<Box<PartialTrie>>;
 
 /// A entry to be inserted into a `PartialTrie`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -39,77 +41,87 @@ struct ExistingAndNewNodePreAndPost {
 /// enum just indicates whether or not a value needs to go into the branch node.
 #[derive(Debug)]
 enum ExistingOrNewBranchValuePlacement {
-    BranchValue(Vec<u8>, (Nibble, Box<PartialTrie>)),
-    BothBranchChildren((Nibble, Box<PartialTrie>), (Nibble, Box<PartialTrie>)),
+    BranchValue(Vec<u8>, (Nibble, Node)),
+    BothBranchChildren((Nibble, Node), (Nibble, Node)),
 }
 
 impl PartialTrie {
-    pub fn construct_trie_from_inserts(
-        nodes: impl Iterator<Item = InsertEntry>,
-    ) -> Box<PartialTrie> {
-        let mut root = Box::new(PartialTrie::Empty);
+    pub fn construct_trie_from_inserts(nodes: impl Iterator<Item = InsertEntry>) -> PartialTrie {
+        let mut root = PartialTrie::Empty;
 
         for new_entry in nodes {
-            if let Some(updated_root) = Self::insert_into_trie(&mut root, new_entry) {
-                root = updated_root;
-            }
+            root = Self::insert(root, new_entry);
         }
 
         root
     }
 
-    pub fn insert_into_trie(
-        root: &mut Box<PartialTrie>,
-        new_entry: InsertEntry,
-    ) -> Option<Box<PartialTrie>> {
+    pub fn insert(self, new_entry: InsertEntry) -> PartialTrie {
         trace!("Inserting new leaf node {:?}...", new_entry);
-        insert_into_trie_rec(root, new_entry)
+
+        // Inserts are guaranteed to update the root node.
+        *insert_into_trie_rec(&self.into(), new_entry)
+            .unwrap()
+            .as_ref()
+            .clone()
     }
 }
 
-fn insert_into_trie_rec(
-    node: &mut PartialTrie,
-    mut new_node: InsertEntry,
-) -> Option<Box<PartialTrie>> {
-    match node {
+fn insert_into_trie_rec(node: &Node, mut new_node: InsertEntry) -> Option<Node> {
+    match node.as_ref().as_ref() {
         PartialTrie::Empty => {
             trace!("Insert traversed Empty");
-            return Some(Box::new(PartialTrie::Leaf {
-                nibbles: new_node.nibbles,
-                value: new_node.v,
-            }));
+            Some(
+                PartialTrie::Leaf {
+                    nibbles: new_node.nibbles,
+                    value: new_node.v,
+                }
+                .into(),
+            )
         }
         PartialTrie::Branch { children, value } => {
             if new_node.nibbles.count == 0 {
                 trace!("Insert traversed branch and placed value in node");
-                *value = new_node.v;
-                return None;
+                return Some(
+                    PartialTrie::Branch {
+                        children: children.clone(),
+                        value: new_node.v,
+                    }
+                    .into(),
+                );
             }
 
             let nibble = new_node.nibbles.pop_next_nibble();
             trace!("Insert traversed Branch (nibble: {:x})", nibble);
 
-            if let Some(updated_child) =
-                insert_into_trie_rec(&mut children[nibble as usize], new_node)
-            {
-                children[nibble as usize] = updated_child;
-            }
+            insert_into_trie_rec(&children[nibble as usize], new_node).map(|updated_child| {
+                let mut updated_children = children.clone();
+                updated_children[nibble as usize] = updated_child;
+                PartialTrie::Branch {
+                    children: updated_children,
+                    value: value.clone(),
+                }
+                .into()
+            })
         }
         PartialTrie::Extension { nibbles, child } => {
             trace!("Insert traversed Extension (nibbles: {:?})", nibbles);
 
             // Note: Child is guaranteed to be a branch.
-            assert!(matches!(**child, PartialTrie::Branch { .. }), "Extension node child should be guaranteed to be a branch, but wasn't! (Ext node: {:?})", node);
+            assert!(matches!(***child, PartialTrie::Branch { .. }), "Extension node child should be guaranteed to be a branch, but wasn't! (Ext node: {:?})", node);
 
             let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
 
             if nibbles.nibbles_are_identical_up_to_smallest_count(&new_node.nibbles) {
                 new_node.truncate_n_nibbles(nibbles.count);
-                if let Some(updated_node) = insert_into_trie_rec(child, new_node) {
-                    *child = updated_node;
-                }
 
-                return None;
+                return insert_into_trie_rec(child, new_node).map(|updated_child| {
+                    PartialTrie::Extension {
+                        nibbles: *nibbles,
+                        child: updated_child,
+                    }
+                    .into()
+                });
             }
 
             // Drop one since branch will cover one nibble.
@@ -120,38 +132,48 @@ fn insert_into_trie_rec(
             // the branch.
             let updated_existing_node = match existing_postfix_adjusted_for_branch.count {
                 0 => child.clone(),
-                _ => Box::new(PartialTrie::Extension {
+                _ => PartialTrie::Extension {
                     nibbles: existing_postfix_adjusted_for_branch,
                     child: child.clone(),
-                }),
+                }
+                .into(),
             };
 
-            return Some(place_branch_and_potentially_ext_prefix(
+            Some(place_branch_and_potentially_ext_prefix(
                 &info,
                 updated_existing_node,
                 new_node,
-            ));
+            ))
         }
         PartialTrie::Leaf { nibbles, value } => {
             trace!("Insert traversed Leaf (nibbles: {:?})", nibbles);
 
             // Update existing node value if already present.
             if *nibbles == new_node.nibbles {
-                *value = new_node.v;
-                return Some(Box::new(node.clone()));
+                return Some(
+                    PartialTrie::Leaf {
+                        nibbles: *nibbles,
+                        value: new_node.v,
+                    }
+                    .into(),
+                );
             }
 
             let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
 
             // This existing leaf is going in a branch, so we need to truncate the first
             // nibble since it's going to be represented by the branch.
-            *nibbles = nibbles.truncate_n_nibbles(info.common_prefix.count + 1);
+            let existing_node_truncated = PartialTrie::Leaf {
+                nibbles: nibbles.truncate_n_nibbles(info.common_prefix.count + 1),
+                value: value.clone(),
+            }
+            .into();
 
-            return Some(place_branch_and_potentially_ext_prefix(
+            Some(place_branch_and_potentially_ext_prefix(
                 &info,
-                Box::new(node.clone()),
+                existing_node_truncated,
                 new_node,
-            ));
+            ))
         }
         PartialTrie::Hash(_) => {
             trace!("Insert traversed {:?}", node);
@@ -160,8 +182,6 @@ fn insert_into_trie_rec(
             )
         }
     }
-
-    None
 }
 
 fn get_pre_and_postfixes_for_existing_and_new_nodes(
@@ -187,9 +207,9 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
 
 fn place_branch_and_potentially_ext_prefix(
     info: &ExistingAndNewNodePreAndPost,
-    existing_node: Box<PartialTrie>,
+    existing_node: Node,
     new_node: InsertEntry,
-) -> Box<PartialTrie> {
+) -> Node {
     let mut children = new_branch_child_arr();
     let mut value = vec![];
 
@@ -208,14 +228,15 @@ fn place_branch_and_potentially_ext_prefix(
         }
     }
 
-    let branch = Box::new(PartialTrie::Branch { children, value });
+    let branch = PartialTrie::Branch { children, value }.into();
 
     match info.common_prefix.count {
         0 => branch,
-        _ => Box::new(PartialTrie::Extension {
+        _ => PartialTrie::Extension {
             nibbles: info.common_prefix,
             child: branch,
-        }),
+        }
+        .into(),
     }
 }
 
@@ -223,14 +244,14 @@ fn place_branch_and_potentially_ext_prefix(
 /// into the value field of the new branch.
 fn check_if_existing_or_new_node_should_go_in_branch_value_field(
     info: &ExistingAndNewNodePreAndPost,
-    mut existing_node: Box<PartialTrie>,
+    existing_node: Node,
     new_node_entry: InsertEntry,
 ) -> ExistingOrNewBranchValuePlacement {
     // Guaranteed that both postfixes are not equal at this point.
     match (
         info.existing_postfix.count,
         info.new_postfix.count,
-        &mut *existing_node,
+        existing_node.as_ref().as_ref(),
     ) {
         (0, _, PartialTrie::Leaf { value, .. }) => ExistingOrNewBranchValuePlacement::BranchValue(
             value.clone(),
@@ -238,10 +259,10 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field(
         ),
         (_, 0, _) => ExistingOrNewBranchValuePlacement::BranchValue(
             new_node_entry.v,
-            (info.existing_postfix.get_nibble(0), existing_node),
+            (info.existing_postfix.get_nibble(0), existing_node.clone()),
         ),
         (_, _, _) => ExistingOrNewBranchValuePlacement::BothBranchChildren(
-            (info.existing_postfix.get_nibble(0), existing_node),
+            (info.existing_postfix.get_nibble(0), existing_node.clone()),
             ins_entry_into_leaf_and_nibble(info, new_node_entry),
         ),
     }
@@ -250,38 +271,39 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field(
 fn ins_entry_into_leaf_and_nibble(
     info: &ExistingAndNewNodePreAndPost,
     entry: InsertEntry,
-) -> (Nibble, Box<PartialTrie>) {
+) -> (Nibble, Node) {
     let new_first_nibble = info.new_postfix.get_nibble(0);
-    let new_node = Box::new(PartialTrie::Leaf {
+    let new_node = PartialTrie::Leaf {
         nibbles: entry
             .nibbles
             .truncate_n_nibbles(info.common_prefix.count + 1),
         value: entry.v,
-    });
+    }
+    .into();
 
     (new_first_nibble, new_node)
 }
 
-fn new_branch_child_arr() -> [Box<PartialTrie>; 16] {
+fn new_branch_child_arr() -> [Node; 16] {
     // Hahaha ok there actually is no better way to init this array unless I want to
     // use iterators and take a runtime hit...
     [
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
-        Box::new(PartialTrie::Empty),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
+        PartialTrie::Empty.into(),
     ]
 }
 
@@ -304,7 +326,7 @@ mod tests {
 
     const NUM_RANDOM_INSERTS: usize = 100000;
 
-    fn create_trie_from_inserts(ins: impl Iterator<Item = InsertEntry>) -> Box<PartialTrie> {
+    fn create_trie_from_inserts(ins: impl Iterator<Item = InsertEntry>) -> PartialTrie {
         PartialTrie::construct_trie_from_inserts(ins)
     }
 

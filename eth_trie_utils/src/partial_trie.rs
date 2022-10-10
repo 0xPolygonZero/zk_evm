@@ -1,4 +1,4 @@
-use std::{fmt::Debug, fmt::Display, ops::Range, str::FromStr};
+use std::{fmt::Debug, fmt::Display, ops::Range, rc::Rc, str::FromStr};
 
 use bytes::{Bytes, BytesMut};
 use ethereum_types::{H256, U256};
@@ -32,17 +32,23 @@ pub enum PartialTrie {
     Hash(H256),
     /// A branch node, which consists of 16 children and an optional value.
     Branch {
-        children: [Box<PartialTrie>; 16],
+        children: [Rc<Box<PartialTrie>>; 16],
         value: Vec<u8>,
     },
     /// An extension node, which consists of a list of nibbles and a single
     /// child.
     Extension {
         nibbles: Nibbles,
-        child: Box<PartialTrie>,
+        child: Rc<Box<PartialTrie>>,
     },
     /// A leaf node, which consists of a list of nibbles and a value.
     Leaf { nibbles: Nibbles, value: Vec<u8> },
+}
+
+impl From<PartialTrie> for Rc<Box<PartialTrie>> {
+    fn from(v: PartialTrie) -> Self {
+        Rc::new(Box::new(v))
+    }
 }
 
 impl Eq for PartialTrie {}

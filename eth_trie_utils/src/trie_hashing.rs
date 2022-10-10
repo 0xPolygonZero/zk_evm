@@ -106,7 +106,7 @@ mod tests {
         trie_hashing::hash,
     };
 
-    const PYEVM_TRUTH_VALS_JSON_PATH: &str = "testing/pyevm_account_ground_truth.txt";
+    const PYEVM_TRUTH_VALS_JSON_PATH: &str = "test_data/pyevm_account_ground_truth.json";
     const NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST: usize = 1000;
 
     #[derive(Copy, Clone, Debug)]
@@ -216,13 +216,10 @@ mod tests {
     fn get_root_hashes_for_our_trie_after_each_insert(
         entries: impl Iterator<Item = InsertEntry>,
     ) -> impl Iterator<Item = H256> {
-        let mut trie = Box::new(PartialTrie::Empty);
+        let mut trie = PartialTrie::Empty;
 
         entries.map(move |e| {
-            if let Some(updated_root) = PartialTrie::insert_into_trie(&mut trie, e) {
-                trie = updated_root;
-            }
-
+            trie = PartialTrie::insert(trie.clone(), e);
             trie.calc_hash()
         })
     }
