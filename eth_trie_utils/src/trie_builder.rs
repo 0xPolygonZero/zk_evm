@@ -11,9 +11,15 @@ type Node = Rc<Box<PartialTrie>>;
 
 /// A entry to be inserted into a `PartialTrie`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct InsertEntry {
+struct InsertEntry {
     pub nibbles: Nibbles,
     pub v: Vec<u8>,
+}
+
+impl From<(Nibbles, Vec<u8>)> for InsertEntry {
+    fn from((nibbles, v): (Nibbles, Vec<u8>)) -> Self {
+        Self { nibbles, v }
+    }
 }
 
 impl Display for InsertEntry {
@@ -46,24 +52,27 @@ enum ExistingOrNewBranchValuePlacement {
 }
 
 impl PartialTrie {
-    pub fn construct_trie_from_inserts(nodes: impl Iterator<Item = InsertEntry>) -> PartialTrie {
-        let mut root = PartialTrie::Empty;
-
-        for new_entry in nodes {
-            root = Self::insert(root, new_entry);
-        }
-
-        root
-    }
-
-    pub fn insert(self, new_entry: InsertEntry) -> PartialTrie {
-        trace!("Inserting new leaf node {:?}...", new_entry);
+    pub fn insert(self, k: Nibbles, v: Vec<u8>) -> PartialTrie {
+        let ins_entry = (k, v).into();
+        trace!("Inserting new leaf node {:?}...", ins_entry);
 
         // Inserts are guaranteed to update the root node.
-        *insert_into_trie_rec(&self.into(), new_entry)
+        *insert_into_trie_rec(&self.into(), ins_entry)
             .unwrap()
             .as_ref()
             .clone()
+    }
+}
+
+impl FromIterator<(Nibbles, Vec<u8>)> for PartialTrie {
+    fn from_iter<T: IntoIterator<Item = (Nibbles, Vec<u8>)>>(nodes: T) -> Self {
+        let mut root = PartialTrie::Empty;
+
+        for (k, v) in nodes {
+            root = root.insert(k, v);
+        }
+
+        root
     }
 }
 
@@ -314,23 +323,18 @@ mod tests {
     use ethereum_types::U256;
     use log::info;
 
-    use super::InsertEntry;
     use crate::{
         partial_trie::{Nibbles, PartialTrie},
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_trie_entries,
-            generate_n_random_variable_keys,
+            generate_n_random_variable_keys, TestInsertEntry,
         },
         utils::{create_mask_of_1s, Nibble},
     };
 
     const NUM_RANDOM_INSERTS: usize = 100000;
 
-    fn create_trie_from_inserts(ins: impl Iterator<Item = InsertEntry>) -> PartialTrie {
-        PartialTrie::construct_trie_from_inserts(ins)
-    }
-
-    fn get_entries_in_trie(trie: &PartialTrie) -> HashSet<InsertEntry> {
+    fn get_entries_in_trie(trie: &PartialTrie) -> HashSet<TestInsertEntry> {
         info!("Collecting all entries inserted into trie...");
 
         let mut seen_entries = HashSet::new();
@@ -348,7 +352,7 @@ mod tests {
 
     fn get_entries_in_trie_rec(
         trie: &PartialTrie,
-        seen_entries: &mut HashSet<InsertEntry>,
+        seen_entries: &mut HashSet<TestInsertEntry>,
         curr_k: Nibbles,
     ) {
         match trie {
@@ -361,7 +365,7 @@ mod tests {
                 }
 
                 if !value.is_empty() {
-                    add_entry_to_seen_entries(InsertEntry { nibbles: curr_k, v: value.clone() }, seen_entries)
+                    add_entry_to_seen_entries((curr_k, value.clone()), seen_entries)
                 }
             },
             PartialTrie::Extension { nibbles, child } => {
@@ -370,12 +374,12 @@ mod tests {
             },
             PartialTrie::Leaf { nibbles, value } => {
                 let final_key = curr_k.merge(nibbles);
-                add_entry_to_seen_entries(InsertEntry { nibbles: final_key, v: value.clone() }, seen_entries);
+                add_entry_to_seen_entries((final_key, value.clone()), seen_entries);
             },
         }
     }
 
-    fn add_entry_to_seen_entries(e: InsertEntry, seen_entries: &mut HashSet<InsertEntry>) {
+    fn add_entry_to_seen_entries(e: TestInsertEntry, seen_entries: &mut HashSet<TestInsertEntry>) {
         assert!(
             !seen_entries.contains(&e),
             "A duplicate entry exists in the trie! {:?}",
@@ -395,8 +399,8 @@ mod tests {
         }
     }
 
-    fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[InsertEntry]) {
-        let trie = create_trie_from_inserts(entries.iter().cloned());
+    fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[TestInsertEntry]) {
+        let trie = PartialTrie::from_iter(entries.iter().cloned());
         let entries_in_trie = get_entries_in_trie(&trie);
 
         let all_entries_retrieved: Vec<_> = entries
@@ -405,7 +409,7 @@ mod tests {
             .collect();
 
         // HashSet to avoid the linear search below.
-        let entries_hashset: HashSet<InsertEntry> = HashSet::from_iter(entries.iter().cloned());
+        let entries_hashset: HashSet<TestInsertEntry> = HashSet::from_iter(entries.iter().cloned());
         let additional_entries_inserted: Vec<_> = entries_in_trie
             .iter()
             .filter(|e| !entries_hashset.contains(e))
@@ -471,9 +475,9 @@ mod tests {
     fn updating_an_existing_node_works() {
         common_setup();
         let mut entries = [entry(0x1234), entry(0x1234)];
-        entries[1].v = vec![100];
+        entries[1].1 = vec![100];
 
-        let trie = PartialTrie::construct_trie_from_inserts(entries.into_iter());
+        let trie = PartialTrie::from_iter(entries.into_iter());
         assert_eq!(trie.get(0x1234.into()), Some([100].as_slice()));
     }
 
@@ -500,11 +504,11 @@ mod tests {
         assert_eq!(PartialTrie::Empty, PartialTrie::Empty);
 
         let entries = generate_n_random_fixed_trie_entries(NUM_RANDOM_INSERTS, 0);
-        let big_trie_1 = create_trie_from_inserts(entries);
+        let big_trie_1 = PartialTrie::from_iter(entries);
         assert_eq!(big_trie_1, big_trie_1);
 
         let entries = generate_n_random_fixed_trie_entries(NUM_RANDOM_INSERTS, 1);
-        let big_trie_2 = create_trie_from_inserts(entries);
+        let big_trie_2 = PartialTrie::from_iter(entries);
 
         assert_ne!(big_trie_1, big_trie_2)
     }

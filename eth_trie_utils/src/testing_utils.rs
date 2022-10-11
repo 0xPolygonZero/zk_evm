@@ -1,13 +1,15 @@
 use ethereum_types::U256;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use crate::{partial_trie::Nibbles, trie_builder::InsertEntry, utils::is_even};
+use crate::{partial_trie::Nibbles, utils::is_even};
 
 /// Some tests check that all values inserted are retrievable, and if we end up
 /// generating multiple inserts for the same key, then these tests will fail.
 /// Making the min key nibbles sufficiently high will significantly decrease the
 /// chances of these collisions occurring.
 const MIN_BYTES_FOR_VAR_KEY: usize = 5;
+
+pub(crate) type TestInsertEntry = (Nibbles, Vec<u8>);
 
 // Don't want this exposed publicly, but it is useful for testing.
 impl From<U256> for Nibbles {
@@ -36,38 +38,32 @@ pub(crate) fn common_setup() {
     let _ = pretty_env_logger::try_init();
 }
 
-pub(crate) fn entry<K: Into<Nibbles>>(k: K) -> InsertEntry {
-    InsertEntry {
-        nibbles: k.into(),
-        v: vec![2],
-    }
+pub(crate) fn entry<K: Into<Nibbles>>(k: K) -> TestInsertEntry {
+    (k.into(), vec![2])
 }
 
-pub(crate) fn entry_with_value<K: Into<Nibbles>>(k: K, v: u8) -> InsertEntry {
-    InsertEntry {
-        nibbles: k.into(),
-        v: vec![v],
-    }
+pub(crate) fn entry_with_value<K: Into<Nibbles>>(k: K, v: u8) -> TestInsertEntry {
+    (k.into(), vec![v])
 }
 
 pub(crate) fn generate_n_random_fixed_trie_entries(
     n: usize,
     seed: u64,
-) -> impl Iterator<Item = InsertEntry> {
+) -> impl Iterator<Item = TestInsertEntry> {
     gen_n_random_trie_entries_common(n, seed, gen_fixed_nibbles)
 }
 
 pub(crate) fn generate_n_random_variable_keys(
     n: usize,
     seed: u64,
-) -> impl Iterator<Item = InsertEntry> {
+) -> impl Iterator<Item = TestInsertEntry> {
     gen_n_random_trie_entries_common(n, seed, gen_variable_nibbles)
 }
 
 pub(crate) fn generate_n_random_fixed_even_nibble_padded_trie_entries(
     n: usize,
     seed: u64,
-) -> impl Iterator<Item = InsertEntry> {
+) -> impl Iterator<Item = TestInsertEntry> {
     gen_n_random_trie_entries_common(n, seed, gen_variable_nibbles_even_padded_nibbles)
 }
 
@@ -75,13 +71,11 @@ fn gen_n_random_trie_entries_common<F: Fn(&mut StdRng) -> Nibbles>(
     n: usize,
     seed: u64,
     u256_gen_f: F,
-) -> impl Iterator<Item = InsertEntry> {
+) -> impl Iterator<Item = TestInsertEntry> {
     let mut rng = StdRng::seed_from_u64(seed);
-
-    (0..n).into_iter().map(move |i| InsertEntry {
-        nibbles: u256_gen_f(&mut rng),
-        v: i.to_be_bytes().to_vec(),
-    })
+    (0..n)
+        .into_iter()
+        .map(move |i| (u256_gen_f(&mut rng), i.to_be_bytes().to_vec()))
 }
 
 fn gen_fixed_nibbles(rng: &mut StdRng) -> Nibbles {

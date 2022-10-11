@@ -100,9 +100,8 @@ mod tests {
         partial_trie::PartialTrie,
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
-            generate_n_random_fixed_trie_entries,
+            generate_n_random_fixed_trie_entries, TestInsertEntry,
         },
-        trie_builder::InsertEntry,
         trie_hashing::hash,
     };
 
@@ -196,14 +195,13 @@ mod tests {
     /// Gets the root hash for each insert by using an established eth trie
     /// library as a ground truth.
     fn get_lib_trie_root_hashes_after_each_insert(
-        entries: impl Iterator<Item = InsertEntry>,
+        entries: impl Iterator<Item = TestInsertEntry>,
     ) -> impl Iterator<Item = H256> {
         let db = Arc::new(MemoryDB::new(false));
         let mut truth_trie = EthTrie::new(db);
 
-        entries.map(move |e| {
-            truth_trie.insert(&e.nibbles.bytes_be(), &e.v).unwrap();
-            truth_trie.get(&e.nibbles.bytes_be()).unwrap();
+        entries.map(move |(k, v)| {
+            truth_trie.insert(&k.bytes_be(), &v).unwrap();
             let h = truth_trie.root_hash().unwrap();
 
             // Kind of silly... Both of these types are identical except that one is
@@ -214,17 +212,17 @@ mod tests {
     }
 
     fn get_root_hashes_for_our_trie_after_each_insert(
-        entries: impl Iterator<Item = InsertEntry>,
+        entries: impl Iterator<Item = TestInsertEntry>,
     ) -> impl Iterator<Item = H256> {
         let mut trie = PartialTrie::Empty;
 
-        entries.map(move |e| {
-            trie = PartialTrie::insert(trie.clone(), e);
+        entries.map(move |(k, v)| {
+            trie = trie.clone().insert(k, v);
             trie.calc_hash()
         })
     }
 
-    fn insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(entries: &[InsertEntry]) {
+    fn insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(entries: &[TestInsertEntry]) {
         let truth_hashes = get_lib_trie_root_hashes_after_each_insert(entries.iter().cloned());
         let our_hashes = get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
 
@@ -249,17 +247,14 @@ mod tests {
         let acc_entry = acc_and_hash_entry.account_entry();
         let rlp_bytes = rlp::encode(&acc_entry);
 
-        let ins_entry = InsertEntry {
-            nibbles: acc_and_hash_entry.account_key.into(),
-            v: rlp_bytes.into(),
-        };
+        let ins_entry = (acc_and_hash_entry.account_key.into(), rlp_bytes.into());
 
         let py_evm_truth_val = acc_and_hash_entry.final_state_root;
         let eth_trie_lib_truth_val =
             get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
                 .next()
                 .unwrap();
-        let our_hash = PartialTrie::construct_trie_from_inserts(once(ins_entry)).calc_hash();
+        let our_hash = PartialTrie::from_iter(once(ins_entry)).calc_hash();
 
         assert_eq!(py_evm_truth_val, our_hash);
         assert_eq!(eth_trie_lib_truth_val, our_hash);
@@ -316,10 +311,7 @@ mod tests {
 
         let entries: Vec<_> = py_evm_truth_vals
             .iter()
-            .map(|e| InsertEntry {
-                nibbles: e.account_key.into(),
-                v: rlp::encode(&e.account_entry()).into(),
-            })
+            .map(|e| (e.account_key.into(), rlp::encode(&e.account_entry()).into()))
             .collect();
 
         let our_insert_hashes =

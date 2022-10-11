@@ -60,7 +60,7 @@ mod tests {
         common_setup();
 
         let entries = [entry_with_value(0x1234, 1), entry_with_value(0x12345678, 2)];
-        let trie = PartialTrie::construct_trie_from_inserts(entries.iter().cloned());
+        let trie = PartialTrie::from_iter(entries.iter().cloned());
 
         assert_eq!(trie.get(0x1234.into()), Some([1].as_slice()));
         assert_eq!(trie.get(0x12345678.into()), Some([2].as_slice()));
@@ -72,13 +72,13 @@ mod tests {
 
         let random_entries: Vec<_> =
             generate_n_random_fixed_trie_entries(TRIE_SIZE, 9001).collect();
-        let trie = PartialTrie::construct_trie_from_inserts(random_entries.iter().cloned());
+        let trie = PartialTrie::from_iter(random_entries.iter().cloned());
 
-        for e in random_entries.iter() {
-            debug!("Attempting to retrieve {:?}...", e);
-            let res = trie.get(e.nibbles);
+        for (k, v) in random_entries.into_iter() {
+            debug!("Attempting to retrieve {:?}...", (k, &v));
+            let res = trie.get(k);
 
-            assert_eq!(res, Some(e.v.as_slice()));
+            assert_eq!(res, Some(v.as_slice()));
         }
     }
 }
