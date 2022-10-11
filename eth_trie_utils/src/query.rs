@@ -47,14 +47,19 @@ impl PartialTrie {
 
 #[cfg(test)]
 mod tests {
+
     use log::debug;
 
     use crate::{
         partial_trie::PartialTrie,
-        testing_utils::{common_setup, entry_with_value, generate_n_random_fixed_trie_entries},
+        testing_utils::{
+            common_setup, entry_with_value, generate_n_random_fixed_trie_entries,
+            generate_n_random_variable_keys, get_entries_in_trie,
+        },
     };
 
     const TRIE_SIZE: usize = 100000;
+    const COW_TEST_TRIE_SIZE: usize = 500;
 
     #[test]
     fn two_variable_length_keys_with_overlap_is_queryable() {
@@ -80,6 +85,30 @@ mod tests {
             let res = trie.get(k);
 
             assert_eq!(res, Some(v.as_slice()));
+        }
+    }
+
+    #[test]
+    fn held_trie_cow_references_do_not_change_as_trie_changes() {
+        let entries = generate_n_random_variable_keys(COW_TEST_TRIE_SIZE, 9002);
+
+        let mut all_nodes_in_trie_after_each_insert = Vec::new();
+        let mut root_node_after_each_insert = Vec::new();
+
+        let mut trie = PartialTrie::default();
+        for (k, v) in entries {
+            trie = trie.clone().insert(k, v);
+
+            all_nodes_in_trie_after_each_insert.push(get_entries_in_trie(&trie));
+            root_node_after_each_insert.push(trie.clone());
+        }
+
+        for (old_trie_nodes_truth, old_root_node) in all_nodes_in_trie_after_each_insert
+            .into_iter()
+            .zip(root_node_after_each_insert.into_iter())
+        {
+            let nodes_retrieved = get_entries_in_trie(&old_root_node);
+            assert_eq!(old_trie_nodes_truth, nodes_retrieved)
         }
     }
 }
