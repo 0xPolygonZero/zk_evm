@@ -52,6 +52,7 @@ enum ExistingOrNewBranchValuePlacement {
 }
 
 impl PartialTrie {
+    /// Inserts a node into the trie.
     pub fn insert(self, k: Nibbles, v: Vec<u8>) -> PartialTrie {
         let ins_entry = (k, v).into();
         trace!("Inserting new leaf node {:?}...", ins_entry);

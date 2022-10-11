@@ -161,6 +161,10 @@ impl FromStr for Nibbles {
 }
 
 impl Nibbles {
+    /// Creates `Nibbles` from big endian bytes.
+    ///
+    /// Returns an error if the byte slice is empty or is longer than `32`
+    /// bytes.
     pub fn from_bytes_be(bytes: &[u8]) -> Result<Self, BytesToNibblesError> {
         if bytes.is_empty() {
             return Err(BytesToNibblesError::ZeroSizedKey);
@@ -178,10 +182,12 @@ impl Nibbles {
         })
     }
 
+    /// Gets the nth proceeding nibble.
     pub fn get_nibble(&self, idx: usize) -> Nibble {
         Self::get_nibble_common(&self.packed, idx, self.count)
     }
 
+    /// Pops the next nibble.
     pub fn pop_next_nibble(&mut self) -> Nibble {
         let n = self.get_nibble(0);
         self.truncate_n_nibbles_mut(1);
@@ -189,11 +195,12 @@ impl Nibbles {
         n
     }
 
+    /// Gets the next `n` nibbles.
     pub fn get_next_nibbles(&self, n: usize) -> Nibbles {
         self.get_nibble_range(0..n)
     }
 
-    /// Pops the next `n` proceeding nibbles.
+    /// Pops the next `n` nibbles.
     pub fn pop_next_nibbles(&mut self, n: usize) -> Nibbles {
         let r = self.get_nibble_range(0..n);
         self.truncate_n_nibbles_mut(n);
@@ -211,6 +218,10 @@ impl Nibbles {
         }
     }
 
+    /// Gets the nibbles at the range specified, where `0` is the next nibble.
+    ///
+    /// # Panics
+    /// Panics if `range.end` is outside of the current `Nibbles`.
     pub fn get_nibble_range(&self, range: Range<usize>) -> Nibbles {
         Self::get_nibble_range_common(&self.packed, range, self.count)
     }
@@ -228,16 +239,21 @@ impl Nibbles {
         }
     }
 
+    /// Returns whether or not this `Nibbles` contains actual nibbles. (If
+    /// `count` is set to `0`)
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
 
+    /// Checks if two given `Nibbles` are identical up to the shorter of the two
+    /// `Nibbles`.
     pub fn nibbles_are_identical_up_to_smallest_count(&self, other: &Nibbles) -> bool {
         let smaller_count = self.count.min(other.count);
         (0..smaller_count).all(|i| self.get_nibble(i) == other.get_nibble(i))
     }
 
-    /// Drops the next `n` proceeding nibbles.
+    /// Drops the next `n` proceeding nibbles without mutation.
+    ///
     /// If we truncate more nibbles that there are, we will just return the
     /// `empty` nibble.
     pub fn truncate_n_nibbles(&self, n: usize) -> Nibbles {
@@ -247,6 +263,10 @@ impl Nibbles {
         nib
     }
 
+    /// Drop the next `n` proceeding nibbles.
+    ///
+    /// If we truncate more nibbles that there are, we will just return the
+    /// `empty` nibble.
     pub fn truncate_n_nibbles_mut(&mut self, n: usize) {
         // If we attempt to truncate more than we have, then just truncate to `0`.
         let n = match self.count >= n {
@@ -282,6 +302,7 @@ impl Nibbles {
         (pre, post)
     }
 
+    /// Split the `Nibbles` at the given index but only return the prefix.
     pub fn split_at_idx_prefix(&self, idx: usize) -> Nibbles {
         let shift_amt = (self.count - idx) * 4;
         let pre_mask = create_mask_of_1s(idx * 4) << shift_amt;
@@ -292,6 +313,7 @@ impl Nibbles {
         }
     }
 
+    /// Split the `Nibbles` at the given index but only return the postfix.
     pub fn split_at_idx_postfix(&self, idx: usize) -> Nibbles {
         let postfix_count = self.count - idx;
         let mask = create_mask_of_1s(postfix_count * 4);
@@ -311,8 +333,8 @@ impl Nibbles {
     }
 
     // TODO: Potentially make faster...
-    /// Finds the nibble idx that differs between two nibbles.
-    /// If there is no difference, returns 1 + the last index.
+    /// Finds the nibble idx that differs between two nibbles. If there is no
+    /// difference, returns 1 + the last index.
     pub fn find_nibble_idx_that_differs_between_nibbles_different_lengths(
         n1: &Nibbles,
         n2: &Nibbles,
@@ -325,6 +347,11 @@ impl Nibbles {
         )
     }
 
+    /// Finds the nibble index that differs between two `Nibbles` of equal
+    /// length. If there is no difference, returns 1 + the last index.
+    ///
+    /// # Panics
+    /// Panics if both `Nibbles` are not the same length.
     pub fn find_nibble_idx_that_differs_between_nibbles_equal_lengths(
         n1: &Nibbles,
         n2: &Nibbles,
@@ -351,6 +378,7 @@ impl Nibbles {
         n1.count
     }
 
+    /// Returns the minimum number of nibbles needed to represent a `U256` key.
     pub fn get_num_nibbles_in_key(k: &U256) -> usize {
         (k.bits() + 3) / 4
     }

@@ -1,3 +1,5 @@
+//! Utilities and types for working with Ethereum partial tries.
+
 #![feature(slice_pattern)]
 
 pub mod partial_trie;

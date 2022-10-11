@@ -3,6 +3,7 @@ use log::trace;
 use crate::partial_trie::{Nibbles, PartialTrie};
 
 impl PartialTrie {
+    /// Get a node if it exists in the trie.
     pub fn get(&self, mut n: Nibbles) -> Option<&[u8]> {
         self.get_intern(&mut n)
     }
