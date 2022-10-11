@@ -1,5 +1,5 @@
 [![Crate](https://img.shields.io/crates/v/eth_trie_utils)](https://crates.io/crates/eth_trie_utils)
-[![Docs](https://img.shields.io/docsrs/eth_trie_utils)](https://docs.rs/eth_trie_utils/0.1.0/eth_trie_utils/)
+[![Docs](https://img.shields.io/docsrs/eth_trie_utils)](https://docs.rs/eth_trie_utils/latest/eth_trie_utils/)
 # Ethereum Trie Utils
 
 Currently a WIP and not the most performant.
