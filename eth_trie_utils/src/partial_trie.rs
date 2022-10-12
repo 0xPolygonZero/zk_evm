@@ -1,4 +1,4 @@
-use std::{fmt::Debug, fmt::Display, ops::Range, rc::Rc, str::FromStr};
+use std::{fmt::Debug, fmt::Display, ops::Range, str::FromStr, sync::Arc};
 
 use bytes::{Bytes, BytesMut};
 use ethereum_types::{H256, U256};
@@ -7,6 +7,9 @@ use thiserror::Error;
 use uint::FromHexError;
 
 use crate::utils::{create_mask_of_1s, is_even, Nibble};
+
+/// Alias for a node that is a child of an extension or branch node.
+pub type WrappedNode = Arc<Box<PartialTrie>>;
 
 #[derive(Debug, Error)]
 pub enum BytesToNibblesError {
@@ -32,22 +35,22 @@ pub enum PartialTrie {
     Hash(H256),
     /// A branch node, which consists of 16 children and an optional value.
     Branch {
-        children: [Rc<Box<PartialTrie>>; 16],
+        children: [WrappedNode; 16],
         value: Vec<u8>,
     },
     /// An extension node, which consists of a list of nibbles and a single
     /// child.
     Extension {
         nibbles: Nibbles,
-        child: Rc<Box<PartialTrie>>,
+        child: WrappedNode,
     },
     /// A leaf node, which consists of a list of nibbles and a value.
     Leaf { nibbles: Nibbles, value: Vec<u8> },
 }
 
-impl From<PartialTrie> for Rc<Box<PartialTrie>> {
+impl From<PartialTrie> for WrappedNode {
     fn from(v: PartialTrie) -> Self {
-        Rc::new(Box::new(v))
+        Arc::new(Box::new(v))
     }
 }
 

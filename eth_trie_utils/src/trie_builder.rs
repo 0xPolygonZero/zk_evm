@@ -1,13 +1,11 @@
-use std::{fmt::Display, rc::Rc};
+use std::fmt::Display;
 
 use log::trace;
 
 use crate::{
-    partial_trie::{Nibbles, PartialTrie},
+    partial_trie::{Nibbles, PartialTrie, WrappedNode},
     utils::Nibble,
 };
-
-type Node = Rc<Box<PartialTrie>>;
 
 /// A entry to be inserted into a `PartialTrie`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -47,8 +45,8 @@ struct ExistingAndNewNodePreAndPost {
 /// enum just indicates whether or not a value needs to go into the branch node.
 #[derive(Debug)]
 enum ExistingOrNewBranchValuePlacement {
-    BranchValue(Vec<u8>, (Nibble, Node)),
-    BothBranchChildren((Nibble, Node), (Nibble, Node)),
+    BranchValue(Vec<u8>, (Nibble, WrappedNode)),
+    BothBranchChildren((Nibble, WrappedNode), (Nibble, WrappedNode)),
 }
 
 impl PartialTrie {
@@ -77,7 +75,7 @@ impl FromIterator<(Nibbles, Vec<u8>)> for PartialTrie {
     }
 }
 
-fn insert_into_trie_rec(node: &Node, mut new_node: InsertEntry) -> Option<Node> {
+fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option<WrappedNode> {
     match node.as_ref().as_ref() {
         PartialTrie::Empty => {
             trace!("Insert traversed Empty");
@@ -217,9 +215,9 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
 
 fn place_branch_and_potentially_ext_prefix(
     info: &ExistingAndNewNodePreAndPost,
-    existing_node: Node,
+    existing_node: WrappedNode,
     new_node: InsertEntry,
-) -> Node {
+) -> WrappedNode {
     let mut children = new_branch_child_arr();
     let mut value = vec![];
 
@@ -254,7 +252,7 @@ fn place_branch_and_potentially_ext_prefix(
 /// into the value field of the new branch.
 fn check_if_existing_or_new_node_should_go_in_branch_value_field(
     info: &ExistingAndNewNodePreAndPost,
-    existing_node: Node,
+    existing_node: WrappedNode,
     new_node_entry: InsertEntry,
 ) -> ExistingOrNewBranchValuePlacement {
     // Guaranteed that both postfixes are not equal at this point.
@@ -281,7 +279,7 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field(
 fn ins_entry_into_leaf_and_nibble(
     info: &ExistingAndNewNodePreAndPost,
     entry: InsertEntry,
-) -> (Nibble, Node) {
+) -> (Nibble, WrappedNode) {
     let new_first_nibble = info.new_postfix.get_nibble(0);
     let new_node = PartialTrie::Leaf {
         nibbles: entry
@@ -294,7 +292,7 @@ fn ins_entry_into_leaf_and_nibble(
     (new_first_nibble, new_node)
 }
 
-fn new_branch_child_arr() -> [Node; 16] {
+fn new_branch_child_arr() -> [WrappedNode; 16] {
     // Hahaha ok there actually is no better way to init this array unless I want to
     // use iterators and take a runtime hit...
     [
