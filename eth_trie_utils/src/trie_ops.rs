@@ -102,6 +102,29 @@ impl PartialTrie {
             }
         }
     }
+
+    /// Deletes a `Leaf` node or `Branch` value field if it exists.
+    ///
+    /// To agree with Ethereum specs, deleting nodes does not result in the trie
+    /// removing nodes that are redundant after deletion. For example, a
+    /// `Branch` node that is completely empty after all of its children are
+    /// deleted is not pruned. Also note:
+    /// - Deleted leaves are replaced with `Empty` nodes.
+    /// - Deleted branch values are replaced with empty `Vec`s.
+    ///
+    /// # Panics
+    /// If a `Hash` node is traversed, a panic will occur. Since `Hash` nodes
+    /// are meant for parts of the trie that are not relevant, traversing one
+    /// means that a `Hash` node was created that potentially should not have
+    /// been.
+    pub fn delete(&mut self, k: Nibbles) -> Option<Vec<u8>> {
+        trace!("Deleting a leaf node with key {} if it exists", k);
+
+        delete_intern(&self.clone().into(), k).map(|(updated_root, deleted_val)| {
+            *self = *updated_root.as_ref().clone();
+            deleted_val
+        })
+    }
 }
 
 impl FromIterator<(Nibbles, Vec<u8>)> for PartialTrie {
@@ -120,24 +143,18 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
     match node.as_ref().as_ref() {
         PartialTrie::Empty => {
             trace!("Insert traversed Empty");
-            Some(
-                PartialTrie::Leaf {
-                    nibbles: new_node.nibbles,
-                    value: new_node.v,
-                }
-                .into(),
+            Some(leaf(new_node.nibbles, new_node.v))
+        }
+        PartialTrie::Hash(_) => {
+            trace!("Insert traversed {:?}", node);
+            unreachable!(
+                "Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!"
             )
         }
         PartialTrie::Branch { children, value } => {
             if new_node.nibbles.count == 0 {
                 trace!("Insert traversed branch and placed value in node");
-                return Some(
-                    PartialTrie::Branch {
-                        children: children.clone(),
-                        value: new_node.v,
-                    }
-                    .into(),
-                );
+                return Some(branch(children.clone(), new_node.v));
             }
 
             let nibble = new_node.nibbles.pop_next_nibble();
@@ -146,11 +163,7 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
             insert_into_trie_rec(&children[nibble as usize], new_node).map(|updated_child| {
                 let mut updated_children = children.clone();
                 updated_children[nibble as usize] = updated_child;
-                PartialTrie::Branch {
-                    children: updated_children,
-                    value: value.clone(),
-                }
-                .into()
+                branch(updated_children, value.clone())
             })
         }
         PartialTrie::Extension { nibbles, child } => {
@@ -164,13 +177,8 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
             if nibbles.nibbles_are_identical_up_to_smallest_count(&new_node.nibbles) {
                 new_node.truncate_n_nibbles(nibbles.count);
 
-                return insert_into_trie_rec(child, new_node).map(|updated_child| {
-                    PartialTrie::Extension {
-                        nibbles: *nibbles,
-                        child: updated_child,
-                    }
-                    .into()
-                });
+                return insert_into_trie_rec(child, new_node)
+                    .map(|updated_child| extension(*nibbles, updated_child));
             }
 
             // Drop one since branch will cover one nibble.
@@ -181,11 +189,7 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
             // the branch.
             let updated_existing_node = match existing_postfix_adjusted_for_branch.count {
                 0 => child.clone(),
-                _ => PartialTrie::Extension {
-                    nibbles: existing_postfix_adjusted_for_branch,
-                    child: child.clone(),
-                }
-                .into(),
+                _ => extension(existing_postfix_adjusted_for_branch, child.clone()),
             };
 
             Some(place_branch_and_potentially_ext_prefix(
@@ -199,24 +203,17 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
 
             // Update existing node value if already present.
             if *nibbles == new_node.nibbles {
-                return Some(
-                    PartialTrie::Leaf {
-                        nibbles: *nibbles,
-                        value: new_node.v,
-                    }
-                    .into(),
-                );
+                return Some(leaf(*nibbles, new_node.v));
             }
 
             let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
 
             // This existing leaf is going in a branch, so we need to truncate the first
             // nibble since it's going to be represented by the branch.
-            let existing_node_truncated = PartialTrie::Leaf {
-                nibbles: nibbles.truncate_n_nibbles(info.common_prefix.count + 1),
-                value: value.clone(),
-            }
-            .into();
+            let existing_node_truncated = leaf(
+                nibbles.truncate_n_nibbles(info.common_prefix.count + 1),
+                value.clone(),
+            );
 
             Some(place_branch_and_potentially_ext_prefix(
                 &info,
@@ -224,11 +221,38 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
                 new_node,
             ))
         }
+    }
+}
+
+fn delete_intern(node: &WrappedNode, mut curr_k: Nibbles) -> Option<(WrappedNode, Vec<u8>)> {
+    match node.as_ref().as_ref() {
+        PartialTrie::Empty => None,
         PartialTrie::Hash(_) => {
-            trace!("Insert traversed {:?}", node);
-            unreachable!(
-                "Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!"
-            )
+            panic!("Attempted to delete a value that ended up inside a hash node")
+        } // TODO: Find a nice way to get the full key path...
+        PartialTrie::Branch { children, value } => {
+            if curr_k.is_empty() {
+                return Some((branch(children.clone(), Vec::new()), value.clone()));
+            }
+
+            let nib = curr_k.pop_next_nibble() as usize;
+            delete_intern(&children[nib], curr_k).map(|(updated_child, value_deleted)| {
+                let mut updated_children = children.clone();
+                updated_children[nib] = updated_child;
+                (branch(updated_children, value.clone()), value_deleted)
+            })
+        }
+        PartialTrie::Extension { nibbles, child } => nibbles
+            .nibbles_are_identical_up_to_smallest_count(&curr_k)
+            .then(|| {
+                curr_k.truncate_n_nibbles(nibbles.count);
+                delete_intern(child, curr_k).map(|(updated_child, value_deleted)| {
+                    (extension(*nibbles, updated_child), value_deleted)
+                })
+            })
+            .flatten(),
+        PartialTrie::Leaf { nibbles, value } => {
+            (*nibbles == curr_k).then(|| (PartialTrie::Empty.into(), value.clone()))
         }
     }
 }
@@ -277,15 +301,11 @@ fn place_branch_and_potentially_ext_prefix(
         }
     }
 
-    let branch = PartialTrie::Branch { children, value }.into();
+    let branch = branch(children, value);
 
     match info.common_prefix.count {
         0 => branch,
-        _ => PartialTrie::Extension {
-            nibbles: info.common_prefix,
-            child: branch,
-        }
-        .into(),
+        _ => extension(info.common_prefix, branch),
     }
 }
 
@@ -322,13 +342,12 @@ fn ins_entry_into_leaf_and_nibble(
     entry: InsertEntry,
 ) -> (Nibble, WrappedNode) {
     let new_first_nibble = info.new_postfix.get_nibble(0);
-    let new_node = PartialTrie::Leaf {
-        nibbles: entry
+    let new_node = leaf(
+        entry
             .nibbles
             .truncate_n_nibbles(info.common_prefix.count + 1),
-        value: entry.v,
-    }
-    .into();
+        entry.v,
+    );
 
     (new_first_nibble, new_node)
 }
@@ -354,6 +373,18 @@ fn new_branch_child_arr() -> [WrappedNode; 16] {
         PartialTrie::Empty.into(),
         PartialTrie::Empty.into(),
     ]
+}
+
+fn branch(children: [WrappedNode; 16], value: Vec<u8>) -> WrappedNode {
+    PartialTrie::Branch { children, value }.into()
+}
+
+fn extension(nibbles: Nibbles, child: WrappedNode) -> WrappedNode {
+    PartialTrie::Extension { nibbles, child }.into()
+}
+
+fn leaf(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode {
+    PartialTrie::Leaf { nibbles, value }.into()
 }
 
 #[cfg(test)]
