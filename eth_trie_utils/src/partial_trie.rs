@@ -455,6 +455,16 @@ impl Nibbles {
 
         byte_buf[32 - self.min_bytes()..32].to_vec()
     }
+
+    /// Creates a new `Nibbles` from a single `Nibble`.
+    pub fn from_nibble(n: Nibble) -> Self {
+        assert!(n <= 0xf);
+
+        Self {
+            count: 1,
+            packed: n.into(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -670,5 +680,18 @@ mod tests {
         assert_eq!(Nibbles::from_str("0").unwrap().as_hex_str(), "0x0");
         assert_eq!(Nibbles::from_str("0x800").unwrap().as_hex_str(), "0x800");
         assert_eq!(Nibbles::from_str("800").unwrap().as_hex_str(), "0x800");
+    }
+
+    #[test]
+    fn nibbles_from_nibble_works() {
+        assert_eq!(u64::from(Nibbles::from_nibble(0x0)), 0x0);
+        assert_eq!(u64::from(Nibbles::from_nibble(0x1)), 0x1);
+        assert_eq!(u64::from(Nibbles::from_nibble(0xf)), 0xf);
+    }
+
+    #[test]
+    #[should_panic]
+    fn nibbles_from_nibble_panics_when_not_nibble() {
+        let _ = u64::from(Nibbles::from_nibble(0x10));
     }
 }

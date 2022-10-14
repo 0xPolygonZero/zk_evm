@@ -39,6 +39,13 @@ impl From<u64> for Nibbles {
     }
 }
 
+// For testing...
+impl From<Nibbles> for u64 {
+    fn from(value: Nibbles) -> Self {
+        value.packed.try_into().unwrap()
+    }
+}
+
 pub(crate) fn common_setup() {
     // Try init since multiple tests calling `init` will cause an error.
     let _ = pretty_env_logger::try_init();

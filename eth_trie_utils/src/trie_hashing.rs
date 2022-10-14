@@ -192,13 +192,17 @@ mod tests {
         raw.into_iter().map(|r| r.into()).collect()
     }
 
+    fn create_truth_trie() -> EthTrie<MemoryDB> {
+        let db = Arc::new(MemoryDB::new(true));
+        EthTrie::new(db)
+    }
+
     /// Gets the root hash for each insert by using an established eth trie
     /// library as a ground truth.
     fn get_lib_trie_root_hashes_after_each_insert(
         entries: impl Iterator<Item = TestInsertEntry>,
     ) -> impl Iterator<Item = H256> {
-        let db = Arc::new(MemoryDB::new(false));
-        let mut truth_trie = EthTrie::new(db);
+        let mut truth_trie = create_truth_trie();
 
         entries.map(move |(k, v)| {
             truth_trie.insert(&k.bytes_be(), &v).unwrap();
@@ -325,6 +329,34 @@ mod tests {
         {
             assert_eq!(our_h, lib_h);
             assert_eq!(our_h, pyevm_h);
+        }
+    }
+
+    #[test]
+    fn massive_trie_data_deletion_agrees_with_eth_trie() {
+        common_setup();
+
+        let entries: Vec<_> = generate_n_random_fixed_even_nibble_padded_trie_entries(
+            NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST,
+            8,
+        )
+        .collect();
+
+        let mut our_trie = PartialTrie::from_iter(entries.iter().cloned());
+        let mut truth_trie = create_truth_trie();
+
+        for (k, v) in entries.iter() {
+            truth_trie.insert(&k.bytes_be(), v).unwrap();
+        }
+
+        let half_entries = entries.len() / 2;
+        let entries_to_delete = entries.into_iter().take(half_entries);
+        for (k, _) in entries_to_delete {
+            our_trie.delete(k);
+            truth_trie.remove(&k.bytes_be()).unwrap();
+
+            let truth_root_hash = H256(truth_trie.root_hash().unwrap().0);
+            assert_eq!(our_trie.calc_hash(), truth_root_hash);
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::{convert::TryInto, ops::BitAnd};
+use std::{convert::TryInto, fmt::Display, ops::BitAnd, sync::Arc};
 
 use ethereum_types::{U256, U512};
 use num_traits::PrimInt;
@@ -18,6 +18,12 @@ pub(crate) enum TrieNodeType {
     Leaf,
 }
 
+impl From<&Arc<Box<PartialTrie>>> for TrieNodeType {
+    fn from(value: &Arc<Box<PartialTrie>>) -> Self {
+        (&***value).into()
+    }
+}
+
 impl From<&PartialTrie> for TrieNodeType {
     fn from(node: &PartialTrie) -> Self {
         match node {
@@ -26,6 +32,18 @@ impl From<&PartialTrie> for TrieNodeType {
             PartialTrie::Branch { .. } => Self::Branch,
             PartialTrie::Extension { .. } => Self::Extension,
             PartialTrie::Leaf { .. } => Self::Leaf,
+        }
+    }
+}
+
+impl Display for TrieNodeType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TrieNodeType::Empty => write!(f, "Empty"),
+            TrieNodeType::Hash => write!(f, "Hash"),
+            TrieNodeType::Branch => write!(f, "Branch"),
+            TrieNodeType::Extension => write!(f, "Extension"),
+            TrieNodeType::Leaf => write!(f, "Leaf"),
         }
     }
 }

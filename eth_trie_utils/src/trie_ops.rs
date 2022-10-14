@@ -4,7 +4,7 @@ use log::trace;
 
 use crate::{
     partial_trie::{Nibbles, PartialTrie, WrappedNode},
-    utils::Nibble,
+    utils::{Nibble, TrieNodeType},
 };
 
 /// A entry to be inserted into a `PartialTrie`.
@@ -121,7 +121,8 @@ impl PartialTrie {
         trace!("Deleting a leaf node with key {} if it exists", k);
 
         delete_intern(&self.clone().into(), k).map(|(updated_root, deleted_val)| {
-            *self = *updated_root.as_ref().clone();
+            // Final check at the root if we have an extension node
+            *self = *try_collapse_if_extension(updated_root).as_ref().clone();
             deleted_val
         })
     }
@@ -226,7 +227,10 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
 
 fn delete_intern(node: &WrappedNode, mut curr_k: Nibbles) -> Option<(WrappedNode, Vec<u8>)> {
     match node.as_ref().as_ref() {
-        PartialTrie::Empty => None,
+        PartialTrie::Empty => {
+            trace!("Delete traversed Empty");
+            None
+        }
         PartialTrie::Hash(_) => {
             panic!("Attempted to delete a value that ended up inside a hash node")
         } // TODO: Find a nice way to get the full key path...
@@ -235,25 +239,87 @@ fn delete_intern(node: &WrappedNode, mut curr_k: Nibbles) -> Option<(WrappedNode
                 return Some((branch(children.clone(), Vec::new()), value.clone()));
             }
 
-            let nib = curr_k.pop_next_nibble() as usize;
-            delete_intern(&children[nib], curr_k).map(|(updated_child, value_deleted)| {
-                let mut updated_children = children.clone();
-                updated_children[nib] = updated_child;
-                (branch(updated_children, value.clone()), value_deleted)
-            })
+            let nibble = curr_k.pop_next_nibble();
+            trace!("Delete traversed Branch nibble {:x}", nibble);
+
+            delete_intern(&children[nibble as usize], curr_k).map(
+                |(updated_child, value_deleted)| {
+                    // If the child we recursively called is deleted, then we may need to reduce
+                    // this branch to an extension/leaf.
+                    let updated_node = match node_is_empty(&updated_child)
+                        && get_num_non_empty_children(children) <= 2
+                    {
+                        false => {
+                            // Branch stays.
+                            let mut updated_children = children.clone();
+                            updated_children[nibble as usize] =
+                                try_collapse_if_extension(updated_child);
+                            branch(updated_children, value.clone())
+                        }
+                        true => {
+                            let (child_nibble, non_empty_node) =
+                                get_other_non_empty_child_and_nibble_in_two_elem_branch(
+                                    children, nibble,
+                                );
+
+                            // Extension may be collapsed one level above.
+                            extension(Nibbles::from_nibble(child_nibble), non_empty_node.clone())
+                        }
+                    };
+
+                    (updated_node, value_deleted)
+                },
+            )
         }
-        PartialTrie::Extension { nibbles, child } => nibbles
-            .nibbles_are_identical_up_to_smallest_count(&curr_k)
-            .then(|| {
-                curr_k.truncate_n_nibbles(nibbles.count);
-                delete_intern(child, curr_k).map(|(updated_child, value_deleted)| {
-                    (extension(*nibbles, updated_child), value_deleted)
+        PartialTrie::Extension {
+            nibbles: ext_nibbles,
+            child,
+        } => {
+            trace!("Delete traversed Extension (nibbles: {:?})", ext_nibbles);
+
+            ext_nibbles
+                .nibbles_are_identical_up_to_smallest_count(&curr_k)
+                .then(|| {
+                    curr_k.truncate_n_nibbles_mut(ext_nibbles.count);
+                    delete_intern(child, curr_k).map(|(updated_child, value_deleted)| {
+                        let updated_node = collapse_ext_node_if_needed(ext_nibbles, &updated_child);
+                        (updated_node, value_deleted)
+                    })
                 })
-            })
-            .flatten(),
+                .flatten()
+        }
         PartialTrie::Leaf { nibbles, value } => {
+            trace!("Delete traversed Leaf (nibbles: {:?})", nibbles);
             (*nibbles == curr_k).then(|| (PartialTrie::Empty.into(), value.clone()))
         }
+    }
+}
+
+fn try_collapse_if_extension(node: WrappedNode) -> WrappedNode {
+    match node.as_ref().as_ref() {
+        PartialTrie::Extension { nibbles, child } => collapse_ext_node_if_needed(nibbles, child),
+        _ => node,
+    }
+}
+
+fn collapse_ext_node_if_needed(ext_nibbles: &Nibbles, child: &WrappedNode) -> WrappedNode {
+    match child.as_ref().as_ref() {
+        PartialTrie::Branch { .. } => extension(*ext_nibbles, child.clone()),
+        PartialTrie::Extension {
+            nibbles: other_ext_nibbles,
+            child: other_ext_child,
+        } => extension(
+            ext_nibbles.merge(other_ext_nibbles),
+            other_ext_child.clone(),
+        ),
+        PartialTrie::Leaf {
+            nibbles: leaf_nibbles,
+            value,
+        } => leaf(ext_nibbles.merge(leaf_nibbles), value.clone()),
+        _ => panic!(
+            "Extension managed to get a child node type that is impossible! (child: {})",
+            TrieNodeType::from(child)
+        ),
     }
 }
 
@@ -375,6 +441,26 @@ fn new_branch_child_arr() -> [WrappedNode; 16] {
     ]
 }
 
+fn get_num_non_empty_children(children: &[WrappedNode; 16]) -> usize {
+    children.iter().filter(|c| !node_is_empty(c)).count()
+}
+
+fn get_other_non_empty_child_and_nibble_in_two_elem_branch(
+    children: &[WrappedNode; 16],
+    our_nib: Nibble,
+) -> (Nibble, &WrappedNode) {
+    children
+        .iter()
+        .enumerate()
+        .find(|(i, c)| *i != our_nib as usize && !node_is_empty(c))
+        .map(|(n, c)| (n as Nibble, c))
+        .expect("Expected to find a non-empty node in the branch's children")
+}
+
+fn node_is_empty(node: &WrappedNode) -> bool {
+    matches!(node.as_ref().as_ref(), PartialTrie::Empty)
+}
+
 fn branch(children: [WrappedNode; 16], value: Vec<u8>) -> WrappedNode {
     PartialTrie::Branch { children, value }.into()
 }
@@ -389,6 +475,7 @@ fn leaf(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode {
 
 #[cfg(test)]
 mod tests {
+    use core::slice::SlicePattern;
     use std::collections::HashSet;
 
     use log::debug;
@@ -548,6 +635,8 @@ mod tests {
 
     #[test]
     fn held_trie_cow_references_do_not_change_as_trie_changes() {
+        common_setup();
+
         let entries = generate_n_random_variable_keys(COW_TEST_TRIE_SIZE, 9002);
 
         let mut all_nodes_in_trie_after_each_insert = Vec::new();
@@ -567,6 +656,48 @@ mod tests {
         {
             let nodes_retrieved = get_entries_in_trie(&old_root_node);
             assert_eq!(old_trie_nodes_truth, nodes_retrieved)
+        }
+    }
+
+    #[test]
+    fn deleting_a_non_existent_node_returns_none() {
+        common_setup();
+
+        let mut trie = PartialTrie::default();
+        trie = trie.insert(0x1234.into(), vec![91]);
+
+        assert!(trie.delete(0x5678.into()).is_none())
+    }
+
+    #[test]
+    fn deleting_from_an_empty_trie_returns_none() {
+        common_setup();
+
+        let mut trie = PartialTrie::default();
+        assert!(trie.delete(0x1234.into()).is_none());
+    }
+
+    #[test]
+    fn deletion_massive_trie() {
+        common_setup();
+
+        let entries: Vec<_> = generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 7).collect();
+        let mut trie = PartialTrie::from_iter(entries.iter().cloned());
+
+        // Delete half of the elements
+        let half_entries = entries.len() / 2;
+
+        let entries_to_delete = entries.iter().take(half_entries);
+        for (k, v) in entries_to_delete {
+            let res = trie.delete(*k);
+
+            assert!(trie.get(*k).is_none());
+            assert_eq!(res.as_ref(), Some(v));
+        }
+
+        let entries_that_still_should_exist = entries.into_iter().skip(half_entries);
+        for (k, v) in entries_that_still_should_exist {
+            assert_eq!(trie.get(k), Some(v.as_slice()));
         }
     }
 }
