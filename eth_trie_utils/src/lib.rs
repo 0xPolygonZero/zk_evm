@@ -1,6 +1,6 @@
 //! Utilities and types for working with Ethereum partial tries.
 
-#![feature(slice_pattern)]
+#![feature(let_chains)]
 
 pub mod partial_trie;
 pub mod trie_hashing;

@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uint::FromHexError;
 
-use crate::utils::{create_mask_of_1s, is_even, Nibble};
+use crate::utils::{create_mask_of_1s, is_even};
+
+// Use a whole byte for a Nibble just for convenience
+pub type Nibble = u8;
 
 /// Alias for a node that is a child of an extension or branch node.
 pub type WrappedNode = Arc<Box<PartialTrie>>;
@@ -103,7 +106,7 @@ impl Default for PartialTrie {
     }
 }
 
-#[derive(Copy, Clone, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Copy, Clone, Deserialize, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 /// A sequence of nibbles.
 pub struct Nibbles {
     /// The number of nibbles in this sequence.
@@ -190,10 +193,18 @@ impl Nibbles {
         Self::get_nibble_common(&self.packed, idx, self.count)
     }
 
-    /// Pops the next nibble.
-    pub fn pop_next_nibble(&mut self) -> Nibble {
+    /// Pops the nibble at the front (the next nibble).
+    pub fn pop_next_nibble_front(&mut self) -> Nibble {
         let n = self.get_nibble(0);
-        self.truncate_n_nibbles_mut(1);
+        self.truncate_n_nibbles_front_mut(1);
+
+        n
+    }
+
+    /// Pops the nibble at the back (the last nibble).
+    pub fn pop_next_nibble_back(&mut self) -> Nibble {
+        let n = self.get_nibble(0);
+        self.truncate_n_nibbles_back_mut(1);
 
         n
     }
@@ -206,7 +217,7 @@ impl Nibbles {
     /// Pops the next `n` nibbles.
     pub fn pop_next_nibbles(&mut self, n: usize) -> Nibbles {
         let r = self.get_nibble_range(0..n);
-        self.truncate_n_nibbles_mut(n);
+        self.truncate_n_nibbles_front_mut(n);
 
         r
     }
@@ -219,6 +230,40 @@ impl Nibbles {
             false => (byte & 0b11110000) >> 4,
             true => byte & 0b00001111,
         }
+    }
+
+    /// Appends a nibble to the front.
+    pub fn push_nibble_front(&mut self, n: Nibble) {
+        self.nibble_append_safety_asserts(n);
+
+        let shift_amt = 4 * self.count;
+
+        self.count += 1;
+        self.packed = self.packed | (U256::from(n) << shift_amt);
+    }
+
+    /// Appends a nibble to the back.
+    pub fn push_nibble_back(&mut self, n: Nibble) {
+        self.nibble_append_safety_asserts(n);
+
+        self.count += 1;
+        self.packed = (self.packed << 4) | n.into();
+    }
+
+    fn nibble_append_safety_asserts(&self, n: Nibble) {
+        assert!(self.count < 64);
+        assert!(n < 16);
+    }
+
+    /// Appends `Nibbles` to the front.
+    pub fn push_nibbles(&mut self, n: &Self) {
+        let new_count = self.count + n.count;
+        assert!(new_count <= 64);
+
+        let shift_amt = 4 * self.count;
+
+        self.count = new_count;
+        self.packed = self.packed | (n.packed << shift_amt);
     }
 
     /// Gets the nibbles at the range specified, where `0` is the next nibble.
@@ -259,9 +304,20 @@ impl Nibbles {
     ///
     /// If we truncate more nibbles that there are, we will just return the
     /// `empty` nibble.
-    pub fn truncate_n_nibbles(&self, n: usize) -> Nibbles {
+    pub fn truncate_n_nibbles_front(&self, n: usize) -> Nibbles {
         let mut nib = *self;
-        nib.truncate_n_nibbles_mut(n);
+        nib.truncate_n_nibbles_front_mut(n);
+
+        nib
+    }
+
+    /// Drops the last `n` nibbles without mutation.
+    ///
+    /// If we truncate more nibbles that there are, we will just return the
+    /// `empty` nibble.
+    pub fn truncate_n_nibbles_back(&self, n: usize) -> Nibbles {
+        let mut nib = *self;
+        nib.truncate_n_nibbles_back_mut(n);
 
         nib
     }
@@ -270,18 +326,35 @@ impl Nibbles {
     ///
     /// If we truncate more nibbles that there are, we will just return the
     /// `empty` nibble.
-    pub fn truncate_n_nibbles_mut(&mut self, n: usize) {
-        // If we attempt to truncate more than we have, then just truncate to `0`.
-        let n = match self.count >= n {
-            false => self.count,
-            true => n,
-        };
+    pub fn truncate_n_nibbles_front_mut(&mut self, n: usize) {
+        let n = self.get_min_truncate_amount_to_prevent_over_truncating(n);
 
         let mask_shift = (self.count - n) * 4;
         let truncate_mask = !(create_mask_of_1s(n * 4) << mask_shift);
 
         self.count -= n;
         self.packed = self.packed & truncate_mask;
+    }
+
+    /// Drop the last `n` nibbles.
+    ///
+    /// If we truncate more nibbles that there are, we will just return the
+    /// `empty` nibble.
+    pub fn truncate_n_nibbles_back_mut(&mut self, n: usize) {
+        let n = self.get_min_truncate_amount_to_prevent_over_truncating(n);
+
+        let shift_amt = n * 4;
+        let truncate_mask = !create_mask_of_1s(n * 4);
+
+        self.count -= n;
+        self.packed = (self.packed & truncate_mask) >> shift_amt;
+    }
+
+    fn get_min_truncate_amount_to_prevent_over_truncating(&self, n: usize) -> usize {
+        match self.count >= n {
+            false => self.count,
+            true => n,
+        }
     }
 
     /// Splits the `Nibbles` at the given index, returning two `Nibbles`.
@@ -327,10 +400,29 @@ impl Nibbles {
         }
     }
 
-    /// Merge two `Nibbles` together. `self` will be the prefix.
-    pub fn merge(&self, post: &Nibbles) -> Nibbles {
+    /// Merge a single Nibble with a `Nibbles`. `self` will be the prefix.
+    ///
+    /// Panics
+    /// Panics if merging the `Nibbles` causes an overflow.
+    pub fn merge_nibble(&self, post: Nibble) -> Nibbles {
+        self.nibble_append_safety_asserts(post);
+
         Nibbles {
-            count: self.count + post.count,
+            count: self.count + 1,
+            packed: (self.packed << 4) | post.into(),
+        }
+    }
+
+    /// Merge two `Nibbles` together. `self` will be the prefix.
+    ///
+    /// Panics
+    /// Panics if merging the `Nibbles` causes an overflow.
+    pub fn merge_nibbles(&self, post: &Nibbles) -> Nibbles {
+        let new_count = self.count + post.count;
+        assert!(new_count <= 64);
+
+        Nibbles {
+            count: new_count,
             packed: (self.packed << (post.count * 4)) | post.packed,
         }
     }
@@ -469,7 +561,6 @@ impl Nibbles {
 
 #[cfg(test)]
 mod tests {
-
     use std::str::FromStr;
 
     use ethereum_types::H256;
@@ -533,11 +624,19 @@ mod tests {
     fn truncate_nibbles_works() {
         let n: Nibbles = 0x1234.into();
 
-        assert_eq!(n.truncate_n_nibbles(0), n);
-        assert_eq!(n.truncate_n_nibbles(1), 0x234.into());
-        assert_eq!(n.truncate_n_nibbles(2), 0x34.into());
-        assert_eq!(n.truncate_n_nibbles(4), 0x0.into());
-        assert_eq!(n.truncate_n_nibbles(8), 0x0.into());
+        assert_eq!(n.truncate_n_nibbles_front(0), n);
+        assert_eq!(n.truncate_n_nibbles_front(1), 0x234.into());
+        assert_eq!(n.truncate_n_nibbles_front(2), 0x34.into());
+        assert_eq!(n.truncate_n_nibbles_front(3), 0x4.into());
+        assert_eq!(n.truncate_n_nibbles_front(4), 0x0.into());
+        assert_eq!(n.truncate_n_nibbles_front(8), 0x0.into());
+
+        assert_eq!(n.truncate_n_nibbles_back(0), n);
+        assert_eq!(n.truncate_n_nibbles_back(1), 0x123.into());
+        assert_eq!(n.truncate_n_nibbles_back(2), 0x12.into());
+        assert_eq!(n.truncate_n_nibbles_back(3), 0x1.into());
+        assert_eq!(n.truncate_n_nibbles_back(4), 0x0.into());
+        assert_eq!(n.truncate_n_nibbles_back(8), 0x0.into());
     }
 
     #[test]
@@ -569,11 +668,26 @@ mod tests {
     }
 
     #[test]
-    fn merge_works() {
-        assert_eq!(Nibbles::from(0x12).merge(&(0x34.into())), 0x1234.into());
-        assert_eq!(Nibbles::from(0x12).merge(&(0x0.into())), 0x12.into());
-        assert_eq!(Nibbles::from(0x0).merge(&(0x34.into())), 0x34.into());
-        assert_eq!(Nibbles::from(0x0).merge(&(0x0).into()), 0x0.into());
+    fn merge_nibble_works() {
+        assert_eq!(Nibbles::from(0x0).merge_nibble(1), 0x1.into());
+        assert_eq!(Nibbles::from(0x1234).merge_nibble(5), 0x12345.into());
+    }
+
+    #[test]
+    fn merge_nibbles_works() {
+        assert_eq!(
+            Nibbles::from(0x12).merge_nibbles(&(0x34.into())),
+            0x1234.into()
+        );
+        assert_eq!(
+            Nibbles::from(0x12).merge_nibbles(&(0x0.into())),
+            0x12.into()
+        );
+        assert_eq!(
+            Nibbles::from(0x0).merge_nibbles(&(0x34.into())),
+            0x34.into()
+        );
+        assert_eq!(Nibbles::from(0x0).merge_nibbles(&(0x0).into()), 0x0.into());
     }
 
     #[test]

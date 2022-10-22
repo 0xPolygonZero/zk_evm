@@ -1,10 +1,11 @@
 use std::fmt::Display;
 
+use ethereum_types::H256;
 use log::trace;
 
 use crate::{
-    partial_trie::{Nibbles, PartialTrie, WrappedNode},
-    utils::{Nibble, TrieNodeType},
+    partial_trie::{Nibble, Nibbles, PartialTrie, WrappedNode},
+    utils::TrieNodeType,
 };
 
 /// A entry to be inserted into a `PartialTrie`.
@@ -28,7 +29,7 @@ impl Display for InsertEntry {
 
 impl InsertEntry {
     pub(crate) fn truncate_n_nibbles(&mut self, n: usize) {
-        self.nibbles = self.nibbles.truncate_n_nibbles(n);
+        self.nibbles = self.nibbles.truncate_n_nibbles_front(n);
     }
 }
 
@@ -47,6 +48,120 @@ struct ExistingAndNewNodePreAndPost {
 enum ExistingOrNewBranchValuePlacement {
     BranchValue(Vec<u8>, (Nibble, WrappedNode)),
     BothBranchChildren((Nibble, WrappedNode), (Nibble, WrappedNode)),
+}
+
+#[derive(Debug)]
+enum IterStackEntry {
+    Root(WrappedNode),
+    Extension(usize),
+    Branch(BranchStackEntry),
+}
+
+#[derive(Debug)]
+struct BranchStackEntry {
+    children: [WrappedNode; 16],
+    value: Vec<u8>,
+    curr_nib: Nibble,
+}
+
+#[derive(Debug)]
+pub struct PartialTrieIter {
+    curr_key_after_last_branch: Nibbles,
+    trie_stack: Vec<IterStackEntry>,
+}
+
+#[derive(Clone, Debug)]
+pub enum TrieIterItem {
+    Value(Vec<u8>),
+    Hash(H256),
+}
+
+impl PartialTrieIter {
+    fn advance_iter_to_next_empty_leaf_or_hash_node(
+        &mut self,
+        node: &WrappedNode,
+        mut curr_key: Nibbles,
+    ) -> Option<(Nibbles, TrieIterItem)> {
+        match node.as_ref().as_ref() {
+            PartialTrie::Empty => None,
+            PartialTrie::Hash(h) => Some((curr_key, TrieIterItem::Hash(*h))),
+            PartialTrie::Branch { children, value } => {
+                self.trie_stack
+                    .push(IterStackEntry::Branch(BranchStackEntry {
+                        children: children.clone(),
+                        value: value.clone(),
+                        curr_nib: 1,
+                    }));
+
+                self.curr_key_after_last_branch = curr_key;
+                curr_key.push_nibble_back(0);
+                self.advance_iter_to_next_empty_leaf_or_hash_node(&children[0], curr_key)
+            }
+            PartialTrie::Extension { nibbles, child } => {
+                self.trie_stack
+                    .push(IterStackEntry::Extension(nibbles.count));
+                curr_key = curr_key.merge_nibbles(nibbles);
+
+                self.advance_iter_to_next_empty_leaf_or_hash_node(child, curr_key)
+            }
+            PartialTrie::Leaf { nibbles, value } => {
+                curr_key = curr_key.merge_nibbles(nibbles);
+                Some((curr_key, TrieIterItem::Value(value.clone())))
+            }
+        }
+    }
+}
+
+impl Iterator for PartialTrieIter {
+    type Item = (Nibbles, TrieIterItem);
+
+    fn next(&mut self) -> Option<(Nibbles, TrieIterItem)> {
+        let mut next_iter_item = None;
+
+        while next_iter_item.is_none() && let Some(mut stack_entry) = self.trie_stack.pop() {
+            next_iter_item = match stack_entry {
+                IterStackEntry::Root(root) =>
+                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::default()),
+                IterStackEntry::Extension(num_nibbles) => {
+                    // Drop nibbles that extension added since we are going back up the trie.
+                    self.curr_key_after_last_branch.truncate_n_nibbles_back_mut(num_nibbles);
+                    None
+                }
+                IterStackEntry::Branch(ref mut branch_entry) => {
+                    let curr_nib = branch_entry.curr_nib;
+
+                    match curr_nib {
+                        1..=15 => {
+                            branch_entry.curr_nib += 1;
+                            let next_child = branch_entry.children[curr_nib as usize].clone();
+                            self.trie_stack.push(stack_entry);
+
+                            let updated_key = self.curr_key_after_last_branch.merge_nibbles(&Nibbles::from_nibble(curr_nib));
+                            self.advance_iter_to_next_empty_leaf_or_hash_node(&next_child, updated_key)
+                        },
+                        16 => {
+                            let res = match branch_entry.value.is_empty() {
+                                false => {
+                                    let value_key = self.curr_key_after_last_branch;
+                                    Some((value_key, TrieIterItem::Value(branch_entry.value.clone())))
+                                },
+                                true => None,
+                            };
+
+                            if !self.curr_key_after_last_branch.is_empty() {
+                                self.curr_key_after_last_branch.truncate_n_nibbles_back_mut(1);
+                            }
+
+                            res
+                        }
+                        _ => unreachable!("Trie iterator managed to reach nibble 17 or 0"),
+                    }
+                },
+            }
+        }
+
+        next_iter_item
+    }
 }
 
 impl PartialTrie {
@@ -80,7 +195,7 @@ impl PartialTrie {
                     return (!value.is_empty()).then_some(value.as_slice());
                 }
 
-                let nib = curr_nibbles.pop_next_nibble();
+                let nib = curr_nibbles.pop_next_nibble_front();
                 trace!("Get traversed Branch (nibble: {:x})", nib);
                 children[nib as usize].get_intern(curr_nibbles)
             }
@@ -126,6 +241,27 @@ impl PartialTrie {
             deleted_val
         })
     }
+
+    /// Returns an iterator over the trie that returns all key/value pairs for
+    /// every `Leaf` and `Hash` node.
+    pub fn items(&self) -> impl Iterator<Item = (Nibbles, TrieIterItem)> {
+        PartialTrieIter {
+            curr_key_after_last_branch: Nibbles::default(),
+            trie_stack: vec![IterStackEntry::Root(self.clone().into())],
+        }
+    }
+
+    /// Returns an iterator over the trie that returns all keys for every `Leaf`
+    /// and `Hash` node.
+    pub fn keys(&self) -> impl Iterator<Item = Nibbles> {
+        self.items().map(|(k, _)| k)
+    }
+
+    /// Returns an iterator over the trie that returns all values for every
+    /// `Leaf` and `Hash` node.
+    pub fn values(&self) -> impl Iterator<Item = TrieIterItem> {
+        self.items().map(|(_, v)| v)
+    }
 }
 
 impl FromIterator<(Nibbles, Vec<u8>)> for PartialTrie {
@@ -158,7 +294,7 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
                 return Some(branch(children.clone(), new_node.v));
             }
 
-            let nibble = new_node.nibbles.pop_next_nibble();
+            let nibble = new_node.nibbles.pop_next_nibble_front();
             trace!("Insert traversed Branch (nibble: {:x})", nibble);
 
             insert_into_trie_rec(&children[nibble as usize], new_node).map(|updated_child| {
@@ -184,7 +320,8 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
 
             // Drop one since branch will cover one nibble.
             // Also note that the postfix is always >= 1.
-            let existing_postfix_adjusted_for_branch = info.existing_postfix.truncate_n_nibbles(1);
+            let existing_postfix_adjusted_for_branch =
+                info.existing_postfix.truncate_n_nibbles_front(1);
 
             // If we split an extension node, we may need to place an extension node after
             // the branch.
@@ -212,7 +349,7 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
             // This existing leaf is going in a branch, so we need to truncate the first
             // nibble since it's going to be represented by the branch.
             let existing_node_truncated = leaf(
-                nibbles.truncate_n_nibbles(info.common_prefix.count + 1),
+                nibbles.truncate_n_nibbles_front(info.common_prefix.count + 1),
                 value.clone(),
             );
 
@@ -239,7 +376,7 @@ fn delete_intern(node: &WrappedNode, mut curr_k: Nibbles) -> Option<(WrappedNode
                 return Some((branch(children.clone(), Vec::new()), value.clone()));
             }
 
-            let nibble = curr_k.pop_next_nibble();
+            let nibble = curr_k.pop_next_nibble_front();
             trace!("Delete traversed Branch nibble {:x}", nibble);
 
             delete_intern(&children[nibble as usize], curr_k).map(
@@ -280,7 +417,7 @@ fn delete_intern(node: &WrappedNode, mut curr_k: Nibbles) -> Option<(WrappedNode
             ext_nibbles
                 .nibbles_are_identical_up_to_smallest_count(&curr_k)
                 .then(|| {
-                    curr_k.truncate_n_nibbles_mut(ext_nibbles.count);
+                    curr_k.truncate_n_nibbles_front_mut(ext_nibbles.count);
                     delete_intern(child, curr_k).map(|(updated_child, value_deleted)| {
                         let updated_node = collapse_ext_node_if_needed(ext_nibbles, &updated_child);
                         (updated_node, value_deleted)
@@ -309,13 +446,13 @@ fn collapse_ext_node_if_needed(ext_nibbles: &Nibbles, child: &WrappedNode) -> Wr
             nibbles: other_ext_nibbles,
             child: other_ext_child,
         } => extension(
-            ext_nibbles.merge(other_ext_nibbles),
+            ext_nibbles.merge_nibbles(other_ext_nibbles),
             other_ext_child.clone(),
         ),
         PartialTrie::Leaf {
             nibbles: leaf_nibbles,
             value,
-        } => leaf(ext_nibbles.merge(leaf_nibbles), value.clone()),
+        } => leaf(ext_nibbles.merge_nibbles(leaf_nibbles), value.clone()),
         _ => panic!(
             "Extension managed to get a child node type that is impossible! (child: {})",
             TrieNodeType::from(child)
@@ -411,7 +548,7 @@ fn ins_entry_into_leaf_and_nibble(
     let new_node = leaf(
         entry
             .nibbles
-            .truncate_n_nibbles(info.common_prefix.count + 1),
+            .truncate_n_nibbles_front(info.common_prefix.count + 1),
         entry.v,
     );
 
@@ -475,11 +612,11 @@ fn leaf(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode {
 
 #[cfg(test)]
 mod tests {
-    use core::slice::SlicePattern;
     use std::collections::HashSet;
 
     use log::debug;
 
+    use super::TrieIterItem;
     use crate::{
         partial_trie::PartialTrie,
         testing_utils::{
@@ -656,6 +793,30 @@ mod tests {
         {
             let nodes_retrieved = get_entries_in_trie(&old_root_node);
             assert_eq!(old_trie_nodes_truth, nodes_retrieved)
+        }
+    }
+
+    #[test]
+    fn trie_iter_works() {
+        common_setup();
+
+        let entries: HashSet<_> =
+            generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 9003).collect();
+        let trie = PartialTrie::from_iter(entries.iter().cloned());
+
+        let trie_items: HashSet<_> = trie
+            .items()
+            .map(|(k, v)| (k, unwrap_iter_item_to_val(v)))
+            .collect();
+
+        assert!(entries.iter().all(|e| trie_items.contains(e)));
+        assert!(trie_items.iter().all(|item| entries.contains(item)));
+    }
+
+    fn unwrap_iter_item_to_val(item: TrieIterItem) -> Vec<u8> {
+        match item {
+            TrieIterItem::Value(v) => v,
+            TrieIterItem::Hash(_) => unreachable!(),
         }
     }
 

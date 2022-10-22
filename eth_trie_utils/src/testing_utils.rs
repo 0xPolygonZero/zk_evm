@@ -5,8 +5,8 @@ use log::info;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
-    partial_trie::{Nibbles, PartialTrie},
-    utils::{is_even, Nibble},
+    partial_trie::{Nibble, Nibbles, PartialTrie},
+    utils::is_even,
 };
 
 /// Some tests check that all values inserted are retrievable, and if we end up
@@ -155,11 +155,11 @@ fn get_entries_in_trie_rec(
             }
         },
         PartialTrie::Extension { nibbles, child } => {
-            let new_k = curr_k.merge(nibbles);
+            let new_k = curr_k.merge_nibbles(nibbles);
             get_entries_in_trie_rec(child, seen_entries, new_k);
         },
         PartialTrie::Leaf { nibbles, value } => {
-            let final_key = curr_k.merge(nibbles);
+            let final_key = curr_k.merge_nibbles(nibbles);
             add_entry_to_seen_entries((final_key, value.clone()), seen_entries);
         },
     }
