@@ -5,7 +5,8 @@ use log::info;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
-    partial_trie::{Nibble, Nibbles, PartialTrie},
+    partial_trie::{Nibbles, PartialTrie},
+    trie_ops::TrieIterItem,
     utils::is_even,
 };
 
@@ -122,65 +123,14 @@ fn gen_variable_nibbles(rng: &mut StdRng) -> Nibbles {
 // TODO: Replace with `PartialTrie` `iter` methods once done...
 pub(crate) fn get_entries_in_trie(trie: &PartialTrie) -> HashSet<TestInsertEntry> {
     info!("Collecting all entries inserted into trie...");
-
-    let mut seen_entries = HashSet::new();
-    get_entries_in_trie_rec(
-        trie,
-        &mut seen_entries,
-        Nibbles {
-            count: 0,
-            packed: U256::zero(),
-        },
-    );
-
-    seen_entries
+    trie.items()
+        .map(|(k, v)| (k, unwrap_iter_item_to_val(v)))
+        .collect()
 }
 
-fn get_entries_in_trie_rec(
-    trie: &PartialTrie,
-    seen_entries: &mut HashSet<TestInsertEntry>,
-    curr_k: Nibbles,
-) {
-    match trie {
-        PartialTrie::Empty => (),
-        PartialTrie::Hash(_) => unreachable!("Found a Hash node when collecting all entries in a trie! These should not exist for the Eth tests!"),
-        PartialTrie::Branch { children, value } => {
-            for (branch_nib, child) in children.iter().enumerate() {
-                let new_k = append_nibble_to_nibbles(&curr_k, branch_nib as u8);
-                get_entries_in_trie_rec(child, seen_entries, new_k);
-            }
-
-            if !value.is_empty() {
-                add_entry_to_seen_entries((curr_k, value.clone()), seen_entries)
-            }
-        },
-        PartialTrie::Extension { nibbles, child } => {
-            let new_k = curr_k.merge_nibbles(nibbles);
-            get_entries_in_trie_rec(child, seen_entries, new_k);
-        },
-        PartialTrie::Leaf { nibbles, value } => {
-            let final_key = curr_k.merge_nibbles(nibbles);
-            add_entry_to_seen_entries((final_key, value.clone()), seen_entries);
-        },
-    }
-}
-
-fn add_entry_to_seen_entries(e: TestInsertEntry, seen_entries: &mut HashSet<TestInsertEntry>) {
-    assert!(
-        !seen_entries.contains(&e),
-        "A duplicate entry exists in the trie! {:?}",
-        e
-    );
-
-    seen_entries.insert(e);
-}
-
-fn append_nibble_to_nibbles(nibbles: &Nibbles, nibble: Nibble) -> Nibbles {
-    assert!(nibble < 16);
-
-    let packed = (nibbles.packed << 4) | nibble.into();
-    Nibbles {
-        count: nibbles.count + 1,
-        packed,
+pub(crate) fn unwrap_iter_item_to_val(item: TrieIterItem) -> Vec<u8> {
+    match item {
+        TrieIterItem::Value(v) => v,
+        TrieIterItem::Hash(_) => unreachable!(),
     }
 }

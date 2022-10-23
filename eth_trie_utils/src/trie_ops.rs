@@ -616,12 +616,12 @@ mod tests {
 
     use log::debug;
 
-    use super::TrieIterItem;
     use crate::{
         partial_trie::PartialTrie,
         testing_utils::{
             common_setup, entry, entry_with_value, generate_n_random_fixed_trie_entries,
-            generate_n_random_variable_keys, get_entries_in_trie, TestInsertEntry,
+            generate_n_random_variable_keys, get_entries_in_trie, unwrap_iter_item_to_val,
+            TestInsertEntry,
         },
         utils::create_mask_of_1s,
     };
@@ -811,13 +811,6 @@ mod tests {
 
         assert!(entries.iter().all(|e| trie_items.contains(e)));
         assert!(trie_items.iter().all(|item| entries.contains(item)));
-    }
-
-    fn unwrap_iter_item_to_val(item: TrieIterItem) -> Vec<u8> {
-        match item {
-            TrieIterItem::Value(v) => v,
-            TrieIterItem::Hash(_) => unreachable!(),
-        }
     }
 
     #[test]
