@@ -188,12 +188,24 @@ impl Nibbles {
         })
     }
 
-    /// Gets the nth proceeding nibble.
+    /// Gets the nth proceeding nibble. The front `Nibble` is at idx `0`.
+    ///
+    /// # Panics
+    /// Panics if `idx` is out of range.
     pub fn get_nibble(&self, idx: usize) -> Nibble {
-        Self::get_nibble_common(&self.packed, idx, self.count)
+        let nib_idx = self.count - idx - 1;
+        let byte = self.packed.byte(nib_idx / 2);
+
+        match is_even(nib_idx) {
+            false => (byte & 0b11110000) >> 4,
+            true => byte & 0b00001111,
+        }
     }
 
     /// Pops the nibble at the front (the next nibble).
+    ///
+    /// # Panics
+    /// Panics if the `Nibbles` is empty.
     pub fn pop_next_nibble_front(&mut self) -> Nibble {
         let n = self.get_nibble(0);
         self.truncate_n_nibbles_front_mut(1);
@@ -202,37 +214,52 @@ impl Nibbles {
     }
 
     /// Pops the nibble at the back (the last nibble).
+    ///
+    /// # Panics
+    /// Panics if the `Nibbles` is empty.
     pub fn pop_next_nibble_back(&mut self) -> Nibble {
-        let n = self.get_nibble(0);
+        let n = self.get_nibble(self.count - 1);
         self.truncate_n_nibbles_back_mut(1);
 
         n
     }
 
     /// Gets the next `n` nibbles.
+    /// # Panics
+    /// Panics if `n` is larger than the number of nibbles contained.
     pub fn get_next_nibbles(&self, n: usize) -> Nibbles {
         self.get_nibble_range(0..n)
     }
 
-    /// Pops the next `n` nibbles.
-    pub fn pop_next_nibbles(&mut self, n: usize) -> Nibbles {
+    /// Pops the next `n` nibbles from the front.
+    ///
+    /// # Panics
+    /// Panics if `n` is larger than the number of nibbles contained.
+    pub fn pop_nibbles_front(&mut self, n: usize) -> Nibbles {
         let r = self.get_nibble_range(0..n);
         self.truncate_n_nibbles_front_mut(n);
 
         r
     }
 
-    fn get_nibble_common(k: &U256, idx: usize, count: usize) -> Nibble {
-        let nib_idx = count - idx - 1;
-        let byte = k.byte(nib_idx / 2);
+    /// Pops the next `n` nibbles from the back.
+    ///
+    /// # Panics
+    /// Panics if `n` is larger than the number of nibbles contained.
+    pub fn pop_nibbles_back(&mut self, n: usize) -> Nibbles {
+        let r = self
+            .get_nibble_range((self.count - n)..self.count)
+            .reverse();
+        self.truncate_n_nibbles_back_mut(n);
 
-        match is_even(nib_idx) {
-            false => (byte & 0b11110000) >> 4,
-            true => byte & 0b00001111,
-        }
+        r
     }
 
     /// Appends a nibble to the front.
+    ///
+    /// # Panics
+    /// Panics if appending the `Nibble` causes an overflow (total nibbles >
+    /// 64).
     pub fn push_nibble_front(&mut self, n: Nibble) {
         self.nibble_append_safety_asserts(n);
 
@@ -243,6 +270,10 @@ impl Nibbles {
     }
 
     /// Appends a nibble to the back.
+    ///
+    /// # Panics
+    /// Panics if appending the `Nibble` causes an overflow (total nibbles >
+    /// 64).
     pub fn push_nibble_back(&mut self, n: Nibble) {
         self.nibble_append_safety_asserts(n);
 
@@ -250,12 +281,11 @@ impl Nibbles {
         self.packed = (self.packed << 4) | n.into();
     }
 
-    fn nibble_append_safety_asserts(&self, n: Nibble) {
-        assert!(self.count < 64);
-        assert!(n < 16);
-    }
-
     /// Appends `Nibbles` to the front.
+    ///
+    /// # Panics
+    /// Panics if appending the `Nibble` causes an overflow (total nibbles >
+    /// 64).
     pub fn push_nibbles(&mut self, n: &Self) {
         let new_count = self.count + n.count;
         assert!(new_count <= 64);
@@ -271,15 +301,11 @@ impl Nibbles {
     /// # Panics
     /// Panics if `range.end` is outside of the current `Nibbles`.
     pub fn get_nibble_range(&self, range: Range<usize>) -> Nibbles {
-        Self::get_nibble_range_common(&self.packed, range, self.count)
-    }
-
-    fn get_nibble_range_common(k: &U256, range: Range<usize>, count: usize) -> Nibbles {
         let range_count = range.end - range.start;
 
-        let shift_amt = (count - range.end) * 4;
+        let shift_amt = (self.count - range.end) * 4;
         let mask = create_mask_of_1s(range_count * 4) << shift_amt;
-        let range_packed = (*k & mask) >> shift_amt;
+        let range_packed = (self.packed & mask) >> shift_amt;
 
         Self {
             count: range_count,
@@ -359,6 +385,9 @@ impl Nibbles {
 
     /// Splits the `Nibbles` at the given index, returning two `Nibbles`.
     /// Specifically, if `0x1234` is split at `1`, we get `0x1` and `0x234`.
+    ///
+    /// # Panics
+    /// Panics if the `idx` is out of range.
     pub fn split_at_idx(&self, idx: usize) -> (Nibbles, Nibbles) {
         let post_count = self.count - idx;
         let post_mask = create_mask_of_1s(post_count * 4);
@@ -379,6 +408,9 @@ impl Nibbles {
     }
 
     /// Split the `Nibbles` at the given index but only return the prefix.
+    ///
+    /// # Panics
+    /// Panics if the `idx` is out of range.
     pub fn split_at_idx_prefix(&self, idx: usize) -> Nibbles {
         let shift_amt = (self.count - idx) * 4;
         let pre_mask = create_mask_of_1s(idx * 4) << shift_amt;
@@ -390,6 +422,9 @@ impl Nibbles {
     }
 
     /// Split the `Nibbles` at the given index but only return the postfix.
+    ///
+    /// # Panics
+    /// Panics if the `idx` is out of range.
     pub fn split_at_idx_postfix(&self, idx: usize) -> Nibbles {
         let postfix_count = self.count - idx;
         let mask = create_mask_of_1s(postfix_count * 4);
@@ -402,8 +437,8 @@ impl Nibbles {
 
     /// Merge a single Nibble with a `Nibbles`. `self` will be the prefix.
     ///
-    /// Panics
-    /// Panics if merging the `Nibbles` causes an overflow.
+    /// # Panics
+    /// Panics if merging the `Nibble` causes an overflow (total nibbles > 64).
     pub fn merge_nibble(&self, post: Nibble) -> Nibbles {
         self.nibble_append_safety_asserts(post);
 
@@ -415,8 +450,8 @@ impl Nibbles {
 
     /// Merge two `Nibbles` together. `self` will be the prefix.
     ///
-    /// Panics
-    /// Panics if merging the `Nibbles` causes an overflow.
+    /// # Panics
+    /// Panics if merging the `Nibbles` causes an overflow (total nibbles > 64).
     pub fn merge_nibbles(&self, post: &Nibbles) -> Nibbles {
         let new_count = self.count + post.count;
         assert!(new_count <= 64);
@@ -424,6 +459,27 @@ impl Nibbles {
         Nibbles {
             count: new_count,
             packed: (self.packed << (post.count * 4)) | post.packed,
+        }
+    }
+
+    /// Reverses the `Nibbles` such that the last `Nibble` is now the first
+    /// `Nibble`.
+    pub fn reverse(&self) -> Nibbles {
+        let mut mask = U256::from(0xf);
+        let mut reversed_packed = U256::zero();
+
+        for i in 0..self.count {
+            reversed_packed <<= 4;
+
+            let nib = (self.packed & mask) >> (i * 4);
+            reversed_packed = reversed_packed | nib;
+
+            mask <<= 4;
+        }
+
+        Nibbles {
+            count: self.count,
+            packed: reversed_packed,
         }
     }
 
@@ -549,6 +605,9 @@ impl Nibbles {
     }
 
     /// Creates a new `Nibbles` from a single `Nibble`.
+    ///
+    /// # Panics
+    /// Panics if the nibble is > `0xf`.
     pub fn from_nibble(n: Nibble) -> Self {
         assert!(n <= 0xf);
 
@@ -556,6 +615,11 @@ impl Nibbles {
             count: 1,
             packed: n.into(),
         }
+    }
+
+    fn nibble_append_safety_asserts(&self, n: Nibble) {
+        assert!(self.count < 64);
+        assert!(n < 16);
     }
 }
 
@@ -565,7 +629,7 @@ mod tests {
 
     use ethereum_types::H256;
 
-    use super::Nibbles;
+    use super::{Nibble, Nibbles};
 
     #[test]
     fn get_nibble_works() {
@@ -575,39 +639,120 @@ mod tests {
         assert_eq!(n.get_nibble(3), 0x4);
     }
 
-    fn u64_to_nibbles_and_bytes_back_to_u64(v: u64) -> u64 {
-        let mut byte_buf = [0; 8];
-        let nib = Nibbles::from(v);
-        let nib_bytes = nib.bytes_be();
-
-        for (i, b) in nib_bytes.iter().rev().enumerate() {
-            byte_buf[7 - i] = *b;
-        }
-
-        u64::from_be_bytes(byte_buf)
+    #[test]
+    fn pop_nibble_front_works() {
+        pop_and_assert_nibbles(0x1, 0x0, 1, Nibbles::pop_next_nibble_front);
+        pop_and_assert_nibbles(0x1234, 0x234, 1, Nibbles::pop_next_nibble_front);
     }
 
     #[test]
-    fn pop_next_nibbles_works() {
-        let nib = 0x1234.into();
-
-        assert_pop_nibbles(&nib, 0, 0x1234.into(), 0x0.into());
-        assert_pop_nibbles(&nib, 1, 0x234.into(), 0x1.into());
-        assert_pop_nibbles(&nib, 3, 0x4.into(), 0x123.into());
-        assert_pop_nibbles(&nib, 4, 0x0.into(), 0x1234.into());
+    fn pop_nibble_back_works() {
+        pop_and_assert_nibbles(0x1, 0x0, 1, Nibbles::pop_next_nibble_back);
+        pop_and_assert_nibbles(0x1234, 0x123, 4, Nibbles::pop_next_nibble_back);
     }
 
-    fn assert_pop_nibbles(
+    fn pop_and_assert_nibbles<F: Fn(&mut Nibbles) -> Nibble>(
+        nibbles: u64,
+        expected_nibbles: u64,
+        expected_popped_nibble: Nibble,
+        pop_f: F,
+    ) {
+        let mut nibbles = Nibbles::from(nibbles);
+        let nib = pop_f(&mut nibbles);
+        assert_pop_nibble(&nibbles, expected_nibbles, nib, expected_popped_nibble);
+    }
+
+    fn assert_pop_nibble(
+        mutated_nibbles: &Nibbles,
+        expected_nibbles: u64,
+        popped_nibble: Nibble,
+        expected_popped_nibble: Nibble,
+    ) {
+        assert_eq!(*mutated_nibbles, Nibbles::from(expected_nibbles));
+        assert_eq!(popped_nibble, expected_popped_nibble)
+    }
+
+    #[test]
+    fn pop_nibbles_front_works() {
+        let nib = 0x1234.into();
+
+        assert_pop_nibbles(
+            &nib,
+            0,
+            0x1234.into(),
+            0x0.into(),
+            Nibbles::pop_nibbles_front,
+        );
+        assert_pop_nibbles(
+            &nib,
+            1,
+            0x234.into(),
+            0x1.into(),
+            Nibbles::pop_nibbles_front,
+        );
+        assert_pop_nibbles(
+            &nib,
+            3,
+            0x4.into(),
+            0x123.into(),
+            Nibbles::pop_nibbles_front,
+        );
+        assert_pop_nibbles(
+            &nib,
+            4,
+            0x0.into(),
+            0x1234.into(),
+            Nibbles::pop_nibbles_front,
+        );
+    }
+
+    #[test]
+    fn pop_nibbles_back_works() {
+        let nib = 0x1234.into();
+
+        assert_pop_nibbles(
+            &nib,
+            0,
+            0x1234.into(),
+            0x0.into(),
+            Nibbles::pop_nibbles_back,
+        );
+        assert_pop_nibbles(&nib, 1, 0x123.into(), 0x4.into(), Nibbles::pop_nibbles_back);
+        assert_pop_nibbles(&nib, 3, 0x1.into(), 0x432.into(), Nibbles::pop_nibbles_back);
+        assert_pop_nibbles(
+            &nib,
+            4,
+            0x0.into(),
+            0x4321.into(),
+            Nibbles::pop_nibbles_back,
+        );
+    }
+
+    fn assert_pop_nibbles<F: Fn(&mut Nibbles, usize) -> Nibbles>(
         orig: &Nibbles,
         n: usize,
         expected_orig_after_pop: Nibbles,
         expected_resulting_nibbles: Nibbles,
+        pop_f: F,
     ) {
         let mut nib = *orig;
-        let res = nib.pop_next_nibbles(n);
+        let res = pop_f(&mut nib, n);
 
         assert_eq!(nib, expected_orig_after_pop);
         assert_eq!(res, expected_resulting_nibbles);
+    }
+
+    #[test]
+    fn get_next_nibbles_works() {
+        let n: Nibbles = 0x1234.into();
+
+        assert_eq!(n.get_next_nibbles(0), Nibbles::default());
+        assert_eq!(n.get_next_nibbles(1), Nibbles::from(0x1));
+        assert_eq!(n.get_next_nibbles(2), Nibbles::from(0x12));
+        assert_eq!(n.get_next_nibbles(3), Nibbles::from(0x123));
+        assert_eq!(n.get_next_nibbles(4), Nibbles::from(0x1234));
+
+        assert_eq!(Nibbles::from(0x0).get_next_nibbles(0), Nibbles::default());
     }
 
     #[test]
@@ -650,6 +795,12 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn split_at_idx_panics_if_out_of_range() {
+        Nibbles::from(0x1234).split_at_idx(5);
+    }
+
+    #[test]
     fn split_at_idx_prefix_works() {
         let n: Nibbles = 0x1234.into();
 
@@ -688,6 +839,14 @@ mod tests {
             0x34.into()
         );
         assert_eq!(Nibbles::from(0x0).merge_nibbles(&(0x0).into()), 0x0.into());
+    }
+
+    #[test]
+    fn reverse_works() {
+        assert_eq!(Nibbles::from(0x0).reverse(), Nibbles::from(0x0));
+        assert_eq!(Nibbles::from(0x1).reverse(), Nibbles::from(0x1));
+        assert_eq!(Nibbles::from(0x12).reverse(), Nibbles::from(0x21));
+        assert_eq!(Nibbles::from(0x1234).reverse(), Nibbles::from(0x4321));
     }
 
     #[test]
@@ -774,6 +933,18 @@ mod tests {
             u64_to_nibbles_and_bytes_back_to_u64(0x123456789001aaaa),
             0x123456789001aaaa
         );
+    }
+
+    fn u64_to_nibbles_and_bytes_back_to_u64(v: u64) -> u64 {
+        let mut byte_buf = [0; 8];
+        let nib = Nibbles::from(v);
+        let nib_bytes = nib.bytes_be();
+
+        for (i, b) in nib_bytes.iter().rev().enumerate() {
+            byte_buf[7 - i] = *b;
+        }
+
+        u64::from_be_bytes(byte_buf)
     }
 
     #[test]

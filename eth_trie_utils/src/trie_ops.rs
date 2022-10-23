@@ -136,7 +136,7 @@ impl Iterator for PartialTrieIter {
                             let next_child = branch_entry.children[curr_nib as usize].clone();
                             self.trie_stack.push(stack_entry);
 
-                            let updated_key = self.curr_key_after_last_branch.merge_nibbles(&Nibbles::from_nibble(curr_nib));
+                            let updated_key = self.curr_key_after_last_branch.merge_nibble(curr_nib);
                             self.advance_iter_to_next_empty_leaf_or_hash_node(&next_child, updated_key)
                         },
                         16 => {
@@ -201,7 +201,7 @@ impl PartialTrie {
             }
             PartialTrie::Extension { nibbles, child } => {
                 trace!("Get traversed Extension (nibbles: {:?})", nibbles);
-                let r = curr_nibbles.pop_next_nibbles(nibbles.count);
+                let r = curr_nibbles.pop_nibbles_front(nibbles.count);
 
                 match r.nibbles_are_identical_up_to_smallest_count(nibbles) {
                     false => None,
