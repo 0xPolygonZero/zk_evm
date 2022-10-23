@@ -221,7 +221,7 @@ mod tests {
         let mut trie = PartialTrie::Empty;
 
         entries.map(move |(k, v)| {
-            trie = trie.clone().insert(k, v);
+            trie.insert(k, v);
             trie.calc_hash()
         })
     }

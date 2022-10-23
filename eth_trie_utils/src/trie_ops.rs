@@ -166,15 +166,15 @@ impl Iterator for PartialTrieIter {
 
 impl PartialTrie {
     /// Inserts a node into the trie.
-    pub fn insert(self, k: Nibbles, v: Vec<u8>) -> PartialTrie {
+    pub fn insert(&mut self, k: Nibbles, v: Vec<u8>) {
         let ins_entry = (k, v).into();
         trace!("Inserting new leaf node {:?}...", ins_entry);
 
         // Inserts are guaranteed to update the root node.
-        *insert_into_trie_rec(&self.into(), ins_entry)
+        *self = *insert_into_trie_rec(&self.clone().into(), ins_entry)
             .unwrap()
             .as_ref()
-            .clone()
+            .clone();
     }
 
     /// Get a node if it exists in the trie.
@@ -269,7 +269,7 @@ impl FromIterator<(Nibbles, Vec<u8>)> for PartialTrie {
         let mut root = PartialTrie::Empty;
 
         for (k, v) in nodes {
-            root = root.insert(k, v);
+            root.insert(k, v);
         }
 
         root
@@ -781,7 +781,7 @@ mod tests {
 
         let mut trie = PartialTrie::default();
         for (k, v) in entries {
-            trie = trie.clone().insert(k, v);
+            trie.insert(k, v);
 
             all_nodes_in_trie_after_each_insert.push(get_entries_in_trie(&trie));
             root_node_after_each_insert.push(trie.clone());
@@ -825,7 +825,7 @@ mod tests {
         common_setup();
 
         let mut trie = PartialTrie::default();
-        trie = trie.insert(0x1234.into(), vec![91]);
+        trie.insert(0x1234.into(), vec![91]);
 
         assert!(trie.delete(0x5678.into()).is_none())
     }
