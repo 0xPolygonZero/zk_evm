@@ -21,10 +21,7 @@ pub(crate) type TestInsertEntry = (Nibbles, Vec<u8>);
 // Don't want this exposed publicly, but it is useful for testing.
 impl From<U256> for Nibbles {
     fn from(packed: U256) -> Self {
-        Self {
-            count: Self::get_num_nibbles_in_key(&packed),
-            packed,
-        }
+        Nibbles::from_u256(packed)
     }
 }
 

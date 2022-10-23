@@ -188,6 +188,19 @@ impl Nibbles {
         })
     }
 
+    /// Creates `Nibbles` from a `U256`.
+    ///
+    /// Note that this will create `Nibbles` with a `Nibble` count that is
+    /// accurate down to the nibble. For example, passing in `0x123` has `3`
+    /// `Nibble`s and is not padded to the nearest byte (in which case it
+    /// would have `4` `Nibble`s).
+    pub fn from_u256(v: U256) -> Self {
+        Self {
+            count: Self::get_num_nibbles_in_key(&v),
+            packed: v,
+        }
+    }
+
     /// Gets the nth proceeding nibble. The front `Nibble` is at idx `0`.
     ///
     /// # Panics
@@ -945,6 +958,14 @@ mod tests {
         }
 
         u64::from_be_bytes(byte_buf)
+    }
+
+    #[test]
+    fn from_u256_works() {
+        assert_eq!(Nibbles::from_u256(0x0.into()), Nibbles::from(0x0));
+        assert_eq!(Nibbles::from_u256(0x1.into()), Nibbles::from(0x1));
+        assert_eq!(Nibbles::from_u256(0x12.into()), Nibbles::from(0x12));
+        assert_eq!(Nibbles::from_u256(0x123.into()), Nibbles::from(0x123));
     }
 
     #[test]
