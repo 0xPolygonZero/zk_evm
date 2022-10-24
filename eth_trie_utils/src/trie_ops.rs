@@ -39,7 +39,7 @@ impl InsertEntry {
 /// A "entry" in a [`PartialTrie`].
 ///  
 /// Entries in the trie may either be actual values or
-/// [`Hash`](partial_trie::PartialTrie::Hash) nodes.
+/// [`Hash`](crate::partial_trie::PartialTrie::Hash) nodes.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ValOrHash {
     /// A value in a trie.
@@ -198,7 +198,11 @@ impl Iterator for PartialTrieIter {
 
 impl PartialTrie {
     /// Inserts a node into the trie.
-    pub fn insert<K: Into<Nibbles>, V: Into<ValOrHash>>(&mut self, k: K, v: V) {
+    pub fn insert<K, V>(&mut self, k: K, v: V)
+    where
+        K: Into<Nibbles>,
+        V: Into<ValOrHash>,
+    {
         let ins_entry = (k.into(), v.into()).into();
         trace!("Inserting new node {:?}...", ins_entry);
 
@@ -222,7 +226,10 @@ impl PartialTrie {
     }
 
     /// Get a node if it exists in the trie.
-    pub fn get<K: Into<Nibbles>>(&self, k: K) -> Option<&[u8]> {
+    pub fn get<K>(&self, k: K) -> Option<&[u8]>
+    where
+        K: Into<Nibbles>,
+    {
         self.get_intern(&mut k.into())
     }
 
@@ -276,7 +283,10 @@ impl PartialTrie {
     /// are meant for parts of the trie that are not relevant, traversing one
     /// means that a `Hash` node was created that potentially should not have
     /// been.
-    pub fn delete<K: Into<Nibbles>>(&mut self, k: K) -> Option<Vec<u8>> {
+    pub fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
+    where
+        K: Into<Nibbles>,
+    {
         let k = k.into();
         trace!("Deleting a leaf node with key {} if it exists", k);
 
@@ -309,7 +319,11 @@ impl PartialTrie {
     }
 }
 
-impl<K: Into<Nibbles>, V: Into<ValOrHash>> FromIterator<(K, V)> for PartialTrie {
+impl<K, V> FromIterator<(K, V)> for PartialTrie
+where
+    K: Into<Nibbles>,
+    V: Into<ValOrHash>,
+{
     fn from_iter<T: IntoIterator<Item = (K, V)>>(nodes: T) -> Self {
         let mut root = PartialTrie::Empty;
         root.extend(nodes.into_iter());

@@ -4,10 +4,10 @@
 //! - You only need a portion of an existing larger trie.
 //! - You need this partial trie to produce the same hash as the full trie.
 //!
-//! The core of this library is the [`PartialTrie`](partial_trie::PartialTrie)
+//! The core of this library is the [`PartialTrie`][partial_trie::PartialTrie]
 //! type, which represents a trie that is a subset of an existing larger one.
 //! Nodes that are not to be included in the `PartialTrie` are replaced with
-//! [`Hash`](partial_trie::PartialTrie::Hash) nodes, which contains the merkle
+//! [`Hash`][partial_trie::PartialTrie::Hash] nodes, which contains the merkle
 //! hash of the node it replaces.
 
 #![feature(let_chains)]

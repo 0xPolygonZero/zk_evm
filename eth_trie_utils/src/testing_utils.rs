@@ -50,11 +50,17 @@ pub(crate) fn common_setup() {
     let _ = pretty_env_logger::try_init();
 }
 
-pub(crate) fn entry<K: Into<Nibbles>>(k: K) -> TestInsertValEntry {
+pub(crate) fn entry<K>(k: K) -> TestInsertValEntry
+where
+    K: Into<Nibbles>,
+{
     (k.into(), vec![2])
 }
 
-pub(crate) fn entry_with_value<K: Into<Nibbles>>(k: K, v: u8) -> TestInsertValEntry {
+pub(crate) fn entry_with_value<K>(k: K, v: u8) -> TestInsertValEntry
+where
+    K: Into<Nibbles>,
+{
     (k.into(), vec![v])
 }
 
