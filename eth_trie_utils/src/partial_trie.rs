@@ -219,6 +219,19 @@ impl Nibbles {
         }
     }
 
+    /// Creates a new `Nibbles` from a single `Nibble`.
+    ///
+    /// # Panics
+    /// Panics if the nibble is > `0xf`.
+    pub fn from_nibble(n: Nibble) -> Self {
+        assert!(n <= 0xf);
+
+        Self {
+            count: 1,
+            packed: n.into(),
+        }
+    }
+
     /// Gets the nth proceeding nibble. The front `Nibble` is at idx `0`.
     ///
     /// # Panics
@@ -344,19 +357,6 @@ impl Nibbles {
         }
     }
 
-    /// Returns whether or not this `Nibbles` contains actual nibbles. (If
-    /// `count` is set to `0`)
-    pub fn is_empty(&self) -> bool {
-        self.count == 0
-    }
-
-    /// Checks if two given `Nibbles` are identical up to the shorter of the two
-    /// `Nibbles`.
-    pub fn nibbles_are_identical_up_to_smallest_count(&self, other: &Nibbles) -> bool {
-        let smaller_count = self.count.min(other.count);
-        (0..smaller_count).all(|i| self.get_nibble(i) == other.get_nibble(i))
-    }
-
     /// Drops the next `n` proceeding nibbles without mutation.
     ///
     /// If we truncate more nibbles that there are, we will just return the
@@ -412,6 +412,19 @@ impl Nibbles {
             false => self.count,
             true => n,
         }
+    }
+
+    /// Returns whether or not this `Nibbles` contains actual nibbles. (If
+    /// `count` is set to `0`)
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    /// Checks if two given `Nibbles` are identical up to the shorter of the two
+    /// `Nibbles`.
+    pub fn nibbles_are_identical_up_to_smallest_count(&self, other: &Nibbles) -> bool {
+        let smaller_count = self.count.min(other.count);
+        (0..smaller_count).all(|i| self.get_nibble(i) == other.get_nibble(i))
     }
 
     /// Splits the `Nibbles` at the given index, returning two `Nibbles`.
@@ -560,12 +573,6 @@ impl Nibbles {
         n1.count
     }
 
-    /// Returns the minimum number of nibbles needed to represent a `U256` key.
-    pub fn get_num_nibbles_in_key(k: &U256) -> usize {
-        (k.bits() + 3) / 4
-    }
-
-    // TODO: Make nicer...
     /// Returns a hex representation of the string.
     fn as_hex_str<F>(&self, hex_encode_f: F) -> String
     where
@@ -629,6 +636,11 @@ impl Nibbles {
         (self.count + 1) / 2
     }
 
+    /// Returns the minimum number of nibbles needed to represent a `U256` key.
+    pub fn get_num_nibbles_in_key(k: &U256) -> usize {
+        (k.bits() + 3) / 4
+    }
+
     // TODO: Make not terrible at some point... Consider moving away from `U256`
     // internally?
     pub fn bytes_be(&self) -> Vec<u8> {
@@ -636,19 +648,6 @@ impl Nibbles {
         self.packed.to_big_endian(&mut byte_buf);
 
         byte_buf[32 - self.min_bytes()..32].to_vec()
-    }
-
-    /// Creates a new `Nibbles` from a single `Nibble`.
-    ///
-    /// # Panics
-    /// Panics if the nibble is > `0xf`.
-    pub fn from_nibble(n: Nibble) -> Self {
-        assert!(n <= 0xf);
-
-        Self {
-            count: 1,
-            packed: n.into(),
-        }
     }
 
     fn nibble_append_safety_asserts(&self, n: Nibble) {
