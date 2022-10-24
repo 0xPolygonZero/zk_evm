@@ -100,7 +100,7 @@ mod tests {
         partial_trie::PartialTrie,
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
-            generate_n_random_fixed_trie_entries, TestInsertEntry,
+            generate_n_random_fixed_trie_entries, TestInsertValEntry,
         },
         trie_hashing::hash,
     };
@@ -200,7 +200,7 @@ mod tests {
     /// Gets the root hash for each insert by using an established eth trie
     /// library as a ground truth.
     fn get_lib_trie_root_hashes_after_each_insert(
-        entries: impl Iterator<Item = TestInsertEntry>,
+        entries: impl Iterator<Item = TestInsertValEntry>,
     ) -> impl Iterator<Item = H256> {
         let mut truth_trie = create_truth_trie();
 
@@ -216,7 +216,7 @@ mod tests {
     }
 
     fn get_root_hashes_for_our_trie_after_each_insert(
-        entries: impl Iterator<Item = TestInsertEntry>,
+        entries: impl Iterator<Item = TestInsertValEntry>,
     ) -> impl Iterator<Item = H256> {
         let mut trie = PartialTrie::Empty;
 
@@ -226,7 +226,9 @@ mod tests {
         })
     }
 
-    fn insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(entries: &[TestInsertEntry]) {
+    fn insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(
+        entries: &[TestInsertValEntry],
+    ) {
         let truth_hashes = get_lib_trie_root_hashes_after_each_insert(entries.iter().cloned());
         let our_hashes = get_root_hashes_for_our_trie_after_each_insert(entries.iter().cloned());
 

@@ -126,7 +126,7 @@ pub struct Nibbles {
 
 impl Display for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:x}", self)
+        write!(f, "{:x}", self.packed)
     }
 }
 
@@ -135,7 +135,7 @@ impl Debug for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Nibbles")
             .field("count", &self.count)
-            .field("packed", &self)
+            .field("packed", &format!("{:x}", self.packed))
             .finish()
     }
 }

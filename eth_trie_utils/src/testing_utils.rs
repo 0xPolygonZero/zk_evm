@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 
-use ethereum_types::U256;
+use ethereum_types::{H256, U256};
 use log::info;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 
 use crate::{
     partial_trie::{Nibbles, PartialTrie},
-    trie_ops::TrieIterItem,
+    trie_ops::ValOrHash,
     utils::is_even,
 };
 
@@ -16,7 +16,8 @@ use crate::{
 /// chances of these collisions occurring.
 const MIN_BYTES_FOR_VAR_KEY: usize = 5;
 
-pub(crate) type TestInsertEntry = (Nibbles, Vec<u8>);
+pub(crate) type TestInsertValEntry = (Nibbles, Vec<u8>);
+pub(crate) type TestInsertHashEntry = (Nibbles, H256);
 
 // Don't want this exposed publicly, but it is useful for testing.
 impl From<U256> for Nibbles {
@@ -49,32 +50,32 @@ pub(crate) fn common_setup() {
     let _ = pretty_env_logger::try_init();
 }
 
-pub(crate) fn entry<K: Into<Nibbles>>(k: K) -> TestInsertEntry {
+pub(crate) fn entry<K: Into<Nibbles>>(k: K) -> TestInsertValEntry {
     (k.into(), vec![2])
 }
 
-pub(crate) fn entry_with_value<K: Into<Nibbles>>(k: K, v: u8) -> TestInsertEntry {
+pub(crate) fn entry_with_value<K: Into<Nibbles>>(k: K, v: u8) -> TestInsertValEntry {
     (k.into(), vec![v])
 }
 
 pub(crate) fn generate_n_random_fixed_trie_entries(
     n: usize,
     seed: u64,
-) -> impl Iterator<Item = TestInsertEntry> {
+) -> impl Iterator<Item = TestInsertValEntry> {
     gen_n_random_trie_entries_common(n, seed, gen_fixed_nibbles)
 }
 
 pub(crate) fn generate_n_random_variable_keys(
     n: usize,
     seed: u64,
-) -> impl Iterator<Item = TestInsertEntry> {
+) -> impl Iterator<Item = TestInsertValEntry> {
     gen_n_random_trie_entries_common(n, seed, gen_variable_nibbles)
 }
 
 pub(crate) fn generate_n_random_fixed_even_nibble_padded_trie_entries(
     n: usize,
     seed: u64,
-) -> impl Iterator<Item = TestInsertEntry> {
+) -> impl Iterator<Item = TestInsertValEntry> {
     gen_n_random_trie_entries_common(n, seed, gen_variable_nibbles_even_padded_nibbles)
 }
 
@@ -82,11 +83,28 @@ fn gen_n_random_trie_entries_common<F: Fn(&mut StdRng) -> Nibbles>(
     n: usize,
     seed: u64,
     u256_gen_f: F,
-) -> impl Iterator<Item = TestInsertEntry> {
+) -> impl Iterator<Item = TestInsertValEntry> {
     let mut rng = StdRng::seed_from_u64(seed);
     (0..n)
         .into_iter()
         .map(move |i| (u256_gen_f(&mut rng), i.to_be_bytes().to_vec()))
+}
+
+pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie(
+    trie: &PartialTrie,
+    n: usize,
+    seed: u64,
+) -> Vec<TestInsertHashEntry> {
+    let mut rng = StdRng::seed_from_u64(seed);
+
+    // Pretty inefficient, but ok for tests.
+    trie.items()
+        .filter(|(k, v)| k.count <= 63 && matches!(v, ValOrHash::Val(_)))
+        .map(|(k, _)| k.merge_nibble(1))
+        .choose_multiple(&mut rng, n)
+        .into_iter()
+        .map(|k| (k, rng.gen()))
+        .collect()
 }
 
 fn gen_fixed_nibbles(rng: &mut StdRng) -> Nibbles {
@@ -118,16 +136,16 @@ fn gen_variable_nibbles(rng: &mut StdRng) -> Nibbles {
 }
 
 // TODO: Replace with `PartialTrie` `iter` methods once done...
-pub(crate) fn get_entries_in_trie(trie: &PartialTrie) -> HashSet<TestInsertEntry> {
+pub(crate) fn get_non_hash_values_in_trie(trie: &PartialTrie) -> HashSet<TestInsertValEntry> {
     info!("Collecting all entries inserted into trie...");
     trie.items()
-        .map(|(k, v)| (k, unwrap_iter_item_to_val(v)))
+        .map(|(k, v)| (k, v.expect_leaf_val()))
         .collect()
 }
 
-pub(crate) fn unwrap_iter_item_to_val(item: TrieIterItem) -> Vec<u8> {
+pub(crate) fn unwrap_iter_item_to_val(item: ValOrHash) -> Vec<u8> {
     match item {
-        TrieIterItem::Value(v) => v,
-        TrieIterItem::Hash(_) => unreachable!(),
+        ValOrHash::Val(v) => v,
+        ValOrHash::Hash(_) => unreachable!(),
     }
 }
