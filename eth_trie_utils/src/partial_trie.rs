@@ -1,3 +1,5 @@
+//! Definitions for the core types [`PartialTrie`] and [`Nibbles`].
+
 use std::{
     fmt::Debug,
     fmt::{Display, LowerHex, UpperHex},

@@ -1,3 +1,6 @@
+//! Defines various operations for
+//! [`PartialTrie`][crate::partial_trie::PartialTrie].
+
 use std::fmt::Display;
 
 use ethereum_types::H256;
