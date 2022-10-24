@@ -166,8 +166,8 @@ impl Iterator for PartialTrieIter {
 
 impl PartialTrie {
     /// Inserts a node into the trie.
-    pub fn insert(&mut self, k: Nibbles, v: Vec<u8>) {
-        let ins_entry = (k, v).into();
+    pub fn insert<K: Into<Nibbles>>(&mut self, k: K, v: Vec<u8>) {
+        let ins_entry = (k.into(), v).into();
         trace!("Inserting new leaf node {:?}...", ins_entry);
 
         // Inserts are guaranteed to update the root node.
@@ -178,8 +178,8 @@ impl PartialTrie {
     }
 
     /// Get a node if it exists in the trie.
-    pub fn get(&self, mut n: Nibbles) -> Option<&[u8]> {
-        self.get_intern(&mut n)
+    pub fn get<K: Into<Nibbles>>(&self, k: K) -> Option<&[u8]> {
+        self.get_intern(&mut k.into())
     }
 
     fn get_intern(&self, curr_nibbles: &mut Nibbles) -> Option<&[u8]> {
@@ -232,7 +232,8 @@ impl PartialTrie {
     /// are meant for parts of the trie that are not relevant, traversing one
     /// means that a `Hash` node was created that potentially should not have
     /// been.
-    pub fn delete(&mut self, k: Nibbles) -> Option<Vec<u8>> {
+    pub fn delete<K: Into<Nibbles>>(&mut self, k: K) -> Option<Vec<u8>> {
+        let k = k.into();
         trace!("Deleting a leaf node with key {} if it exists", k);
 
         delete_intern(&self.clone().into(), k).map(|(updated_root, deleted_val)| {
@@ -264,8 +265,8 @@ impl PartialTrie {
     }
 }
 
-impl FromIterator<(Nibbles, Vec<u8>)> for PartialTrie {
-    fn from_iter<T: IntoIterator<Item = (Nibbles, Vec<u8>)>>(nodes: T) -> Self {
+impl<K: Into<Nibbles>> FromIterator<(K, Vec<u8>)> for PartialTrie {
+    fn from_iter<T: IntoIterator<Item = (K, Vec<u8>)>>(nodes: T) -> Self {
         let mut root = PartialTrie::Empty;
 
         for (k, v) in nodes {
@@ -708,7 +709,7 @@ mod tests {
         entries[1].1 = vec![100];
 
         let trie = PartialTrie::from_iter(entries.into_iter());
-        assert_eq!(trie.get(0x1234.into()), Some([100].as_slice()));
+        assert_eq!(trie.get(0x1234), Some([100].as_slice()));
     }
 
     #[test]
@@ -750,8 +751,8 @@ mod tests {
         let entries = [entry_with_value(0x1234, 1), entry_with_value(0x12345678, 2)];
         let trie = PartialTrie::from_iter(entries.iter().cloned());
 
-        assert_eq!(trie.get(0x1234.into()), Some([1].as_slice()));
-        assert_eq!(trie.get(0x12345678.into()), Some([2].as_slice()));
+        assert_eq!(trie.get(0x1234), Some([1].as_slice()));
+        assert_eq!(trie.get(0x12345678), Some([2].as_slice()));
     }
 
     #[test]
@@ -818,9 +819,9 @@ mod tests {
         common_setup();
 
         let mut trie = PartialTrie::default();
-        trie.insert(0x1234.into(), vec![91]);
+        trie.insert(0x1234, vec![91]);
 
-        assert!(trie.delete(0x5678.into()).is_none())
+        assert!(trie.delete(0x5678).is_none())
     }
 
     #[test]
@@ -828,7 +829,7 @@ mod tests {
         common_setup();
 
         let mut trie = PartialTrie::default();
-        assert!(trie.delete(0x1234.into()).is_none());
+        assert!(trie.delete(0x1234).is_none());
     }
 
     #[test]
