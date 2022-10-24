@@ -1,4 +1,10 @@
-use std::{fmt::Debug, fmt::Display, ops::Range, str::FromStr, sync::Arc};
+use std::{
+    fmt::Debug,
+    fmt::{Display, LowerHex, UpperHex},
+    ops::Range,
+    str::FromStr,
+    sync::Arc,
+};
 
 use bytes::{Bytes, BytesMut};
 use ethereum_types::{H256, U256};
@@ -118,7 +124,7 @@ pub struct Nibbles {
 
 impl Display for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_hex_str())
+        write!(f, "{:x}", self)
     }
 }
 
@@ -127,7 +133,7 @@ impl Debug for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Nibbles")
             .field("count", &self.count)
-            .field("packed", &self.as_hex_str())
+            .field("packed", &self)
             .finish()
     }
 }
@@ -163,6 +169,18 @@ impl FromStr for Nibbles {
             count: leading_zeros + Self::get_num_nibbles_in_key(&packed),
             packed,
         })
+    }
+}
+
+impl LowerHex for Nibbles {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_hex_str(|bytes| hex::encode(bytes)))
+    }
+}
+
+impl UpperHex for Nibbles {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_hex_str(|bytes| hex::encode_upper(bytes)))
     }
 }
 
@@ -549,7 +567,10 @@ impl Nibbles {
 
     // TODO: Make nicer...
     /// Returns a hex representation of the string.
-    fn as_hex_str(&self) -> String {
+    fn as_hex_str<F>(&self, hex_encode_f: F) -> String
+    where
+        F: Fn(&[u8]) -> String,
+    {
         // `hex::encode` will output `0x` for 0.
         if self.count == 0 {
             return "0x0".to_string();
@@ -559,7 +580,7 @@ impl Nibbles {
         self.packed.to_big_endian(&mut byte_buf);
 
         let count_bytes = self.min_bytes();
-        let hex_string_raw = hex::encode(&byte_buf[(32 - count_bytes)..32]);
+        let hex_string_raw = hex_encode_f(&byte_buf[(32 - count_bytes)..32]);
         let hex_char_iter_raw = hex_string_raw.chars();
 
         let hex_char_iter = match is_even(self.count) {
@@ -971,21 +992,24 @@ mod tests {
     #[test]
     fn nibbles_from_h256_works() {
         assert_eq!(
-            Nibbles::from(H256::from_low_u64_be(0)).as_hex_str(),
+            format!("{:x}", Nibbles::from(H256::from_low_u64_be(0))),
             "0x0000000000000000000000000000000000000000000000000000000000000000"
         );
         assert_eq!(
-            Nibbles::from(H256::from_low_u64_be(2048)).as_hex_str(),
+            format!("{:x}", Nibbles::from(H256::from_low_u64_be(2048))),
             "0x0000000000000000000000000000000000000000000000000000000000000800"
         );
     }
 
     #[test]
     fn nibbles_from_str_works() {
-        assert_eq!(Nibbles::from_str("0x0").unwrap().as_hex_str(), "0x0");
-        assert_eq!(Nibbles::from_str("0").unwrap().as_hex_str(), "0x0");
-        assert_eq!(Nibbles::from_str("0x800").unwrap().as_hex_str(), "0x800");
-        assert_eq!(Nibbles::from_str("800").unwrap().as_hex_str(), "0x800");
+        assert_eq!(format!("{:x}", Nibbles::from_str("0x0").unwrap()), "0x0");
+        assert_eq!(format!("{:x}", Nibbles::from_str("0").unwrap()), "0x0");
+        assert_eq!(
+            format!("{:x}", Nibbles::from_str("0x800").unwrap()),
+            "0x800"
+        );
+        assert_eq!(format!("{:x}", Nibbles::from_str("800").unwrap()), "0x800");
     }
 
     #[test]
