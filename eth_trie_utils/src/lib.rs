@@ -3,9 +3,9 @@
 #![feature(let_chains)]
 
 pub mod partial_trie;
-pub mod trie_hashing;
+mod trie_hashing;
 pub mod trie_ops;
-pub mod utils;
+mod utils;
 
 #[cfg(test)]
 mod testing_utils;
