@@ -150,13 +150,20 @@ impl Iterator for PartialTrieIter {
     fn next(&mut self) -> Option<(Nibbles, ValOrHash)> {
         let mut next_iter_item = None;
 
-        while next_iter_item.is_none() && let Some(mut stack_entry) = self.trie_stack.pop() {
+        while next_iter_item.is_none() {
+            let mut stack_entry = match self.trie_stack.pop() {
+                Some(e) => e,
+                None => break,
+            };
+
             next_iter_item = match stack_entry {
-                IterStackEntry::Root(root) =>
-                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::default()),
+                IterStackEntry::Root(root) => {
+                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::default())
+                }
                 IterStackEntry::Extension(num_nibbles) => {
                     // Drop nibbles that extension added since we are going back up the trie.
-                    self.curr_key_after_last_branch.truncate_n_nibbles_back_mut(num_nibbles);
+                    self.curr_key_after_last_branch
+                        .truncate_n_nibbles_back_mut(num_nibbles);
                     None
                 }
                 IterStackEntry::Branch(ref mut branch_entry) => {
@@ -168,27 +175,32 @@ impl Iterator for PartialTrieIter {
                             let next_child = branch_entry.children[curr_nib as usize].clone();
                             self.trie_stack.push(stack_entry);
 
-                            let updated_key = self.curr_key_after_last_branch.merge_nibble(curr_nib);
-                            self.advance_iter_to_next_empty_leaf_or_hash_node(&next_child, updated_key)
-                        },
+                            let updated_key =
+                                self.curr_key_after_last_branch.merge_nibble(curr_nib);
+                            self.advance_iter_to_next_empty_leaf_or_hash_node(
+                                &next_child,
+                                updated_key,
+                            )
+                        }
                         16 => {
                             let res = match branch_entry.value.is_empty() {
                                 false => {
                                     let value_key = self.curr_key_after_last_branch;
                                     Some((value_key, ValOrHash::Val(branch_entry.value.clone())))
-                                },
+                                }
                                 true => None,
                             };
 
                             if !self.curr_key_after_last_branch.is_empty() {
-                                self.curr_key_after_last_branch.truncate_n_nibbles_back_mut(1);
+                                self.curr_key_after_last_branch
+                                    .truncate_n_nibbles_back_mut(1);
                             }
 
                             res
                         }
                         _ => unreachable!("Trie iterator managed to reach nibble 17 or 0"),
                     }
-                },
+                }
             }
         }
 
