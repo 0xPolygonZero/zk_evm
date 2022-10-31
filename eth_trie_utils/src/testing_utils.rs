@@ -1,4 +1,7 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    iter::{once, repeat},
+};
 
 use ethereum_types::{H256, U256};
 use log::info;
@@ -20,15 +23,8 @@ pub(crate) type TestInsertValEntry = (Nibbles, Vec<u8>);
 pub(crate) type TestInsertHashEntry = (Nibbles, H256);
 
 // Don't want this exposed publicly, but it is useful for testing.
-impl From<U256> for Nibbles {
-    fn from(packed: U256) -> Self {
-        Nibbles::from_u256(packed)
-    }
-}
-
-// Also useful for testing.
-impl From<u64> for Nibbles {
-    fn from(k: u64) -> Self {
+impl From<i32> for Nibbles {
+    fn from(k: i32) -> Self {
         let packed = U256::from(k);
 
         Self {
@@ -55,6 +51,15 @@ where
     K: Into<Nibbles>,
 {
     (k.into(), vec![2])
+}
+
+/// Needed when replacing nodes with `Hash` nodes to ensure they are >= 32
+/// bytes when RLP encoded.
+pub(crate) fn large_entry<K>(k: K) -> TestInsertValEntry
+where
+    K: Into<Nibbles>,
+{
+    (k.into(), once(2).chain(repeat(255).take(32)).collect())
 }
 
 pub(crate) fn entry_with_value<K>(k: K, v: u8) -> TestInsertValEntry

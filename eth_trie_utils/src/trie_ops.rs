@@ -56,6 +56,12 @@ impl From<Vec<u8>> for ValOrHash {
     }
 }
 
+impl From<&[u8]> for ValOrHash {
+    fn from(value: &[u8]) -> Self {
+        Self::Val(value.to_vec())
+    }
+}
+
 impl From<H256> for ValOrHash {
     fn from(hash: H256) -> Self {
         Self::Hash(hash)
@@ -66,7 +72,7 @@ impl ValOrHash {
     pub fn expect_leaf_val(self) -> Vec<u8> {
         match self {
             ValOrHash::Val(leaf_v) => leaf_v,
-            ValOrHash::Hash(h) => panic!("Expected a value we were inserting to be a leaf value but instead found a hash! (hash: {})", h),
+            ValOrHash::Hash(h) => panic!("Expected a value we were inserting to be a leaf value but instead found a hash! (hash: {h})"),
         }
     }
 }
@@ -352,7 +358,7 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
         }
         PartialTrie::Hash(_) => {
             trace!("Insert traversed {:?}", node);
-            unreachable!(
+            panic!(
                 "Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!"
             )
         }
@@ -374,8 +380,7 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
         PartialTrie::Extension { nibbles, child } => {
             trace!("Insert traversed Extension (nibbles: {:?})", nibbles);
 
-            // Note: Child is guaranteed to be a branch.
-            assert!(matches!(***child, PartialTrie::Branch { .. }), "Extension node child should be guaranteed to be a branch, but wasn't! (Ext node: {:?})", node);
+            // Note: Child is guaranteed to be either a `Branch` or a `Hash` node.
 
             let info = get_pre_and_postfixes_for_existing_and_new_nodes(nibbles, &new_node.nibbles);
 
@@ -691,7 +696,19 @@ fn leaf_from_insert_val(nibbles: Nibbles, value: ValOrHash) -> WrappedNode {
 fn create_node_from_insert_val(nibbles: Nibbles, value: ValOrHash) -> WrappedNode {
     match value {
         ValOrHash::Val(value) => PartialTrie::Leaf { nibbles, value },
-        ValOrHash::Hash(h) => PartialTrie::Hash(h),
+        ValOrHash::Hash(h) => {
+            let hash_node = PartialTrie::Hash(h);
+
+            match nibbles.is_empty() {
+                // Since hash nodes can represent remaining nibbles like leaves can, we must insert
+                // an extension node in this case.
+                false => PartialTrie::Extension {
+                    nibbles,
+                    child: hash_node.into(),
+                },
+                true => hash_node,
+            }
+        }
     }
     .into()
 }
@@ -717,7 +734,7 @@ mod tests {
 
     use super::ValOrHash;
     use crate::{
-        partial_trie::{Nibble, PartialTrie},
+        partial_trie::PartialTrie,
         testing_utils::{
             common_setup, entry, entry_with_value,
             generate_n_hash_nodes_entries_for_empty_slots_in_trie,
@@ -729,7 +746,6 @@ mod tests {
 
     const MASSIVE_TRIE_SIZE: usize = 100000;
     const COW_TEST_TRIE_SIZE: usize = 500;
-    const NODES_PER_BRANCH_FOR_HASH_REPLACEMENT_TEST: usize = 200;
 
     fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[TestInsertValEntry]) {
         let trie = PartialTrie::from_iter(entries.iter().cloned());
@@ -762,8 +778,8 @@ mod tests {
                 entries.len()
             );
 
-            println!("Missing: {:#?}", all_entries_retrieved);
-            println!("Unexpected retrieved: {:#?}", additional_entries_inserted);
+            println!("Missing: {all_entries_retrieved:#?}");
+            println!("Unexpected retrieved: {additional_entries_inserted:#?}");
         }
 
         assert!(all_entries_retrievable_from_trie);
@@ -986,37 +1002,5 @@ mod tests {
         for (k, v) in entries_that_still_should_exist {
             assert_eq!(trie.get(k), Some(v.as_slice()));
         }
-    }
-
-    #[test]
-    fn replacing_part_of_a_trie_with_a_hash_node_produces_same_hash() {
-        let entries = (0..16).flat_map(|i| {
-            generate_n_random_variable_keys(NODES_PER_BRANCH_FOR_HASH_REPLACEMENT_TEST, i).map(
-                move |(mut k, v)| {
-                    // Force all keys to be under a given branch at root.
-                    k.truncate_n_nibbles_front_mut(1);
-                    k.push_nibble_front(i as Nibble);
-
-                    (k, v)
-                },
-            )
-        });
-
-        let mut trie = PartialTrie::from_iter(entries);
-        let orig_hash = trie.calc_hash();
-
-        let root_branch_children = match &mut trie {
-            PartialTrie::Branch { children, .. } => children,
-            _ => unreachable!(),
-        };
-
-        // Replace every even branch node in the root with a hash node.
-        for i in (0..16).step_by(2) {
-            let child_hash = root_branch_children[i].calc_hash();
-            root_branch_children[i] = PartialTrie::Hash(child_hash).into();
-        }
-
-        let new_hash = trie.calc_hash();
-        assert_eq!(orig_hash, new_hash);
     }
 }

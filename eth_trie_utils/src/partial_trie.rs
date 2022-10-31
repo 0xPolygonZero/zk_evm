@@ -3,13 +3,14 @@
 use std::{
     fmt::Debug,
     fmt::{Display, LowerHex, UpperHex},
+    mem::size_of,
     ops::Range,
     str::FromStr,
     sync::Arc,
 };
 
 use bytes::{Bytes, BytesMut};
-use ethereum_types::{H256, U256};
+use ethereum_types::{H256, U128, U256};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uint::FromHexError;
@@ -21,6 +22,75 @@ pub type Nibble = u8;
 
 /// Alias for a node that is a child of an extension or branch node.
 pub type WrappedNode = Arc<Box<PartialTrie>>;
+
+/// Because there are two different ways to convert to `Nibbles`, we don't want
+/// to rely on `From`. Instead, we'll define a new trait that defines both
+/// conversions.
+pub trait ToNibbles {
+    /// Convert the type to a sequence of nibbles.
+    ///
+    /// Note that this will create `Nibbles` with a `Nibble` count that is
+    /// accurate down to the nibble. For example, passing in `0x123` has `3`
+    /// `Nibble`s and is not padded to the nearest byte (in which case it
+    /// would have `4` `Nibble`s).
+    fn to_nibbles(self) -> Nibbles;
+
+    /// Convert the type to a sequence of nibbles but pad to the nearest byte.
+    fn to_nibbles_byte_padded(self) -> Nibbles
+    where
+        Self: Sized,
+    {
+        let mut nibbles = self.to_nibbles();
+        nibbles.count = (nibbles.count + 1) / 2;
+
+        nibbles
+    }
+}
+
+/// The default conversion to nibbles will be to be precise down to the
+/// `Nibble`.
+impl<T> From<T> for Nibbles
+where
+    T: ToNibbles,
+{
+    fn from(v: T) -> Self {
+        v.to_nibbles()
+    }
+}
+
+macro_rules! impl_to_nibbles {
+    ($type:ty) => {
+        impl ToNibbles for $type {
+            fn to_nibbles(self) -> Nibbles {
+                // Ethereum types don't have `BITS` defined.
+                #[allow(clippy::manual_bits)]
+                let size_bits = size_of::<Self>() * 8;
+                let count = (size_bits - self.leading_zeros() as usize + 3) / 4;
+
+                Nibbles {
+                    count,
+                    packed: self.into(),
+                }
+            }
+        }
+    };
+}
+
+impl_to_nibbles!(u8);
+impl_to_nibbles!(u16);
+impl_to_nibbles!(u32);
+impl_to_nibbles!(u64);
+impl_to_nibbles!(U128);
+impl_to_nibbles!(U256);
+
+impl From<H256> for Nibbles {
+    fn from(v: H256) -> Self {
+        Nibbles {
+            count: 64,
+            packed: U256::from_big_endian(v.as_bytes()),
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum BytesToNibblesError {
@@ -43,6 +113,11 @@ pub enum PartialTrie {
     /// An empty trie.
     Empty,
     /// The digest of trie whose data does not need to be stored.
+    ///
+    /// **Important note**: Hash nodes should **only** be created to replace
+    /// `PartialTrie`s whose RLP encoding is >= 32 bytes. Creating a hash node
+    /// for a `PartialTrie` smaller than this will cause an incorrect hash to be
+    /// generated for the trie.
     Hash(H256),
     /// A branch node, which consists of 16 children and an optional value.
     Branch {
@@ -115,7 +190,44 @@ impl Default for PartialTrie {
 }
 
 #[derive(Copy, Clone, Deserialize, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-/// A sequence of nibbles.
+/// A sequence of nibbles which is used as the key type into [`PartialTrie`].
+///
+/// Generally, if you're constructing keys from actual trie data, you probably
+/// will be working with `U256`s and `H256`s both of which `Nibbles` has a
+/// `From` implementation for.
+///
+/// It's important to note that leading `0` bits are part of a key. For example:
+/// ```rust
+/// let n1 = Nibbles::from_str("0x123");
+/// let n2 = Nibbles::from_str("0x0123");
+///
+/// assert_ne!(n1, n2); // These are different keys
+/// ```
+/// Also note by default, converting to `Nibbles` does not pad to the
+/// nearest byte like other trie libraries generally do. If you need this
+/// behavior, you can construct `Nibbles` like this:
+/// ```rust
+/// 
+/// Note that for the time being, `Nibbles` is limited to key lengths no longer
+/// than `256` bits. While we could support arbitrarily long keys, tries in
+/// Ethereum never have keys longer than `256` bits. Because of this, we decided
+/// to create a minor optimization by restricting max key sizes to `256` bits.
+///
+/// let padded = 0x123_u64.to_nibbles_byte_padded();
+/// assert_eq(format!(":x"), "0x0123");
+/// ```
+///
+/// Finally, note that due to the limitations initializing from an integer, when
+/// creating a key directly from an integer, there is no way to know if a
+/// leading `0` was passed in. ```rust
+/// let n1 = Nibbles::from(0x123);
+/// let n2 = Nibbles::from(0x00000000123); // Use `from_str` or construct
+/// `Nibbles` explicitly instead here.
+///
+/// assert_eq!(n1, n2)
+/// assert!(Nibbles::from(0x00000000).is_empty());
+/// ```
+
 pub struct Nibbles {
     /// The number of nibbles in this sequence.
     pub count: usize,
@@ -135,7 +247,7 @@ impl Debug for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Nibbles")
             .field("count", &self.count)
-            .field("packed", &format!("{:x}", self.packed))
+            .field("packed", &format!("{self:x}"))
             .finish()
     }
 }
@@ -143,15 +255,6 @@ impl Debug for Nibbles {
 impl From<Nibbles> for U256 {
     fn from(n: Nibbles) -> Self {
         n.packed
-    }
-}
-
-impl From<H256> for Nibbles {
-    fn from(v: H256) -> Self {
-        Nibbles {
-            count: 64,
-            packed: U256::from_big_endian(v.as_bytes()),
-        }
     }
 }
 
@@ -192,6 +295,21 @@ impl Nibbles {
     /// Returns an error if the byte slice is empty or is longer than `32`
     /// bytes.
     pub fn from_bytes_be(bytes: &[u8]) -> Result<Self, BytesToNibblesError> {
+        Self::from_bytes(bytes, U256::from_big_endian)
+    }
+
+    /// Creates `Nibbles` from little endian bytes.
+    ///
+    /// Returns an error if the byte slice is empty or is longer than `32`
+    /// bytes.
+    pub fn from_bytes_le(bytes: &[u8]) -> Result<Self, BytesToNibblesError> {
+        Self::from_bytes(bytes, U256::from_little_endian)
+    }
+
+    fn from_bytes<F>(bytes: &[u8], conv_f: F) -> Result<Self, BytesToNibblesError>
+    where
+        F: FnOnce(&[u8]) -> U256,
+    {
         if bytes.is_empty() {
             return Err(BytesToNibblesError::ZeroSizedKey);
         }
@@ -200,25 +318,12 @@ impl Nibbles {
             return Err(BytesToNibblesError::TooManyBytes(bytes.len()));
         }
 
-        let packed = U256::from_big_endian(bytes);
+        let packed = conv_f(bytes);
 
         Ok(Self {
             count: bytes.len() * 2,
             packed,
         })
-    }
-
-    /// Creates `Nibbles` from a `U256`.
-    ///
-    /// Note that this will create `Nibbles` with a `Nibble` count that is
-    /// accurate down to the nibble. For example, passing in `0x123` has `3`
-    /// `Nibble`s and is not padded to the nearest byte (in which case it
-    /// would have `4` `Nibble`s).
-    pub fn from_u256(v: U256) -> Self {
-        Self {
-            count: Self::get_num_nibbles_in_key(&v),
-            packed: v,
-        }
     }
 
     /// Creates a new `Nibbles` from a single `Nibble`.
@@ -878,10 +983,10 @@ mod tests {
 
     #[test]
     fn reverse_works() {
-        assert_eq!(Nibbles::from(0x0).reverse(), Nibbles::from(0x0));
-        assert_eq!(Nibbles::from(0x1).reverse(), Nibbles::from(0x1));
-        assert_eq!(Nibbles::from(0x12).reverse(), Nibbles::from(0x21));
-        assert_eq!(Nibbles::from(0x1234).reverse(), Nibbles::from(0x4321));
+        assert_eq!(Nibbles::from(0x0).reverse(), Nibbles::from(0x0_u64));
+        assert_eq!(Nibbles::from(0x1).reverse(), Nibbles::from(0x1_u64));
+        assert_eq!(Nibbles::from(0x12).reverse(), Nibbles::from(0x21_u64));
+        assert_eq!(Nibbles::from(0x1234).reverse(), Nibbles::from(0x4321_u64));
     }
 
     #[test]
@@ -984,10 +1089,10 @@ mod tests {
 
     #[test]
     fn from_u256_works() {
-        assert_eq!(Nibbles::from_u256(0x0.into()), Nibbles::from(0x0));
-        assert_eq!(Nibbles::from_u256(0x1.into()), Nibbles::from(0x1));
-        assert_eq!(Nibbles::from_u256(0x12.into()), Nibbles::from(0x12));
-        assert_eq!(Nibbles::from_u256(0x123.into()), Nibbles::from(0x123));
+        assert_eq!(Nibbles::from(0x0), Nibbles::from(0x0));
+        assert_eq!(Nibbles::from(0x1), Nibbles::from(0x1));
+        assert_eq!(Nibbles::from(0x12), Nibbles::from(0x12));
+        assert_eq!(Nibbles::from(0x123), Nibbles::from(0x123));
     }
 
     #[test]

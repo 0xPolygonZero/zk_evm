@@ -5,7 +5,7 @@ use rlp::RlpStream;
 
 use crate::partial_trie::PartialTrie;
 
-/// theA node type used for calculating the hash of a trie.
+/// The node type used for calculating the hash of a trie.
 #[derive(Debug)]
 enum EncodedNode {
     /// Node that is RLPed but not hashed.
@@ -97,16 +97,18 @@ mod tests {
     use serde::Deserialize;
 
     use crate::{
-        partial_trie::PartialTrie,
+        partial_trie::{Nibble, PartialTrie, WrappedNode},
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
-            generate_n_random_fixed_trie_entries, TestInsertValEntry,
+            generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, large_entry,
+            TestInsertValEntry,
         },
         trie_hashing::hash,
     };
 
     const PYEVM_TRUTH_VALS_JSON_PATH: &str = "test_data/pyevm_account_ground_truth.json";
     const NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST: usize = 1000;
+    const NODES_PER_BRANCH_FOR_HASH_REPLACEMENT_TEST: usize = 200;
 
     #[derive(Copy, Clone, Debug)]
     struct U256Rlpable(U256);
@@ -131,7 +133,7 @@ mod tests {
     #[derive(Debug, RlpEncodable)]
     struct AccountEntry {
         nonce: u64,
-        balance: U256Rlpable,
+        balance: U256,
         storage_root: H256,
         code_hash: H256,
     }
@@ -153,7 +155,7 @@ mod tests {
                 account_key: H256(hash(&Bytes::copy_from_slice(
                     H160::from_str(&r.address).unwrap().as_bytes(),
                 ))),
-                balance: U256::from_str(&r.balance).unwrap().into(),
+                balance: U256::from_str(&r.balance).unwrap(),
                 nonce: r.nonce,
                 code_hash: H256::from_str(&r.code_hash).unwrap(),
                 storage_root: H256::from_str(&r.storage_root).unwrap(),
@@ -166,7 +168,7 @@ mod tests {
     #[derive(Clone, Debug)]
     struct PyEvmTrueValEntry {
         account_key: H256,
-        balance: U256Rlpable,
+        balance: U256,
         nonce: u64,
         code_hash: H256,
         storage_root: H256,
@@ -360,5 +362,66 @@ mod tests {
             let truth_root_hash = H256(truth_trie.root_hash().unwrap().0);
             assert_eq!(our_trie.calc_hash(), truth_root_hash);
         }
+    }
+
+    #[test]
+    fn replacing_branch_of_leaves_with_hash_nodes_produced_same_hash() {
+        let mut trie = PartialTrie::from_iter(
+            [
+                large_entry(0x1),
+                large_entry(0x2),
+                large_entry(0x3),
+                large_entry(0x4),
+            ]
+            .into_iter(),
+        );
+
+        let orig_hash = trie.calc_hash();
+
+        let children = get_branch_children_expected(&mut trie);
+        children[1] = PartialTrie::Hash(children[1].calc_hash()).into();
+        children[4] = PartialTrie::Hash(children[4].calc_hash()).into();
+
+        let new_hash = trie.calc_hash();
+        assert_eq!(orig_hash, new_hash);
+    }
+
+    fn get_branch_children_expected(node: &mut PartialTrie) -> &mut [WrappedNode; 16] {
+        match node {
+            PartialTrie::Branch { children, .. } => children,
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn replacing_part_of_a_trie_with_a_hash_node_produces_same_hash() {
+        let entries = (0..16).flat_map(|i| {
+            generate_n_random_variable_keys(NODES_PER_BRANCH_FOR_HASH_REPLACEMENT_TEST, i).map(
+                move |(mut k, v)| {
+                    // Force all keys to be under a given branch at root.
+                    k.truncate_n_nibbles_front_mut(1);
+                    k.push_nibble_front(i as Nibble);
+
+                    (k, v)
+                },
+            )
+        });
+
+        let mut trie = PartialTrie::from_iter(entries);
+        let orig_hash = trie.calc_hash();
+
+        let root_branch_children = match &mut trie {
+            PartialTrie::Branch { children, .. } => children,
+            _ => unreachable!(),
+        };
+
+        // Replace every even branch node in the root with a hash node.
+        for i in (0..16).step_by(2) {
+            let child_hash = root_branch_children[i].calc_hash();
+            root_branch_children[i] = PartialTrie::Hash(child_hash).into();
+        }
+
+        let new_hash = trie.calc_hash();
+        assert_eq!(orig_hash, new_hash);
     }
 }
