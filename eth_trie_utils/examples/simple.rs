@@ -57,9 +57,11 @@ fn main() {
 
     // Note that `From` just calls `to_nibbles` by default instead of
     // `to_nibbles_byte_padded`.
-    let hash_1 = PartialTrie::from_iter(once((0x9002_u32.to_nibbles_byte_padded(), vec![4, 5, 6])))
-        .calc_hash();
-    let hash_2 = PartialTrie::from_iter(once((0x9002_u32.to_nibbles(), vec![4, 5, 6]))).calc_hash();
+    let hash_1 =
+        PartialTrie::from_iter(once((0x19002_u32.to_nibbles_byte_padded(), vec![4, 5, 6])))
+            .calc_hash();
+    let hash_2 =
+        PartialTrie::from_iter(once((0x19002_u32.to_nibbles(), vec![4, 5, 6]))).calc_hash();
     assert_ne!(hash_1, hash_2);
 
     // Finally note that `Nibbles` which are constructed from bytes are always

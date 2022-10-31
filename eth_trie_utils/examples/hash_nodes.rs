@@ -14,7 +14,7 @@
 //! For example, say we only need the right hand side of the root:
 //!
 //! Full Trie:
-//!```
+//!```text
 //!       N
 //!    /    \
 //!   B      B
@@ -22,7 +22,7 @@
 //! L   L  L   L
 //! ```
 //! Partial Trie:
-//!```
+//!```text
 //!       B
 //!    /    \
 //!   H      B

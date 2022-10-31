@@ -41,7 +41,7 @@ pub trait ToNibbles {
         Self: Sized,
     {
         let mut nibbles = self.to_nibbles();
-        nibbles.count = (nibbles.count + 1) / 2;
+        nibbles.count = ((nibbles.count + 1) / 2) * 2;
 
         nibbles
     }
@@ -198,8 +198,11 @@ impl Default for PartialTrie {
 ///
 /// It's important to note that leading `0` bits are part of a key. For example:
 /// ```rust
-/// let n1 = Nibbles::from_str("0x123");
-/// let n2 = Nibbles::from_str("0x0123");
+/// # use eth_trie_utils::partial_trie::Nibbles;
+/// # use std::str::FromStr;
+///
+/// let n1 = Nibbles::from_str("0x123").unwrap();
+/// let n2 = Nibbles::from_str("0x0123").unwrap();
 ///
 /// assert_ne!(n1, n2); // These are different keys
 /// ```
@@ -207,25 +210,28 @@ impl Default for PartialTrie {
 /// nearest byte like other trie libraries generally do. If you need this
 /// behavior, you can construct `Nibbles` like this:
 /// ```rust
-/// 
+/// # use eth_trie_utils::partial_trie::ToNibbles;
+///
+/// let padded = 0x123_u64.to_nibbles_byte_padded();
+/// assert_eq!(format!("{:x}", padded), "0x0123");
+/// ```
+///
 /// Note that for the time being, `Nibbles` is limited to key lengths no longer
 /// than `256` bits. While we could support arbitrarily long keys, tries in
 /// Ethereum never have keys longer than `256` bits. Because of this, we decided
 /// to create a minor optimization by restricting max key sizes to `256` bits.
 ///
-/// let padded = 0x123_u64.to_nibbles_byte_padded();
-/// assert_eq(format!(":x"), "0x0123");
-/// ```
-///
 /// Finally, note that due to the limitations initializing from an integer, when
 /// creating a key directly from an integer, there is no way to know if a
-/// leading `0` was passed in. ```rust
-/// let n1 = Nibbles::from(0x123);
-/// let n2 = Nibbles::from(0x00000000123); // Use `from_str` or construct
-/// `Nibbles` explicitly instead here.
+/// leading `0` was passed in.
+/// ```rust
+/// # use eth_trie_utils::partial_trie::Nibbles;
 ///
-/// assert_eq!(n1, n2)
-/// assert!(Nibbles::from(0x00000000).is_empty());
+/// let n1 = Nibbles::from(0x123_u64);
+/// let n2 = Nibbles::from(0x00000000123_u64); // Use `from_str` or construct `Nibbles` explicitly instead here.
+///
+/// assert_eq!(n1, n2);
+/// assert!(Nibbles::from(0x00000000_u64).is_empty());
 /// ```
 
 pub struct Nibbles {
@@ -685,11 +691,6 @@ impl Nibbles {
     where
         F: Fn(&[u8]) -> String,
     {
-        // `hex::encode` will output `0x` for 0.
-        if self.count == 0 {
-            return "0x0".to_string();
-        }
-
         let mut byte_buf = [0; 32];
         self.packed.to_big_endian(&mut byte_buf);
 
@@ -769,7 +770,7 @@ mod tests {
 
     use ethereum_types::H256;
 
-    use super::{Nibble, Nibbles};
+    use super::{Nibble, Nibbles, ToNibbles};
 
     #[test]
     fn get_nibble_works() {
@@ -1129,5 +1130,20 @@ mod tests {
     #[should_panic]
     fn nibbles_from_nibble_panics_when_not_nibble() {
         let _ = u64::from(Nibbles::from_nibble(0x10));
+    }
+
+    #[test]
+    fn to_nibbles_works() {
+        assert_eq!(format!("{:x}", 0x0_u64.to_nibbles()), "0x");
+        assert_eq!(format!("{:x}", 0x0_u64.to_nibbles_byte_padded()), "0x");
+
+        assert_eq!(format!("{:x}", 0x1_u64.to_nibbles()), "0x1");
+        assert_eq!(format!("{:x}", 0x1_u64.to_nibbles_byte_padded()), "0x01");
+
+        assert_eq!(format!("{:x}", 0x1234_u64.to_nibbles()), "0x1234");
+        assert_eq!(
+            format!("{:x}", 0x1234_u64.to_nibbles_byte_padded()),
+            "0x1234"
+        );
     }
 }
