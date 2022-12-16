@@ -657,8 +657,7 @@ impl Nibbles {
     ) -> usize {
         assert_eq!(
             n1.count, n2.count,
-            "Tried finding the differing nibble between two nibbles with different sizes! ({}, {})",
-            n1, n2
+            "Tried finding the differing nibble between two nibbles with different sizes! ({n1}, {n2})"
         );
 
         if n1.count == 0 {

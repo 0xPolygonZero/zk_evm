@@ -719,10 +719,9 @@ fn create_node_if_ins_val_not_hash<F: FnOnce(Vec<u8>) -> WrappedNode>(
 ) -> WrappedNode {
     match value {
         ValOrHash::Val(leaf_v) => create_node_f(leaf_v),
-        ValOrHash::Hash(h) => panic!(
-            "Attempted to place a hash node on an existing node! (hash: {})",
-            h
-        ),
+        ValOrHash::Hash(h) => {
+            panic!("Attempted to place a hash node on an existing node! (hash: {h})")
+        }
     }
 }
 
