@@ -97,7 +97,7 @@ mod tests {
     use serde::Deserialize;
 
     use crate::{
-        partial_trie::{Nibble, PartialTrie, WrappedNode},
+        partial_trie::{Nibble, Nibbles, PartialTrie, WrappedNode},
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
             generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, large_entry,
@@ -255,7 +255,10 @@ mod tests {
         let acc_entry = acc_and_hash_entry.account_entry();
         let rlp_bytes = rlp::encode(&acc_entry);
 
-        let ins_entry = (acc_and_hash_entry.account_key.into(), rlp_bytes.into());
+        let ins_entry = (
+            Nibbles::from_h256_be(acc_and_hash_entry.account_key),
+            rlp_bytes.into(),
+        );
 
         let py_evm_truth_val = acc_and_hash_entry.final_state_root;
         let eth_trie_lib_truth_val =
@@ -319,7 +322,12 @@ mod tests {
 
         let entries: Vec<_> = py_evm_truth_vals
             .iter()
-            .map(|e| (e.account_key.into(), rlp::encode(&e.account_entry()).into()))
+            .map(|e| {
+                (
+                    Nibbles::from_h256_be(e.account_key),
+                    rlp::encode(&e.account_entry()).into(),
+                )
+            })
             .collect();
 
         let our_insert_hashes =

@@ -83,15 +83,6 @@ impl_to_nibbles!(u64);
 impl_to_nibbles!(U128);
 impl_to_nibbles!(U256);
 
-impl From<H256> for Nibbles {
-    fn from(v: H256) -> Self {
-        Nibbles {
-            count: 64,
-            packed: U256::from_big_endian(v.as_bytes()),
-        }
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum BytesToNibblesError {
     #[error("Tried constructing `Nibbles` from a zero byte slice")]
@@ -758,6 +749,23 @@ impl Nibbles {
         byte_buf[32 - self.min_bytes()..32].to_vec()
     }
 
+    /// Creates `Nibbles` from a big endian `H256`. 
+    pub fn from_h256_be(v: H256) -> Self {
+        Self::from_h256_common(|v| U256::from_big_endian(v.as_bytes()), v)
+    }
+
+    /// Creates `Nibbles` from a little endian `H256`. 
+    pub fn from_h256_le(v: H256) -> Self {
+        Self::from_h256_common(|v| U256::from_little_endian(v.as_bytes()), v)
+    }
+
+    fn from_h256_common<F: Fn(H256) -> U256>(conv_f: F, v: H256) -> Self {
+        Self {
+            count: 64,
+            packed: conv_f(v),
+        }
+    }
+
     fn nibble_append_safety_asserts(&self, n: Nibble) {
         assert!(self.count < 64);
         assert!(n < 16);
@@ -1099,12 +1107,22 @@ mod tests {
     #[test]
     fn nibbles_from_h256_works() {
         assert_eq!(
-            format!("{:x}", Nibbles::from(H256::from_low_u64_be(0))),
+            format!("{:x}", Nibbles::from_h256_be(H256::from_low_u64_be(0))),
             "0x0000000000000000000000000000000000000000000000000000000000000000"
         );
         assert_eq!(
-            format!("{:x}", Nibbles::from(H256::from_low_u64_be(2048))),
+            format!("{:x}", Nibbles::from_h256_be(H256::from_low_u64_be(2048))),
             "0x0000000000000000000000000000000000000000000000000000000000000800"
+        );
+        assert_eq!(
+            format!("{:x}", Nibbles::from_h256_le(H256::from_low_u64_be(0))),
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+
+        // Note that the first bit of the `Nibbles` changes if the count is odd.
+        assert_eq!(
+            format!("{:x}", Nibbles::from_h256_le(H256::from_low_u64_be(2048))),
+            "0x0008000000000000000000000000000000000000000000000000000000000000"
         );
     }
 

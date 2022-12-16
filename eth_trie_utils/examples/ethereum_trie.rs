@@ -10,7 +10,7 @@
 
 use std::ops::RangeInclusive;
 
-use eth_trie_utils::partial_trie::PartialTrie;
+use eth_trie_utils::partial_trie::{Nibbles, PartialTrie};
 use ethereum_types::{H160, H256, U256};
 use keccak_hash::keccak;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -42,7 +42,7 @@ fn main() {
     let _state_trie = PartialTrie::from_iter(
         account_entries
             .into_iter()
-            .map(|(k, acc)| (k, acc.rlp_bytes().to_vec())),
+            .map(|(k, acc)| (Nibbles::from_h256_be(k), acc.rlp_bytes().to_vec())),
     );
 
     let _account_storage_tries: Vec<(AccountAddr, PartialTrie)> = account_storage_tries;
@@ -82,7 +82,7 @@ fn generate_fake_account_storage_trie(
     let num_storage_entries = rng.gen_range(RANGE_OF_STORAGE_ENTRIES_AN_ACCOUNT_CAN_HAVE);
 
     PartialTrie::from_iter((0..num_storage_entries).map(|_| {
-        let hashed_storage_addr = rng.gen::<HashedAccountAddr>();
+        let hashed_storage_addr = Nibbles::from_h256_be(rng.gen::<HashedAccountAddr>());
         let storage_data = gen_u256(rng).rlp_bytes().to_vec();
 
         (hashed_storage_addr, storage_data)
