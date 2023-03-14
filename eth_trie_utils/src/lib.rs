@@ -10,6 +10,7 @@
 //! [`Hash`][partial_trie::PartialTrie::Hash] nodes, which contains the merkle
 //! hash of the node it replaces.
 
+pub mod nibbles;
 pub mod partial_trie;
 mod trie_hashing;
 pub mod trie_ops;

@@ -50,7 +50,7 @@ use std::{
     str::FromStr,
 };
 
-use eth_trie_utils::partial_trie::{Nibbles, PartialTrie};
+use eth_trie_utils::{nibbles::Nibbles, partial_trie::PartialTrie};
 
 fn main() {
     pretty_env_logger::try_init().unwrap();

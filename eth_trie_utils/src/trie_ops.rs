@@ -7,7 +7,8 @@ use ethereum_types::H256;
 use log::trace;
 
 use crate::{
-    partial_trie::{Nibble, Nibbles, PartialTrie, WrappedNode},
+    nibbles::{Nibble, Nibbles},
+    partial_trie::{PartialTrie, WrappedNode},
     utils::TrieNodeType,
 };
 

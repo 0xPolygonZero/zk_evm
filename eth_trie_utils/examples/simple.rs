@@ -3,7 +3,8 @@
 use std::iter::once;
 
 use eth_trie_utils::{
-    partial_trie::{Nibbles, PartialTrie, ToNibbles},
+    nibbles::{Nibbles, ToNibbles},
+    partial_trie::PartialTrie,
     trie_ops::ValOrHash,
 };
 

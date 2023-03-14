@@ -7,11 +7,7 @@ use ethereum_types::{H256, U256};
 use log::info;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 
-use crate::{
-    partial_trie::{Nibbles, PartialTrie},
-    trie_ops::ValOrHash,
-    utils::is_even,
-};
+use crate::{nibbles::Nibbles, partial_trie::PartialTrie, trie_ops::ValOrHash, utils::is_even};
 
 /// Some tests check that all values inserted are retrievable, and if we end up
 /// generating multiple inserts for the same key, then these tests will fail.
@@ -96,9 +92,7 @@ fn gen_n_random_trie_entries_common<F: Fn(&mut StdRng) -> Nibbles>(
     u256_gen_f: F,
 ) -> impl Iterator<Item = TestInsertValEntry> {
     let mut rng = StdRng::seed_from_u64(seed);
-    (0..n)
-        .into_iter()
-        .map(move |i| (u256_gen_f(&mut rng), i.to_be_bytes().to_vec()))
+    (0..n).map(move |i| (u256_gen_f(&mut rng), i.to_be_bytes().to_vec()))
 }
 
 pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie(

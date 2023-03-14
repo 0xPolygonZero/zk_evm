@@ -97,7 +97,8 @@ mod tests {
     use serde::Deserialize;
 
     use crate::{
-        partial_trie::{Nibble, Nibbles, PartialTrie, WrappedNode},
+        nibbles::{Nibble, Nibbles},
+        partial_trie::{PartialTrie, WrappedNode},
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
             generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, large_entry,

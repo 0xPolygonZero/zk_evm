@@ -10,7 +10,7 @@
 
 use std::ops::RangeInclusive;
 
-use eth_trie_utils::partial_trie::{Nibbles, PartialTrie};
+use eth_trie_utils::{nibbles::Nibbles, partial_trie::PartialTrie};
 use ethereum_types::{H160, H256, U256};
 use keccak_hash::keccak;
 use rand::{rngs::StdRng, Rng, SeedableRng};
