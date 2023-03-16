@@ -50,7 +50,10 @@ use std::{
     str::FromStr,
 };
 
-use eth_trie_utils::{nibbles::Nibbles, partial_trie::PartialTrie};
+use eth_trie_utils::{
+    nibbles::Nibbles,
+    partial_trie::{Node, PartialTrie},
+};
 
 fn main() {
     pretty_env_logger::try_init().unwrap();
@@ -72,8 +75,8 @@ fn main() {
     // Slight hack. Normally this has would come from your own logic that is making
     // calls into this crate to construct the `PartialTrie`. May add API to
     // do this in the future if needed.
-    let left_side_hash = match &full_trie {
-        PartialTrie::Branch { children, .. } => children[0].calc_hash(),
+    let left_side_hash = match &*full_trie {
+        Node::Branch { children, .. } => children[0].calc_hash(),
         _ => unreachable!(),
     };
 

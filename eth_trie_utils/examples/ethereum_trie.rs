@@ -59,7 +59,7 @@ fn generate_fake_account_and_storage_trie(
     let account_addr: H160 = rng.gen();
     let hashed_account_addr = keccak(account_addr.as_bytes());
 
-    let account_storage_trie = generate_fake_account_storage_trie(rng, account_addr);
+    let account_storage_trie = generate_fake_account_storage_trie(rng);
 
     let acc_entry = StateTrieEntry {
         nonce: gen_u256(rng),
@@ -75,10 +75,7 @@ fn generate_fake_account_and_storage_trie(
     )
 }
 
-fn generate_fake_account_storage_trie(
-    rng: &mut StdRng,
-    _hashed_account_addr: AccountAddr,
-) -> PartialTrie {
+fn generate_fake_account_storage_trie(rng: &mut StdRng) -> PartialTrie {
     let num_storage_entries = rng.gen_range(RANGE_OF_STORAGE_ENTRIES_AN_ACCOUNT_CAN_HAVE);
 
     PartialTrie::from_iter((0..num_storage_entries).map(|_| {

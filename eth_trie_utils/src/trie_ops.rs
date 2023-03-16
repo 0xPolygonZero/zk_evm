@@ -8,7 +8,7 @@ use log::trace;
 
 use crate::{
     nibbles::{Nibble, Nibbles},
-    partial_trie::{PartialTrie, WrappedNode},
+    partial_trie::{Node, TrieNode, WrappedNode},
     utils::TrieNodeType,
 };
 
@@ -90,41 +90,41 @@ struct ExistingAndNewNodePreAndPost {
 /// we may place one of the nodes right into the value node of the branch. This
 /// enum just indicates whether or not a value needs to go into the branch node.
 #[derive(Debug)]
-enum ExistingOrNewBranchValuePlacement {
-    BranchValue(Vec<u8>, (Nibble, WrappedNode)),
-    BothBranchChildren((Nibble, WrappedNode), (Nibble, WrappedNode)),
+enum ExistingOrNewBranchValuePlacement<N> {
+    BranchValue(Vec<u8>, (Nibble, WrappedNode<N>)),
+    BothBranchChildren((Nibble, WrappedNode<N>), (Nibble, WrappedNode<N>)),
 }
 
 #[derive(Debug)]
-enum IterStackEntry {
-    Root(WrappedNode),
+enum IterStackEntry<N> {
+    Root(WrappedNode<N>),
     Extension(usize),
-    Branch(BranchStackEntry),
+    Branch(BranchStackEntry<N>),
 }
 
 #[derive(Debug)]
-struct BranchStackEntry {
-    children: [WrappedNode; 16],
+struct BranchStackEntry<N> {
+    children: [WrappedNode<N>; 16],
     value: Vec<u8>,
     curr_nib: Nibble,
 }
 
 #[derive(Debug)]
-pub struct PartialTrieIter {
+pub struct PartialTrieIter<N> {
     curr_key_after_last_branch: Nibbles,
-    trie_stack: Vec<IterStackEntry>,
+    trie_stack: Vec<IterStackEntry<N>>,
 }
 
-impl PartialTrieIter {
+impl<N: TrieNode> PartialTrieIter<N> {
     fn advance_iter_to_next_empty_leaf_or_hash_node(
         &mut self,
-        node: &WrappedNode,
+        node: &WrappedNode<N>,
         mut curr_key: Nibbles,
     ) -> Option<(Nibbles, ValOrHash)> {
-        match node.as_ref().as_ref() {
-            PartialTrie::Empty => None,
-            PartialTrie::Hash(h) => Some((curr_key, ValOrHash::Hash(*h))),
-            PartialTrie::Branch { children, value } => {
+        match node.as_ref() {
+            Node::Empty => None,
+            Node::Hash(h) => Some((curr_key, ValOrHash::Hash(*h))),
+            Node::Branch { children, value } => {
                 self.trie_stack
                     .push(IterStackEntry::Branch(BranchStackEntry {
                         children: children.clone(),
@@ -136,14 +136,14 @@ impl PartialTrieIter {
                 curr_key.push_nibble_back(0);
                 self.advance_iter_to_next_empty_leaf_or_hash_node(&children[0], curr_key)
             }
-            PartialTrie::Extension { nibbles, child } => {
+            Node::Extension { nibbles, child } => {
                 self.trie_stack
                     .push(IterStackEntry::Extension(nibbles.count));
                 curr_key = curr_key.merge_nibbles(nibbles);
 
                 self.advance_iter_to_next_empty_leaf_or_hash_node(child, curr_key)
             }
-            PartialTrie::Leaf { nibbles, value } => {
+            Node::Leaf { nibbles, value } => {
                 curr_key = curr_key.merge_nibbles(nibbles);
                 Some((curr_key, ValOrHash::Val(value.clone())))
             }
@@ -151,7 +151,7 @@ impl PartialTrieIter {
     }
 }
 
-impl Iterator for PartialTrieIter {
+impl<N: TrieNode> Iterator for PartialTrieIter<N> {
     type Item = (Nibbles, ValOrHash);
 
     fn next(&mut self) -> Option<(Nibbles, ValOrHash)> {
@@ -215,7 +215,7 @@ impl Iterator for PartialTrieIter {
     }
 }
 
-impl PartialTrie {
+impl<T: TrieNode> Node<T> {
     /// Inserts a node into the trie.
     pub fn insert<K, V>(&mut self, k: K, v: V)
     where
@@ -226,10 +226,8 @@ impl PartialTrie {
         trace!("Inserting new node {:?}...", ins_entry);
 
         // Inserts are guaranteed to update the root node.
-        *self = *insert_into_trie_rec(&self.clone().into(), ins_entry)
-            .unwrap()
-            .as_ref()
-            .clone();
+        let node_ref: &Node<T> = &insert_into_trie_rec(self, ins_entry).unwrap();
+        *self = node_ref.clone();
     }
 
     /// Add more nodes to the trie through an iterator
@@ -254,12 +252,12 @@ impl PartialTrie {
 
     fn get_intern(&self, curr_nibbles: &mut Nibbles) -> Option<&[u8]> {
         match self {
-            PartialTrie::Empty | PartialTrie::Hash(_) => {
+            Node::Empty | Node::Hash(_) => {
                 trace!("Get traversed {:?}", self);
                 None
             }
             // Note: If we end up supporting non-fixed sized keys, then we need to also check value.
-            PartialTrie::Branch { children, value } => {
+            Node::Branch { children, value } => {
                 // Check against branch value.
                 if curr_nibbles.is_empty() {
                     return (!value.is_empty()).then_some(value.as_slice());
@@ -269,7 +267,7 @@ impl PartialTrie {
                 trace!("Get traversed Branch (nibble: {:x})", nib);
                 children[nib as usize].get_intern(curr_nibbles)
             }
-            PartialTrie::Extension { nibbles, child } => {
+            Node::Extension { nibbles, child } => {
                 trace!("Get traversed Extension (nibbles: {:?})", nibbles);
                 let r = curr_nibbles.pop_nibbles_front(nibbles.count);
 
@@ -278,7 +276,7 @@ impl PartialTrie {
                     true => child.get_intern(curr_nibbles),
                 }
             }
-            PartialTrie::Leaf { nibbles, value } => {
+            Node::Leaf { nibbles, value } => {
                 trace!("Get traversed Leaf (nibbles: {:?})", nibbles);
                 match nibbles.nibbles_are_identical_up_to_smallest_count(curr_nibbles) {
                     false => None,
@@ -309,9 +307,11 @@ impl PartialTrie {
         let k = k.into();
         trace!("Deleting a leaf node with key {} if it exists", k);
 
-        delete_intern(&self.clone().into(), k).map(|(updated_root, deleted_val)| {
+        delete_intern(&self.clone(), k).map(|(updated_root, deleted_val)| {
             // Final check at the root if we have an extension node
-            *self = *try_collapse_if_extension(updated_root).as_ref().clone();
+            let node_ref: &Node<T> = &try_collapse_if_extension(updated_root);
+            *self = node_ref.clone();
+
             deleted_val
         })
     }
@@ -338,32 +338,22 @@ impl PartialTrie {
     }
 }
 
-impl<K, V> FromIterator<(K, V)> for PartialTrie
-where
-    K: Into<Nibbles>,
-    V: Into<ValOrHash>,
-{
-    fn from_iter<T: IntoIterator<Item = (K, V)>>(nodes: T) -> Self {
-        let mut root = PartialTrie::Empty;
-        root.extend(nodes.into_iter());
-
-        root
-    }
-}
-
-fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option<WrappedNode> {
-    match node.as_ref().as_ref() {
-        PartialTrie::Empty => {
+fn insert_into_trie_rec<N: TrieNode>(
+    node: &Node<N>,
+    mut new_node: InsertEntry,
+) -> Option<WrappedNode<N>> {
+    match node {
+        Node::Empty => {
             trace!("Insert traversed Empty");
             Some(create_node_from_insert_val(new_node.nibbles, new_node.v))
         }
-        PartialTrie::Hash(_) => {
+        Node::Hash(_) => {
             trace!("Insert traversed {:?}", node);
             panic!(
                 "Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!"
             )
         }
-        PartialTrie::Branch { children, value } => {
+        Node::Branch { children, value } => {
             if new_node.nibbles.count == 0 {
                 trace!("Insert traversed branch and placed value in node");
                 return Some(branch_from_insert_val(children.clone(), new_node.v));
@@ -378,7 +368,7 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
                 branch(updated_children, value.clone())
             })
         }
-        PartialTrie::Extension { nibbles, child } => {
+        Node::Extension { nibbles, child } => {
             trace!("Insert traversed Extension (nibbles: {:?})", nibbles);
 
             // Note: Child is guaranteed to be either a `Branch` or a `Hash` node.
@@ -410,7 +400,7 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
                 new_node,
             ))
         }
-        PartialTrie::Leaf { nibbles, value } => {
+        Node::Leaf { nibbles, value } => {
             trace!("Insert traversed Leaf (nibbles: {:?})", nibbles);
 
             // Update existing node value if already present.
@@ -436,16 +426,19 @@ fn insert_into_trie_rec(node: &WrappedNode, mut new_node: InsertEntry) -> Option
     }
 }
 
-fn delete_intern(node: &WrappedNode, mut curr_k: Nibbles) -> Option<(WrappedNode, Vec<u8>)> {
-    match node.as_ref().as_ref() {
-        PartialTrie::Empty => {
+fn delete_intern<N: TrieNode>(
+    node: &Node<N>,
+    mut curr_k: Nibbles,
+) -> Option<(WrappedNode<N>, Vec<u8>)> {
+    match node {
+        Node::Empty => {
             trace!("Delete traversed Empty");
             None
         }
-        PartialTrie::Hash(_) => {
+        Node::Hash(_) => {
             panic!("Attempted to delete a value that ended up inside a hash node")
         } // TODO: Find a nice way to get the full key path...
-        PartialTrie::Branch { children, value } => {
+        Node::Branch { children, value } => {
             if curr_k.is_empty() {
                 return Some((branch(children.clone(), Vec::new()), value.clone()));
             }
@@ -482,7 +475,7 @@ fn delete_intern(node: &WrappedNode, mut curr_k: Nibbles) -> Option<(WrappedNode
                 },
             )
         }
-        PartialTrie::Extension {
+        Node::Extension {
             nibbles: ext_nibbles,
             child,
         } => {
@@ -499,31 +492,34 @@ fn delete_intern(node: &WrappedNode, mut curr_k: Nibbles) -> Option<(WrappedNode
                 })
                 .flatten()
         }
-        PartialTrie::Leaf { nibbles, value } => {
+        Node::Leaf { nibbles, value } => {
             trace!("Delete traversed Leaf (nibbles: {:?})", nibbles);
-            (*nibbles == curr_k).then(|| (PartialTrie::Empty.into(), value.clone()))
+            (*nibbles == curr_k).then(|| (Node::Empty.into(), value.clone()))
         }
     }
 }
 
-fn try_collapse_if_extension(node: WrappedNode) -> WrappedNode {
-    match node.as_ref().as_ref() {
-        PartialTrie::Extension { nibbles, child } => collapse_ext_node_if_needed(nibbles, child),
+fn try_collapse_if_extension<N: TrieNode>(node: WrappedNode<N>) -> WrappedNode<N> {
+    match node.as_ref() {
+        Node::Extension { nibbles, child } => collapse_ext_node_if_needed(nibbles, child),
         _ => node,
     }
 }
 
-fn collapse_ext_node_if_needed(ext_nibbles: &Nibbles, child: &WrappedNode) -> WrappedNode {
-    match child.as_ref().as_ref() {
-        PartialTrie::Branch { .. } => extension(*ext_nibbles, child.clone()),
-        PartialTrie::Extension {
+fn collapse_ext_node_if_needed<N: TrieNode>(
+    ext_nibbles: &Nibbles,
+    child: &WrappedNode<N>,
+) -> WrappedNode<N> {
+    match child.as_ref() {
+        Node::Branch { .. } => extension(*ext_nibbles, child.clone()),
+        Node::Extension {
             nibbles: other_ext_nibbles,
             child: other_ext_child,
         } => extension(
             ext_nibbles.merge_nibbles(other_ext_nibbles),
             other_ext_child.clone(),
         ),
-        PartialTrie::Leaf {
+        Node::Leaf {
             nibbles: leaf_nibbles,
             value,
         } => leaf(ext_nibbles.merge_nibbles(leaf_nibbles), value.clone()),
@@ -555,11 +551,11 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
     }
 }
 
-fn place_branch_and_potentially_ext_prefix(
+fn place_branch_and_potentially_ext_prefix<N: TrieNode>(
     info: &ExistingAndNewNodePreAndPost,
-    existing_node: WrappedNode,
+    existing_node: WrappedNode<N>,
     new_node: InsertEntry,
-) -> WrappedNode {
+) -> WrappedNode<N> {
     let mut children = new_branch_child_arr();
     let mut value = vec![];
 
@@ -588,18 +584,18 @@ fn place_branch_and_potentially_ext_prefix(
 
 /// Check if the new leaf or existing node (either leaf/extension) should go
 /// into the value field of the new branch.
-fn check_if_existing_or_new_node_should_go_in_branch_value_field(
+fn check_if_existing_or_new_node_should_go_in_branch_value_field<N: TrieNode>(
     info: &ExistingAndNewNodePreAndPost,
-    existing_node: WrappedNode,
+    existing_node: WrappedNode<N>,
     new_node_entry: InsertEntry,
-) -> ExistingOrNewBranchValuePlacement {
+) -> ExistingOrNewBranchValuePlacement<N> {
     // Guaranteed that both postfixes are not equal at this point.
     match (
         info.existing_postfix.count,
         info.new_postfix.count,
-        existing_node.as_ref().as_ref(),
+        existing_node.as_ref(),
     ) {
-        (0, _, PartialTrie::Leaf { value, .. }) => ExistingOrNewBranchValuePlacement::BranchValue(
+        (0, _, Node::Leaf { value, .. }) => ExistingOrNewBranchValuePlacement::BranchValue(
             value.clone(),
             ins_entry_into_leaf_and_nibble(info, new_node_entry),
         ),
@@ -614,10 +610,10 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field(
     }
 }
 
-fn ins_entry_into_leaf_and_nibble(
+fn ins_entry_into_leaf_and_nibble<N: TrieNode>(
     info: &ExistingAndNewNodePreAndPost,
     entry: InsertEntry,
-) -> (Nibble, WrappedNode) {
+) -> (Nibble, WrappedNode<N>) {
     let new_first_nibble = info.new_postfix.get_nibble(0);
     let new_node = create_node_from_insert_val(
         entry
@@ -629,37 +625,37 @@ fn ins_entry_into_leaf_and_nibble(
     (new_first_nibble, new_node)
 }
 
-fn new_branch_child_arr() -> [WrappedNode; 16] {
+fn new_branch_child_arr<N: TrieNode>() -> [WrappedNode<N>; 16] {
     // Hahaha ok there actually is no better way to init this array unless I want to
     // use iterators and take a runtime hit...
     [
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
-        PartialTrie::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
+        Node::Empty.into(),
     ]
 }
 
-fn get_num_non_empty_children(children: &[WrappedNode; 16]) -> usize {
+fn get_num_non_empty_children<N: TrieNode>(children: &[WrappedNode<N>; 16]) -> usize {
     children.iter().filter(|c| !node_is_empty(c)).count()
 }
 
-fn get_other_non_empty_child_and_nibble_in_two_elem_branch(
-    children: &[WrappedNode; 16],
+fn get_other_non_empty_child_and_nibble_in_two_elem_branch<N: TrieNode>(
+    children: &[WrappedNode<N>; 16],
     our_nib: Nibble,
-) -> (Nibble, &WrappedNode) {
+) -> (Nibble, &WrappedNode<N>) {
     children
         .iter()
         .enumerate()
@@ -668,42 +664,43 @@ fn get_other_non_empty_child_and_nibble_in_two_elem_branch(
         .expect("Expected to find a non-empty node in the branch's children")
 }
 
-fn node_is_empty(node: &WrappedNode) -> bool {
-    matches!(node.as_ref().as_ref(), PartialTrie::Empty)
+fn node_is_empty<N: TrieNode>(node: &WrappedNode<N>) -> bool {
+    matches!(node.as_ref(), Node::Empty)
 }
 
-fn branch(children: [WrappedNode; 16], value: Vec<u8>) -> WrappedNode {
-    PartialTrie::Branch { children, value }.into()
+fn branch<N: TrieNode>(children: [WrappedNode<N>; 16], value: Vec<u8>) -> WrappedNode<N> {
+    Node::Branch { children, value }.into()
 }
 
-fn branch_from_insert_val(children: [WrappedNode; 16], value: ValOrHash) -> WrappedNode {
-    create_node_if_ins_val_not_hash(value, |value| {
-        PartialTrie::Branch { children, value }.into()
-    })
+fn branch_from_insert_val<N: TrieNode>(
+    children: [WrappedNode<N>; 16],
+    value: ValOrHash,
+) -> WrappedNode<N> {
+    create_node_if_ins_val_not_hash(value, |value| Node::Branch { children, value }.into())
 }
 
-fn extension(nibbles: Nibbles, child: WrappedNode) -> WrappedNode {
-    PartialTrie::Extension { nibbles, child }.into()
+fn extension<N: TrieNode>(nibbles: Nibbles, child: WrappedNode<N>) -> WrappedNode<N> {
+    Node::Extension { nibbles, child }.into()
 }
 
-fn leaf(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode {
-    PartialTrie::Leaf { nibbles, value }.into()
+fn leaf<N: TrieNode>(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode<N> {
+    Node::Leaf { nibbles, value }.into()
 }
 
-fn leaf_from_insert_val(nibbles: Nibbles, value: ValOrHash) -> WrappedNode {
-    create_node_if_ins_val_not_hash(value, |value| PartialTrie::Leaf { nibbles, value }.into())
+fn leaf_from_insert_val<N: TrieNode>(nibbles: Nibbles, value: ValOrHash) -> WrappedNode<N> {
+    create_node_if_ins_val_not_hash(value, |value| Node::Leaf { nibbles, value }.into())
 }
 
-fn create_node_from_insert_val(nibbles: Nibbles, value: ValOrHash) -> WrappedNode {
+fn create_node_from_insert_val<N: TrieNode>(nibbles: Nibbles, value: ValOrHash) -> WrappedNode<N> {
     match value {
-        ValOrHash::Val(value) => PartialTrie::Leaf { nibbles, value },
+        ValOrHash::Val(value) => Node::Leaf { nibbles, value },
         ValOrHash::Hash(h) => {
-            let hash_node = PartialTrie::Hash(h);
+            let hash_node = Node::Hash(h);
 
             match nibbles.is_empty() {
                 // Since hash nodes can represent remaining nibbles like leaves can, we must insert
                 // an extension node in this case.
-                false => PartialTrie::Extension {
+                false => Node::Extension {
                     nibbles,
                     child: hash_node.into(),
                 },
@@ -714,10 +711,10 @@ fn create_node_from_insert_val(nibbles: Nibbles, value: ValOrHash) -> WrappedNod
     .into()
 }
 
-fn create_node_if_ins_val_not_hash<F: FnOnce(Vec<u8>) -> WrappedNode>(
+fn create_node_if_ins_val_not_hash<N, F: FnOnce(Vec<u8>) -> WrappedNode<N>>(
     value: ValOrHash,
     create_node_f: F,
-) -> WrappedNode {
+) -> WrappedNode<N> {
     match value {
         ValOrHash::Val(leaf_v) => create_node_f(leaf_v),
         ValOrHash::Hash(h) => {
@@ -734,7 +731,7 @@ mod tests {
 
     use super::ValOrHash;
     use crate::{
-        partial_trie::PartialTrie,
+        partial_trie::{Node, PartialTrie, TrieNode},
         testing_utils::{
             common_setup, entry, entry_with_value,
             generate_n_hash_nodes_entries_for_empty_slots_in_trie,
@@ -752,7 +749,7 @@ mod tests {
         assert_all_entries_in_trie(entries, &trie)
     }
 
-    fn assert_all_entries_in_trie(entries: &[TestInsertValEntry], trie: &PartialTrie) {
+    fn assert_all_entries_in_trie(entries: &[TestInsertValEntry], trie: &Node<PartialTrie>) {
         let entries_in_trie = get_non_hash_values_in_trie(trie);
 
         let all_entries_retrieved: Vec<_> = entries
@@ -880,7 +877,7 @@ mod tests {
     fn equivalency_check_works() {
         common_setup();
 
-        assert_eq!(PartialTrie::Empty, PartialTrie::Empty);
+        assert_eq!(PartialTrie::new(Node::Empty), PartialTrie::new(Node::Empty));
 
         let entries = generate_n_random_fixed_trie_entries(MASSIVE_TRIE_SIZE, 0);
         let big_trie_1 = PartialTrie::from_iter(entries);

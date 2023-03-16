@@ -3,7 +3,7 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
-use crate::partial_trie::PartialTrie;
+use crate::partial_trie::{Node, TrieNode};
 
 /// The node type used for calculating the hash of a trie.
 #[derive(Debug)]
@@ -14,7 +14,7 @@ enum EncodedNode {
     Hashed([u8; 32]),
 }
 
-impl PartialTrie {
+impl<N: TrieNode> Node<N> {
     /// Calculates the hash of a node.
     /// Assumes that all leaf values are already rlp encoded.
     pub fn calc_hash(&self) -> H256 {
@@ -30,9 +30,9 @@ impl PartialTrie {
 
     fn rlp_encode_and_hash_node(&self) -> EncodedNode {
         match self {
-            PartialTrie::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
-            PartialTrie::Hash(h) => EncodedNode::Hashed(h.0),
-            PartialTrie::Branch { children, value } => {
+            Node::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
+            Node::Hash(h) => EncodedNode::Hashed(h.0),
+            Node::Branch { children, value } => {
                 let mut stream = RlpStream::new_list(17);
 
                 for c in children.iter() {
@@ -46,7 +46,7 @@ impl PartialTrie {
 
                 Self::hash_bytes_if_large_enough(stream.out().into())
             }
-            PartialTrie::Extension { nibbles, child } => {
+            Node::Extension { nibbles, child } => {
                 let mut stream = RlpStream::new_list(2);
 
                 stream.append(&nibbles.to_hex_prefix_encoding(false));
@@ -54,7 +54,7 @@ impl PartialTrie {
 
                 Self::hash_bytes_if_large_enough(stream.out().into())
             }
-            PartialTrie::Leaf { nibbles, value } => {
+            Node::Leaf { nibbles, value } => {
                 let hex_prefix_k = nibbles.to_hex_prefix_encoding(true);
                 let mut stream = RlpStream::new_list(2);
 
@@ -81,6 +81,8 @@ impl PartialTrie {
     }
 }
 
+// impl Node<Pa>
+
 fn hash(bytes: &Bytes) -> [u8; 32] {
     keccak(bytes).0
 }
@@ -98,7 +100,7 @@ mod tests {
 
     use crate::{
         nibbles::{Nibble, Nibbles},
-        partial_trie::{PartialTrie, WrappedNode},
+        partial_trie::{Node, PartialTrie, WrappedNode},
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
             generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, large_entry,
@@ -221,7 +223,7 @@ mod tests {
     fn get_root_hashes_for_our_trie_after_each_insert(
         entries: impl Iterator<Item = TestInsertValEntry>,
     ) -> impl Iterator<Item = H256> {
-        let mut trie = PartialTrie::Empty;
+        let mut trie = PartialTrie(Node::Empty);
 
         entries.map(move |(k, v)| {
             trie.insert(k, v);
@@ -244,7 +246,7 @@ mod tests {
     fn empty_hash_is_correct() {
         common_setup();
 
-        let trie = PartialTrie::Empty;
+        let trie = PartialTrie(Node::Empty);
         assert_eq!(keccak_hash::KECCAK_NULL_RLP, trie.calc_hash());
     }
 
@@ -388,16 +390,18 @@ mod tests {
         let orig_hash = trie.calc_hash();
 
         let children = get_branch_children_expected(&mut trie);
-        children[1] = PartialTrie::Hash(children[1].calc_hash()).into();
-        children[4] = PartialTrie::Hash(children[4].calc_hash()).into();
+        children[1] = Node::Hash(children[1].calc_hash()).into();
+        children[4] = Node::Hash(children[4].calc_hash()).into();
 
         let new_hash = trie.calc_hash();
         assert_eq!(orig_hash, new_hash);
     }
 
-    fn get_branch_children_expected(node: &mut PartialTrie) -> &mut [WrappedNode; 16] {
+    fn get_branch_children_expected(
+        node: &mut Node<PartialTrie>,
+    ) -> &mut [WrappedNode<PartialTrie>; 16] {
         match node {
-            PartialTrie::Branch { children, .. } => children,
+            Node::Branch { children, .. } => children,
             _ => unreachable!(),
         }
     }
@@ -419,15 +423,15 @@ mod tests {
         let mut trie = PartialTrie::from_iter(entries);
         let orig_hash = trie.calc_hash();
 
-        let root_branch_children = match &mut trie {
-            PartialTrie::Branch { children, .. } => children,
+        let root_branch_children = match &mut *trie {
+            Node::Branch { children, .. } => children,
             _ => unreachable!(),
         };
 
         // Replace every even branch node in the root with a hash node.
         for i in (0..16).step_by(2) {
             let child_hash = root_branch_children[i].calc_hash();
-            root_branch_children[i] = PartialTrie::Hash(child_hash).into();
+            root_branch_children[i] = Node::Hash(child_hash).into();
         }
 
         let new_hash = trie.calc_hash();
