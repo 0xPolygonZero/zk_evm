@@ -52,7 +52,7 @@ use std::{
 
 use eth_trie_utils::{
     nibbles::Nibbles,
-    partial_trie::{Node, PartialTrie},
+    partial_trie::{HashedPartialTrie, Node},
 };
 
 fn main() {
@@ -61,7 +61,7 @@ fn main() {
     // Lets build the (binary) tries in the module-level docs. Since the example
     // uses binary nodes while branch nodes are really `16-ary`, we'll only use
     // branch slots `0` and `1`.
-    let mut full_trie = PartialTrie::default();
+    let mut full_trie = HashedPartialTrie::default();
 
     // Note the nibbles read the most significant nibble first (eg. `0x12` reads `1`
     // first).
@@ -70,23 +70,23 @@ fn main() {
     full_trie.insert(Nibbles::from(0x10_u64), large_val(3)); // 3rd from left.
     full_trie.insert(Nibbles::from(0x11_u64), large_val(4)); // 4th from left.
 
-    let full_trie_hash = full_trie.calc_hash();
+    let full_trie_hash = full_trie.get_hash();
 
     // Slight hack. Normally this has would come from your own logic that is making
     // calls into this crate to construct the `PartialTrie`. May add API to
     // do this in the future if needed.
     let left_side_hash = match &*full_trie {
-        Node::Branch { children, .. } => children[0].calc_hash(),
+        Node::Branch { children, .. } => children[0].get_hash(),
         _ => unreachable!(),
     };
 
     // Hash version. `0` branch is replaced with a `Hash` node.
-    let mut hash_trie = PartialTrie::default();
+    let mut hash_trie = HashedPartialTrie::default();
     hash_trie.insert(Nibbles::from_str("0x0").unwrap(), left_side_hash); // Hash node
     hash_trie.insert(0x10_u64, large_val(3)); // 3rd from left.
     hash_trie.insert(0x11_u64, large_val(4)); // 4th from left.
 
-    let hash_trie_hash = hash_trie.calc_hash();
+    let hash_trie_hash = hash_trie.get_hash();
 
     // Hashes should be equal.
     assert_eq!(full_trie_hash, hash_trie_hash);

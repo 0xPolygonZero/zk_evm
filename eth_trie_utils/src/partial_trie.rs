@@ -7,6 +7,7 @@ use std::{
 };
 
 use ethereum_types::H256;
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 use crate::{nibbles::Nibbles, trie_ops::ValOrHash};
@@ -62,7 +63,7 @@ pub trait TrieNode:
     fn values(&self) -> impl Iterator<Item = ValOrHash>;
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 /// A partial trie, or a sub-trie thereof. This mimics the structure of an
 /// Ethereum trie, except with an additional `Hash` node type, representing a
 /// node whose data is not needed to process our transaction.
@@ -71,6 +72,7 @@ where
     T: TrieNode + Clone + Debug,
 {
     /// An empty trie.
+    #[default]
     Empty,
     /// The digest of trie whose data does not need to be stored.
     ///
@@ -134,12 +136,6 @@ impl<N: TrieNode> PartialEq for Node<N> {
             ) => n1 == n2 && v1 == v2,
             (_, _) => false,
         }
-    }
-}
-
-impl<N: TrieNode> Default for Node<N> {
-    fn default() -> Self {
-        Self::Empty
     }
 }
 
@@ -221,13 +217,32 @@ where
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HashedPartialTrie {
-    node: Node<HashedPartialTrie>,
-    hash: Option<H256>,
+    pub(crate) node: Node<HashedPartialTrie>,
+    pub(crate) hash: Arc<RwLock<Option<H256>>>,
+}
+
+impl HashedPartialTrie {
+    /// Lazily get calculates the hash for the node,
+    pub fn get_hash(&self) -> H256 {
+        let hash = *self.hash.read();
+
+        match hash {
+            Some(h) => h,
+            None => self.hash(),
+        }
+    }
+
+    pub(crate) fn set_hash(&self, _v: Option<H256>) {
+        *self.hash.write() = None;
+    }
 }
 
 impl TrieNode for HashedPartialTrie {
     fn new(node: Node<Self>) -> Self {
-        Self { node, hash: None }
+        Self {
+            node,
+            hash: Arc::new(RwLock::new(None)),
+        }
     }
 
     fn insert<K, V>(&mut self, k: K, v: V)
@@ -236,7 +251,7 @@ impl TrieNode for HashedPartialTrie {
         V: Into<crate::trie_ops::ValOrHash>,
     {
         self.node.insert(k, v);
-        self.hash = None;
+        self.set_hash(None);
     }
 
     fn extend<K, V, I>(&mut self, nodes: I)
@@ -246,7 +261,7 @@ impl TrieNode for HashedPartialTrie {
         I: IntoIterator<Item = (K, V)>,
     {
         self.node.extend(nodes);
-        self.hash = None;
+        self.set_hash(None);
     }
 
     fn get<K>(&self, k: K) -> Option<&[u8]>
@@ -261,7 +276,7 @@ impl TrieNode for HashedPartialTrie {
         K: Into<crate::nibbles::Nibbles>,
     {
         let res = self.node.delete(k);
-        self.hash = None;
+        self.set_hash(None);
 
         res
     }
@@ -283,13 +298,13 @@ impl Deref for HashedPartialTrie {
     type Target = Node<HashedPartialTrie>;
 
     fn deref(&self) -> &Self::Target {
-        todo!()
+        &self.node
     }
 }
 
 impl DerefMut for HashedPartialTrie {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        todo!()
+        &mut self.node
     }
 }
 
