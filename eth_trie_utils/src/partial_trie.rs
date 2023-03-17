@@ -62,7 +62,7 @@ pub trait TrieNode:
     fn values(&self) -> impl Iterator<Item = ValOrHash>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 /// A partial trie, or a sub-trie thereof. This mimics the structure of an
 /// Ethereum trie, except with an additional `Hash` node type, representing a
 /// node whose data is not needed to process our transaction.
@@ -92,24 +92,6 @@ where
     },
     /// A leaf node, which consists of a list of nibbles and a value.
     Leaf { nibbles: Nibbles, value: Vec<u8> },
-}
-
-impl<'de, N: Deserialize<'de> + TrieNode> Deserialize<'de> for Node<N> {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        todo!()
-    }
-}
-
-impl<N: Serialize + TrieNode> Serialize for Node<N> {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        todo!()
-    }
 }
 
 impl<N: TrieNode> Eq for Node<N> {}
