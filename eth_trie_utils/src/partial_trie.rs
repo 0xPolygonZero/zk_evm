@@ -16,7 +16,7 @@ pub type WrappedNode<N> = Arc<Box<N>>;
 
 impl<N: TrieNode> AsRef<Node<N>> for WrappedNode<N> {
     fn as_ref(&self) -> &Node<N> {
-        todo!()
+        self
     }
 }
 
@@ -37,7 +37,6 @@ pub trait TrieNode:
     + Sized
 {
     fn new(n: Node<Self>) -> Self;
-    fn set_node(&mut self, n: Node<Self>);
 
     fn insert<K, V>(&mut self, k: K, v: V)
     where
@@ -166,55 +165,51 @@ impl<N: TrieNode> Default for Node<N> {
 pub struct PartialTrie(pub Node<PartialTrie>);
 
 impl TrieNode for PartialTrie {
-    fn new(_n: Node<Self>) -> Self {
-        todo!()
+    fn new(n: Node<Self>) -> Self {
+        Self(n)
     }
 
-    fn set_node(&mut self, _n: Node<Self>) {
-        todo!()
-    }
-
-    fn insert<K, V>(&mut self, _k: K, _v: V)
+    fn insert<K, V>(&mut self, k: K, v: V)
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
     {
-        todo!()
+        self.0.insert(k, v);
     }
 
-    fn extend<K, V, I>(&mut self, _nodes: I)
+    fn extend<K, V, I>(&mut self, nodes: I)
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
         I: IntoIterator<Item = (K, V)>,
     {
-        todo!()
+        self.0.extend(nodes)
     }
 
-    fn get<K>(&self, _k: K) -> Option<&[u8]>
+    fn get<K>(&self, k: K) -> Option<&[u8]>
     where
         K: Into<Nibbles>,
     {
-        todo!()
+        self.0.get(k)
     }
 
-    fn delete<K>(&mut self, _k: K) -> Option<Vec<u8>>
+    fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
     where
         K: Into<Nibbles>,
     {
-        todo!()
+        self.0.delete(k)
     }
 
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
-        std::iter::empty()
+        self.0.items()
     }
 
     fn keys(&self) -> impl Iterator<Item = Nibbles> {
-        std::iter::empty()
+        self.0.keys()
     }
 
     fn values(&self) -> impl Iterator<Item = ValOrHash> {
-        std::iter::empty()
+        self.0.values()
     }
 }
 
@@ -222,13 +217,13 @@ impl Deref for PartialTrie {
     type Target = Node<PartialTrie>;
 
     fn deref(&self) -> &Self::Target {
-        todo!()
+        &self.0
     }
 }
 
 impl DerefMut for PartialTrie {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        todo!()
+        &mut self.0
     }
 }
 
@@ -244,60 +239,61 @@ where
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HashedPartialTrie {
-    node: Box<HashedPartialTrie>,
+    node: Node<HashedPartialTrie>,
     hash: Option<H256>,
 }
 
 impl TrieNode for HashedPartialTrie {
-    fn new(_n: Node<Self>) -> Self {
-        todo!()
+    fn new(node: Node<Self>) -> Self {
+        Self { node, hash: None }
     }
 
-    fn set_node(&mut self, _n: Node<Self>) {
-        todo!()
-    }
-
-    fn insert<K, V>(&mut self, _k: K, _v: V)
+    fn insert<K, V>(&mut self, k: K, v: V)
     where
         K: Into<crate::nibbles::Nibbles>,
         V: Into<crate::trie_ops::ValOrHash>,
     {
-        todo!()
+        self.node.insert(k, v);
+        self.hash = None;
     }
 
-    fn extend<K, V, I>(&mut self, _nodes: I)
+    fn extend<K, V, I>(&mut self, nodes: I)
     where
         K: Into<crate::nibbles::Nibbles>,
         V: Into<crate::trie_ops::ValOrHash>,
         I: IntoIterator<Item = (K, V)>,
     {
-        todo!()
+        self.node.extend(nodes);
+        self.hash = None;
     }
 
-    fn get<K>(&self, _k: K) -> Option<&[u8]>
+    fn get<K>(&self, k: K) -> Option<&[u8]>
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        todo!()
+        self.node.get(k)
     }
 
-    fn delete<K>(&mut self, _k: K) -> Option<Vec<u8>>
+    fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        todo!()
+        let res = self.node.delete(k);
+        self.hash = None;
+
+        res
     }
 
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
-        std::iter::empty()
+        self.node.items()
     }
 
     fn keys(&self) -> impl Iterator<Item = Nibbles> {
-        std::iter::empty()
+        self.node.keys()
     }
 
     fn values(&self) -> impl Iterator<Item = ValOrHash> {
-        std::iter::empty()
+        self.node.values()
     }
 }
 
