@@ -10,7 +10,11 @@ use ethereum_types::H256;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use crate::{nibbles::Nibbles, trie_ops::ValOrHash};
+use crate::{
+    nibbles::Nibbles,
+    trie_hashing::{hash_trie, rlp_encode_and_hash_node, EncodedNode},
+    trie_ops::ValOrHash,
+};
 
 /// Alias for a node that is a child of an extension or branch node.
 pub type WrappedNode<N> = Arc<Box<N>>;
@@ -58,9 +62,15 @@ pub trait TrieNode:
     where
         K: Into<Nibbles>;
 
+    fn hash(&self) -> H256;
+
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)>;
     fn keys(&self) -> impl Iterator<Item = Nibbles>;
     fn values(&self) -> impl Iterator<Item = ValOrHash>;
+}
+
+pub(crate) trait TrieNodeIntern {
+    fn hash_intern(&self) -> EncodedNode;
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -178,6 +188,10 @@ impl TrieNode for PartialTrie {
         self.0.delete(k)
     }
 
+    fn hash(&self) -> H256 {
+        hash_trie(self)
+    }
+
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         self.0.items()
     }
@@ -188,6 +202,12 @@ impl TrieNode for PartialTrie {
 
     fn values(&self) -> impl Iterator<Item = ValOrHash> {
         self.0.values()
+    }
+}
+
+impl TrieNodeIntern for PartialTrie {
+    fn hash_intern(&self) -> EncodedNode {
+        rlp_encode_and_hash_node(self)
     }
 }
 
@@ -281,6 +301,10 @@ impl TrieNode for HashedPartialTrie {
         res
     }
 
+    fn hash(&self) -> H256 {
+        hash_trie(&self.node)
+    }
+
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         self.node.items()
     }
@@ -291,6 +315,19 @@ impl TrieNode for HashedPartialTrie {
 
     fn values(&self) -> impl Iterator<Item = ValOrHash> {
         self.node.values()
+    }
+}
+
+impl TrieNodeIntern for HashedPartialTrie {
+    fn hash_intern(&self) -> EncodedNode {
+        if let Some(h) = *self.hash.read() {
+            return EncodedNode::Hashed(h.0);
+        }
+
+        let res = rlp_encode_and_hash_node(&self.node);
+        self.set_hash(Some((&res).into()));
+
+        res
     }
 }
 

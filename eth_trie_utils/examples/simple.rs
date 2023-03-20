@@ -2,6 +2,7 @@
 
 use std::iter::once;
 
+use eth_trie_utils::partial_trie::TrieNode;
 use eth_trie_utils::{
     nibbles::{Nibbles, ToNibbles},
     partial_trie::{HashedPartialTrie, PartialTrie},
@@ -19,7 +20,7 @@ fn main() {
     );
 
     // Or by initializing the trie with an iterator of key value pairs:
-    let mut trie = HashedPartialTrie::from_iter(vec![
+    let mut trie = PartialTrie::from_iter(vec![
         (0x1234_u32, b"some data".to_vec()),
         (9001_u32, vec![1, 2, 3]),
     ]);
@@ -29,7 +30,7 @@ fn main() {
     assert_eq!(trie.get(0x5678_u32), None);
 
     // Trie hashes can be calculated:
-    let _hash = trie.get_hash();
+    let _hash = trie.hash();
 
     // `PartialTrie` can produce iterators which iterate over the values it
     // contains:

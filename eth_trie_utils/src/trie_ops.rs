@@ -217,7 +217,7 @@ impl<N: TrieNode> Iterator for PartialTrieIter<N> {
 
 impl<T: TrieNode> Node<T> {
     /// Inserts a node into the trie.
-    pub fn insert<K, V>(&mut self, k: K, v: V)
+    pub(crate) fn insert<K, V>(&mut self, k: K, v: V)
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
@@ -231,7 +231,7 @@ impl<T: TrieNode> Node<T> {
     }
 
     /// Add more nodes to the trie through an iterator
-    pub fn extend<K, V, I>(&mut self, nodes: I)
+    pub(crate) fn extend<K, V, I>(&mut self, nodes: I)
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
@@ -243,7 +243,7 @@ impl<T: TrieNode> Node<T> {
     }
 
     /// Get a node if it exists in the trie.
-    pub fn get<K>(&self, k: K) -> Option<&[u8]>
+    pub(crate) fn get<K>(&self, k: K) -> Option<&[u8]>
     where
         K: Into<Nibbles>,
     {
@@ -300,7 +300,7 @@ impl<T: TrieNode> Node<T> {
     /// are meant for parts of the trie that are not relevant, traversing one
     /// means that a `Hash` node was created that potentially should not have
     /// been.
-    pub fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
+    pub(crate) fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
     where
         K: Into<Nibbles>,
     {
@@ -318,7 +318,7 @@ impl<T: TrieNode> Node<T> {
 
     /// Returns an iterator over the trie that returns all key/value pairs for
     /// every `Leaf` and `Hash` node.
-    pub fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
+    pub(crate) fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         PartialTrieIter {
             curr_key_after_last_branch: Nibbles::default(),
             trie_stack: vec![IterStackEntry::Root(self.clone().into())],
@@ -327,13 +327,13 @@ impl<T: TrieNode> Node<T> {
 
     /// Returns an iterator over the trie that returns all keys for every `Leaf`
     /// and `Hash` node.
-    pub fn keys(&self) -> impl Iterator<Item = Nibbles> {
+    pub(crate) fn keys(&self) -> impl Iterator<Item = Nibbles> {
         self.items().map(|(k, _)| k)
     }
 
     /// Returns an iterator over the trie that returns all values for every
     /// `Leaf` and `Hash` node.
-    pub fn values(&self) -> impl Iterator<Item = ValOrHash> {
+    pub(crate) fn values(&self) -> impl Iterator<Item = ValOrHash> {
         self.items().map(|(_, v)| v)
     }
 }

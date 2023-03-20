@@ -3,11 +3,11 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
-use crate::partial_trie::{HashedPartialTrie, Node};
+use crate::partial_trie::{Node, TrieNode, TrieNodeIntern};
 
 /// The node type used for calculating the hash of a trie.
 #[derive(Debug)]
-enum EncodedNode {
+pub(crate) enum EncodedNode {
     /// Node that is RLPed but not hashed.
     Raw(Bytes),
     /// Node that is hashed.
@@ -23,72 +23,67 @@ impl From<&EncodedNode> for H256 {
     }
 }
 
-impl HashedPartialTrie {
-    /// Calculates the hash of a node.
-    /// Assumes that all leaf values are already rlp encoded.
-    pub fn hash(&self) -> H256 {
-        let trie_hash_bytes = self.rlp_encode_and_hash_node();
-        (&trie_hash_bytes).into()
-    }
+/// Calculates the hash of a node.
+/// Assumes that all leaf values are already rlp encoded.
+pub(crate) fn hash_trie<N: TrieNode + TrieNodeIntern>(node: &Node<N>) -> H256 {
+    let trie_hash_bytes = rlp_encode_and_hash_node(node);
+    (&trie_hash_bytes).into()
+}
 
-    fn rlp_encode_and_hash_node(&self) -> EncodedNode {
-        if let Some(h) = *self.hash.read() {
-            return EncodedNode::Hashed(h.0);
+pub(crate) fn rlp_encode_and_hash_node<N: TrieNode + TrieNodeIntern>(
+    node: &Node<N>,
+) -> EncodedNode {
+    let res = match node {
+        Node::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
+        Node::Hash(h) => EncodedNode::Hashed(h.0),
+        Node::Branch { children, value } => {
+            let mut stream = RlpStream::new_list(17);
+
+            for c in children.iter() {
+                append_to_stream(&mut stream, c.hash_intern());
+            }
+
+            match value.is_empty() {
+                false => stream.append(value),
+                true => stream.append_empty_data(),
+            };
+
+            hash_bytes_if_large_enough(stream.out().into())
         }
+        Node::Extension { nibbles, child } => {
+            let mut stream = RlpStream::new_list(2);
 
-        let res = match &self.node {
-            Node::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
-            Node::Hash(h) => EncodedNode::Hashed(h.0),
-            Node::Branch { children, value } => {
-                let mut stream = RlpStream::new_list(17);
+            stream.append(&nibbles.to_hex_prefix_encoding(false));
+            append_to_stream(&mut stream, child.hash_intern());
 
-                for c in children.iter() {
-                    Self::append_to_stream(&mut stream, c.rlp_encode_and_hash_node());
-                }
-
-                match value.is_empty() {
-                    false => stream.append(value),
-                    true => stream.append_empty_data(),
-                };
-
-                Self::hash_bytes_if_large_enough(stream.out().into())
-            }
-            Node::Extension { nibbles, child } => {
-                let mut stream = RlpStream::new_list(2);
-
-                stream.append(&nibbles.to_hex_prefix_encoding(false));
-                Self::append_to_stream(&mut stream, child.rlp_encode_and_hash_node());
-
-                Self::hash_bytes_if_large_enough(stream.out().into())
-            }
-            Node::Leaf { nibbles, value } => {
-                let hex_prefix_k = nibbles.to_hex_prefix_encoding(true);
-                let mut stream = RlpStream::new_list(2);
-
-                stream.append(&hex_prefix_k);
-                stream.append(value);
-
-                Self::hash_bytes_if_large_enough(stream.out().into())
-            }
-        };
-
-        self.set_hash(Some((&res).into()));
-        res
-    }
-
-    fn hash_bytes_if_large_enough(bytes: Bytes) -> EncodedNode {
-        match bytes.len() >= 32 {
-            false => EncodedNode::Raw(bytes),
-            true => EncodedNode::Hashed(hash(&bytes)),
+            hash_bytes_if_large_enough(stream.out().into())
         }
-    }
+        Node::Leaf { nibbles, value } => {
+            let hex_prefix_k = nibbles.to_hex_prefix_encoding(true);
+            let mut stream = RlpStream::new_list(2);
 
-    fn append_to_stream(s: &mut RlpStream, node: EncodedNode) {
-        match node {
-            EncodedNode::Raw(b) => s.append_raw(&b, 1),
-            EncodedNode::Hashed(h) => s.append(&h.as_ref()),
-        };
+            stream.append(&hex_prefix_k);
+            stream.append(value);
+
+            hash_bytes_if_large_enough(stream.out().into())
+        }
+    };
+
+    res
+}
+
+fn hash_bytes_if_large_enough(bytes: Bytes) -> EncodedNode {
+    match bytes.len() >= 32 {
+        false => EncodedNode::Raw(bytes),
+        true => EncodedNode::Hashed(hash(&bytes)),
     }
+}
+
+fn append_to_stream(s: &mut RlpStream, node: EncodedNode) {
+    match node {
+        EncodedNode::Raw(b) => s.append_raw(&b, 1),
+        EncodedNode::Hashed(h) => s.append(&h.as_ref()),
+    };
 }
 
 // impl Node<Pa>
