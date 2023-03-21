@@ -16,6 +16,7 @@ pub mod nibbles;
 pub mod partial_trie;
 mod trie_hashing;
 pub mod trie_ops;
+mod trie_subsets;
 mod utils;
 
 #[cfg(test)]

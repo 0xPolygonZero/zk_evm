@@ -64,6 +64,11 @@ pub trait TrieNode:
 
     fn hash(&self) -> H256;
 
+    fn create_partial_trie_subset<K, I>(&self, keys: I) -> Self
+    where
+        K: Into<Nibbles>,
+        I: IntoIterator<Item = K>;
+
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)>;
     fn keys(&self) -> impl Iterator<Item = Nibbles>;
     fn values(&self) -> impl Iterator<Item = ValOrHash>;
@@ -79,7 +84,7 @@ pub(crate) trait TrieNodeIntern {
 /// node whose data is not needed to process our transaction.
 pub enum Node<T>
 where
-    T: TrieNode + Clone + Debug,
+    T: Clone + Debug,
 {
     /// An empty trie.
     #[default]
@@ -190,6 +195,14 @@ impl TrieNode for PartialTrie {
 
     fn hash(&self) -> H256 {
         hash_trie(self)
+    }
+
+    fn create_partial_trie_subset<K, I>(&self, _keys: I) -> Self
+    where
+        K: Into<Nibbles>,
+        I: IntoIterator<Item = K>,
+    {
+        todo!()
     }
 
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
@@ -303,6 +316,14 @@ impl TrieNode for HashedPartialTrie {
 
     fn hash(&self) -> H256 {
         hash_trie(&self.node)
+    }
+
+    fn create_partial_trie_subset<K, I>(&self, _keys: I) -> Self
+    where
+        K: Into<Nibbles>,
+        I: IntoIterator<Item = K>,
+    {
+        todo!()
     }
 
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
