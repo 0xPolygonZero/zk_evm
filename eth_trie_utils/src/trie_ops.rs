@@ -668,7 +668,10 @@ fn node_is_empty<N: TrieNode>(node: &WrappedNode<N>) -> bool {
     matches!(node.as_ref(), Node::Empty)
 }
 
-fn branch<N: TrieNode>(children: [WrappedNode<N>; 16], value: Vec<u8>) -> WrappedNode<N> {
+pub(crate) fn branch<N: TrieNode>(
+    children: [WrappedNode<N>; 16],
+    value: Vec<u8>,
+) -> WrappedNode<N> {
     Node::Branch { children, value }.into()
 }
 
