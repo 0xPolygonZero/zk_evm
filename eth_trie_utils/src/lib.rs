@@ -10,6 +10,7 @@
 //! [`Hash`][partial_trie::PartialTrie::Hash] nodes, which contains the merkle
 //! hash of the node it replaces.
 
+#![allow(incomplete_features)]
 #![feature(return_position_impl_trait_in_trait)]
 
 pub mod nibbles;

@@ -1,9 +1,9 @@
 //! Defines various operations for
 //! [`PartialTrie`][crate::partial_trie::PartialTrie].
 
-use std::fmt::Display;
+use std::{fmt::Display, mem::size_of};
 
-use ethereum_types::H256;
+use ethereum_types::{H256, U128, U256};
 use log::trace;
 
 use crate::{
@@ -51,6 +51,31 @@ pub enum ValOrHash {
     Hash(H256),
 }
 
+macro_rules! impl_eth_type_from_for_val_variant {
+    ($type:ty) => {
+        impl From<$type> for ValOrHash {
+            fn from(v: $type) -> Self {
+                let size = size_of::<Self>();
+
+                let mut buf = Vec::with_capacity(size);
+                v.to_big_endian(&mut buf);
+                ValOrHash::Val(buf)
+            }
+        }
+    };
+}
+
+macro_rules! impl_prim_int_from_for_val_variant {
+    ($type:ty) => {
+        impl From<$type> for ValOrHash {
+            fn from(v: $type) -> Self {
+                let buf = v.to_be_bytes();
+                ValOrHash::Val(buf.into())
+            }
+        }
+    };
+}
+
 impl From<Vec<u8>> for ValOrHash {
     fn from(value: Vec<u8>) -> Self {
         Self::Val(value)
@@ -68,6 +93,13 @@ impl From<H256> for ValOrHash {
         Self::Hash(hash)
     }
 }
+
+impl_eth_type_from_for_val_variant!(U256);
+impl_eth_type_from_for_val_variant!(U128);
+impl_prim_int_from_for_val_variant!(u64);
+impl_prim_int_from_for_val_variant!(u32);
+impl_prim_int_from_for_val_variant!(u16);
+impl_prim_int_from_for_val_variant!(u8);
 
 impl ValOrHash {
     pub fn expect_leaf_val(self) -> Vec<u8> {
