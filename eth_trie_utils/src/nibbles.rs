@@ -312,7 +312,7 @@ impl Nibbles {
         r
     }
 
-    /// Appends a nibble to the front.
+    /// Pushes a nibble to the front.
     ///
     /// # Panics
     /// Panics if appending the `Nibble` causes an overflow (total nibbles >
@@ -326,7 +326,7 @@ impl Nibbles {
         self.packed |= U256::from(n) << shift_amt;
     }
 
-    /// Appends a nibble to the back.
+    /// Pushes a nibble to the back.
     ///
     /// # Panics
     /// Panics if appending the `Nibble` causes an overflow (total nibbles >
@@ -343,7 +343,7 @@ impl Nibbles {
     /// # Panics
     /// Panics if appending the `Nibble` causes an overflow (total nibbles >
     /// 64).
-    pub fn push_nibbles(&mut self, n: &Self) {
+    pub fn push_nibbles_front(&mut self, n: &Self) {
         let new_count = self.count + n.count;
         assert!(new_count <= 64);
 
