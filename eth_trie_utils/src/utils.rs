@@ -3,7 +3,7 @@ use std::{convert::TryInto, fmt::Display, ops::BitAnd, sync::Arc};
 use ethereum_types::{U256, U512};
 use num_traits::PrimInt;
 
-use crate::partial_trie::{Node, TrieNode};
+use crate::partial_trie::{Node, PartialTrie};
 
 #[derive(Debug, Eq, PartialEq)]
 /// Simplified trie node type to make logging cleaner.
@@ -15,13 +15,13 @@ pub(crate) enum TrieNodeType {
     Leaf,
 }
 
-impl<N: TrieNode> From<&Arc<Box<N>>> for TrieNodeType {
+impl<N: PartialTrie> From<&Arc<Box<N>>> for TrieNodeType {
     fn from(value: &Arc<Box<N>>) -> Self {
         (&****value).into()
     }
 }
 
-impl<N: TrieNode> From<&Node<N>> for TrieNodeType {
+impl<N: PartialTrie> From<&Node<N>> for TrieNodeType {
     fn from(node: &Node<N>) -> Self {
         match node {
             Node::Empty => Self::Empty,

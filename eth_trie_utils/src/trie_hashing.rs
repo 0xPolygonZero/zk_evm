@@ -3,7 +3,7 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
-use crate::partial_trie::{Node, TrieNode, TrieNodeIntern};
+use crate::partial_trie::{Node, PartialTrie, TrieNodeIntern};
 
 /// The node type used for calculating the hash of a trie.
 #[derive(Debug)]
@@ -25,12 +25,12 @@ impl From<&EncodedNode> for H256 {
 
 /// Calculates the hash of a node.
 /// Assumes that all leaf values are already rlp encoded.
-pub(crate) fn hash_trie<N: TrieNode + TrieNodeIntern>(node: &Node<N>) -> H256 {
+pub(crate) fn hash_trie<N: PartialTrie + TrieNodeIntern>(node: &Node<N>) -> H256 {
     let trie_hash_bytes = rlp_encode_and_hash_node(node);
     (&trie_hash_bytes).into()
 }
 
-pub(crate) fn rlp_encode_and_hash_node<N: TrieNode + TrieNodeIntern>(
+pub(crate) fn rlp_encode_and_hash_node<N: PartialTrie + TrieNodeIntern>(
     node: &Node<N>,
 ) -> EncodedNode {
     let res = match node {
@@ -109,7 +109,7 @@ mod tests {
 
     use crate::{
         nibbles::{Nibble, Nibbles},
-        partial_trie::{HashedPartialTrie, Node, TrieNode, WrappedNode},
+        partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode},
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
             generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, large_entry,

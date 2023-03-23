@@ -19,19 +19,20 @@ use crate::{
 /// Alias for a node that is a child of an extension or branch node.
 pub type WrappedNode<N> = Arc<Box<N>>;
 
-impl<N: TrieNode> AsRef<Node<N>> for WrappedNode<N> {
+impl<N: PartialTrie> AsRef<Node<N>> for WrappedNode<N> {
     fn as_ref(&self) -> &Node<N> {
         self
     }
 }
 
-impl<N: TrieNode> From<Node<N>> for WrappedNode<N> {
+impl<N: PartialTrie> From<Node<N>> for WrappedNode<N> {
     fn from(v: Node<N>) -> Self {
         Arc::new(Box::new(N::new(v)))
     }
 }
 
-pub trait TrieNode:
+/// A trait for any types that are `PartialTrie`s.
+pub trait PartialTrie:
     Clone
     + Debug
     + Default
@@ -43,34 +44,55 @@ pub trait TrieNode:
 {
     fn new(n: Node<Self>) -> Self;
 
+    /// Inserts a node into the trie.
     fn insert<K, V>(&mut self, k: K, v: V)
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>;
 
+    /// Add more nodes to the trie through an iterator
     fn extend<K, V, I>(&mut self, nodes: I)
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
         I: IntoIterator<Item = (K, V)>;
 
+    /// Get a node if it exists in the trie.
     fn get<K>(&self, k: K) -> Option<&[u8]>
     where
         K: Into<Nibbles>;
 
+    /// Deletes a `Leaf` node or `Branch` value field if it exists.
+    ///
+    /// To agree with Ethereum specs, deleting nodes does not result in the trie
+    /// removing nodes that are redundant after deletion. For example, a
+    /// `Branch` node that is completely empty after all of its children are
+    /// deleted is not pruned. Also note:
+    /// - Deleted leaves are replaced with `Empty` nodes.
+    /// - Deleted branch values are replaced with empty `Vec`s.
+    ///
+    /// # Panics
+    /// If a `Hash` node is traversed, a panic will occur. Since `Hash` nodes
+    /// are meant for parts of the trie that are not relevant, traversing one
+    /// means that a `Hash` node was created that potentially should not have
+    /// been.
     fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
     where
         K: Into<Nibbles>;
 
+    /// Get the hash for the node.
     fn hash(&self) -> H256;
 
-    fn create_partial_trie_subset<K, I>(&self, keys: I) -> Self
-    where
-        K: Into<Nibbles>,
-        I: IntoIterator<Item = K>;
-
+    /// Returns an iterator over the trie that returns all key/value pairs for
+    /// every `Leaf` and `Hash` node.
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)>;
+
+    /// Returns an iterator over the trie that returns all keys for every `Leaf`
+    /// and `Hash` node.
     fn keys(&self) -> impl Iterator<Item = Nibbles>;
+
+    /// Returns an iterator over the trie that returns all values for every
+    /// `Leaf` and `Hash` node.
     fn values(&self) -> impl Iterator<Item = ValOrHash>;
 }
 
@@ -111,10 +133,10 @@ where
     Leaf { nibbles: Nibbles, value: Vec<u8> },
 }
 
-impl<N: TrieNode> Eq for Node<N> {}
+impl<N: PartialTrie> Eq for Node<N> {}
 
 /// `PartialTrie` equality means all nodes through the trie are equivalent.
-impl<N: TrieNode> PartialEq for Node<N> {
+impl<N: PartialTrie> PartialEq for Node<N> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Node::Empty, Node::Empty) => true,
@@ -154,10 +176,13 @@ impl<N: TrieNode> PartialEq for Node<N> {
     }
 }
 
+/// A simple PartialTrie with no hash caching.
+/// Note that while you can *still* calculate the hashes for any given node, the
+/// hashes are not cached and are recalculated each time.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PartialTrie(pub Node<PartialTrie>);
+pub struct StandardTrie(pub Node<StandardTrie>);
 
-impl TrieNode for PartialTrie {
+impl PartialTrie for StandardTrie {
     fn new(n: Node<Self>) -> Self {
         Self(n)
     }
@@ -197,14 +222,6 @@ impl TrieNode for PartialTrie {
         hash_trie(self)
     }
 
-    fn create_partial_trie_subset<K, I>(&self, _keys: I) -> Self
-    where
-        K: Into<Nibbles>,
-        I: IntoIterator<Item = K>,
-    {
-        todo!()
-    }
-
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         self.0.items()
     }
@@ -218,27 +235,27 @@ impl TrieNode for PartialTrie {
     }
 }
 
-impl TrieNodeIntern for PartialTrie {
+impl TrieNodeIntern for StandardTrie {
     fn hash_intern(&self) -> EncodedNode {
         rlp_encode_and_hash_node(self)
     }
 }
 
-impl Deref for PartialTrie {
-    type Target = Node<PartialTrie>;
+impl Deref for StandardTrie {
+    type Target = Node<StandardTrie>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for PartialTrie {
+impl DerefMut for StandardTrie {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<K, V> FromIterator<(K, V)> for PartialTrie
+impl<K, V> FromIterator<(K, V)> for StandardTrie
 where
     K: Into<Nibbles>,
     V: Into<ValOrHash>,
@@ -248,6 +265,9 @@ where
     }
 }
 
+/// A partial trie that lazily caches hashes for each node as needed.
+/// If you are doing frequent hashing of node, you probably want to use this
+/// `Trie` variant.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HashedPartialTrie {
     pub(crate) node: Node<HashedPartialTrie>,
@@ -270,7 +290,7 @@ impl HashedPartialTrie {
     }
 }
 
-impl TrieNode for HashedPartialTrie {
+impl PartialTrie for HashedPartialTrie {
     fn new(node: Node<Self>) -> Self {
         Self {
             node,
@@ -316,14 +336,6 @@ impl TrieNode for HashedPartialTrie {
 
     fn hash(&self) -> H256 {
         hash_trie(&self.node)
-    }
-
-    fn create_partial_trie_subset<K, I>(&self, _keys: I) -> Self
-    where
-        K: Into<Nibbles>,
-        I: IntoIterator<Item = K>,
-    {
-        todo!()
     }
 
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
@@ -383,7 +395,7 @@ where
     }
 }
 
-fn from_iter_common<N: TrieNode, T: IntoIterator<Item = (K, V)>, K, V>(nodes: T) -> N
+fn from_iter_common<N: PartialTrie, T: IntoIterator<Item = (K, V)>, K, V>(nodes: T) -> N
 where
     K: Into<Nibbles>,
     V: Into<ValOrHash>,

@@ -2,16 +2,16 @@
 
 use std::iter::once;
 
-use eth_trie_utils::partial_trie::TrieNode;
+use eth_trie_utils::partial_trie::PartialTrie;
 use eth_trie_utils::{
     nibbles::{Nibbles, ToNibbles},
-    partial_trie::{HashedPartialTrie, PartialTrie},
+    partial_trie::{HashedPartialTrie, StandardTrie},
     trie_ops::ValOrHash,
 };
 
 fn main() {
     // Construct an empty trie:
-    let mut trie = PartialTrie::default();
+    let mut trie = StandardTrie::default();
 
     // Elements can be inserted into the trie by calling insert directly:
     trie.insert(
@@ -20,7 +20,7 @@ fn main() {
     );
 
     // Or by initializing the trie with an iterator of key value pairs:
-    let mut trie = PartialTrie::from_iter(vec![
+    let mut trie = StandardTrie::from_iter(vec![
         (0x1234_u32, b"some data".to_vec()),
         (9001_u32, vec![1, 2, 3]),
     ]);

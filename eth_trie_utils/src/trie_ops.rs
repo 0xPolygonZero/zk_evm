@@ -8,7 +8,7 @@ use log::trace;
 
 use crate::{
     nibbles::{Nibble, Nibbles},
-    partial_trie::{Node, TrieNode, WrappedNode},
+    partial_trie::{Node, PartialTrie, WrappedNode},
     utils::TrieNodeType,
 };
 
@@ -147,7 +147,7 @@ pub struct PartialTrieIter<N> {
     trie_stack: Vec<IterStackEntry<N>>,
 }
 
-impl<N: TrieNode> PartialTrieIter<N> {
+impl<N: PartialTrie> PartialTrieIter<N> {
     fn advance_iter_to_next_empty_leaf_or_hash_node(
         &mut self,
         node: &WrappedNode<N>,
@@ -183,7 +183,7 @@ impl<N: TrieNode> PartialTrieIter<N> {
     }
 }
 
-impl<N: TrieNode> Iterator for PartialTrieIter<N> {
+impl<N: PartialTrie> Iterator for PartialTrieIter<N> {
     type Item = (Nibbles, ValOrHash);
 
     fn next(&mut self) -> Option<(Nibbles, ValOrHash)> {
@@ -247,8 +247,7 @@ impl<N: TrieNode> Iterator for PartialTrieIter<N> {
     }
 }
 
-impl<T: TrieNode> Node<T> {
-    /// Inserts a node into the trie.
+impl<T: PartialTrie> Node<T> {
     pub(crate) fn insert<K, V>(&mut self, k: K, v: V)
     where
         K: Into<Nibbles>,
@@ -262,7 +261,6 @@ impl<T: TrieNode> Node<T> {
         *self = node_ref.clone();
     }
 
-    /// Add more nodes to the trie through an iterator
     pub(crate) fn extend<K, V, I>(&mut self, nodes: I)
     where
         K: Into<Nibbles>,
@@ -274,7 +272,6 @@ impl<T: TrieNode> Node<T> {
         }
     }
 
-    /// Get a node if it exists in the trie.
     pub(crate) fn get<K>(&self, k: K) -> Option<&[u8]>
     where
         K: Into<Nibbles>,
@@ -318,20 +315,6 @@ impl<T: TrieNode> Node<T> {
         }
     }
 
-    /// Deletes a `Leaf` node or `Branch` value field if it exists.
-    ///
-    /// To agree with Ethereum specs, deleting nodes does not result in the trie
-    /// removing nodes that are redundant after deletion. For example, a
-    /// `Branch` node that is completely empty after all of its children are
-    /// deleted is not pruned. Also note:
-    /// - Deleted leaves are replaced with `Empty` nodes.
-    /// - Deleted branch values are replaced with empty `Vec`s.
-    ///
-    /// # Panics
-    /// If a `Hash` node is traversed, a panic will occur. Since `Hash` nodes
-    /// are meant for parts of the trie that are not relevant, traversing one
-    /// means that a `Hash` node was created that potentially should not have
-    /// been.
     pub(crate) fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
     where
         K: Into<Nibbles>,
@@ -348,8 +331,6 @@ impl<T: TrieNode> Node<T> {
         })
     }
 
-    /// Returns an iterator over the trie that returns all key/value pairs for
-    /// every `Leaf` and `Hash` node.
     pub(crate) fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         PartialTrieIter {
             curr_key_after_last_branch: Nibbles::default(),
@@ -357,20 +338,16 @@ impl<T: TrieNode> Node<T> {
         }
     }
 
-    /// Returns an iterator over the trie that returns all keys for every `Leaf`
-    /// and `Hash` node.
     pub(crate) fn keys(&self) -> impl Iterator<Item = Nibbles> {
         self.items().map(|(k, _)| k)
     }
 
-    /// Returns an iterator over the trie that returns all values for every
-    /// `Leaf` and `Hash` node.
     pub(crate) fn values(&self) -> impl Iterator<Item = ValOrHash> {
         self.items().map(|(_, v)| v)
     }
 }
 
-fn insert_into_trie_rec<N: TrieNode>(
+fn insert_into_trie_rec<N: PartialTrie>(
     node: &Node<N>,
     mut new_node: InsertEntry,
 ) -> Option<WrappedNode<N>> {
@@ -458,7 +435,7 @@ fn insert_into_trie_rec<N: TrieNode>(
     }
 }
 
-fn delete_intern<N: TrieNode>(
+fn delete_intern<N: PartialTrie>(
     node: &Node<N>,
     mut curr_k: Nibbles,
 ) -> Option<(WrappedNode<N>, Vec<u8>)> {
@@ -531,14 +508,14 @@ fn delete_intern<N: TrieNode>(
     }
 }
 
-fn try_collapse_if_extension<N: TrieNode>(node: WrappedNode<N>) -> WrappedNode<N> {
+fn try_collapse_if_extension<N: PartialTrie>(node: WrappedNode<N>) -> WrappedNode<N> {
     match node.as_ref() {
         Node::Extension { nibbles, child } => collapse_ext_node_if_needed(nibbles, child),
         _ => node,
     }
 }
 
-fn collapse_ext_node_if_needed<N: TrieNode>(
+fn collapse_ext_node_if_needed<N: PartialTrie>(
     ext_nibbles: &Nibbles,
     child: &WrappedNode<N>,
 ) -> WrappedNode<N> {
@@ -583,7 +560,7 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
     }
 }
 
-fn place_branch_and_potentially_ext_prefix<N: TrieNode>(
+fn place_branch_and_potentially_ext_prefix<N: PartialTrie>(
     info: &ExistingAndNewNodePreAndPost,
     existing_node: WrappedNode<N>,
     new_node: InsertEntry,
@@ -616,7 +593,7 @@ fn place_branch_and_potentially_ext_prefix<N: TrieNode>(
 
 /// Check if the new leaf or existing node (either leaf/extension) should go
 /// into the value field of the new branch.
-fn check_if_existing_or_new_node_should_go_in_branch_value_field<N: TrieNode>(
+fn check_if_existing_or_new_node_should_go_in_branch_value_field<N: PartialTrie>(
     info: &ExistingAndNewNodePreAndPost,
     existing_node: WrappedNode<N>,
     new_node_entry: InsertEntry,
@@ -642,7 +619,7 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field<N: TrieNode>(
     }
 }
 
-fn ins_entry_into_leaf_and_nibble<N: TrieNode>(
+fn ins_entry_into_leaf_and_nibble<N: PartialTrie>(
     info: &ExistingAndNewNodePreAndPost,
     entry: InsertEntry,
 ) -> (Nibble, WrappedNode<N>) {
@@ -657,7 +634,7 @@ fn ins_entry_into_leaf_and_nibble<N: TrieNode>(
     (new_first_nibble, new_node)
 }
 
-fn new_branch_child_arr<N: TrieNode>() -> [WrappedNode<N>; 16] {
+fn new_branch_child_arr<N: PartialTrie>() -> [WrappedNode<N>; 16] {
     // Hahaha ok there actually is no better way to init this array unless I want to
     // use iterators and take a runtime hit...
     [
@@ -680,11 +657,11 @@ fn new_branch_child_arr<N: TrieNode>() -> [WrappedNode<N>; 16] {
     ]
 }
 
-fn get_num_non_empty_children<N: TrieNode>(children: &[WrappedNode<N>; 16]) -> usize {
+fn get_num_non_empty_children<N: PartialTrie>(children: &[WrappedNode<N>; 16]) -> usize {
     children.iter().filter(|c| !node_is_empty(c)).count()
 }
 
-fn get_other_non_empty_child_and_nibble_in_two_elem_branch<N: TrieNode>(
+fn get_other_non_empty_child_and_nibble_in_two_elem_branch<N: PartialTrie>(
     children: &[WrappedNode<N>; 16],
     our_nib: Nibble,
 ) -> (Nibble, &WrappedNode<N>) {
@@ -696,37 +673,40 @@ fn get_other_non_empty_child_and_nibble_in_two_elem_branch<N: TrieNode>(
         .expect("Expected to find a non-empty node in the branch's children")
 }
 
-fn node_is_empty<N: TrieNode>(node: &WrappedNode<N>) -> bool {
+fn node_is_empty<N: PartialTrie>(node: &WrappedNode<N>) -> bool {
     matches!(node.as_ref(), Node::Empty)
 }
 
-pub(crate) fn branch<N: TrieNode>(
+pub(crate) fn branch<N: PartialTrie>(
     children: [WrappedNode<N>; 16],
     value: Vec<u8>,
 ) -> WrappedNode<N> {
     Node::Branch { children, value }.into()
 }
 
-fn branch_from_insert_val<N: TrieNode>(
+fn branch_from_insert_val<N: PartialTrie>(
     children: [WrappedNode<N>; 16],
     value: ValOrHash,
 ) -> WrappedNode<N> {
     create_node_if_ins_val_not_hash(value, |value| Node::Branch { children, value }.into())
 }
 
-fn extension<N: TrieNode>(nibbles: Nibbles, child: WrappedNode<N>) -> WrappedNode<N> {
+fn extension<N: PartialTrie>(nibbles: Nibbles, child: WrappedNode<N>) -> WrappedNode<N> {
     Node::Extension { nibbles, child }.into()
 }
 
-fn leaf<N: TrieNode>(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode<N> {
+fn leaf<N: PartialTrie>(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode<N> {
     Node::Leaf { nibbles, value }.into()
 }
 
-fn leaf_from_insert_val<N: TrieNode>(nibbles: Nibbles, value: ValOrHash) -> WrappedNode<N> {
+fn leaf_from_insert_val<N: PartialTrie>(nibbles: Nibbles, value: ValOrHash) -> WrappedNode<N> {
     create_node_if_ins_val_not_hash(value, |value| Node::Leaf { nibbles, value }.into())
 }
 
-fn create_node_from_insert_val<N: TrieNode>(nibbles: Nibbles, value: ValOrHash) -> WrappedNode<N> {
+fn create_node_from_insert_val<N: PartialTrie>(
+    nibbles: Nibbles,
+    value: ValOrHash,
+) -> WrappedNode<N> {
     match value {
         ValOrHash::Val(value) => Node::Leaf { nibbles, value },
         ValOrHash::Hash(h) => {
@@ -766,7 +746,7 @@ mod tests {
 
     use super::ValOrHash;
     use crate::{
-        partial_trie::{Node, PartialTrie, TrieNode},
+        partial_trie::{Node, PartialTrie, StandardTrie},
         testing_utils::{
             common_setup, entry, entry_with_value,
             generate_n_hash_nodes_entries_for_empty_slots_in_trie,
@@ -780,11 +760,11 @@ mod tests {
     const COW_TEST_TRIE_SIZE: usize = 500;
 
     fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[TestInsertValEntry]) {
-        let trie = PartialTrie::from_iter(entries.iter().cloned());
+        let trie = StandardTrie::from_iter(entries.iter().cloned());
         assert_all_entries_in_trie(entries, &trie)
     }
 
-    fn assert_all_entries_in_trie(entries: &[TestInsertValEntry], trie: &Node<PartialTrie>) {
+    fn assert_all_entries_in_trie(entries: &[TestInsertValEntry], trie: &Node<StandardTrie>) {
         let entries_in_trie = get_non_hash_values_in_trie(trie);
 
         let all_entries_retrieved: Vec<_> = entries
@@ -862,7 +842,7 @@ mod tests {
         let mut entries = [entry(0x1234), entry(0x1234)];
         entries[1].1 = vec![100];
 
-        let trie = PartialTrie::from_iter(entries.into_iter());
+        let trie = StandardTrie::from_iter(entries.into_iter());
         assert_eq!(trie.get(0x1234), Some([100].as_slice()));
     }
 
@@ -887,7 +867,7 @@ mod tests {
         common_setup();
         let non_hash_entries: Vec<_> =
             generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 0).collect();
-        let mut trie = PartialTrie::from_iter(non_hash_entries.iter().cloned());
+        let mut trie = StandardTrie::from_iter(non_hash_entries.iter().cloned());
 
         let extra_hash_entries = generate_n_hash_nodes_entries_for_empty_slots_in_trie(
             &trie,
@@ -912,14 +892,17 @@ mod tests {
     fn equivalency_check_works() {
         common_setup();
 
-        assert_eq!(PartialTrie::new(Node::Empty), PartialTrie::new(Node::Empty));
+        assert_eq!(
+            StandardTrie::new(Node::Empty),
+            StandardTrie::new(Node::Empty)
+        );
 
         let entries = generate_n_random_fixed_trie_entries(MASSIVE_TRIE_SIZE, 0);
-        let big_trie_1 = PartialTrie::from_iter(entries);
+        let big_trie_1 = StandardTrie::from_iter(entries);
         assert_eq!(big_trie_1, big_trie_1);
 
         let entries = generate_n_random_fixed_trie_entries(MASSIVE_TRIE_SIZE, 1);
-        let big_trie_2 = PartialTrie::from_iter(entries);
+        let big_trie_2 = StandardTrie::from_iter(entries);
 
         assert_ne!(big_trie_1, big_trie_2)
     }
@@ -929,7 +912,7 @@ mod tests {
         common_setup();
 
         let entries = [entry_with_value(0x1234, 1), entry_with_value(0x12345678, 2)];
-        let trie = PartialTrie::from_iter(entries.iter().cloned());
+        let trie = StandardTrie::from_iter(entries.iter().cloned());
 
         assert_eq!(trie.get(0x1234), Some([1].as_slice()));
         assert_eq!(trie.get(0x12345678), Some([2].as_slice()));
@@ -941,7 +924,7 @@ mod tests {
 
         let random_entries: Vec<_> =
             generate_n_random_fixed_trie_entries(MASSIVE_TRIE_SIZE, 9001).collect();
-        let trie = PartialTrie::from_iter(random_entries.iter().cloned());
+        let trie = StandardTrie::from_iter(random_entries.iter().cloned());
 
         for (k, v) in random_entries.into_iter() {
             debug!("Attempting to retrieve {:?}...", (k, &v));
@@ -960,7 +943,7 @@ mod tests {
         let mut all_nodes_in_trie_after_each_insert = Vec::new();
         let mut root_node_after_each_insert = Vec::new();
 
-        let mut trie = PartialTrie::default();
+        let mut trie = StandardTrie::default();
         for (k, v) in entries {
             trie.insert(k, v);
 
@@ -983,7 +966,7 @@ mod tests {
 
         let entries: HashSet<_> =
             generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 9003).collect();
-        let trie = PartialTrie::from_iter(entries.iter().cloned());
+        let trie = StandardTrie::from_iter(entries.iter().cloned());
 
         let trie_items: HashSet<_> = trie
             .items()
@@ -998,7 +981,7 @@ mod tests {
     fn deleting_a_non_existent_node_returns_none() {
         common_setup();
 
-        let mut trie = PartialTrie::default();
+        let mut trie = StandardTrie::default();
         trie.insert(0x1234, vec![91]);
 
         assert!(trie.delete(0x5678).is_none())
@@ -1008,7 +991,7 @@ mod tests {
     fn deleting_from_an_empty_trie_returns_none() {
         common_setup();
 
-        let mut trie = PartialTrie::default();
+        let mut trie = StandardTrie::default();
         assert!(trie.delete(0x1234).is_none());
     }
 
@@ -1017,7 +1000,7 @@ mod tests {
         common_setup();
 
         let entries: Vec<_> = generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 7).collect();
-        let mut trie = PartialTrie::from_iter(entries.iter().cloned());
+        let mut trie = StandardTrie::from_iter(entries.iter().cloned());
 
         // Delete half of the elements
         let half_entries = entries.len() / 2;

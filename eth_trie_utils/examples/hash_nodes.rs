@@ -50,7 +50,7 @@ use std::{
     str::FromStr,
 };
 
-use eth_trie_utils::partial_trie::TrieNode;
+use eth_trie_utils::partial_trie::PartialTrie;
 use eth_trie_utils::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node},

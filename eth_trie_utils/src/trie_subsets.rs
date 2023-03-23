@@ -1,3 +1,10 @@
+//! Logic for calculating a subset of a [`PartialTrie`] from an existing
+//! `PartialTrie`.
+//!
+//! Given a `PartialTrie`, you can pass in keys of leaf nodes that should be
+//! included in the produced subset. Any nodes that are not needed in the subset
+//! are replaced with [`Hash`] nodes are far up the trie as possible.
+
 use std::sync::Arc;
 
 use ethereum_types::H256;
@@ -5,12 +12,13 @@ use thiserror::Error;
 
 use crate::{
     nibbles::Nibbles,
-    partial_trie::{Node, TrieNode, WrappedNode},
+    partial_trie::{Node, PartialTrie, WrappedNode},
     utils::TrieNodeType,
 };
 
 pub type SubsetTrieResult<T> = Result<T, SubsetTrieError>;
 
+/// Errors that may occur when creating a subset [`PartialTrie`].
 #[derive(Debug, Error)]
 pub enum SubsetTrieError {
     #[error("Tried to mark nodes in a tracked trie for a key that does not exist! (Key: {0}, trie: {1})")]
@@ -18,7 +26,7 @@ pub enum SubsetTrieError {
 }
 
 #[derive(Debug)]
-enum TrackedNodeIntern<N: TrieNode> {
+enum TrackedNodeIntern<N: PartialTrie> {
     Empty,
     Hash,
     Branch(Box<[TrackedNode<N>; 16]>),
@@ -27,12 +35,12 @@ enum TrackedNodeIntern<N: TrieNode> {
 }
 
 #[derive(Debug)]
-struct TrackedNode<N: TrieNode> {
+struct TrackedNode<N: PartialTrie> {
     node: TrackedNodeIntern<N>,
     info: TrackedNodeInfo<N>,
 }
 
-impl<N: Clone + TrieNode> TrackedNode<N> {
+impl<N: Clone + PartialTrie> TrackedNode<N> {
     fn new(underlying_node: &N) -> Self {
         Self {
             node: match &**underlying_node {
@@ -51,7 +59,9 @@ impl<N: Clone + TrieNode> TrackedNode<N> {
     }
 }
 
-fn tracked_branch<N: TrieNode>(underlying_children: &[WrappedNode<N>; 16]) -> [TrackedNode<N>; 16] {
+fn tracked_branch<N: PartialTrie>(
+    underlying_children: &[WrappedNode<N>; 16],
+) -> [TrackedNode<N>; 16] {
     [
         TrackedNode::new(&underlying_children[0]),
         TrackedNode::new(&underlying_children[1]),
@@ -72,7 +82,7 @@ fn tracked_branch<N: TrieNode>(underlying_children: &[WrappedNode<N>; 16]) -> [T
     ]
 }
 
-fn partial_trie_extension<N: TrieNode>(nibbles: Nibbles, child: &TrackedNode<N>) -> N {
+fn partial_trie_extension<N: PartialTrie>(nibbles: Nibbles, child: &TrackedNode<N>) -> N {
     N::new(Node::Extension {
         nibbles,
         child: Arc::new(Box::new(create_partial_trie_subset_from_tracked_trie(
@@ -81,7 +91,10 @@ fn partial_trie_extension<N: TrieNode>(nibbles: Nibbles, child: &TrackedNode<N>)
     })
 }
 
-fn partial_trie_branch<N: TrieNode>(underlying_children: &[TrackedNode<N>; 16], value: &[u8]) -> N {
+fn partial_trie_branch<N: PartialTrie>(
+    underlying_children: &[TrackedNode<N>; 16],
+    value: &[u8],
+) -> N {
     let children = [
         Arc::new(Box::new(create_partial_trie_subset_from_tracked_trie(
             &underlying_children[0],
@@ -140,12 +153,12 @@ fn partial_trie_branch<N: TrieNode>(underlying_children: &[TrackedNode<N>; 16], 
 }
 
 #[derive(Debug)]
-struct TrackedNodeInfo<N: TrieNode> {
+struct TrackedNodeInfo<N: PartialTrie> {
     underlying_node: N,
     touched: bool,
 }
 
-impl<N: TrieNode> TrackedNodeInfo<N> {
+impl<N: PartialTrie> TrackedNodeInfo<N> {
     fn new(underlying_node: N) -> Self {
         Self {
             underlying_node,
@@ -190,9 +203,11 @@ impl<N: TrieNode> TrackedNodeInfo<N> {
     }
 }
 
+/// Create a [`PartialTrie`] subset from a base trie given a list of keys of
+/// leaf nodes that must be present in the subset.
 pub fn create_trie_subset<N, K, I>(trie: &N, keys_involved: I) -> SubsetTrieResult<N>
 where
-    N: TrieNode,
+    N: PartialTrie,
     K: Into<Nibbles>,
     I: IntoIterator<Item = K>,
 {
@@ -200,18 +215,19 @@ where
     create_trie_subset_intern(&mut tracked_trie, keys_involved.into_iter())
 }
 
-pub fn create_trie_subsets<N, K, I>(
-    base_trie: &N,
-    keys_involved: impl Iterator<Item = I>,
-) -> SubsetTrieResult<Vec<N>>
+/// Create [`PartialTrie`] subsets from a given base `PartialTrie` given a
+/// iterator of keys per subset needed.
+pub fn create_trie_subsets<N, K, I, O>(base_trie: &N, keys_involved: O) -> SubsetTrieResult<Vec<N>>
 where
-    N: TrieNode,
+    N: PartialTrie,
     K: Into<Nibbles>,
     I: IntoIterator<Item = K>,
+    O: IntoIterator<Item = I>,
 {
     let mut tracked_trie = TrackedNode::new(base_trie);
 
     keys_involved
+        .into_iter()
         .map(|ks| {
             let res = create_trie_subset_intern(&mut tracked_trie, ks.into_iter())?;
             reset_tracked_trie_state(&mut tracked_trie);
@@ -226,7 +242,7 @@ fn create_trie_subset_intern<N, K>(
     keys_involved: impl Iterator<Item = K>,
 ) -> SubsetTrieResult<N>
 where
-    N: TrieNode,
+    N: PartialTrie,
     K: Into<Nibbles>,
 {
     for k in keys_involved {
@@ -236,7 +252,7 @@ where
     Ok(create_partial_trie_subset_from_tracked_trie(tracked_trie))
 }
 
-fn mark_nodes_that_are_needed<N: TrieNode>(
+fn mark_nodes_that_are_needed<N: PartialTrie>(
     trie: &mut TrackedNode<N>,
     curr_nibbles: &mut Nibbles,
 ) -> SubsetTrieResult<()> {
@@ -285,7 +301,9 @@ fn mark_nodes_that_are_needed<N: TrieNode>(
     }
 }
 
-fn create_partial_trie_subset_from_tracked_trie<N: TrieNode>(tracked_node: &TrackedNode<N>) -> N {
+fn create_partial_trie_subset_from_tracked_trie<N: PartialTrie>(
+    tracked_node: &TrackedNode<N>,
+) -> N {
     match tracked_node.info.touched {
         false => N::new(Node::Hash(tracked_node.info.underlying_node.hash())),
         true => match &tracked_node.node {
@@ -310,7 +328,7 @@ fn create_partial_trie_subset_from_tracked_trie<N: TrieNode>(tracked_node: &Trac
     }
 }
 
-fn reset_tracked_trie_state<N: TrieNode>(tracked_node: &mut TrackedNode<N>) {
+fn reset_tracked_trie_state<N: PartialTrie>(tracked_node: &mut TrackedNode<N>) {
     match tracked_node.node {
         TrackedNodeIntern::Branch(ref mut children) => {
             children.iter_mut().for_each(|c| c.info.reset())
@@ -329,13 +347,13 @@ mod tests {
     use super::{create_trie_subset, create_trie_subsets};
     use crate::{
         nibbles::Nibbles,
-        partial_trie::{HashedPartialTrie, Node, TrieNode},
+        partial_trie::{HashedPartialTrie, Node, PartialTrie},
         testing_utils::generate_n_random_fixed_trie_entries,
         trie_ops::ValOrHash,
         utils::TrieNodeType,
     };
 
-    type Trie = HashedPartialTrie;
+    type TrieType = HashedPartialTrie;
 
     const MASSIVE_TEST_NUM_SUB_TRIES: usize = 10;
     const MASSIVE_TEST_NUM_SUB_TRIE_SIZE: usize = 5000;
@@ -347,7 +365,7 @@ mod tests {
     }
 
     impl NodeFullNibbles {
-        fn new_from_node<N: TrieNode>(node: &Node<N>, nibbles: Nibbles) -> Self {
+        fn new_from_node<N: PartialTrie>(node: &Node<N>, nibbles: Nibbles) -> Self {
             Self {
                 n_type: node.into(),
                 nibbles,
@@ -362,7 +380,7 @@ mod tests {
         }
     }
 
-    fn get_all_non_empty_and_hash_nodes_in_trie(trie: &Trie) -> Vec<NodeFullNibbles> {
+    fn get_all_non_empty_and_hash_nodes_in_trie(trie: &TrieType) -> Vec<NodeFullNibbles> {
         let mut nodes = Vec::new();
         get_all_non_empty_and_hash_nodes_in_trie_intern(trie, Nibbles::default(), &mut nodes);
 
@@ -370,7 +388,7 @@ mod tests {
     }
 
     fn get_all_non_empty_and_hash_nodes_in_trie_intern(
-        trie: &Trie,
+        trie: &TrieType,
         mut curr_nibbles: Nibbles,
         nodes: &mut Vec<NodeFullNibbles>,
     ) {
@@ -396,7 +414,7 @@ mod tests {
         nodes.push(NodeFullNibbles::new_from_node(trie, curr_nibbles.reverse()));
     }
 
-    fn get_all_nibbles_of_leaf_nodes_in_trie(trie: &Trie) -> HashSet<Nibbles> {
+    fn get_all_nibbles_of_leaf_nodes_in_trie(trie: &TrieType) -> HashSet<Nibbles> {
         trie.items()
             .filter_map(|(n, v_or_h)| matches!(v_or_h, ValOrHash::Val(_)).then(|| n))
             .collect()
@@ -404,7 +422,7 @@ mod tests {
 
     #[test]
     fn empty_trie_returns_err_on_query() {
-        let trie = Trie::default();
+        let trie = TrieType::default();
         let nibbles: Nibbles = 0x1234.into();
         let res = create_trie_subset(&trie, once(nibbles));
 
@@ -413,7 +431,7 @@ mod tests {
 
     #[test]
     fn non_existent_key_returns_err() {
-        let mut trie = Trie::default();
+        let mut trie = TrieType::default();
         trie.insert(0x1234, vec![0, 1, 2]);
         let res = create_trie_subset(&trie, once(0x5678));
 
@@ -422,7 +440,7 @@ mod tests {
 
     #[test]
     fn single_node_trie_is_queryable() {
-        let mut trie = Trie::default();
+        let mut trie = TrieType::default();
         trie.insert(0x1234, vec![0, 1, 2]);
         let trie_subset = create_trie_subset(&trie, once(0x1234)).unwrap();
 
@@ -431,7 +449,7 @@ mod tests {
 
     #[test]
     fn multi_node_trie_returns_proper_subset() {
-        let mut trie = Trie::default();
+        let mut trie = TrieType::default();
         trie.insert(0x1234, vec![0]);
         trie.insert(0x56, vec![1]);
         trie.insert(0x12345, vec![2]);
@@ -446,7 +464,7 @@ mod tests {
 
     #[test]
     fn intermediate_nodes_are_included_in_subset() {
-        let mut trie = Trie::default();
+        let mut trie = TrieType::default();
         let inserts = vec![
             (0x1234_u64.into(), vec![0]),
             (0x1324_u64.into(), vec![1]),
@@ -574,7 +592,7 @@ mod tests {
         let random_entries: Vec<_> =
             generate_n_random_fixed_trie_entries(trie_size, 9009).collect();
         let entry_keys: Vec<_> = random_entries.iter().map(|(k, _)| k).cloned().collect();
-        let trie = Trie::from_iter(random_entries);
+        let trie = TrieType::from_iter(random_entries);
 
         let keys_of_subsets: Vec<Vec<_>> = (0..MASSIVE_TEST_NUM_SUB_TRIES)
             .map(|i| {

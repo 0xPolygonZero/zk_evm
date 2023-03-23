@@ -9,7 +9,7 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 
 use crate::{
     nibbles::Nibbles,
-    partial_trie::{Node, TrieNode},
+    partial_trie::{Node, PartialTrie},
     trie_ops::ValOrHash,
     utils::is_even,
 };
@@ -100,7 +100,7 @@ fn gen_n_random_trie_entries_common<F: Fn(&mut StdRng) -> Nibbles>(
     (0..n).map(move |i| (u256_gen_f(&mut rng), i.to_be_bytes().to_vec()))
 }
 
-pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie<N: TrieNode>(
+pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie<N: PartialTrie>(
     trie: &Node<N>,
     n: usize,
     seed: u64,
@@ -146,7 +146,7 @@ fn gen_variable_nibbles(rng: &mut StdRng) -> Nibbles {
 }
 
 // TODO: Replace with `PartialTrie` `iter` methods once done...
-pub(crate) fn get_non_hash_values_in_trie<N: TrieNode>(
+pub(crate) fn get_non_hash_values_in_trie<N: PartialTrie>(
     trie: &Node<N>,
 ) -> HashSet<TestInsertValEntry> {
     info!("Collecting all entries inserted into trie...");
