@@ -1,5 +1,5 @@
 //! Logic for calculating a subset of a [`PartialTrie`] from an existing
-//! `PartialTrie`.
+//! [`PartialTrie`].
 //!
 //! Given a `PartialTrie`, you can pass in keys of leaf nodes that should be
 //! included in the produced subset. Any nodes that are not needed in the subset

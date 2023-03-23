@@ -40,7 +40,7 @@ impl InsertEntry {
 /// A "entry" in a [`PartialTrie`].
 ///  
 /// Entries in the trie may either be actual values or
-/// [`Hash`](crate::partial_trie::PartialTrie::Hash) nodes.
+/// [`Hash`](crate::partial_trie::Node::Hash) nodes.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ValOrHash {
     /// A value in a trie.

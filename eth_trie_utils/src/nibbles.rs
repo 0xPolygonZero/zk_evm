@@ -91,7 +91,8 @@ impl_to_nibbles!(U128);
 impl_to_nibbles!(U256);
 
 #[derive(Copy, Clone, Deserialize, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-/// A sequence of nibbles which is used as the key type into [`PartialTrie`].
+/// A sequence of nibbles which is used as the key type into
+/// [`PartialTrie`][`crate::partial_trie::PartialTrie`].
 ///
 /// Generally, if you're constructing keys from actual trie data, you probably
 /// will be working with `U256`s and `H256`s both of which `Nibbles` has a
@@ -101,7 +102,6 @@ impl_to_nibbles!(U256);
 /// ```rust
 /// # use eth_trie_utils::partial_trie::Nibbles;
 /// # use std::str::FromStr;
-///
 /// let n1 = Nibbles::from_str("0x123").unwrap();
 /// let n2 = Nibbles::from_str("0x0123").unwrap();
 ///

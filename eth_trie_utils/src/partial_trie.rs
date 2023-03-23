@@ -31,7 +31,7 @@ impl<N: PartialTrie> From<Node<N>> for WrappedNode<N> {
     }
 }
 
-/// A trait for any types that are `PartialTrie`s.
+/// A trait for any types that are Tries.
 pub trait PartialTrie:
     Clone
     + Debug
