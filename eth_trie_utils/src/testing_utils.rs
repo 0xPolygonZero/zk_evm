@@ -108,7 +108,7 @@ pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie<N: PartialTr
     let mut rng = StdRng::seed_from_u64(seed);
 
     // Pretty inefficient, but ok for tests.
-    trie.items()
+    trie.trie_items()
         .filter(|(k, v)| k.count <= 63 && matches!(v, ValOrHash::Val(_)))
         .map(|(k, _)| k.merge_nibble(1))
         .choose_multiple(&mut rng, n)
@@ -150,7 +150,7 @@ pub(crate) fn get_non_hash_values_in_trie<N: PartialTrie>(
     trie: &Node<N>,
 ) -> HashSet<TestInsertValEntry> {
     info!("Collecting all entries inserted into trie...");
-    trie.items()
+    trie.trie_items()
         .map(|(k, v)| (k, v.expect_leaf_val()))
         .collect()
 }

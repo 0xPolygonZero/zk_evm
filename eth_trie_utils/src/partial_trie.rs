@@ -16,6 +16,16 @@ use crate::{
     trie_ops::ValOrHash,
 };
 
+macro_rules! impl_from_for_trie_type {
+    ($type:ty) => {
+        impl From<Node<$type>> for $type {
+            fn from(v: Node<$type>) -> Self {
+                Self::new(v)
+            }
+        }
+    };
+}
+
 /// Alias for a node that is a child of an extension or branch node.
 pub type WrappedNode<N> = Arc<Box<N>>;
 
@@ -182,6 +192,8 @@ impl<N: PartialTrie> PartialEq for Node<N> {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct StandardTrie(pub Node<StandardTrie>);
 
+impl_from_for_trie_type!(StandardTrie);
+
 impl PartialTrie for StandardTrie {
     fn new(n: Node<Self>) -> Self {
         Self(n)
@@ -192,7 +204,7 @@ impl PartialTrie for StandardTrie {
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
     {
-        self.0.insert(k, v);
+        self.0.trie_insert(k, v);
     }
 
     fn extend<K, V, I>(&mut self, nodes: I)
@@ -201,21 +213,21 @@ impl PartialTrie for StandardTrie {
         V: Into<ValOrHash>,
         I: IntoIterator<Item = (K, V)>,
     {
-        self.0.extend(nodes)
+        self.0.trie_extend(nodes)
     }
 
     fn get<K>(&self, k: K) -> Option<&[u8]>
     where
         K: Into<Nibbles>,
     {
-        self.0.get(k)
+        self.0.trie_get(k)
     }
 
     fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
     where
         K: Into<Nibbles>,
     {
-        self.0.delete(k)
+        self.0.trie_delete(k)
     }
 
     fn hash(&self) -> H256 {
@@ -223,15 +235,15 @@ impl PartialTrie for StandardTrie {
     }
 
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
-        self.0.items()
+        self.0.trie_items()
     }
 
     fn keys(&self) -> impl Iterator<Item = Nibbles> {
-        self.0.keys()
+        self.0.trie_keys()
     }
 
     fn values(&self) -> impl Iterator<Item = ValOrHash> {
-        self.0.values()
+        self.0.trie_values()
     }
 }
 
@@ -274,14 +286,16 @@ pub struct HashedPartialTrie {
     pub(crate) hash: Arc<RwLock<Option<H256>>>,
 }
 
+impl_from_for_trie_type!(HashedPartialTrie);
+
 impl HashedPartialTrie {
     /// Lazily get calculates the hash for the node,
-    pub fn get_hash(&self) -> H256 {
+    pub(crate) fn get_hash(&self) -> H256 {
         let hash = *self.hash.read();
 
         match hash {
             Some(h) => h,
-            None => self.hash(),
+            None => hash_trie(self),
         }
     }
 
@@ -303,7 +317,7 @@ impl PartialTrie for HashedPartialTrie {
         K: Into<crate::nibbles::Nibbles>,
         V: Into<crate::trie_ops::ValOrHash>,
     {
-        self.node.insert(k, v);
+        self.node.trie_insert(k, v);
         self.set_hash(None);
     }
 
@@ -313,7 +327,7 @@ impl PartialTrie for HashedPartialTrie {
         V: Into<crate::trie_ops::ValOrHash>,
         I: IntoIterator<Item = (K, V)>,
     {
-        self.node.extend(nodes);
+        self.node.trie_extend(nodes);
         self.set_hash(None);
     }
 
@@ -321,33 +335,33 @@ impl PartialTrie for HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        self.node.get(k)
+        self.node.trie_get(k)
     }
 
     fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        let res = self.node.delete(k);
+        let res = self.node.trie_delete(k);
         self.set_hash(None);
 
         res
     }
 
     fn hash(&self) -> H256 {
-        hash_trie(&self.node)
+        self.get_hash()
     }
 
     fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
-        self.node.items()
+        self.node.trie_items()
     }
 
     fn keys(&self) -> impl Iterator<Item = Nibbles> {
-        self.node.keys()
+        self.node.trie_keys()
     }
 
     fn values(&self) -> impl Iterator<Item = ValOrHash> {
-        self.node.values()
+        self.node.trie_values()
     }
 }
 

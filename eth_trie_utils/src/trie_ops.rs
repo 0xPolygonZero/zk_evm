@@ -248,7 +248,7 @@ impl<N: PartialTrie> Iterator for PartialTrieIter<N> {
 }
 
 impl<T: PartialTrie> Node<T> {
-    pub(crate) fn insert<K, V>(&mut self, k: K, v: V)
+    pub(crate) fn trie_insert<K, V>(&mut self, k: K, v: V)
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
@@ -261,25 +261,25 @@ impl<T: PartialTrie> Node<T> {
         *self = node_ref.clone();
     }
 
-    pub(crate) fn extend<K, V, I>(&mut self, nodes: I)
+    pub(crate) fn trie_extend<K, V, I>(&mut self, nodes: I)
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
         I: IntoIterator<Item = (K, V)>,
     {
         for (k, v) in nodes {
-            self.insert(k, v);
+            self.trie_insert(k, v);
         }
     }
 
-    pub(crate) fn get<K>(&self, k: K) -> Option<&[u8]>
+    pub(crate) fn trie_get<K>(&self, k: K) -> Option<&[u8]>
     where
         K: Into<Nibbles>,
     {
-        self.get_intern(&mut k.into())
+        self.trie_get_intern(&mut k.into())
     }
 
-    fn get_intern(&self, curr_nibbles: &mut Nibbles) -> Option<&[u8]> {
+    fn trie_get_intern(&self, curr_nibbles: &mut Nibbles) -> Option<&[u8]> {
         match self {
             Node::Empty | Node::Hash(_) => {
                 trace!("Get traversed {:?}", self);
@@ -294,7 +294,7 @@ impl<T: PartialTrie> Node<T> {
 
                 let nib = curr_nibbles.pop_next_nibble_front();
                 trace!("Get traversed Branch (nibble: {:x})", nib);
-                children[nib as usize].get_intern(curr_nibbles)
+                children[nib as usize].trie_get_intern(curr_nibbles)
             }
             Node::Extension { nibbles, child } => {
                 trace!("Get traversed Extension (nibbles: {:?})", nibbles);
@@ -302,7 +302,7 @@ impl<T: PartialTrie> Node<T> {
 
                 match r.nibbles_are_identical_up_to_smallest_count(nibbles) {
                     false => None,
-                    true => child.get_intern(curr_nibbles),
+                    true => child.trie_get_intern(curr_nibbles),
                 }
             }
             Node::Leaf { nibbles, value } => {
@@ -315,7 +315,7 @@ impl<T: PartialTrie> Node<T> {
         }
     }
 
-    pub(crate) fn delete<K>(&mut self, k: K) -> Option<Vec<u8>>
+    pub(crate) fn trie_delete<K>(&mut self, k: K) -> Option<Vec<u8>>
     where
         K: Into<Nibbles>,
     {
@@ -331,19 +331,19 @@ impl<T: PartialTrie> Node<T> {
         })
     }
 
-    pub(crate) fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
+    pub(crate) fn trie_items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         PartialTrieIter {
             curr_key_after_last_branch: Nibbles::default(),
             trie_stack: vec![IterStackEntry::Root(self.clone().into())],
         }
     }
 
-    pub(crate) fn keys(&self) -> impl Iterator<Item = Nibbles> {
-        self.items().map(|(k, _)| k)
+    pub(crate) fn trie_keys(&self) -> impl Iterator<Item = Nibbles> {
+        self.trie_items().map(|(k, _)| k)
     }
 
-    pub(crate) fn values(&self) -> impl Iterator<Item = ValOrHash> {
-        self.items().map(|(_, v)| v)
+    pub(crate) fn trie_values(&self) -> impl Iterator<Item = ValOrHash> {
+        self.trie_items().map(|(_, v)| v)
     }
 }
 

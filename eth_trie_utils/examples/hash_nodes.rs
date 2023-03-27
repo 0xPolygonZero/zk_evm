@@ -71,13 +71,13 @@ fn main() {
     full_trie.insert(Nibbles::from(0x10_u64), large_val(3)); // 3rd from left.
     full_trie.insert(Nibbles::from(0x11_u64), large_val(4)); // 4th from left.
 
-    let full_trie_hash = full_trie.get_hash();
+    let full_trie_hash = full_trie.hash();
 
     // Slight hack. Normally this has would come from your own logic that is making
     // calls into this crate to construct the `PartialTrie`. May add API to
     // do this in the future if needed.
     let left_side_hash = match &*full_trie {
-        Node::Branch { children, .. } => children[0].get_hash(),
+        Node::Branch { children, .. } => children[0].hash(),
         _ => unreachable!(),
     };
 
@@ -87,7 +87,7 @@ fn main() {
     hash_trie.insert(0x10_u64, large_val(3)); // 3rd from left.
     hash_trie.insert(0x11_u64, large_val(4)); // 4th from left.
 
-    let hash_trie_hash = hash_trie.get_hash();
+    let hash_trie_hash = hash_trie.hash();
 
     // Hashes should be equal.
     assert_eq!(full_trie_hash, hash_trie_hash);

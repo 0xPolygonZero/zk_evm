@@ -61,9 +61,9 @@ fn main() {
     // `to_nibbles_byte_padded`.
     let hash_1 =
         HashedPartialTrie::from_iter(once((0x19002_u32.to_nibbles_byte_padded(), vec![4, 5, 6])))
-            .get_hash();
+            .hash();
     let hash_2 =
-        HashedPartialTrie::from_iter(once((0x19002_u32.to_nibbles(), vec![4, 5, 6]))).get_hash();
+        HashedPartialTrie::from_iter(once((0x19002_u32.to_nibbles(), vec![4, 5, 6]))).hash();
     assert_ne!(hash_1, hash_2);
 
     // Finally note that `Nibbles` which are constructed from bytes are always

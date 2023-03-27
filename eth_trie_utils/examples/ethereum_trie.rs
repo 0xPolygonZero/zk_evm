@@ -10,6 +10,7 @@
 
 use std::ops::RangeInclusive;
 
+use eth_trie_utils::partial_trie::PartialTrie;
 use eth_trie_utils::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, StandardTrie},
@@ -67,7 +68,7 @@ fn generate_fake_account_and_storage_trie(
     let acc_entry = StateTrieEntry {
         nonce: gen_u256(rng),
         balance: gen_u256(rng),
-        storage_root: account_storage_trie.get_hash(),
+        storage_root: account_storage_trie.hash(),
         code_hash: rng.gen(), /* For the test, the contract code does not exist, so we can just
                                * "fake" it here. */
     };
