@@ -8,7 +8,8 @@ use log::info;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 
 use crate::{
-    partial_trie::{Nibbles, PartialTrie},
+    nibbles::Nibbles,
+    partial_trie::{Node, PartialTrie},
     trie_ops::ValOrHash,
     utils::is_even,
 };
@@ -96,20 +97,18 @@ fn gen_n_random_trie_entries_common<F: Fn(&mut StdRng) -> Nibbles>(
     u256_gen_f: F,
 ) -> impl Iterator<Item = TestInsertValEntry> {
     let mut rng = StdRng::seed_from_u64(seed);
-    (0..n)
-        .into_iter()
-        .map(move |i| (u256_gen_f(&mut rng), i.to_be_bytes().to_vec()))
+    (0..n).map(move |i| (u256_gen_f(&mut rng), i.to_be_bytes().to_vec()))
 }
 
-pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie(
-    trie: &PartialTrie,
+pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie<N: PartialTrie>(
+    trie: &Node<N>,
     n: usize,
     seed: u64,
 ) -> Vec<TestInsertHashEntry> {
     let mut rng = StdRng::seed_from_u64(seed);
 
     // Pretty inefficient, but ok for tests.
-    trie.items()
+    trie.trie_items()
         .filter(|(k, v)| k.count <= 63 && matches!(v, ValOrHash::Val(_)))
         .map(|(k, _)| k.merge_nibble(1))
         .choose_multiple(&mut rng, n)
@@ -147,9 +146,11 @@ fn gen_variable_nibbles(rng: &mut StdRng) -> Nibbles {
 }
 
 // TODO: Replace with `PartialTrie` `iter` methods once done...
-pub(crate) fn get_non_hash_values_in_trie(trie: &PartialTrie) -> HashSet<TestInsertValEntry> {
+pub(crate) fn get_non_hash_values_in_trie<N: PartialTrie>(
+    trie: &Node<N>,
+) -> HashSet<TestInsertValEntry> {
     info!("Collecting all entries inserted into trie...");
-    trie.items()
+    trie.trie_items()
         .map(|(k, v)| (k, v.expect_leaf_val()))
         .collect()
 }

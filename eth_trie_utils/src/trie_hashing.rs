@@ -3,86 +3,97 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
-use crate::partial_trie::PartialTrie;
+use crate::partial_trie::{Node, PartialTrie, TrieNodeIntern};
 
 /// The node type used for calculating the hash of a trie.
 #[derive(Debug)]
-enum EncodedNode {
+pub(crate) enum EncodedNode {
     /// Node that is RLPed but not hashed.
     Raw(Bytes),
     /// Node that is hashed.
     Hashed([u8; 32]),
 }
 
-impl PartialTrie {
-    /// Calculates the hash of a node.
-    /// Assumes that all leaf values are already rlp encoded.
-    pub fn calc_hash(&self) -> H256 {
-        let trie_hash_bytes = self.rlp_encode_and_hash_node();
-
-        let h = match trie_hash_bytes {
-            EncodedNode::Raw(b) => hash(&b),
-            EncodedNode::Hashed(h) => h,
-        };
-
-        keccak_hash::H256::from_slice(&h)
-    }
-
-    fn rlp_encode_and_hash_node(&self) -> EncodedNode {
-        match self {
-            PartialTrie::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
-            PartialTrie::Hash(h) => EncodedNode::Hashed(h.0),
-            PartialTrie::Branch { children, value } => {
-                let mut stream = RlpStream::new_list(17);
-
-                for c in children.iter() {
-                    Self::append_to_stream(&mut stream, c.rlp_encode_and_hash_node());
-                }
-
-                match value.is_empty() {
-                    false => stream.append(value),
-                    true => stream.append_empty_data(),
-                };
-
-                Self::hash_bytes_if_large_enough(stream.out().into())
-            }
-            PartialTrie::Extension { nibbles, child } => {
-                let mut stream = RlpStream::new_list(2);
-
-                stream.append(&nibbles.to_hex_prefix_encoding(false));
-                Self::append_to_stream(&mut stream, child.rlp_encode_and_hash_node());
-
-                Self::hash_bytes_if_large_enough(stream.out().into())
-            }
-            PartialTrie::Leaf { nibbles, value } => {
-                let hex_prefix_k = nibbles.to_hex_prefix_encoding(true);
-                let mut stream = RlpStream::new_list(2);
-
-                stream.append(&hex_prefix_k);
-                stream.append(value);
-
-                Self::hash_bytes_if_large_enough(stream.out().into())
-            }
+impl From<&EncodedNode> for H256 {
+    fn from(v: &EncodedNode) -> Self {
+        match v {
+            EncodedNode::Raw(b) => bytes_to_h256(&hash(b)),
+            EncodedNode::Hashed(h) => bytes_to_h256(h),
         }
-    }
-
-    fn hash_bytes_if_large_enough(bytes: Bytes) -> EncodedNode {
-        match bytes.len() >= 32 {
-            false => EncodedNode::Raw(bytes),
-            true => EncodedNode::Hashed(hash(&bytes)),
-        }
-    }
-
-    fn append_to_stream(s: &mut RlpStream, node: EncodedNode) {
-        match node {
-            EncodedNode::Raw(b) => s.append_raw(&b, 1),
-            EncodedNode::Hashed(h) => s.append(&h.as_ref()),
-        };
     }
 }
 
+/// Calculates the hash of a node.
+/// Assumes that all leaf values are already rlp encoded.
+pub(crate) fn hash_trie<N: PartialTrie + TrieNodeIntern>(node: &Node<N>) -> H256 {
+    let trie_hash_bytes = rlp_encode_and_hash_node(node);
+    (&trie_hash_bytes).into()
+}
+
+pub(crate) fn rlp_encode_and_hash_node<N: PartialTrie + TrieNodeIntern>(
+    node: &Node<N>,
+) -> EncodedNode {
+    let res = match node {
+        Node::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
+        Node::Hash(h) => EncodedNode::Hashed(h.0),
+        Node::Branch { children, value } => {
+            let mut stream = RlpStream::new_list(17);
+
+            for c in children.iter() {
+                append_to_stream(&mut stream, c.hash_intern());
+            }
+
+            match value.is_empty() {
+                false => stream.append(value),
+                true => stream.append_empty_data(),
+            };
+
+            hash_bytes_if_large_enough(stream.out().into())
+        }
+        Node::Extension { nibbles, child } => {
+            let mut stream = RlpStream::new_list(2);
+
+            stream.append(&nibbles.to_hex_prefix_encoding(false));
+            append_to_stream(&mut stream, child.hash_intern());
+
+            hash_bytes_if_large_enough(stream.out().into())
+        }
+        Node::Leaf { nibbles, value } => {
+            let hex_prefix_k = nibbles.to_hex_prefix_encoding(true);
+            let mut stream = RlpStream::new_list(2);
+
+            stream.append(&hex_prefix_k);
+            stream.append(value);
+
+            hash_bytes_if_large_enough(stream.out().into())
+        }
+    };
+
+    res
+}
+
+fn hash_bytes_if_large_enough(bytes: Bytes) -> EncodedNode {
+    match bytes.len() >= 32 {
+        false => EncodedNode::Raw(bytes),
+        true => EncodedNode::Hashed(hash(&bytes)),
+    }
+}
+
+fn append_to_stream(s: &mut RlpStream, node: EncodedNode) {
+    match node {
+        EncodedNode::Raw(b) => s.append_raw(&b, 1),
+        EncodedNode::Hashed(h) => s.append(&h.as_ref()),
+    };
+}
+
+// impl Node<Pa>
+
 fn hash(bytes: &Bytes) -> [u8; 32] {
     keccak(bytes).0
+}
+
+fn bytes_to_h256(b: &[u8; 32]) -> H256 {
+    keccak_hash::H256::from_slice(b)
 }
 
 #[cfg(test)]
@@ -97,7 +108,8 @@ mod tests {
     use serde::Deserialize;
 
     use crate::{
-        partial_trie::{Nibble, Nibbles, PartialTrie, WrappedNode},
+        nibbles::{Nibble, Nibbles},
+        partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode},
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
             generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, large_entry,
@@ -220,11 +232,11 @@ mod tests {
     fn get_root_hashes_for_our_trie_after_each_insert(
         entries: impl Iterator<Item = TestInsertValEntry>,
     ) -> impl Iterator<Item = H256> {
-        let mut trie = PartialTrie::Empty;
+        let mut trie = HashedPartialTrie::new(Node::Empty);
 
         entries.map(move |(k, v)| {
             trie.insert(k, v);
-            trie.calc_hash()
+            trie.get_hash()
         })
     }
 
@@ -243,8 +255,8 @@ mod tests {
     fn empty_hash_is_correct() {
         common_setup();
 
-        let trie = PartialTrie::Empty;
-        assert_eq!(keccak_hash::KECCAK_NULL_RLP, trie.calc_hash());
+        let trie = HashedPartialTrie::new(Node::Empty);
+        assert_eq!(keccak_hash::KECCAK_NULL_RLP, trie.get_hash());
     }
 
     #[test]
@@ -265,7 +277,7 @@ mod tests {
             get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
                 .next()
                 .unwrap();
-        let our_hash = PartialTrie::from_iter(once(ins_entry)).calc_hash();
+        let our_hash = HashedPartialTrie::from_iter(once(ins_entry)).get_hash();
 
         assert_eq!(py_evm_truth_val, our_hash);
         assert_eq!(eth_trie_lib_truth_val, our_hash);
@@ -354,7 +366,7 @@ mod tests {
         )
         .collect();
 
-        let mut our_trie = PartialTrie::from_iter(entries.iter().cloned());
+        let mut our_trie = HashedPartialTrie::from_iter(entries.iter().cloned());
         let mut truth_trie = create_truth_trie();
 
         for (k, v) in entries.iter() {
@@ -368,13 +380,13 @@ mod tests {
             truth_trie.remove(&k.bytes_be()).unwrap();
 
             let truth_root_hash = H256(truth_trie.root_hash().unwrap().0);
-            assert_eq!(our_trie.calc_hash(), truth_root_hash);
+            assert_eq!(our_trie.get_hash(), truth_root_hash);
         }
     }
 
     #[test]
     fn replacing_branch_of_leaves_with_hash_nodes_produced_same_hash() {
-        let mut trie = PartialTrie::from_iter(
+        let mut trie = HashedPartialTrie::from_iter(
             [
                 large_entry(0x1),
                 large_entry(0x2),
@@ -384,19 +396,21 @@ mod tests {
             .into_iter(),
         );
 
-        let orig_hash = trie.calc_hash();
+        let orig_hash = trie.hash();
 
         let children = get_branch_children_expected(&mut trie);
-        children[1] = PartialTrie::Hash(children[1].calc_hash()).into();
-        children[4] = PartialTrie::Hash(children[4].calc_hash()).into();
+        children[1] = Node::Hash(children[1].get_hash()).into();
+        children[4] = Node::Hash(children[4].get_hash()).into();
 
-        let new_hash = trie.calc_hash();
+        let new_hash = trie.get_hash();
         assert_eq!(orig_hash, new_hash);
     }
 
-    fn get_branch_children_expected(node: &mut PartialTrie) -> &mut [WrappedNode; 16] {
+    fn get_branch_children_expected(
+        node: &mut Node<HashedPartialTrie>,
+    ) -> &mut [WrappedNode<HashedPartialTrie>; 16] {
         match node {
-            PartialTrie::Branch { children, .. } => children,
+            Node::Branch { children, .. } => children,
             _ => unreachable!(),
         }
     }
@@ -415,21 +429,21 @@ mod tests {
             )
         });
 
-        let mut trie = PartialTrie::from_iter(entries);
-        let orig_hash = trie.calc_hash();
+        let mut trie = HashedPartialTrie::from_iter(entries);
+        let orig_hash = trie.get_hash();
 
-        let root_branch_children = match &mut trie {
-            PartialTrie::Branch { children, .. } => children,
+        let root_branch_children = match &mut *trie {
+            Node::Branch { children, .. } => children,
             _ => unreachable!(),
         };
 
         // Replace every even branch node in the root with a hash node.
         for i in (0..16).step_by(2) {
-            let child_hash = root_branch_children[i].calc_hash();
-            root_branch_children[i] = PartialTrie::Hash(child_hash).into();
+            let child_hash = root_branch_children[i].get_hash();
+            root_branch_children[i] = Node::Hash(child_hash).into();
         }
 
-        let new_hash = trie.calc_hash();
+        let new_hash = trie.get_hash();
         assert_eq!(orig_hash, new_hash);
     }
 }
