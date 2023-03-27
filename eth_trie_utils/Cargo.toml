@@ -44,5 +44,4 @@ name = "simple"
 doc-scrape-examples = true
 
 [package.metadata.docs.rs]
-# Remove "all" once we have an `examples` directory...
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

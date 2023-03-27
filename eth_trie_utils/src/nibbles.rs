@@ -100,7 +100,7 @@ impl_to_nibbles!(U256);
 ///
 /// It's important to note that leading `0` bits are part of a key. For example:
 /// ```rust
-/// # use eth_trie_utils::partial_trie::Nibbles;
+/// # use eth_trie_utils::nibbles::Nibbles;
 /// # use std::str::FromStr;
 /// let n1 = Nibbles::from_str("0x123").unwrap();
 /// let n2 = Nibbles::from_str("0x0123").unwrap();
@@ -111,7 +111,7 @@ impl_to_nibbles!(U256);
 /// nearest byte like other trie libraries generally do. If you need this
 /// behavior, you can construct `Nibbles` like this:
 /// ```rust
-/// # use eth_trie_utils::partial_trie::ToNibbles;
+/// # use eth_trie_utils::nibbles::ToNibbles;
 ///
 /// let padded = 0x123_u64.to_nibbles_byte_padded();
 /// assert_eq!(format!("{:x}", padded), "0x0123");
@@ -126,7 +126,7 @@ impl_to_nibbles!(U256);
 /// creating a key directly from an integer, there is no way to know if a
 /// leading `0` was passed in.
 /// ```rust
-/// # use eth_trie_utils::partial_trie::Nibbles;
+/// # use eth_trie_utils::nibbles::Nibbles;
 ///
 /// let n1 = Nibbles::from(0x123_u64);
 /// let n2 = Nibbles::from(0x00000000123_u64); // Use `from_str` or construct `Nibbles` explicitly instead here.
