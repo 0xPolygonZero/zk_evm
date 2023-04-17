@@ -203,8 +203,11 @@ impl<N: PartialTrie> TrackedNodeInfo<N> {
     }
 }
 
-/// Create a [`PartialTrie`] subset from a base trie given a list of keys of
-/// leaf nodes that must be present in the subset.
+/// Create a [`PartialTrie`] subset from a base trie given an iterator of keys
+/// of nodes that may or may not exist in the trie. All nodes traversed by the
+/// keys will not be hashed out in the trie subset. If the key does not exist in
+/// the trie at all, this is not considered an error and will still record which
+/// nodes were visited.
 pub fn create_trie_subset<N, K, I>(trie: &N, keys_involved: I) -> SubsetTrieResult<N>
 where
     N: PartialTrie,
@@ -216,7 +219,8 @@ where
 }
 
 /// Create [`PartialTrie`] subsets from a given base `PartialTrie` given a
-/// iterator of keys per subset needed.
+/// iterator of keys per subset needed. See [`create_trie_subset`] for more
+/// info.
 pub fn create_trie_subsets<N, K, I, O>(base_trie: &N, keys_involved: O) -> SubsetTrieResult<Vec<N>>
 where
     N: PartialTrie,
@@ -259,7 +263,8 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
     trie.info.touched = true;
 
     match &mut trie.node {
-        TrackedNodeIntern::Empty | TrackedNodeIntern::Hash => match curr_nibbles.is_empty() {
+        TrackedNodeIntern::Empty => Ok(()),
+        TrackedNodeIntern::Hash => match curr_nibbles.is_empty() {
             false => Err(SubsetTrieError::UnexpectedKey(
                 *curr_nibbles,
                 format!("{:?}", trie),
@@ -281,23 +286,11 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
             let r = curr_nibbles.pop_nibbles_front(nibbles.count);
 
             match r.nibbles_are_identical_up_to_smallest_count(nibbles) {
-                false => Err(SubsetTrieError::UnexpectedKey(
-                    *curr_nibbles,
-                    format!("{:?}", trie),
-                )),
+                false => Ok(()),
                 true => mark_nodes_that_are_needed(child, curr_nibbles),
             }
         }
-        TrackedNodeIntern::Leaf => {
-            let nibbles = trie.info.get_nibbles_expected();
-            match nibbles.nibbles_are_identical_up_to_smallest_count(curr_nibbles) {
-                false => Err(SubsetTrieError::UnexpectedKey(
-                    *curr_nibbles,
-                    format!("{:?}", trie),
-                )),
-                true => Ok(()),
-            }
-        }
+        TrackedNodeIntern::Leaf => Ok(()),
     }
 }
 
@@ -343,6 +336,8 @@ fn reset_tracked_trie_state<N: PartialTrie>(tracked_node: &mut TrackedNode<N>) {
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, iter::once};
+
+    use ethereum_types::H256;
 
     use super::{create_trie_subset, create_trie_subsets};
     use crate::{
@@ -421,21 +416,29 @@ mod tests {
     }
 
     #[test]
-    fn empty_trie_returns_err_on_query() {
+    fn empty_trie_does_not_return_err_on_query() {
         let trie = TrieType::default();
         let nibbles: Nibbles = 0x1234.into();
         let res = create_trie_subset(&trie, once(nibbles));
 
-        assert!(res.is_err());
+        assert!(res.is_ok());
     }
 
     #[test]
-    fn non_existent_key_returns_err() {
+    fn non_existent_key_does_not_return_err() {
         let mut trie = TrieType::default();
         trie.insert(0x1234, vec![0, 1, 2]);
         let res = create_trie_subset(&trie, once(0x5678));
 
-        assert!(res.is_err());
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn encountering_a_hash_node_returns_err() {
+        let trie = HashedPartialTrie::new(Node::Hash(H256::zero()));
+        let res = create_trie_subset(&trie, once(0x1234));
+
+        assert!(res.is_err())
     }
 
     #[test]
@@ -498,7 +501,7 @@ mod tests {
 
         let all_non_empty_and_hash_nodes =
             get_all_non_empty_and_hash_nodes_in_trie(&trie_subset_all);
-        println!("{:#?}", all_non_empty_and_hash_nodes);
+
         assert_node_exists(
             &all_non_empty_and_hash_nodes,
             TrieNodeType::Branch,

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::mem::size_of;
 use std::{
     fmt::{Display, LowerHex, UpperHex},
@@ -8,6 +8,7 @@ use std::{
 
 use bytes::{Bytes, BytesMut};
 use ethereum_types::{H256, U128, U256};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uint::FromHexError;
@@ -48,6 +49,15 @@ pub enum BytesToNibblesError {
 
     #[error("Tried constructing `Nibbles` from a byte slice with more than 32 bytes (len: {0})")]
     TooManyBytes(usize),
+}
+
+#[derive(Debug, Error)]
+pub enum FromHexPrefixError {
+    #[error("Tried to convert a hex prefix byte string into `Nibbles` with invalid flags at the start: {0:#04b}")]
+    InvalidFlags(Nibble),
+
+    #[error("Tried to convert a hex prefix byte string into `Nibbles` that was longer than 64 bytes: (length: {0}, bytes: {1})")]
+    TooLong(String, usize),
 }
 
 #[derive(Debug, Error)]
@@ -184,13 +194,13 @@ impl FromStr for Nibbles {
 }
 
 impl LowerHex for Nibbles {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_hex_str(|bytes| hex::encode(bytes)))
     }
 }
 
 impl UpperHex for Nibbles {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_hex_str(|bytes| hex::encode_upper(bytes)))
     }
 }
@@ -608,7 +618,7 @@ impl Nibbles {
         hex_string
     }
 
-    /// Converts `Nibbles` to hex-prefix encoding.
+    /// Converts [`Nibbles`] to hex-prefix encoding (AKA "compact").
     /// This appends an extra nibble to the end which encodes if the node is
     /// even and if it's a leaf (terminator) or not.
     pub fn to_hex_prefix_encoding(&self, is_leaf: bool) -> Bytes {
@@ -636,6 +646,59 @@ impl Nibbles {
         bytes[flag_byte_idx] |= flags;
 
         Bytes::copy_from_slice(&bytes[flag_byte_idx..33])
+    }
+
+    /// Converts a hex prefix byte string ("AKA "compact") into `Nibbles`.
+    pub fn from_hex_prefix_encoding(hex_prefix_bytes: &[u8]) -> Result<Self, FromHexPrefixError> {
+        if hex_prefix_bytes.len() > 32 {
+            return Err(FromHexPrefixError::TooLong(
+                hex::encode(hex_prefix_bytes),
+                hex_prefix_bytes.len(),
+            ));
+        }
+
+        let flag_bits = (hex_prefix_bytes[0] & 0b11110000) >> 4;
+
+        // is_odd --> 0b01
+        // is_leaf --> 0b10
+        let (is_leaf, tot_nib_modifier) = match flag_bits {
+            0b00 => (false, -2),
+            0b01 => (false, -1),
+            0b10 => (true, 0),
+            0b11 => (true, 1),
+            _ => return Err(FromHexPrefixError::InvalidFlags(flag_bits)),
+        };
+
+        let count = ((hex_prefix_bytes.len() * 2) as isize + tot_nib_modifier) as usize;
+        let odd_nib_count = count & 0b1 == 1;
+
+        let hex_prefix_nibs_iter = hex_prefix_bytes.iter().skip(1).flat_map(|b| {
+            let upper_nib = (b & 0b11110000) >> 4;
+            let lower_nib = b & 0b00001111;
+
+            [upper_nib, lower_nib].into_iter()
+        });
+
+        // Not loving the extra `Vec` allocation, but this is a limitation of the API
+        // exposed by `U256`...
+        let mut nibbles_raw = Vec::with_capacity(count);
+
+        if odd_nib_count {
+            nibbles_raw.push(hex_prefix_bytes[0] & 0b1111)
+        }
+
+        nibbles_raw.extend(hex_prefix_nibs_iter.tuples().map(|(u, l)| (u << 4) | l));
+
+        if is_leaf {
+            nibbles_raw.push(16);
+        }
+
+        let x = Self {
+            count,
+            packed: U256::from_big_endian(&nibbles_raw),
+        };
+
+        Ok(x)
     }
 
     /// Returns the minimum number of bytes needed to represent these `Nibbles`.
@@ -687,6 +750,7 @@ mod tests {
     use ethereum_types::H256;
 
     use super::{Nibble, Nibbles, ToNibbles};
+    use crate::nibbles::FromHexPrefixError;
 
     #[test]
     fn get_nibble_works() {
@@ -974,6 +1038,58 @@ mod tests {
         bytes_padded[8 - bytes.len()..8].clone_from_slice(&bytes);
 
         u64::from_be_bytes(bytes_padded)
+    }
+
+    #[test]
+    fn nibbles_from_hex_prefix_encoding_works() {
+        assert_eq!(
+            from_hex_prefix_encoding_str_unwrapped("0x001234"),
+            Nibbles::from(0x1234)
+        );
+        assert_eq!(
+            from_hex_prefix_encoding_str_unwrapped("0x201234"),
+            Nibbles::from(0x123410)
+        );
+        assert_eq!(
+            from_hex_prefix_encoding_str_unwrapped("0x112345"),
+            Nibbles::from(0x12345)
+        );
+        assert_eq!(
+            from_hex_prefix_encoding_str_unwrapped("0x312345"),
+            Nibbles::from(0x1234510)
+        );
+    }
+
+    fn from_hex_prefix_encoding_str(k: &str) -> Result<Nibbles, FromHexPrefixError> {
+        Nibbles::from_hex_prefix_encoding(&Nibbles::from_str(k).unwrap().bytes_be())
+    }
+
+    fn from_hex_prefix_encoding_str_unwrapped(k: &str) -> Nibbles {
+        from_hex_prefix_encoding_str(k).unwrap()
+    }
+
+    #[test]
+    fn nibbles_from_hex_prefix_encoding_errors_if_flags_invalid() {
+        assert!(matches!(
+            from_hex_prefix_encoding_str("0x401234"),
+            Err(FromHexPrefixError::InvalidFlags(_))
+        ));
+        assert!(matches!(
+            from_hex_prefix_encoding_str("0xF12345"),
+            Err(FromHexPrefixError::InvalidFlags(_))
+        ));
+    }
+
+    #[test]
+    fn nibbles_from_hex_prefix_encoding_errors_if_too_large() {
+        // 66 bytes long.
+        let b = hex::decode("100000000000000000000000000000000000000000000000000000000000000000")
+            .unwrap();
+
+        assert!(matches!(
+            Nibbles::from_hex_prefix_encoding(&b),
+            Err(FromHexPrefixError::TooLong(_, _))
+        ));
     }
 
     #[test]

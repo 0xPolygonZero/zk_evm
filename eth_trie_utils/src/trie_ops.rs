@@ -3,6 +3,7 @@
 
 use std::{fmt::Display, mem::size_of};
 
+use enum_as_inner::EnumAsInner;
 use ethereum_types::{H256, U128, U256};
 use log::trace;
 
@@ -41,7 +42,7 @@ impl InsertEntry {
 ///  
 /// Entries in the trie may either be actual values or
 /// [`Hash`](crate::partial_trie::Node::Hash) nodes.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, EnumAsInner, Eq, Hash, PartialEq)]
 pub enum ValOrHash {
     /// A value in a trie.
     Val(Vec<u8>),
@@ -58,6 +59,7 @@ macro_rules! impl_eth_type_from_for_val_variant {
                 let size = size_of::<Self>();
 
                 let mut buf = Vec::with_capacity(size);
+                buf.resize(32, 0);
                 v.to_big_endian(&mut buf);
                 ValOrHash::Val(buf)
             }
@@ -102,11 +104,14 @@ impl_prim_int_from_for_val_variant!(u16);
 impl_prim_int_from_for_val_variant!(u8);
 
 impl ValOrHash {
-    pub fn expect_leaf_val(self) -> Vec<u8> {
-        match self {
-            ValOrHash::Val(leaf_v) => leaf_v,
-            ValOrHash::Hash(h) => panic!("Expected a value we were inserting to be a leaf value but instead found a hash! (hash: {h})"),
-        }
+    pub fn expect_hash(self) -> H256 {
+        self.into_hash()
+            .expect("Expected a `ValOrHash` to be a hash")
+    }
+
+    pub fn expect_val(self) -> Vec<u8> {
+        self.into_val()
+            .expect("Expected a `ValOrHash` to be a value")
     }
 }
 
@@ -608,8 +613,9 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field<N: PartialTrie>
             value.clone(),
             ins_entry_into_leaf_and_nibble(info, new_node_entry),
         ),
+
         (_, 0, _) => ExistingOrNewBranchValuePlacement::BranchValue(
-            new_node_entry.v.expect_leaf_val(),
+            new_node_entry.v.expect_val(),
             (info.existing_postfix.get_nibble(0), existing_node.clone()),
         ),
         (_, _, _) => ExistingOrNewBranchValuePlacement::BothBranchChildren(

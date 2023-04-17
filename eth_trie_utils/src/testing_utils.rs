@@ -151,7 +151,7 @@ pub(crate) fn get_non_hash_values_in_trie<N: PartialTrie>(
 ) -> HashSet<TestInsertValEntry> {
     info!("Collecting all entries inserted into trie...");
     trie.trie_items()
-        .map(|(k, v)| (k, v.expect_leaf_val()))
+        .map(|(k, v)| (k, v.expect_val()))
         .collect()
 }
 
