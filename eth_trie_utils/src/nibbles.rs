@@ -1,5 +1,8 @@
-use std::fmt::{self, Debug};
 use std::mem::size_of;
+use std::{
+    fmt::{self, Debug},
+    iter::once,
+};
 use std::{
     fmt::{Display, LowerHex, UpperHex},
     ops::Range,
@@ -8,7 +11,6 @@ use std::{
 
 use bytes::{Bytes, BytesMut};
 use ethereum_types::{H256, U128, U256};
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uint::FromHexError;
@@ -672,33 +674,40 @@ impl Nibbles {
         let count = ((hex_prefix_bytes.len() * 2) as isize + tot_nib_modifier) as usize;
         let odd_nib_count = count & 0b1 == 1;
 
-        let hex_prefix_nibs_iter = hex_prefix_bytes.iter().skip(1).flat_map(|b| {
-            let upper_nib = (b & 0b11110000) >> 4;
-            let lower_nib = b & 0b00001111;
+        let hex_prefix_byes_iter = hex_prefix_bytes.iter().skip(1).cloned();
 
-            [upper_nib, lower_nib].into_iter()
-        });
-
-        // Not loving the extra `Vec` allocation, but this is a limitation of the API
-        // exposed by `U256`...
-        let mut nibbles_raw = Vec::with_capacity(count);
+        let mut i = 0;
+        let mut nibbles_raw = [0; 32];
 
         if odd_nib_count {
-            nibbles_raw.push(hex_prefix_bytes[0] & 0b1111)
+            Self::write_byte_iter_to_byte_buf(
+                &mut nibbles_raw,
+                once(hex_prefix_bytes[0] & 0b1111),
+                &mut i,
+            );
         }
 
-        nibbles_raw.extend(hex_prefix_nibs_iter.tuples().map(|(u, l)| (u << 4) | l));
+        Self::write_byte_iter_to_byte_buf(&mut nibbles_raw, hex_prefix_byes_iter, &mut i);
 
         if is_leaf {
-            nibbles_raw.push(16);
+            Self::write_byte_iter_to_byte_buf(&mut nibbles_raw, once(16), &mut i);
         }
+
+        let tot_bytes = (count + 1) / 2;
 
         let x = Self {
             count,
-            packed: U256::from_big_endian(&nibbles_raw),
+            packed: U256::from_big_endian(&nibbles_raw[..tot_bytes]),
         };
 
         Ok(x)
+    }
+
+    fn write_byte_iter_to_byte_buf(buf: &mut [u8], bytes: impl Iterator<Item = u8>, i: &mut usize) {
+        for b in bytes {
+            buf[*i] = b;
+            *i += 1;
+        }
     }
 
     /// Returns the minimum number of bytes needed to represent these `Nibbles`.
@@ -1057,6 +1066,13 @@ mod tests {
         assert_eq!(
             from_hex_prefix_encoding_str_unwrapped("0x312345"),
             Nibbles::from(0x1234510)
+        );
+        assert_eq!(
+            from_hex_prefix_encoding_str_unwrapped(
+                "0x2000080000000000000000000000000000000000000000000000000000000000"
+            ),
+            Nibbles::from_str("0x0008000000000000000000000000000000000000000000000000000000000010")
+                .unwrap()
         );
     }
 
