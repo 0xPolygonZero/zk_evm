@@ -10,7 +10,7 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
-use ethereum_types::{H256, U128, U256};
+use ethereum_types::{H256, U128, U256, U512};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uint::FromHexError;
@@ -19,6 +19,7 @@ use crate::utils::{create_mask_of_1s, is_even};
 
 // Use a whole byte for a Nibble just for convenience
 pub type Nibble = u8;
+pub type NibblesIntern = U512;
 
 /// Because there are two different ways to convert to `Nibbles`, we don't want
 /// to rely on `From`. Instead, we'll define a new trait that defines both
@@ -101,6 +102,7 @@ impl_to_nibbles!(u32);
 impl_to_nibbles!(u64);
 impl_to_nibbles!(U128);
 impl_to_nibbles!(U256);
+impl_to_nibbles!(U512);
 
 #[derive(Copy, Clone, Deserialize, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 /// A sequence of nibbles which is used as the key type into
@@ -151,12 +153,13 @@ pub struct Nibbles {
     pub count: usize,
     /// A packed encoding of these nibbles. Only the first (least significant)
     /// `4 * count` bits are used. The rest are unused and should be zero.
-    pub packed: U256,
+    pub packed: NibblesIntern,
 }
 
 impl Display for Nibbles {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:x}", self.packed)
+        // By default, just use lower hex.
+        <Self as LowerHex>::fmt(self, f)
     }
 }
 
@@ -170,12 +173,7 @@ impl Debug for Nibbles {
     }
 }
 
-impl From<Nibbles> for U256 {
-    fn from(n: Nibbles) -> Self {
-        n.packed
-    }
-}
-
+// TODO: This impl is going to need to change once we move away from `U256`s...
 impl FromStr for Nibbles {
     type Err = StrToNibblesError;
 
@@ -186,11 +184,11 @@ impl FromStr for Nibbles {
             .chars()
             .position(|c| c != '0')
             .unwrap_or(stripped_str.len());
-        let packed = U256::from_str(s)?;
+        let packed = U512::from_str(s)?;
 
         Ok(Self {
             count: leading_zeros + Self::get_num_nibbles_in_key(&packed),
-            packed,
+            packed, // TODO: Remove this hack...
         })
     }
 }
@@ -213,7 +211,7 @@ impl Nibbles {
     /// Returns an error if the byte slice is empty or is longer than `32`
     /// bytes.
     pub fn from_bytes_be(bytes: &[u8]) -> Result<Self, BytesToNibblesError> {
-        Self::from_bytes(bytes, U256::from_big_endian)
+        Self::from_bytes(bytes, U512::from_big_endian)
     }
 
     /// Creates `Nibbles` from little endian bytes.
@@ -221,18 +219,18 @@ impl Nibbles {
     /// Returns an error if the byte slice is empty or is longer than `32`
     /// bytes.
     pub fn from_bytes_le(bytes: &[u8]) -> Result<Self, BytesToNibblesError> {
-        Self::from_bytes(bytes, U256::from_little_endian)
+        Self::from_bytes(bytes, U512::from_little_endian)
     }
 
     fn from_bytes<F>(bytes: &[u8], conv_f: F) -> Result<Self, BytesToNibblesError>
     where
-        F: FnOnce(&[u8]) -> U256,
+        F: FnOnce(&[u8]) -> NibblesIntern,
     {
         if bytes.is_empty() {
             return Err(BytesToNibblesError::ZeroSizedKey);
         }
 
-        if bytes.len() > 32 {
+        if bytes.len() > 33 {
             return Err(BytesToNibblesError::TooManyBytes(bytes.len()));
         }
 
@@ -335,7 +333,7 @@ impl Nibbles {
         let shift_amt = 4 * self.count;
 
         self.count += 1;
-        self.packed |= U256::from(n) << shift_amt;
+        self.packed |= U512::from(n) << shift_amt;
     }
 
     /// Pushes a nibble to the back.
@@ -534,8 +532,8 @@ impl Nibbles {
     /// Reverses the `Nibbles` such that the last `Nibble` is now the first
     /// `Nibble`.
     pub fn reverse(&self) -> Nibbles {
-        let mut mask = U256::from(0xf);
-        let mut reversed_packed = U256::zero();
+        let mut mask = U512::from(0xf);
+        let mut reversed_packed = U512::zero();
 
         for i in 0..self.count {
             reversed_packed <<= 4;
@@ -585,7 +583,7 @@ impl Nibbles {
             return n1.count;
         }
 
-        let mut curr_mask: U256 = (U256::from(0xf)) << ((n1.count - 1) * 4);
+        let mut curr_mask: U512 = (U512::from(0xf)) << ((n1.count - 1) * 4);
         for i in 0..n1.count {
             if n1.packed & curr_mask != n2.packed & curr_mask {
                 return i;
@@ -602,11 +600,11 @@ impl Nibbles {
     where
         F: Fn(&[u8]) -> String,
     {
-        let mut byte_buf = [0; 32];
+        let mut byte_buf = [0; 64];
         self.packed.to_big_endian(&mut byte_buf);
 
         let count_bytes = self.min_bytes();
-        let hex_string_raw = hex_encode_f(&byte_buf[(32 - count_bytes)..32]);
+        let hex_string_raw = hex_encode_f(&byte_buf[(64 - count_bytes)..64]);
         let hex_char_iter_raw = hex_string_raw.chars();
 
         let hex_char_iter = match is_even(self.count) {
@@ -626,10 +624,10 @@ impl Nibbles {
     pub fn to_hex_prefix_encoding(&self, is_leaf: bool) -> Bytes {
         let num_nibbles = self.count + 1;
         let num_bytes = (num_nibbles + 1) / 2;
-        let flag_byte_idx = 33 - num_bytes;
+        let flag_byte_idx = 65 - num_bytes;
 
         // Needed because `to_big_endian` always writes `32` bytes.
-        let mut bytes = BytesMut::zeroed(33);
+        let mut bytes = BytesMut::zeroed(65);
 
         let is_even = is_even(self.count);
         let odd_bit = match is_even {
@@ -643,11 +641,10 @@ impl Nibbles {
         };
 
         let flags: u8 = (odd_bit | (term_bit << 1)) << 4;
-        self.packed.to_big_endian(&mut bytes[1..33]);
+        self.packed.to_big_endian(&mut bytes[1..65]);
 
         bytes[flag_byte_idx] |= flags;
-
-        Bytes::copy_from_slice(&bytes[flag_byte_idx..33])
+        Bytes::copy_from_slice(&bytes[flag_byte_idx..65])
     }
 
     /// Converts a hex prefix byte string ("AKA "compact") into `Nibbles`.
@@ -671,13 +668,17 @@ impl Nibbles {
             _ => return Err(FromHexPrefixError::InvalidFlags(flag_bits)),
         };
 
+        // println!("Is leaf: {}, tot_nib_mod: {}", is_leaf, tot_nib_modifier);
+
         let count = ((hex_prefix_bytes.len() * 2) as isize + tot_nib_modifier) as usize;
+
+        // println!("Count: {}", count);
         let odd_nib_count = count & 0b1 == 1;
 
-        let hex_prefix_byes_iter = hex_prefix_bytes.iter().skip(1).cloned();
+        let hex_prefix_byes_iter = hex_prefix_bytes.iter().skip(1).take(32).cloned();
 
         let mut i = 0;
-        let mut nibbles_raw = [0; 32];
+        let mut nibbles_raw = [0; 64];
 
         if odd_nib_count {
             Self::write_byte_iter_to_byte_buf(
@@ -697,7 +698,7 @@ impl Nibbles {
 
         let x = Self {
             count,
-            packed: U256::from_big_endian(&nibbles_raw[..tot_bytes]),
+            packed: U512::from_big_endian(&nibbles_raw[..tot_bytes]),
         };
 
         Ok(x)
@@ -716,30 +717,30 @@ impl Nibbles {
     }
 
     /// Returns the minimum number of nibbles needed to represent a `U256` key.
-    pub fn get_num_nibbles_in_key(k: &U256) -> usize {
+    pub fn get_num_nibbles_in_key(k: &U512) -> usize {
         (k.bits() + 3) / 4
     }
 
     // TODO: Make not terrible at some point... Consider moving away from `U256`
     // internally?
     pub fn bytes_be(&self) -> Vec<u8> {
-        let mut byte_buf = [0; 32];
+        let mut byte_buf = [0; 64];
         self.packed.to_big_endian(&mut byte_buf);
 
-        byte_buf[32 - self.min_bytes()..32].to_vec()
+        byte_buf[64 - self.min_bytes()..64].to_vec()
     }
 
     /// Creates `Nibbles` from a big endian `H256`.
     pub fn from_h256_be(v: H256) -> Self {
-        Self::from_h256_common(|v| U256::from_big_endian(v.as_bytes()), v)
+        Self::from_h256_common(|v| U512::from_big_endian(v.as_bytes()), v)
     }
 
     /// Creates `Nibbles` from a little endian `H256`.
     pub fn from_h256_le(v: H256) -> Self {
-        Self::from_h256_common(|v| U256::from_little_endian(v.as_bytes()), v)
+        Self::from_h256_common(|v| U512::from_little_endian(v.as_bytes()), v)
     }
 
-    fn from_h256_common<F: Fn(H256) -> U256>(conv_f: F, v: H256) -> Self {
+    fn from_h256_common<F: Fn(H256) -> U512>(conv_f: F, v: H256) -> Self {
         Self {
             count: 64,
             packed: conv_f(v),
@@ -750,13 +751,24 @@ impl Nibbles {
         assert!(self.count < 64);
         assert!(n < 16);
     }
+
+    // TODO: REMOVE BEFORE NEXT CRATE VERSION! THIS IS A TEMP HACK!
+    pub fn try_into_u256(&self) -> Result<U256, String> {
+        match self.count <= 64 {
+            false => Err(format!(
+                "Tried getting a U256 from Nibbles that were too big! ({:?})",
+                self
+            )),
+            true => Ok(self.packed.try_into().unwrap()),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
-    use ethereum_types::H256;
+    use ethereum_types::{H256, U256};
 
     use super::{Nibble, Nibbles, ToNibbles};
     use crate::nibbles::FromHexPrefixError;
@@ -1044,7 +1056,12 @@ mod tests {
     fn to_hex_prefix_encoding(k: u64, is_leaf: bool) -> u64 {
         let mut bytes_padded = [0; 8];
         let bytes = Nibbles::from(k).to_hex_prefix_encoding(is_leaf);
+
+        println!("Raw bytes: {}", hex::encode(&bytes));
+
         bytes_padded[8 - bytes.len()..8].clone_from_slice(&bytes);
+
+        println!("Bytes padded: {}", hex::encode(bytes_padded));
 
         u64::from_be_bytes(bytes_padded)
     }
@@ -1203,5 +1220,15 @@ mod tests {
             format!("{:x}", 0x1234_u64.to_nibbles_byte_padded()),
             "0x1234"
         );
+    }
+
+    #[test]
+    fn from_hex_prefix_encoding_edge_case() {
+        let v = U256::from_str("3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353")
+            .unwrap();
+        let mut buf = [0; 32];
+        v.to_big_endian(&mut buf);
+
+        Nibbles::from_hex_prefix_encoding(&buf).unwrap();
     }
 }

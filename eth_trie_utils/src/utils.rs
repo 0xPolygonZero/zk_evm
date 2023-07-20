@@ -1,6 +1,6 @@
-use std::{convert::TryInto, fmt::Display, ops::BitAnd, sync::Arc};
+use std::{fmt::Display, ops::BitAnd, sync::Arc};
 
-use ethereum_types::{U256, U512};
+use ethereum_types::U512;
 use num_traits::PrimInt;
 
 use crate::partial_trie::{Node, PartialTrie};
@@ -49,6 +49,6 @@ pub(crate) fn is_even<T: PrimInt + BitAnd<Output = T>>(num: T) -> bool {
     (num & T::one()) == T::zero()
 }
 
-pub(crate) fn create_mask_of_1s(amt: usize) -> U256 {
-    ((U512::one() << amt) - 1).try_into().unwrap()
+pub(crate) fn create_mask_of_1s(amt: usize) -> U512 {
+    (U512::one() << amt) - 1
 }

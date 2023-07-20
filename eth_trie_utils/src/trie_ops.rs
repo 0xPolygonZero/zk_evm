@@ -4,7 +4,7 @@
 use std::{fmt::Display, mem::size_of};
 
 use enum_as_inner::EnumAsInner;
-use ethereum_types::{H256, U128, U256};
+use ethereum_types::{H256, U128, U256, U512};
 use log::trace;
 
 use crate::{
@@ -96,6 +96,7 @@ impl From<H256> for ValOrHash {
     }
 }
 
+impl_eth_type_from_for_val_variant!(U512);
 impl_eth_type_from_for_val_variant!(U256);
 impl_eth_type_from_for_val_variant!(U128);
 impl_prim_int_from_for_val_variant!(u64);

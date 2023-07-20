@@ -3,7 +3,7 @@ use std::{
     iter::{once, repeat},
 };
 
-use ethereum_types::{H256, U256};
+use ethereum_types::{H256, U256, U512};
 use log::info;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
 
@@ -26,7 +26,7 @@ pub(crate) type TestInsertHashEntry = (Nibbles, H256);
 // Don't want this exposed publicly, but it is useful for testing.
 impl From<i32> for Nibbles {
     fn from(k: i32) -> Self {
-        let packed = U256::from(k);
+        let packed = U512::from(k);
 
         Self {
             count: Self::get_num_nibbles_in_key(&packed),
