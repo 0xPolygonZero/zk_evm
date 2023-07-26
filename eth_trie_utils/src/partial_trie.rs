@@ -299,8 +299,8 @@ impl HashedPartialTrie {
         }
     }
 
-    pub(crate) fn set_hash(&self, _v: Option<H256>) {
-        *self.hash.write() = None;
+    pub(crate) fn set_hash(&self, v: Option<H256>) {
+        *self.hash.write() = v;
     }
 }
 
