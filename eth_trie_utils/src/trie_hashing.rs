@@ -3,7 +3,10 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
-use crate::partial_trie::{Node, PartialTrie, TrieNodeIntern};
+use crate::{
+    partial_trie::{Node, PartialTrie, TrieNodeIntern},
+    utils::bytes_to_h256,
+};
 
 /// The node type used for calculating the hash of a trie.
 #[derive(Debug)]
@@ -17,7 +20,7 @@ pub(crate) enum EncodedNode {
 impl From<&EncodedNode> for H256 {
     fn from(v: &EncodedNode) -> Self {
         match v {
-            EncodedNode::Raw(b) => bytes_to_h256(&hash(b)),
+            EncodedNode::Raw(b) => bytes_to_h256(&hash_bytes(b)),
             EncodedNode::Hashed(h) => bytes_to_h256(h),
         }
     }
@@ -75,7 +78,7 @@ pub(crate) fn rlp_encode_and_hash_node<N: PartialTrie + TrieNodeIntern>(
 fn hash_bytes_if_large_enough(bytes: Bytes) -> EncodedNode {
     match bytes.len() >= 32 {
         false => EncodedNode::Raw(bytes),
-        true => EncodedNode::Hashed(hash(&bytes)),
+        true => EncodedNode::Hashed(hash_bytes(&bytes)),
     }
 }
 
@@ -86,14 +89,8 @@ fn append_to_stream(s: &mut RlpStream, node: EncodedNode) {
     };
 }
 
-// impl Node<Pa>
-
-fn hash(bytes: &Bytes) -> [u8; 32] {
+fn hash_bytes(bytes: &Bytes) -> [u8; 32] {
     keccak(bytes).0
-}
-
-fn bytes_to_h256(b: &[u8; 32]) -> H256 {
-    keccak_hash::H256::from_slice(b)
 }
 
 #[cfg(test)]
@@ -115,7 +112,7 @@ mod tests {
             generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, large_entry,
             TestInsertValEntry,
         },
-        trie_hashing::hash,
+        trie_hashing::hash_bytes,
     };
 
     const PYEVM_TRUTH_VALS_JSON_PATH: &str = "test_data/pyevm_account_ground_truth.json";
@@ -164,7 +161,7 @@ mod tests {
     impl From<PyEvmTrueValEntryRaw> for PyEvmTrueValEntry {
         fn from(r: PyEvmTrueValEntryRaw) -> Self {
             PyEvmTrueValEntry {
-                account_key: H256(hash(&Bytes::copy_from_slice(
+                account_key: H256(hash_bytes(&Bytes::copy_from_slice(
                     H160::from_str(&r.address).unwrap().as_bytes(),
                 ))),
                 balance: U256::from_str(&r.balance).unwrap(),
@@ -402,7 +399,7 @@ mod tests {
         children[1] = Node::Hash(children[1].get_hash()).into();
         children[4] = Node::Hash(children[4].get_hash()).into();
 
-        let new_hash = trie.get_hash();
+        let new_hash = trie.hash();
         assert_eq!(orig_hash, new_hash);
     }
 

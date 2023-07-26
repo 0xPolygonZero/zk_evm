@@ -14,6 +14,7 @@ use crate::{
     nibbles::Nibbles,
     trie_hashing::{hash_trie, rlp_encode_and_hash_node, EncodedNode},
     trie_ops::ValOrHash,
+    utils::bytes_to_h256,
 };
 
 macro_rules! impl_from_for_trie_type {
@@ -372,7 +373,11 @@ impl TrieNodeIntern for HashedPartialTrie {
         }
 
         let res = rlp_encode_and_hash_node(&self.node);
-        self.set_hash(Some((&res).into()));
+        // We can't hash anything smaller than 32 bytes (which is the case if it's a
+        // `Raw` variant), so only cache if this isn't the case.
+        if let EncodedNode::Hashed(h) = res {
+            self.set_hash(Some(bytes_to_h256(&h)));
+        }
 
         res
     }
