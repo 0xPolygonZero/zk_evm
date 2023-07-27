@@ -50,7 +50,7 @@ pub enum BytesToNibblesError {
     #[error("Tried constructing `Nibbles` from a zero byte slice")]
     ZeroSizedKey,
 
-    #[error("Tried constructing `Nibbles` from a byte slice with more than 32 bytes (len: {0})")]
+    #[error("Tried constructing `Nibbles` from a byte slice with more than 33 bytes (len: {0})")]
     TooManyBytes(usize),
 }
 
@@ -649,7 +649,7 @@ impl Nibbles {
 
     /// Converts a hex prefix byte string ("AKA "compact") into `Nibbles`.
     pub fn from_hex_prefix_encoding(hex_prefix_bytes: &[u8]) -> Result<Self, FromHexPrefixError> {
-        if hex_prefix_bytes.len() > 32 {
+        if hex_prefix_bytes.len() > 33 {
             return Err(FromHexPrefixError::TooLong(
                 hex::encode(hex_prefix_bytes),
                 hex_prefix_bytes.len(),
@@ -1115,8 +1115,8 @@ mod tests {
 
     #[test]
     fn nibbles_from_hex_prefix_encoding_errors_if_too_large() {
-        // 66 bytes long.
-        let b = hex::decode("100000000000000000000000000000000000000000000000000000000000000000")
+        // 68 bytes long.
+        let b = hex::decode("10000000000000000000000000000000000000000000000000000000000000000000")
             .unwrap();
 
         assert!(matches!(
