@@ -51,6 +51,7 @@ pub trait PartialTrie:
     + DerefMut<Target = Node<Self>>
     + Eq
     + PartialEq
+    + TrieNodeIntern
     + Sized
 {
     fn new(n: Node<Self>) -> Self;
@@ -107,7 +108,9 @@ pub trait PartialTrie:
     fn values(&self) -> impl Iterator<Item = ValOrHash>;
 }
 
-pub(crate) trait TrieNodeIntern {
+/// Part of the trait that is not really part of the public interface but
+/// implementor of other node types still need to implement.
+pub trait TrieNodeIntern {
     fn hash_intern(&self) -> EncodedNode;
 }
 
