@@ -1,14 +1,18 @@
 use std::ops::Range;
 
+use log::info;
 use paste::paste;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
 
 use crate::types::AllRecursiveCircuits;
 
+/// Plonky2 proving state. Note that is is generally going to be massive in
+/// terms of memory and has a long spin-up time,
 pub struct ProverState {
     pub(crate) state: AllRecursiveCircuits,
 }
 
+/// Builder for the prover state.
 #[derive(Debug)]
 pub struct ProverStateBuilder {
     arithmetic_circuit_size: Range<usize>,

@@ -12,6 +12,8 @@ use crate::{
 
 type ProofGenResult<T> = Result<T, ProofGenError>;
 
+// Plonky2 is still using `anyhow` for proof gen, and since this is a library,
+// it's probably best if we at least convert it to a `String`.
 pub struct ProofGenError(pub(crate) String);
 
 impl From<String> for ProofGenError {
@@ -20,6 +22,7 @@ impl From<String> for ProofGenError {
     }
 }
 
+/// Generate a txn proof from proof IR data.
 pub fn generate_txn_proof(
     p_state: &ProverState,
     start_info: TxnProofGenIR,
@@ -53,6 +56,9 @@ pub fn generate_txn_proof(
     })
 }
 
+/// Generate a agg proof from two child proofs.
+///
+/// Note that the child proofs may be either txn or agg proofs.
 pub fn generate_agg_proof(
     p_state: &ProverState,
     lhs_child: &AggregatableProof,
@@ -153,6 +159,10 @@ fn expand_aggregatable_proof(p: &AggregatableProof) -> (ExpandedAggregatableProo
     (expanded, common)
 }
 
+/// Generate a block proof.
+///
+/// Note that `prev_opt_parent_b_proof` is able to be `None` on checkpoint
+/// heights.
 pub fn generate_block_proof(
     p_state: &ProverState,
     prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,

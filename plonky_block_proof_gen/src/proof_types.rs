@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{BlockHeight, PlonkyProofIntern, ProofUnderlyingTxns, TxnIdx};
 
-/// Data that is specific to a block.
+/// Data that is specific to a block and is constant for all txns in a given
+/// block.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockLevelData {
     pub b_meta: BlockMetadata,
@@ -24,12 +25,21 @@ pub struct ProofCommon {
     pub roots_after: TrieRoots,
 }
 
-/// State required to generate a transaction proof. Sent once per txn.
+/// An `IR` (Intermediate Representation) for a given txn in a block that we can
+/// use to generate a proof for that txn.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TxnProofGenIR {
+    /// Signed txn bytecode.
     pub signed_txn: Vec<u8>,
+
+    /// The partial trie states at the start of the txn.
     pub tries: TrieInputs,
+
+    /// The expected root hashes of all tries (except storage tries) after the
+    /// txn is executed.
     pub trie_roots_after: TrieRoots,
+
+    /// Additional info of state that changed before and after the txn executed.
     pub deltas: ProofBeforeAndAfterDeltas,
 
     /// Mapping between smart contract code hashes and the contract byte code.
@@ -37,7 +47,10 @@ pub struct TxnProofGenIR {
     /// entry present.
     pub contract_code: HashMap<H256, Vec<u8>>,
 
+    /// The height of the block.
     pub b_height: BlockHeight,
+
+    /// The index of the txn in the block.
     pub txn_idx: TxnIdx,
 }
 
@@ -125,7 +138,8 @@ pub struct GeneratedBlockProof {
 }
 
 /// Sometimes we don't care about the underlying proof type and instead only if
-/// we can combine it into an agg proof.
+/// we can combine it into an agg proof. For these cases, we want to abstract
+/// away whether or not the proof was a txn or agg proof.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum AggregatableProof {
     Txn(GeneratedTxnProof),

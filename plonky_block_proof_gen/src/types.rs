@@ -22,6 +22,8 @@ pub type AllRecursiveCircuits = plonky2_evm::fixed_recursive_verifier::AllRecurs
     2,
 >;
 
+/// Underlying txns idxs associated with a proof.
+/// Note that the range for a single txn for index `n` is `n..n+1`.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ProofUnderlyingTxns {
     pub txn_idxs: Range<TxnIdx>,
