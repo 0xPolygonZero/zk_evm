@@ -54,7 +54,12 @@ impl ProverStateBuilder {
     define_set_circuit_size_method!(logic);
     define_set_circuit_size_method!(memory);
 
+    // TODO: Consider adding async version?
+    /// Instantiate the prover state from the builder. Note that this is a very
+    /// expensive call!
     pub fn build(self) -> ProverState {
+        info!("Initializing Plonky2 aggregation prover state (This may take a while)...");
+
         // ... Yeah I don't understand the mysterious ranges either :)
         let state = AllRecursiveCircuits::new(
             &AllStark::default(),
@@ -69,6 +74,8 @@ impl ProverStateBuilder {
             ],
             &StarkConfig::standard_fast_config(),
         );
+
+        info!("Finished initializing Plonky2 aggregation prover state!");
 
         ProverState { state }
     }
