@@ -147,3 +147,15 @@ impl AggregatableProof {
         }
     }
 }
+
+impl From<GeneratedTxnProof> for AggregatableProof {
+    fn from(v: GeneratedTxnProof) -> Self {
+        Self::Txn(v)
+    }
+}
+
+impl From<GeneratedAggProof> for AggregatableProof {
+    fn from(v: GeneratedAggProof) -> Self {
+        Self::Agg(v)
+    }
+}
