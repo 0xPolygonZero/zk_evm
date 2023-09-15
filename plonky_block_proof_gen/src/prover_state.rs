@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use paste::paste;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
 
 use crate::types::AllRecursiveCircuits;
@@ -33,7 +34,26 @@ impl Default for ProverStateBuilder {
     }
 }
 
+macro_rules! define_set_circuit_size_method {
+    ($name:ident) => {
+        paste! {
+            pub fn [<set_ $name _circuit_size>](mut self, size: Range<usize>) -> Self {
+                self.[<$name _circuit_size>] = size;
+                self
+            }
+        }
+    };
+}
+
 impl ProverStateBuilder {
+    define_set_circuit_size_method!(arithmetic);
+    define_set_circuit_size_method!(byte_packing);
+    define_set_circuit_size_method!(cpu);
+    define_set_circuit_size_method!(keccak);
+    define_set_circuit_size_method!(keccak_sponge);
+    define_set_circuit_size_method!(logic);
+    define_set_circuit_size_method!(memory);
+
     pub fn build(self) -> ProverState {
         // ... Yeah I don't understand the mysterious ranges either :)
         let state = AllRecursiveCircuits::new(
