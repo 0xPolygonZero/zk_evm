@@ -10,11 +10,11 @@ use crate::{
     types::PlonkyProofIntern,
 };
 
-type ProofGenResult<T> = Result<T, ProofGenError>;
+pub type ProofGenResult<T> = Result<T, ProofGenError>;
 
 // Plonky2 is still using `anyhow` for proof gen, and since this is a library,
 // it's probably best if we at least convert it to a `String`.
-pub struct ProofGenError(pub(crate) String);
+pub struct ProofGenError(pub String);
 
 impl From<String> for ProofGenError {
     fn from(v: String) -> Self {

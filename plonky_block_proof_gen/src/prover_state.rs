@@ -6,7 +6,7 @@ use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
 
 use crate::types::AllRecursiveCircuits;
 
-/// Plonky2 proving state. Note that is is generally going to be massive in
+/// Plonky2 proving state. Note that this is generally going to be massive in
 /// terms of memory and has a long spin-up time,
 pub struct ProverState {
     pub(crate) state: AllRecursiveCircuits,
