@@ -1,0 +1,7 @@
+[package]
+name = "proof_protocol_decoder"
+authors = ["Polygon Zero <bgluth@polygon.technology>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
