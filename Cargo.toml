@@ -7,3 +7,4 @@ edition = "2021"
 [dependencies]
 ethereum-types = "0.14.1"
 plonky2_evm = { git = "https://github.com/mir-protocol/plonky2.git", rev = "0b5ac312c0f9efdcc6d85c10256d2843d42215a2" }
+serde = "1.0.166"

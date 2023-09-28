@@ -23,14 +23,9 @@
 
 use std::collections::HashMap;
 
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, U256};
 
-pub type BlockHeight = u64;
-pub type Bloom = [U256; 8];
-pub type CodeHash = H256;
-pub type HashedAccountAddress = H256;
-pub type StorageAddr = H256;
-pub type StorageVal = U256;
+use crate::types::{Bloom, CodeHash, HashedAccountAddress, StorageAddr, StorageVal};
 
 /// Core payload needed to generate a proof for a block. Note that the scheduler
 /// may need to request some additional data from the client along with this in
