@@ -1,27 +1,15 @@
-use std::{borrow::Borrow, iter::empty};
+use std::borrow::Borrow;
 
 use ethereum_types::U256;
-use plonky2_evm::{
-    generation::GenerationInputs,
-    proof::{BlockHashes, BlockMetadata, ExtraBlockData},
-};
+use plonky2_evm::proof::{BlockHashes, BlockMetadata, ExtraBlockData};
 use serde::{Deserialize, Serialize};
 
-use crate::{trace_protocol::BlockTrace, types::TxnIdx};
+use crate::types::TxnIdx;
 
 #[derive(Debug)]
 pub struct BlockLevelData {
     pub b_meta: BlockMetadata,
     pub b_hashes: BlockHashes,
-}
-
-impl BlockTrace {
-    pub fn into_txn_proof_gen_inputs(
-        self,
-        _b_data: BlockLevelData,
-    ) -> impl Iterator<Item = GenerationInputs> {
-        empty() // TODO
-    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

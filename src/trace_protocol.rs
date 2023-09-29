@@ -23,6 +23,7 @@
 
 use std::collections::HashMap;
 
+use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{Address, U256};
 
 use crate::types::{Bloom, CodeHash, HashedAccountAddress, StorageAddr, StorageVal};
@@ -68,7 +69,7 @@ pub struct TrieCompact {}
 /// Trie format that is in exactly the same format of our internal trie format.
 /// This is the fastest format for us to processes.
 #[derive(Debug)]
-pub struct TrieDirect {}
+pub struct TrieDirect(pub HashedPartialTrie);
 
 #[derive(Debug)]
 pub enum StorageTriesPreImage {
