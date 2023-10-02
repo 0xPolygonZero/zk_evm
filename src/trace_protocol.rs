@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{Address, U256};
 
-use crate::types::{Bloom, CodeHash, HashedAccountAddress, StorageAddr, StorageVal};
+use crate::types::{Bloom, CodeHash, HashedAccountAddr, StorageAddr, StorageVal};
 
 /// Core payload needed to generate a proof for a block. Note that the scheduler
 /// may need to request some additional data from the client along with this in
@@ -80,7 +80,7 @@ pub enum StorageTriesPreImage {
 
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.
-    MultipleTries(HashMap<HashedAccountAddress, TriePreImage>),
+    MultipleTries(HashMap<HashedAccountAddr, TriePreImage>),
 }
 
 /// Contract code hit by txns in the block.

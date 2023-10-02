@@ -1,17 +1,25 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 
+use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
+use ethereum_types::U256;
 
 use crate::trace_protocol::{
-    BlockTrace, BlockUsedContractCode, StorageTriesPreImage, TrieCompact, TriePreImage, TxnInfo,
+    BlockTrace, BlockUsedContractCode, ContractCodeUsage, StorageTriesPreImage, TrieCompact,
+    TriePreImage, TxnInfo,
 };
-use crate::types::{CodeHash, HashedAccountAddress};
+use crate::types::{
+    Bloom, CodeHash, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
+    HashedStorageAddrNibbles, StorageAddr, StorageVal,
+};
+use crate::utils::hash;
 
 pub(crate) struct ProcessedBlockTrace {
-    state_trie: HashedPartialTrie,
-    storage_tries: HashMap<HashedAccountAddress, HashedPartialTrie>,
-    contract_code: HashMap<CodeHash, Vec<u8>>,
-    txn_info: Vec<TxnInfo>,
+    pub(crate) state_trie: HashedPartialTrie,
+    pub(crate) storage_tries: HashMap<HashedAccountAddr, HashedPartialTrie>,
+    pub(crate) contract_code: HashMap<CodeHash, Vec<u8>>,
+    pub(crate) txn_info: Vec<ProcessedTxnInfo>,
 }
 
 impl BlockTrace {
@@ -26,7 +34,7 @@ impl BlockTrace {
                 self.contract_code,
                 &p_meta.resolve_code_hash_fn,
             ),
-            txn_info: self.txn_info,
+            txn_info: self.txn_info.into_iter().map(|t| t.into()).collect(),
         }
     }
 }
@@ -41,7 +49,7 @@ fn process_state_trie(trie: TriePreImage) -> HashedPartialTrie {
 
 fn process_storage_tries(
     trie: StorageTriesPreImage,
-) -> HashMap<HashedAccountAddress, HashedPartialTrie> {
+) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     match trie {
         StorageTriesPreImage::SingleTrie(t) => process_single_storage_trie(t),
         StorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
@@ -50,13 +58,13 @@ fn process_storage_tries(
 
 fn process_single_storage_trie(
     _trie: TriePreImage,
-) -> HashMap<HashedAccountAddress, HashedPartialTrie> {
+) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     todo!()
 }
 
 fn process_multiple_storage_tries(
-    _tries: HashMap<HashedAccountAddress, TriePreImage>,
-) -> HashMap<HashedAccountAddress, HashedPartialTrie> {
+    _tries: HashMap<HashedAccountAddr, TriePreImage>,
+) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     todo!()
 }
 
@@ -99,4 +107,85 @@ where
             resolve_code_hash_fn,
         }
     }
+}
+
+#[derive(Debug)]
+pub(crate) struct ProcessedTxnInfo {
+    pub(crate) contract_code: Vec<CodeHash>,
+    pub(crate) nodes_used_by_txn: NodesUsedByTxn,
+    pub(crate) contract_code_created: Vec<(CodeHash, Vec<u8>)>,
+    pub(crate) new_meta_state: BlockMetaState,
+}
+
+impl From<TxnInfo> for ProcessedTxnInfo {
+    fn from(v: TxnInfo) -> Self {
+        let mut nodes_used_by_txn = NodesUsedByTxn::default();
+        let mut contract_code_created = Vec::new();
+        // let mut state_trie_writes = Vec::with_capacity(v.traces.len()); // Good
+        // assumption?
+
+        for (addr, trace) in v.traces {
+            let hashed_addr = hash(addr.as_bytes());
+
+            let s_writes = trace.storage_written.unwrap_or_default();
+
+            let s_read_keys = trace.storage_read.into_iter().flat_map(|reads| {
+                reads
+                    .into_iter()
+                    .map(|addr| storage_addr_to_nibbles_even_nibble_fixed_hashed(&addr))
+            });
+
+            let s_write_keys = s_writes
+                .keys()
+                .map(|k| storage_addr_to_nibbles_even_nibble_fixed_hashed(k));
+            let s_access_keys = s_read_keys.chain(s_write_keys);
+
+            nodes_used_by_txn
+                .storage_accesses
+                .push((hashed_addr, s_access_keys.collect()));
+            // nodes_used_by_txn.storage_writes.push((hashed_addr, s_writes));
+        }
+
+        // TODO
+
+        Self {
+            contract_code: todo!(),
+            nodes_used_by_txn,
+            contract_code_created,
+            new_meta_state: todo!(),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct NodesUsedByTxn {
+    state_accesses: Vec<HashedNodeAddr>,
+    state_writes: Vec<StateTrieWrites>,
+    storage_accesses: Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
+    storage_writes: Vec<(
+        HashedAccountAddr,
+        Vec<(HashedStorageAddrNibbles, StorageVal)>,
+    )>,
+}
+
+#[derive(Debug)]
+struct StateTrieWrites {
+    balance: Option<U256>,
+    nonce: Option<U256>,
+}
+
+#[derive(Debug)]
+enum TraceStorageAccess {
+    Read(StorageAddr),
+    Write(StorageAddr, StorageVal),
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct BlockMetaState {
+    pub(crate) gas_used: u64,
+    pub(crate) block_bloom: Bloom,
+}
+
+fn storage_addr_to_nibbles_even_nibble_fixed_hashed(addr: &StorageAddr) -> Nibbles {
+    todo!()
 }
