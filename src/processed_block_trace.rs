@@ -158,7 +158,7 @@ impl From<TxnInfo> for ProcessedTxnInfo {
 }
 
 #[derive(Debug, Default)]
-struct NodesUsedByTxn {
+pub(crate) struct NodesUsedByTxn {
     state_accesses: Vec<HashedNodeAddr>,
     state_writes: Vec<StateTrieWrites>,
     storage_accesses: Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
