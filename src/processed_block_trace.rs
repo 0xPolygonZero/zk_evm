@@ -3,7 +3,8 @@ use std::fmt::Debug;
 
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
-use ethereum_types::U256;
+use ethereum_types::{H256, U256};
+use plonky2_evm::generation::mpt::AccountRlp;
 
 use crate::trace_protocol::{
     BlockTrace, BlockUsedContractCode, ContractCodeUsage, StorageTriesPreImage, TrieCompact,
@@ -159,19 +160,21 @@ impl From<TxnInfo> for ProcessedTxnInfo {
 
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    state_accesses: Vec<HashedNodeAddr>,
-    state_writes: Vec<StateTrieWrites>,
-    storage_accesses: Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
-    storage_writes: Vec<(
+    pub(crate) state_accesses: Vec<HashedNodeAddr>,
+    pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
+    pub(crate) storage_accesses: Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
+    pub(crate) storage_writes: Vec<(
         HashedAccountAddr,
         Vec<(HashedStorageAddrNibbles, StorageVal)>,
     )>,
 }
 
 #[derive(Debug)]
-struct StateTrieWrites {
-    balance: Option<U256>,
-    nonce: Option<U256>,
+pub(crate) struct StateTrieWrites {
+    pub(crate) balance: Option<U256>,
+    pub(crate) nonce: Option<U256>,
+    pub(crate) storage_root: Option<H256>,
+    pub(crate) code_root: Option<H256>,
 }
 
 #[derive(Debug)]

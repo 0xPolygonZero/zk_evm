@@ -1,15 +1,24 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{self, Display, Formatter},
+};
 
-use eth_trie_utils::partial_trie::HashedPartialTrie;
-use plonky2_evm::generation::{GenerationInputs, TrieInputs};
+use eth_trie_utils::{
+    nibbles::Nibbles,
+    partial_trie::{HashedPartialTrie, PartialTrie},
+};
+use ethereum_types::H256;
+use plonky2_evm::generation::{mpt::AccountRlp, GenerationInputs, TrieInputs};
+use rlp::decode;
 use thiserror::Error;
 
 use crate::{
     processed_block_trace::{
-        BlockMetaState, NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo,
+        BlockMetaState, NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites,
     },
     proof_gen_types::BlockLevelData,
     types::{Bloom, HashedAccountAddr},
+    utils::{hash, update_val_if_some},
 };
 
 pub type TraceParsingResult<T> = Result<T, TraceParsingError>;
@@ -22,14 +31,27 @@ pub enum TraceParsingError {
     #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0})")]
     MissingAccountStorageTrie(HashedAccountAddr),
 
-    // TODO: Make this error nicer...
-    #[error(
-        "Non-existent account addr given when creating a sub partial trie from the base state trie"
-    )]
-    NonExistentAcctAddrsCreatingSubPartialTrie,
+    #[error("Tried accessing a non-existent key ({1}) in the {0} trie (root hash: {2:x})")]
+    NonExistentTrieEntry(TrieType, Nibbles, H256),
+}
 
-    #[error("Creating a subset partial trie for account storage for account {0}, mem addrs accessed: {1:?}")]
-    NonExistentStorageAddrsCreatingStorageSubPartialTrie(HashedAccountAddr, Vec<String>, String),
+#[derive(Debug)]
+pub enum TrieType {
+    State,
+    Storage,
+    Receipt,
+    Txn,
+}
+
+impl Display for TrieType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            TrieType::State => write!(f, "state"),
+            TrieType::Storage => write!(f, "storage"),
+            TrieType::Receipt => write!(f, "receipt"),
+            TrieType::Txn => write!(f, "transaction"),
+        }
+    }
 }
 
 /// The current state of all tries as we process txn deltas. These are mutated
@@ -62,9 +84,39 @@ impl ProcessedBlockTrace {
 
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
-        deltas: Vec<ProcessedTxnInfo>,
+        deltas: ProcessedTxnInfo,
         addrs_to_code: &mut HashMap<HashedAccountAddr, Vec<u8>>,
     ) -> TraceParsingResult<()> {
-        todo!()
+        for (hashed_acc_addr, s_trie_writes) in deltas.nodes_used_by_txn.state_writes {
+            let val_k = Nibbles::from_h256_be(hashed_acc_addr);
+            let val_bytes = trie_state.state.get(val_k).ok_or_else(|| {
+                TraceParsingError::NonExistentTrieEntry(
+                    TrieType::State,
+                    val_k,
+                    trie_state.state.hash(),
+                )
+            })?;
+
+            let mut account: AccountRlp = rlp::decode(val_bytes).map_err(|err| {
+                TraceParsingError::AccountDecode(hex::encode(val_bytes), err.to_string())
+            })?;
+            s_trie_writes.apply_writes_to_state_node(&mut account);
+
+            let updated_account_bytes = rlp::encode(&account);
+            trie_state
+                .state
+                .insert(val_k, updated_account_bytes.to_vec());
+        }
+
+        Ok(())
+    }
+}
+
+impl StateTrieWrites {
+    fn apply_writes_to_state_node(&self, state_node: &mut AccountRlp) {
+        update_val_if_some(&mut state_node.balance, self.balance);
+        update_val_if_some(&mut state_node.nonce, self.nonce);
+        update_val_if_some(&mut state_node.storage_root, self.storage_root);
+        update_val_if_some(&mut state_node.code_hash, self.code_root);
     }
 }
