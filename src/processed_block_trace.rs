@@ -4,7 +4,9 @@ use std::fmt::Debug;
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::U256;
+use plonky2_evm::generation::GenerationInputs;
 
+use crate::proof_gen_types::BlockLevelData;
 use crate::trace_protocol::{
     BlockTrace, BlockUsedContractCode, ContractCodeUsage, StorageTriesPreImage, TrieCompact,
     TriePreImage, TxnInfo,
@@ -23,6 +25,18 @@ pub(crate) struct ProcessedBlockTrace {
 }
 
 impl BlockTrace {
+    pub fn into_proof_generation_inputs<F>(
+        self,
+        p_meta: &ProcessingMeta<F>,
+        b_data: BlockLevelData,
+    ) -> Vec<GenerationInputs>
+    where
+        F: Fn(&CodeHash) -> Vec<u8>,
+    {
+        let proced_block_trace = self.into_processed_block_trace(p_meta);
+        proced_block_trace.into_generation_inputs(b_data)
+    }
+
     fn into_processed_block_trace<F>(self, p_meta: &ProcessingMeta<F>) -> ProcessedBlockTrace
     where
         F: Fn(&CodeHash) -> Vec<u8>,

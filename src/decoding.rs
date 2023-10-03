@@ -70,7 +70,7 @@ struct PartialTrieState {
 }
 
 impl ProcessedBlockTrace {
-    fn into_generation_inputs(self, _b_data: BlockLevelData) -> Vec<GenerationInputs> {
+    pub(crate) fn into_generation_inputs(self, _b_data: BlockLevelData) -> Vec<GenerationInputs> {
         let _trie_state = PartialTrieState::default();
         let _b_meta_state = BlockMetaState::default();
         let txn_gen_inputs = Vec::with_capacity(self.txn_info.len());
