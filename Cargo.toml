@@ -5,7 +5,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-eth_trie_utils = "0.6.0"
+eth_trie_utils = { git = "https://github.com/mir-protocol/eth_trie_utils.git", rev = "e9ec4ec2aa2ae976b7c699ef40c1ffc716d87ed5" }
 ethereum-types = "0.14.1"
 hex = "0.4.3"
 keccak-hash = "0.10.0"

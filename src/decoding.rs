@@ -6,6 +6,7 @@ use std::{
 use eth_trie_utils::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
+    trie_subsets::create_trie_subset,
 };
 use plonky2_evm::generation::{mpt::AccountRlp, GenerationInputs, TrieInputs};
 use thiserror::Error;
@@ -15,7 +16,7 @@ use crate::{
         BlockMetaState, NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites,
     },
     proof_gen_types::BlockLevelData,
-    types::{HashedAccountAddr, TrieRootHash},
+    types::{HashedAccountAddr, HashedNodeAddr, TrieRootHash},
     utils::update_val_if_some,
 };
 
@@ -31,6 +32,11 @@ pub enum TraceParsingError {
 
     #[error("Tried accessing a non-existent key ({1}) in the {0} trie (root hash: {2:x})")]
     NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
+
+    // TODO: Figure out how to make this error useful/meaningful... For now this is just a
+    // placeholder.
+    #[error("Missing keys when creating sub-partial tries (Trie type: {0})")]
+    MissingKeysCreatingSubPartialTrie(TrieType),
 }
 
 #[derive(Debug)]
@@ -74,16 +80,33 @@ impl ProcessedBlockTrace {
     }
 
     fn create_minimal_partial_tries_needed_by_txn(
-        _curr_block_tries: &PartialTrieState,
-        _nodes_used_by_txn: NodesUsedByTxn,
+        curr_block_tries: &PartialTrieState,
+        nodes_used_by_txn: NodesUsedByTxn,
     ) -> TraceParsingResult<TrieInputs> {
-        todo!()
+        let state_trie = Self::create_minimal_state_partial_trie(
+            &curr_block_tries.state,
+            nodes_used_by_txn.state_accesses.iter().cloned(),
+        )?;
+
+        Ok(TrieInputs {
+            state_trie,
+            transactions_trie: todo!(),
+            receipts_trie: todo!(),
+            storage_tries: todo!(),
+        })
+    }
+
+    fn create_minimal_state_partial_trie(
+        state_trie: &HashedPartialTrie,
+        state_accesses: impl Iterator<Item = HashedNodeAddr>,
+    ) -> TraceParsingResult<HashedPartialTrie> {
+        create_trie_subset(state_trie, state_accesses.map(Nibbles::from_h256_be))
+            .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(TrieType::State))
     }
 
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
         deltas: ProcessedTxnInfo,
-        _addrs_to_code: &mut HashMap<HashedAccountAddr, Vec<u8>>,
     ) -> TraceParsingResult<()> {
         for (hashed_acc_addr, storage_writes) in deltas.nodes_used_by_txn.storage_writes {
             let storage_trie = trie_state.storage.get_mut(&hashed_acc_addr).ok_or(

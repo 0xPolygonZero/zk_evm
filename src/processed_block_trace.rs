@@ -200,6 +200,7 @@ impl From<TxnInfo> for ProcessedTxnInfo {
     }
 }
 
+/// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
     pub(crate) state_accesses: Vec<HashedNodeAddr>,
