@@ -1,18 +1,17 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
-use ethereum_types::{H256, U256};
-use plonky2_evm::generation::mpt::AccountRlp;
+use ethereum_types::U256;
 
 use crate::trace_protocol::{
     BlockTrace, BlockUsedContractCode, ContractCodeUsage, StorageTriesPreImage, TrieCompact,
     TriePreImage, TxnInfo,
 };
 use crate::types::{
-    Bloom, CodeHash, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
-    HashedStorageAddrNibbles, StorageAddr, StorageVal,
+    Bloom, CodeHash, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, StorageAddr,
+    StorageVal,
 };
 use crate::utils::hash;
 
@@ -112,8 +111,8 @@ where
 
 #[derive(Debug)]
 pub(crate) struct ProcessedTxnInfo {
-    pub(crate) contract_code: Vec<CodeHash>,
     pub(crate) nodes_used_by_txn: NodesUsedByTxn,
+    pub(crate) contract_code_read: Vec<CodeHash>,
     pub(crate) contract_code_created: Vec<(CodeHash, Vec<u8>)>,
     pub(crate) new_meta_state: BlockMetaState,
 }
@@ -121,39 +120,82 @@ pub(crate) struct ProcessedTxnInfo {
 impl From<TxnInfo> for ProcessedTxnInfo {
     fn from(v: TxnInfo) -> Self {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
+        let mut contract_code_read = Vec::new();
         let mut contract_code_created = Vec::new();
-        // let mut state_trie_writes = Vec::with_capacity(v.traces.len()); // Good
-        // assumption?
 
         for (addr, trace) in v.traces {
             let hashed_addr = hash(addr.as_bytes());
 
-            let s_writes = trace.storage_written.unwrap_or_default();
+            let storage_writes = trace.storage_written.unwrap_or_default();
 
-            let s_read_keys = trace.storage_read.into_iter().flat_map(|reads| {
+            let storage_read_keys = trace.storage_read.into_iter().flat_map(|reads| {
                 reads
                     .into_iter()
                     .map(|addr| storage_addr_to_nibbles_even_nibble_fixed_hashed(&addr))
             });
 
-            let s_write_keys = s_writes
+            let storage_write_keys = storage_writes
                 .keys()
-                .map(|k| storage_addr_to_nibbles_even_nibble_fixed_hashed(k));
-            let s_access_keys = s_read_keys.chain(s_write_keys);
+                .map(storage_addr_to_nibbles_even_nibble_fixed_hashed);
+            let storage_access_keys = storage_read_keys.chain(storage_write_keys);
 
             nodes_used_by_txn
                 .storage_accesses
-                .push((hashed_addr, s_access_keys.collect()));
-            // nodes_used_by_txn.storage_writes.push((hashed_addr, s_writes));
+                .push((hashed_addr, storage_access_keys.collect()));
+
+            let storage_trie_change = !storage_writes.is_empty();
+            let code_change = trace.code_usage.is_some();
+            let state_write_occurred = trace.balance.is_some()
+                || trace.nonce.is_some()
+                || storage_trie_change
+                || code_change;
+
+            if state_write_occurred {
+                let state_trie_writes = StateTrieWrites {
+                    balance: trace.balance,
+                    nonce: trace.nonce,
+                    storage_trie_change,
+                    code_hash: trace.code_usage.as_ref().map(|usage| usage.get_code_hash()),
+                };
+
+                nodes_used_by_txn
+                    .state_writes
+                    .push((hashed_addr, state_trie_writes))
+            }
+
+            let storage_writes_vec = storage_writes
+                .into_iter()
+                .map(|(k, v)| (storage_addr_to_nibbles_even_nibble_fixed_hashed(&k), v))
+                .collect();
+            nodes_used_by_txn
+                .storage_writes
+                .push((hashed_addr, storage_writes_vec));
+
+            nodes_used_by_txn.state_accesses.push(hashed_addr);
+
+            if let Some(c_usage) = trace.code_usage {
+                match c_usage {
+                    ContractCodeUsage::Read(c_hash) => contract_code_read.push(c_hash),
+                    ContractCodeUsage::Write(c_bytes) => {
+                        let c_hash = hash(&c_bytes);
+
+                        contract_code_read.push(c_hash);
+                        contract_code_created.push((c_hash, c_bytes));
+                    }
+                }
+            }
         }
 
-        // TODO
+        let new_meta_state = BlockMetaState {
+            gas_used: v.meta.gas_used,
+            block_bloom: v.meta.bloom,
+        };
 
         Self {
-            contract_code: todo!(),
             nodes_used_by_txn,
+            contract_code_read,
             contract_code_created,
-            new_meta_state: todo!(),
+            new_meta_state,
         }
     }
 }
@@ -173,8 +215,8 @@ pub(crate) struct NodesUsedByTxn {
 pub(crate) struct StateTrieWrites {
     pub(crate) balance: Option<U256>,
     pub(crate) nonce: Option<U256>,
-    pub(crate) storage_root: Option<H256>,
-    pub(crate) code_root: Option<H256>,
+    pub(crate) storage_trie_change: bool,
+    pub(crate) code_hash: Option<CodeHash>,
 }
 
 #[derive(Debug)]
@@ -189,6 +231,6 @@ pub(crate) struct BlockMetaState {
     pub(crate) block_bloom: Bloom,
 }
 
-fn storage_addr_to_nibbles_even_nibble_fixed_hashed(addr: &StorageAddr) -> Nibbles {
+fn storage_addr_to_nibbles_even_nibble_fixed_hashed(_addr: &StorageAddr) -> Nibbles {
     todo!()
 }

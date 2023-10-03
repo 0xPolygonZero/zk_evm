@@ -10,4 +10,5 @@ pub type HashedStorageAddr = H256;
 pub type HashedStorageAddrNibbles = Nibbles;
 pub type StorageAddr = H256;
 pub type StorageVal = U256;
+pub type TrieRootHash = H256;
 pub type TxnIdx = usize;

@@ -26,7 +26,10 @@ use std::collections::HashMap;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{Address, U256};
 
-use crate::types::{Bloom, CodeHash, HashedAccountAddr, StorageAddr, StorageVal};
+use crate::{
+    types::{Bloom, CodeHash, HashedAccountAddr, StorageAddr, StorageVal},
+    utils::hash,
+};
 
 /// Core payload needed to generate a proof for a block. Note that the scheduler
 /// may need to request some additional data from the client along with this in
@@ -163,4 +166,13 @@ pub enum ContractCodeUsage {
     /// Contract was created (and these are the bytes). Note that this new
     /// contract code will not appear in the [`BlockTrace`] map.
     Write(Vec<u8>),
+}
+
+impl ContractCodeUsage {
+    pub(crate) fn get_code_hash(&self) -> CodeHash {
+        match self {
+            ContractCodeUsage::Read(hash) => *hash,
+            ContractCodeUsage::Write(bytes) => hash(bytes),
+        }
+    }
 }

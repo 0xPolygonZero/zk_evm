@@ -7,9 +7,7 @@ use eth_trie_utils::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
-use ethereum_types::H256;
 use plonky2_evm::generation::{mpt::AccountRlp, GenerationInputs, TrieInputs};
-use rlp::decode;
 use thiserror::Error;
 
 use crate::{
@@ -17,8 +15,8 @@ use crate::{
         BlockMetaState, NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites,
     },
     proof_gen_types::BlockLevelData,
-    types::{Bloom, HashedAccountAddr},
-    utils::{hash, update_val_if_some},
+    types::{HashedAccountAddr, TrieRootHash},
+    utils::update_val_if_some,
 };
 
 pub type TraceParsingResult<T> = Result<T, TraceParsingError>;
@@ -32,7 +30,7 @@ pub enum TraceParsingError {
     MissingAccountStorageTrie(HashedAccountAddr),
 
     #[error("Tried accessing a non-existent key ({1}) in the {0} trie (root hash: {2:x})")]
-    NonExistentTrieEntry(TrieType, Nibbles, H256),
+    NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
 }
 
 #[derive(Debug)]
@@ -65,19 +63,19 @@ struct PartialTrieState {
 }
 
 impl ProcessedBlockTrace {
-    fn into_generation_inputs(self, b_data: BlockLevelData) -> Vec<GenerationInputs> {
-        let mut trie_state = PartialTrieState::default();
-        let mut b_meta_state = BlockMetaState::default();
-        let mut txn_gen_inputs = Vec::with_capacity(self.txn_info.len());
+    fn into_generation_inputs(self, _b_data: BlockLevelData) -> Vec<GenerationInputs> {
+        let _trie_state = PartialTrieState::default();
+        let _b_meta_state = BlockMetaState::default();
+        let txn_gen_inputs = Vec::with_capacity(self.txn_info.len());
 
-        for (txn_idx, txn_info) in self.txn_info.into_iter().enumerate() {}
+        for (_txn_idx, _txn_info) in self.txn_info.into_iter().enumerate() {}
 
         txn_gen_inputs
     }
 
     fn create_minimal_partial_tries_needed_by_txn(
-        curr_block_tries: &PartialTrieState,
-        nodes_used_by_txn: NodesUsedByTxn,
+        _curr_block_tries: &PartialTrieState,
+        _nodes_used_by_txn: NodesUsedByTxn,
     ) -> TraceParsingResult<TrieInputs> {
         todo!()
     }
@@ -85,8 +83,15 @@ impl ProcessedBlockTrace {
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
         deltas: ProcessedTxnInfo,
-        addrs_to_code: &mut HashMap<HashedAccountAddr, Vec<u8>>,
+        _addrs_to_code: &mut HashMap<HashedAccountAddr, Vec<u8>>,
     ) -> TraceParsingResult<()> {
+        for (hashed_acc_addr, storage_writes) in deltas.nodes_used_by_txn.storage_writes {
+            let storage_trie = trie_state.storage.get_mut(&hashed_acc_addr).ok_or(
+                TraceParsingError::MissingAccountStorageTrie(hashed_acc_addr),
+            )?;
+            storage_trie.extend(storage_writes);
+        }
+
         for (hashed_acc_addr, s_trie_writes) in deltas.nodes_used_by_txn.state_writes {
             let val_k = Nibbles::from_h256_be(hashed_acc_addr);
             let val_bytes = trie_state.state.get(val_k).ok_or_else(|| {
@@ -100,7 +105,11 @@ impl ProcessedBlockTrace {
             let mut account: AccountRlp = rlp::decode(val_bytes).map_err(|err| {
                 TraceParsingError::AccountDecode(hex::encode(val_bytes), err.to_string())
             })?;
-            s_trie_writes.apply_writes_to_state_node(&mut account);
+            s_trie_writes.apply_writes_to_state_node(
+                &mut account,
+                &hashed_acc_addr,
+                &trie_state.storage,
+            )?;
 
             let updated_account_bytes = rlp::encode(&account);
             trie_state
@@ -113,10 +122,27 @@ impl ProcessedBlockTrace {
 }
 
 impl StateTrieWrites {
-    fn apply_writes_to_state_node(&self, state_node: &mut AccountRlp) {
+    fn apply_writes_to_state_node(
+        &self,
+        state_node: &mut AccountRlp,
+        h_addr: &HashedAccountAddr,
+        acc_storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
+    ) -> TraceParsingResult<()> {
+        let storage_root_hash_change = match self.storage_trie_change {
+            false => None,
+            true => {
+                let storage_trie = acc_storage_tries
+                    .get(h_addr)
+                    .ok_or(TraceParsingError::MissingAccountStorageTrie(*h_addr))?;
+                Some(storage_trie.hash())
+            }
+        };
+
         update_val_if_some(&mut state_node.balance, self.balance);
         update_val_if_some(&mut state_node.nonce, self.nonce);
-        update_val_if_some(&mut state_node.storage_root, self.storage_root);
-        update_val_if_some(&mut state_node.code_hash, self.code_root);
+        update_val_if_some(&mut state_node.storage_root, storage_root_hash_change);
+        update_val_if_some(&mut state_node.code_hash, self.code_hash);
+
+        Ok(())
     }
 }
