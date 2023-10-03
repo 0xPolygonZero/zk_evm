@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
+    iter::once,
 };
 
 use eth_trie_utils::{
@@ -16,7 +17,7 @@ use crate::{
         BlockMetaState, NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites,
     },
     proof_gen_types::BlockLevelData,
-    types::{HashedAccountAddr, HashedNodeAddr, TrieRootHash},
+    types::{HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, TrieRootHash, TxnIdx},
     utils::update_val_if_some,
 };
 
@@ -82,17 +83,36 @@ impl ProcessedBlockTrace {
     fn create_minimal_partial_tries_needed_by_txn(
         curr_block_tries: &PartialTrieState,
         nodes_used_by_txn: NodesUsedByTxn,
+        txn_idx: TxnIdx,
     ) -> TraceParsingResult<TrieInputs> {
         let state_trie = Self::create_minimal_state_partial_trie(
             &curr_block_tries.state,
             nodes_used_by_txn.state_accesses.iter().cloned(),
         )?;
 
+        // TODO: Replace cast once `eth_trie_utils` supports `into` for `usize...
+        let transactions_trie = Self::create_trie_subset_wrapped(
+            &curr_block_tries.txn,
+            once((txn_idx as u32).into()),
+            TrieType::Txn,
+        )?;
+
+        let receipts_trie = Self::create_trie_subset_wrapped(
+            &curr_block_tries.receipt,
+            once((txn_idx as u32).into()),
+            TrieType::Receipt,
+        )?;
+
+        let storage_tries = Self::create_minimal_storage_partial_tries(
+            &curr_block_tries.storage,
+            nodes_used_by_txn.storage_accesses.into_iter(),
+        )?;
+
         Ok(TrieInputs {
             state_trie,
-            transactions_trie: todo!(),
-            receipts_trie: todo!(),
-            storage_tries: todo!(),
+            transactions_trie,
+            receipts_trie,
+            storage_tries,
         })
     }
 
@@ -100,8 +120,40 @@ impl ProcessedBlockTrace {
         state_trie: &HashedPartialTrie,
         state_accesses: impl Iterator<Item = HashedNodeAddr>,
     ) -> TraceParsingResult<HashedPartialTrie> {
-        create_trie_subset(state_trie, state_accesses.map(Nibbles::from_h256_be))
-            .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(TrieType::State))
+        Self::create_trie_subset_wrapped(
+            state_trie,
+            state_accesses.map(Nibbles::from_h256_be),
+            TrieType::State,
+        )
+    }
+
+    fn create_minimal_storage_partial_tries<'a>(
+        storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
+        accesses_per_account: impl Iterator<Item = (HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
+    ) -> TraceParsingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {
+        accesses_per_account
+            .map(|(h_addr, mem_accesses)| {
+                let base_storage_trie = storage_tries
+                    .get(&h_addr)
+                    .ok_or(TraceParsingError::MissingAccountStorageTrie(h_addr))?;
+                let partial_storage_trie = Self::create_trie_subset_wrapped(
+                    base_storage_trie,
+                    mem_accesses.into_iter(),
+                    TrieType::Storage,
+                )?;
+
+                Ok((h_addr, partial_storage_trie))
+            })
+            .collect::<TraceParsingResult<_>>()
+    }
+
+    fn create_trie_subset_wrapped(
+        trie: &HashedPartialTrie,
+        accesses: impl Iterator<Item = Nibbles>,
+        trie_type: TrieType,
+    ) -> TraceParsingResult<HashedPartialTrie> {
+        create_trie_subset(trie, accesses)
+            .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(trie_type))
     }
 
     fn apply_deltas_to_trie_state(
