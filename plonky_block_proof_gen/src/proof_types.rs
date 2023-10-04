@@ -75,6 +75,39 @@ impl TxnProofGenIR {
             addresses: Vec::default(), // TODO!
         }
     }
+
+    /// Creates a dummy transaction.
+    ///
+    /// These can be used to pad a block if the number of transactions in the
+    /// block is below `2`.
+    pub fn create_dummy(b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
+        Self {
+            signed_txn: Default::default(),
+            tries: Default::default(),
+            trie_roots_after: Default::default(),
+            deltas: Default::default(),
+            contract_code: Default::default(),
+            b_height,
+            txn_idx,
+        }
+    }
+
+    /// Clone the `TxnProofGenIR` to a new `TxnProofGenIR` with a different
+    /// `b_height` and `txn_idx`.
+    ///
+    /// This can be used to pad a block if there is only one transaction in the
+    /// block. Block proofs need a minimum of two transactions.
+    pub fn clone_as(&self, b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
+        Self {
+            signed_txn: self.signed_txn.clone(),
+            tries: self.tries.clone(),
+            trie_roots_after: self.trie_roots_after.clone(),
+            deltas: self.deltas.clone(),
+            contract_code: self.contract_code.clone(),
+            b_height,
+            txn_idx,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
