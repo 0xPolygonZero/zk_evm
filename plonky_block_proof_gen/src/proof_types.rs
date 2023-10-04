@@ -92,21 +92,16 @@ impl TxnProofGenIR {
         }
     }
 
-    /// Clone the `TxnProofGenIR` to a new `TxnProofGenIR` with a different
-    /// `b_height` and `txn_idx`.
+    /// Copy relevant fields of the `TxnProofGenIR` to a new `TxnProofGenIR`
+    /// with a different `b_height` and `txn_idx`.
     ///
     /// This can be used to pad a block if there is only one transaction in the
     /// block. Block proofs need a minimum of two transactions.
-    pub fn clone_as(&self, b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
-        Self {
-            signed_txn: self.signed_txn.clone(),
-            tries: self.tries.clone(),
-            trie_roots_after: self.trie_roots_after.clone(),
-            deltas: self.deltas.clone(),
-            contract_code: self.contract_code.clone(),
-            b_height,
-            txn_idx,
-        }
+    pub fn dummy_with_at(&self, b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
+        let mut dummy = Self::create_dummy(b_height, txn_idx);
+        dummy.deltas = self.deltas.clone();
+        dummy.trie_roots_after = self.trie_roots_after.clone();
+        dummy
     }
 }
 
