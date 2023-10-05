@@ -9,6 +9,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{BlockHeight, PlonkyProofIntern, ProofUnderlyingTxns, TxnIdx};
 
+/// 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
+const EMPTY_TRIE_HASH: H256 = H256([
+    86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
+    108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
+]);
+
 /// Data that is specific to a block and is constant for all txns in a given
 /// block.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -81,10 +87,16 @@ impl TxnProofGenIR {
     /// These can be used to pad a block if the number of transactions in the
     /// block is below `2`.
     pub fn create_dummy(b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
+        let trie_roots_after = TrieRoots {
+            state_root: EMPTY_TRIE_HASH,
+            transactions_root: EMPTY_TRIE_HASH,
+            receipts_root: EMPTY_TRIE_HASH,
+        };
+
         Self {
             signed_txn: Default::default(),
             tries: Default::default(),
-            trie_roots_after: Default::default(),
+            trie_roots_after,
             deltas: Default::default(),
             contract_code: Default::default(),
             b_height,
