@@ -66,13 +66,18 @@ impl TxnProofGenIR {
     }
 
     pub(crate) fn into_generation_inputs(self, b_data: BlockLevelData) -> GenerationInputs {
+        let signed_txns = match self.signed_txn.is_empty() {
+            false => vec![self.signed_txn],
+            true => Vec::new(),
+        };
+
         GenerationInputs {
             txn_number_before: self.txn_idx.into(),
             gas_used_before: self.deltas.gas_used_before,
             block_bloom_before: self.deltas.block_bloom_before,
             gas_used_after: self.deltas.gas_used_after,
             block_bloom_after: self.deltas.block_bloom_after,
-            signed_txns: vec![self.signed_txn],
+            signed_txns,
             tries: self.tries,
             trie_roots_after: self.trie_roots_after,
             contract_code: self.contract_code,
