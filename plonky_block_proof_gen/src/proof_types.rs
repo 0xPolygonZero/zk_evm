@@ -99,7 +99,15 @@ impl TxnProofGenIR {
     /// block. Block proofs need a minimum of two transactions.
     pub fn dummy_with_at(&self, b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
         let mut dummy = Self::create_dummy(b_height, txn_idx);
-        dummy.deltas = self.deltas.clone();
+
+        let deltas = ProofBeforeAndAfterDeltas {
+            gas_used_before: self.deltas.gas_used_after,
+            gas_used_after: self.deltas.gas_used_after,
+            block_bloom_before: self.deltas.block_bloom_after,
+            block_bloom_after: self.deltas.block_bloom_after,
+        };
+
+        dummy.deltas = deltas;
         dummy.trie_roots_after = self.trie_roots_after.clone();
         dummy
     }
