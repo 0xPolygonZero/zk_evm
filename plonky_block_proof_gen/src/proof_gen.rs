@@ -3,8 +3,8 @@ use plonky2_evm::{all_stark::AllStark, config::StarkConfig, proof::PublicValues}
 
 use crate::{
     proof_types::{
-        AggregatableProof, BlockLevelData, GeneratedAggProof, GeneratedBlockProof,
-        GeneratedTxnProof, ProofBeforeAndAfterDeltas, ProofCommon, TxnProofGenIR,
+        create_extra_block_data, AggregatableProof, GeneratedAggProof, GeneratedBlockProof,
+        GeneratedTxnProof, OtherBlockData, ProofBeforeAndAfterDeltas, ProofCommon, TxnProofGenIR,
     },
     prover_state::ProverState,
     types::PlonkyProofIntern,
@@ -35,7 +35,7 @@ impl From<String> for ProofGenError {
 pub fn generate_txn_proof(
     p_state: &ProverState,
     start_info: TxnProofGenIR,
-    b_data: BlockLevelData,
+    other_data: OtherBlockData,
 ) -> ProofGenResult<GeneratedTxnProof> {
     let b_height = start_info.b_height;
     let txn_idx = start_info.txn_idx;
@@ -46,7 +46,7 @@ pub fn generate_txn_proof(
         .prove_root(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
-            start_info.into_generation_inputs(b_data),
+            start_info.into_generation_inputs(other_data),
             &mut TimingTree::default(),
         )
         .map_err(|err| err.to_string())?;
@@ -72,9 +72,9 @@ pub fn generate_agg_proof(
     p_state: &ProverState,
     lhs_child: &AggregatableProof,
     rhs_child: &AggregatableProof,
-    b_data: BlockLevelData,
+    other_data: OtherBlockData,
 ) -> ProofGenResult<GeneratedAggProof> {
-    let expanded_agg_proofs = expand_aggregatable_proofs(lhs_child, rhs_child, b_data);
+    let expanded_agg_proofs = expand_aggregatable_proofs(lhs_child, rhs_child, other_data);
     let deltas = expanded_agg_proofs.p_vals.extra_block_data.clone().into();
 
     let (agg_proof_intern, p_vals) = p_state
@@ -118,23 +118,28 @@ struct ExpandedAggregatableProof<'a> {
 fn expand_aggregatable_proofs<'a>(
     lhs_child: &'a AggregatableProof,
     rhs_child: &'a AggregatableProof,
-    b_data: BlockLevelData,
+    other_data: OtherBlockData,
 ) -> ExpandedAggregatableProofs<'a> {
     let (expanded_lhs, lhs_common) = expand_aggregatable_proof(lhs_child);
     let (expanded_rhs, rhs_common) = expand_aggregatable_proof(rhs_child);
 
-    let txn_idxs = lhs_child
+    let p_underlying_txns = lhs_child
         .underlying_txns()
         .combine(&rhs_child.underlying_txns());
     let deltas = merge_lhs_and_rhs_deltas(&lhs_common.deltas, &rhs_common.deltas);
-    let extra_block_data =
-        deltas.into_extra_block_data(txn_idxs.txn_idxs.start, txn_idxs.txn_idxs.end);
+    
+    let extra_block_data = create_extra_block_data(
+        deltas,
+        other_data.genesis_state_trie_root,
+        p_underlying_txns.txn_idxs.start,
+        p_underlying_txns.txn_idxs.end,
+    );
 
     let p_vals = PublicValues {
         trie_roots_before: lhs_common.roots_before.clone(),
         trie_roots_after: rhs_common.roots_after.clone(),
-        block_metadata: b_data.b_meta,
-        block_hashes: b_data.b_hashes,
+        block_metadata: other_data.b_data.b_meta,
+        block_hashes: other_data.b_data.b_hashes,
         extra_block_data,
     };
 
@@ -176,21 +181,24 @@ pub fn generate_block_proof(
     p_state: &ProverState,
     prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
     curr_block_agg_proof: &GeneratedAggProof,
-    b_data: BlockLevelData,
+    other_data: OtherBlockData,
 ) -> ProofGenResult<GeneratedBlockProof> {
     let b_height = curr_block_agg_proof.common.b_height;
     let parent_intern = prev_opt_parent_b_proof.map(|p| &p.intern);
 
+    let extra_block_data = create_extra_block_data(
+        curr_block_agg_proof.common.deltas.clone(),
+        other_data.genesis_state_trie_root,
+        curr_block_agg_proof.underlying_txns.txn_idxs.start,
+        curr_block_agg_proof.underlying_txns.txn_idxs.end,
+    );
+
     let p_vals = PublicValues {
         trie_roots_before: curr_block_agg_proof.common.roots_before.clone(),
         trie_roots_after: curr_block_agg_proof.common.roots_after.clone(),
-        block_metadata: b_data.b_meta,
-        block_hashes: b_data.b_hashes,
-        extra_block_data: curr_block_agg_proof
-            .common
-            .deltas
-            .clone()
-            .into_extra_block_data(0, curr_block_agg_proof.underlying_txns.txn_idxs.end),
+        block_metadata: other_data.b_data.b_meta,
+        block_hashes: other_data.b_data.b_hashes,
+        extra_block_data,
     };
 
     let (b_proof_intern, _) = p_state

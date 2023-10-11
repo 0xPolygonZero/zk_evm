@@ -15,6 +15,13 @@ const EMPTY_TRIE_HASH: H256 = H256([
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);
 
+/// Other data that is needed for proof gen.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct OtherBlockData {
+    pub b_data: BlockLevelData,
+    pub genesis_state_trie_root: H256,
+}
+
 /// Data that is specific to a block and is constant for all txns in a given
 /// block.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -65,13 +72,14 @@ impl TxnProofGenIR {
         self.txn_idx
     }
 
-    pub(crate) fn into_generation_inputs(self, b_data: BlockLevelData) -> GenerationInputs {
+    pub(crate) fn into_generation_inputs(self, other_data: OtherBlockData) -> GenerationInputs {
         let signed_txns = match self.signed_txn.is_empty() {
             false => vec![self.signed_txn],
             true => Vec::new(),
         };
 
         GenerationInputs {
+            genesis_state_trie_root: other_data.genesis_state_trie_root,
             txn_number_before: self.txn_idx.into(),
             gas_used_before: self.deltas.gas_used_before,
             block_bloom_before: self.deltas.block_bloom_before,
@@ -81,8 +89,8 @@ impl TxnProofGenIR {
             tries: self.tries,
             trie_roots_after: self.trie_roots_after,
             contract_code: self.contract_code,
-            block_metadata: b_data.b_meta,
-            block_hashes: b_data.b_hashes,
+            block_metadata: other_data.b_data.b_meta,
+            block_hashes: other_data.b_data.b_hashes,
             addresses: Vec::default(), // TODO!
         }
     }
@@ -151,16 +159,20 @@ impl<T: Borrow<ExtraBlockData>> From<T> for ProofBeforeAndAfterDeltas {
     }
 }
 
-impl ProofBeforeAndAfterDeltas {
-    pub fn into_extra_block_data(self, txn_start: TxnIdx, txn_end: TxnIdx) -> ExtraBlockData {
-        ExtraBlockData {
-            txn_number_before: txn_start.into(),
-            txn_number_after: txn_end.into(),
-            gas_used_before: self.gas_used_before,
-            gas_used_after: self.gas_used_after,
-            block_bloom_before: self.block_bloom_before,
-            block_bloom_after: self.block_bloom_after,
-        }
+pub fn create_extra_block_data(
+    deltas: ProofBeforeAndAfterDeltas,
+    genesis_root: H256,
+    txn_start: TxnIdx,
+    txn_end: TxnIdx,
+) -> ExtraBlockData {
+    ExtraBlockData {
+        genesis_state_trie_root: genesis_root,
+        txn_number_before: txn_start.into(),
+        txn_number_after: txn_end.into(),
+        gas_used_before: deltas.gas_used_before,
+        gas_used_after: deltas.gas_used_after,
+        block_bloom_before: deltas.block_bloom_before,
+        block_bloom_after: deltas.block_bloom_after,
     }
 }
 
