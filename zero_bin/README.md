@@ -6,6 +6,9 @@ A quick and dirty way to prove a block with plonky2. No orchestration. No distri
 
 Pass JSON formatted prover input to stdin or over HTTP. See [data/block_121.json](data/block_121.json) for an example of the expected format.
 
+Initializing plonky2 can take a while. 
+HTTP mode will allow you to run multiple proof jobs without re-initializing plonky2 between job invocations. Otherwise, every time the process is started, plonky2 will need to be re-initialized.
+
 ### stdin
 
 ```bash
