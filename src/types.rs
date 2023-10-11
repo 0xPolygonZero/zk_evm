@@ -12,3 +12,5 @@ pub type StorageAddr = H256;
 pub type StorageVal = U256;
 pub type TrieRootHash = H256;
 pub type TxnIdx = usize;
+
+pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;

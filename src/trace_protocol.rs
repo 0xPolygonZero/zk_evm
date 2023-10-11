@@ -42,9 +42,6 @@ pub struct BlockTrace {
     /// Map of hashed account addr --> storage trie pre-image.
     pub storage_tries: StorageTriesPreImage,
 
-    /// All contract code used by txns in the block.
-    pub contract_code: BlockUsedContractCode,
-
     /// Traces and other info per txn. The index of the txn corresponds to the
     /// slot in this vec.
     pub txn_info: Vec<TxnInfo>,
@@ -84,18 +81,6 @@ pub enum StorageTriesPreImage {
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.
     MultipleTries(HashMap<HashedAccountAddr, TriePreImage>),
-}
-
-/// Contract code hit by txns in the block.
-#[derive(Debug)]
-pub enum BlockUsedContractCode {
-    /// Contains a map of the code hash to the actual contract code.
-    Full(HashMap<CodeHash, Vec<u8>>),
-
-    /// Only contains the code hashes that were used. It's up to the prover
-    /// generation scheduler to get the code for each hash. This is the more
-    /// data efficient option.
-    Digests(Vec<CodeHash>),
 }
 
 /// Info specific to txns in the block.
