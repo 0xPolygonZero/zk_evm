@@ -14,7 +14,16 @@ pub type ProofGenResult<T> = Result<T, ProofGenError>;
 
 // Plonky2 is still using `anyhow` for proof gen, and since this is a library,
 // it's probably best if we at least convert it to a `String`.
+#[derive(Debug)]
 pub struct ProofGenError(pub String);
+
+impl std::fmt::Display for ProofGenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#?}", self.0)
+    }
+}
+
+impl std::error::Error for ProofGenError {}
 
 impl From<String> for ProofGenError {
     fn from(v: String) -> Self {
