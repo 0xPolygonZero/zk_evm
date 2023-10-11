@@ -1,0 +1,24 @@
+[package]
+name = "zero-bin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+plonky_edge_block_trace_parser = { git = "https://github.com/mir-protocol/plonky-edge-block-trace-parser.git", rev = "0e5f70f673439434480ef74a1f4a7430859524b4" }
+plonky_block_proof_gen = { git = "https://github.com/mir-protocol/plonky-block-proof-gen.git", rev = "6a64f9be4616931c042aaf932d2483529e1db9bf" }
+plonky2_evm = { git = "https://github.com/mir-protocol/plonky2.git", rev = "0b5ac312c0f9efdcc6d85c10256d2843d42215a2" }
+clap = { version = "4.4.6", features = ["derive"] }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+anyhow = "1.0.75"
+serde_json = "1.0.107"
+serde = "1.0.188"
+ethereum-types = "0.14.1"
+axum = "0.6.20"
+tokio = { version = "1.33.0", features = ["full"] }
+
+[patch.crates-io]
+# TODO: Remove `eth_trie_utils` patch once version `0.7.0` is released...
+eth_trie_utils = { git = "https://github.com/mir-protocol/eth_trie_utils.git", rev = "e9ec4ec2aa2ae976b7c699ef40c1ffc716d87ed5" }
