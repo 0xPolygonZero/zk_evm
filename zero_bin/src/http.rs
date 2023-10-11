@@ -13,15 +13,13 @@ pub(crate) async fn http_main(p_state: ProverState, port: u16) -> Result<()> {
     debug!("listening on {}", addr);
 
     let p_state = Arc::new(p_state);
-    let app = Router::new()
-        .route(
-            "/prove",
-            post({
-                let p_state = p_state.clone();
-                move |body| prove(body, p_state)
-            }),
-        )
-        .with_state(Arc::new(p_state));
+    let app = Router::new().route(
+        "/prove",
+        post({
+            let p_state = p_state.clone();
+            move |body| prove(body, p_state)
+        }),
+    );
 
     Ok(axum::Server::bind(&addr)
         .serve(app.into_make_service())
