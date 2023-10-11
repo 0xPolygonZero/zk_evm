@@ -1384,7 +1384,7 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 [[package]]
 name = "plonky2"
 version = "0.1.4"
-source = "git+https://github.com/mir-protocol/plonky2.git?rev=0b5ac312c0f9efdcc6d85c10256d2843d42215a2#0b5ac312c0f9efdcc6d85c10256d2843d42215a2"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=762e6f07b834df04be8cd290f07465a28c392c6d#762e6f07b834df04be8cd290f07465a28c392c6d"
 dependencies = [
  "ahash 0.8.3",
  "anyhow",
@@ -1408,7 +1408,7 @@ dependencies = [
 [[package]]
 name = "plonky2_evm"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git?rev=0b5ac312c0f9efdcc6d85c10256d2843d42215a2#0b5ac312c0f9efdcc6d85c10256d2843d42215a2"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=762e6f07b834df04be8cd290f07465a28c392c6d#762e6f07b834df04be8cd290f07465a28c392c6d"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1442,7 +1442,7 @@ dependencies = [
 [[package]]
 name = "plonky2_field"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git?rev=0b5ac312c0f9efdcc6d85c10256d2843d42215a2#0b5ac312c0f9efdcc6d85c10256d2843d42215a2"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=762e6f07b834df04be8cd290f07465a28c392c6d#762e6f07b834df04be8cd290f07465a28c392c6d"
 dependencies = [
  "anyhow",
  "itertools",
@@ -1457,7 +1457,7 @@ dependencies = [
 [[package]]
 name = "plonky2_maybe_rayon"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git?rev=0b5ac312c0f9efdcc6d85c10256d2843d42215a2#0b5ac312c0f9efdcc6d85c10256d2843d42215a2"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=762e6f07b834df04be8cd290f07465a28c392c6d#762e6f07b834df04be8cd290f07465a28c392c6d"
 dependencies = [
  "rayon",
 ]
@@ -1465,12 +1465,12 @@ dependencies = [
 [[package]]
 name = "plonky2_util"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git?rev=0b5ac312c0f9efdcc6d85c10256d2843d42215a2#0b5ac312c0f9efdcc6d85c10256d2843d42215a2"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=762e6f07b834df04be8cd290f07465a28c392c6d#762e6f07b834df04be8cd290f07465a28c392c6d"
 
 [[package]]
 name = "plonky_block_proof_gen"
 version = "0.1.0"
-source = "git+https://github.com/mir-protocol/plonky-block-proof-gen.git?rev=6a64f9be4616931c042aaf932d2483529e1db9bf#6a64f9be4616931c042aaf932d2483529e1db9bf"
+source = "git+https://github.com/mir-protocol/plonky-block-proof-gen.git?rev=73c3bcbaf3bfe913641c5b6817bc3ba5aa9859bc#73c3bcbaf3bfe913641c5b6817bc3ba5aa9859bc"
 dependencies = [
  "ethereum-types",
  "log",
@@ -1483,7 +1483,7 @@ dependencies = [
 [[package]]
 name = "plonky_edge_block_trace_parser"
 version = "0.1.0"
-source = "git+https://github.com/mir-protocol/plonky-edge-block-trace-parser.git?rev=0e5f70f673439434480ef74a1f4a7430859524b4#0e5f70f673439434480ef74a1f4a7430859524b4"
+source = "git+https://github.com/mir-protocol/plonky-edge-block-trace-parser.git?rev=1bc20699b91201291294914772a30de84ffdcc58#1bc20699b91201291294914772a30de84ffdcc58"
 dependencies = [
  "eth_trie_utils",
  "ethereum-types",
