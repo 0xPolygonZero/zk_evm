@@ -3,10 +3,11 @@
 use std::{
     any::type_name,
     borrow::Borrow,
-    collections::VecDeque,
+    collections::{LinkedList, VecDeque},
     error::Error,
     fmt::{self, Display},
     io::{Cursor, Read},
+    ops::Range,
 };
 
 use eth_trie_utils::partial_trie::HashedPartialTrie;
@@ -164,6 +165,8 @@ impl ParserState {
     }
 
     fn apply_rules_to_stack(&mut self) -> usize {
+        let _num_rules_applied = 0;
+
         todo!()
     }
 }
@@ -361,6 +364,57 @@ impl CompactCursor {
 
     fn at_eof(&self) -> bool {
         self.intern.position() as usize == self.intern.get_ref().len()
+    }
+}
+
+/// We kind of want a wrapper around the actual data structure I think since
+/// there's a good chance this will change a few times in the future.
+struct WitnessEntries {
+    // Yeah a LL is actually (unfortunately) a very good choice here. We will be doing a ton of
+    // inserts mid-list, and the list can get very large. There might be a better choice for a data
+    // structure, but for now, this will make performance not scale exponentially with list
+    // size.
+    intern: LinkedList<StackEntry>,
+}
+
+impl WitnessEntries {
+    fn push_entry(&mut self, _entry: StackEntry) {
+        todo!()
+    }
+
+    fn replace_entries_with_single_entry(
+        &mut self,
+        _idxs_to_replace: Range<usize>,
+        _entry_to_replace_with: StackEntry,
+    ) {
+        todo!()
+    }
+
+    fn create_collapseable_iter(&mut self) -> CollapsableStackElementTraverser {
+        todo!()
+    }
+}
+
+// It's not quite an iterator, so this is the next best name that I can come up
+// with.
+struct CollapsableStackElementTraverser {}
+
+impl CollapsableStackElementTraverser {
+    fn advance(&mut self) {
+        todo!()
+    }
+
+    fn get_next_n_elems(&self, _n: usize) -> impl Iterator<Item = &StackEntry> {
+        // TODO
+        std::iter::empty()
+    }
+
+    fn get_next_n_elems_into_buf(&self, _n: usize, _buf: &mut Vec<&StackEntry>) {
+        todo!()
+    }
+
+    fn replace_next_n_entry_with_single_entry(&mut self, _n: usize, _entry: StackEntry) {
+        todo!()
     }
 }
 
