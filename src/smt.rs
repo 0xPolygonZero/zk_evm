@@ -132,10 +132,8 @@ impl Smt {
                         [hash, existing.hash()]
                     });
                     self.leaves.remove(&partial_key);
-                    self.leaves
-                        .insert(common_prefix.add_bit(n_bit), node.clone());
-                    self.leaves
-                        .insert(common_prefix.add_bit(o_bit), existing.clone());
+                    self.leaves.insert(common_prefix.add_bit(n_bit), node);
+                    self.leaves.insert(common_prefix.add_bit(o_bit), existing);
                     let mut internal_hash = new_node.hash();
                     self.internal_nodes.insert(common_prefix, new_node);
                     let mut internal_key = common_prefix;
@@ -160,8 +158,7 @@ impl Smt {
                 let last_bit = last_bit.ok_or_else(|| "Error".to_string())?;
                 assert_eq!(existing.0[last_bit as usize], DEFAULT_HASH);
                 self.internal_nodes.get_mut(&partial_key).unwrap().0[last_bit as usize] = hash;
-                self.leaves
-                    .insert(partial_key.add_bit(last_bit), node.clone());
+                self.leaves.insert(partial_key.add_bit(last_bit), node);
                 let mut internal_key = partial_key;
                 let mut internal_hash = self.internal_nodes.get(&partial_key).unwrap().hash();
                 while internal_key.count > 0 {
