@@ -30,6 +30,8 @@ type HashValue = H256;
 type RawValue = Vec<u8>;
 type RawCode = Vec<u8>;
 
+const MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE: usize = 3;
+
 #[derive(Debug, Error)]
 pub enum CompactParsingError {
     #[error("Missing header")]
@@ -46,9 +48,12 @@ pub enum CompactParsingError {
 
     #[error("Unable to parse the type \"{0}\" from cbor bytes {1}")]
     InvalidBytesForType(&'static str, String, String),
+
+    #[error("Invalid block witness entries: {0:?}")]
+    InvalidWitnessFormat(Vec<WitnessEntry>),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct Key {
     is_even: bool,
     bytes: Vec<u8>,
@@ -71,13 +76,14 @@ enum Opcode {
     EmptyRoot = 0x06,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum WitnessEntry {
     Instruction(Instruction),
     Node(NodeEntry),
 }
 
-#[derive(Debug)]
+// TODO: Ignore `NEW_TRIE` for now...
+#[derive(Clone, Debug)]
 enum Instruction {
     Leaf(Key, RawValue),
     Extension(Key),
@@ -94,7 +100,7 @@ impl From<Instruction> for WitnessEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum NodeEntry {
     AccountLeaf(AccountLeafData),
     Code(Vec<u8>),
@@ -104,7 +110,7 @@ enum NodeEntry {
     Extension(Key),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct AccountLeafData {}
 
 #[derive(Debug, Deserialize)]
@@ -153,8 +159,10 @@ impl ParserState {
     }
 
     fn parse_into_trie(mut self) -> CompactParsingResult<HashedPartialTrie> {
+        let mut entry_buf = Vec::new();
+
         loop {
-            let num_rules_applied = self.apply_rules_to_witness_entries();
+            let num_rules_applied = self.apply_rules_to_witness_entries(&mut entry_buf)?;
 
             if num_rules_applied == 0 {
                 break;
@@ -164,13 +172,57 @@ impl ParserState {
         todo!()
     }
 
-    fn apply_rules_to_witness_entries(&mut self) -> usize {
-        let _num_rules_applied = 0;
+    fn apply_rules_to_witness_entries(
+        &mut self,
+        entry_buf: &mut Vec<&WitnessEntry>,
+    ) -> CompactParsingResult<usize> {
+        let mut tot_rules_applied = 0;
+
+        let mut traverser = self.entries.create_collapsable_traverser();
+
+        while !traverser.at_end() {
+            let num_rules_applied = Self::try_apply_rules_to_curr_entry(&mut traverser, entry_buf)?;
+            tot_rules_applied += num_rules_applied;
+        }
 
         todo!()
     }
 
-    fn try_apply_rules_to_curr_entry() {}
+    fn try_apply_rules_to_curr_entry(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<&WitnessEntry>,
+    ) -> CompactParsingResult<usize> {
+        traverser.get_next_n_elems_into_buf(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE, buf);
+
+        match buf[0] {
+            WitnessEntry::Instruction(Instruction::Hash(_h)) => {
+                todo!()
+            }
+            WitnessEntry::Instruction(Instruction::Leaf(_k, _v)) => {
+                todo!()
+            }
+            WitnessEntry::Instruction(Instruction::Extension(_k)) => {
+                todo!()
+            }
+            WitnessEntry::Instruction(Instruction::Code(_c)) => {
+                todo!()
+            }
+            WitnessEntry::Instruction(Instruction::AccountLeaf(_k, _n, _b, _h_c, _h_s)) => {
+                todo!()
+            }
+            WitnessEntry::Instruction(Instruction::Branch(_mask)) => {
+                todo!()
+            }
+            _ => {
+                // TODO: This needs to be cleaned up and put into a separate function...
+                let invalid_entry_buf = traverser
+                    .get_next_n_elems(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE)
+                    .cloned()
+                    .collect();
+                Err(CompactParsingError::InvalidWitnessFormat(invalid_entry_buf))
+            }
+        }
+    }
 }
 
 struct WitnessBytes {
@@ -394,7 +446,7 @@ impl WitnessEntries {
         todo!()
     }
 
-    fn create_collapseable_traverser(&mut self) -> CollapsableWitnessEntryTraverser {
+    fn create_collapsable_traverser(&mut self) -> CollapsableWitnessEntryTraverser {
         todo!()
     }
 }
@@ -426,6 +478,10 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
         }
 
         self.entry_cursor.insert_after(entry)
+    }
+
+    fn at_end(&self) -> bool {
+        self.entry_cursor.as_cursor().peek_next().is_none()
     }
 }
 
