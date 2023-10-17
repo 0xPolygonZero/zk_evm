@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use ethereum_types::{BigEndianHash, H256, U256};
 
-use crate::{bits::Bits, hash::hash_bytes};
+use crate::{
+    bits::Bits,
+    hash::{hash_internal, hash_leaf},
+};
 
 pub const RADIX: usize = 2;
 pub const DEFAULT_HASH: H256 = H256([0; 32]);
@@ -26,13 +29,6 @@ impl ValOrHash {
     pub fn is_hash(&self) -> bool {
         matches!(self, ValOrHash::Hash(_))
     }
-
-    pub fn hash(&self) -> H256 {
-        match self {
-            ValOrHash::Val(_) => todo!(),
-            ValOrHash::Hash(h) => *h,
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -52,7 +48,7 @@ impl ValOrHashNode {
 
     pub fn hash(&self) -> H256 {
         match self {
-            ValOrHashNode::Val { key, value } => hash_bytes(value),
+            ValOrHashNode::Val { key, value } => hash_leaf(*key, value),
             ValOrHashNode::Hash(h) => *h,
         }
     }
@@ -63,11 +59,7 @@ pub struct InternalNode([H256; RADIX]);
 
 impl InternalNode {
     pub fn hash(&self) -> H256 {
-        let mut bytes = [0u8; 32 * RADIX];
-        for i in 0..RADIX {
-            bytes[32 * i..32 * (i + 1)].copy_from_slice(&self.0[0].0);
-        }
-        hash_bytes(&bytes)
+        hash_internal(self.0)
     }
 }
 
@@ -218,7 +210,7 @@ fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
                 index
             }
         }
-    } else if let Some(_) = smt.internal_nodes.get(&key) {
+    } else if smt.internal_nodes.contains_key(&key) {
         let index = v.len();
         v.push(INTERNAL_TYPE.into());
         for _ in 0..RADIX {
@@ -238,7 +230,7 @@ fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
     }
 }
 
-fn hash_serialize(v: &[U256]) -> H256 {
+pub fn hash_serialize(v: &[U256]) -> H256 {
     _hash_serialize(v, 0)
 }
 
@@ -257,13 +249,13 @@ fn _hash_serialize(v: &[U256], ptr: usize) -> H256 {
             node.hash()
         }
         LEAF_TYPE => {
-            let _key = Bits::from(v[ptr + 1]); // TODO: use.
+            let key = Bits::from(v[ptr + 1]);
             let value_len = v[ptr + 2].as_usize();
             let value = v[ptr + 3..ptr + 3 + value_len]
                 .iter()
                 .map(|x| x.as_usize() as u8)
                 .collect::<Vec<_>>();
-            hash_bytes(&value)
+            hash_leaf(key, &value)
         }
         _ => panic!("Should not happen"),
     }
@@ -274,7 +266,7 @@ mod tests {
     use ethereum_types::U256;
     use rand::{seq::SliceRandom, thread_rng, Rng};
 
-    use crate::{bits::Bits, smt::hash_serialize};
+    use crate::smt::hash_serialize;
 
     use super::{Smt, ValOrHash};
 
