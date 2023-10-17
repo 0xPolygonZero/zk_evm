@@ -5,6 +5,7 @@ use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::U256;
 
+use crate::compact_prestate_processing::process_compact_prestate;
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
@@ -22,6 +23,8 @@ pub(crate) struct ProcessedBlockTrace {
     pub(crate) storage_tries: HashMap<HashedAccountAddr, HashedPartialTrie>,
     pub(crate) txn_info: Vec<ProcessedTxnInfo>,
 }
+
+const COMPATIBLE_HEADER_VERSION: u8 = 1;
 
 impl BlockTrace {
     pub fn into_txn_proof_gen_ir<F>(
@@ -122,8 +125,18 @@ fn process_multiple_storage_tries(
     todo!()
 }
 
-fn process_compact_trie(_trie: TrieCompact) -> ProcessedBlockTracePreImages {
-    todo!()
+fn process_compact_trie(trie_compact: TrieCompact) -> ProcessedBlockTracePreImages {
+    // TODO: Wrap in proper result type...
+    let (header, trie) = process_compact_prestate(trie_compact).unwrap();
+
+    // TODO: Make this into a result...
+    assert!(header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
+
+    ProcessedBlockTracePreImages {
+        state: trie,
+        storage: todo!(),
+        extra_code_hash_mappings: todo!(),
+    }
 }
 
 #[derive(Debug)]

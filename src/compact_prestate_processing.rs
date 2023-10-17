@@ -1,6 +1,7 @@
 //! Processing for the compact format as specified here: https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md
 
 use std::{
+    collections::VecDeque,
     fmt::{self, Display},
     io::{Cursor, Read},
 };
@@ -32,17 +33,6 @@ pub enum CompactParsingError {
     InvalidByteVector(String),
 }
 
-#[derive(Debug)]
-struct Header {
-    version: u8,
-}
-
-impl Display for Header {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Erigon block witness version {}", self.version)
-    }
-}
-
 #[derive(Debug, Deserialize)]
 struct Key {
     is_even: bool,
@@ -61,7 +51,13 @@ enum Opcode {
 }
 
 #[derive(Debug)]
-enum Operator {
+enum StackEntry {
+    Instruction(Instruction),
+    Node(NodeEntry),
+}
+
+#[derive(Debug)]
+enum Instruction {
     Leaf(),
     Extension,
     Branch,
@@ -71,6 +67,25 @@ enum Operator {
     EmptyRoot,
 }
 
+impl From<Instruction> for StackEntry {
+    fn from(v: Instruction) -> Self {
+        Self::Instruction(v)
+    }
+}
+
+#[derive(Debug)]
+enum NodeEntry {
+    AccountLeaf(AccountLeafData),
+    Code(Vec<u8>),
+    Empty,
+    Hash(NodeHash),
+    Leaf(Key, Value),
+    Extension(Key),
+}
+
+#[derive(Debug)]
+struct AccountLeafData {}
+
 #[derive(Debug, Deserialize)]
 struct LeafData {
     key: Key,
@@ -78,55 +93,95 @@ struct LeafData {
 }
 
 #[derive(Debug)]
+pub(crate) struct Header {
+    version: u8,
+}
+
+impl Display for Header {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Erigon block witness version {}", self.version)
+    }
+}
+
+impl Header {
+    pub(crate) fn version_is_compatible(&self, target_ver: u8) -> bool {
+        self.version == target_ver
+    }
+}
+
+#[derive(Debug)]
 struct ParserState {
-    stack: Vec<StackEntry>,
-    byte_cursor: CompactCursor,
+    stack: VecDeque<StackEntry>,
 }
 
 impl ParserState {
-    fn new(payload_bytes: Vec<u8>) -> Self {
-        let byte_cursor = CompactCursor {
-            intern: Cursor::new(payload_bytes),
-        };
+    fn create_and_extract_header(
+        witness_bytes_raw: Vec<u8>,
+    ) -> CompactParsingResult<(Header, Self)> {
+        let witness_bytes = WitnessBytes::new(witness_bytes_raw);
+        let (header, stack) = witness_bytes.process_into_instructions_and_header()?;
 
-        Self {
-            byte_cursor,
-            stack: Vec::default(),
-        }
+        let p_state = Self { stack };
+
+        Ok((header, p_state))
     }
 
-    fn process_stream(self) -> CompactParsingResult<HashedPartialTrie> {
-        let (_, trie) = self.process_stream_and_get_header()?;
+    fn parse(self) -> CompactParsingResult<HashedPartialTrie> {
+        let trie = self.parse_into_trie()?;
         Ok(trie)
     }
 
-    fn process_stream_and_get_header(
+    fn parse_into_trie(mut self) -> CompactParsingResult<HashedPartialTrie> {
+        loop {
+            let num_rules_applied = self.apply_rules_to_stack();
+
+            if num_rules_applied == 0 {
+                break;
+            }
+        }
+
+        todo!()
+    }
+
+    fn apply_rules_to_stack(&mut self) -> usize {
+        todo!()
+    }
+}
+
+struct WitnessBytes {
+    byte_cursor: CompactCursor,
+    instrs: VecDeque<StackEntry>,
+}
+
+impl WitnessBytes {
+    fn new(witness_bytes: Vec<u8>) -> Self {
+        Self {
+            byte_cursor: CompactCursor {
+                intern: Cursor::new(witness_bytes),
+            },
+            instrs: VecDeque::default(),
+        }
+    }
+
+    fn process_into_instructions_and_header(
         mut self,
-    ) -> CompactParsingResult<(Header, HashedPartialTrie)> {
+    ) -> CompactParsingResult<(Header, VecDeque<StackEntry>)> {
         let header = self.parse_header()?;
 
+        // TODO
         loop {
-            let _operator = self.process_operator()?;
+            let instr = self.process_operator()?;
+            self.instrs.push_front(instr.into());
 
             if self.byte_cursor.at_eof() {
                 break;
             }
         }
 
-        // TODO
-        Ok((header, HashedPartialTrie::default()))
+        Ok((header, self.instrs))
     }
 
-    fn parse_header(&mut self) -> CompactParsingResult<Header> {
-        let h_byte = self
-            .byte_cursor
-            .read_byte()
-            .map_err(|_| CompactParsingError::MissingHeader)?;
-
-        Ok(Header { version: h_byte })
-    }
-
-    fn process_operator(&mut self) -> CompactParsingResult<Operator> {
+    fn process_operator(&mut self) -> CompactParsingResult<Instruction> {
         let opcode_byte = self.byte_cursor.read_byte()?;
 
         let opcode =
@@ -177,27 +232,23 @@ impl ParserState {
     }
 
     fn process_empty_root(&mut self) -> CompactParsingResult<()> {
-        self.push_to_stack(StackEntry::Empty);
+        self.push_to_stack(Instruction::EmptyRoot);
         Ok(())
     }
 
-    fn push_to_stack(&mut self, entry: StackEntry) {
-        self.stack.push(entry)
+    fn push_to_stack(&mut self, instr: Instruction) {
+        self.instrs.push_front(instr.into())
+    }
+
+    fn parse_header(&mut self) -> CompactParsingResult<Header> {
+        let h_byte = self
+            .byte_cursor
+            .read_byte()
+            .map_err(|_| CompactParsingError::MissingHeader)?;
+
+        Ok(Header { version: h_byte })
     }
 }
-
-#[derive(Debug)]
-enum StackEntry {
-    AccountLeaf(AccountLeafData),
-    Code(Vec<u8>),
-    Empty,
-    Hash(NodeHash),
-    Leaf(Key, Value),
-    Extension(Key),
-}
-
-#[derive(Debug)]
-struct AccountLeafData {}
 
 #[derive(Debug)]
 struct CompactCursor {
@@ -228,7 +279,9 @@ impl CompactCursor {
 
 pub(crate) fn process_compact_prestate(
     state: TrieCompact,
-) -> CompactParsingResult<HashedPartialTrie> {
-    let parser = ParserState::new(state.bytes);
-    parser.process_stream()
+) -> CompactParsingResult<(Header, HashedPartialTrie)> {
+    let (header, parser) = ParserState::create_and_extract_header(state.bytes)?;
+    let trie = parser.parse()?;
+
+    Ok((header, trie))
 }
