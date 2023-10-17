@@ -3,7 +3,7 @@
 use std::{
     any::type_name,
     borrow::Borrow,
-    collections::{linked_list::CursorMut, LinkedList, VecDeque},
+    collections::{linked_list::CursorMut, LinkedList},
     error::Error,
     fmt::{self, Display},
     io::{Cursor, Read},
@@ -72,7 +72,7 @@ enum Opcode {
 }
 
 #[derive(Debug)]
-enum StackEntry {
+enum WitnessEntry {
     Instruction(Instruction),
     Node(NodeEntry),
 }
@@ -88,7 +88,7 @@ enum Instruction {
     EmptyRoot,
 }
 
-impl From<Instruction> for StackEntry {
+impl From<Instruction> for WitnessEntry {
     fn from(v: Instruction) -> Self {
         Self::Instruction(v)
     }
@@ -132,7 +132,7 @@ impl Header {
 
 #[derive(Debug)]
 struct ParserState {
-    stack: VecDeque<StackEntry>,
+    entries: WitnessEntries,
 }
 
 impl ParserState {
@@ -140,9 +140,9 @@ impl ParserState {
         witness_bytes_raw: Vec<u8>,
     ) -> CompactParsingResult<(Header, Self)> {
         let witness_bytes = WitnessBytes::new(witness_bytes_raw);
-        let (header, stack) = witness_bytes.process_into_instructions_and_header()?;
+        let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
 
-        let p_state = Self { stack };
+        let p_state = Self { entries };
 
         Ok((header, p_state))
     }
@@ -154,7 +154,7 @@ impl ParserState {
 
     fn parse_into_trie(mut self) -> CompactParsingResult<HashedPartialTrie> {
         loop {
-            let num_rules_applied = self.apply_rules_to_stack();
+            let num_rules_applied = self.apply_rules_to_witness_entries();
 
             if num_rules_applied == 0 {
                 break;
@@ -164,35 +164,37 @@ impl ParserState {
         todo!()
     }
 
-    fn apply_rules_to_stack(&mut self) -> usize {
+    fn apply_rules_to_witness_entries(&mut self) -> usize {
         let _num_rules_applied = 0;
 
         todo!()
     }
+
+    fn try_apply_rules_to_curr_entry() {}
 }
 
 struct WitnessBytes {
     byte_cursor: CompactCursor,
-    instrs: VecDeque<StackEntry>,
+    instrs: WitnessEntries,
 }
 
 impl WitnessBytes {
     fn new(witness_bytes: Vec<u8>) -> Self {
         Self {
             byte_cursor: CompactCursor::new(witness_bytes),
-            instrs: VecDeque::default(),
+            instrs: WitnessEntries::default(),
         }
     }
 
     fn process_into_instructions_and_header(
         mut self,
-    ) -> CompactParsingResult<(Header, VecDeque<StackEntry>)> {
+    ) -> CompactParsingResult<(Header, WitnessEntries)> {
         let header = self.parse_header()?;
 
         // TODO
         loop {
             let instr = self.process_operator()?;
-            self.instrs.push_front(instr.into());
+            self.instrs.push_entry(instr.into());
 
             if self.byte_cursor.at_eof() {
                 break;
@@ -229,35 +231,35 @@ impl WitnessBytes {
         let key = self.byte_cursor.read_cbor_byte_array()?.into();
         let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec()?;
 
-        self.push_to_stack(Instruction::Leaf(key, value_raw));
+        self.push_entry(Instruction::Leaf(key, value_raw));
         Ok(())
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
         let key = self.byte_cursor.read_cbor_byte_array()?.into();
 
-        self.push_to_stack(Instruction::Extension(key));
+        self.push_entry(Instruction::Extension(key));
         Ok(())
     }
 
     fn process_branch(&mut self) -> CompactParsingResult<()> {
         let mask = self.byte_cursor.read_t()?;
 
-        self.push_to_stack(Instruction::Branch(mask));
+        self.push_entry(Instruction::Branch(mask));
         Ok(())
     }
 
     fn process_hash(&mut self) -> CompactParsingResult<()> {
         let hash = self.byte_cursor.read_t()?;
 
-        self.push_to_stack(Instruction::Hash(hash));
+        self.push_entry(Instruction::Hash(hash));
         Ok(())
     }
 
     fn process_code(&mut self) -> CompactParsingResult<()> {
         let code = self.byte_cursor.read_t()?;
 
-        self.push_to_stack(Instruction::Code(code));
+        self.push_entry(Instruction::Code(code));
         Ok(())
     }
 
@@ -268,7 +270,7 @@ impl WitnessBytes {
         let has_code = self.byte_cursor.read_t()?;
         let has_storage = self.byte_cursor.read_t()?;
 
-        self.push_to_stack(Instruction::AccountLeaf(
+        self.push_entry(Instruction::AccountLeaf(
             key,
             nonce,
             balance,
@@ -280,12 +282,12 @@ impl WitnessBytes {
     }
 
     fn process_empty_root(&mut self) -> CompactParsingResult<()> {
-        self.push_to_stack(Instruction::EmptyRoot);
+        self.push_entry(Instruction::EmptyRoot);
         Ok(())
     }
 
-    fn push_to_stack(&mut self, instr: Instruction) {
-        self.instrs.push_front(instr.into())
+    fn push_entry(&mut self, instr: Instruction) {
+        self.instrs.push_entry(instr.into())
     }
 
     fn parse_header(&mut self) -> CompactParsingResult<Header> {
@@ -370,54 +372,55 @@ impl CompactCursor {
 
 /// We kind of want a wrapper around the actual data structure I think since
 /// there's a good chance this will change a few times in the future.
+#[derive(Debug, Default)]
 struct WitnessEntries {
     // Yeah a LL is actually (unfortunately) a very good choice here. We will be doing a ton of
     // inserts mid-list, and the list can get very large. There might be a better choice for a data
     // structure, but for now, this will make performance not scale exponentially with list
     // size.
-    intern: LinkedList<StackEntry>,
+    intern: LinkedList<WitnessEntry>,
 }
 
 impl WitnessEntries {
-    fn push_entry(&mut self, _entry: StackEntry) {
+    fn push_entry(&mut self, _entry: WitnessEntry) {
         todo!()
     }
 
     fn replace_entries_with_single_entry(
         &mut self,
         _idxs_to_replace: Range<usize>,
-        _entry_to_replace_with: StackEntry,
+        _entry_to_replace_with: WitnessEntry,
     ) {
         todo!()
     }
 
-    fn create_collapseable_traverser(&mut self) -> CollapsableStackElementTraverser {
+    fn create_collapseable_traverser(&mut self) -> CollapsableWitnessEntryTraverser {
         todo!()
     }
 }
 
 // It's not quite an iterator, so this is the next best name that I can come up
 // with.
-struct CollapsableStackElementTraverser<'a> {
+struct CollapsableWitnessEntryTraverser<'a> {
     entries: &'a mut WitnessEntries,
-    entry_cursor: CursorMut<'a, StackEntry>,
+    entry_cursor: CursorMut<'a, WitnessEntry>,
 }
 
-impl<'a> CollapsableStackElementTraverser<'a> {
+impl<'a> CollapsableWitnessEntryTraverser<'a> {
     fn advance(&mut self) {
         todo!()
     }
 
-    fn get_next_n_elems(&self, _n: usize) -> impl Iterator<Item = &StackEntry> {
+    fn get_next_n_elems(&self, _n: usize) -> impl Iterator<Item = &WitnessEntry> {
         // TODO
         std::iter::empty()
     }
 
-    fn get_next_n_elems_into_buf(&self, _n: usize, _buf: &mut Vec<&StackEntry>) {
+    fn get_next_n_elems_into_buf(&self, _n: usize, _buf: &mut Vec<&WitnessEntry>) {
         todo!()
     }
 
-    fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry: StackEntry) {
+    fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
         for _ in 0..n {
             self.entry_cursor.remove_current();
         }
