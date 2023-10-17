@@ -1,13 +1,15 @@
 //! Processing for the compact format as specified here: https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md
 
 use std::{
+    borrow::Borrow,
     collections::VecDeque,
+    error::Error,
     fmt::{self, Display},
     io::{Cursor, Read},
 };
 
 use eth_trie_utils::partial_trie::HashedPartialTrie;
-use ethereum_types::H256;
+use ethereum_types::{H256, U256};
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -15,8 +17,16 @@ use crate::trace_protocol::TrieCompact;
 
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
 
-type NodeHash = H256;
-type Value = Vec<u8>;
+type BranchMask = u16;
+
+type Balance = U256;
+type Nonce = U256;
+type HasCode = bool;
+type HasStorage = bool;
+
+type HashValue = H256;
+type RawValue = Vec<u8>;
+type RawCode = Vec<u8>;
 
 #[derive(Debug, Error)]
 pub enum CompactParsingError {
@@ -39,6 +49,12 @@ struct Key {
     bytes: Vec<u8>,
 }
 
+impl<K: Borrow<[u8]>> From<K> for Key {
+    fn from(_value: K) -> Self {
+        todo!()
+    }
+}
+
 #[derive(Debug, enumn::N)]
 enum Opcode {
     Leaf = 0x00,
@@ -58,12 +74,12 @@ enum StackEntry {
 
 #[derive(Debug)]
 enum Instruction {
-    Leaf(),
-    Extension,
-    Branch,
-    Hash,
-    Code,
-    AccountLeaf,
+    Leaf(Key, RawValue),
+    Extension(Key),
+    Branch(BranchMask),
+    Hash(HashValue),
+    Code(RawCode),
+    AccountLeaf(Key, Nonce, Balance, HasCode, HasStorage),
     EmptyRoot,
 }
 
@@ -78,8 +94,8 @@ enum NodeEntry {
     AccountLeaf(AccountLeafData),
     Code(Vec<u8>),
     Empty,
-    Hash(NodeHash),
-    Leaf(Key, Value),
+    Hash(HashValue),
+    Leaf(Key, RawValue),
     Extension(Key),
 }
 
@@ -156,9 +172,7 @@ struct WitnessBytes {
 impl WitnessBytes {
     fn new(witness_bytes: Vec<u8>) -> Self {
         Self {
-            byte_cursor: CompactCursor {
-                intern: Cursor::new(witness_bytes),
-            },
+            byte_cursor: CompactCursor::new(witness_bytes),
             instrs: VecDeque::default(),
         }
     }
@@ -205,10 +219,11 @@ impl WitnessBytes {
     }
 
     fn process_leaf(&mut self) -> CompactParsingResult<()> {
-        let _key_raw = self.byte_cursor.read_byte_array()?;
-        let _value_raw = self.byte_cursor.read_byte_array()?;
+        let key = self.byte_cursor.read_cbor_byte_array()?.into();
+        let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec()?;
 
-        todo!()
+        self.push_to_stack(Instruction::Leaf(key, value_raw));
+        Ok(())
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
@@ -253,9 +268,17 @@ impl WitnessBytes {
 #[derive(Debug)]
 struct CompactCursor {
     intern: Cursor<Vec<u8>>,
+    temp_buf: Vec<u8>,
 }
 
 impl CompactCursor {
+    fn new(bytes: Vec<u8>) -> Self {
+        Self {
+            intern: Cursor::new(bytes),
+            temp_buf: Vec::default(),
+        }
+    }
+
     fn read_byte(&mut self) -> CompactParsingResult<u8> {
         let mut single_byte_buf = [0];
 
@@ -267,9 +290,21 @@ impl CompactCursor {
         Ok(single_byte_buf[0])
     }
 
-    fn read_byte_array(&mut self) -> CompactParsingResult<Vec<u8>> {
-        ciborium::from_reader(&mut self.intern)
-            .map_err(|err| CompactParsingError::InvalidByteVector(err.to_string()))
+    fn read_cbor_byte_array(&mut self) -> CompactParsingResult<&[u8]> {
+        self.temp_buf.clear();
+        Self::ciborium_err_reader_res_to_parsing_res(self.intern.read_exact(&mut self.temp_buf));
+
+        Ok(&self.temp_buf)
+    }
+
+    fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>> {
+        Self::ciborium_err_reader_res_to_parsing_res(ciborium::from_reader(&mut self.intern))
+    }
+
+    fn ciborium_err_reader_res_to_parsing_res<T, E: Error>(
+        res: Result<T, E>,
+    ) -> CompactParsingResult<T> {
+        res.map_err(|err| CompactParsingError::InvalidByteVector(err.to_string()))
     }
 
     fn at_eof(&self) -> bool {
