@@ -1,6 +1,7 @@
 //! Processing for the compact format as specified here: https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md
 
 use std::{
+    any::type_name,
     borrow::Borrow,
     collections::VecDeque,
     error::Error,
@@ -10,14 +11,14 @@ use std::{
 
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{H256, U256};
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize};
 use thiserror::Error;
 
 use crate::trace_protocol::TrieCompact;
 
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
 
-type BranchMask = u16;
+type BranchMask = u32;
 
 type Balance = U256;
 type Nonce = U256;
@@ -41,6 +42,9 @@ pub enum CompactParsingError {
 
     #[error("Unable to parse an expected byte vector (error: {0})")]
     InvalidByteVector(String),
+
+    #[error("Unable to parse the type \"{0}\" from cbor bytes {1}")]
+    InvalidBytesForType(&'static str, String, String),
 }
 
 #[derive(Debug, Deserialize)]
@@ -227,11 +231,17 @@ impl WitnessBytes {
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
-        todo!()
+        let key = self.byte_cursor.read_cbor_byte_array()?.into();
+
+        self.push_to_stack(Instruction::Extension(key));
+        Ok(())
     }
 
     fn process_branch(&mut self) -> CompactParsingResult<()> {
-        todo!()
+        let mask = self.byte_cursor.read_t()?;
+
+        self.push_to_stack(Instruction::Branch(mask));
+        Ok(())
     }
 
     fn process_hash(&mut self) -> CompactParsingResult<()> {
@@ -279,6 +289,24 @@ impl CompactCursor {
         }
     }
 
+    fn read_t<T: DeserializeOwned>(&mut self) -> CompactParsingResult<T> {
+        let starting_pos = self.intern.position();
+
+        ciborium::from_reader(&mut self.intern).map_err(move |err| {
+            let ending_pos = self.intern.position();
+            let type_bytes = self.intern.clone().into_inner()
+                [starting_pos as usize..ending_pos as usize]
+                .to_vec();
+            let type_bytes_hex = hex::encode(type_bytes);
+
+            CompactParsingError::InvalidBytesForType(
+                type_name::<T>(),
+                type_bytes_hex,
+                err.to_string(),
+            )
+        })
+    }
+
     fn read_byte(&mut self) -> CompactParsingResult<u8> {
         let mut single_byte_buf = [0];
 
@@ -292,16 +320,21 @@ impl CompactCursor {
 
     fn read_cbor_byte_array(&mut self) -> CompactParsingResult<&[u8]> {
         self.temp_buf.clear();
-        Self::ciborium_err_reader_res_to_parsing_res(self.intern.read_exact(&mut self.temp_buf));
+        Self::ciborium_byte_vec_err_reader_res_to_parsing_res(ciborium_io::Read::read_exact(
+            &mut self.intern,
+            &mut self.temp_buf,
+        ))?;
 
         Ok(&self.temp_buf)
     }
 
     fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>> {
-        Self::ciborium_err_reader_res_to_parsing_res(ciborium::from_reader(&mut self.intern))
+        Self::ciborium_byte_vec_err_reader_res_to_parsing_res(ciborium::from_reader(
+            &mut self.intern,
+        ))
     }
 
-    fn ciborium_err_reader_res_to_parsing_res<T, E: Error>(
+    fn ciborium_byte_vec_err_reader_res_to_parsing_res<T, E: Error>(
         res: Result<T, E>,
     ) -> CompactParsingResult<T> {
         res.map_err(|err| CompactParsingError::InvalidByteVector(err.to_string()))
