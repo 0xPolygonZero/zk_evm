@@ -3,7 +3,7 @@
 use std::{
     any::type_name,
     borrow::Borrow,
-    collections::{LinkedList, VecDeque},
+    collections::{linked_list::CursorMut, LinkedList, VecDeque},
     error::Error,
     fmt::{self, Display},
     io::{Cursor, Read},
@@ -275,6 +275,7 @@ impl WitnessBytes {
             has_code,
             has_storage,
         ));
+
         Ok(())
     }
 
@@ -390,16 +391,19 @@ impl WitnessEntries {
         todo!()
     }
 
-    fn create_collapseable_iter(&mut self) -> CollapsableStackElementTraverser {
+    fn create_collapseable_traverser(&mut self) -> CollapsableStackElementTraverser {
         todo!()
     }
 }
 
 // It's not quite an iterator, so this is the next best name that I can come up
 // with.
-struct CollapsableStackElementTraverser {}
+struct CollapsableStackElementTraverser<'a> {
+    entries: &'a mut WitnessEntries,
+    entry_cursor: CursorMut<'a, StackEntry>,
+}
 
-impl CollapsableStackElementTraverser {
+impl<'a> CollapsableStackElementTraverser<'a> {
     fn advance(&mut self) {
         todo!()
     }
@@ -413,8 +417,12 @@ impl CollapsableStackElementTraverser {
         todo!()
     }
 
-    fn replace_next_n_entry_with_single_entry(&mut self, _n: usize, _entry: StackEntry) {
-        todo!()
+    fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry: StackEntry) {
+        for _ in 0..n {
+            self.entry_cursor.remove_current();
+        }
+
+        self.entry_cursor.insert_after(entry)
     }
 }
 

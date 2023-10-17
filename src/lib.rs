@@ -1,3 +1,4 @@
+#![feature(linked_list_cursors)]
 #![feature(trait_alias)]
 
 mod compact_prestate_processing;
