@@ -245,15 +245,34 @@ impl WitnessBytes {
     }
 
     fn process_hash(&mut self) -> CompactParsingResult<()> {
-        todo!()
+        let hash = self.byte_cursor.read_t()?;
+
+        self.push_to_stack(Instruction::Hash(hash));
+        Ok(())
     }
 
     fn process_code(&mut self) -> CompactParsingResult<()> {
-        todo!()
+        let code = self.byte_cursor.read_t()?;
+
+        self.push_to_stack(Instruction::Code(code));
+        Ok(())
     }
 
     fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
-        todo!()
+        let key = self.byte_cursor.read_cbor_byte_array()?.into();
+        let nonce = self.byte_cursor.read_t()?;
+        let balance = self.byte_cursor.read_t()?;
+        let has_code = self.byte_cursor.read_t()?;
+        let has_storage = self.byte_cursor.read_t()?;
+
+        self.push_to_stack(Instruction::AccountLeaf(
+            key,
+            nonce,
+            balance,
+            has_code,
+            has_storage,
+        ));
+        Ok(())
     }
 
     fn process_empty_root(&mut self) -> CompactParsingResult<()> {
