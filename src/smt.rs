@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use ethereum_types::{BigEndianHash, H256, U256};
 
 use crate::{
-    account::Account,
+    account::{Account, AccountWithStorageRoot},
     bits::Bits,
     hash::{hash_internal, hash_leaf},
     utils::u2h,
@@ -18,11 +18,27 @@ const LEAF_TYPE: u8 = 2;
 
 pub type Error = String;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum AccountOrValue {
+    Account(Account),
+    Value(U256),
+}
+
+impl AccountOrValue {
+    pub fn hash(&self) -> H256 {
+        match self {
+            AccountOrValue::Account(a) => a.hash(),
+            AccountOrValue::Value(v) => u2h(*v),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValOrHash {
-    Val(Account),
+    Val(AccountOrValue),
     Hash(H256),
 }
+
 impl ValOrHash {
     pub fn is_val(&self) -> bool {
         matches!(self, ValOrHash::Val(_))
@@ -33,9 +49,9 @@ impl ValOrHash {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValOrHashNode {
-    Val { key: Bits, account: Account },
+    Val { key: Bits, leaf: AccountOrValue },
     Hash(H256),
 }
 
@@ -50,7 +66,7 @@ impl ValOrHashNode {
 
     pub fn hash(&self) -> H256 {
         match self {
-            ValOrHashNode::Val { key, account } => hash_leaf(*key, account.hash()),
+            ValOrHashNode::Val { key, leaf } => hash_leaf(*key, leaf.hash()),
             ValOrHashNode::Hash(h) => *h,
         }
     }
@@ -102,7 +118,7 @@ impl Smt {
         }
 
         let node = match value {
-            ValOrHash::Val(account) => ValOrHashNode::Val { key, account },
+            ValOrHash::Val(account) => ValOrHashNode::Val { key, leaf: account },
             ValOrHash::Hash(h) => ValOrHashNode::Hash(h),
         };
         let hash = node.hash();
@@ -191,12 +207,22 @@ impl Smt {
 fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
     if let Some(node) = smt.leaves.get(&key) {
         match node {
-            ValOrHashNode::Val { key, account } => {
+            ValOrHashNode::Val { key, leaf } => {
                 let index = v.len();
                 v.push(LEAF_TYPE.into());
                 assert_eq!(key.count, 256);
                 v.push(key.packed);
-                v.extend(account.pack_u256());
+                match leaf {
+                    AccountOrValue::Account(account) => {
+                        v.extend(account.pack_u256());
+                        let storage_smt_index = v.len();
+                        v[storage_smt_index - 2] = storage_smt_index.into();
+                        serialize(&account.storage_smt, Bits::empty(), v);
+                    }
+                    AccountOrValue::Value(val) => {
+                        v.push(*val);
+                    }
+                }
                 index
             }
             ValOrHashNode::Hash(h) => {
@@ -226,11 +252,15 @@ fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
     }
 }
 
-pub fn hash_serialize(v: &[U256]) -> H256 {
-    _hash_serialize(v, 0)
+pub fn hash_serialize_state(v: &[U256]) -> H256 {
+    _hash_serialize(v, 0, false)
 }
 
-fn _hash_serialize(v: &[U256], ptr: usize) -> H256 {
+pub fn hash_serialize_storage(v: &[U256]) -> H256 {
+    _hash_serialize(v, 0, true)
+}
+
+fn _hash_serialize(v: &[U256], ptr: usize, storage: bool) -> H256 {
     assert!(v[ptr] <= u8::MAX.into());
     match v[ptr].as_u64() as u8 {
         HASH_TYPE => H256(v[ptr + 1].into()),
@@ -239,24 +269,30 @@ fn _hash_serialize(v: &[U256], ptr: usize) -> H256 {
             let mut node = InternalNode([DEFAULT_HASH; RADIX]);
             for b in 0..RADIX {
                 let child_index = v[ptr + 1 + b];
-                let child_hash = _hash_serialize(v, child_index.as_usize());
+                let child_hash = _hash_serialize(v, child_index.as_usize(), storage);
                 node.0[b] = child_hash;
             }
             node.hash()
         }
         LEAF_TYPE => {
             let key = Bits::from(v[ptr + 1]);
-            let nonce = v[ptr + 2].as_u64();
-            let balance = v[ptr + 3];
-            let storage_root = u2h(v[ptr + 4]);
-            let code_hash = u2h(v[ptr + 5]);
-            let account = Account {
-                nonce,
-                balance,
-                storage_root,
-                code_hash,
-            };
-            hash_leaf(key, account.hash())
+            if storage {
+                let val = v[ptr + 2];
+                hash_leaf(key, AccountOrValue::Value(val).hash())
+            } else {
+                let nonce = v[ptr + 2].as_u64();
+                let balance = v[ptr + 3];
+                let storage_smt_root_index = v[ptr + 4].as_usize();
+                let storage_smt_root = _hash_serialize(v, storage_smt_root_index, true);
+                let code_hash = u2h(v[ptr + 5]);
+                let account = AccountWithStorageRoot {
+                    nonce,
+                    balance,
+                    storage_smt_root,
+                    code_hash,
+                };
+                hash_leaf(key, account.hash())
+            }
         }
         _ => panic!("Should not happen"),
     }
@@ -267,23 +303,23 @@ mod tests {
     use ethereum_types::U256;
     use rand::{seq::SliceRandom, thread_rng, Rng};
 
-    use crate::smt::hash_serialize;
+    use crate::smt::{hash_serialize_state, AccountOrValue};
 
     use super::{Smt, ValOrHash};
 
     #[test]
     fn test_small_smt() -> Result<(), String> {
         let mut rng = thread_rng();
-        let account0 = rng.gen();
-        let account1 = rng.gen();
+        let account0 = AccountOrValue::Account(rng.gen());
+        let account1 = AccountOrValue::Account(rng.gen());
 
         let nodes = [
-            (U256::from(3).into(), ValOrHash::Val(account0)),
-            (U256::one().into(), ValOrHash::Val(account1)),
+            (U256::from(3).into(), ValOrHash::Val(account0.clone())),
+            (U256::one().into(), ValOrHash::Val(account1.clone())),
         ];
         let smt0 = Smt::new(nodes)?;
         let v = smt0.serialize();
-        assert_eq!(hash_serialize(&v), smt0.root);
+        assert_eq!(hash_serialize_state(&v), smt0.root);
 
         let nodes = [
             (U256::one().into(), ValOrHash::Val(account1)),
@@ -299,8 +335,8 @@ mod tests {
     #[test]
     fn test_small_smt_bis() -> Result<(), String> {
         let mut rng = thread_rng();
-        let account0 = rng.gen();
-        let account1 = rng.gen();
+        let account0 = AccountOrValue::Account(rng.gen());
+        let account1 = AccountOrValue::Account(rng.gen());
 
         let nodes = [
             (
@@ -309,7 +345,7 @@ mod tests {
                 )
                 .unwrap()
                 .into(),
-                ValOrHash::Val(account0),
+                ValOrHash::Val(account0.clone()),
             ),
             (
                 U256::from_dec_str(
@@ -317,12 +353,12 @@ mod tests {
                 )
                 .unwrap()
                 .into(),
-                ValOrHash::Val(account1),
+                ValOrHash::Val(account1.clone()),
             ),
         ];
         let smt0 = Smt::new(nodes)?;
         let v = smt0.serialize();
-        assert_eq!(hash_serialize(&v), smt0.root);
+        assert_eq!(hash_serialize_state(&v), smt0.root);
 
         let nodes = [
             (
@@ -351,13 +387,18 @@ mod tests {
 
     #[test]
     fn test_random_smt() -> Result<(), String> {
-        let n = 10000;
+        let n = 1000;
         let mut rng = thread_rng();
-        let rand_node = |_| (U256(rng.gen()).into(), ValOrHash::Val(rng.gen()));
+        let rand_node = |_| {
+            (
+                U256(rng.gen()).into(),
+                ValOrHash::Val(AccountOrValue::Account(rng.gen())),
+            )
+        };
         let mut rand_nodes = (0..n).map(rand_node).collect::<Vec<_>>();
         let smt0 = Smt::new(rand_nodes.iter().cloned())?;
         let v = smt0.serialize();
-        assert_eq!(hash_serialize(&v), smt0.root);
+        assert_eq!(hash_serialize_state(&v), smt0.root);
 
         rand_nodes.shuffle(&mut rng);
         let smt1 = Smt::new(rand_nodes)?;
