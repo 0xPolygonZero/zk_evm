@@ -4,7 +4,9 @@ A flexible protocol that clients (eg. full nodes) can use to easily generate blo
 
 ## Specification
 
-In progress...
+Temporary [high-level overview and comparison](docs/usage_seq_diagrams.md) to what the old Edge setup used to look like.
+
+TODO...
 
 ## License
 
