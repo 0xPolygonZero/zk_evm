@@ -1,10 +1,11 @@
 use plonky2::util::timing::TimingTree;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig, proof::PublicValues};
+use proof_protocol_decoder::types::OtherBlockData;
 
 use crate::{
     proof_types::{
         create_extra_block_data, AggregatableProof, GeneratedAggProof, GeneratedBlockProof,
-        GeneratedTxnProof, OtherBlockData, ProofBeforeAndAfterDeltas, ProofCommon, TxnProofGenIR,
+        GeneratedTxnProof, ProofBeforeAndAfterDeltas, ProofCommon, TxnProofGenIR,
     },
     prover_state::ProverState,
     types::PlonkyProofIntern,
@@ -127,7 +128,7 @@ fn expand_aggregatable_proofs<'a>(
         .underlying_txns()
         .combine(&rhs_child.underlying_txns());
     let deltas = merge_lhs_and_rhs_deltas(&lhs_common.deltas, &rhs_common.deltas);
-    
+
     let extra_block_data = create_extra_block_data(
         deltas,
         other_data.genesis_state_trie_root,

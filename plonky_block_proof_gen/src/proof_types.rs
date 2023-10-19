@@ -3,8 +3,9 @@ use std::{borrow::Borrow, collections::HashMap};
 use ethereum_types::{H256, U256};
 use plonky2_evm::{
     generation::{GenerationInputs, TrieInputs},
-    proof::{BlockHashes, BlockMetadata, ExtraBlockData, TrieRoots},
+    proof::{ExtraBlockData, TrieRoots},
 };
+use proof_protocol_decoder::types::OtherBlockData;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{BlockHeight, PlonkyProofIntern, ProofUnderlyingTxns, TxnIdx};
@@ -14,21 +15,6 @@ const EMPTY_TRIE_HASH: H256 = H256([
     86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);
-
-/// Other data that is needed for proof gen.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct OtherBlockData {
-    pub b_data: BlockLevelData,
-    pub genesis_state_trie_root: H256,
-}
-
-/// Data that is specific to a block and is constant for all txns in a given
-/// block.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct BlockLevelData {
-    pub b_meta: BlockMetadata,
-    pub b_hashes: BlockHashes,
-}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ProofCommon {
