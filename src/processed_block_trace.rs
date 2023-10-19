@@ -7,13 +7,12 @@ use ethereum_types::U256;
 use plonky2_evm::generation::GenerationInputs;
 
 use crate::decoding::TraceParsingResult;
-use crate::proof_gen_types::BlockLevelData;
 use crate::trace_protocol::{
     BlockTrace, ContractCodeUsage, StorageTriesPreImage, TrieCompact, TriePreImage, TxnInfo,
 };
 use crate::types::{
     Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
-    HashedStorageAddrNibbles, StorageAddr, StorageVal,
+    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, StorageVal,
 };
 use crate::utils::hash;
 
@@ -27,13 +26,13 @@ impl BlockTrace {
     pub fn into_proof_generation_inputs<F>(
         self,
         p_meta: &ProcessingMeta<F>,
-        b_data: BlockLevelData,
+        other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
         let proced_block_trace = self.into_processed_block_trace(p_meta);
-        proced_block_trace.into_generation_inputs(b_data)
+        proced_block_trace.into_generation_inputs(other_data)
     }
 
     fn into_processed_block_trace<F>(self, p_meta: &ProcessingMeta<F>) -> ProcessedBlockTrace

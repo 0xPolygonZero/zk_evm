@@ -9,7 +9,7 @@ eth_trie_utils = { git = "https://github.com/0xPolygonZero/eth_trie_utils.git", 
 ethereum-types = "0.14.1"
 hex = "0.4.3"
 keccak-hash = "0.10.0"
-plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "0b5ac312c0f9efdcc6d85c10256d2843d42215a2" }
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "49976ea2a98dcb6052bd6cf3a65f730e55727330" }
 thiserror = "1.0.49"
 rlp = "0.5.2"
 rlp-derive = "0.1.0"

@@ -18,9 +18,9 @@ use thiserror::Error;
 
 use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites},
-    proof_gen_types::BlockLevelData,
     types::{
-        Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, TrieRootHash, TxnIdx,
+        BlockLevelData, Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
+        OtherBlockData, TrieRootHash, TxnIdx,
     },
     utils::update_val_if_some,
 };
@@ -81,7 +81,7 @@ struct PartialTrieState {
 impl ProcessedBlockTrace {
     pub(crate) fn into_generation_inputs(
         self,
-        b_data: BlockLevelData,
+        other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<GenerationInputs>> {
         let mut curr_block_tries = PartialTrieState::default();
 
@@ -113,9 +113,10 @@ impl ProcessedBlockTrace {
                     signed_txns: vec![txn_info.meta.txn_bytes],
                     tries,
                     trie_roots_after,
+                    genesis_state_trie_root: other_data.genesis_state_trie_root,
                     contract_code: txn_info.contract_code_accessed,
-                    block_metadata: b_data.b_meta.clone(),
-                    block_hashes: b_data.b_hashes.clone(),
+                    block_metadata: other_data.b_data.b_meta.clone(),
+                    block_hashes: other_data.b_data.b_hashes.clone(),
                     addresses,
                 };
 
@@ -131,7 +132,7 @@ impl ProcessedBlockTrace {
             })
             .collect::<TraceParsingResult<Vec<_>>>()?;
 
-        Self::pad_gen_inputs_with_dummy_inputs_if_needed(&mut txn_gen_inputs, &b_data);
+        Self::pad_gen_inputs_with_dummy_inputs_if_needed(&mut txn_gen_inputs, &other_data.b_data);
         Ok(txn_gen_inputs)
     }
 
@@ -351,6 +352,7 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         signed_txns: Vec::default(),
         tries,
         trie_roots_after: prev_real_gen_input.trie_roots_after.clone(),
+        genesis_state_trie_root: prev_real_gen_input.genesis_state_trie_root,
         contract_code: HashMap::default(),
         block_metadata: b_data.b_meta.clone(),
         block_hashes: b_data.b_hashes.clone(),
@@ -382,6 +384,7 @@ fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> Generatio
         signed_txns: Vec::default(),
         tries: create_empty_trie_inputs(),
         trie_roots_after: create_trie_roots_for_empty_tries(),
+        genesis_state_trie_root: TrieRootHash::default(),
         contract_code: HashMap::default(),
         block_metadata: b_data.b_meta.clone(),
         block_hashes: b_data.b_hashes.clone(),

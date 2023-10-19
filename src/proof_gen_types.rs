@@ -1,16 +1,10 @@
 use std::borrow::Borrow;
 
 use ethereum_types::U256;
-use plonky2_evm::proof::{BlockHashes, BlockMetadata, ExtraBlockData};
+use plonky2_evm::proof::ExtraBlockData;
 use serde::{Deserialize, Serialize};
 
-use crate::types::TxnIdx;
-
-#[derive(Debug)]
-pub struct BlockLevelData {
-    pub b_meta: BlockMetadata,
-    pub b_hashes: BlockHashes,
-}
+use crate::types::{TrieRootHash, TxnIdx};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ProofBeforeAndAfterDeltas {
@@ -34,8 +28,14 @@ impl<T: Borrow<ExtraBlockData>> From<T> for ProofBeforeAndAfterDeltas {
 }
 
 impl ProofBeforeAndAfterDeltas {
-    pub fn into_extra_block_data(self, txn_start: TxnIdx, txn_end: TxnIdx) -> ExtraBlockData {
+    pub fn into_extra_block_data(
+        self,
+        genesis_state_trie_root: TrieRootHash,
+        txn_start: TxnIdx,
+        txn_end: TxnIdx,
+    ) -> ExtraBlockData {
         ExtraBlockData {
+            genesis_state_trie_root,
             txn_number_before: txn_start.into(),
             txn_number_after: txn_end.into(),
             gas_used_before: self.gas_used_before,
