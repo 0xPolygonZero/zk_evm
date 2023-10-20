@@ -264,62 +264,14 @@ impl ParserState {
             WitnessEntry::Instruction(Instruction::AccountLeaf(k, n, b, has_code, has_storage)) => {
                 let (n_nodes_to_replace, account_node_code, s_root) = match (has_code, has_storage)
                 {
-                    (false, false) => Ok((1, None, None)),
+                    (false, false) => Self::match_account_leaf_no_code_and_no_storage(),
                     (false, true) => {
-                        traverser.get_prev_n_elems_into_buf(1, buf);
-
-                        match buf[0] {
-                            WitnessEntry::Node(node) => {
-                                match Self::try_get_storage_hash_from_node(node) {
-                                    Some(s_hash) => Ok((1, None, Some(s_hash))),
-                                    None => Self::invalid_witness_err(
-                                        1,
-                                        TraverserDirection::Backwards,
-                                        traverser,
-                                    ),
-                                }
-                            }
-                            _ => Self::invalid_witness_err(
-                                2,
-                                TraverserDirection::Backwards,
-                                traverser,
-                            ),
-                        }
+                        Self::match_account_leaf_no_code_but_has_storage(traverser, buf)
                     }
                     (true, false) => {
-                        traverser.get_prev_n_elems_into_buf(1, buf);
-
-                        match buf[0] {
-                            WitnessEntry::Node(NodeEntry::Code(code)) => {
-                                Ok((1, Some(AccountNodeCode::CodeNode(code.clone())), None))
-                            }
-                            WitnessEntry::Node(NodeEntry::Hash(h)) => {
-                                Ok((1, Some(AccountNodeCode::HashNode(*h)), None))
-                            }
-                            _ => Self::invalid_witness_err(
-                                2,
-                                TraverserDirection::Backwards,
-                                traverser,
-                            ),
-                        }
+                        Self::match_account_leaf_has_code_but_no_storage(traverser, buf)
                     }
-                    (true, true) => {
-                        traverser.get_prev_n_elems_into_buf(2, buf);
-
-                        match buf[0..=1] {
-                            [WitnessEntry::Node(NodeEntry::Code(_c)), WitnessEntry::Node(_node)] => {
-                                todo!()
-                            }
-                            [WitnessEntry::Node(NodeEntry::Hash(_h)), WitnessEntry::Node(_node)] => {
-                                todo!()
-                            }
-                            _ => Self::invalid_witness_err(
-                                3,
-                                TraverserDirection::Backwards,
-                                traverser,
-                            ),
-                        }
-                    }
+                    (true, true) => Self::match_account_leaf_has_code_and_storage(traverser, buf),
                 }?;
 
                 let account_leaf_data = AccountNodeData::new(*n, *b, s_root, account_node_code);
@@ -339,6 +291,60 @@ impl ParserState {
                 TraverserDirection::Both,
                 traverser,
             ),
+        }
+    }
+
+    fn match_account_leaf_no_code_and_no_storage(
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+        Ok((0, None, None))
+    }
+
+    fn match_account_leaf_no_code_but_has_storage(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<&WitnessEntry>,
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+        traverser.get_prev_n_elems_into_buf(1, buf);
+
+        match buf[0] {
+            WitnessEntry::Node(node) => match Self::try_get_storage_hash_from_node(node) {
+                Some(s_hash) => Ok((1, None, Some(s_hash))),
+                None => Self::invalid_witness_err(1, TraverserDirection::Backwards, traverser),
+            },
+            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+        }
+    }
+
+    fn match_account_leaf_has_code_but_no_storage(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<&WitnessEntry>,
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+        traverser.get_prev_n_elems_into_buf(1, buf);
+
+        match buf[0] {
+            WitnessEntry::Node(NodeEntry::Code(code)) => {
+                Ok((1, Some(AccountNodeCode::CodeNode(code.clone())), None))
+            }
+            WitnessEntry::Node(NodeEntry::Hash(h)) => {
+                Ok((1, Some(AccountNodeCode::HashNode(*h)), None))
+            }
+            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+        }
+    }
+
+    fn match_account_leaf_has_code_and_storage(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<&WitnessEntry>,
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+        traverser.get_prev_n_elems_into_buf(2, buf);
+
+        match buf[0..=1] {
+            [WitnessEntry::Node(NodeEntry::Code(_c)), WitnessEntry::Node(_node)] => {
+                todo!()
+            }
+            [WitnessEntry::Node(NodeEntry::Hash(_h)), WitnessEntry::Node(_node)] => {
+                todo!()
+            }
+            _ => Self::invalid_witness_err(3, TraverserDirection::Backwards, traverser),
         }
     }
 
