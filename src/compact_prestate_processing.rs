@@ -51,6 +51,9 @@ pub enum CompactParsingError {
 
     #[error("Invalid block witness entries: {0:?}")]
     InvalidWitnessFormat(Vec<WitnessEntry>),
+
+    #[error("There were multiple entries remaining after the compact block witness was processed (Remaining entries: {0:?})")]
+    NonSingleEntryAfterProcessing(WitnessEntries),
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -212,23 +215,39 @@ impl ParserState {
             }
         }
 
-        todo!()
+        match self.entries.len() {
+            1 => Self::create_partial_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
+            _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
+                self.entries,
+            )),
+        }
+    }
+
+    fn create_partial_trie_from_remaining_witness_elem(
+        remaining_entry: WitnessEntry,
+    ) -> CompactParsingResult<HashedPartialTrie> {
+        todo!();
     }
 
     fn apply_rules_to_witness_entries(
         &mut self,
         entry_buf: &mut Vec<&WitnessEntry>,
     ) -> CompactParsingResult<usize> {
-        let mut tot_rules_applied = 0;
-
         let mut traverser = self.entries.create_collapsable_traverser();
+
+        let mut tot_rules_applied = 0;
 
         while !traverser.at_end() {
             let num_rules_applied = Self::try_apply_rules_to_curr_entry(&mut traverser, entry_buf)?;
             tot_rules_applied += num_rules_applied;
+
+            if num_rules_applied == 0 {
+                // Unable to apply rule at current position, so advance the traverser.
+                traverser.advance();
+            }
         }
 
-        todo!()
+        Ok(tot_rules_applied)
     }
 
     fn try_apply_rules_to_curr_entry(
@@ -407,7 +426,7 @@ impl WitnessBytes {
         // TODO
         loop {
             let instr = self.process_operator()?;
-            self.instrs.push_entry(instr.into());
+            self.instrs.push(instr.into());
 
             if self.byte_cursor.at_eof() {
                 break;
@@ -500,7 +519,7 @@ impl WitnessBytes {
     }
 
     fn push_entry(&mut self, instr: Instruction) {
-        self.instrs.push_entry(instr.into())
+        self.instrs.push(instr.into())
     }
 
     fn parse_header(&mut self) -> CompactParsingResult<Header> {
@@ -595,7 +614,11 @@ struct WitnessEntries {
 }
 
 impl WitnessEntries {
-    fn push_entry(&mut self, _entry: WitnessEntry) {
+    fn push(&mut self, _entry: WitnessEntry) {
+        todo!()
+    }
+
+    fn pop(&mut self) -> Option<WitnessEntry> {
         todo!()
     }
 
@@ -609,6 +632,10 @@ impl WitnessEntries {
 
     fn create_collapsable_traverser(&mut self) -> CollapsableWitnessEntryTraverser {
         todo!()
+    }
+
+    fn len(&self) -> usize {
+        self.intern.len()
     }
 }
 
