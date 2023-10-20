@@ -10,3 +10,7 @@ pub(crate) fn update_val_if_some<T>(target: &mut T, opt: Option<T>) {
         *target = new_val;
     }
 }
+
+pub(crate) fn clone_vec_and_remove_refs<T: Clone>(vec_of_refs: &Vec<&T>) -> Vec<T> {
+    vec_of_refs.iter().map(|r| (*r).clone()).collect()
+}

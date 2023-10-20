@@ -15,7 +15,7 @@ use ethereum_types::{H256, U256};
 use serde::{de::DeserializeOwned, Deserialize};
 use thiserror::Error;
 
-use crate::{trace_protocol::TrieCompact, types::TrieRootHash};
+use crate::{trace_protocol::TrieCompact, types::TrieRootHash, utils::clone_vec_and_remove_refs};
 
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
 
@@ -31,6 +31,7 @@ type RawValue = Vec<u8>;
 type RawCode = Vec<u8>;
 
 const MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE: usize = 3;
+const BRANCH_MAX_CHILDREN: usize = 16;
 
 #[derive(Debug, Error)]
 pub enum CompactParsingError {
@@ -54,6 +55,17 @@ pub enum CompactParsingError {
 
     #[error("There were multiple entries remaining after the compact block witness was processed (Remaining entries: {0:?})")]
     NonSingleEntryAfterProcessing(WitnessEntries),
+
+    #[error("Branch mask {0:#b} stated there should be {1} preceding nodes but instead found {2} (nodes: {3:?})")]
+    IncorrectNumberOfNodesPrecedingBranch(BranchMask, usize, usize, Vec<WitnessEntry>),
+
+    #[error(
+        "Expected a branch to have {0} preceding nodes but only had {1} (mask: {2}, nodes: {3:?})"
+    )]
+    MissingExpectedNodesPrecedingBranch(usize, usize, BranchMask, Vec<WitnessEntry>),
+
+    #[error("Expected the entry preceding {0} positions behind a {1} entry to be a node but instead found a {2}. (nodes: {3:?})")]
+    PrecedingNonNodeEntryFoundWhenProcessingRule(usize, &'static str, String, Vec<WitnessEntry>),
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -85,6 +97,15 @@ enum WitnessEntry {
     Node(NodeEntry),
 }
 
+impl Display for WitnessEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WitnessEntry::Instruction(i) => write!(f, "Instruction({})", i),
+            WitnessEntry::Node(n) => write!(f, "Node({})", n),
+        }
+    }
+}
+
 // TODO: Ignore `NEW_TRIE` for now...
 #[derive(Clone, Debug)]
 enum Instruction {
@@ -97,6 +118,26 @@ enum Instruction {
     EmptyRoot,
 }
 
+impl Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Instruction::Leaf(_, _) => write!(f, "Leaf"),
+            Instruction::Extension(_) => write!(f, "Extension"),
+            Instruction::Branch(_) => write!(f, "Branch"),
+            Instruction::Hash(_) => write!(f, "Hash"),
+            Instruction::Code(_) => write!(f, "Code"),
+            Instruction::AccountLeaf(_, _, _, _, _) => write!(f, "AccountLeaf"),
+            Instruction::EmptyRoot => write!(f, "EmptyRoot"),
+        }
+    }
+}
+
+impl From<NodeEntry> for WitnessEntry {
+    fn from(v: NodeEntry) -> Self {
+        WitnessEntry::Node(v)
+    }
+}
+
 impl From<Instruction> for WitnessEntry {
     fn from(v: Instruction) -> Self {
         Self::Instruction(v)
@@ -106,12 +147,28 @@ impl From<Instruction> for WitnessEntry {
 #[derive(Clone, Debug)]
 enum NodeEntry {
     Account(AccountNodeData),
+    Branch([Option<Box<NodeEntry>>; 16]),
     Code(Vec<u8>),
     Empty,
     Hash(HashValue),
     Leaf(Key, LeafNodeData),
     Extension(Key, Box<NodeEntry>),
     Value(ValueNodeData),
+}
+
+impl Display for NodeEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NodeEntry::Account(_) => write!(f, "Account"),
+            NodeEntry::Branch(_) => write!(f, "Branch"),
+            NodeEntry::Code(_) => write!(f, "Code"),
+            NodeEntry::Empty => write!(f, "Empty"),
+            NodeEntry::Hash(_) => write!(f, "Hash"),
+            NodeEntry::Leaf(_, _) => write!(f, "Leaf"),
+            NodeEntry::Extension(_, _) => write!(f, "Extension"),
+            NodeEntry::Value(_) => write!(f, "Value"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -224,7 +281,7 @@ impl ParserState {
     }
 
     fn create_partial_trie_from_remaining_witness_elem(
-        remaining_entry: WitnessEntry,
+        _remaining_entry: WitnessEntry,
     ) -> CompactParsingResult<HashedPartialTrie> {
         todo!();
     }
@@ -310,8 +367,8 @@ impl ParserState {
 
                 Ok(1)
             }
-            WitnessEntry::Instruction(Instruction::Branch(_mask)) => {
-                todo!()
+            WitnessEntry::Instruction(Instruction::Branch(mask)) => {
+                Self::process_branch_instr(traverser, buf, *mask)
             }
             _ => Self::invalid_witness_err(
                 MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
@@ -319,6 +376,74 @@ impl ParserState {
                 traverser,
             ),
         }
+    }
+
+    fn process_branch_instr(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<&WitnessEntry>,
+        mask: BranchMask,
+    ) -> CompactParsingResult<usize> {
+        let expected_number_of_preceding_nodes = mask.count_ones() as usize;
+
+        traverser.get_prev_n_elems_into_buf(expected_number_of_preceding_nodes, buf);
+        let number_available_preceding_elems = buf.len();
+
+        if buf.len() != expected_number_of_preceding_nodes {
+            return Err(CompactParsingError::IncorrectNumberOfNodesPrecedingBranch(
+                mask,
+                expected_number_of_preceding_nodes,
+                number_available_preceding_elems,
+                clone_vec_and_remove_refs(buf),
+            ));
+        }
+
+        let mut branch_nodes = Self::create_empty_branch_node_entry();
+        let mut curr_traverser_node_idx = 0;
+
+        for i in 0..BRANCH_MAX_CHILDREN {
+            if mask as usize & (i << 1) != 0 {
+                let entry_to_check = buf[curr_traverser_node_idx];
+                let node_entry = try_get_node_entry_from_witness_entry(entry_to_check)
+                    .ok_or_else(|| {
+                        let n_entries_behind_cursor = number_available_preceding_elems - i;
+
+                        CompactParsingError::PrecedingNonNodeEntryFoundWhenProcessingRule(
+                            n_entries_behind_cursor,
+                            "Branch",
+                            entry_to_check.to_string(),
+                            clone_vec_and_remove_refs(buf),
+                        )
+                    })?
+                    .clone();
+
+                branch_nodes[i] = Some(Box::new(node_entry));
+                curr_traverser_node_idx += 1;
+            }
+        }
+
+        let number_of_nodes_traversed = curr_traverser_node_idx; // For readability.
+        if curr_traverser_node_idx != buf.len() {
+            return Err(CompactParsingError::MissingExpectedNodesPrecedingBranch(
+                expected_number_of_preceding_nodes,
+                number_of_nodes_traversed,
+                mask,
+                clone_vec_and_remove_refs(buf),
+            ));
+        }
+
+        traverser.replace_prev_n_entries_with_single_entry(
+            number_of_nodes_traversed + 1,
+            NodeEntry::Branch(branch_nodes).into(),
+        );
+        Ok(1)
+    }
+
+    // ... Because we can't do `[None; 16]` without implementing `Copy`.
+    fn create_empty_branch_node_entry() -> [Option<Box<NodeEntry>>; 16] {
+        [
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None,
+        ]
     }
 
     fn match_account_leaf_no_code_and_no_storage(
@@ -687,6 +812,13 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
 
     fn at_end(&self) -> bool {
         self.entry_cursor.as_cursor().peek_next().is_none()
+    }
+}
+
+fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&NodeEntry> {
+    match entry {
+        WitnessEntry::Node(n_entry) => Some(n_entry),
+        _ => None,
     }
 }
 
