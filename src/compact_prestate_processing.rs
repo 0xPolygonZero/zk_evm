@@ -15,7 +15,7 @@ use ethereum_types::{H256, U256};
 use serde::{de::DeserializeOwned, Deserialize};
 use thiserror::Error;
 
-use crate::trace_protocol::TrieCompact;
+use crate::{trace_protocol::TrieCompact, types::TrieRootHash};
 
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
 
@@ -102,16 +102,59 @@ impl From<Instruction> for WitnessEntry {
 
 #[derive(Clone, Debug)]
 enum NodeEntry {
-    AccountLeaf(AccountLeafData),
+    Account(AccountNodeData),
     Code(Vec<u8>),
     Empty,
     Hash(HashValue),
-    Leaf(Key, RawValue),
+    Leaf(Key, LeafNodeData),
     Extension(Key),
+    Value(ValueNodeData),
 }
 
 #[derive(Clone, Debug)]
-struct AccountLeafData {}
+struct ValueNodeData(Vec<u8>);
+
+impl From<Vec<u8>> for ValueNodeData {
+    fn from(v: Vec<u8>) -> Self {
+        Self(v)
+    }
+}
+
+#[derive(Clone, Debug)]
+enum LeafNodeData {
+    Value(ValueNodeData),
+    Account(AccountNodeData),
+}
+
+#[derive(Clone, Debug)]
+enum AccountNodeCode {
+    CodeNode(Vec<u8>),
+    HashNode(TrieRootHash),
+}
+
+#[derive(Clone, Debug)]
+struct AccountNodeData {
+    nonce: Nonce,
+    balance: Balance,
+    storage_root: Option<TrieRootHash>,
+    account_node_code: Option<AccountNodeCode>,
+}
+
+impl AccountNodeData {
+    fn new(
+        nonce: Nonce,
+        balance: Balance,
+        storage_root: Option<TrieRootHash>,
+        account_node_code: Option<AccountNodeCode>,
+    ) -> Self {
+        Self {
+            nonce,
+            balance,
+            storage_root,
+            account_node_code,
+        }
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct LeafData {
@@ -195,33 +238,122 @@ impl ParserState {
         traverser.get_next_n_elems_into_buf(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE, buf);
 
         match buf[0] {
-            WitnessEntry::Instruction(Instruction::Hash(_h)) => {
-                todo!()
+            WitnessEntry::Instruction(Instruction::Hash(h)) => {
+                Self::replace_next_traverser_node_entry_helper(traverser, NodeEntry::Hash(*h))
             }
-            WitnessEntry::Instruction(Instruction::Leaf(_k, _v)) => {
-                todo!()
+            WitnessEntry::Instruction(Instruction::Leaf(k, v)) => {
+                Self::replace_next_traverser_node_entry_helper(
+                    traverser,
+                    NodeEntry::Leaf(k.clone(), LeafNodeData::Value(v.clone().into())),
+                )
             }
-            WitnessEntry::Instruction(Instruction::Extension(_k)) => {
-                todo!()
+            WitnessEntry::Instruction(Instruction::Extension(k)) => {
+                Self::replace_next_traverser_node_entry_helper(
+                    traverser,
+                    NodeEntry::Extension(k.clone()),
+                )
             }
-            WitnessEntry::Instruction(Instruction::Code(_c)) => {
-                todo!()
+            WitnessEntry::Instruction(Instruction::Code(c)) => {
+                Self::replace_next_traverser_node_entry_helper(
+                    traverser,
+                    NodeEntry::Code(c.clone()),
+                )
             }
-            WitnessEntry::Instruction(Instruction::AccountLeaf(_k, _n, _b, _h_c, _h_s)) => {
-                todo!()
+            WitnessEntry::Instruction(Instruction::AccountLeaf(k, n, b, has_code, has_storage)) => {
+                let (n_nodes_to_replace, account_node_code, s_root) = match (has_code, has_storage)
+                {
+                    (false, false) => Ok((1, None, None)),
+                    (false, true) => {
+                        traverser.get_prev_n_elems_into_buf(1, buf);
+
+                        match buf[0] {
+                            // TODO: Really match against branch, hash, and value nodes...
+                            WitnessEntry::Node(_node) => Ok((1, None, None)), // TODO
+                            _ => Self::invalid_witness_err(
+                                2,
+                                TraverserDirection::Backwards,
+                                traverser,
+                            ),
+                        }
+                    }
+                    (true, false) => {
+                        traverser.get_prev_n_elems_into_buf(1, buf);
+
+                        match buf[0] {
+                            WitnessEntry::Node(NodeEntry::Code(code)) => {
+                                Ok((1, Some(AccountNodeCode::CodeNode(code.clone())), None))
+                            }
+                            WitnessEntry::Node(NodeEntry::Hash(h)) => {
+                                Ok((1, Some(AccountNodeCode::HashNode(*h)), None))
+                            }
+                            _ => Self::invalid_witness_err(
+                                2,
+                                TraverserDirection::Backwards,
+                                traverser,
+                            ),
+                        }
+                    }
+                    (true, true) => {
+                        traverser.get_prev_n_elems_into_buf(2, buf);
+
+                        match buf[0..=1] {
+                            [WitnessEntry::Node(NodeEntry::Code(_c)), WitnessEntry::Node(_node)] => {
+                                todo!()
+                            }
+                            [WitnessEntry::Node(NodeEntry::Hash(_h)), WitnessEntry::Node(_node)] => {
+                                todo!()
+                            }
+                            _ => Self::invalid_witness_err(
+                                3,
+                                TraverserDirection::Backwards,
+                                traverser,
+                            ),
+                        }
+                    }
+                }?;
+
+                let account_leaf_data = AccountNodeData::new(*n, *b, s_root, account_node_code);
+                let leaf_node = WitnessEntry::Node(NodeEntry::Leaf(
+                    k.clone(),
+                    LeafNodeData::Account(account_leaf_data),
+                ));
+                traverser.replace_prev_n_entries_with_single_entry(n_nodes_to_replace, leaf_node);
+
+                Ok(1)
             }
             WitnessEntry::Instruction(Instruction::Branch(_mask)) => {
                 todo!()
             }
-            _ => {
-                // TODO: This needs to be cleaned up and put into a separate function...
-                let invalid_entry_buf = traverser
-                    .get_next_n_elems(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE)
-                    .cloned()
-                    .collect();
-                Err(CompactParsingError::InvalidWitnessFormat(invalid_entry_buf))
-            }
+            _ => Self::invalid_witness_err(
+                MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
+                TraverserDirection::Both,
+                traverser,
+            ),
         }
+    }
+
+    fn invalid_witness_err<T>(
+        n: usize,
+        t_dir: TraverserDirection,
+        traverser: &mut CollapsableWitnessEntryTraverser,
+    ) -> CompactParsingResult<T> {
+        let adjacent_elems_buf = match t_dir {
+            TraverserDirection::Forwards => traverser.get_next_n_elems(n).cloned().collect(),
+            TraverserDirection::Backwards => traverser.get_prev_n_elems(n).cloned().collect(),
+            TraverserDirection::Both => todo!(),
+        };
+
+        Err(CompactParsingError::InvalidWitnessFormat(
+            adjacent_elems_buf,
+        ))
+    }
+
+    fn replace_next_traverser_node_entry_helper(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        entry: NodeEntry,
+    ) -> CompactParsingResult<usize> {
+        traverser.replace_next_n_entries_with_single_entry(1, WitnessEntry::Node(entry));
+        Ok(1)
     }
 }
 
@@ -468,6 +600,19 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
         std::iter::empty()
     }
 
+    fn get_prev_n_elems(&self, _n: usize) -> impl Iterator<Item = &WitnessEntry> {
+        // TODO
+        std::iter::empty()
+    }
+
+    /// Get the previous `n` elements into a buf. Note that this does not
+    /// include the element that we are currently pointing to.
+    fn get_prev_n_elems_into_buf(&self, _n: usize, _buf: &mut Vec<&WitnessEntry>) {
+        todo!()
+    }
+
+    /// Get the next `n` elements into a buf. Note that this includes the
+    /// element that we are currently pointing to.
     fn get_next_n_elems_into_buf(&self, _n: usize, _buf: &mut Vec<&WitnessEntry>) {
         todo!()
     }
@@ -480,9 +625,20 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
         self.entry_cursor.insert_after(entry)
     }
 
+    fn replace_prev_n_entries_with_single_entry(&mut self, _n: usize, _entry: WitnessEntry) {
+        todo!()
+    }
+
     fn at_end(&self) -> bool {
         self.entry_cursor.as_cursor().peek_next().is_none()
     }
+}
+
+#[derive(Debug)]
+enum TraverserDirection {
+    Forwards,
+    Backwards,
+    Both,
 }
 
 pub(crate) fn process_compact_prestate(
