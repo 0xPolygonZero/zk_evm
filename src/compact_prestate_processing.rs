@@ -107,7 +107,7 @@ enum NodeEntry {
     Empty,
     Hash(HashValue),
     Leaf(Key, LeafNodeData),
-    Extension(Key),
+    Extension(Key, Box<NodeEntry>),
     Value(ValueNodeData),
 }
 
@@ -241,22 +241,30 @@ impl ParserState {
         // calls to `invalid_witness_err`. We should condense this...
         match buf[0] {
             WitnessEntry::Instruction(Instruction::Hash(h)) => {
-                Self::replace_next_traverser_node_entry_helper(traverser, NodeEntry::Hash(*h))
+                Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Hash(*h))
             }
             WitnessEntry::Instruction(Instruction::Leaf(k, v)) => {
-                Self::replace_next_traverser_node_entry_helper(
+                Self::traverser_replace_prev_n_nodes_entry_helper(
+                    1,
                     traverser,
                     NodeEntry::Leaf(k.clone(), LeafNodeData::Value(v.clone().into())),
                 )
             }
             WitnessEntry::Instruction(Instruction::Extension(k)) => {
-                Self::replace_next_traverser_node_entry_helper(
-                    traverser,
-                    NodeEntry::Extension(k.clone()),
-                )
+                traverser.get_prev_n_elems_into_buf(1, buf);
+
+                match buf[0] {
+                    WitnessEntry::Node(node) => Self::traverser_replace_prev_n_nodes_entry_helper(
+                        2,
+                        traverser,
+                        NodeEntry::Extension(k.clone(), Box::new(node.clone())),
+                    ),
+                    _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+                }
             }
             WitnessEntry::Instruction(Instruction::Code(c)) => {
-                Self::replace_next_traverser_node_entry_helper(
+                Self::traverser_replace_prev_n_nodes_entry_helper(
+                    1,
                     traverser,
                     NodeEntry::Code(c.clone()),
                 )
@@ -368,11 +376,12 @@ impl ParserState {
         ))
     }
 
-    fn replace_next_traverser_node_entry_helper(
+    fn traverser_replace_prev_n_nodes_entry_helper(
+        n: usize,
         traverser: &mut CollapsableWitnessEntryTraverser,
         entry: NodeEntry,
     ) -> CompactParsingResult<usize> {
-        traverser.replace_next_n_entries_with_single_entry(1, WitnessEntry::Node(entry));
+        traverser.replace_prev_n_entries_with_single_entry(n, WitnessEntry::Node(entry));
         Ok(1)
     }
 }
