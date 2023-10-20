@@ -237,6 +237,8 @@ impl ParserState {
     ) -> CompactParsingResult<usize> {
         traverser.get_next_n_elems_into_buf(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE, buf);
 
+        // TODO: There is a decent amount of code duplication with the matches and the
+        // calls to `invalid_witness_err`. We should condense this...
         match buf[0] {
             WitnessEntry::Instruction(Instruction::Hash(h)) => {
                 Self::replace_next_traverser_node_entry_helper(traverser, NodeEntry::Hash(*h))
@@ -267,8 +269,16 @@ impl ParserState {
                         traverser.get_prev_n_elems_into_buf(1, buf);
 
                         match buf[0] {
-                            // TODO: Really match against branch, hash, and value nodes...
-                            WitnessEntry::Node(_node) => Ok((1, None, None)), // TODO
+                            WitnessEntry::Node(node) => {
+                                match Self::try_get_storage_hash_from_node(node) {
+                                    Some(s_hash) => Ok((1, None, Some(s_hash))),
+                                    None => Self::invalid_witness_err(
+                                        1,
+                                        TraverserDirection::Backwards,
+                                        traverser,
+                                    ),
+                                }
+                            }
                             _ => Self::invalid_witness_err(
                                 2,
                                 TraverserDirection::Backwards,
@@ -330,6 +340,10 @@ impl ParserState {
                 traverser,
             ),
         }
+    }
+
+    fn try_get_storage_hash_from_node(_node: &NodeEntry) -> Option<TrieRootHash> {
+        todo!()
     }
 
     fn invalid_witness_err<T>(
