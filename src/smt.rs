@@ -47,11 +47,21 @@ impl ValOrHash {
     pub fn is_hash(&self) -> bool {
         matches!(self, ValOrHash::Hash(_))
     }
+
+    pub fn to_node(&self, rem_key: Bits) -> ValOrHashNode {
+        match self {
+            ValOrHash::Val(account) => ValOrHashNode::Val {
+                rem_key,
+                leaf: account.clone(),
+            },
+            ValOrHash::Hash(h) => ValOrHashNode::Hash(*h),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValOrHashNode {
-    Val { key: Bits, leaf: AccountOrValue },
+    Val { rem_key: Bits, leaf: AccountOrValue },
     Hash(H256),
 }
 
@@ -66,7 +76,7 @@ impl ValOrHashNode {
 
     pub fn hash(&self) -> H256 {
         match self {
-            ValOrHashNode::Val { key, leaf } => hash_leaf(*key, leaf.hash()),
+            ValOrHashNode::Val { rem_key, leaf } => hash_leaf(*rem_key, leaf.hash()),
             ValOrHashNode::Hash(h) => *h,
         }
     }
@@ -74,6 +84,12 @@ impl ValOrHashNode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InternalNode([H256; RADIX]);
+
+impl Default for InternalNode {
+    fn default() -> Self {
+        Self([DEFAULT_HASH; RADIX])
+    }
+}
 
 impl InternalNode {
     pub fn hash(&self) -> H256 {
@@ -89,111 +105,89 @@ pub struct Smt {
 }
 
 impl Smt {
+    pub fn empty() -> Self {
+        Self {
+            leaves: BTreeMap::from_iter([(Bits::empty(), ValOrHashNode::Hash(DEFAULT_HASH))]),
+            internal_nodes: BTreeMap::new(),
+            root: DEFAULT_HASH,
+        }
+    }
+
     pub fn new<I>(iter: I) -> Result<Self, Error>
     where
         I: IntoIterator<Item = (Bits, ValOrHash)>,
     {
-        let mut smt = Smt {
-            leaves: BTreeMap::new(),
-            internal_nodes: BTreeMap::new(),
-            root: DEFAULT_HASH,
-        };
+        let mut smt = Self::empty();
         for (key, value) in iter {
             smt.insert(key, value)?;
         }
         Ok(smt)
     }
+
     pub fn is_empty(&self) -> bool {
         let empty = self.root == DEFAULT_HASH;
         if empty {
-            assert!(self.leaves.is_empty());
             assert!(self.internal_nodes.is_empty());
+            assert_eq!(
+                self.leaves,
+                BTreeMap::from_iter([(Bits::empty(), ValOrHashNode::Hash(DEFAULT_HASH))])
+            );
         }
         empty
+    }
+
+    pub fn leaves<I>(self) -> Vec<(Bits, ValOrHash)> {
+        self.leaves
+            .into_iter()
+            .map(|(k, v)| match v {
+                ValOrHashNode::Val { rem_key, leaf } => (k + rem_key, ValOrHash::Val(leaf)),
+                ValOrHashNode::Hash(h) => (k, ValOrHash::Hash(h)),
+            })
+            .collect()
+    }
+
+    fn insert_helper(
+        &mut self,
+        current_key: Bits,
+        rem_key: Bits,
+        value: &ValOrHash,
+    ) -> Result<(), Error> {
+        if self.internal_nodes.contains_key(&current_key) {
+            let mut rem = rem_key;
+            let new_key = current_key.add_bit(rem.pop_next_bit());
+            return self.insert_helper(new_key, rem, value);
+        }
+        match self.leaves.get(&current_key) {
+            Some(ValOrHashNode::Hash(h)) if h.is_zero() => {
+                self.leaves.insert(current_key, value.to_node(rem_key));
+                self.update_hashes(current_key);
+            }
+            Some(ValOrHashNode::Val { rem_key: k, leaf }) => {
+                let k = *k;
+                let leaf = leaf.clone();
+                if k == rem_key {
+                    return Err("Key already exists. Use update instead.".to_string());
+                }
+                self.internal_nodes
+                    .insert(current_key, InternalNode::default());
+                self.leaves.remove(&current_key);
+                self.insert_helper(current_key, k, &ValOrHash::Val(leaf))?;
+                self.insert_helper(current_key, rem_key, value)?;
+            }
+            None => {
+                self.leaves.insert(current_key, value.to_node(rem_key));
+                self.update_hashes(current_key);
+            }
+            _ => panic!("Should not happen"),
+        }
+        Ok(())
     }
 
     pub fn insert(&mut self, key: Bits, value: ValOrHash) -> Result<(), Error> {
         if value.is_val() && key.count != 256 {
             return Err("Key must be 256 bits".to_string());
         }
-
-        let node = match value {
-            ValOrHash::Val(account) => ValOrHashNode::Val { key, leaf: account },
-            ValOrHash::Hash(h) => ValOrHashNode::Hash(h),
-        };
-        let hash = node.hash();
-        if self.is_empty() {
-            self.root = hash;
-            self.leaves.insert(Bits::empty(), node);
-            return Ok(());
-        }
-        let mut partial_key = key;
-        let mut last_bit = None;
-        loop {
-            // Check if leaves[key] exists, and if so if it's consistent with the new value.
-            if let Some(existing) = self.leaves.get(&partial_key).cloned() {
-                if existing.hash() == hash {
-                    return Ok(());
-                }
-                if let ValOrHashNode::Val { key: k, .. } = existing {
-                    if k == key {
-                        return Err("Key already exists. Use update instead.".to_string());
-                    }
-                    // We need to create a new internal node.
-                    let (common_prefix, bits) = key.common_prefix(&k);
-                    let (n_bit, o_bit) = bits.ok_or_else(|| "Error".to_string())?;
-                    let new_node = InternalNode(if n_bit {
-                        [existing.hash(), hash]
-                    } else {
-                        [hash, existing.hash()]
-                    });
-                    self.leaves.remove(&partial_key);
-                    self.leaves.insert(common_prefix.add_bit(n_bit), node);
-                    self.leaves.insert(common_prefix.add_bit(o_bit), existing);
-                    let mut internal_hash = new_node.hash();
-                    self.internal_nodes.insert(common_prefix, new_node);
-                    let mut internal_key = common_prefix;
-                    while internal_key.count > 0 {
-                        let bit = internal_key.pop_next_bit();
-                        if self.leaves.contains_key(&internal_key) {
-                            return Err("There is a hash node above this key1.".to_string());
-                        }
-                        let node = self
-                            .internal_nodes
-                            .entry(internal_key)
-                            .or_insert_with(|| InternalNode([DEFAULT_HASH; RADIX]));
-                        node.0[bit as usize] = internal_hash;
-                        internal_hash = node.hash();
-                    }
-                    self.root = internal_hash;
-                    return Ok(());
-                } else {
-                    return Err("There is a hash node above this key2.".to_string());
-                }
-            } else if let Some(existing) = self.internal_nodes.get(&partial_key).cloned() {
-                let last_bit = last_bit.ok_or_else(|| "Error".to_string())?;
-                assert_eq!(existing.0[last_bit as usize], DEFAULT_HASH);
-                self.internal_nodes.get_mut(&partial_key).unwrap().0[last_bit as usize] = hash;
-                self.leaves.insert(partial_key.add_bit(last_bit), node);
-                let mut internal_key = partial_key;
-                let mut internal_hash = self.internal_nodes.get(&partial_key).unwrap().hash();
-                while internal_key.count > 0 {
-                    let bit = internal_key.pop_next_bit();
-                    if self.leaves.contains_key(&internal_key) {
-                        return Err("There is a hash node above this key3.".to_string());
-                    }
-                    let node = self
-                        .internal_nodes
-                        .entry(internal_key)
-                        .or_insert_with(|| InternalNode([DEFAULT_HASH; RADIX]));
-                    node.0[bit as usize] = internal_hash;
-                    internal_hash = node.hash();
-                }
-                self.root = internal_hash;
-                return Ok(());
-            }
-            last_bit = Some(partial_key.pop_next_bit());
-        }
+        self.insert_helper(Bits::empty(), key, &value)
     }
 
     pub fn serialize(&self) -> Vec<U256> {
@@ -202,16 +196,31 @@ impl Smt {
         serialize(self, key, &mut v);
         v
     }
+
+    fn update_hashes(&mut self, current_key: Bits) {
+        let leaf = self.leaves.get(&current_key).expect("Should exist");
+        let mut hash = leaf.hash();
+        let mut key = current_key;
+        loop {
+            if key.is_empty() {
+                self.root = hash;
+                return;
+            }
+            let bit = key.pop_next_bit();
+            let internal = self.internal_nodes.get_mut(&key).expect("Should exist");
+            internal.0[bit as usize] = hash;
+            hash = internal.hash();
+        }
+    }
 }
 
 fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
     if let Some(node) = smt.leaves.get(&key) {
         match node {
-            ValOrHashNode::Val { key, leaf } => {
+            ValOrHashNode::Val { rem_key, leaf } => {
                 let index = v.len();
                 v.push(LEAF_TYPE.into());
-                assert_eq!(key.count, 256);
-                v.push(key.packed);
+                v.push(rem_key.packed);
                 match leaf {
                     AccountOrValue::Account(account) => {
                         v.extend(account.pack_u256());

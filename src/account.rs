@@ -23,7 +23,7 @@ impl Account {
 
     pub fn pack(&self) -> Vec<u8> {
         let mut v = vec![];
-        v.extend(&self.nonce.to_be_bytes());
+        v.extend(&self.nonce.to_le_bytes());
         v.extend(u2b(self.balance));
         v.extend(self.storage_smt.root.0);
         v.extend(self.code_hash.0);
@@ -46,7 +46,7 @@ pub struct AccountWithStorageRoot {
 impl AccountWithStorageRoot {
     pub fn pack(&self) -> Vec<u8> {
         let mut v = vec![];
-        v.extend(&self.nonce.to_be_bytes());
+        v.extend(&self.nonce.to_le_bytes());
         v.extend(u2b(self.balance));
         v.extend(self.storage_smt_root.0);
         v.extend(self.code_hash.0);
@@ -58,7 +58,6 @@ impl AccountWithStorageRoot {
     }
 }
 
-#[cfg(test)]
 pub(crate) mod rand {
     use ethereum_types::U256;
     use rand::{distributions::Standard, prelude::Distribution, Rng};
@@ -73,7 +72,7 @@ pub(crate) mod rand {
                 nonce: rng.gen(),
                 balance: U256(rng.gen()),
                 storage_smt: {
-                    let n = 20;
+                    let n = 10;
                     let rand_node = |_| {
                         (
                             U256(rng.gen()).into(),

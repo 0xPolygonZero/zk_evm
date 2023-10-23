@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use ethereum_types::U256;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +19,18 @@ pub struct Bits {
 impl From<U256> for Bits {
     fn from(packed: U256) -> Self {
         Bits { count: 256, packed }
+    }
+}
+
+impl Add for Bits {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        assert!(self.count + rhs.count <= 256, "Overflow");
+        Self {
+            count: self.count + rhs.count,
+            packed: self.packed * (U256::one() << rhs.count) + rhs.packed,
+        }
     }
 }
 
