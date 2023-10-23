@@ -220,6 +220,7 @@ fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
             ValOrHashNode::Val { rem_key, leaf } => {
                 let index = v.len();
                 v.push(LEAF_TYPE.into());
+                v.push((index + 2).into());
                 v.push(rem_key.packed);
                 match leaf {
                     AccountOrValue::Account(account) => {
@@ -284,16 +285,17 @@ fn _hash_serialize(v: &[U256], ptr: usize, storage: bool) -> H256 {
             node.hash()
         }
         LEAF_TYPE => {
-            let key = Bits::from(v[ptr + 1]);
+            let ptr = v[ptr + 1].as_usize();
+            let key = Bits::from(v[ptr]);
             if storage {
-                let val = v[ptr + 2];
+                let val = v[ptr + 1];
                 hash_leaf(key, AccountOrValue::Value(val).hash())
             } else {
-                let nonce = v[ptr + 2].as_u64();
-                let balance = v[ptr + 3];
-                let storage_smt_root_index = v[ptr + 4].as_usize();
+                let nonce = v[ptr + 1].as_u64();
+                let balance = v[ptr + 2];
+                let storage_smt_root_index = v[ptr + 3].as_usize();
                 let storage_smt_root = _hash_serialize(v, storage_smt_root_index, true);
-                let code_hash = u2h(v[ptr + 5]);
+                let code_hash = u2h(v[ptr + 4]);
                 let account = AccountWithStorageRoot {
                     nonce,
                     balance,
