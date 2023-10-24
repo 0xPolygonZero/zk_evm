@@ -1,11 +1,10 @@
-use std::{borrow::Borrow, collections::HashMap};
+use std::borrow::Borrow;
 
 use ethereum_types::{H256, U256};
 use plonky2_evm::{
-    generation::{GenerationInputs, TrieInputs},
-    proof::{ExtraBlockData, TrieRoots},
+    generation::GenerationInputs,
+    proof::{BlockMetadata, ExtraBlockData, TrieRoots},
 };
-use proof_protocol_decoder::types::OtherBlockData;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{BlockHeight, PlonkyProofIntern, ProofUnderlyingTxns, TxnIdx};
@@ -28,56 +27,25 @@ pub struct ProofCommon {
 /// use to generate a proof for that txn.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TxnProofGenIR {
-    /// Signed txn bytecode.
-    pub signed_txn: Vec<u8>,
-
-    /// The partial trie states at the start of the txn.
-    pub tries: TrieInputs,
-
-    /// The expected root hashes of all tries (except storage tries) after the
-    /// txn is executed.
-    pub trie_roots_after: TrieRoots,
-
-    /// Additional info of state that changed before and after the txn executed.
-    pub deltas: ProofBeforeAndAfterDeltas,
-
-    /// Mapping between smart contract code hashes and the contract byte code.
-    /// All account smart contracts that are invoked by this txn will have an
-    /// entry present.
-    pub contract_code: HashMap<H256, Vec<u8>>,
-
-    /// The height of the block.
-    pub b_height: BlockHeight,
-
-    /// The index of the txn in the block.
     pub txn_idx: TxnIdx,
+    pub gen_inputs: GenerationInputs,
 }
 
 impl TxnProofGenIR {
-    pub fn get_txn_idx(&self) -> TxnIdx {
+    pub fn b_height(&self) -> BlockHeight {
+        self.gen_inputs.block_metadata.block_number.as_u64()
+    }
+
+    pub fn txn_idx(&self) -> TxnIdx {
         self.txn_idx
     }
 
-    pub(crate) fn into_generation_inputs(self, other_data: OtherBlockData) -> GenerationInputs {
-        let signed_txns = match self.signed_txn.is_empty() {
-            false => vec![self.signed_txn],
-            true => Vec::new(),
-        };
-
-        GenerationInputs {
-            genesis_state_trie_root: other_data.genesis_state_trie_root,
-            txn_number_before: self.txn_idx.into(),
-            gas_used_before: self.deltas.gas_used_before,
-            block_bloom_before: self.deltas.block_bloom_before,
-            gas_used_after: self.deltas.gas_used_after,
-            block_bloom_after: self.deltas.block_bloom_after,
-            signed_txns,
-            tries: self.tries,
-            trie_roots_after: self.trie_roots_after,
-            contract_code: self.contract_code,
-            block_metadata: other_data.b_data.b_meta,
-            block_hashes: other_data.b_data.b_hashes,
-            addresses: Vec::default(), // TODO!
+    pub fn deltas(&self) -> ProofBeforeAndAfterDeltas {
+        ProofBeforeAndAfterDeltas {
+            gas_used_before: self.gen_inputs.gas_used_before,
+            gas_used_after: self.gen_inputs.gas_used_after,
+            block_bloom_before: self.gen_inputs.block_bloom_before,
+            block_bloom_after: self.gen_inputs.block_bloom_after,
         }
     }
 
@@ -92,14 +60,20 @@ impl TxnProofGenIR {
             receipts_root: EMPTY_TRIE_HASH,
         };
 
-        Self {
-            signed_txn: Default::default(),
-            tries: Default::default(),
+        let block_metadata = BlockMetadata {
+            block_number: b_height.into(),
+            ..Default::default()
+        };
+
+        let gen_inputs = GenerationInputs {
             trie_roots_after,
-            deltas: Default::default(),
-            contract_code: Default::default(),
-            b_height,
+            block_metadata,
+            ..Default::default()
+        };
+
+        Self {
             txn_idx,
+            gen_inputs,
         }
     }
 
@@ -111,15 +85,12 @@ impl TxnProofGenIR {
     pub fn dummy_with_at(&self, b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
         let mut dummy = Self::create_dummy(b_height, txn_idx);
 
-        let deltas = ProofBeforeAndAfterDeltas {
-            gas_used_before: self.deltas.gas_used_after,
-            gas_used_after: self.deltas.gas_used_after,
-            block_bloom_before: self.deltas.block_bloom_after,
-            block_bloom_after: self.deltas.block_bloom_after,
-        };
+        dummy.gen_inputs.gas_used_before = self.gen_inputs.gas_used_after;
+        dummy.gen_inputs.gas_used_after = self.gen_inputs.gas_used_after;
+        dummy.gen_inputs.block_bloom_before = self.gen_inputs.block_bloom_after;
+        dummy.gen_inputs.block_bloom_after = self.gen_inputs.block_bloom_after;
 
-        dummy.deltas = deltas;
-        dummy.trie_roots_after = self.trie_roots_after.clone();
+        dummy.gen_inputs.trie_roots_after = self.gen_inputs.trie_roots_after.clone();
         dummy
     }
 }

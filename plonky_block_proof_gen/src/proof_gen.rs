@@ -36,18 +36,17 @@ impl From<String> for ProofGenError {
 pub fn generate_txn_proof(
     p_state: &ProverState,
     start_info: TxnProofGenIR,
-    other_data: OtherBlockData,
 ) -> ProofGenResult<GeneratedTxnProof> {
-    let b_height = start_info.b_height;
+    let b_height = start_info.b_height();
     let txn_idx = start_info.txn_idx;
-    let deltas = start_info.deltas.clone();
+    let deltas = start_info.deltas();
 
     let (txn_proof_intern, p_vals) = p_state
         .state
         .prove_root(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
-            start_info.into_generation_inputs(other_data),
+            start_info.gen_inputs,
             &mut TimingTree::default(),
         )
         .map_err(|err| err.to_string())?;
