@@ -80,7 +80,9 @@ pub struct TrieUncompressed {}
 // TODO
 /// Compact representation of a trie (will likely be very close to https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md)
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TrieCompact {}
+pub struct TrieCompact {
+    pub bytes: Vec<u8>,
+}
 
 // TODO
 /// Trie format that is in exactly the same format of our internal trie format.
