@@ -12,7 +12,3 @@ clap = { version = "4.4.6", features = ["derive"] }
 tokio = { version = "1.33.0", features = ["full"] }
 serde = "1.0.183"
 plonky_block_proof_gen = { git = "https://github.com/mir-protocol/plonky-block-proof-gen.git", rev = "73c3bcbaf3bfe913641c5b6817bc3ba5aa9859bc" }
-
-[patch.crates-io]
-# TODO: Remove `eth_trie_utils` patch once version `0.7.0` is released...
-eth_trie_utils = { git = "https://github.com/mir-protocol/eth_trie_utils.git", rev = "e9ec4ec2aa2ae976b7c699ef40c1ffc716d87ed5" }
