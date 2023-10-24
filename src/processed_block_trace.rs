@@ -4,7 +4,6 @@ use std::fmt::Debug;
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::U256;
-use plonky2_evm::generation::GenerationInputs;
 
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
@@ -12,7 +11,7 @@ use crate::trace_protocol::{
 };
 use crate::types::{
     Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
-    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, StorageVal,
+    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, StorageVal, TxnProofGenIR,
 };
 use crate::utils::hash;
 
@@ -23,16 +22,16 @@ pub(crate) struct ProcessedBlockTrace {
 }
 
 impl BlockTrace {
-    pub fn into_proof_generation_inputs<F>(
+    pub fn into_txn_proof_gen_ir<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> TraceParsingResult<Vec<GenerationInputs>>
+    ) -> TraceParsingResult<Vec<TxnProofGenIR>>
     where
         F: CodeHashResolveFunc,
     {
         let proced_block_trace = self.into_processed_block_trace(p_meta);
-        proced_block_trace.into_generation_inputs(other_data)
+        proced_block_trace.into_txn_proof_gen_ir(other_data)
     }
 
     fn into_processed_block_trace<F>(self, p_meta: &ProcessingMeta<F>) -> ProcessedBlockTrace

@@ -20,7 +20,7 @@ use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites},
     types::{
         BlockLevelData, Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TrieRootHash, TxnIdx,
+        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR,
     },
     utils::update_val_if_some,
 };
@@ -79,10 +79,10 @@ struct PartialTrieState {
 }
 
 impl ProcessedBlockTrace {
-    pub(crate) fn into_generation_inputs(
+    pub(crate) fn into_txn_proof_gen_ir(
         self,
         other_data: OtherBlockData,
-    ) -> TraceParsingResult<Vec<GenerationInputs>> {
+    ) -> TraceParsingResult<Vec<TxnProofGenIR>> {
         let mut curr_block_tries = PartialTrieState::default();
 
         let mut tot_gas_used = U256::zero();
@@ -104,7 +104,7 @@ impl ProcessedBlockTrace {
                 let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
                 let new_bloom = txn_info.meta.block_bloom;
 
-                let proof_gen_input = GenerationInputs {
+                let gen_inputs = GenerationInputs {
                     txn_number_before: txn_idx.saturating_sub(1).into(),
                     gas_used_before: tot_gas_used,
                     block_bloom_before: curr_bloom,
@@ -120,6 +120,11 @@ impl ProcessedBlockTrace {
                     addresses,
                 };
 
+                let txn_proof_gen_ir = TxnProofGenIR {
+                    txn_idx,
+                    gen_inputs,
+                };
+
                 Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
                     txn_info.nodes_used_by_txn,
@@ -128,7 +133,7 @@ impl ProcessedBlockTrace {
                 tot_gas_used = new_tot_gas_used;
                 curr_bloom = new_bloom;
 
-                Ok(proof_gen_input)
+                Ok(txn_proof_gen_ir)
             })
             .collect::<TraceParsingResult<Vec<_>>>()?;
 
@@ -253,8 +258,8 @@ impl ProcessedBlockTrace {
         Ok(())
     }
 
-    fn pad_gen_inputs_with_dummy_inputs_if_needed<'a>(
-        gen_inputs: &mut Vec<GenerationInputs>,
+    fn pad_gen_inputs_with_dummy_inputs_if_needed(
+        gen_inputs: &mut Vec<TxnProofGenIR>,
         b_data: &BlockLevelData,
     ) {
         match gen_inputs.len() {
@@ -266,7 +271,7 @@ impl ProcessedBlockTrace {
                 // Only need one dummy txn, but it needs info from the one real txn in the
                 // block.
                 gen_inputs.push(create_dummy_txn_gen_input_single_dummy_txn(
-                    &gen_inputs[0],
+                    &gen_inputs[0].gen_inputs,
                     b_data,
                 ))
             }
@@ -319,7 +324,7 @@ fn calculate_trie_input_hashes(t_inputs: &TrieInputs) -> TrieRoots {
 fn create_dummy_txn_gen_input_single_dummy_txn(
     prev_real_gen_input: &GenerationInputs,
     b_data: &BlockLevelData,
-) -> GenerationInputs {
+) -> TxnProofGenIR {
     let partial_sub_storage_tries: Vec<_> = prev_real_gen_input
         .tries
         .storage_tries
@@ -343,7 +348,7 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         storage_tries: partial_sub_storage_tries,
     };
 
-    GenerationInputs {
+    let gen_inputs = GenerationInputs {
         txn_number_before: 0.into(),
         gas_used_before: prev_real_gen_input.gas_used_after,
         block_bloom_before: prev_real_gen_input.block_bloom_after,
@@ -357,7 +362,9 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         block_metadata: b_data.b_meta.clone(),
         block_hashes: b_data.b_hashes.clone(),
         addresses: Vec::default(),
-    }
+    };
+
+    gen_inputs_to_ir(gen_inputs, 1)
 }
 
 // We really want to get a trie with just a hash node here, and this is an easy
@@ -367,15 +374,15 @@ fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedP
     create_trie_subset(trie, empty::<Nibbles>()).unwrap()
 }
 
-fn create_dummy_txn_pair_for_empty_block(b_data: &BlockLevelData) -> [GenerationInputs; 2] {
+fn create_dummy_txn_pair_for_empty_block(b_data: &BlockLevelData) -> [TxnProofGenIR; 2] {
     [
         create_dummy_gen_input(b_data, 0),
         create_dummy_gen_input(b_data, 1),
     ]
 }
 
-fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> GenerationInputs {
-    GenerationInputs {
+fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> TxnProofGenIR {
+    let gen_inputs = GenerationInputs {
         txn_number_before: txn_idx.saturating_sub(1).into(),
         gas_used_before: 0.into(),
         block_bloom_before: Bloom::default(),
@@ -389,6 +396,15 @@ fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> Generatio
         block_metadata: b_data.b_meta.clone(),
         block_hashes: b_data.b_hashes.clone(),
         addresses: Vec::default(),
+    };
+
+    gen_inputs_to_ir(gen_inputs, txn_idx)
+}
+
+fn gen_inputs_to_ir(gen_inputs: GenerationInputs, txn_idx: TxnIdx) -> TxnProofGenIR {
+    TxnProofGenIR {
+        txn_idx,
+        gen_inputs,
     }
 }
 
