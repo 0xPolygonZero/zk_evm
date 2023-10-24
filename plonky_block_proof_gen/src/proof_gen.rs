@@ -1,11 +1,14 @@
 use plonky2::util::timing::TimingTree;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig, proof::PublicValues};
-use proof_protocol_decoder::types::OtherBlockData;
+use proof_protocol_decoder::{
+    proof_gen_types::ProofBeforeAndAfterDeltas,
+    types::{OtherBlockData, TxnProofGenIR},
+};
 
 use crate::{
     proof_types::{
         create_extra_block_data, AggregatableProof, GeneratedAggProof, GeneratedBlockProof,
-        GeneratedTxnProof, ProofBeforeAndAfterDeltas, ProofCommon, TxnProofGenIR,
+        GeneratedTxnProof, ProofCommon,
     },
     prover_state::ProverState,
     types::PlonkyProofIntern,
