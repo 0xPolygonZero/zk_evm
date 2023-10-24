@@ -1,0 +1,15 @@
+[package]
+name = "ops"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+paladin-core = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+plonky_block_proof_gen = { workspace = true }
+plonky2_evm = { git = "https://github.com/mir-protocol/plonky2.git", rev = "762e6f07b834df04be8cd290f07465a28c392c6d" }
+async-trait = "0.1.73"
+futures = "0.3.28"
+once_cell = "1.18.0"

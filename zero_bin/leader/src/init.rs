@@ -1,5 +1,5 @@
 use tracing_subscriber::{fmt::format::FmtSpan, prelude::*, util::SubscriberInitExt, EnvFilter};
-pub(crate) fn init() {
+pub(crate) fn tracing() {
     tracing_subscriber::Registry::default()
         .with(
             tracing_subscriber::fmt::layer()

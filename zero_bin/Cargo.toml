@@ -1,23 +1,17 @@
-[package]
-name = "zero-bin"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = ["leader", "worker", "ops"]
+resolver = "2"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-plonky_edge_block_trace_parser = { git = "https://github.com/mir-protocol/plonky-edge-block-trace-parser.git", rev = "1bc20699b91201291294914772a30de84ffdcc58" }
-plonky_block_proof_gen = { git = "https://github.com/mir-protocol/plonky-block-proof-gen.git", rev = "73c3bcbaf3bfe913641c5b6817bc3ba5aa9859bc" }
-plonky2_evm = { git = "https://github.com/mir-protocol/plonky2.git", rev = "762e6f07b834df04be8cd290f07465a28c392c6d" }
+[workspace.dependencies]
+paladin-core = "0.1.2"
+anyhow = { version = "1.0.75", features = ["backtrace"] }
+dotenvy = "0.15.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.4.6", features = ["derive"] }
-tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-anyhow = "1.0.75"
-serde_json = "1.0.107"
-serde = "1.0.188"
-ethereum-types = "0.14.1"
-axum = "0.6.20"
 tokio = { version = "1.33.0", features = ["full"] }
+serde = "1.0.183"
+plonky_block_proof_gen = { git = "https://github.com/mir-protocol/plonky-block-proof-gen.git", rev = "73c3bcbaf3bfe913641c5b6817bc3ba5aa9859bc" }
 
 [patch.crates-io]
 # TODO: Remove `eth_trie_utils` patch once version `0.7.0` is released...
