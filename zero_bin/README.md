@@ -16,6 +16,7 @@ A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`plo
     - [Input mode](#input-mode)
       - [stdin](#stdin)
       - [HTTP](#http)
+  - [Docker](#docker)
 
 
 ## Project layout
@@ -117,3 +118,7 @@ Once initialized, send a request:
 ```bash
 curl -X POST -H "Content-Type: application/json" -d @./block_121.json http://localhost:8080/prove
 ```
+
+## Docker
+
+Docker images are provided for both the [leader](leader.Dockerfile) and [worker](worker.Dockerfile) binaries.
