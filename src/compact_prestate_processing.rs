@@ -7,7 +7,7 @@ use std::{
     error::Error,
     fmt::{self, Display},
     io::{Cursor, Read},
-    ops::Range,
+    iter,
 };
 
 use eth_trie_utils::partial_trie::HashedPartialTrie;
@@ -15,7 +15,7 @@ use ethereum_types::{H256, U256};
 use serde::{de::DeserializeOwned, Deserialize};
 use thiserror::Error;
 
-use crate::{trace_protocol::TrieCompact, types::TrieRootHash, utils::clone_vec_and_remove_refs};
+use crate::{trace_protocol::TrieCompact, types::TrieRootHash};
 
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
 
@@ -288,7 +288,7 @@ impl ParserState {
 
     fn apply_rules_to_witness_entries(
         &mut self,
-        entry_buf: &mut Vec<&WitnessEntry>,
+        entry_buf: &mut Vec<WitnessEntry>,
     ) -> CompactParsingResult<usize> {
         let mut traverser = self.entries.create_collapsable_traverser();
 
@@ -309,15 +309,17 @@ impl ParserState {
 
     fn try_apply_rules_to_curr_entry(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        buf: &mut Vec<&WitnessEntry>,
+        buf: &mut Vec<WitnessEntry>,
     ) -> CompactParsingResult<usize> {
         traverser.get_next_n_elems_into_buf(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE, buf);
 
         // TODO: There is a decent amount of code duplication with the matches and the
         // calls to `invalid_witness_err`. We should condense this...
-        match buf[0] {
+
+        // TODO: These clones are really bad, but we will clean this up once it works.
+        match buf[0].clone() {
             WitnessEntry::Instruction(Instruction::Hash(h)) => {
-                Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Hash(*h))
+                Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Hash(h))
             }
             WitnessEntry::Instruction(Instruction::Leaf(k, v)) => {
                 Self::traverser_replace_prev_n_nodes_entry_helper(
@@ -329,7 +331,7 @@ impl ParserState {
             WitnessEntry::Instruction(Instruction::Extension(k)) => {
                 traverser.get_prev_n_elems_into_buf(1, buf);
 
-                match buf[0] {
+                match buf[0].clone() {
                     WitnessEntry::Node(node) => Self::traverser_replace_prev_n_nodes_entry_helper(
                         2,
                         traverser,
@@ -358,7 +360,7 @@ impl ParserState {
                     (true, true) => Self::match_account_leaf_has_code_and_storage(traverser, buf),
                 }?;
 
-                let account_leaf_data = AccountNodeData::new(*n, *b, s_root, account_node_code);
+                let account_leaf_data = AccountNodeData::new(n, b, s_root, account_node_code);
                 let leaf_node = WitnessEntry::Node(NodeEntry::Leaf(
                     k.clone(),
                     LeafNodeData::Account(account_leaf_data),
@@ -368,7 +370,7 @@ impl ParserState {
                 Ok(1)
             }
             WitnessEntry::Instruction(Instruction::Branch(mask)) => {
-                Self::process_branch_instr(traverser, buf, *mask)
+                Self::process_branch_instr(traverser, buf, mask)
             }
             _ => Self::invalid_witness_err(
                 MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
@@ -380,7 +382,7 @@ impl ParserState {
 
     fn process_branch_instr(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        buf: &mut Vec<&WitnessEntry>,
+        buf: &mut Vec<WitnessEntry>,
         mask: BranchMask,
     ) -> CompactParsingResult<usize> {
         let expected_number_of_preceding_nodes = mask.count_ones() as usize;
@@ -393,7 +395,7 @@ impl ParserState {
                 mask,
                 expected_number_of_preceding_nodes,
                 number_available_preceding_elems,
-                clone_vec_and_remove_refs(buf),
+                buf.clone(),
             ));
         }
 
@@ -402,7 +404,7 @@ impl ParserState {
 
         for i in 0..BRANCH_MAX_CHILDREN {
             if mask as usize & (i << 1) != 0 {
-                let entry_to_check = buf[curr_traverser_node_idx];
+                let entry_to_check = &buf[curr_traverser_node_idx];
                 let node_entry = try_get_node_entry_from_witness_entry(entry_to_check)
                     .ok_or_else(|| {
                         let n_entries_behind_cursor = number_available_preceding_elems - i;
@@ -411,7 +413,7 @@ impl ParserState {
                             n_entries_behind_cursor,
                             "Branch",
                             entry_to_check.to_string(),
-                            clone_vec_and_remove_refs(buf),
+                            buf.clone(),
                         )
                     })?
                     .clone();
@@ -427,7 +429,7 @@ impl ParserState {
                 expected_number_of_preceding_nodes,
                 number_of_nodes_traversed,
                 mask,
-                clone_vec_and_remove_refs(buf),
+                buf.clone(),
             ));
         }
 
@@ -453,12 +455,12 @@ impl ParserState {
 
     fn match_account_leaf_no_code_but_has_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        buf: &mut Vec<&WitnessEntry>,
+        buf: &mut Vec<WitnessEntry>,
     ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
         traverser.get_prev_n_elems_into_buf(1, buf);
 
-        match buf[0] {
-            WitnessEntry::Node(node) => match Self::try_get_storage_hash_from_node(node) {
+        match buf[0].clone() {
+            WitnessEntry::Node(node) => match Self::try_get_storage_hash_from_node(&node) {
                 Some(s_hash) => Ok((1, None, Some(s_hash))),
                 None => Self::invalid_witness_err(1, TraverserDirection::Backwards, traverser),
             },
@@ -468,16 +470,16 @@ impl ParserState {
 
     fn match_account_leaf_has_code_but_no_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        buf: &mut Vec<&WitnessEntry>,
+        buf: &mut Vec<WitnessEntry>,
     ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
         traverser.get_prev_n_elems_into_buf(1, buf);
 
-        match buf[0] {
+        match buf[0].clone() {
             WitnessEntry::Node(NodeEntry::Code(code)) => {
                 Ok((1, Some(AccountNodeCode::CodeNode(code.clone())), None))
             }
             WitnessEntry::Node(NodeEntry::Hash(h)) => {
-                Ok((1, Some(AccountNodeCode::HashNode(*h)), None))
+                Ok((1, Some(AccountNodeCode::HashNode(h)), None))
             }
             _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
         }
@@ -485,11 +487,11 @@ impl ParserState {
 
     fn match_account_leaf_has_code_and_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        buf: &mut Vec<&WitnessEntry>,
+        buf: &mut Vec<WitnessEntry>,
     ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
         traverser.get_prev_n_elems_into_buf(2, buf);
 
-        match buf[0..=1] {
+        match &buf[0..=1] {
             [WitnessEntry::Node(NodeEntry::Code(_c)), WitnessEntry::Node(_node)] => {
                 todo!()
             }
@@ -512,7 +514,17 @@ impl ParserState {
         let adjacent_elems_buf = match t_dir {
             TraverserDirection::Forwards => traverser.get_next_n_elems(n).cloned().collect(),
             TraverserDirection::Backwards => traverser.get_prev_n_elems(n).cloned().collect(),
-            TraverserDirection::Both => todo!(),
+            TraverserDirection::Both => {
+                let prev_elems = traverser.get_prev_n_elems(n);
+                let curr_elem = traverser.get_curr_elem();
+                let next_elems = traverser.get_next_n_elems(n);
+
+                prev_elems
+                    .chain(curr_elem)
+                    .chain(next_elems)
+                    .cloned()
+                    .collect()
+            }
         };
 
         Err(CompactParsingError::InvalidWitnessFormat(
@@ -739,24 +751,18 @@ struct WitnessEntries {
 }
 
 impl WitnessEntries {
-    fn push(&mut self, _entry: WitnessEntry) {
-        todo!()
+    fn push(&mut self, entry: WitnessEntry) {
+        self.intern.push_back(entry)
     }
 
     fn pop(&mut self) -> Option<WitnessEntry> {
-        todo!()
-    }
-
-    fn replace_entries_with_single_entry(
-        &mut self,
-        _idxs_to_replace: Range<usize>,
-        _entry_to_replace_with: WitnessEntry,
-    ) {
-        todo!()
+        self.intern.pop_back()
     }
 
     fn create_collapsable_traverser(&mut self) -> CollapsableWitnessEntryTraverser {
-        todo!()
+        let entry_cursor = self.intern.cursor_front_mut();
+
+        CollapsableWitnessEntryTraverser { entry_cursor }
     }
 
     fn len(&self) -> usize {
@@ -767,35 +773,50 @@ impl WitnessEntries {
 // It's not quite an iterator, so this is the next best name that I can come up
 // with.
 struct CollapsableWitnessEntryTraverser<'a> {
-    entries: &'a mut WitnessEntries,
     entry_cursor: CursorMut<'a, WitnessEntry>,
 }
 
+// TODO: For now, lets just use pure values in the buffer, but we probably want
+// to switch over to references later...
 impl<'a> CollapsableWitnessEntryTraverser<'a> {
     fn advance(&mut self) {
-        todo!()
+        self.entry_cursor.move_next();
     }
 
-    fn get_next_n_elems(&self, _n: usize) -> impl Iterator<Item = &WitnessEntry> {
-        // TODO
-        std::iter::empty()
+    fn get_curr_elem(&self) -> Option<&WitnessEntry> {
+        self.entry_cursor.as_cursor().current()
     }
 
-    fn get_prev_n_elems(&self, _n: usize) -> impl Iterator<Item = &WitnessEntry> {
-        // TODO
-        std::iter::empty()
+    fn get_next_n_elems(&self, n: usize) -> impl Iterator<Item = &WitnessEntry> {
+        let mut read_only_cursor = self.entry_cursor.as_cursor();
+
+        iter::from_fn(move || {
+            read_only_cursor.move_next();
+            read_only_cursor.current()
+        })
+        .take(n)
+    }
+
+    fn get_prev_n_elems(&self, n: usize) -> impl Iterator<Item = &WitnessEntry> {
+        let mut read_only_cursor = self.entry_cursor.as_cursor();
+
+        iter::from_fn(move || {
+            read_only_cursor.move_prev();
+            read_only_cursor.current()
+        })
+        .take(n)
     }
 
     /// Get the previous `n` elements into a buf. Note that this does not
     /// include the element that we are currently pointing to.
-    fn get_prev_n_elems_into_buf(&self, _n: usize, _buf: &mut Vec<&WitnessEntry>) {
-        todo!()
+    fn get_prev_n_elems_into_buf(&self, n: usize, buf: &mut Vec<WitnessEntry>) {
+        buf.extend(self.get_next_n_elems(n).cloned())
     }
 
     /// Get the next `n` elements into a buf. Note that this includes the
     /// element that we are currently pointing to.
-    fn get_next_n_elems_into_buf(&self, _n: usize, _buf: &mut Vec<&WitnessEntry>) {
-        todo!()
+    fn get_next_n_elems_into_buf(&self, n: usize, buf: &mut Vec<WitnessEntry>) {
+        buf.extend(self.get_prev_n_elems(n).cloned());
     }
 
     fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
@@ -806,8 +827,14 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
         self.entry_cursor.insert_after(entry)
     }
 
-    fn replace_prev_n_entries_with_single_entry(&mut self, _n: usize, _entry: WitnessEntry) {
-        todo!()
+    fn replace_prev_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
+        for _ in 0..n {
+            // ... Does this work?
+            self.entry_cursor.move_prev();
+            self.entry_cursor.remove_current();
+        }
+
+        self.entry_cursor.insert_after(entry)
     }
 
     fn at_end(&self) -> bool {
