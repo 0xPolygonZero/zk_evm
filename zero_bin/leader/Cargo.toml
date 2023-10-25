@@ -13,6 +13,7 @@ serde = { workspace = true }
 dotenvy = { workspace = true }
 tokio = { workspace = true }
 plonky_block_proof_gen = { workspace = true }
+proof_protocol_decoder = { workspace = true }
 serde_json = "1.0.107"
 axum = "0.6.20"
 ops = { path = "../ops" }

@@ -1,12 +1,11 @@
 use anyhow::{bail, Result};
-use ops::{AggProof, BlockProof, BlockProofInput, ProofInput, TxProof};
+use ops::{AggProof, BlockProof, TxProof};
 use paladin::{
     directive::{Directive, IndexedStream, Literal},
     runtime::Runtime,
 };
-use plonky_block_proof_gen::proof_types::{
-    AggregatableProof, GeneratedBlockProof, OtherBlockData, TxnProofGenIR,
-};
+use plonky_block_proof_gen::proof_types::{AggregatableProof, GeneratedBlockProof};
+use proof_protocol_decoder::types::{OtherBlockData, TxnProofGenIR};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -18,25 +17,23 @@ pub(crate) struct ProverInput {
 impl ProverInput {
     pub(crate) async fn prove(self, runtime: &Runtime) -> Result<GeneratedBlockProof> {
         let other_data = self.other_data;
-        let txs_zipped = self.txs.into_iter().map(move |tx| ProofInput {
-            data: tx,
-            other: other_data.clone(),
-        });
-        let agg_proof = IndexedStream::from(txs_zipped)
+
+        let agg_proof = IndexedStream::from(self.txs)
             .map(TxProof)
-            .fold(AggProof)
+            .fold(AggProof {
+                other: other_data.clone(),
+            })
             .run(runtime)
             .await?;
 
-        if let AggregatableProof::Agg(p) = agg_proof.data {
-            let block_proof = Literal(BlockProofInput {
-                data: p,
-                other: agg_proof.other,
-                prev: None,
-            })
-            .map(BlockProof)
-            .run(runtime)
-            .await?;
+        if let AggregatableProof::Agg(proof) = agg_proof {
+            let block_proof = Literal(proof)
+                .map(BlockProof {
+                    prev: None,
+                    other: other_data,
+                })
+                .run(runtime)
+                .await?;
 
             Ok(block_proof.0)
         } else {

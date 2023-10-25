@@ -6,11 +6,10 @@ use paladin::{
 };
 use plonky_block_proof_gen::{
     proof_gen::{generate_agg_proof, generate_block_proof, generate_txn_proof},
-    proof_types::{
-        AggregatableProof, GeneratedAggProof, GeneratedBlockProof, OtherBlockData, TxnProofGenIR,
-    },
+    proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
     prover_state::{ProverState, ProverStateBuilder},
 };
+use proof_protocol_decoder::types::{OtherBlockData, TxnProofGenIR};
 use serde::{Deserialize, Serialize};
 
 static P_STATE: Lazy<ProverState> = Lazy::new(|| ProverStateBuilder::default().build());
@@ -18,43 +17,31 @@ static P_STATE: Lazy<ProverState> = Lazy::new(|| ProverStateBuilder::default().b
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct TxProof;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ProofInput<T> {
-    pub data: T,
-    pub other: OtherBlockData,
-}
-
 impl Operation for TxProof {
-    type Input = ProofInput<TxnProofGenIR>;
-    type Output = ProofInput<AggregatableProof>;
+    type Input = TxnProofGenIR;
+    type Output = AggregatableProof;
     type Kind = Ops;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let other_data = input.other;
-        let result = generate_txn_proof(&P_STATE, input.data, other_data.clone())?;
+        let result = generate_txn_proof(&P_STATE, input)?;
 
-        Ok(ProofInput {
-            data: result.into(),
-            other: other_data,
-        })
+        Ok(result.into())
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-pub struct AggProof;
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AggProof {
+    pub other: OtherBlockData,
+}
 
 impl Monoid for AggProof {
-    type Elem = ProofInput<AggregatableProof>;
+    type Elem = AggregatableProof;
     type Kind = Ops;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
-        let other_data = a.other;
-        let result = generate_agg_proof(&P_STATE, &a.data, &b.data, other_data.clone())?;
+        let result = generate_agg_proof(&P_STATE, &a, &b, self.other.clone())?;
 
-        Ok(ProofInput {
-            data: result.into(),
-            other: other_data,
-        })
+        Ok(result.into())
     }
 
     fn empty(&self) -> Self::Elem {
@@ -63,32 +50,29 @@ impl Monoid for AggProof {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, Default)]
-pub struct BlockProof;
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct BlockProofInput {
-    pub data: GeneratedAggProof,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BlockProof {
     pub other: OtherBlockData,
     pub prev: Option<GeneratedBlockProof>,
 }
 
 impl Operation for BlockProof {
-    type Input = BlockProofInput;
+    type Input = GeneratedAggProof;
     type Output = GeneratedBlockProof;
     type Kind = Ops;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         Ok(generate_block_proof(
             &P_STATE,
-            input.prev.as_ref(),
-            &input.data,
-            input.other,
+            self.prev.as_ref(),
+            &input,
+            self.other.clone(),
         )?)
     }
 }
 
-#[derive(OpKind, Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(OpKind, Debug, Clone, Deserialize, Serialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum Ops {
     TxProof(TxProof),
     AggProof(AggProof),
