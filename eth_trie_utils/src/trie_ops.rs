@@ -38,8 +38,8 @@ impl InsertEntry {
     }
 }
 
-/// A "entry" in a [`PartialTrie`].
-///  
+/// An "entry" in a [`PartialTrie`].
+///
 /// Entries in the trie may either be actual values or
 /// [`Hash`](crate::partial_trie::Node::Hash) nodes.
 #[derive(Clone, Debug, EnumAsInner, Eq, Hash, PartialEq)]
@@ -105,11 +105,15 @@ impl_prim_int_from_for_val_variant!(u16);
 impl_prim_int_from_for_val_variant!(u8);
 
 impl ValOrHash {
+    /// Cast a [`ValOrHash::Hash`] enum to the hash ([`H256`]). Panics if called
+    /// on the wrong enum variant.
     pub fn expect_hash(self) -> H256 {
         self.into_hash()
             .expect("Expected a `ValOrHash` to be a hash")
     }
 
+    /// Cast a [`ValOrHash::Val`] enum to the value ([`Vec<u8>`]). Panics if
+    /// called on the wrong enum variant.
     pub fn expect_val(self) -> Vec<u8> {
         self.into_val()
             .expect("Expected a `ValOrHash` to be a value")
