@@ -92,7 +92,7 @@ enum Opcode {
 }
 
 #[derive(Clone, Debug)]
-enum WitnessEntry {
+pub enum WitnessEntry {
     Instruction(Instruction),
     Node(NodeEntry),
 }
@@ -256,12 +256,7 @@ impl ParserState {
         Ok((header, p_state))
     }
 
-    fn parse(self) -> CompactParsingResult<HashedPartialTrie> {
-        let trie = self.parse_into_trie()?;
-        Ok(trie)
-    }
-
-    fn parse_into_trie(mut self) -> CompactParsingResult<HashedPartialTrie> {
+    fn parse(mut self) -> CompactParsingResult<HashedPartialTrie> {
         let mut entry_buf = Vec::new();
 
         loop {
@@ -402,7 +397,11 @@ impl ParserState {
         let mut branch_nodes = Self::create_empty_branch_node_entry();
         let mut curr_traverser_node_idx = 0;
 
-        for i in 0..BRANCH_MAX_CHILDREN {
+        for (i, branch_node) in branch_nodes
+            .iter_mut()
+            .enumerate()
+            .take(BRANCH_MAX_CHILDREN)
+        {
             if mask as usize & (i << 1) != 0 {
                 let entry_to_check = &buf[curr_traverser_node_idx];
                 let node_entry = try_get_node_entry_from_witness_entry(entry_to_check)
@@ -418,7 +417,7 @@ impl ParserState {
                     })?
                     .clone();
 
-                branch_nodes[i] = Some(Box::new(node_entry));
+                *branch_node = Some(Box::new(node_entry));
                 curr_traverser_node_idx += 1;
             }
         }
@@ -742,7 +741,7 @@ impl CompactCursor {
 /// We kind of want a wrapper around the actual data structure I think since
 /// there's a good chance this will change a few times in the future.
 #[derive(Debug, Default)]
-struct WitnessEntries {
+pub struct WitnessEntries {
     // Yeah a LL is actually (unfortunately) a very good choice here. We will be doing a ton of
     // inserts mid-list, and the list can get very large. There might be a better choice for a data
     // structure, but for now, this will make performance not scale exponentially with list
@@ -863,4 +862,20 @@ pub(crate) fn process_compact_prestate(
     let trie = parser.parse()?;
 
     Ok((header, trie))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::compact_prestate_processing::ParserState;
+
+    #[test]
+    fn simple() {
+        const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
+
+        let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
+        let (header, parser) = ParserState::create_and_extract_header(bytes).unwrap();
+
+        assert_eq!(header.version, 1);
+        let _trie = parser.parse().unwrap();
+    }
 }
