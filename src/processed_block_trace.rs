@@ -38,13 +38,26 @@ impl BlockTrace {
     where
         F: CodeHashResolveFunc,
     {
+        let (storage_tries, provided_contract_code) = process_storage_tries(self.storage_tries);
+
+        let code_hash_resolve_f = |c_hash: &_| {
+            let provided_contract_code_ref = provided_contract_code.as_ref();
+
+            provided_contract_code_ref.and_then(|included_c_hash_lookup| {
+                included_c_hash_lookup
+                    .get(c_hash)
+                    .cloned()
+                    .or_else(|| Some((p_meta.resolve_code_hash_fn)(c_hash)))
+            }).expect("Code hash resolve function should always be able to resolve a code hash to it's byte code but failed to!")
+        };
+
         ProcessedBlockTrace {
             state_trie: process_state_trie(self.state_trie),
-            storage_tries: process_storage_tries(self.storage_tries),
+            storage_tries,
             txn_info: self
                 .txn_info
                 .into_iter()
-                .map(|t| t.into_processed_txn_info(&p_meta.resolve_code_hash_fn))
+                .map(|t| t.into_processed_txn_info(&code_hash_resolve_f))
                 .collect(),
         }
     }
@@ -60,7 +73,10 @@ fn process_state_trie(trie: TriePreImage) -> HashedPartialTrie {
 
 fn process_storage_tries(
     trie: StorageTriesPreImage,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
+) -> (
+    HashMap<HashedAccountAddr, HashedPartialTrie>,
+    Option<HashMap<CodeHash, Vec<u8>>>,
+) {
     match trie {
         StorageTriesPreImage::SingleTrie(t) => process_single_storage_trie(t),
         StorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
@@ -69,13 +85,19 @@ fn process_storage_tries(
 
 fn process_single_storage_trie(
     _trie: TriePreImage,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
+) -> (
+    HashMap<HashedAccountAddr, HashedPartialTrie>,
+    Option<HashMap<CodeHash, Vec<u8>>>,
+) {
     todo!()
 }
 
 fn process_multiple_storage_tries(
     _tries: HashMap<HashedAccountAddr, TriePreImage>,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
+) -> (
+    HashMap<HashedAccountAddr, HashedPartialTrie>,
+    Option<HashMap<CodeHash, Vec<u8>>>,
+) {
     todo!()
 }
 
