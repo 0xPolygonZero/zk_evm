@@ -10,8 +10,12 @@ use std::{
     iter,
 };
 
-use eth_trie_utils::partial_trie::HashedPartialTrie;
+use eth_trie_utils::{
+    nibbles::{BytesToNibblesError, Nibbles},
+    partial_trie::HashedPartialTrie,
+};
 use ethereum_types::{H256, U256};
+use log::trace;
 use serde::{de::DeserializeOwned, Deserialize};
 use thiserror::Error;
 
@@ -66,20 +70,25 @@ pub enum CompactParsingError {
 
     #[error("Expected the entry preceding {0} positions behind a {1} entry to be a node but instead found a {2}. (nodes: {3:?})")]
     PrecedingNonNodeEntryFoundWhenProcessingRule(usize, &'static str, String, Vec<WitnessEntry>),
+
+    #[error("Unable to create key nibbles from bytes {0}")]
+    KeyError(#[from] BytesToNibblesError),
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct Key {
-    is_even: bool,
-    bytes: Vec<u8>,
+    nibbles: Nibbles,
 }
 
-impl<K: Borrow<[u8]>> From<K> for Key {
-    fn from(v: K) -> Self {
-        Self {
-            is_even: false, // TODO!
-            bytes: v.borrow().to_owned(),
-        }
+impl Key {
+    fn new<B: Borrow<[u8]>>(bytes: B) -> CompactParsingResult<Self> {
+        let bytes = bytes.borrow();
+        let mut nibbles = Nibbles::from_bytes_be(bytes)?;
+
+        // Drop flag bits.
+        nibbles.pop_next_nibble_front();
+
+        Ok(Self { nibbles })
     }
 }
 
@@ -110,7 +119,7 @@ impl Display for WitnessEntry {
 }
 
 // TODO: Ignore `NEW_TRIE` for now...
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum Instruction {
     Leaf(Key, RawValue),
     Extension(Key),
@@ -579,7 +588,7 @@ impl WitnessBytes {
         let opcode =
             Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOperator(opcode_byte))?;
 
-        println!("Processed {:?}", opcode);
+        trace!("Processed {:?} opcode", opcode);
 
         self.process_data_following_opcode(opcode)
     }
@@ -597,7 +606,7 @@ impl WitnessBytes {
     }
 
     fn process_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = self.byte_cursor.read_cbor_byte_array_to_vec()?.into();
+        let key = Key::new(self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
         let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec()?;
 
         self.push_entry(Instruction::Leaf(key, value_raw));
@@ -605,7 +614,7 @@ impl WitnessBytes {
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
-        let key = self.byte_cursor.read_cbor_byte_array_to_vec()?.into();
+        let key = Key::new(self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
 
         self.push_entry(Instruction::Extension(key));
         Ok(())
@@ -633,7 +642,7 @@ impl WitnessBytes {
     }
 
     fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = self.byte_cursor.read_cbor_byte_array_to_vec()?.into();
+        let key = Key::new(self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
         let nonce = self.byte_cursor.read_t()?;
         let balance = self.byte_cursor.read_t()?;
         let has_code = self.byte_cursor.read_t()?;
@@ -878,9 +887,18 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
 #[cfg(test)]
 mod tests {
     use super::parse_just_to_instructions;
-    use crate::compact_prestate_processing::ParserState;
+    use crate::compact_prestate_processing::{Instruction, Key, ParserState};
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
+
+    fn h_decode_key(h_bytes: &str) -> Key {
+        let bytes = hex::decode(h_bytes).unwrap();
+        Key::new(bytes).unwrap()
+    }
+
+    fn h_decode(b_str: &str) -> Vec<u8> {
+        hex::decode(b_str).unwrap()
+    }
 
     #[test]
     fn simple() {
@@ -901,6 +919,19 @@ mod tests {
             Err(err) => panic!("{}", err),
         };
 
-        println!("{:?}", instrs);
+        let expected_instrs = vec![
+            Instruction::Leaf(h_decode_key("10"), h_decode("31323334")),
+            Instruction::Leaf(h_decode_key("10"), h_decode("31323334")),
+            Instruction::Branch(0b00110000),
+            Instruction::Leaf(h_decode_key("0350"), h_decode("31323335")),
+            Instruction::Branch(0b00011000),
+            Instruction::Extension(h_decode_key(
+                "0000000000000000000000000000000000000000000000000000000000000012",
+            )),
+        ];
+
+        for (i, expected_instr) in expected_instrs.into_iter().enumerate() {
+            assert_eq!(expected_instr, instrs[i])
+        }
     }
 }
