@@ -103,11 +103,14 @@ pub struct TxnMeta {
     /// Txn byte code.
     pub byte_code: Vec<u8>,
 
-    /// Rlped bytes of the new txn node inserted into the txn trie by this txn.
+    /// Rlped bytes of the new txn value inserted into the txn trie by
+    /// this txn. Note that the key is not included and this is only the rlped
+    /// value of the node!
     pub new_txn_trie_node_byte: Vec<u8>,
 
-    /// Rlped bytes of the new receipt node inserted into the receipt trie by
-    /// this txn.
+    /// Rlped bytes of the new receipt value inserted into the receipt trie by
+    /// this txn. Note that the key is not included and this is only the rlped
+    /// value of the node!
     pub new_receipt_trie_node_byte: Vec<u8>,
 
     /// Gas used by this txn (Note: not cumulative gas used).
