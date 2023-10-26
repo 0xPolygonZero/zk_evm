@@ -38,7 +38,7 @@ pub enum CompactParsingError {
     #[error("Missing header")]
     MissingHeader,
 
-    #[error("Invalid opcode operator (\"{0:x}\"")]
+    #[error("Invalid opcode operator (\"{0:x}\")")]
     InvalidOperator(u8),
 
     #[error("Reached the end of the byte stream when we still expected more data")]
@@ -75,8 +75,11 @@ struct Key {
 }
 
 impl<K: Borrow<[u8]>> From<K> for Key {
-    fn from(_value: K) -> Self {
-        todo!()
+    fn from(v: K) -> Self {
+        Self {
+            is_even: false, // TODO!
+            bytes: v.borrow().to_owned(),
+        }
     }
 }
 
@@ -559,10 +562,8 @@ impl WitnessBytes {
     ) -> CompactParsingResult<(Header, WitnessEntries)> {
         let header = self.parse_header()?;
 
-        // TODO
         loop {
-            let instr = self.process_operator()?;
-            self.instrs.push(instr.into());
+            self.process_operator()?;
 
             if self.byte_cursor.at_eof() {
                 break;
@@ -572,15 +573,15 @@ impl WitnessBytes {
         Ok((header, self.instrs))
     }
 
-    fn process_operator(&mut self) -> CompactParsingResult<Instruction> {
+    fn process_operator(&mut self) -> CompactParsingResult<()> {
         let opcode_byte = self.byte_cursor.read_byte()?;
 
         let opcode =
             Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOperator(opcode_byte))?;
 
-        self.process_data_following_opcode(opcode)?;
+        println!("Processed {:?}", opcode);
 
-        todo!()
+        self.process_data_following_opcode(opcode)
     }
 
     fn process_data_following_opcode(&mut self, opcode: Opcode) -> CompactParsingResult<()> {
@@ -866,13 +867,12 @@ pub(crate) fn process_compact_prestate(
 
 // TODO: Move behind a feature flag just used for debugging (but probably not
 // `debug`)...
-fn parse_just_to_instructions(bytes: Vec<u8>) -> Vec<Instruction> {
+fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
     let witness_bytes = WitnessBytes::new(bytes);
-    let (_header, entries) = witness_bytes
-        .process_into_instructions_and_header()
-        .unwrap();
+    let (_, entries) = witness_bytes
+        .process_into_instructions_and_header()?;
 
-    entries
+    Ok(entries
         .intern
         .into_iter()
         .map(|entry| match entry {
@@ -881,7 +881,7 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> Vec<Instruction> {
                 "Found a non-instruction at a stage when we should only have instructions!"
             ),
         })
-        .collect()
+        .collect())
 }
 
 #[cfg(test)]
@@ -904,6 +904,11 @@ mod tests {
     fn simple_instructions_are_parsed_correctly() {
         let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
         let instrs = parse_just_to_instructions(bytes);
+
+        let instrs = match instrs {
+            Ok(x) => x,
+            Err(err) => panic!("{}", err),
+        };
 
         println!("{:?}", instrs);
     }
