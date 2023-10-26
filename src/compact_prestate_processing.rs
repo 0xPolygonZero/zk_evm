@@ -597,7 +597,7 @@ impl WitnessBytes {
     }
 
     fn process_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = self.byte_cursor.read_cbor_byte_array()?.into();
+        let key = self.byte_cursor.read_cbor_byte_array_to_vec()?.into();
         let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec()?;
 
         self.push_entry(Instruction::Leaf(key, value_raw));
@@ -605,7 +605,7 @@ impl WitnessBytes {
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
-        let key = self.byte_cursor.read_cbor_byte_array()?.into();
+        let key = self.byte_cursor.read_cbor_byte_array_to_vec()?.into();
 
         self.push_entry(Instruction::Extension(key));
         Ok(())
@@ -633,7 +633,7 @@ impl WitnessBytes {
     }
 
     fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = self.byte_cursor.read_cbor_byte_array()?.into();
+        let key = self.byte_cursor.read_cbor_byte_array_to_vec()?.into();
         let nonce = self.byte_cursor.read_t()?;
         let balance = self.byte_cursor.read_t()?;
         let has_code = self.byte_cursor.read_t()?;
@@ -712,16 +712,8 @@ impl CompactCursor {
         Ok(single_byte_buf[0])
     }
 
-    fn read_cbor_byte_array(&mut self) -> CompactParsingResult<&[u8]> {
-        self.temp_buf.clear();
-        Self::ciborium_byte_vec_err_reader_res_to_parsing_res(ciborium_io::Read::read_exact(
-            &mut self.intern,
-            &mut self.temp_buf,
-        ))?;
-
-        Ok(&self.temp_buf)
-    }
-
+    // I don't think it's possible to not read to a vec here with `ciborium`... In
+    // theory this should be doable, but the way the library I don't think we can.
     fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>> {
         Self::ciborium_byte_vec_err_reader_res_to_parsing_res(ciborium::from_reader(
             &mut self.intern,
@@ -869,8 +861,7 @@ pub(crate) fn process_compact_prestate(
 // `debug`)...
 fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
     let witness_bytes = WitnessBytes::new(bytes);
-    let (_, entries) = witness_bytes
-        .process_into_instructions_and_header()?;
+    let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
 
     Ok(entries
         .intern
