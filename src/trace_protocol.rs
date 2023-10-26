@@ -25,6 +25,7 @@ use std::collections::HashMap;
 
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{Address, U256};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     types::{Bloom, CodeHash, HashedAccountAddr, StorageAddr, StorageVal},
@@ -34,7 +35,7 @@ use crate::{
 /// Core payload needed to generate a proof for a block. Note that the scheduler
 /// may need to request some additional data from the client along with this in
 /// order to generate a proof.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BlockTrace {
     /// State trie pre-image.
     pub state_trie: TriePreImage,
@@ -48,7 +49,7 @@ pub struct BlockTrace {
 }
 
 /// Minimal hashed out tries needed by all txns in the block.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum TriePreImage {
     Uncompressed(TrieUncompressed),
     Compact(TrieCompact),
@@ -57,21 +58,21 @@ pub enum TriePreImage {
 
 // TODO
 /// Bulkier format that is quicker to process.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TrieUncompressed {}
 
 // TODO
 /// Compact representation of a trie (will likely be very close to https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md)
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TrieCompact {}
 
 // TODO
 /// Trie format that is in exactly the same format of our internal trie format.
 /// This is the fastest format for us to processes.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TrieDirect(pub HashedPartialTrie);
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum StorageTriesPreImage {
     /// A single hash map that contains all node hashes from all storage tries
     /// involved in the block. We can reconstruct the individual storage tries
@@ -84,7 +85,7 @@ pub enum StorageTriesPreImage {
 }
 
 /// Info specific to txns in the block.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TxnInfo {
     /// Trace data for the txn. This is used by the protocol to:
     /// - Mutate it's own trie state between txns to arrive at the correct trie
@@ -97,7 +98,7 @@ pub struct TxnInfo {
     pub meta: TxnMeta,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TxnMeta {
     /// Txn byte code.
     pub byte_code: Vec<u8>,
@@ -120,7 +121,7 @@ pub struct TxnMeta {
 ///
 /// Specifically, since we can not execute the txn before proof generation, we
 /// rely on a separate EVM to run the txn and supply this data for us.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TxnTrace {
     /// If the balance changed, then the new balance will appear here.
     pub balance: Option<U256>,
@@ -143,7 +144,7 @@ pub struct TxnTrace {
 }
 
 /// Contract code access type. Used by txn traces.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ContractCodeUsage {
     /// Contract was read.
     Read(CodeHash),
