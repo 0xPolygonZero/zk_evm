@@ -57,7 +57,7 @@ pub enum CompactParsingError {
     #[error("Invalid block witness entries: {0:?}")]
     InvalidWitnessFormat(Vec<WitnessEntry>),
 
-    #[error("There were multiple entries remaining after the compact block witness was processed (Remaining entries: {0:?})")]
+    #[error("There were multiple entries remaining after the compact block witness was processed (Remaining entries: {0:#?})")]
     NonSingleEntryAfterProcessing(WitnessEntries),
 
     #[error("Branch mask {0:#b} stated there should be {1} preceding nodes but instead found {2} (nodes: {3:?})")]
@@ -379,11 +379,7 @@ impl ParserState {
             WitnessEntry::Instruction(Instruction::Branch(mask)) => {
                 Self::process_branch_instr(traverser, buf, mask)
             }
-            _ => Self::invalid_witness_err(
-                MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
-                TraverserDirection::Both,
-                traverser,
-            ),
+            _ => Ok(0),
         }
     }
 
@@ -414,11 +410,12 @@ impl ParserState {
             .enumerate()
             .take(BRANCH_MAX_CHILDREN)
         {
-            if mask as usize & (i << 1) != 0 {
+            if mask as usize & (1 << i) != 0 {
                 let entry_to_check = &buf[curr_traverser_node_idx];
                 let node_entry = try_get_node_entry_from_witness_entry(entry_to_check)
                     .ok_or_else(|| {
-                        let n_entries_behind_cursor = number_available_preceding_elems - i;
+                        let n_entries_behind_cursor =
+                            number_available_preceding_elems - curr_traverser_node_idx;
 
                         CompactParsingError::PrecedingNonNodeEntryFoundWhenProcessingRule(
                             n_entries_behind_cursor,
@@ -527,12 +524,12 @@ impl ParserState {
             TraverserDirection::Backwards => traverser.get_prev_n_elems(n).cloned().collect(),
             TraverserDirection::Both => {
                 let prev_elems = traverser.get_prev_n_elems(n);
-                let curr_elem = traverser.get_curr_elem();
-                let next_elems = traverser.get_next_n_elems(n);
+                let next_elems_including_curr = traverser.get_next_n_elems(n + 1);
+                let prev_elems_vec: Vec<_> = prev_elems.collect();
 
-                prev_elems
-                    .chain(curr_elem)
-                    .chain(next_elems)
+                prev_elems_vec
+                    .into_iter()
+                    .chain(next_elems_including_curr)
                     .cloned()
                     .collect()
             }
@@ -773,6 +770,7 @@ impl WitnessEntries {
 
 // It's not quite an iterator, so this is the next best name that I can come up
 // with.
+#[derive(Debug)]
 struct CollapsableWitnessEntryTraverser<'a> {
     entry_cursor: CursorMut<'a, WitnessEntry>,
 }
@@ -792,9 +790,14 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
         let mut read_only_cursor = self.entry_cursor.as_cursor();
 
         iter::from_fn(move || {
-            read_only_cursor.move_next();
-            read_only_cursor.current()
+            // Index returns a `None` if we are at the end of the LL.
+            read_only_cursor.index().map(|_| {
+                let entry = read_only_cursor.current();
+                read_only_cursor.move_next();
+                entry
+            })
         })
+        .flatten()
         .take(n)
     }
 
@@ -802,24 +805,30 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
         let mut read_only_cursor = self.entry_cursor.as_cursor();
 
         iter::from_fn(move || {
-            read_only_cursor.move_prev();
-            read_only_cursor.current()
+            read_only_cursor.index().map(|_| {
+                read_only_cursor.move_prev();
+                read_only_cursor.current()
+            })
         })
+        .flatten()
         .take(n)
     }
 
     /// Get the previous `n` elements into a buf. Note that this does not
     /// include the element that we are currently pointing to.
     fn get_prev_n_elems_into_buf(&self, n: usize, buf: &mut Vec<WitnessEntry>) {
-        buf.extend(self.get_next_n_elems(n).cloned())
+        buf.clear();
+        buf.extend(self.get_prev_n_elems(n).cloned())
     }
 
     /// Get the next `n` elements into a buf. Note that this includes the
     /// element that we are currently pointing to.
     fn get_next_n_elems_into_buf(&self, n: usize, buf: &mut Vec<WitnessEntry>) {
-        buf.extend(self.get_prev_n_elems(n).cloned());
+        buf.clear();
+        buf.extend(self.get_next_n_elems(n).cloned());
     }
 
+    // Inclusive.
     fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
         for _ in 0..n {
             self.entry_cursor.remove_current();
@@ -828,18 +837,23 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
         self.entry_cursor.insert_after(entry)
     }
 
+    // Inclusive.
     fn replace_prev_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
         for _ in 0..n {
-            // ... Does this work?
-            self.entry_cursor.move_prev();
             self.entry_cursor.remove_current();
-        }
+            self.entry_cursor.move_prev();
 
-        self.entry_cursor.insert_after(entry)
+            if self.entry_cursor.index().is_none() {
+                break;
+            }
+        }
+        self.entry_cursor.insert_after(entry);
+
+        self.entry_cursor.move_next();
     }
 
     fn at_end(&self) -> bool {
-        self.entry_cursor.as_cursor().peek_next().is_none()
+        self.entry_cursor.as_cursor().current().is_none()
     }
 }
 
@@ -891,6 +905,10 @@ mod tests {
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
 
+    fn init() {
+        let _ = pretty_env_logger::try_init();
+    }
+
     fn h_decode_key(h_bytes: &str) -> Key {
         let bytes = hex::decode(h_bytes).unwrap();
         Key::new(bytes).unwrap()
@@ -901,16 +919,23 @@ mod tests {
     }
 
     #[test]
-    fn simple() {
+    fn simple_full() {
+        init();
+
         let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
         let (header, parser) = ParserState::create_and_extract_header(bytes).unwrap();
 
         assert_eq!(header.version, 1);
-        let _trie = parser.parse().unwrap();
+        let _trie = match parser.parse() {
+            Ok(trie) => trie,
+            Err(err) => panic!("{}", err),
+        };
     }
 
     #[test]
     fn simple_instructions_are_parsed_correctly() {
+        init();
+
         let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
         let instrs = parse_just_to_instructions(bytes);
 
