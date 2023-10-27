@@ -5,20 +5,32 @@ use paladin::{
     runtime::Runtime,
 };
 use plonky_block_proof_gen::proof_types::{AggregatableProof, GeneratedBlockProof};
-use proof_protocol_decoder::types::{OtherBlockData, TxnProofGenIR};
+use proof_protocol_decoder::{
+    processed_block_trace::ProcessingMeta,
+    trace_protocol::BlockTrace,
+    types::{CodeHash, OtherBlockData},
+};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ProverInput {
-    txs: Vec<TxnProofGenIR>,
+    block_trace: BlockTrace,
     other_data: OtherBlockData,
+}
+
+fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
+    todo!()
 }
 
 impl ProverInput {
     pub(crate) async fn prove(self, runtime: &Runtime) -> Result<GeneratedBlockProof> {
         let other_data = self.other_data;
+        let txs = self.block_trace.into_txn_proof_gen_ir(
+            &ProcessingMeta::new(resolve_code_hash_fn),
+            other_data.clone(),
+        )?;
 
-        let agg_proof = IndexedStream::from(self.txs)
+        let agg_proof = IndexedStream::from(txs)
             .map(TxProof)
             .fold(AggProof {
                 other: other_data.clone(),
