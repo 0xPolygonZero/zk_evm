@@ -20,6 +20,7 @@ use log::trace;
 use serde::{de::DeserializeOwned, Deserialize};
 use thiserror::Error;
 
+use super::compact_to_partial_trie::create_partial_trie_from_remaining_witness_elem;
 use crate::{trace_protocol::TrieCompact, types::TrieRootHash};
 
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
@@ -77,7 +78,7 @@ pub enum CompactParsingError {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct Key {
+pub(super) struct Key {
     nibbles: Nibbles,
 }
 
@@ -185,7 +186,7 @@ impl Display for NodeEntry {
 }
 
 #[derive(Clone, Debug)]
-struct ValueNodeData(Vec<u8>);
+pub(super) struct ValueNodeData(Vec<u8>);
 
 impl From<Vec<u8>> for ValueNodeData {
     fn from(v: Vec<u8>) -> Self {
@@ -194,7 +195,7 @@ impl From<Vec<u8>> for ValueNodeData {
 }
 
 #[derive(Clone, Debug)]
-enum LeafNodeData {
+pub(super) enum LeafNodeData {
     Value(ValueNodeData),
     Account(AccountNodeData),
 }
@@ -206,7 +207,7 @@ enum AccountNodeCode {
 }
 
 #[derive(Clone, Debug)]
-struct AccountNodeData {
+pub(super) struct AccountNodeData {
     nonce: Nonce,
     balance: Balance,
     storage_root: Option<TrieRootHash>,
@@ -856,41 +857,6 @@ fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&NodeEn
     match entry {
         WitnessEntry::Node(n_entry) => Some(n_entry),
         _ => None,
-    }
-}
-
-// TODO: Consider moving this to a separate module...
-pub(crate) fn create_partial_trie_from_remaining_witness_elem(
-    remaining_entry: WitnessEntry,
-) -> CompactParsingResult<HashedPartialTrie> {
-    let remaining_node = remaining_entry
-        .into_node()
-        .expect("Final node in compact entries was not a node! This is a bug!");
-    let mut trie = HashedPartialTrie::default();
-
-    create_partial_trie_from_remaining_witness_elem_rec(
-        Nibbles::default(),
-        &remaining_node,
-        &mut trie,
-    )?;
-
-    Ok(trie)
-}
-
-pub(crate) fn create_partial_trie_from_remaining_witness_elem_rec(
-    _curr_key: Nibbles,
-    curr_node: &NodeEntry,
-    _p_trie: &mut HashedPartialTrie,
-) -> CompactParsingResult<()> {
-    match curr_node {
-        NodeEntry::Account(_) => todo!(),
-        NodeEntry::Branch(_) => todo!(),
-        NodeEntry::Code(_) => todo!(),
-        NodeEntry::Empty => todo!(),
-        NodeEntry::Hash(_) => todo!(),
-        NodeEntry::Leaf(_, _) => todo!(),
-        NodeEntry::Extension(_, _) => todo!(),
-        NodeEntry::Value(_) => todo!(),
     }
 }
 
