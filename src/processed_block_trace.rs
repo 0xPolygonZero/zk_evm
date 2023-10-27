@@ -5,7 +5,7 @@ use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::U256;
 
-use crate::compact_prestate_processing::process_compact_prestate;
+use crate::compact::compact_prestate_processing::process_compact_prestate;
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,

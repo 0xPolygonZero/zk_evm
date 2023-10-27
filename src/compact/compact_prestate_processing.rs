@@ -930,8 +930,8 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
 
 #[cfg(test)]
 mod tests {
-    use super::parse_just_to_instructions;
-    use crate::compact_prestate_processing::{Instruction, Key, ParserState};
+    use super::{parse_just_to_instructions, Instruction, Key};
+    use crate::compact::compact_prestate_processing::ParserState;
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
 
