@@ -24,6 +24,18 @@ pub enum AccountOrValue {
     Value(U256),
 }
 
+impl From<Account> for AccountOrValue {
+    fn from(account: Account) -> Self {
+        Self::Account(account)
+    }
+}
+
+impl From<U256> for AccountOrValue {
+    fn from(value: U256) -> Self {
+        Self::Value(value)
+    }
+}
+
 impl AccountOrValue {
     pub fn hash(&self) -> H256 {
         match self {
@@ -37,6 +49,18 @@ impl AccountOrValue {
 pub enum ValOrHash {
     Val(AccountOrValue),
     Hash(H256),
+}
+
+impl From<Account> for ValOrHash {
+    fn from(account: Account) -> Self {
+        ValOrHash::Val(account.into())
+    }
+}
+
+impl<T: Into<U256>> From<T> for ValOrHash {
+    fn from(value: T) -> Self {
+        ValOrHash::Val((value.into()).into())
+    }
 }
 
 impl ValOrHash {
@@ -102,6 +126,12 @@ pub struct Smt {
     pub leaves: BTreeMap<Bits, ValOrHashNode>,
     pub internal_nodes: BTreeMap<Bits, InternalNode>,
     pub root: H256,
+}
+
+impl Default for Smt {
+    fn default() -> Self {
+        Self::empty()
+    }
 }
 
 impl Smt {
@@ -191,7 +221,7 @@ impl Smt {
     }
 
     pub fn serialize(&self) -> Vec<U256> {
-        let mut v = vec![];
+        let mut v = vec![U256::zero(); 2]; // For empty hash node.
         let key = Bits::empty();
         serialize(self, key, &mut v);
         v
@@ -263,11 +293,11 @@ fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
 }
 
 pub fn hash_serialize_state(v: &[U256]) -> H256 {
-    _hash_serialize(v, 0, false)
+    _hash_serialize(v, 2, false)
 }
 
 pub fn hash_serialize_storage(v: &[U256]) -> H256 {
-    _hash_serialize(v, 0, true)
+    _hash_serialize(v, 2, true)
 }
 
 fn _hash_serialize(v: &[U256], ptr: usize, storage: bool) -> H256 {
@@ -314,27 +344,26 @@ mod tests {
     use ethereum_types::U256;
     use rand::{seq::SliceRandom, thread_rng, Rng};
 
-    use crate::smt::{hash_serialize_state, AccountOrValue};
+    use crate::{account::Account, smt::hash_serialize_state};
 
-    use super::{Smt, ValOrHash};
+    use super::Smt;
 
     #[test]
     fn test_small_smt() -> Result<(), String> {
-        let mut rng = thread_rng();
-        let account0 = AccountOrValue::Account(rng.gen());
-        let account1 = AccountOrValue::Account(rng.gen());
+        let account0 = Account::rand(10);
+        let account1 = Account::rand(10);
 
         let nodes = [
-            (U256::from(3).into(), ValOrHash::Val(account0.clone())),
-            (U256::one().into(), ValOrHash::Val(account1.clone())),
+            (U256::from(3).into(), account0.clone().into()),
+            (U256::one().into(), account1.clone().into()),
         ];
         let smt0 = Smt::new(nodes)?;
         let v = smt0.serialize();
         assert_eq!(hash_serialize_state(&v), smt0.root);
 
         let nodes = [
-            (U256::one().into(), ValOrHash::Val(account1)),
-            (U256::from(3).into(), ValOrHash::Val(account0)),
+            (U256::one().into(), account1.into()),
+            (U256::from(3).into(), account0.into()),
         ];
         let smt1 = Smt::new(nodes)?;
 
@@ -345,9 +374,8 @@ mod tests {
 
     #[test]
     fn test_small_smt_bis() -> Result<(), String> {
-        let mut rng = thread_rng();
-        let account0 = AccountOrValue::Account(rng.gen());
-        let account1 = AccountOrValue::Account(rng.gen());
+        let account0 = Account::rand(10);
+        let account1 = Account::rand(10);
 
         let nodes = [
             (
@@ -356,7 +384,7 @@ mod tests {
                 )
                 .unwrap()
                 .into(),
-                ValOrHash::Val(account0.clone()),
+                account0.clone().into(),
             ),
             (
                 U256::from_dec_str(
@@ -364,7 +392,7 @@ mod tests {
                 )
                 .unwrap()
                 .into(),
-                ValOrHash::Val(account1.clone()),
+                account1.clone().into(),
             ),
         ];
         let smt0 = Smt::new(nodes)?;
@@ -378,7 +406,7 @@ mod tests {
                 )
                 .unwrap()
                 .into(),
-                ValOrHash::Val(account1),
+                account1.into(),
             ),
             (
                 U256::from_dec_str(
@@ -386,7 +414,7 @@ mod tests {
                 )
                 .unwrap()
                 .into(),
-                ValOrHash::Val(account0),
+                account0.into(),
             ),
         ];
         let smt1 = Smt::new(nodes)?;
@@ -400,12 +428,7 @@ mod tests {
     fn test_random_smt() -> Result<(), String> {
         let n = 1000;
         let mut rng = thread_rng();
-        let rand_node = |_| {
-            (
-                U256(rng.gen()).into(),
-                ValOrHash::Val(AccountOrValue::Account(rng.gen())),
-            )
-        };
+        let rand_node = |_| (U256(rng.gen()).into(), Account::rand(10).into());
         let mut rand_nodes = (0..n).map(rand_node).collect::<Vec<_>>();
         let smt0 = Smt::new(rand_nodes.iter().cloned())?;
         let v = smt0.serialize();

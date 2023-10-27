@@ -1,7 +1,11 @@
+use ::rand::{thread_rng, Rng};
 use ethereum_types::{BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 
-use crate::{smt::Smt, utils::u2b};
+use crate::{
+    smt::{AccountOrValue, Smt, ValOrHash},
+    utils::u2b,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Account {
@@ -9,6 +13,17 @@ pub struct Account {
     pub balance: U256,
     pub storage_smt: Smt,
     pub code_hash: H256,
+}
+
+impl Default for Account {
+    fn default() -> Self {
+        Self {
+            nonce: Default::default(),
+            balance: Default::default(),
+            storage_smt: Default::default(),
+            code_hash: keccak([]),
+        }
+    }
 }
 
 impl Account {
@@ -33,6 +48,24 @@ impl Account {
     pub fn hash(&self) -> H256 {
         keccak(self.pack())
     }
+
+    pub fn rand(num_storage_slots: usize) -> Self {
+        let mut rng = thread_rng();
+        Account {
+            nonce: rng.gen(),
+            balance: U256(rng.gen()),
+            storage_smt: {
+                let rand_node = |_| {
+                    (
+                        U256(rng.gen()).into(),
+                        ValOrHash::Val(AccountOrValue::Value(U256(rng.gen()))),
+                    )
+                };
+                Smt::new((0..num_storage_slots).map(rand_node)).unwrap()
+            },
+            code_hash: rng.gen(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,34 +88,5 @@ impl AccountWithStorageRoot {
 
     pub fn hash(&self) -> H256 {
         keccak(self.pack())
-    }
-}
-
-pub(crate) mod rand {
-    use ethereum_types::U256;
-    use rand::{distributions::Standard, prelude::Distribution, Rng};
-
-    use crate::smt::{AccountOrValue, Smt, ValOrHash};
-
-    use super::Account;
-
-    impl Distribution<Account> for Standard {
-        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Account {
-            Account {
-                nonce: rng.gen(),
-                balance: U256(rng.gen()),
-                storage_smt: {
-                    let n = 10;
-                    let rand_node = |_| {
-                        (
-                            U256(rng.gen()).into(),
-                            ValOrHash::Val(AccountOrValue::Value(U256(rng.gen()))),
-                        )
-                    };
-                    Smt::new((0..n).map(rand_node)).unwrap()
-                },
-                code_hash: rng.gen(),
-            }
-        }
     }
 }

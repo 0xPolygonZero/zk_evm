@@ -1,6 +1,6 @@
 use std::ops::Add;
 
-use ethereum_types::U256;
+use ethereum_types::{BigEndianHash, H256, U256};
 use serde::{Deserialize, Serialize};
 
 pub type Bit = bool;
@@ -19,6 +19,15 @@ pub struct Bits {
 impl From<U256> for Bits {
     fn from(packed: U256) -> Self {
         Bits { count: 256, packed }
+    }
+}
+
+impl From<H256> for Bits {
+    fn from(packed: H256) -> Self {
+        Bits {
+            count: 256,
+            packed: packed.into_uint(),
+        }
     }
 }
 
