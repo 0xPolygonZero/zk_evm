@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use ethereum_types::{BigEndianHash, H256, U256};
+use ethereum_types::{H256, U256};
 
 use crate::{
     account::{Account, AccountWithStorageRoot},
@@ -98,6 +98,13 @@ impl ValOrHashNode {
         matches!(self, ValOrHashNode::Hash(_))
     }
 
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ValOrHashNode::Hash(h) => *h == DEFAULT_HASH,
+            _ => false,
+        }
+    }
+
     pub fn hash(&self) -> H256 {
         match self {
             ValOrHashNode::Val { rem_key, leaf } => hash_leaf(*rem_key, leaf.hash()),
@@ -121,6 +128,13 @@ impl InternalNode {
     }
 }
 
+/// Sparse Merkle tree (SMT).
+/// Represented as a map from keys to leaves and a map from keys to internal nodes.
+/// Leaves hold either a value node, representing an account in the state SMT or a value in the storage SMT,
+/// or a hash node, representing a hash of a subtree.
+/// Internal nodes hold the hashes of their children.
+/// The root is the hash of the root internal node.
+/// Leaves are hashed using a prefix of 0, internal nodes using a prefix of 1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Smt {
     pub leaves: BTreeMap<Bits, ValOrHashNode>,
@@ -220,6 +234,15 @@ impl Smt {
         self.insert_helper(Bits::empty(), key, &value)
     }
 
+    /// Serialize the SMT into a vector of U256.
+    /// Starts with a [0, 0] for convenience, that way `ptr=0` is a canonical empty node.
+    /// Therefore the root of the SMT is at `ptr=2`.
+    /// Serialization rules:
+    /// ```pseudocode
+    /// serialize( HashNode { h } ) = [HASH_TYPE, h]
+    /// serialize( InternalNode { left, right } ) = [INTERNAL_TYPE, serialize(left).ptr, serialize(right).ptr]
+    /// serialize( LeafNode { key, value } ) = [LEAF_TYPE, serialize(key || value).ptr]
+    /// ```
     pub fn serialize(&self) -> Vec<U256> {
         let mut v = vec![U256::zero(); 2]; // For empty hash node.
         let key = Bits::empty();
@@ -227,6 +250,7 @@ impl Smt {
         v
     }
 
+    /// Update the hashes in the SMT's internal nodes from `current_key` to the root.
     fn update_hashes(&mut self, current_key: Bits) {
         let leaf = self.leaves.get(&current_key).expect("Should exist");
         let mut hash = leaf.hash();
@@ -246,6 +270,9 @@ impl Smt {
 
 fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
     if let Some(node) = smt.leaves.get(&key) {
+        if node.is_empty() {
+            return 0; // `ptr=0` is an empty node.
+        }
         match node {
             ValOrHashNode::Val { rem_key, leaf } => {
                 let index = v.len();
@@ -256,8 +283,8 @@ fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
                     AccountOrValue::Account(account) => {
                         v.extend(account.pack_u256());
                         let storage_smt_index = v.len();
-                        v[storage_smt_index - 2] = storage_smt_index.into();
-                        serialize(&account.storage_smt, Bits::empty(), v);
+                        v[storage_smt_index - 2] =
+                            serialize(&account.storage_smt, Bits::empty(), v).into();
                     }
                     AccountOrValue::Value(val) => {
                         v.push(*val);
@@ -285,17 +312,16 @@ fn serialize(smt: &Smt, key: Bits, v: &mut Vec<U256>) -> usize {
         index
     } else {
         // Empty node
-        let index = v.len();
-        v.push(HASH_TYPE.into());
-        v.push(DEFAULT_HASH.into_uint());
-        index
+        return 0; // `ptr=0` is an empty node.
     }
 }
 
+/// Hash a serialized state SMT, i.e., one where leaves hold accounts.
 pub fn hash_serialize_state(v: &[U256]) -> H256 {
     _hash_serialize(v, 2, false)
 }
 
+/// Hash a serialized storage SMT, i.e., one where leaves hold scalar values.
 pub fn hash_serialize_storage(v: &[U256]) -> H256 {
     _hash_serialize(v, 2, true)
 }
