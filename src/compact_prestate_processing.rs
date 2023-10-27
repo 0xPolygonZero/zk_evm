@@ -10,6 +10,7 @@ use std::{
     iter,
 };
 
+use enum_as_inner::EnumAsInner;
 use eth_trie_utils::{
     nibbles::{BytesToNibblesError, Nibbles},
     partial_trie::HashedPartialTrie,
@@ -103,7 +104,7 @@ enum Opcode {
     EmptyRoot = 0x06,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumAsInner)]
 pub enum WitnessEntry {
     Instruction(Instruction),
     Node(NodeEntry),
@@ -157,7 +158,7 @@ impl From<Instruction> for WitnessEntry {
 }
 
 #[derive(Clone, Debug)]
-enum NodeEntry {
+pub(crate) enum NodeEntry {
     Account(AccountNodeData),
     Branch([Option<Box<NodeEntry>>; 16]),
     Code(Vec<u8>),
@@ -280,17 +281,11 @@ impl ParserState {
         }
 
         match self.entries.len() {
-            1 => Self::create_partial_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
+            1 => create_partial_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
             _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
                 self.entries,
             )),
         }
-    }
-
-    fn create_partial_trie_from_remaining_witness_elem(
-        _remaining_entry: WitnessEntry,
-    ) -> CompactParsingResult<HashedPartialTrie> {
-        todo!();
     }
 
     fn apply_rules_to_witness_entries(
@@ -861,6 +856,41 @@ fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&NodeEn
     match entry {
         WitnessEntry::Node(n_entry) => Some(n_entry),
         _ => None,
+    }
+}
+
+// TODO: Consider moving this to a separate module...
+pub(crate) fn create_partial_trie_from_remaining_witness_elem(
+    remaining_entry: WitnessEntry,
+) -> CompactParsingResult<HashedPartialTrie> {
+    let remaining_node = remaining_entry
+        .into_node()
+        .expect("Final node in compact entries was not a node! This is a bug!");
+    let mut trie = HashedPartialTrie::default();
+
+    create_partial_trie_from_remaining_witness_elem_rec(
+        Nibbles::default(),
+        &remaining_node,
+        &mut trie,
+    )?;
+
+    Ok(trie)
+}
+
+pub(crate) fn create_partial_trie_from_remaining_witness_elem_rec(
+    _curr_key: Nibbles,
+    curr_node: &NodeEntry,
+    _p_trie: &mut HashedPartialTrie,
+) -> CompactParsingResult<()> {
+    match curr_node {
+        NodeEntry::Account(_) => todo!(),
+        NodeEntry::Branch(_) => todo!(),
+        NodeEntry::Code(_) => todo!(),
+        NodeEntry::Empty => todo!(),
+        NodeEntry::Hash(_) => todo!(),
+        NodeEntry::Leaf(_, _) => todo!(),
+        NodeEntry::Extension(_, _) => todo!(),
+        NodeEntry::Value(_) => todo!(),
     }
 }
 
