@@ -3,7 +3,7 @@ members = ["leader", "worker", "ops"]
 resolver = "2"
 
 [workspace.dependencies]
-paladin-core = "0.1.2"
+paladin-core = "0.1.3"
 anyhow = { version = "1.0.75", features = ["backtrace"] }
 dotenvy = "0.15.7"
 tracing = "0.1"

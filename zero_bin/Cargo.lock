@@ -1542,8 +1542,6 @@ name = "ops"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
- "futures",
  "once_cell",
  "paladin-core",
  "plonky_block_proof_gen",
@@ -1577,9 +1575,9 @@ dependencies = [
 
 [[package]]
 name = "paladin-core"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f9d7358ef9004e0ab1f2e4721b84f6aa8cf57fd46b2efa7732b5fd54b15e5d8"
+checksum = "c550efa420239735fae6a45dd1f0e58829c8547c0464370f9e048e91e9a442b7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1602,9 +1600,9 @@ dependencies = [
 
 [[package]]
 name = "paladin-opkind-derive"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52db5917dc6613839e99f55194fa6049b919906aad4a558076864fb6d524315b"
+checksum = "c5e25b58dbb19317d61c5f812c78908b14eed74c20ca60c12bbd50a1d7f297f5"
 dependencies = [
  "quote",
  "syn 2.0.38",
