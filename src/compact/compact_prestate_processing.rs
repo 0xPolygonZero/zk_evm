@@ -165,7 +165,6 @@ impl From<Instruction> for WitnessEntry {
 
 #[derive(Clone, Debug)]
 pub(crate) enum NodeEntry {
-    Account(AccountNodeData),
     Branch([Option<Box<NodeEntry>>; 16]),
     Code(Vec<u8>),
     Empty,
@@ -177,7 +176,6 @@ pub(crate) enum NodeEntry {
 impl Display for NodeEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NodeEntry::Account(_) => write!(f, "Account"),
             NodeEntry::Branch(_) => write!(f, "Branch"),
             NodeEntry::Code(_) => write!(f, "Code"),
             NodeEntry::Empty => write!(f, "Empty"),

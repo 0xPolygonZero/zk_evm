@@ -10,7 +10,7 @@ use super::compact_prestate_processing::{
     AccountNodeCode, AccountNodeData, CompactParsingResult, LeafNodeData, NodeEntry, WitnessEntry,
 };
 use crate::{
-    types::{CodeHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH},
+    types::{CodeHash, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH},
     utils::hash,
 };
 
@@ -40,28 +40,21 @@ pub(super) fn create_partial_trie_from_remaining_witness_elem(
     Ok(output)
 }
 
+// TODO: Consider putting in some asserts that invalid nodes are not appearing
+// in the wrong trie type (eg. account )
 pub(super) fn create_partial_trie_from_remaining_witness_elem_rec(
     curr_key: Nibbles,
     curr_node: &NodeEntry,
     output: &mut CompactToPartialOutput,
 ) -> CompactParsingResult<()> {
     match curr_node {
-        NodeEntry::Account(_) => process_account(curr_key, curr_node, output),
         NodeEntry::Branch(n) => process_branch(curr_key, n, output),
         NodeEntry::Code(c_bytes) => process_code(c_bytes.clone(), output),
-        NodeEntry::Empty => process_empty(curr_key, curr_node),
-        NodeEntry::Hash(_) => process_hash(curr_key, curr_node, &mut output.trie),
+        NodeEntry::Empty => process_empty(),
+        NodeEntry::Hash(h) => process_hash(curr_key, *h, &mut output.trie),
         NodeEntry::Leaf(k, v) => process_leaf(curr_key, k, v, output),
         NodeEntry::Extension(k, c) => process_extension(curr_key, k, c, output),
     }
-}
-
-fn process_account(
-    _curr_key: Nibbles,
-    _curr_node: &NodeEntry,
-    _output: &mut CompactToPartialOutput,
-) -> CompactParsingResult<()> {
-    todo!()
 }
 
 fn process_branch(
@@ -88,16 +81,21 @@ fn process_code(c_bytes: Vec<u8>, output: &mut CompactToPartialOutput) -> Compac
     Ok(())
 }
 
-fn process_empty(_curr_key: Nibbles, _curr_node: &NodeEntry) -> CompactParsingResult<()> {
-    todo!()
+fn process_empty() -> CompactParsingResult<()> {
+    // Nothing to do.
+    Ok(())
 }
 
 fn process_hash(
-    _curr_key: Nibbles,
-    _curr_node: &NodeEntry,
-    _p_trie: &mut HashedPartialTrie,
+    curr_key: Nibbles,
+    hash: TrieRootHash,
+    p_trie: &mut HashedPartialTrie,
 ) -> CompactParsingResult<()> {
-    todo!()
+    // If we see a hash node at this stage, it must be a hashed out node in the
+    // trie.
+    p_trie.insert(curr_key, hash);
+
+    Ok(())
 }
 
 fn process_leaf(
@@ -130,14 +128,6 @@ fn process_extension(
     create_partial_trie_from_remaining_witness_elem_rec(new_k, ext_child, output)?;
 
     Ok(())
-}
-
-fn process_value(
-    _curr_key: Nibbles,
-    _curr_node: &NodeEntry,
-    _p_trie: &mut HashedPartialTrie,
-) -> CompactParsingResult<()> {
-    todo!()
 }
 
 fn convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(
