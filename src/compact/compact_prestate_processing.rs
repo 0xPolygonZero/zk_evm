@@ -172,7 +172,6 @@ pub(crate) enum NodeEntry {
     Hash(HashValue),
     Leaf(Nibbles, LeafNodeData),
     Extension(Nibbles, Box<NodeEntry>),
-    Value(ValueNodeData),
 }
 
 impl Display for NodeEntry {
@@ -185,7 +184,6 @@ impl Display for NodeEntry {
             NodeEntry::Hash(_) => write!(f, "Hash"),
             NodeEntry::Leaf(_, _) => write!(f, "Leaf"),
             NodeEntry::Extension(_, _) => write!(f, "Extension"),
-            NodeEntry::Value(_) => write!(f, "Value"),
         }
     }
 }

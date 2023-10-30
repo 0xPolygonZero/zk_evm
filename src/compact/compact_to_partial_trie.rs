@@ -52,8 +52,7 @@ pub(super) fn create_partial_trie_from_remaining_witness_elem_rec(
         NodeEntry::Empty => process_empty(curr_key, curr_node),
         NodeEntry::Hash(_) => process_hash(curr_key, curr_node, &mut output.trie),
         NodeEntry::Leaf(k, v) => process_leaf(curr_key, k, v, output),
-        NodeEntry::Extension(_, _) => process_extension(curr_key, curr_node, output),
-        NodeEntry::Value(_) => process_value(curr_key, curr_node, &mut output.trie),
+        NodeEntry::Extension(k, c) => process_extension(curr_key, k, c, output),
     }
 }
 
@@ -122,11 +121,15 @@ fn process_leaf(
 }
 
 fn process_extension(
-    _curr_key: Nibbles,
-    _curr_node: &NodeEntry,
-    _output: &mut CompactToPartialOutput,
+    curr_key: Nibbles,
+    ext_node_key: &Nibbles,
+    ext_child: &NodeEntry,
+    output: &mut CompactToPartialOutput,
 ) -> CompactParsingResult<()> {
-    todo!()
+    let new_k = curr_key.merge_nibbles(ext_node_key);
+    create_partial_trie_from_remaining_witness_elem_rec(new_k, ext_child, output)?;
+
+    Ok(())
 }
 
 fn process_value(
