@@ -22,8 +22,14 @@ pub type TxnIdx = usize;
 
 pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;
 
+// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+pub(crate) const EMPTY_CODE_HASH: H256 = H256([
+    197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
+    130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
+]);
+
 /// 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-const EMPTY_TRIE_HASH: H256 = H256([
+pub(crate) const EMPTY_TRIE_HASH: H256 = H256([
     86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);

@@ -9,7 +9,7 @@ use crate::compact::compact_prestate_processing::process_compact_prestate;
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
-    SeperateStorageTriesPreImage, SeperateTriePreImage, SeperateTriePreImages, TrieCompact,
+    SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages, TrieCompact,
     TxnInfo,
 };
 use crate::types::{
@@ -43,17 +43,21 @@ impl BlockTrace {
     where
         F: CodeHashResolveFunc,
     {
+        // The compact format is able to provide actual code, so if it does, we should
+        // take advantage of it.
         let pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images);
 
-        let code_hash_resolve_f = |c_hash: &_| {
-            let provided_contract_code_ref = pre_image_data.extra_code_hash_mappings.as_ref();
+        let resolve_code_hash_fn = |c_hash: &_| {
+            let resolve_code_hash_fn_ref = &p_meta.resolve_code_hash_fn;
+            let extra_code_hash_mappings_ref = &pre_image_data.extra_code_hash_mappings;
 
-            provided_contract_code_ref.and_then(|included_c_hash_lookup| {
-                included_c_hash_lookup
+            match extra_code_hash_mappings_ref {
+                Some(m) => m
                     .get(c_hash)
                     .cloned()
-                    .or_else(|| Some((p_meta.resolve_code_hash_fn)(c_hash)))
-            }).expect("Code hash resolve function should always be able to resolve a code hash to it's byte code but failed to!")
+                    .unwrap_or_else(|| (resolve_code_hash_fn_ref)(c_hash)),
+                None => (resolve_code_hash_fn_ref)(c_hash),
+            }
         };
 
         ProcessedBlockTrace {
@@ -62,7 +66,7 @@ impl BlockTrace {
             txn_info: self
                 .txn_info
                 .into_iter()
-                .map(|t| t.into_processed_txn_info(&code_hash_resolve_f))
+                .map(|t| t.into_processed_txn_info(&resolve_code_hash_fn))
                 .collect(),
         }
     }
@@ -78,7 +82,7 @@ fn process_block_trace_trie_pre_images(
     block_trace_pre_images: BlockTraceTriePreImages,
 ) -> ProcessedBlockTracePreImages {
     match block_trace_pre_images {
-        BlockTraceTriePreImages::Seperate(t) => process_seperate_trie_pre_images(t),
+        BlockTraceTriePreImages::Separate(t) => process_separate_trie_pre_images(t),
         BlockTraceTriePreImages::Combined(t) => process_combined_trie_pre_images(t),
     }
 }
@@ -89,7 +93,7 @@ fn process_combined_trie_pre_images(tries: CombinedPreImages) -> ProcessedBlockT
     }
 }
 
-fn process_seperate_trie_pre_images(tries: SeperateTriePreImages) -> ProcessedBlockTracePreImages {
+fn process_separate_trie_pre_images(tries: SeparateTriePreImages) -> ProcessedBlockTracePreImages {
     ProcessedBlockTracePreImages {
         state: process_state_trie(tries.state),
         storage: process_storage_tries(tries.storage),
@@ -97,37 +101,37 @@ fn process_seperate_trie_pre_images(tries: SeperateTriePreImages) -> ProcessedBl
     }
 }
 
-fn process_state_trie(trie: SeperateTriePreImage) -> HashedPartialTrie {
+fn process_state_trie(trie: SeparateTriePreImage) -> HashedPartialTrie {
     match trie {
-        SeperateTriePreImage::Uncompressed(_) => todo!(),
-        SeperateTriePreImage::Direct(t) => t.0,
+        SeparateTriePreImage::Uncompressed(_) => todo!(),
+        SeparateTriePreImage::Direct(t) => t.0,
     }
 }
 
 fn process_storage_tries(
-    trie: SeperateStorageTriesPreImage,
+    trie: SeparateStorageTriesPreImage,
 ) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     match trie {
-        SeperateStorageTriesPreImage::SingleTrie(t) => process_single_storage_trie(t),
-        SeperateStorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
+        SeparateStorageTriesPreImage::SingleTrie(t) => process_single_storage_trie(t),
+        SeparateStorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
     }
 }
 
 fn process_single_storage_trie(
-    _trie: SeperateTriePreImage,
+    _trie: SeparateTriePreImage,
 ) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     todo!()
 }
 
 fn process_multiple_storage_tries(
-    _tries: HashMap<HashedAccountAddr, SeperateTriePreImage>,
+    _tries: HashMap<HashedAccountAddr, SeparateTriePreImage>,
 ) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     todo!()
 }
 
-fn process_compact_trie(trie_compact: TrieCompact) -> ProcessedBlockTracePreImages {
+fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     // TODO: Wrap in proper result type...
-    let (header, trie) = process_compact_prestate(trie_compact).unwrap();
+    let (header, trie, extra_code_hash_mappings) = process_compact_prestate(trie).unwrap();
 
     // TODO: Make this into a result...
     assert!(header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
@@ -135,7 +139,7 @@ fn process_compact_trie(trie_compact: TrieCompact) -> ProcessedBlockTracePreImag
     ProcessedBlockTracePreImages {
         state: trie,
         storage: todo!(),
-        extra_code_hash_mappings: todo!(),
+        extra_code_hash_mappings,
     }
 }
 

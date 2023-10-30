@@ -9,7 +9,7 @@ use eth_trie_utils::{
     partial_trie::{HashedPartialTrie, PartialTrie},
     trie_subsets::create_trie_subset,
 };
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, U256};
 use plonky2_evm::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::TrieRoots,
@@ -20,15 +20,10 @@ use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites},
     types::{
         BlockLevelData, Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR,
+        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_TRIE_HASH,
     },
     utils::update_val_if_some,
 };
-
-const EMPTY_TRIE_HASH: H256 = H256([
-    86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
-    108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
-]);
 
 pub type TraceParsingResult<T> = Result<T, TraceParsingError>;
 

@@ -3,7 +3,7 @@
 use std::{
     any::type_name,
     borrow::Borrow,
-    collections::{linked_list::CursorMut, LinkedList},
+    collections::{linked_list::CursorMut, HashMap, LinkedList},
     error::Error,
     fmt::{self, Display},
     io::{Cursor, Read},
@@ -20,8 +20,13 @@ use log::trace;
 use serde::{de::DeserializeOwned, Deserialize};
 use thiserror::Error;
 
-use super::compact_to_partial_trie::create_partial_trie_from_remaining_witness_elem;
-use crate::{trace_protocol::TrieCompact, types::TrieRootHash};
+use super::compact_to_partial_trie::{
+    create_partial_trie_from_remaining_witness_elem, CompactToPartialOutput,
+};
+use crate::{
+    trace_protocol::TrieCompact,
+    types::{CodeHash, TrieRootHash},
+};
 
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
 
@@ -123,12 +128,12 @@ impl Display for WitnessEntry {
 // TODO: Ignore `NEW_TRIE` for now...
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum Instruction {
-    Leaf(Key, RawValue),
-    Extension(Key),
+    Leaf(Nibbles, RawValue),
+    Extension(Nibbles),
     Branch(BranchMask),
     Hash(HashValue),
     Code(RawCode),
-    AccountLeaf(Key, Nonce, Balance, HasCode, HasStorage),
+    AccountLeaf(Nibbles, Nonce, Balance, HasCode, HasStorage),
     EmptyRoot,
 }
 
@@ -165,8 +170,8 @@ pub(crate) enum NodeEntry {
     Code(Vec<u8>),
     Empty,
     Hash(HashValue),
-    Leaf(Key, LeafNodeData),
-    Extension(Key, Box<NodeEntry>),
+    Leaf(Nibbles, LeafNodeData),
+    Extension(Nibbles, Box<NodeEntry>),
     Value(ValueNodeData),
 }
 
@@ -186,7 +191,7 @@ impl Display for NodeEntry {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct ValueNodeData(Vec<u8>);
+pub(super) struct ValueNodeData(pub(super) Vec<u8>);
 
 impl From<Vec<u8>> for ValueNodeData {
     fn from(v: Vec<u8>) -> Self {
@@ -201,17 +206,17 @@ pub(super) enum LeafNodeData {
 }
 
 #[derive(Clone, Debug)]
-enum AccountNodeCode {
+pub(super) enum AccountNodeCode {
     CodeNode(Vec<u8>),
     HashNode(TrieRootHash),
 }
 
 #[derive(Clone, Debug)]
 pub(super) struct AccountNodeData {
-    nonce: Nonce,
-    balance: Balance,
-    storage_root: Option<TrieRootHash>,
-    account_node_code: Option<AccountNodeCode>,
+    pub(super) nonce: Nonce,
+    pub(super) balance: Balance,
+    pub(super) storage_root: Option<TrieRootHash>,
+    pub(super) account_node_code: Option<AccountNodeCode>,
 }
 
 impl AccountNodeData {
@@ -270,7 +275,7 @@ impl ParserState {
         Ok((header, p_state))
     }
 
-    fn parse(mut self) -> CompactParsingResult<HashedPartialTrie> {
+    fn parse(mut self) -> CompactParsingResult<CompactToPartialOutput> {
         let mut entry_buf = Vec::new();
 
         loop {
@@ -328,7 +333,7 @@ impl ParserState {
                 Self::traverser_replace_prev_n_nodes_entry_helper(
                     1,
                     traverser,
-                    NodeEntry::Leaf(k.clone(), LeafNodeData::Value(v.clone().into())),
+                    NodeEntry::Leaf(k, LeafNodeData::Value(v.clone().into())),
                 )
             }
             WitnessEntry::Instruction(Instruction::Extension(k)) => {
@@ -338,7 +343,7 @@ impl ParserState {
                     WitnessEntry::Node(node) => Self::traverser_replace_prev_n_nodes_entry_helper(
                         2,
                         traverser,
-                        NodeEntry::Extension(k.clone(), Box::new(node.clone())),
+                        NodeEntry::Extension(k, Box::new(node.clone())),
                     ),
                     _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
                 }
@@ -365,7 +370,7 @@ impl ParserState {
 
                 let account_leaf_data = AccountNodeData::new(n, b, s_root, account_node_code);
                 let leaf_node = WitnessEntry::Node(NodeEntry::Leaf(
-                    k.clone(),
+                    k,
                     LeafNodeData::Account(account_leaf_data),
                 ));
                 traverser.replace_prev_n_entries_with_single_entry(n_nodes_to_replace, leaf_node);
@@ -599,7 +604,7 @@ impl WitnessBytes {
     }
 
     fn process_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = Key::new(self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
+        let key = Nibbles::from_bytes_be(&self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
         let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec()?;
 
         self.push_entry(Instruction::Leaf(key, value_raw));
@@ -607,7 +612,7 @@ impl WitnessBytes {
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
-        let key = Key::new(self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
+        let key = Nibbles::from_bytes_be(&self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
 
         self.push_entry(Instruction::Extension(key));
         Ok(())
@@ -635,7 +640,7 @@ impl WitnessBytes {
     }
 
     fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = Key::new(self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
+        let key = Nibbles::from_bytes_be(&self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
         let nonce = self.byte_cursor.read_t()?;
         let balance = self.byte_cursor.read_t()?;
         let has_code = self.byte_cursor.read_t()?;
@@ -869,11 +874,17 @@ enum TraverserDirection {
 
 pub(crate) fn process_compact_prestate(
     state: TrieCompact,
-) -> CompactParsingResult<(Header, HashedPartialTrie)> {
+) -> CompactParsingResult<(
+    Header,
+    HashedPartialTrie,
+    Option<HashMap<CodeHash, Vec<u8>>>,
+)> {
     let (header, parser) = ParserState::create_and_extract_header(state.bytes)?;
-    let trie = parser.parse()?;
+    let out = parser.parse()?;
 
-    Ok((header, trie))
+    let extra_code_hash_mappings = (!out.code.is_empty()).then_some(out.code);
+
+    Ok((header, out.trie, extra_code_hash_mappings))
 }
 
 // TODO: Move behind a feature flag just used for debugging (but probably not
@@ -896,7 +907,9 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_just_to_instructions, Instruction, Key};
+    use eth_trie_utils::nibbles::Nibbles;
+
+    use super::{parse_just_to_instructions, Instruction};
     use crate::compact::compact_prestate_processing::ParserState;
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
@@ -905,9 +918,9 @@ mod tests {
         let _ = pretty_env_logger::try_init();
     }
 
-    fn h_decode_key(h_bytes: &str) -> Key {
+    fn h_decode_key(h_bytes: &str) -> Nibbles {
         let bytes = hex::decode(h_bytes).unwrap();
-        Key::new(bytes).unwrap()
+        Nibbles::from_bytes_be(&bytes).unwrap()
     }
 
     fn h_decode(b_str: &str) -> Vec<u8> {

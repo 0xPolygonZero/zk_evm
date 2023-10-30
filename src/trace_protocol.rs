@@ -48,20 +48,20 @@ pub struct BlockTrace {
 /// Minimal hashed out tries needed by all txns in the block.
 #[derive(Debug, Serialize, Deserialize)]
 pub enum BlockTraceTriePreImages {
-    Seperate(SeperateTriePreImages),
+    Separate(SeparateTriePreImages),
     Combined(CombinedPreImages),
 }
 
 /// State/Storage trie pre-images that are seperate.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SeperateTriePreImages {
-    pub state: SeperateTriePreImage,
-    pub storage: SeperateStorageTriesPreImage,
+pub struct SeparateTriePreImages {
+    pub state: SeparateTriePreImage,
+    pub storage: SeparateStorageTriesPreImage,
 }
 
 /// A trie pre-image where state & storage are seperate.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum SeperateTriePreImage {
+pub enum SeparateTriePreImage {
     Uncompressed(TrieUncompressed),
     Direct(TrieDirect),
 }
@@ -91,15 +91,15 @@ pub struct TrieCompact {
 pub struct TrieDirect(pub HashedPartialTrie);
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum SeperateStorageTriesPreImage {
+pub enum SeparateStorageTriesPreImage {
     /// A single hash map that contains all node hashes from all storage tries
     /// involved in the block. We can reconstruct the individual storage tries
     /// by the storage root hash in the state entries.
-    SingleTrie(SeperateTriePreImage),
+    SingleTrie(SeparateTriePreImage),
 
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.
-    MultipleTries(HashMap<HashedAccountAddr, SeperateTriePreImage>),
+    MultipleTries(HashMap<HashedAccountAddr, SeparateTriePreImage>),
 }
 
 /// Info specific to txns in the block.
