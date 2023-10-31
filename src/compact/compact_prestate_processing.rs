@@ -2,7 +2,6 @@
 
 use std::{
     any::type_name,
-    borrow::Borrow,
     collections::{linked_list::CursorMut, HashMap, LinkedList},
     error::Error,
     fmt::{self, Display},
@@ -12,7 +11,7 @@ use std::{
 
 use enum_as_inner::EnumAsInner;
 use eth_trie_utils::{
-    nibbles::{BytesToNibblesError, Nibbles},
+    nibbles::{FromHexPrefixError, Nibbles},
     partial_trie::HashedPartialTrie,
 };
 use ethereum_types::{H256, U256};
@@ -79,24 +78,7 @@ pub enum CompactParsingError {
     PrecedingNonNodeEntryFoundWhenProcessingRule(usize, &'static str, String, Vec<WitnessEntry>),
 
     #[error("Unable to create key nibbles from bytes {0}")]
-    KeyError(#[from] BytesToNibblesError),
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct Key {
-    nibbles: Nibbles,
-}
-
-impl Key {
-    fn new<B: Borrow<[u8]>>(bytes: B) -> CompactParsingResult<Self> {
-        let bytes = bytes.borrow();
-        let mut nibbles = Nibbles::from_bytes_be(bytes)?;
-
-        // Drop flag bits.
-        nibbles.pop_next_nibble_front();
-
-        Ok(Self { nibbles })
-    }
+    KeyError(#[from] FromHexPrefixError),
 }
 
 #[derive(Debug, enumn::N)]
@@ -233,7 +215,7 @@ impl AccountNodeData {
 
 #[derive(Debug, Deserialize)]
 struct LeafData {
-    key: Key,
+    key: Nibbles,
     value: Vec<u8>,
 }
 
@@ -600,7 +582,7 @@ impl WitnessBytes {
     }
 
     fn process_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = Nibbles::from_bytes_be(&self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
+        let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec()?);
         let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec()?;
 
         self.push_entry(Instruction::Leaf(key, value_raw));
@@ -608,7 +590,7 @@ impl WitnessBytes {
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
-        let key = Nibbles::from_bytes_be(&self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
+        let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec()?);
 
         self.push_entry(Instruction::Extension(key));
         Ok(())
@@ -636,7 +618,7 @@ impl WitnessBytes {
     }
 
     fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = Nibbles::from_bytes_be(&self.byte_cursor.read_cbor_byte_array_to_vec()?)?;
+        let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec()?);
         let nonce = self.byte_cursor.read_t()?;
         let balance = self.byte_cursor.read_t()?;
         let has_code = self.byte_cursor.read_t()?;
@@ -901,11 +883,55 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
         .collect())
 }
 
+// TODO: This could probably be made a bit faster...
+fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
+    let flags = bytes[0];
+    let is_odd = (flags & 0b00000001) != 0;
+    let has_term = (flags & 0b00000010) != 0;
+
+    let mut key = Nibbles::default();
+
+    let actual_key_bytes = match has_term {
+        false => &bytes[1..],
+        true => &bytes[1..(bytes.len() - 1)],
+    };
+
+    if actual_key_bytes.is_empty() {
+        // Key is just 0.
+        return key;
+    }
+
+    let final_byte_idx = actual_key_bytes.len() - 1;
+
+    // The compact key format is kind of weird. We need to read the nibbles
+    // backwards from how we expect it internally.
+    for byte in &actual_key_bytes[..(final_byte_idx)] {
+        let high_nib = (byte & 0b11110000) >> 4;
+        let low_nib = byte & 0b00001111;
+
+        key.push_nibble_front(high_nib);
+        key.push_nibble_front(low_nib);
+    }
+
+    // The final byte we might need to ignore the last nibble, so we need to do it
+    // separately.
+    let final_byte = actual_key_bytes[final_byte_idx];
+    let high_nib = (final_byte & 0b11110000) >> 4;
+    key.push_nibble_front(high_nib);
+
+    if !is_odd {
+        let low_nib = final_byte & 0b00001111;
+        key.push_nibble_front(low_nib);
+    }
+
+    key
+}
+
 #[cfg(test)]
 mod tests {
     use eth_trie_utils::nibbles::Nibbles;
 
-    use super::{parse_just_to_instructions, Instruction};
+    use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
     use crate::compact::compact_prestate_processing::ParserState;
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
@@ -916,7 +942,7 @@ mod tests {
 
     fn h_decode_key(h_bytes: &str) -> Nibbles {
         let bytes = hex::decode(h_bytes).unwrap();
-        Nibbles::from_bytes_be(&bytes).unwrap()
+        key_bytes_to_nibbles(&bytes)
     }
 
     fn h_decode(b_str: &str) -> Vec<u8> {
@@ -931,7 +957,7 @@ mod tests {
         let (header, parser) = ParserState::create_and_extract_header(bytes).unwrap();
 
         assert_eq!(header.version, 1);
-        let _trie = match parser.parse() {
+        let _output = match parser.parse() {
             Ok(trie) => trie,
             Err(err) => panic!("{}", err),
         };
