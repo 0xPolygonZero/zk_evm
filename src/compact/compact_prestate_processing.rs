@@ -939,7 +939,10 @@ mod tests {
     use eth_trie_utils::{nibbles::Nibbles, partial_trie::PartialTrie};
 
     use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
-    use crate::compact::compact_prestate_processing::ParserState;
+    use crate::compact::{
+        compact_prestate_processing::ParserState,
+        complex_test_payloads::{TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3},
+    };
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
 
@@ -996,5 +999,20 @@ mod tests {
         for (i, expected_instr) in expected_instrs.into_iter().enumerate() {
             assert_eq!(expected_instr, instrs[i])
         }
+    }
+
+    #[test]
+    fn complex_payload_1() {
+        TEST_PAYLOAD_1.parse_and_check_hash_matches();
+    }
+
+    #[test]
+    fn complex_payload_2() {
+        TEST_PAYLOAD_2.parse_and_check_hash_matches();
+    }
+
+    #[test]
+    fn complex_payload_3() {
+        TEST_PAYLOAD_3.parse_and_check_hash_matches();
     }
 }
