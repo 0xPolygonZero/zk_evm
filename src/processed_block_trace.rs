@@ -7,7 +7,9 @@ use ethereum_types::U256;
 
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
-    BlockTrace, ContractCodeUsage, StorageTriesPreImage, TrieCompact, TriePreImage, TxnInfo,
+    BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
+    SeperateStorageTriesPreImage, SeperateTriePreImage, SeperateTriePreImages, TrieCompact,
+    TxnInfo,
 };
 use crate::types::{
     Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
@@ -38,10 +40,10 @@ impl BlockTrace {
     where
         F: CodeHashResolveFunc,
     {
-        let (storage_tries, provided_contract_code) = process_storage_tries(self.storage_tries);
+        let pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images);
 
         let code_hash_resolve_f = |c_hash: &_| {
-            let provided_contract_code_ref = provided_contract_code.as_ref();
+            let provided_contract_code_ref = pre_image_data.extra_code_hash_mappings.as_ref();
 
             provided_contract_code_ref.and_then(|included_c_hash_lookup| {
                 included_c_hash_lookup
@@ -52,8 +54,8 @@ impl BlockTrace {
         };
 
         ProcessedBlockTrace {
-            state_trie: process_state_trie(self.state_trie),
-            storage_tries,
+            state_trie: pre_image_data.state,
+            storage_tries: pre_image_data.storage,
             txn_info: self
                 .txn_info
                 .into_iter()
@@ -63,45 +65,64 @@ impl BlockTrace {
     }
 }
 
-fn process_state_trie(trie: TriePreImage) -> HashedPartialTrie {
+struct ProcessedBlockTracePreImages {
+    state: HashedPartialTrie,
+    storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
+    extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
+}
+
+fn process_block_trace_trie_pre_images(
+    block_trace_pre_images: BlockTraceTriePreImages,
+) -> ProcessedBlockTracePreImages {
+    match block_trace_pre_images {
+        BlockTraceTriePreImages::Seperate(t) => process_seperate_trie_pre_images(t),
+        BlockTraceTriePreImages::Combined(t) => process_combined_trie_pre_images(t),
+    }
+}
+
+fn process_combined_trie_pre_images(tries: CombinedPreImages) -> ProcessedBlockTracePreImages {
+    match tries {
+        CombinedPreImages::Compact(t) => process_compact_trie(t),
+    }
+}
+
+fn process_seperate_trie_pre_images(tries: SeperateTriePreImages) -> ProcessedBlockTracePreImages {
+    ProcessedBlockTracePreImages {
+        state: process_state_trie(tries.state),
+        storage: process_storage_tries(tries.storage),
+        extra_code_hash_mappings: None,
+    }
+}
+
+fn process_state_trie(trie: SeperateTriePreImage) -> HashedPartialTrie {
     match trie {
-        TriePreImage::Uncompressed(_) => todo!(),
-        TriePreImage::Compact(t) => process_compact_trie(t),
-        TriePreImage::Direct(t) => t.0,
+        SeperateTriePreImage::Uncompressed(_) => todo!(),
+        SeperateTriePreImage::Direct(t) => t.0,
     }
 }
 
 fn process_storage_tries(
-    trie: StorageTriesPreImage,
-) -> (
-    HashMap<HashedAccountAddr, HashedPartialTrie>,
-    Option<HashMap<CodeHash, Vec<u8>>>,
-) {
+    trie: SeperateStorageTriesPreImage,
+) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     match trie {
-        StorageTriesPreImage::SingleTrie(t) => process_single_storage_trie(t),
-        StorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
+        SeperateStorageTriesPreImage::SingleTrie(t) => process_single_storage_trie(t),
+        SeperateStorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
     }
 }
 
 fn process_single_storage_trie(
-    _trie: TriePreImage,
-) -> (
-    HashMap<HashedAccountAddr, HashedPartialTrie>,
-    Option<HashMap<CodeHash, Vec<u8>>>,
-) {
+    _trie: SeperateTriePreImage,
+) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     todo!()
 }
 
 fn process_multiple_storage_tries(
-    _tries: HashMap<HashedAccountAddr, TriePreImage>,
-) -> (
-    HashMap<HashedAccountAddr, HashedPartialTrie>,
-    Option<HashMap<CodeHash, Vec<u8>>>,
-) {
+    _tries: HashMap<HashedAccountAddr, SeperateTriePreImage>,
+) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     todo!()
 }
 
-fn process_compact_trie(_trie: TrieCompact) -> HashedPartialTrie {
+fn process_compact_trie(_trie: TrieCompact) -> ProcessedBlockTracePreImages {
     todo!()
 }
 

@@ -37,11 +37,8 @@ use crate::{
 /// order to generate a proof.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockTrace {
-    /// State trie pre-image.
-    pub state_trie: TriePreImage,
-
-    /// Map of hashed account addr --> storage trie pre-image.
-    pub storage_tries: StorageTriesPreImage,
+    /// The trie pre-images (state & storage) in multiple possible formats.
+    pub trie_pre_images: BlockTraceTriePreImages,
 
     /// Traces and other info per txn. The index of the txn corresponds to the
     /// slot in this vec.
@@ -50,10 +47,29 @@ pub struct BlockTrace {
 
 /// Minimal hashed out tries needed by all txns in the block.
 #[derive(Debug, Serialize, Deserialize)]
-pub enum TriePreImage {
+pub enum BlockTraceTriePreImages {
+    Seperate(SeperateTriePreImages),
+    Combined(CombinedPreImages),
+}
+
+/// State/Storage trie pre-images that are seperate.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SeperateTriePreImages {
+    pub state: SeperateTriePreImage,
+    pub storage: SeperateStorageTriesPreImage,
+}
+
+/// A trie pre-image where state & storage are seperate.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SeperateTriePreImage {
     Uncompressed(TrieUncompressed),
-    Compact(TrieCompact),
     Direct(TrieDirect),
+}
+
+/// A trie pre-image where both state & storage are combined into one payload.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CombinedPreImages {
+    Compact(TrieCompact),
 }
 
 // TODO
@@ -73,15 +89,15 @@ pub struct TrieCompact {}
 pub struct TrieDirect(pub HashedPartialTrie);
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum StorageTriesPreImage {
+pub enum SeperateStorageTriesPreImage {
     /// A single hash map that contains all node hashes from all storage tries
     /// involved in the block. We can reconstruct the individual storage tries
     /// by the storage root hash in the state entries.
-    SingleTrie(TriePreImage),
+    SingleTrie(SeperateTriePreImage),
 
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.
-    MultipleTries(HashMap<HashedAccountAddr, TriePreImage>),
+    MultipleTries(HashMap<HashedAccountAddr, SeperateTriePreImage>),
 }
 
 /// Info specific to txns in the block.
@@ -126,10 +142,12 @@ pub struct TxnMeta {
 /// rely on a separate EVM to run the txn and supply this data for us.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TxnTrace {
-    /// If the balance changed, then the new balance will appear here.
+    /// If the balance changed, then the new balance will appear here. Will be
+    /// `None` if no change.
     pub balance: Option<U256>,
 
-    /// If the nonce changed, then the new nonce will appear here.
+    /// If the nonce changed, then the new nonce will appear here. Will be
+    /// `None` if no change.
     pub nonce: Option<U256>,
 
     /// Account addresses that were only read by the txn.
