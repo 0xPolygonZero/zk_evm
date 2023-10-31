@@ -66,7 +66,7 @@ fn process_branch(
         if let Some(child) = &branch[i] {
             // TODO: Seriously update `eth_trie_utils` to have a better API...
             let mut new_k = curr_key;
-            new_k.push_nibble_front(i as Nibble);
+            new_k.push_nibble_back(i as Nibble);
             create_partial_trie_from_remaining_witness_elem_rec(new_k, child, output)?;
         }
     }

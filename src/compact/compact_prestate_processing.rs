@@ -390,7 +390,7 @@ impl ParserState {
             .take(BRANCH_MAX_CHILDREN)
         {
             if mask as usize & (1 << i) != 0 {
-                let entry_to_check = &buf[curr_traverser_node_idx];
+                let entry_to_check = &buf[buf.len() - 1 - curr_traverser_node_idx];
                 let node_entry = try_get_node_entry_from_witness_entry(entry_to_check)
                     .ok_or_else(|| {
                         let n_entries_behind_cursor =
@@ -885,19 +885,26 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
 
 // TODO: This could probably be made a bit faster...
 fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
+    let mut key = Nibbles::default();
+
+    // I have no idea why Erigon is doing this with their keys, as I'm don't think
+    // this is part of the yellow paper at all?
+    let is_just_term_byte = bytes.len() == 1 && bytes[0] == 0x10;
+    if is_just_term_byte {
+        return key;
+    }
+
     let flags = bytes[0];
     let is_odd = (flags & 0b00000001) != 0;
     let has_term = (flags & 0b00000010) != 0;
 
-    let mut key = Nibbles::default();
-
+    // ... Term bit seems to have no effect on the key?
     let actual_key_bytes = match has_term {
         false => &bytes[1..],
-        true => &bytes[1..(bytes.len() - 1)],
+        true => &bytes[1..],
     };
 
-    if actual_key_bytes.is_empty() {
-        // Key is just 0.
+    if actual_key_bytes.is_empty() || is_just_term_byte {
         return key;
     }
 
@@ -909,19 +916,19 @@ fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
         let high_nib = (byte & 0b11110000) >> 4;
         let low_nib = byte & 0b00001111;
 
-        key.push_nibble_front(high_nib);
-        key.push_nibble_front(low_nib);
+        key.push_nibble_back(high_nib);
+        key.push_nibble_back(low_nib);
     }
 
     // The final byte we might need to ignore the last nibble, so we need to do it
     // separately.
     let final_byte = actual_key_bytes[final_byte_idx];
     let high_nib = (final_byte & 0b11110000) >> 4;
-    key.push_nibble_front(high_nib);
+    key.push_nibble_back(high_nib);
 
     if !is_odd {
         let low_nib = final_byte & 0b00001111;
-        key.push_nibble_front(low_nib);
+        key.push_nibble_back(low_nib);
     }
 
     key
@@ -929,7 +936,7 @@ fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
 
 #[cfg(test)]
 mod tests {
-    use eth_trie_utils::nibbles::Nibbles;
+    use eth_trie_utils::{nibbles::Nibbles, partial_trie::PartialTrie};
 
     use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
     use crate::compact::compact_prestate_processing::ParserState;
