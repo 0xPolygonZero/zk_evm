@@ -10,7 +10,7 @@ sequenceDiagram
     Note over proof scheduler,protocol decoder (lib): "txn_proof_gen_ir" are the payloads sent to Paladin for a txn
     protocol decoder (lib)->>proof scheduler: [txn_proof_gen_ir]
     proof scheduler->>paladin: [txn_proof_gen_ir]
-    Note over proof scheduler,paladin: Paladin schedules jobs on mulitple machines and returns a block proof
+    Note over proof scheduler,paladin: Paladin schedules jobs on multiple machines and returns a block proof
     loop txn_proof_gen_ir
         paladin->>worker machine: proof_gen_payload (txn, agg, block)
         worker machine->>paladin: generated_proof (txn, agg, block)
