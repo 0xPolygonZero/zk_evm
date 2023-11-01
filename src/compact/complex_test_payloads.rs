@@ -17,10 +17,12 @@ impl TestProtocolInputAndRoot {
         let protocol_bytes = hex::decode(self.byte_str).unwrap();
         let expected_hash = TrieRootHash::from_slice(&hex::decode(self.root_str).unwrap());
 
-        let (header, trie, _) = process_compact_prestate(TrieCompact {
+        let (header, trie, _) = match process_compact_prestate(TrieCompact {
             bytes: protocol_bytes,
-        })
-        .unwrap();
+        }) {
+            Ok(x) => x,
+            Err(err) => panic!("{}", err),
+        };
         let trie_hash = trie.hash();
 
         assert!(header.version_is_compatible(1));

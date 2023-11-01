@@ -42,6 +42,7 @@ type RawCode = Vec<u8>;
 
 const MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE: usize = 3;
 const BRANCH_MAX_CHILDREN: usize = 16;
+const CURSOR_ERROR_BYTES_MAX_LEN: usize = 10;
 
 #[derive(Debug, Error)]
 pub enum CompactParsingError {
@@ -54,11 +55,13 @@ pub enum CompactParsingError {
     #[error("Reached the end of the byte stream when we still expected more data")]
     UnexpectedEndOfStream,
 
-    #[error("Unable to parse an expected byte vector (error: {0})")]
-    InvalidByteVector(String),
+    #[error("Unable to parse an expected byte vector (error: {0}). Cursor error info: {1}")]
+    InvalidByteVector(String, CursorBytesErrorInfo),
 
-    #[error("Unable to parse the type \"{0}\" from cbor bytes {1}")]
-    InvalidBytesForType(&'static str, String, String),
+    #[error(
+        "Unable to parse the type \"{0}\" from cbor bytes {1}. Cursor error info: {2} (err: {3})"
+    )]
+    InvalidBytesForType(&'static str, String, CursorBytesErrorInfo, String),
 
     #[error("Invalid block witness entries: {0:?}")]
     InvalidWitnessFormat(Vec<WitnessEntry>),
@@ -79,6 +82,40 @@ pub enum CompactParsingError {
 
     #[error("Unable to create key nibbles from bytes {0}")]
     KeyError(#[from] FromHexPrefixError),
+}
+
+#[derive(Debug)]
+pub struct CursorBytesErrorInfo {
+    error_start_pos: usize,
+    bad_bytes_hex: String,
+}
+
+impl CursorBytesErrorInfo {
+    fn new(cursor: &Cursor<Vec<u8>>, error_start_pos: u64) -> Self {
+        let mut cursor_cloned = cursor.clone();
+
+        cursor_cloned.set_position(error_start_pos);
+        let mut buf = vec![0; CURSOR_ERROR_BYTES_MAX_LEN];
+        let num_bytes_read = cursor_cloned.read(&mut buf).unwrap();
+        buf.truncate(num_bytes_read);
+
+        let bad_bytes_hex = hex::encode(buf);
+
+        Self {
+            error_start_pos: error_start_pos as usize,
+            bad_bytes_hex,
+        }
+    }
+}
+
+impl Display for CursorBytesErrorInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Error byte position: {}, bad bytes hex ({} bytes following bad bytes): {}",
+            self.error_start_pos, CURSOR_ERROR_BYTES_MAX_LEN, self.bad_bytes_hex
+        )
+    }
 }
 
 #[derive(Debug, enumn::N)]
@@ -678,9 +715,12 @@ impl CompactCursor {
                 .to_vec();
             let type_bytes_hex = hex::encode(type_bytes);
 
+            let cursor_err_info = CursorBytesErrorInfo::new(&self.intern, starting_pos);
+
             CompactParsingError::InvalidBytesForType(
                 type_name::<T>(),
                 type_bytes_hex,
+                cursor_err_info,
                 err.to_string(),
             )
         })
@@ -700,15 +740,24 @@ impl CompactCursor {
     // I don't think it's possible to not read to a vec here with `ciborium`... In
     // theory this should be doable, but the way the library I don't think we can.
     fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>> {
-        Self::ciborium_byte_vec_err_reader_res_to_parsing_res(ciborium::from_reader(
+        let cursor_start_pos = self.intern.position();
+
+        Self::ciborium_byte_vec_err_reader_res_to_parsing_res(
+            ciborium::from_reader(&mut self.intern),
+            cursor_start_pos,
             &mut self.intern,
-        ))
+        )
     }
 
     fn ciborium_byte_vec_err_reader_res_to_parsing_res<T, E: Error>(
         res: Result<T, E>,
+        cursor_start_pos: u64,
+        cursor: &mut Cursor<Vec<u8>>,
     ) -> CompactParsingResult<T> {
-        res.map_err(|err| CompactParsingError::InvalidByteVector(err.to_string()))
+        res.map_err(|err| {
+            let cursor_err_info = CursorBytesErrorInfo::new(cursor, cursor_start_pos);
+            CompactParsingError::InvalidByteVector(err.to_string(), cursor_err_info)
+        })
     }
 
     fn at_eof(&self) -> bool {
