@@ -59,9 +59,15 @@ pub enum CompactParsingError {
     InvalidByteVector(String, CursorBytesErrorInfo),
 
     #[error(
-        "Unable to parse the type \"{0}\" from cbor bytes {1}. Cursor error info: {2} (err: {3})"
+        "Unable to parse the type \"{0}\" (field name: {1}) from cbor bytes {2}. Cursor error info: {3} (err: {4})"
     )]
-    InvalidBytesForType(&'static str, String, CursorBytesErrorInfo, String),
+    InvalidBytesForType(
+        &'static str,
+        &'static str,
+        String,
+        CursorBytesErrorInfo,
+        String,
+    ),
 
     #[error("Invalid block witness entries: {0:?}")]
     InvalidWitnessFormat(Vec<WitnessEntry>),
@@ -685,21 +691,21 @@ impl WitnessBytes {
     }
 
     fn process_branch(&mut self) -> CompactParsingResult<()> {
-        let mask = self.byte_cursor.read_t()?;
+        let mask = self.byte_cursor.read_t("mask")?;
 
         self.push_entry(Instruction::Branch(mask));
         Ok(())
     }
 
     fn process_hash(&mut self) -> CompactParsingResult<()> {
-        let hash = self.byte_cursor.read_t()?;
+        let hash = self.byte_cursor.read_t("hash")?;
 
         self.push_entry(Instruction::Hash(hash));
         Ok(())
     }
 
     fn process_code(&mut self) -> CompactParsingResult<()> {
-        let code = self.byte_cursor.read_t()?;
+        let code = self.byte_cursor.read_t("code")?;
 
         self.push_entry(Instruction::Code(code));
         Ok(())
@@ -707,10 +713,10 @@ impl WitnessBytes {
 
     fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
         let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec()?);
-        let nonce = self.byte_cursor.read_t()?;
-        let balance = self.byte_cursor.read_t()?;
-        let has_code = self.byte_cursor.read_t()?;
-        let has_storage = self.byte_cursor.read_t()?;
+        let nonce = self.byte_cursor.read_t("nonce")?;
+        let balance = self.byte_cursor.read_t("balance")?;
+        let has_code = self.byte_cursor.read_t("has_code")?;
+        let has_storage = self.byte_cursor.read_t("has_storage")?;
 
         self.push_entry(Instruction::AccountLeaf(
             key,
@@ -756,7 +762,7 @@ impl CompactCursor {
         }
     }
 
-    fn read_t<T: DeserializeOwned>(&mut self) -> CompactParsingResult<T> {
+    fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T> {
         let starting_pos = self.intern.position();
 
         ciborium::from_reader(&mut self.intern).map_err(move |err| {
@@ -770,6 +776,7 @@ impl CompactCursor {
 
             CompactParsingError::InvalidBytesForType(
                 type_name::<T>(),
+                field_name,
                 type_bytes_hex,
                 cursor_err_info,
                 err.to_string(),
