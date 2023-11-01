@@ -1,4 +1,4 @@
-# Plonky Edge block trace parser
+# Plonky block proof generator
 
 Library for generating proofs from proof IR.
 
