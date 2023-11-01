@@ -599,9 +599,19 @@ impl WitnessBytes {
     // TODO: Move behind a feature flag...
     // TODO: Fairly hacky...
     // TODO: Replace `unwrap()`s with `Result`s?
-    fn process_into_instructions_and_keep_bytes_parsed_to_instruction(
+    fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure(
+        self,
+    ) -> (Vec<(Instruction, Vec<u8>)>, CompactParsingResult<()>) {
+        let mut instr_and_bytes_buf = Vec::new();
+        let res = self.process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(&mut instr_and_bytes_buf);
+
+        (instr_and_bytes_buf, res)
+    }
+
+    fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(
         mut self,
-    ) -> CompactParsingResult<Vec<(Instruction, Vec<u8>)>> {
+        _instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,
+    ) -> CompactParsingResult<()> {
         // Skip header.
         self.byte_cursor.intern.set_position(1);
         let mut instr_and_bytes = Vec::new();
@@ -633,7 +643,7 @@ impl WitnessBytes {
             }
         }
 
-        Ok(instr_and_bytes)
+        Ok(())
     }
 
     fn process_operator(&mut self) -> CompactParsingResult<()> {
@@ -976,9 +986,10 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
 // TODO: Also move behind a feature flag...
 fn parse_to_instructions_and_bytes_for_instruction(
     bytes: Vec<u8>,
-) -> CompactParsingResult<Vec<(Instruction, Vec<u8>)>> {
+) -> (Vec<(Instruction, Vec<u8>)>, CompactParsingResult<()>) {
     let witness_bytes = WitnessBytes::new(bytes);
-    witness_bytes.process_into_instructions_and_keep_bytes_parsed_to_instruction()
+    witness_bytes
+        .process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure()
 }
 
 // TODO: This could probably be made a bit faster...
