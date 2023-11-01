@@ -670,7 +670,7 @@ impl WitnessBytes {
             Opcode::Branch => self.process_branch(),
             Opcode::Hash => self.process_hash(),
             Opcode::Code => self.process_code(),
-            Opcode::AccountLeaf => self.process_leaf(),
+            Opcode::AccountLeaf => self.process_account_leaf(),
             Opcode::EmptyRoot => self.process_empty_root(),
         }
     }
