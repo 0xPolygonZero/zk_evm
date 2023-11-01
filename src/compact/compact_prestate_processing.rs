@@ -595,6 +595,47 @@ impl WitnessBytes {
         Ok((header, self.instrs))
     }
 
+    // TODO: Look at removing code duplication...
+    // TODO: Move behind a feature flag...
+    // TODO: Fairly hacky...
+    // TODO: Replace `unwrap()`s with `Result`s?
+    fn process_into_instructions_and_keep_bytes_parsed_to_instruction(
+        mut self,
+    ) -> CompactParsingResult<Vec<(Instruction, Vec<u8>)>> {
+        // Skip header.
+        self.byte_cursor.intern.set_position(1);
+        let mut instr_and_bytes = Vec::new();
+
+        loop {
+            let mut cloned_cursor = self.byte_cursor.intern.clone();
+
+            let op_start_pos = self.byte_cursor.intern.position();
+            self.process_operator()?;
+            let op_byte_end_pos = self.byte_cursor.intern.position();
+            let num_instr_bytes = (op_byte_end_pos - op_start_pos) as usize;
+
+            let mut instr_bytes = vec![0; num_instr_bytes];
+            cloned_cursor.read_exact(&mut instr_bytes).unwrap();
+
+            let instr_added = self
+                .instrs
+                .intern
+                .front()
+                .cloned()
+                .unwrap()
+                .into_instruction()
+                .unwrap();
+            
+            instr_and_bytes.push((instr_added, instr_bytes));
+
+            if self.byte_cursor.at_eof() {
+                break;
+            }
+        }
+
+        Ok(instr_and_bytes)
+    }
+
     fn process_operator(&mut self) -> CompactParsingResult<()> {
         let opcode_byte = self.byte_cursor.read_byte()?;
 
@@ -930,6 +971,14 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
             ),
         })
         .collect())
+}
+
+// TODO: Also move behind a feature flag...
+fn parse_to_instructions_and_bytes_for_instruction(
+    bytes: Vec<u8>,
+) -> CompactParsingResult<Vec<(Instruction, Vec<u8>)>> {
+    let witness_bytes = WitnessBytes::new(bytes);
+    witness_bytes.process_into_instructions_and_keep_bytes_parsed_to_instruction()
 }
 
 // TODO: This could probably be made a bit faster...
