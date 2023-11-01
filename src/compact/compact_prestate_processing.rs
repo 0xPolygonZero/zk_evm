@@ -288,7 +288,19 @@ impl ParserState {
     fn create_and_extract_header(
         witness_bytes_raw: Vec<u8>,
     ) -> CompactParsingResult<(Header, Self)> {
-        let witness_bytes = WitnessBytes::new(witness_bytes_raw);
+        let witness_bytes = WitnessBytes::<CompactCursorFast>::new(witness_bytes_raw);
+        let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
+
+        let p_state = Self { entries };
+
+        Ok((header, p_state))
+    }
+
+    // TODO: Move behind a feature flag...
+    fn create_and_extract_header_debug(
+        witness_bytes_raw: Vec<u8>,
+    ) -> CompactParsingResult<(Header, Self)> {
+        let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
         let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
 
         let p_state = Self { entries };
@@ -572,15 +584,15 @@ impl ParserState {
     }
 }
 
-struct WitnessBytes {
-    byte_cursor: CompactCursor,
+struct WitnessBytes<C: CompactCursor> {
+    byte_cursor: C,
     instrs: WitnessEntries,
 }
 
-impl WitnessBytes {
+impl<C: CompactCursor> WitnessBytes<C> {
     fn new(witness_bytes: Vec<u8>) -> Self {
         Self {
-            byte_cursor: CompactCursor::new(witness_bytes),
+            byte_cursor: C::new(witness_bytes),
             instrs: WitnessEntries::default(),
         }
     }
@@ -619,15 +631,15 @@ impl WitnessBytes {
         _instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,
     ) -> CompactParsingResult<()> {
         // Skip header.
-        self.byte_cursor.intern.set_position(1);
+        self.byte_cursor.intern().set_position(1);
         let mut instr_and_bytes = Vec::new();
 
         loop {
-            let mut cloned_cursor = self.byte_cursor.intern.clone();
+            let mut cloned_cursor = self.byte_cursor.intern().clone();
 
-            let op_start_pos = self.byte_cursor.intern.position();
+            let op_start_pos = self.byte_cursor.intern().position();
             self.process_operator()?;
-            let op_byte_end_pos = self.byte_cursor.intern.position();
+            let op_byte_end_pos = self.byte_cursor.intern().position();
             let num_instr_bytes = (op_byte_end_pos - op_start_pos) as usize;
 
             let mut instr_bytes = vec![0; num_instr_bytes];
@@ -658,7 +670,7 @@ impl WitnessBytes {
         let opcode =
             Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOperator(opcode_byte))?;
 
-        trace!("Processed {:?} opcode", opcode);
+        trace!("Processed \"{:?}\" opcode", opcode);
 
         self.process_data_following_opcode(opcode)
     }
@@ -748,18 +760,31 @@ impl WitnessBytes {
     }
 }
 
+trait CompactCursor {
+    fn new(bytes: Vec<u8>) -> Self;
+    fn intern(&mut self) -> &mut Cursor<Vec<u8>>;
+    fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T>;
+    fn read_byte(&mut self) -> CompactParsingResult<u8>;
+    fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>>;
+    fn at_eof(&self) -> bool;
+}
+
 #[derive(Debug)]
-struct CompactCursor {
+struct CompactCursorFast {
     intern: Cursor<Vec<u8>>,
     temp_buf: Vec<u8>,
 }
 
-impl CompactCursor {
+impl CompactCursor for CompactCursorFast {
     fn new(bytes: Vec<u8>) -> Self {
         Self {
             intern: Cursor::new(bytes),
             temp_buf: Vec::default(),
         }
+    }
+
+    fn intern(&mut self) -> &mut Cursor<Vec<u8>> {
+        &mut self.intern
     }
 
     fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T> {
@@ -807,6 +832,14 @@ impl CompactCursor {
         )
     }
 
+    fn at_eof(&self) -> bool {
+        self.intern.position() as usize == self.intern.get_ref().len()
+    }
+}
+
+impl CompactCursorFast {
+    // TODO: Keep around until we decide if we want to attempt the non-vec
+    // allocating route...
     fn ciborium_byte_vec_err_reader_res_to_parsing_res<T, E: Error>(
         res: Result<T, E>,
         cursor_start_pos: u64,
@@ -817,9 +850,72 @@ impl CompactCursor {
             CompactParsingError::InvalidByteVector(err.to_string(), cursor_err_info)
         })
     }
+}
+
+#[derive(Debug)]
+struct DebugCompactCursor(CompactCursorFast);
+
+impl CompactCursor for DebugCompactCursor {
+    fn new(bytes: Vec<u8>) -> Self {
+        Self(CompactCursorFast::new(bytes))
+    }
+
+    fn intern(&mut self) -> &mut Cursor<Vec<u8>> {
+        self.0.intern()
+    }
+
+    fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T> {
+        let cursor_start_pos = self.0.intern.position();
+        let mut cloned_cursor = self.0.intern.clone();
+
+        let res = self.0.read_t(field_name);
+        let cursor_end_pos = self.0.intern.position();
+        let num_bytes_read = (cursor_end_pos - cursor_start_pos) as usize;
+
+        if res.is_ok() {
+            let mut t_bytes = vec![0; num_bytes_read];
+            cloned_cursor.read_exact(&mut t_bytes).unwrap();
+
+            let hex_bytes = hex::encode(&t_bytes);
+            let hex_start_pos = cursor_start_pos * 2;
+
+            trace!("`read_t` successfully parsed \"{}\" from bytes \"{}\" at byte position \"{}\" (hex start position: \"{}\")", field_name, hex_bytes, cursor_start_pos, hex_start_pos);
+    }
+
+        res
+    }
+
+    fn read_byte(&mut self) -> CompactParsingResult<u8> {
+        let res = self.0.read_byte();
+
+        if let Ok(byte) = res.as_ref() {
+            trace!("`read_byte` successfully parsed \"{}\"", byte);
+        }
+
+        res
+    }
+
+    fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>> {
+        let cursor_start_pos = self.0.intern.position();
+        let res = self.0.read_cbor_byte_array_to_vec();
+
+        if let Ok(bytes) = res.as_ref() {
+            let hex_bytes = hex::encode(bytes);
+            let hex_start_pos = cursor_start_pos * 2;
+            trace!("`read_cbor_byte_array_to_vec` successfully parsed \"{}\" into a byte array at position \"{}\" (hex start position: \"{}\")", hex_bytes, cursor_start_pos, hex_start_pos);
+        }
+
+        res
+    }
 
     fn at_eof(&self) -> bool {
-        self.intern.position() as usize == self.intern.get_ref().len()
+        let res = self.0.at_eof();
+
+        if res {
+            trace!("`at_eof` returned \"true\" for initial byte payload");
+    }
+
+        res
     }
 }
 
@@ -975,7 +1071,7 @@ pub(crate) fn process_compact_prestate(
 // TODO: Move behind a feature flag just used for debugging (but probably not
 // `debug`)...
 fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
-    let witness_bytes = WitnessBytes::new(bytes);
+    let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
 
     Ok(entries
@@ -994,7 +1090,7 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
 fn parse_to_instructions_and_bytes_for_instruction(
     bytes: Vec<u8>,
 ) -> (Vec<(Instruction, Vec<u8>)>, CompactParsingResult<()>) {
-    let witness_bytes = WitnessBytes::new(bytes);
+    let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     witness_bytes
         .process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure()
 }
