@@ -53,14 +53,14 @@ pub enum BlockTraceTriePreImages {
     Combined(CombinedPreImages),
 }
 
-/// State/Storage trie pre-images that are seperate.
+/// State/Storage trie pre-images that are separate.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SeparateTriePreImages {
     pub state: SeparateTriePreImage,
     pub storage: SeparateStorageTriesPreImage,
 }
 
-/// A trie pre-image where state & storage are seperate.
+/// A trie pre-image where state & storage are separate.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SeparateTriePreImage {
@@ -99,7 +99,7 @@ pub enum SeparateStorageTriesPreImage {
     /// A single hash map that contains all node hashes from all storage tries
     /// involved in the block. We can reconstruct the individual storage tries
     /// by the storage root hash in the state entries.
-    SingleTrie(SeparateTriePreImage),
+    SingleTrie(TrieUncompressed),
 
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.

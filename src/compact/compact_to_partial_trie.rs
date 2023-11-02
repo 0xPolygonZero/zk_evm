@@ -7,7 +7,8 @@ use eth_trie_utils::{
 use plonky2_evm::generation::mpt::AccountRlp;
 
 use super::compact_prestate_processing::{
-    AccountNodeCode, AccountNodeData, CompactParsingResult, LeafNodeData, NodeEntry, WitnessEntry,
+    AccountNodeCode, AccountNodeData, CompactParsingResult, LeafNodeData, NodeEntry,
+    PartialTriePreImages, WitnessEntry,
 };
 use crate::{
     types::{CodeHash, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH},
@@ -16,7 +17,7 @@ use crate::{
 
 #[derive(Debug, Default)]
 pub(super) struct CompactToPartialOutput {
-    pub(super) trie: HashedPartialTrie,
+    pub(super) tries: PartialTriePreImages,
 
     // TODO: `code` is ever only available for storage tries, so we should come up with a better
     // API that represents this...
@@ -51,7 +52,7 @@ pub(super) fn create_partial_trie_from_remaining_witness_elem_rec(
         NodeEntry::Branch(n) => process_branch(curr_key, n, output),
         NodeEntry::Code(c_bytes) => process_code(c_bytes.clone(), output),
         NodeEntry::Empty => process_empty(),
-        NodeEntry::Hash(h) => process_hash(curr_key, *h, &mut output.trie),
+        NodeEntry::Hash(h) => process_hash(curr_key, *h, &mut output.tries.state),
         NodeEntry::Leaf(k, v) => process_leaf(curr_key, k, v, output),
         NodeEntry::Extension(k, c) => process_extension(curr_key, k, c, output),
     }
@@ -113,7 +114,7 @@ fn process_leaf(
         }
     };
 
-    output.trie.insert(full_k, l_val);
+    output.tries.state.insert(full_k, l_val);
 
     Ok(())
 }

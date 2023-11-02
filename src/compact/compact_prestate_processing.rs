@@ -24,7 +24,7 @@ use super::compact_to_partial_trie::{
 };
 use crate::{
     trace_protocol::TrieCompact,
-    types::{CodeHash, TrieRootHash},
+    types::{CodeHash, HashedAccountAddr, TrieRootHash},
 };
 
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
@@ -1157,40 +1157,47 @@ enum TraverserDirection {
     Both,
 }
 
+#[derive(Debug, Default)]
+pub(crate) struct PartialTriePreImages {
+    pub(crate) state: HashedPartialTrie,
+    pub(crate) storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
+}
+
+#[derive(Debug)]
+pub(crate) struct ProcessedCompactOutput {
+    pub(crate) header: Header,
+    pub(crate) tries: PartialTriePreImages,
+    pub(crate) code: Option<HashMap<CodeHash, Vec<u8>>>,
+}
+
 pub(crate) fn process_compact_prestate(
     state: TrieCompact,
-) -> CompactParsingResult<(
-    Header,
-    HashedPartialTrie,
-    Option<HashMap<CodeHash, Vec<u8>>>,
-)> {
+) -> CompactParsingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header)
 }
 
 // TODO: Move behind a feature flag...
 pub(crate) fn process_compact_prestate_debug(
     state: TrieCompact,
-) -> CompactParsingResult<(
-    Header,
-    HashedPartialTrie,
-    Option<HashMap<CodeHash, Vec<u8>>>,
-)> {
+) -> CompactParsingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
 }
 
 fn process_compact_prestate_common(
     state: TrieCompact,
     create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
-) -> CompactParsingResult<(
-    Header,
-    HashedPartialTrie,
-    Option<HashMap<CodeHash, Vec<u8>>>,
-)> {
+) -> CompactParsingResult<ProcessedCompactOutput> {
     let (header, parser) = create_and_extract_header_f(state.bytes)?;
     let out = parser.parse()?;
     let extra_code_hash_mappings = (!out.code.is_empty()).then_some(out.code);
 
-    Ok((header, out.trie, extra_code_hash_mappings))
+    let out = ProcessedCompactOutput {
+        header,
+        tries: out.tries,
+        code: extra_code_hash_mappings,
+    };
+
+    Ok(out)
 }
 
 // TODO: Move behind a feature flag just used for debugging (but probably not

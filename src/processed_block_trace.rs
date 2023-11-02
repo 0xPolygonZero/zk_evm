@@ -5,12 +5,12 @@ use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::U256;
 
-use crate::compact::compact_prestate_processing::process_compact_prestate;
+use crate::compact::compact_prestate_processing::{process_compact_prestate, PartialTriePreImages};
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages, TrieCompact,
-    TxnInfo,
+    TrieUncompressed, TxnInfo,
 };
 use crate::types::{
     Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
@@ -18,9 +18,9 @@ use crate::types::{
 };
 use crate::utils::hash;
 
+#[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
-    pub(crate) state_trie: HashedPartialTrie,
-    pub(crate) storage_tries: HashMap<HashedAccountAddr, HashedPartialTrie>,
+    pub(crate) tries: PartialTriePreImages,
     pub(crate) txn_info: Vec<ProcessedTxnInfo>,
 }
 
@@ -61,8 +61,7 @@ impl BlockTrace {
         };
 
         ProcessedBlockTrace {
-            state_trie: pre_image_data.state,
-            storage_tries: pre_image_data.storage,
+            tries: pre_image_data.tries,
             txn_info: self
                 .txn_info
                 .into_iter()
@@ -72,9 +71,9 @@ impl BlockTrace {
     }
 }
 
+#[derive(Debug)]
 struct ProcessedBlockTracePreImages {
-    state: HashedPartialTrie,
-    storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
+    tries: PartialTriePreImages,
     extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
 }
 
@@ -94,9 +93,13 @@ fn process_combined_trie_pre_images(tries: CombinedPreImages) -> ProcessedBlockT
 }
 
 fn process_separate_trie_pre_images(tries: SeparateTriePreImages) -> ProcessedBlockTracePreImages {
-    ProcessedBlockTracePreImages {
+    let tries = PartialTriePreImages {
         state: process_state_trie(tries.state),
         storage: process_storage_tries(tries.storage),
+    };
+
+    ProcessedBlockTracePreImages {
+        tries,
         extra_code_hash_mappings: None,
     }
 }
@@ -112,13 +115,13 @@ fn process_storage_tries(
     trie: SeparateStorageTriesPreImage,
 ) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     match trie {
-        SeparateStorageTriesPreImage::SingleTrie(t) => process_single_storage_trie(t),
+        SeparateStorageTriesPreImage::SingleTrie(t) => process_single_combined_storage_tries(t),
         SeparateStorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
     }
 }
 
-fn process_single_storage_trie(
-    _trie: SeparateTriePreImage,
+fn process_single_combined_storage_tries(
+    _trie: TrieUncompressed,
 ) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     todo!()
 }
@@ -131,15 +134,14 @@ fn process_multiple_storage_tries(
 
 fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     // TODO: Wrap in proper result type...
-    let (header, trie, extra_code_hash_mappings) = process_compact_prestate(trie).unwrap();
+    let out = process_compact_prestate(trie).unwrap();
 
     // TODO: Make this into a result...
-    assert!(header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
+    assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
 
     ProcessedBlockTracePreImages {
-        state: trie,
-        storage: todo!(),
-        extra_code_hash_mappings,
+        tries: out.tries,
+        extra_code_hash_mappings: out.code,
     }
 }
 
