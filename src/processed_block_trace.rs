@@ -286,6 +286,11 @@ pub(crate) struct TxnMetaState {
     pub(crate) block_bloom: Bloom,
 }
 
-fn storage_addr_to_nibbles_even_nibble_fixed_hashed(_addr: &StorageAddr) -> Nibbles {
-    todo!()
+// TODO: Remove/rename function based on how complex this gets...
+fn storage_addr_to_nibbles_even_nibble_fixed_hashed(addr: &StorageAddr) -> Nibbles {
+    // I think this is all we need to do? Yell at me if this breaks things.
+    // H256's are never going to be truncated I think.
+
+    let hashed_addr = hash(addr.as_bytes());
+    Nibbles::from_h256_be(hashed_addr)
 }
