@@ -47,6 +47,7 @@ pub struct BlockTrace {
 
 /// Minimal hashed out tries needed by all txns in the block.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BlockTraceTriePreImages {
     Separate(SeparateTriePreImages),
     Combined(CombinedPreImages),
@@ -61,6 +62,7 @@ pub struct SeparateTriePreImages {
 
 /// A trie pre-image where state & storage are seperate.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SeparateTriePreImage {
     Uncompressed(TrieUncompressed),
     Direct(TrieDirect),
@@ -68,6 +70,7 @@ pub enum SeparateTriePreImage {
 
 /// A trie pre-image where both state & storage are combined into one payload.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CombinedPreImages {
     Compact(TrieCompact),
 }
@@ -91,6 +94,7 @@ pub struct TrieCompact {
 pub struct TrieDirect(pub HashedPartialTrie);
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SeparateStorageTriesPreImage {
     /// A single hash map that contains all node hashes from all storage tries
     /// involved in the block. We can reconstruct the individual storage tries
@@ -168,6 +172,7 @@ pub struct TxnTrace {
 
 /// Contract code access type. Used by txn traces.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ContractCodeUsage {
     /// Contract was read.
     Read(CodeHash),
