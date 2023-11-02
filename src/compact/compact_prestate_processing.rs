@@ -492,7 +492,7 @@ impl ParserState {
 
     fn match_account_leaf_no_code_and_no_storage(
     ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
-        Ok((0, None, None))
+        Ok((1, None, None))
     }
 
     fn match_account_leaf_no_code_but_has_storage(
@@ -503,8 +503,8 @@ impl ParserState {
 
         match buf[0].clone() {
             WitnessEntry::Node(node) => match Self::try_get_storage_hash_from_node(&node) {
-                Some(s_hash) => Ok((1, None, Some(s_hash))),
-                None => Self::invalid_witness_err(1, TraverserDirection::Backwards, traverser),
+                Some(s_hash) => Ok((2, None, Some(s_hash))),
+                None => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
             },
             _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
         }
@@ -518,10 +518,10 @@ impl ParserState {
 
         match buf[0].clone() {
             WitnessEntry::Node(NodeEntry::Code(code)) => {
-                Ok((1, Some(AccountNodeCode::CodeNode(code.clone())), None))
+                Ok((2, Some(AccountNodeCode::CodeNode(code.clone())), None))
             }
             WitnessEntry::Node(NodeEntry::Hash(h)) => {
-                Ok((1, Some(AccountNodeCode::HashNode(h)), None))
+                Ok((2, Some(AccountNodeCode::HashNode(h)), None))
             }
             _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
         }
