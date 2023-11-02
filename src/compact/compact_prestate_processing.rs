@@ -708,7 +708,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_hash(&mut self) -> CompactParsingResult<()> {
-        let hash = self.byte_cursor.read_h256("hash")?;
+        let hash = self.byte_cursor.read_non_cbor_h256("hash")?;
 
         self.push_entry(Instruction::Hash(hash));
         Ok(())
@@ -728,16 +728,15 @@ impl<C: CompactCursor> WitnessBytes<C> {
                 .read_cbor_byte_array_to_vec("account leaf key")?,
         );
         let flags: AccountLeafFlags = self.byte_cursor.read_byte()?.into();
-        let nonce = Self::read_account_flag_field_if_present_or_default(
-            &mut self.byte_cursor,
-            "account leaf nonce",
-            flags.nonce_present,
-        )?;
-        let balance = Self::read_account_flag_field_if_present_or_default(
-            &mut self.byte_cursor,
-            "account leaf balance",
-            flags.balance_present,
-        )?;
+        let nonce: U256 =
+            Self::read_account_flag_field_if_present_or_default(flags.nonce_present, || {
+                self.byte_cursor.read_t::<u64>("account leaf nonce")
+            })?
+            .into();
+        let balance =
+            Self::read_account_flag_field_if_present_or_default(flags.balance_present, || {
+                self.byte_cursor.read_cbor_u256("account leaf balance")
+            })?;
 
         // TODO: process actual storage trie probably? Wait until we know what is going
         // on here.
@@ -753,14 +752,17 @@ impl<C: CompactCursor> WitnessBytes<C> {
         Ok(())
     }
 
-    fn read_account_flag_field_if_present_or_default(
-        cursor: &mut C,
-        field_name: &'static str,
+    fn read_account_flag_field_if_present_or_default<F, T>(
         present_flag: bool,
-    ) -> CompactParsingResult<U256> {
+        mut read_f: F,
+    ) -> CompactParsingResult<T>
+    where
+        F: FnMut() -> CompactParsingResult<T>,
+        T: Default,
+    {
         Ok(match present_flag {
-            false => U256::default(),
-            true => deserialize_u256_from_compact(cursor, field_name)?,
+            false => T::default(),
+            true => (read_f)()?,
         })
     }
 
@@ -811,7 +813,8 @@ trait CompactCursor {
         &mut self,
         field_name: &'static str,
     ) -> CompactParsingResult<Vec<u8>>;
-    fn read_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256>;
+    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactParsingResult<U256>;
+    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256>;
     fn at_eof(&self) -> bool;
 }
 
@@ -882,7 +885,13 @@ impl CompactCursor for CompactCursorFast {
         )
     }
 
-    fn read_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256> {
+    // TODO: Clean up code duplication...
+    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactParsingResult<U256> {
+        let b_array = self.read_cbor_byte_array_to_vec(field_name)?;
+        Ok(U256::from_big_endian(&b_array))
+    }
+
+    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256> {
         let cursor_start_pos = self.intern().position();
         let mut h256_bytes = [0; 32];
 
@@ -925,6 +934,7 @@ impl CompactCursorFast {
 #[derive(Debug)]
 struct DebugCompactCursor(CompactCursorFast);
 
+// TODO: There are some decent opportunities to reduce code duplication here...
 impl CompactCursor for DebugCompactCursor {
     fn new(bytes: Vec<u8>) -> Self {
         Self(CompactCursorFast::new(bytes))
@@ -972,9 +982,22 @@ impl CompactCursor for DebugCompactCursor {
         res
     }
 
-    fn read_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256> {
+    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactParsingResult<U256> {
         let cursor_start_pos = self.0.intern.position();
-        let res = self.0.read_h256(field_name);
+        let res = self.0.read_cbor_u256(field_name);
+
+        if let Ok(v) = res.as_ref() {
+            let hex_bytes = format!("{:x}", v);
+            let hex_start_pos = cursor_start_pos * 2;
+            trace!("`read_cbor_u256` successfully parsed \"{}\" (hex bytes: {}) into an U256 at position \"{}\" (hex start position: \"{}\")", v, hex_bytes, cursor_start_pos, hex_start_pos);
+        }
+
+        res
+    }
+
+    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256> {
+        let cursor_start_pos = self.0.intern.position();
+        let res = self.0.read_non_cbor_h256(field_name);
 
         if let Ok(v) = res.as_ref() {
             // Need to use hex formatting otherwise the default display formatting truncates
@@ -983,7 +1006,7 @@ impl CompactCursor for DebugCompactCursor {
             let hex_bytes = hex::encode(get_bytes_from_cursor(self, cursor_start_pos));
             let hex_start_pos = cursor_start_pos * 2;
 
-            trace!("`read_h256` successfully parsed \"{}\" (hex bytes: {}) into an H256 at position \"{}\" (hex start position: \"{}\")", v_full_readable, hex_bytes, cursor_start_pos, hex_start_pos);
+            trace!("`read_non_cbor_h256` successfully parsed \"{}\" (hex bytes: {}) into an H256 at position \"{}\" (hex start position: \"{}\")", v_full_readable, hex_bytes, cursor_start_pos, hex_start_pos);
         }
 
         res
@@ -1141,9 +1164,30 @@ pub(crate) fn process_compact_prestate(
     HashedPartialTrie,
     Option<HashMap<CodeHash, Vec<u8>>>,
 )> {
-    let (header, parser) = ParserState::create_and_extract_header(state.bytes)?;
-    let out = parser.parse()?;
+    process_compact_prestate_common(state, ParserState::create_and_extract_header)
+}
 
+// TODO: Move behind a feature flag...
+pub(crate) fn process_compact_prestate_debug(
+    state: TrieCompact,
+) -> CompactParsingResult<(
+    Header,
+    HashedPartialTrie,
+    Option<HashMap<CodeHash, Vec<u8>>>,
+)> {
+    process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
+}
+
+fn process_compact_prestate_common(
+    state: TrieCompact,
+    create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
+) -> CompactParsingResult<(
+    Header,
+    HashedPartialTrie,
+    Option<HashMap<CodeHash, Vec<u8>>>,
+)> {
+    let (header, parser) = create_and_extract_header_f(state.bytes)?;
+    let out = parser.parse()?;
     let extra_code_hash_mappings = (!out.code.is_empty()).then_some(out.code);
 
     Ok((header, out.trie, extra_code_hash_mappings))
@@ -1254,14 +1298,6 @@ fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
     key
 }
 
-fn deserialize_u256_from_compact<C: CompactCursor>(
-    cursor: &mut C,
-    field_name: &'static str,
-) -> CompactParsingResult<U256> {
-    let b_array = cursor.read_cbor_byte_array_to_vec(field_name)?;
-    Ok(U256::from_big_endian(&b_array))
-}
-
 struct CursorBytesDebugInfo {
     bytes: Vec<u8>,
     bytes_hex: String,
@@ -1367,16 +1403,19 @@ mod tests {
 
     #[test]
     fn complex_payload_1() {
-        TEST_PAYLOAD_1.parse_and_check_hash_matches();
+        init();
+        TEST_PAYLOAD_1.parse_and_check_hash_matches_with_debug();
     }
 
     #[test]
     fn complex_payload_2() {
-        TEST_PAYLOAD_2.parse_and_check_hash_matches();
+        init();
+        TEST_PAYLOAD_2.parse_and_check_hash_matches_with_debug();
     }
 
     #[test]
     fn complex_payload_3() {
-        TEST_PAYLOAD_3.parse_and_check_hash_matches();
+        init();
+        TEST_PAYLOAD_3.parse_and_check_hash_matches_with_debug();
     }
 }
