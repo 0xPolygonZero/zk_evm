@@ -55,11 +55,11 @@ pub enum CompactParsingError {
     #[error("Reached the end of the byte stream when we still expected more data")]
     UnexpectedEndOfStream,
 
-    #[error("Unable to parse an expected byte vector (error: {0}). Cursor error info: {1}")]
-    InvalidByteVector(String, CursorBytesErrorInfo),
+    #[error("Unable to parse an expected byte vector (field name: {0}) (error: {1}). Cursor error info: {2}")]
+    InvalidByteVector(&'static str, String, CursorBytesErrorInfo),
 
     #[error(
-        "Unable to parse the type \"{0}\" (field name: {1}) from cbor bytes {2}. Cursor error info: {3} (err: {4})"
+        "Unable to parse the type \"{0}\" (field name: {1}) from bytes {2}. Cursor error info: {3} (err: {4})"
     )]
     InvalidBytesForType(
         &'static str,
@@ -619,31 +619,25 @@ impl<C: CompactCursor> WitnessBytes<C> {
     // TODO: Replace `unwrap()`s with `Result`s?
     fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure(
         self,
-    ) -> (Vec<(Instruction, Vec<u8>)>, CompactParsingResult<()>) {
+    ) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
         let mut instr_and_bytes_buf = Vec::new();
         let res = self.process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(&mut instr_and_bytes_buf);
 
-        (instr_and_bytes_buf, res)
+        (instr_and_bytes_buf.into(), res)
     }
 
     fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(
         mut self,
-        _instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,
+        instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,
     ) -> CompactParsingResult<()> {
         // Skip header.
         self.byte_cursor.intern().set_position(1);
-        let mut instr_and_bytes = Vec::new();
 
         loop {
-            let mut cloned_cursor = self.byte_cursor.intern().clone();
-
             let op_start_pos = self.byte_cursor.intern().position();
             self.process_operator()?;
-            let op_byte_end_pos = self.byte_cursor.intern().position();
-            let num_instr_bytes = (op_byte_end_pos - op_start_pos) as usize;
 
-            let mut instr_bytes = vec![0; num_instr_bytes];
-            cloned_cursor.read_exact(&mut instr_bytes).unwrap();
+            let instr_bytes = get_bytes_from_cursor(&mut self.byte_cursor, op_start_pos);
 
             let instr_added = self
                 .instrs
@@ -653,8 +647,8 @@ impl<C: CompactCursor> WitnessBytes<C> {
                 .unwrap()
                 .into_instruction()
                 .unwrap();
-            
-            instr_and_bytes.push((instr_added, instr_bytes));
+
+            instr_and_bytes_buf.push((instr_added, instr_bytes));
 
             if self.byte_cursor.at_eof() {
                 break;
@@ -688,15 +682,19 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec()?);
-        let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec()?;
+        let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec("leaf key")?);
+        let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec("leaf value")?;
 
         self.push_entry(Instruction::Leaf(key, value_raw));
         Ok(())
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
-        let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec()?);
+        let key = key_bytes_to_nibbles(
+            &self
+                .byte_cursor
+                .read_cbor_byte_array_to_vec("extension key")?,
+        );
 
         self.push_entry(Instruction::Extension(key));
         Ok(())
@@ -710,7 +708,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_hash(&mut self) -> CompactParsingResult<()> {
-        let hash = self.byte_cursor.read_t("hash")?;
+        let hash = self.byte_cursor.read_h256("hash")?;
 
         self.push_entry(Instruction::Hash(hash));
         Ok(())
@@ -724,21 +722,46 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
-        let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec()?);
-        let nonce = self.byte_cursor.read_t("nonce")?;
-        let balance = self.byte_cursor.read_t("balance")?;
-        let has_code = self.byte_cursor.read_t("has_code")?;
-        let has_storage = self.byte_cursor.read_t("has_storage")?;
+        let key = key_bytes_to_nibbles(
+            &self
+                .byte_cursor
+                .read_cbor_byte_array_to_vec("account leaf key")?,
+        );
+        let flags: AccountLeafFlags = self.byte_cursor.read_byte()?.into();
+        let nonce = Self::read_account_flag_field_if_present_or_default(
+            &mut self.byte_cursor,
+            "account leaf nonce",
+            flags.nonce_present,
+        )?;
+        let balance = Self::read_account_flag_field_if_present_or_default(
+            &mut self.byte_cursor,
+            "account leaf balance",
+            flags.balance_present,
+        )?;
+
+        // TODO: process actual storage trie probably? Wait until we know what is going
+        // on here.
 
         self.push_entry(Instruction::AccountLeaf(
             key,
             nonce,
             balance,
-            has_code,
-            has_storage,
+            flags.code_present,
+            flags.storage_present,
         ));
 
         Ok(())
+    }
+
+    fn read_account_flag_field_if_present_or_default(
+        cursor: &mut C,
+        field_name: &'static str,
+        present_flag: bool,
+    ) -> CompactParsingResult<U256> {
+        Ok(match present_flag {
+            false => U256::default(),
+            true => deserialize_u256_from_compact(cursor, field_name)?,
+        })
     }
 
     fn process_empty_root(&mut self) -> CompactParsingResult<()> {
@@ -760,12 +783,35 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 }
 
+#[derive(Debug)]
+struct AccountLeafFlags {
+    code_present: bool,
+    storage_present: bool,
+    nonce_present: bool,
+    balance_present: bool,
+}
+
+impl From<u8> for AccountLeafFlags {
+    fn from(v: u8) -> Self {
+        Self {
+            code_present: v & 0b0001 != 0,
+            storage_present: v & 0b0010 != 0,
+            nonce_present: v & 0b0100 != 0,
+            balance_present: v & 0b1000 != 0,
+        }
+    }
+}
+
 trait CompactCursor {
     fn new(bytes: Vec<u8>) -> Self;
     fn intern(&mut self) -> &mut Cursor<Vec<u8>>;
     fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T>;
     fn read_byte(&mut self) -> CompactParsingResult<u8>;
-    fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>>;
+    fn read_cbor_byte_array_to_vec(
+        &mut self,
+        field_name: &'static str,
+    ) -> CompactParsingResult<Vec<u8>>;
+    fn read_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256>;
     fn at_eof(&self) -> bool;
 }
 
@@ -822,14 +868,37 @@ impl CompactCursor for CompactCursorFast {
 
     // I don't think it's possible to not read to a vec here with `ciborium`... In
     // theory this should be doable, but the way the library I don't think we can.
-    fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>> {
+    fn read_cbor_byte_array_to_vec(
+        &mut self,
+        field_name: &'static str,
+    ) -> CompactParsingResult<Vec<u8>> {
         let cursor_start_pos = self.intern.position();
 
         Self::ciborium_byte_vec_err_reader_res_to_parsing_res(
             ciborium::from_reader(&mut self.intern),
             cursor_start_pos,
             &mut self.intern,
+            field_name,
         )
+    }
+
+    fn read_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256> {
+        let cursor_start_pos = self.intern().position();
+        let mut h256_bytes = [0; 32];
+
+        self.intern.read_exact(&mut h256_bytes).map_err(|err| {
+            let hex_bytes = hex::encode(h256_bytes);
+            let cursor_err_info = CursorBytesErrorInfo::new(self.intern(), cursor_start_pos);
+            CompactParsingError::InvalidBytesForType(
+                type_name::<H256>(),
+                field_name,
+                hex_bytes,
+                cursor_err_info,
+                err.to_string(),
+            )
+        })?;
+
+        Ok(H256(h256_bytes))
     }
 
     fn at_eof(&self) -> bool {
@@ -844,10 +913,11 @@ impl CompactCursorFast {
         res: Result<T, E>,
         cursor_start_pos: u64,
         cursor: &mut Cursor<Vec<u8>>,
+        field_name: &'static str,
     ) -> CompactParsingResult<T> {
         res.map_err(|err| {
             let cursor_err_info = CursorBytesErrorInfo::new(cursor, cursor_start_pos);
-            CompactParsingError::InvalidByteVector(err.to_string(), cursor_err_info)
+            CompactParsingError::InvalidByteVector(field_name, err.to_string(), cursor_err_info)
         })
     }
 }
@@ -866,21 +936,12 @@ impl CompactCursor for DebugCompactCursor {
 
     fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T> {
         let cursor_start_pos = self.0.intern.position();
-        let mut cloned_cursor = self.0.intern.clone();
-
         let res = self.0.read_t(field_name);
-        let cursor_end_pos = self.0.intern.position();
-        let num_bytes_read = (cursor_end_pos - cursor_start_pos) as usize;
 
         if res.is_ok() {
-            let mut t_bytes = vec![0; num_bytes_read];
-            cloned_cursor.read_exact(&mut t_bytes).unwrap();
-
-            let hex_bytes = hex::encode(&t_bytes);
-            let hex_start_pos = cursor_start_pos * 2;
-
-            trace!("`read_t` successfully parsed \"{}\" from bytes \"{}\" at byte position \"{}\" (hex start position: \"{}\")", field_name, hex_bytes, cursor_start_pos, hex_start_pos);
-    }
+            let info_payload = get_bytes_and_debug_info_from_cursor(self, cursor_start_pos);
+            trace!("`read_t` successfully parsed \"{}\" from bytes \"{}\" at byte position \"{}\" (hex start position: \"{}\")", field_name, info_payload.bytes_hex, cursor_start_pos, info_payload.hex_start_pos);
+        }
 
         res
     }
@@ -895,9 +956,12 @@ impl CompactCursor for DebugCompactCursor {
         res
     }
 
-    fn read_cbor_byte_array_to_vec(&mut self) -> CompactParsingResult<Vec<u8>> {
+    fn read_cbor_byte_array_to_vec(
+        &mut self,
+        field_name: &'static str,
+    ) -> CompactParsingResult<Vec<u8>> {
         let cursor_start_pos = self.0.intern.position();
-        let res = self.0.read_cbor_byte_array_to_vec();
+        let res = self.0.read_cbor_byte_array_to_vec(field_name);
 
         if let Ok(bytes) = res.as_ref() {
             let hex_bytes = hex::encode(bytes);
@@ -908,12 +972,29 @@ impl CompactCursor for DebugCompactCursor {
         res
     }
 
+    fn read_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256> {
+        let cursor_start_pos = self.0.intern.position();
+        let res = self.0.read_h256(field_name);
+
+        if let Ok(v) = res.as_ref() {
+            // Need to use hex formatting otherwise the default display formatting truncates
+            // it.
+            let v_full_readable = format!("{:x}", v);
+            let hex_bytes = hex::encode(get_bytes_from_cursor(self, cursor_start_pos));
+            let hex_start_pos = cursor_start_pos * 2;
+
+            trace!("`read_h256` successfully parsed \"{}\" (hex bytes: {}) into an H256 at position \"{}\" (hex start position: \"{}\")", v_full_readable, hex_bytes, cursor_start_pos, hex_start_pos);
+        }
+
+        res
+    }
+
     fn at_eof(&self) -> bool {
         let res = self.0.at_eof();
 
         if res {
             trace!("`at_eof` returned \"true\" for initial byte payload");
-    }
+        }
 
         res
     }
@@ -1086,10 +1167,37 @@ fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instru
         .collect())
 }
 
+// Using struct to make printing this nicer easier.
+#[derive(Debug)]
+struct InstructionAndBytesParsedFromBuf(Vec<(Instruction, Vec<u8>)>);
+
+impl From<Vec<(Instruction, Vec<u8>)>> for InstructionAndBytesParsedFromBuf {
+    fn from(v: Vec<(Instruction, Vec<u8>)>) -> Self {
+        Self(v)
+    }
+}
+
+impl Display for InstructionAndBytesParsedFromBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Instructions and bytes there were parsed from:")?;
+
+        for (instr, parsed_from_bytes) in &self.0 {
+            writeln!(
+                f,
+                "Instruction: {}, Bytes: {}",
+                instr,
+                hex::encode(parsed_from_bytes)
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
 // TODO: Also move behind a feature flag...
 fn parse_to_instructions_and_bytes_for_instruction(
     bytes: Vec<u8>,
-) -> (Vec<(Instruction, Vec<u8>)>, CompactParsingResult<()>) {
+) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     witness_bytes
         .process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure()
@@ -1144,6 +1252,50 @@ fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
     }
 
     key
+}
+
+fn deserialize_u256_from_compact<C: CompactCursor>(
+    cursor: &mut C,
+    field_name: &'static str,
+) -> CompactParsingResult<U256> {
+    let b_array = cursor.read_cbor_byte_array_to_vec(field_name)?;
+    Ok(U256::from_big_endian(&b_array))
+}
+
+struct CursorBytesDebugInfo {
+    bytes: Vec<u8>,
+    bytes_hex: String,
+    hex_start_pos: usize,
+}
+
+fn get_bytes_and_debug_info_from_cursor<C: CompactCursor>(
+    cursor: &mut C,
+    cursor_start_pos: u64,
+) -> CursorBytesDebugInfo {
+    let bytes = get_bytes_from_cursor(cursor, cursor_start_pos);
+
+    let bytes_hex = hex::encode(&bytes);
+    let hex_start_pos = cursor_start_pos as usize * 2;
+
+    CursorBytesDebugInfo {
+        bytes,
+        bytes_hex,
+        hex_start_pos,
+    }
+}
+
+fn get_bytes_from_cursor<C: CompactCursor>(cursor: &mut C, cursor_start_pos: u64) -> Vec<u8> {
+    let cursor_end_pos = cursor.intern().position();
+    let mut cloned_cursor = cursor.intern().clone();
+
+    // Rewind the cursor.
+    cloned_cursor.set_position(cursor_start_pos);
+
+    let num_bytes_read = (cursor_end_pos - cursor_start_pos) as usize;
+    let mut t_bytes = vec![0; num_bytes_read];
+    cloned_cursor.read_exact(&mut t_bytes).unwrap();
+
+    t_bytes
 }
 
 #[cfg(test)]
