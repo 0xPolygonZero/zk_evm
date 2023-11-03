@@ -1427,7 +1427,7 @@ mod tests {
     use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
     use crate::compact::{
         compact_prestate_processing::ParserState,
-        complex_test_payloads::{TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3},
+        complex_test_payloads::{TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4},
     };
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
@@ -1506,5 +1506,11 @@ mod tests {
     fn complex_payload_3() {
         init();
         TEST_PAYLOAD_3.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_4() {
+        init();
+        TEST_PAYLOAD_4.parse_and_check_hash_matches_with_debug();
     }
 }
