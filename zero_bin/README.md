@@ -16,6 +16,7 @@ A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`plo
     - [Input mode](#input-mode)
       - [stdin](#stdin)
       - [HTTP](#http)
+      - [Jerigon](#jerigon)
   - [Docker](#docker)
 
 
@@ -53,9 +54,13 @@ Usage: leader [OPTIONS]
 
 Options:
   -m, --mode <MODE>
-          The input mode. If `stdio`, the input is read from stdin. If `http`, the input is read from HTTP requests [default: std-io] [possible values: std-io, http]
+          The input mode. If `std-io`, the input is read from stdin. If `http`, the input is read from HTTP requests. If `jerigon`, the input is read from the `debug_traceBlockByNumber` and `eth_getBlockByNumber` RPC methods from Jerigon [default: std-io] [possible values: std-io, http, jerigon]
   -p, --port <PORT>
           The port to listen on when using the `http` mode [default: 8080]
+      --rpc-url <RPC_URL>
+          The RPC URL to use when using the `jerigon` mode
+  -b, --block-number <BLOCK_NUMBER>
+          The block number to use when using the `jerigon` mode
   -t, --task-bus-routing-key <TASK_BUS_ROUTING_KEY>
           Specifies the routing key for publishing task messages. In most cases, the default value should suffice [default: task]
   -s, --serializer <SERIALIZER>
@@ -99,7 +104,11 @@ RUST_LOG=debug cargo r --release --bin leader -- --mode http --runtime in-memory
 ```
 
 ### Input mode
-Pass JSON encoded prover input to stdin or over HTTP. See [`prover_input.rs`](/leader/src/prover_input.rs) for the input format. The examples below assume some prover input is stored in `./block_121.json`.
+Pass JSON encoded prover input to stdin or over HTTP, or point the leader to a Jerigon RPC endpoint to retrieve the prover input from the `debug_traceBlockByNumber` and `eth_getBlockByNumber` RPC methods.
+
+See [`prover_input.rs`](/leader/src/prover_input.rs) for the input format. 
+
+The `std-io` and `http` examples below assume some prover input is stored in `./block_121.json`.
 
 #### stdin
 
@@ -119,6 +128,11 @@ Once initialized, send a request:
 curl -X POST -H "Content-Type: application/json" -d @./block_121.json http://localhost:8080/prove
 ```
 
+#### Jerigon
+
+```bash
+RUST_LOG=debug cargo r --release --bin leader -- --mode jerigon --runtime in-memory --rpc-url <RPC_URL> --block-number 16
+```
 ## Docker
 
 Docker images are provided for both the [leader](leader.Dockerfile) and [worker](worker.Dockerfile) binaries.

@@ -14,8 +14,8 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ProverInput {
-    block_trace: BlockTrace,
-    other_data: OtherBlockData,
+    pub(crate) block_trace: BlockTrace,
+    pub(crate) other_data: OtherBlockData,
 }
 
 fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
