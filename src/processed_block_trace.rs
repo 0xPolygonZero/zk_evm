@@ -178,6 +178,7 @@ impl TxnInfo {
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = HashMap::new();
+        let block_bloom = self.block_bloom();
 
         for (addr, trace) in self.traces {
             let hashed_addr = hash(addr.as_bytes());
@@ -248,7 +249,7 @@ impl TxnInfo {
         let new_meta_state = TxnMetaState {
             txn_bytes: self.meta.byte_code,
             gas_used: self.meta.gas_used,
-            block_bloom: self.meta.bloom,
+            block_bloom,
         };
 
         ProcessedTxnInfo {
@@ -256,6 +257,25 @@ impl TxnInfo {
             contract_code_accessed,
             meta: new_meta_state,
         }
+    }
+
+    fn block_bloom(&self) -> Bloom {
+        let mut bloom = [U256::zero(); 8];
+
+        // Note that bloom can be empty.
+        for (i, v) in self
+            .meta
+            .new_receipt_trie_node_byte
+            .bloom
+            .clone()
+            .into_iter()
+            .array_chunks::<32>()
+            .enumerate()
+        {
+            bloom[i] = U256::from_big_endian(v.as_slice());
+        }
+
+        bloom
     }
 }
 
