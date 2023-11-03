@@ -815,10 +815,16 @@ impl<C: CompactCursor> WitnessBytes<C> {
                 self.byte_cursor.read_t::<u64>("account leaf nonce")
             })?
             .into();
+
         let balance =
             Self::read_account_flag_field_if_present_or_default(flags.balance_present, || {
                 self.byte_cursor.read_cbor_u256("account leaf balance")
             })?;
+
+        // I don't think we need code size?
+        let _ = Self::read_account_flag_field_if_present_or_default(flags.code_present, || {
+            self.byte_cursor.read_t::<u64>("code size")
+        })?;
 
         // TODO: process actual storage trie probably? Wait until we know what is going
         // on here.
