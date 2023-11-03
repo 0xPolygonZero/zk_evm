@@ -398,6 +398,9 @@ impl ParserState {
 
         // TODO: These clones are really bad, but we will clean this up once it works.
         match buf[0].clone() {
+            WitnessEntry::Instruction(Instruction::EmptyRoot) => {
+                Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Empty)
+            }
             WitnessEntry::Instruction(Instruction::Hash(h)) => {
                 Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Hash(h))
             }
@@ -582,7 +585,7 @@ impl ParserState {
         traverser.get_prev_n_elems_into_buf(2, buf);
 
         match &buf[0..=1] {
-            [WitnessEntry::Node(NodeEntry::Code(c_bytes)), WitnessEntry::Node(node)] => {
+            [WitnessEntry::Node(node), WitnessEntry::Node(NodeEntry::Code(c_bytes))] => {
                 Self::try_create_and_insert_partial_trie_from_node(
                     node,
                     Some(c_bytes.clone().into()),
@@ -591,7 +594,7 @@ impl ParserState {
                     traverser,
                 )
             }
-            [WitnessEntry::Node(NodeEntry::Hash(c_hash)), WitnessEntry::Node(node)] => {
+            [WitnessEntry::Node(node), WitnessEntry::Node(NodeEntry::Hash(c_hash))] => {
                 Self::try_create_and_insert_partial_trie_from_node(
                     node,
                     Some((*c_hash).into()),

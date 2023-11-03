@@ -39,7 +39,7 @@ impl TestProtocolInputAndRoot {
 
         let out = match process_compact_prestate_f(TrieCompact(protocol_bytes)) {
             Ok(x) => x,
-            Err(err) => panic!("{}", err),
+            Err(err) => panic!("{}", err.to_string()),
         };
         let trie_hash = out.witness_out.tries.state.hash();
 
