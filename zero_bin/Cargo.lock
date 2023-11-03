@@ -2137,7 +2137,7 @@ source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=49976ea2a98dcb605
 [[package]]
 name = "plonky_block_proof_gen"
 version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/plonky-block-proof-gen.git?rev=687ebf6e0cf7f56993fd3eae5abb5f182441374f#687ebf6e0cf7f56993fd3eae5abb5f182441374f"
+source = "git+https://github.com/0xPolygonZero/plonky-block-proof-gen.git?rev=8bd668c3f521627eb4d8587bf1c90bfff5fac855#8bd668c3f521627eb4d8587bf1c90bfff5fac855"
 dependencies = [
  "ethereum-types",
  "log",
@@ -2221,7 +2221,7 @@ dependencies = [
 [[package]]
 name = "proof_protocol_decoder"
 version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/proof-protocol-decoder.git?rev=145dffc9b85c3d816aa71975e1218c95fcaa1817#145dffc9b85c3d816aa71975e1218c95fcaa1817"
+source = "git+https://github.com/0xPolygonZero/proof-protocol-decoder.git?rev=d28e3afa4a7852e68c3cc9e5ee509cc32a5be6c7#d28e3afa4a7852e68c3cc9e5ee509cc32a5be6c7"
 dependencies = [
  "ciborium",
  "ciborium-io",
