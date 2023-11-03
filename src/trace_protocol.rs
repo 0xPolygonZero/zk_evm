@@ -25,17 +25,20 @@ use std::collections::HashMap;
 
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{Address, U256};
-use serde::{Deserialize, Serialize};
+use plonky2_evm::generation::mpt::LegacyReceiptRlp;
+use serde::Deserialize;
+use serde_with::{serde_as, FromInto, TryFromInto};
 
 use crate::{
-    types::{Bloom, CodeHash, HashedAccountAddr, StorageAddr, StorageVal},
+    deserializers::ByteString,
+    types::{CodeHash, HashedAccountAddr, StorageAddr, StorageVal},
     utils::hash,
 };
 
 /// Core payload needed to generate a proof for a block. Note that the scheduler
 /// may need to request some additional data from the client along with this in
 /// order to generate a proof.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct BlockTrace {
     /// The trie pre-images (state & storage) in multiple possible formats.
     pub trie_pre_images: BlockTraceTriePreImages,
@@ -46,7 +49,7 @@ pub struct BlockTrace {
 }
 
 /// Minimal hashed out tries needed by all txns in the block.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockTraceTriePreImages {
     Separate(SeparateTriePreImages),
@@ -54,14 +57,14 @@ pub enum BlockTraceTriePreImages {
 }
 
 /// State/Storage trie pre-images that are separate.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct SeparateTriePreImages {
     pub state: SeparateTriePreImage,
     pub storage: SeparateStorageTriesPreImage,
 }
 
 /// A trie pre-image where state & storage are separate.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SeparateTriePreImage {
     Uncompressed(TrieUncompressed),
@@ -69,7 +72,7 @@ pub enum SeparateTriePreImage {
 }
 
 /// A trie pre-image where both state & storage are combined into one payload.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CombinedPreImages {
     Compact(TrieCompact),
@@ -77,23 +80,22 @@ pub enum CombinedPreImages {
 
 // TODO
 /// Bulkier format that is quicker to process.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TrieUncompressed {}
 
 // TODO
+#[serde_as]
 /// Compact representation of a trie (will likely be very close to https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md)
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TrieCompact {
-    pub bytes: Vec<u8>,
-}
+#[derive(Debug, Deserialize)]
+pub struct TrieCompact(#[serde_as(as = "FromInto<ByteString>")] pub Vec<u8>);
 
 // TODO
 /// Trie format that is in exactly the same format of our internal trie format.
 /// This is the fastest format for us to processes.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TrieDirect(pub HashedPartialTrie);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SeparateStorageTriesPreImage {
     /// A single hash map that contains all node hashes from all storage tries
@@ -107,7 +109,7 @@ pub enum SeparateStorageTriesPreImage {
 }
 
 /// Info specific to txns in the block.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TxnInfo {
     /// Trace data for the txn. This is used by the protocol to:
     /// - Mutate it's own trie state between txns to arrive at the correct trie
@@ -120,33 +122,34 @@ pub struct TxnInfo {
     pub meta: TxnMeta,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[serde_as]
+#[derive(Debug, Deserialize)]
 pub struct TxnMeta {
     /// Txn byte code.
+    #[serde_as(as = "FromInto<ByteString>")]
     pub byte_code: Vec<u8>,
 
     /// Rlped bytes of the new txn value inserted into the txn trie by
     /// this txn. Note that the key is not included and this is only the rlped
     /// value of the node!
+    #[serde_as(as = "FromInto<ByteString>")]
     pub new_txn_trie_node_byte: Vec<u8>,
 
     /// Rlped bytes of the new receipt value inserted into the receipt trie by
     /// this txn. Note that the key is not included and this is only the rlped
     /// value of the node!
-    pub new_receipt_trie_node_byte: Vec<u8>,
+    #[serde_as(as = "TryFromInto<ByteString>")]
+    pub new_receipt_trie_node_byte: LegacyReceiptRlp,
 
     /// Gas used by this txn (Note: not cumulative gas used).
     pub gas_used: u64,
-
-    /// Bloom after txn execution.
-    pub bloom: Bloom,
 }
 
 /// A "trace" specific to an account for a txn.
 ///
 /// Specifically, since we can not execute the txn before proof generation, we
 /// rely on a separate EVM to run the txn and supply this data for us.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct TxnTrace {
     /// If the balance changed, then the new balance will appear here. Will be
     /// `None` if no change.
@@ -171,7 +174,7 @@ pub struct TxnTrace {
 }
 
 /// Contract code access type. Used by txn traces.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContractCodeUsage {
     /// Contract was read.

@@ -1268,7 +1268,7 @@ fn process_compact_prestate_common(
     state: TrieCompact,
     create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
-    let (header, parser) = create_and_extract_header_f(state.bytes)?;
+    let (header, parser) = create_and_extract_header_f(state.0)?;
     let witness_out = parser.parse()?;
 
     let out = ProcessedCompactOutput {

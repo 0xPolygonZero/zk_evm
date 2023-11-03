@@ -37,9 +37,7 @@ impl TestProtocolInputAndRoot {
         let protocol_bytes = hex::decode(self.byte_str).unwrap();
         let expected_hash = TrieRootHash::from_slice(&hex::decode(self.root_str).unwrap());
 
-        let out = match process_compact_prestate_f(TrieCompact {
-            bytes: protocol_bytes,
-        }) {
+        let out = match process_compact_prestate_f(TrieCompact(protocol_bytes)) {
             Ok(x) => x,
             Err(err) => panic!("{}", err),
         };
