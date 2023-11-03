@@ -39,7 +39,7 @@ impl TestProtocolInputAndRoot {
             Ok(x) => x,
             Err(err) => panic!("{}", err),
         };
-        let trie_hash = out.tries.state.hash();
+        let trie_hash = out.witness_out.tries.state.hash();
 
         assert!(out.header.version_is_compatible(1));
         assert_eq!(trie_hash, expected_hash);

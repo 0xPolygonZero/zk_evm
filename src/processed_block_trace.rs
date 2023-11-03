@@ -140,8 +140,8 @@ fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
 
     ProcessedBlockTracePreImages {
-        tries: out.tries,
-        extra_code_hash_mappings: out.code,
+        tries: out.witness_out.tries,
+        extra_code_hash_mappings: out.witness_out.code,
     }
 }
 

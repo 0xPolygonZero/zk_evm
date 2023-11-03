@@ -4,20 +4,20 @@ use eth_trie_utils::{
     nibbles::{Nibble, Nibbles},
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
+use ethereum_types::H256;
 use plonky2_evm::generation::mpt::AccountRlp;
 
 use super::compact_prestate_processing::{
-    AccountNodeCode, AccountNodeData, CompactParsingResult, LeafNodeData, NodeEntry,
-    PartialTriePreImages, WitnessEntry,
+    AccountNodeCode, AccountNodeData, CompactParsingResult, LeafNodeData, NodeEntry, WitnessEntry,
 };
 use crate::{
-    types::{CodeHash, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH},
+    types::{CodeHash, HashedAccountAddr, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH},
     utils::hash,
 };
 
 #[derive(Debug, Default)]
-pub(super) struct CompactToPartialOutput {
-    pub(super) tries: PartialTriePreImages,
+pub(super) struct CompactToPartialTrieExtractionOutput {
+    pub(super) trie: HashedPartialTrie,
 
     // TODO: `code` is ever only available for storage tries, so we should come up with a better
     // API that represents this...
@@ -26,33 +26,36 @@ pub(super) struct CompactToPartialOutput {
 
 pub(super) fn create_partial_trie_from_remaining_witness_elem(
     remaining_entry: WitnessEntry,
-) -> CompactParsingResult<CompactToPartialOutput> {
+) -> CompactParsingResult<CompactToPartialTrieExtractionOutput> {
     let remaining_node = remaining_entry
         .into_node()
         .expect("Final node in compact entries was not a node! This is a bug!");
-    let mut output = CompactToPartialOutput::default();
 
-    create_partial_trie_from_remaining_witness_elem_rec(
-        Nibbles::default(),
-        &remaining_node,
-        &mut output,
-    )?;
+    create_partial_trie_from_compact_node(remaining_node)
+}
+
+pub(super) fn create_partial_trie_from_compact_node(
+    node: NodeEntry,
+) -> CompactParsingResult<CompactToPartialTrieExtractionOutput> {
+    let mut output = CompactToPartialTrieExtractionOutput::default();
+
+    create_partial_trie_from_compact_node_rec(Nibbles::default(), &node, &mut output)?;
 
     Ok(output)
 }
 
 // TODO: Consider putting in some asserts that invalid nodes are not appearing
 // in the wrong trie type (eg. account )
-pub(super) fn create_partial_trie_from_remaining_witness_elem_rec(
+pub(super) fn create_partial_trie_from_compact_node_rec(
     curr_key: Nibbles,
     curr_node: &NodeEntry,
-    output: &mut CompactToPartialOutput,
+    output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
     match curr_node {
         NodeEntry::Branch(n) => process_branch(curr_key, n, output),
         NodeEntry::Code(c_bytes) => process_code(c_bytes.clone(), output),
         NodeEntry::Empty => process_empty(),
-        NodeEntry::Hash(h) => process_hash(curr_key, *h, &mut output.tries.state),
+        NodeEntry::Hash(h) => process_hash(curr_key, *h, &mut output.trie),
         NodeEntry::Leaf(k, v) => process_leaf(curr_key, k, v, output),
         NodeEntry::Extension(k, c) => process_extension(curr_key, k, c, output),
     }
@@ -61,21 +64,24 @@ pub(super) fn create_partial_trie_from_remaining_witness_elem_rec(
 fn process_branch(
     curr_key: Nibbles,
     branch: &[Option<Box<NodeEntry>>],
-    output: &mut CompactToPartialOutput,
+    output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
     for i in 0..16 {
         if let Some(child) = &branch[i] {
             // TODO: Seriously update `eth_trie_utils` to have a better API...
             let mut new_k = curr_key;
             new_k.push_nibble_back(i as Nibble);
-            create_partial_trie_from_remaining_witness_elem_rec(new_k, child, output)?;
+            create_partial_trie_from_compact_node_rec(new_k, child, output)?;
         }
     }
 
     Ok(())
 }
 
-fn process_code(c_bytes: Vec<u8>, output: &mut CompactToPartialOutput) -> CompactParsingResult<()> {
+fn process_code(
+    c_bytes: Vec<u8>,
+    output: &mut CompactToPartialTrieExtractionOutput,
+) -> CompactParsingResult<()> {
     let c_hash = hash(&c_bytes);
     output.code.insert(c_hash, c_bytes);
 
@@ -103,7 +109,7 @@ fn process_leaf(
     curr_key: Nibbles,
     leaf_key: &Nibbles,
     leaf_node_data: &LeafNodeData,
-    output: &mut CompactToPartialOutput,
+    output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
     let full_k = curr_key.merge_nibbles(leaf_key);
 
@@ -114,7 +120,7 @@ fn process_leaf(
         }
     };
 
-    output.tries.state.insert(full_k, l_val);
+    output.trie.insert(full_k, l_val);
 
     Ok(())
 }
@@ -123,17 +129,17 @@ fn process_extension(
     curr_key: Nibbles,
     ext_node_key: &Nibbles,
     ext_child: &NodeEntry,
-    output: &mut CompactToPartialOutput,
+    output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
     let new_k = curr_key.merge_nibbles(ext_node_key);
-    create_partial_trie_from_remaining_witness_elem_rec(new_k, ext_child, output)?;
+    create_partial_trie_from_compact_node_rec(new_k, ext_child, output)?;
 
     Ok(())
 }
 
 fn convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(
     acc_data: &AccountNodeData,
-    output: &mut CompactToPartialOutput,
+    output: &mut CompactToPartialTrieExtractionOutput,
 ) -> Vec<u8> {
     let code_hash = match &acc_data.account_node_code {
         Some(AccountNodeCode::CodeNode(c_bytes)) => {
@@ -155,4 +161,27 @@ fn convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(
 
     // TODO: Avoid the unnecessary allocation...
     rlp::encode(&account).into()
+}
+
+pub(crate) fn convert_storage_trie_root_keyed_hashmap_to_account_addr_keyed(
+    state_trie: &HashedPartialTrie,
+    storage_root_trie: HashMap<TrieRootHash, HashedPartialTrie>,
+) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
+    let mut acc_addr_to_storage_trie_map = HashMap::new();
+
+    let account_addr_and_storage_root_iter = state_trie.items()
+        .filter_map(|(h_addr_nibs, acc_bytes)| acc_bytes.as_val().map(|acc_bytes| (H256::from_slice(&h_addr_nibs.bytes_be()), rlp::decode::<AccountRlp>(acc_bytes).expect("Encoder lib managed to improperly encode an account node in the state trie! This is a major bug in the encoder.").storage_root)));
+
+    // TODO: Replace with a map...
+    for (acc_addr, storage_root) in account_addr_and_storage_root_iter {
+        if let Some(s_trie) = storage_root_trie.get(&storage_root) {
+            let hashed_addr = hash(acc_addr.as_bytes());
+
+            // Possibility of identical tries between accounts, so we need to do a clone
+            // here.
+            acc_addr_to_storage_trie_map.insert(hashed_addr, s_trie.clone());
+        }
+    }
+
+    acc_addr_to_storage_trie_map
 }

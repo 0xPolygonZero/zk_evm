@@ -1,3 +1,4 @@
+use eth_trie_utils::nibbles::Nibbles;
 use ethereum_types::H256;
 use keccak_hash::keccak;
 
@@ -13,4 +14,8 @@ pub(crate) fn update_val_if_some<T>(target: &mut T, opt: Option<T>) {
 
 pub(crate) fn clone_vec_and_remove_refs<T: Clone>(vec_of_refs: &[&T]) -> Vec<T> {
     vec_of_refs.iter().map(|r| (*r).clone()).collect()
+}
+
+pub(crate) fn h256_to_nibbles(v: H256) -> Nibbles {
+    Nibbles::from_h256_be(v)
 }
