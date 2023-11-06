@@ -66,8 +66,8 @@ fn process_branch(
     branch: &[Option<Box<NodeEntry>>],
     output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
-    for i in 0..16 {
-        if let Some(child) = &branch[i] {
+    for (i, slot) in branch.iter().enumerate().take(16) {
+        if let Some(child) = slot {
             // TODO: Seriously update `eth_trie_utils` to have a better API...
             let mut new_k = curr_key;
             new_k.push_nibble_back(i as Nibble);

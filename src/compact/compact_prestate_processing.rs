@@ -16,7 +16,7 @@ use eth_trie_utils::{
 };
 use ethereum_types::{H256, U256};
 use log::trace;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use super::compact_to_partial_trie::{
@@ -267,12 +267,6 @@ impl AccountNodeData {
             account_node_code,
         }
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct LeafData {
-    key: Nibbles,
-    value: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -912,14 +906,12 @@ trait CompactCursor {
 #[derive(Debug)]
 struct CompactCursorFast {
     intern: Cursor<Vec<u8>>,
-    temp_buf: Vec<u8>,
 }
 
 impl CompactCursor for CompactCursorFast {
     fn new(bytes: Vec<u8>) -> Self {
         Self {
             intern: Cursor::new(bytes),
-            temp_buf: Vec::default(),
         }
     }
 
@@ -1159,10 +1151,6 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
         self.entry_cursor.move_next();
     }
 
-    fn get_curr_elem(&self) -> Option<&WitnessEntry> {
-        self.entry_cursor.as_cursor().current()
-    }
-
     fn get_next_n_elems(&self, n: usize) -> impl Iterator<Item = &WitnessEntry> {
         let mut read_only_cursor = self.entry_cursor.as_cursor();
 
@@ -1394,7 +1382,6 @@ fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
 }
 
 struct CursorBytesDebugInfo {
-    bytes: Vec<u8>,
     bytes_hex: String,
     hex_start_pos: usize,
 }
@@ -1405,11 +1392,10 @@ fn get_bytes_and_debug_info_from_cursor<C: CompactCursor>(
 ) -> CursorBytesDebugInfo {
     let bytes = get_bytes_from_cursor(cursor, cursor_start_pos);
 
-    let bytes_hex = hex::encode(&bytes);
+    let bytes_hex = hex::encode(bytes);
     let hex_start_pos = cursor_start_pos as usize * 2;
 
     CursorBytesDebugInfo {
-        bytes,
         bytes_hex,
         hex_start_pos,
     }
