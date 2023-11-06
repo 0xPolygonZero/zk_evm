@@ -19,7 +19,7 @@ jobs:
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2023-11-03
           profile: minimal
           override: true
           components: rustfmt, clippy
