@@ -9,7 +9,7 @@ use crate::types::AllRecursiveCircuits;
 /// Plonky2 proving state. Note that this is generally going to be massive in
 /// terms of memory and has a long spin-up time,
 pub struct ProverState {
-    pub(crate) state: AllRecursiveCircuits,
+    pub state: AllRecursiveCircuits,
 }
 
 /// Builder for the prover state.
