@@ -59,26 +59,21 @@ async fn prove(
 ) -> StatusCode {
     debug!("Received payload: {:#?}", payload);
 
-    let block_number = payload.other_data.b_data.b_meta.block_number;
-    info!("Proving block {block_number}");
+    let block_number = payload.get_block_number();
 
     match payload.prove(&runtime).await {
-        Ok(b_proof) => {
-            info!("Successfully proved block {block_number}");
-
-            match write_to_file(output_dir, block_number, &b_proof) {
-                Ok(file) => {
-                    info!("Successfully wrote proof to {}", file.display());
-                    StatusCode::OK
-                }
-                Err(e) => {
-                    error!("{e}");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                }
+        Ok(b_proof) => match write_to_file(output_dir, block_number, &b_proof) {
+            Ok(file) => {
+                info!("Successfully wrote proof to {}", file.display());
+                StatusCode::OK
             }
-        }
+            Err(e) => {
+                error!("{e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        },
         Err(e) => {
-            error!("Error while proving: {e:#?}");
+            error!("Error while proving block {block_number}: {e:#?}");
             StatusCode::INTERNAL_SERVER_ERROR
         }
     }

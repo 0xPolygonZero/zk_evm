@@ -102,7 +102,7 @@ The `std-io` and `http` examples below assume some prover input is stored in `./
 #### stdin
 
 ```bash
-cat ./block_121.json | RUST_LOG=debug cargo r --release --bin leader
+cat ./block_121.json | RUST_LOG=debug cargo r --release --bin leader > ./output/block_121.json
 ```
 
 #### HTTP
@@ -120,7 +120,7 @@ curl -X POST -H "Content-Type: application/json" -d @./block_121.json http://loc
 #### Jerigon
 
 ```bash
-RUST_LOG=debug cargo r --release --bin leader -- --mode jerigon --runtime in-memory --rpc-url <RPC_URL> --block-number 16
+RUST_LOG=debug cargo r --release --bin leader -- --mode jerigon --runtime in-memory --rpc-url <RPC_URL> --block-number 16 > ./output/block_16.json
 ```
 ## Docker
 

@@ -1,8 +1,7 @@
-use std::io::Read;
+use std::io::{Read, Write};
 
 use anyhow::Result;
 use paladin::runtime::Runtime;
-use tracing::info;
 
 use crate::prover_input::ProverInput;
 
@@ -13,9 +12,9 @@ pub(crate) async fn stdio_main(runtime: Runtime) -> Result<()> {
 
     let des = &mut serde_json::Deserializer::from_str(&buffer);
     let input: ProverInput = serde_path_to_error::deserialize(des)?;
-
     let proof = input.prove(&runtime).await?;
-    info!("Successfully proved {:#?}", proof);
+
+    std::io::stdout().write_all(&serde_json::to_vec(&proof.intern)?)?;
 
     Ok(())
 }

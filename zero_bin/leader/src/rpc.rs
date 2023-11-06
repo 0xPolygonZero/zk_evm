@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use anyhow::Result;
 use ethereum_types::{Address, Bloom, H256, U256};
 use paladin::runtime::Runtime;
@@ -187,7 +189,7 @@ pub(crate) async fn rpc_main(runtime: Runtime, rpc_url: &str, block_number: u64)
     };
 
     let proof = prover_input.prove(&runtime).await?;
-    info!("Successfully proved {:#?}", proof);
+    std::io::stdout().write_all(&serde_json::to_vec(&proof.intern)?)?;
 
     Ok(())
 }
