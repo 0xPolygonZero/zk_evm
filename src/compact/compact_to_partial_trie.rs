@@ -114,7 +114,7 @@ fn process_leaf(
     let full_k = curr_key.merge_nibbles(leaf_key);
 
     let l_val = match leaf_node_data {
-        LeafNodeData::Value(v_bytes) => v_bytes.0.clone(),
+        LeafNodeData::Value(v_bytes) => rlp::encode(&v_bytes.0).to_vec(),
         LeafNodeData::Account(acc_data) => {
             convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(acc_data, output)
         }
