@@ -53,24 +53,13 @@ cargo run --bin leader -- --help
 Usage: leader [OPTIONS]
 
 Options:
-  -m, --mode <MODE>
-          The input mode. If `std-io`, the input is read from stdin. If `http`, the input is read from HTTP requests. If `jerigon`, the input is read from the `debug_traceBlockByNumber` and `eth_getBlockByNumber` RPC methods from Jerigon [default: std-io] [possible values: std-io, http, jerigon]
-  -p, --port <PORT>
-          The port to listen on when using the `http` mode [default: 8080]
-      --rpc-url <RPC_URL>
-          The RPC URL to use when using the `jerigon` mode
-  -b, --block-number <BLOCK_NUMBER>
-          The block number to use when using the `jerigon` mode
-  -t, --task-bus-routing-key <TASK_BUS_ROUTING_KEY>
-          Specifies the routing key for publishing task messages. In most cases, the default value should suffice [default: task]
-  -s, --serializer <SERIALIZER>
-          Determines the serialization format to be used [default: cbor] [possible values: cbor]
-  -r, --runtime <RUNTIME>
-          Specifies the runtime environment to use [default: amqp] [possible values: amqp, in-memory]
-      --amqp-uri <AMQP_URI>
-          Provides the URI for the AMQP broker, if the AMQP runtime is selected [env: AMQP_URI=amqp://localhost:5672]
-  -h, --help
-          Print help
+  -m, --mode <MODE>                  The input mode. If `std-io`, the input is read from stdin. If `http`, the input is read from HTTP requests. If `jerigon`, the input is read from the `debug_traceBlockByNumber` and `eth_getBlockByNumber` RPC methods from Jerigon [default: std-io] [possible values: std-io, http, jerigon]
+  -p, --port <PORT>                  The port to listen on when using the `http` mode [default: 8080]
+  -o, --output-dir <OUTPUT_DIR>      The directory to which output should be written (`http` mode only)
+      --rpc-url <RPC_URL>            The RPC URL to use when using the `jerigon` mode
+  -b, --block-number <BLOCK_NUMBER>  The block number to use when using the `jerigon` mode
+  -r, --runtime <RUNTIME>            Specifies the paladin runtime to use [default: amqp] [possible values: amqp, in-memory]
+  -h, --help                         Print help
 ```
 
 ### Paladin Runtime
@@ -92,7 +81,7 @@ RUST_LOG=debug cargo r --release --bin worker
 Start the leader process with the desired [input mode](#input-mode). The default paladin runtime is AMQP, so no additional flags are required to enable it.
 
 ```bash
-RUST_LOG=debug cargo r --release --bin leader -- --mode http
+RUST_LOG=debug cargo r --release --bin leader -- --mode http --output-dir ./output
 ```
 
 #### Starting an in-memory (single process) cluster
@@ -100,7 +89,7 @@ RUST_LOG=debug cargo r --release --bin leader -- --mode http
 Paladin can emulate a cluster in memory within a single process. Useful for testing purposes.
 
 ```bash
-RUST_LOG=debug cargo r --release --bin leader -- --mode http --runtime in-memory
+RUST_LOG=debug cargo r --release --bin leader -- --mode http --runtime in-memory --output-dir ./output
 ```
 
 ### Input mode
@@ -120,7 +109,7 @@ cat ./block_121.json | RUST_LOG=debug cargo r --release --bin leader
 
 Start the server
 ```bash
-RUST_LOG=debug cargo r --release --bin leader -- --mode http
+RUST_LOG=debug cargo r --release --bin leader -- --mode http --output-dir ./output
 ```
 
 Once initialized, send a request:
