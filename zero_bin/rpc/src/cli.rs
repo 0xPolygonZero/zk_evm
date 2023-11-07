@@ -1,0 +1,20 @@
+use clap::{Parser, Subcommand, ValueHint};
+
+#[derive(Parser)]
+pub(crate) struct Cli {
+    #[command(subcommand)]
+    pub(crate) command: Commands,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum Commands {
+    /// Fetch and generate prover input from the RPC endpoint
+    Fetch {
+        /// The RPC URL
+        #[arg(short, long, value_hint = ValueHint::Url)]
+        rpc_url: String,
+        /// The block number
+        #[arg(short, long)]
+        block_number: u64,
+    },
+}

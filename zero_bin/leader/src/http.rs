@@ -2,13 +2,12 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
+use common::ProverInput;
 use ethereum_types::U256;
 use paladin::runtime::Runtime;
 use plonky_block_proof_gen::proof_types::GeneratedBlockProof;
 use serde_json::to_writer;
 use tracing::{debug, error, info};
-
-use crate::prover_input::ProverInput;
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(runtime: Runtime, port: u16, output_dir: PathBuf) -> Result<()> {

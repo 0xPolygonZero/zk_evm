@@ -11,25 +11,24 @@ use proof_protocol_decoder::{
     trace_protocol::BlockTrace,
     types::{CodeHash, OtherBlockData},
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct ProverInput {
-    pub(crate) block_trace: BlockTrace,
-    pub(crate) other_data: OtherBlockData,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProverInput {
+    pub block_trace: BlockTrace,
+    pub other_data: OtherBlockData,
 }
-
 fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
     todo!()
 }
 
 impl ProverInput {
-    pub(crate) fn get_block_number(&self) -> U256 {
+    pub fn get_block_number(&self) -> U256 {
         self.other_data.b_data.b_meta.block_number
     }
 
-    pub(crate) async fn prove(self, runtime: &Runtime) -> Result<GeneratedBlockProof> {
+    pub async fn prove(self, runtime: &Runtime) -> Result<GeneratedBlockProof> {
         let block_number = self.get_block_number();
         info!("Proving block {block_number}");
 

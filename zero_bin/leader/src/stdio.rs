@@ -1,9 +1,8 @@
 use std::io::{Read, Write};
 
 use anyhow::Result;
+use common::ProverInput;
 use paladin::runtime::Runtime;
-
-use crate::prover_input::ProverInput;
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(runtime: Runtime) -> Result<()> {

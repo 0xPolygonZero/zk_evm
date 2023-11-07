@@ -6,11 +6,9 @@ use ops::Ops;
 use paladin::runtime::Runtime;
 
 mod cli;
-mod config;
 mod http;
 mod init;
-mod prover_input;
-mod rpc;
+mod jerigon;
 mod stdio;
 
 #[tokio::main]
@@ -47,7 +45,7 @@ async fn main() -> Result<()> {
             let block_number = args
                 .block_number
                 .expect("block-number is required in jerigon mode");
-            rpc::rpc_main(runtime, &rpc_url, block_number).await?;
+            jerigon::jerigon_main(runtime, &rpc_url, block_number).await?;
         }
     }
 

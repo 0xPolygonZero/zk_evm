@@ -1,8 +1,7 @@
-use std::io::Write;
-
 use anyhow::{Context, Result};
+use common::ProverInput;
+use common::MATIC_CHAIN_ID;
 use ethereum_types::{Address, Bloom, H256, U256};
-use paladin::runtime::Runtime;
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
 use proof_protocol_decoder::{
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
@@ -13,8 +12,6 @@ use serde::Deserialize;
 use thiserror::Error;
 use tokio::try_join;
 use tracing::{debug, info};
-
-use crate::{config::MATIC_CHAIN_ID, prover_input::ProverInput};
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -181,8 +178,7 @@ impl EthGetBlockByNumberResponse {
     }
 }
 
-/// The main function for the jerigon mode.
-pub(crate) async fn rpc_main(runtime: Runtime, rpc_url: &str, block_number: u64) -> Result<()> {
+pub async fn fetch_prover_input(rpc_url: &str, block_number: u64) -> Result<ProverInput> {
     let (trace_result, block_result) = try_join!(
         JerigonTraceResponse::fetch(rpc_url, block_number),
         EthGetBlockByNumberResponse::fetch(rpc_url, block_number)
@@ -191,13 +187,8 @@ pub(crate) async fn rpc_main(runtime: Runtime, rpc_url: &str, block_number: u64)
     debug!("Got block result: {:?}", block_result);
     debug!("Got trace result: {:?}", trace_result);
 
-    let prover_input = ProverInput {
+    Ok(ProverInput {
         block_trace: trace_result.try_into()?,
         other_data: block_result.into(),
-    };
-
-    let proof = prover_input.prove(&runtime).await?;
-    std::io::stdout().write_all(&serde_json::to_vec(&proof.intern)?)?;
-
-    Ok(())
+    })
 }

@@ -1,22 +1,20 @@
 [package]
-name = "leader"
+name = "rpc"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-paladin-core = { workspace = true }
-clap = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
-dotenvy = { workspace = true }
-tokio = { workspace = true }
-plonky_block_proof_gen = { workspace = true }
+proof_protocol_decoder = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
+clap = { workspace = true }
 ethereum-types = { workspace = true }
-axum = "0.6.20"
-ops = { path = "../ops" }
+reqwest = { version = "0.11.22", features = ["json"] }
+thiserror = "1.0.50"
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "49976ea2a98dcb6052bd6cf3a65f730e55727330" }
 common = { path = "../common" }
-rpc = { path = "../rpc" }

@@ -17,8 +17,9 @@ A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`plo
       - [stdin](#stdin)
       - [HTTP](#http)
       - [Jerigon](#jerigon)
-  - [Docker](#docker)
   - [Verifier](#verifier)
+  - [RPC](#rpc)
+  - [Docker](#docker)
 
 
 ## Project layout
@@ -123,9 +124,7 @@ curl -X POST -H "Content-Type: application/json" -d @./block_121.json http://loc
 ```bash
 RUST_LOG=debug cargo r --release --bin leader -- --mode jerigon --runtime in-memory --rpc-url <RPC_URL> --block-number 16 > ./output/proof_16.json
 ```
-## Docker
 
-Docker images are provided for both the [leader](leader.Dockerfile) and [worker](worker.Dockerfile) binaries.
 
 ## Verifier
 
@@ -142,5 +141,30 @@ Options:
 
 Example:
 ```bash
-cargo r --bin verifier -- -f ./output/proof_16.json
+cargo r --release --bin verifier -- -f ./output/proof_16.json
 ```
+
+## RPC
+
+An rpc binary is provided to generate the block trace format expected by the leader.
+```
+cargo r --bin rpc -- --help
+
+Usage: rpc <COMMAND>
+
+Commands:
+  fetch  Fetch and generate prover input from the RPC endpoint
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+```
+
+Example:
+```bash
+cargo r --release --bin rpc fetch --rpc-url <RPC_URL> --block-number 16 > ./output/block-16.json
+```
+
+## Docker
+
+Docker images are provided for both the [leader](leader.Dockerfile) and [worker](worker.Dockerfile) binaries.
