@@ -29,12 +29,12 @@ pub(crate) fn h256_to_nibbles(v: H256) -> Nibbles {
 // TODO: Move under a feature flag...
 pub(crate) fn print_value_and_hash_nodes_of_trie(trie: &HashedPartialTrie) {
     let trie_elems = print_value_and_hash_nodes_of_trie_common(trie);
-    println!("State trie for {:#?}", trie_elems);
+    println!("State trie {:#?}", trie_elems);
 }
 
 // TODO: Move under a feature flag...
 pub(crate) fn print_value_and_hash_nodes_of_storage_trie(
-    s_trie_addr: HashedStorageAddr,
+    s_trie_addr: &HashedStorageAddr,
     trie: &HashedPartialTrie,
 ) {
     let trie_elems = print_value_and_hash_nodes_of_trie_common(trie);
@@ -42,7 +42,7 @@ pub(crate) fn print_value_and_hash_nodes_of_storage_trie(
 }
 
 // TODO: Move under a feature flag...
-pub(crate) fn print_value_and_hash_nodes_of_trie_common(trie: &HashedPartialTrie) -> Vec<String> {
+fn print_value_and_hash_nodes_of_trie_common(trie: &HashedPartialTrie) -> Vec<String> {
     trie.items()
         .map(|(k, v_or_h)| {
             let v_or_h_char = match v_or_h {

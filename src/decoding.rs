@@ -78,7 +78,11 @@ impl ProcessedBlockTrace {
         self,
         other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<TxnProofGenIR>> {
-        let mut curr_block_tries = PartialTrieState::default();
+        let mut curr_block_tries = PartialTrieState {
+            state: self.tries.state,
+            storage: self.tries.storage,
+            ..Default::default()
+        };
 
         let mut tot_gas_used = U256::zero();
         let mut curr_bloom = Bloom::default();

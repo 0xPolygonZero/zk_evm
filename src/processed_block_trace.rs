@@ -16,7 +16,7 @@ use crate::types::{
     Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
     HashedStorageAddrNibbles, OtherBlockData, StorageAddr, StorageVal, TxnProofGenIR,
 };
-use crate::utils::hash;
+use crate::utils::{hash, print_value_and_hash_nodes_of_trie, print_value_and_hash_nodes_of_storage_trie};
 
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
@@ -45,7 +45,15 @@ impl BlockTrace {
     {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
-        let pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images);
+        let mut pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images);
+
+        add_empty_storage_tries_that_appear_in_trace_but_not_pre_image(&mut pre_image_data.tries.storage, &self.txn_info);
+
+        print_value_and_hash_nodes_of_trie(&pre_image_data.tries.state);
+
+        for (h_addr, s_trie) in pre_image_data.tries.storage.iter() {
+            print_value_and_hash_nodes_of_storage_trie(h_addr, s_trie);
+        }
 
         let resolve_code_hash_fn = |c_hash: &_| {
             let resolve_code_hash_fn_ref = &p_meta.resolve_code_hash_fn;
@@ -69,6 +77,14 @@ impl BlockTrace {
                 .collect(),
         }
     }
+}
+
+// It's not clear to me if the client should have an empty storage trie for when a txn performs the accounts first storage access, but we're going to assume they won't for now and deal with that case here.
+fn add_empty_storage_tries_that_appear_in_trace_but_not_pre_image(s_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>, txn_traces: &[TxnInfo]) {
+    let all_addrs_that_access_storage_iter = txn_traces.iter().flat_map(|x| x.traces.keys().map(|addr| hash(addr.as_bytes())));
+    let addrs_with_storage_access_without_s_tries_iter: Vec<_> = all_addrs_that_access_storage_iter.filter(|addr| !s_tries.contains_key(addr)).collect();
+
+    s_tries.extend(addrs_with_storage_access_without_s_tries_iter.into_iter().map(|k| (k, HashedPartialTrie::default())));
 }
 
 #[derive(Debug)]

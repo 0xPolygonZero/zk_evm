@@ -55,7 +55,7 @@ impl TestProtocolInputAndRoot {
         print_value_and_hash_nodes_of_trie(&out.witness_out.tries.state);
 
         for (hashed_addr, s_trie) in out.witness_out.tries.storage {
-            print_value_and_hash_nodes_of_storage_trie(hashed_addr, &s_trie);
+            print_value_and_hash_nodes_of_storage_trie(&hashed_addr, &s_trie);
         }
 
         assert!(out.header.version_is_compatible(1));
