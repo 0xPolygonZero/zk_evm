@@ -11,8 +11,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.4.6", features = ["derive"] }
 tokio = { version = "1.33.0", features = ["full"] }
 serde = "1.0.183"
-plonky_block_proof_gen = { git = "https://github.com/0xPolygonZero/plonky-block-proof-gen.git", rev = "dc5bd25f52ab612532df636eacbe9f98d5a052f6" }
-proof_protocol_decoder = { git = "https://github.com/0xPolygonZero/proof-protocol-decoder.git", rev = "8a27e8cf860fe71c84e1d052dad4ecfe78bc75dd" }
+plonky_block_proof_gen = { git = "https://github.com/0xPolygonZero/plonky-block-proof-gen.git", rev = "43988ed3e3645f0cfa4554289268c8fa4ecdbd2a" }
+proof_protocol_decoder = { git = "https://github.com/0xPolygonZero/proof-protocol-decoder.git", rev = "1d1f5ccfde137400b5fe97184667b371ac5e8b12" }
 serde_path_to_error = "0.1.14"
 serde_json = "1.0.107"
 ethereum-types = "0.14.1"
