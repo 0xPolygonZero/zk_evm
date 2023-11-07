@@ -179,6 +179,7 @@ pub struct TxnTrace {
 }
 
 /// Contract code access type. Used by txn traces.
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContractCodeUsage {
@@ -187,7 +188,7 @@ pub enum ContractCodeUsage {
 
     /// Contract was created (and these are the bytes). Note that this new
     /// contract code will not appear in the [`BlockTrace`] map.
-    Write(Vec<u8>),
+    Write(#[serde_as(as = "FromInto<ByteString>")] ByteString),
 }
 
 impl ContractCodeUsage {

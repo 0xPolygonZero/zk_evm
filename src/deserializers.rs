@@ -8,11 +8,19 @@ use serde::{
 };
 
 #[derive(Clone, Debug, Default, Deserialize)]
-pub(crate) struct ByteString(#[serde(with = "self")] pub(crate) Vec<u8>);
+pub struct ByteString(#[serde(with = "self")] pub Vec<u8>);
 
 impl From<ByteString> for Vec<u8> {
     fn from(v: ByteString) -> Self {
         v.0
+    }
+}
+
+impl std::ops::Deref for ByteString {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
