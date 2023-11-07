@@ -1,10 +1,10 @@
-//! Custom deserializers for Serde.
-use hex::FromHex;
+//! Custom deserializers / serializers for Serde.
+use hex::{FromHex, ToHex};
 use plonky2_evm::generation::mpt::LegacyReceiptRlp;
 use rlp::DecoderError;
 use serde::{
     de::{Error, Visitor},
-    Deserialize, Deserializer,
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -16,11 +16,23 @@ impl From<ByteString> for Vec<u8> {
     }
 }
 
+impl From<Vec<u8>> for ByteString {
+    fn from(v: Vec<u8>) -> Self {
+        Self(v)
+    }
+}
+
 impl TryFrom<ByteString> for LegacyReceiptRlp {
     type Error = DecoderError;
 
     fn try_from(value: ByteString) -> Result<Self, Self::Error> {
         rlp::decode(&value.0)
+    }
+}
+
+impl From<LegacyReceiptRlp> for ByteString {
+    fn from(value: LegacyReceiptRlp) -> Self {
+        Self(rlp::encode(&value).into())
     }
 }
 
@@ -61,4 +73,15 @@ fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D:
     }
 
     deserializer.deserialize_string(PrefixHexStrVisitor())
+}
+
+impl Serialize for ByteString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex_string = format!("0x{}", self.0.encode_hex::<String>());
+
+        serializer.serialize_str(&hex_string)
+    }
 }
