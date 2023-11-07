@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use ethereum_types::{Address, Bloom, H256, U256};
 use paladin::runtime::Runtime;
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
@@ -8,7 +8,7 @@ use proof_protocol_decoder::{
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
     types::{BlockLevelData, OtherBlockData},
 };
-use reqwest::IntoUrl;
+use reqwest::{IntoUrl, Response};
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::try_join;
@@ -71,7 +71,7 @@ impl JerigonTraceResponse {
         let block_number_hex = format!("0x{:x}", block_number);
         info!("Fetching block trace for block {}", block_number_hex);
 
-        let result: JerigonTraceResponse = client
+        let response: Response = client
             .post(rpc_url)
             .json(&serde_json::json!({
                 "jsonrpc": "2.0",
@@ -80,11 +80,15 @@ impl JerigonTraceResponse {
                 "id": 1,
             }))
             .send()
-            .await?
-            .json()
-            .await?;
+            .await
+            .context("fetching debug_traceBlockByNumber")?;
 
-        Ok(result)
+        let bytes = response.bytes().await?;
+        let des = &mut serde_json::Deserializer::from_slice(&bytes);
+        let parsed: JerigonTraceResponse = serde_path_to_error::deserialize(des)
+            .context("deserializing debug_traceBlockByNumber")?;
+
+        Ok(parsed)
     }
 }
 
@@ -156,7 +160,7 @@ impl EthGetBlockByNumberResponse {
         let block_number_hex = format!("0x{:x}", block_number);
         info!("Fetching block metadata for block {}", block_number_hex);
 
-        let result: EthGetBlockByNumberResponse = client
+        let response: Response = client
             .post(rpc_url)
             .json(&serde_json::json!({
                 "jsonrpc": "2.0",
@@ -165,11 +169,15 @@ impl EthGetBlockByNumberResponse {
                 "id": 1,
             }))
             .send()
-            .await?
-            .json()
-            .await?;
+            .await
+            .context("fetching eth_getBlockByNumber")?;
 
-        Ok(result)
+        let bytes = response.bytes().await?;
+        let des = &mut serde_json::Deserializer::from_slice(&bytes);
+        let parsed: EthGetBlockByNumberResponse =
+            serde_path_to_error::deserialize(des).context("deserializing eth_getBlockByNumber")?;
+
+        Ok(parsed)
     }
 }
 
