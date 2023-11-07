@@ -14,11 +14,12 @@ dotenvy = { workspace = true }
 tokio = { workspace = true }
 plonky_block_proof_gen = { workspace = true }
 proof_protocol_decoder = { workspace = true }
-serde_json = "1.0.107"
+serde_json = { workspace = true }
+serde_path_to_error = { workspace = true }
 axum = "0.6.20"
-ops = { path = "../ops" }
-serde_path_to_error = "0.1.14"
 reqwest = { version = "0.11.22", features = ["json"] }
 thiserror = "1.0.50"
 ethereum-types = "0.14.1"
 plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "49976ea2a98dcb6052bd6cf3a65f730e55727330" }
+
+ops = { path = "../ops" }

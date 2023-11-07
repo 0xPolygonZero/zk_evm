@@ -2137,7 +2137,7 @@ source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=49976ea2a98dcb605
 [[package]]
 name = "plonky_block_proof_gen"
 version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/plonky-block-proof-gen.git?rev=8bd668c3f521627eb4d8587bf1c90bfff5fac855#8bd668c3f521627eb4d8587bf1c90bfff5fac855"
+source = "git+https://github.com/0xPolygonZero/plonky-block-proof-gen.git?rev=bb114bb8a3ba88cdd3c2e3bb65171b6a8e812a5b#bb114bb8a3ba88cdd3c2e3bb65171b6a8e812a5b"
 dependencies = [
  "ethereum-types",
  "log",
@@ -3263,6 +3263,20 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "verifier"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "plonky_block_proof_gen",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "version_check"
