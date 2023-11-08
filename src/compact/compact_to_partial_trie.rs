@@ -175,11 +175,9 @@ pub(crate) fn convert_storage_trie_root_keyed_hashmap_to_account_addr_keyed(
     // TODO: Replace with a map...
     for (acc_addr, storage_root) in account_addr_and_storage_root_iter {
         if let Some(s_trie) = storage_root_trie.get(&storage_root) {
-            let hashed_addr = hash(acc_addr.as_bytes());
-
             // Possibility of identical tries between accounts, so we need to do a clone
             // here.
-            acc_addr_to_storage_trie_map.insert(hashed_addr, s_trie.clone());
+            acc_addr_to_storage_trie_map.insert(acc_addr, s_trie.clone());
         }
     }
 

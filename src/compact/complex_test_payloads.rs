@@ -1,12 +1,13 @@
 use eth_trie_utils::partial_trie::PartialTrie;
+use plonky2_evm::generation::mpt::AccountRlp;
 
 use super::compact_prestate_processing::{
     process_compact_prestate, process_compact_prestate_debug, CompactParsingResult,
-    ProcessedCompactOutput,
+    PartialTriePreImages, ProcessedCompactOutput,
 };
 use crate::{
     trace_protocol::TrieCompact,
-    types::TrieRootHash,
+    types::{HashedAccountAddr, TrieRootHash, EMPTY_TRIE_HASH},
     utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie},
 };
 
@@ -54,11 +55,41 @@ impl TestProtocolInputAndRoot {
 
         print_value_and_hash_nodes_of_trie(&out.witness_out.tries.state);
 
-        for (hashed_addr, s_trie) in out.witness_out.tries.storage {
-            print_value_and_hash_nodes_of_storage_trie(&hashed_addr, &s_trie);
+        for (hashed_addr, s_trie) in out.witness_out.tries.storage.iter() {
+            print_value_and_hash_nodes_of_storage_trie(hashed_addr, s_trie);
         }
 
         assert!(out.header.version_is_compatible(1));
         assert_eq!(trie_hash, expected_hash);
+
+        Self::assert_non_all_storage_roots_exist_in_storage_trie_map(&out.witness_out.tries);
+    }
+
+    fn assert_non_all_storage_roots_exist_in_storage_trie_map(images: &PartialTriePreImages) {
+        let non_empty_account_s_roots = images
+            .state
+            .items()
+            .filter_map(|(addr, data)| {
+                data.as_val().map(|data| {
+                    (
+                        HashedAccountAddr::from_slice(&addr.bytes_be()),
+                        rlp::decode::<AccountRlp>(data).unwrap().storage_root,
+                    )
+                })
+            })
+            .filter(|(_, s_root)| *s_root != EMPTY_TRIE_HASH)
+            .map(|(addr, _)| addr);
+
+        let x: Vec<_> = non_empty_account_s_roots.collect();
+        println!("non empty account s_roots: {:#?}", x);
+
+        println!(
+            "All keys for storage tries: {:#?}",
+            images.storage.keys().collect::<Vec<_>>()
+        );
+
+        for account_with_non_empty_root in x.into_iter() {
+            assert!(images.storage.contains_key(&account_with_non_empty_root));
+        }
     }
 }
