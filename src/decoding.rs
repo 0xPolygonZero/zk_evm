@@ -21,7 +21,7 @@ use crate::{
     trace_protocol::TxnInfo,
     types::{
         BlockLevelData, Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_TRIE_HASH,
+        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_TRIE_HASH, EMPTY_ACCOUNT_BYTES_RLPED,
     },
     utils::{hash, update_val_if_some},
 };
@@ -292,13 +292,9 @@ impl ProcessedBlockTrace {
 
         for (hashed_acc_addr, s_trie_writes) in deltas.state_writes {
             let val_k = Nibbles::from_h256_be(hashed_acc_addr);
-            let val_bytes = trie_state.state.get(val_k).ok_or_else(|| {
-                TraceParsingError::NonExistentTrieEntry(
-                    TrieType::State,
-                    val_k,
-                    trie_state.state.hash(),
-                )
-            })?;
+
+            // If the account was created, then it will not exist in the trie.
+            let val_bytes = trie_state.state.get(val_k).unwrap_or(&EMPTY_ACCOUNT_BYTES_RLPED);
 
             let mut account: AccountRlp = rlp::decode(val_bytes).map_err(|err| {
                 TraceParsingError::AccountDecode(hex::encode(val_bytes), err.to_string())

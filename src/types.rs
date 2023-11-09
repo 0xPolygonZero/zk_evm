@@ -34,6 +34,8 @@ pub(crate) const EMPTY_TRIE_HASH: H256 = H256([
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);
 
+pub(crate) const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [248, 68, 128, 128, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112];
+
 /// An `IR` (Intermediate Representation) for a given txn in a block that we can
 /// use to generate a proof for that txn.
 #[derive(Clone, Debug, Deserialize, Serialize)]
