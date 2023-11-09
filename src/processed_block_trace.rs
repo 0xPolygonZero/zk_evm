@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 
 use eth_trie_utils::nibbles::Nibbles;
-use eth_trie_utils::partial_trie::HashedPartialTrie;
+use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::U256;
+use plonky2_evm::generation::mpt::AccountRlp;
 
 use crate::compact::compact_prestate_processing::{process_compact_prestate, PartialTriePreImages};
 use crate::decoding::TraceParsingResult;
@@ -14,9 +15,12 @@ use crate::trace_protocol::{
 };
 use crate::types::{
     Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
-    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, StorageVal, TxnProofGenIR,
+    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, StorageVal, TrieRootHash, TxnProofGenIR,
+    EMPTY_TRIE_HASH,
 };
-use crate::utils::{hash, print_value_and_hash_nodes_of_trie, print_value_and_hash_nodes_of_storage_trie};
+use crate::utils::{
+    hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
+};
 
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
@@ -45,9 +49,7 @@ impl BlockTrace {
     {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
-        let mut pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images);
-
-        add_empty_storage_tries_that_appear_in_trace_but_not_pre_image(&mut pre_image_data.tries.storage, &self.txn_info);
+        let pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images);
 
         print_value_and_hash_nodes_of_trie(&pre_image_data.tries.state);
 
@@ -68,23 +70,31 @@ impl BlockTrace {
             }
         };
 
+        let all_accounts_in_pre_image: Vec<_> = pre_image_data
+            .tries
+            .state
+            .items()
+            .filter_map(|(addr, data)| {
+                data.as_val().map(|data| {
+                    (
+                        HashedAccountAddr::from_slice(&addr.bytes_be()),
+                        rlp::decode::<AccountRlp>(data).unwrap(),
+                    )
+                })
+            })
+            .collect();
+
+        let txn_info = self
+            .txn_info
+            .into_iter()
+            .map(|t| t.into_processed_txn_info(&all_accounts_in_pre_image, &resolve_code_hash_fn))
+            .collect::<Vec<_>>();
+
         ProcessedBlockTrace {
             tries: pre_image_data.tries,
-            txn_info: self
-                .txn_info
-                .into_iter()
-                .map(|t| t.into_processed_txn_info(&resolve_code_hash_fn))
-                .collect(),
+            txn_info,
         }
     }
-}
-
-// It's not clear to me if the client should have an empty storage trie for when a txn performs the accounts first storage access, but we're going to assume they won't for now and deal with that case here.
-fn add_empty_storage_tries_that_appear_in_trace_but_not_pre_image(s_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>, txn_traces: &[TxnInfo]) {
-    let all_addrs_that_access_storage_iter = txn_traces.iter().flat_map(|x| x.traces.keys().map(|addr| hash(addr.as_bytes())));
-    let addrs_with_storage_access_without_s_tries_iter: Vec<_> = all_addrs_that_access_storage_iter.filter(|addr| !s_tries.contains_key(addr)).collect();
-
-    s_tries.extend(addrs_with_storage_access_without_s_tries_iter.into_iter().map(|k| (k, HashedPartialTrie::default())));
 }
 
 #[derive(Debug)]
@@ -190,6 +200,7 @@ pub(crate) struct ProcessedTxnInfo {
 impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
+        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         code_hash_resolve_f: &F,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
@@ -262,6 +273,26 @@ impl TxnInfo {
             }
         }
 
+        let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
+            nodes_used_by_txn
+                .storage_accesses
+                .iter()
+                .filter(|(_, slots)| !slots.is_empty())
+                .map(|(addr, _)| *addr),
+        );
+
+        let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
+            .iter()
+            .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
+
+        let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
+            .filter(|&(addr, _data)| (!accounts_with_storage_accesses.contains(addr)))
+            .map(|(addr, data)| (*addr, data.storage_root));
+
+        nodes_used_by_txn
+            .state_accounts_with_no_accesses_but_storage_tries
+            .extend(accounts_with_storage_but_no_storage_accesses);
+
         let new_meta_state = TxnMetaState {
             txn_bytes: self.meta.byte_code,
             gas_used: self.meta.gas_used,
@@ -300,11 +331,15 @@ impl TxnInfo {
 pub(crate) struct NodesUsedByTxn {
     pub(crate) state_accesses: Vec<HashedNodeAddr>,
     pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
+
+    // Note: All entries in `storage_writes` also appear in `storage_accesses`.
     pub(crate) storage_accesses: Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
     pub(crate) storage_writes: Vec<(
         HashedAccountAddr,
         Vec<(HashedStorageAddrNibbles, StorageVal)>,
     )>,
+    pub(crate) state_accounts_with_no_accesses_but_storage_tries:
+        HashMap<HashedAccountAddr, TrieRootHash>,
 }
 
 #[derive(Debug)]

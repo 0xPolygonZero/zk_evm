@@ -1,12 +1,12 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::{self, Display, Formatter},
     iter::{empty, once},
 };
 
 use eth_trie_utils::{
     nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, PartialTrie},
+    partial_trie::{HashedPartialTrie, Node, PartialTrie},
     trie_subsets::create_trie_subset,
 };
 use ethereum_types::{Address, U256};
@@ -18,11 +18,12 @@ use thiserror::Error;
 
 use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites},
+    trace_protocol::TxnInfo,
     types::{
         BlockLevelData, Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
         OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_TRIE_HASH,
     },
-    utils::update_val_if_some,
+    utils::{hash, update_val_if_some},
 };
 
 pub type TraceParsingResult<T> = Result<T, TraceParsingError>;
@@ -93,15 +94,27 @@ impl ProcessedBlockTrace {
             .enumerate()
             .map(|(txn_idx, txn_info)| {
                 let tries = Self::create_minimal_partial_tries_needed_by_txn(
-                    &curr_block_tries,
+                    &mut curr_block_tries,
                     &txn_info.nodes_used_by_txn,
                     txn_idx,
                 )?;
-                let trie_roots_after = calculate_trie_input_hashes(&tries);
+
                 let addresses = Self::get_known_addresses_if_enabled();
 
                 let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
                 let new_bloom = txn_info.meta.block_bloom;
+
+                Self::apply_deltas_to_trie_state(
+                    &mut curr_block_tries,
+                    txn_info.nodes_used_by_txn,
+                )?;
+
+                // TODO: Clean up if this works...
+                let trie_roots_after = TrieRoots {
+                    state_root: curr_block_tries.state.hash(),
+                    transactions_root: curr_block_tries.txn.hash(),
+                    receipts_root: curr_block_tries.receipt.hash(),
+                };
 
                 let gen_inputs = GenerationInputs {
                     txn_number_before: txn_idx.saturating_sub(1).into(),
@@ -124,11 +137,6 @@ impl ProcessedBlockTrace {
                     gen_inputs,
                 };
 
-                Self::apply_deltas_to_trie_state(
-                    &mut curr_block_tries,
-                    txn_info.nodes_used_by_txn,
-                )?;
-
                 tot_gas_used = new_tot_gas_used;
                 curr_bloom = new_bloom;
 
@@ -141,7 +149,7 @@ impl ProcessedBlockTrace {
     }
 
     fn create_minimal_partial_tries_needed_by_txn(
-        curr_block_tries: &PartialTrieState,
+        curr_block_tries: &mut PartialTrieState,
         nodes_used_by_txn: &NodesUsedByTxn,
         txn_idx: TxnIdx,
     ) -> TraceParsingResult<TrieInputs> {
@@ -164,7 +172,8 @@ impl ProcessedBlockTrace {
         )?;
 
         let storage_tries = Self::create_minimal_storage_partial_tries(
-            &curr_block_tries.storage,
+            &mut curr_block_tries.storage,
+            &nodes_used_by_txn.state_accounts_with_no_accesses_but_storage_tries,
             nodes_used_by_txn.storage_accesses.iter(),
         )?;
 
@@ -174,6 +183,19 @@ impl ProcessedBlockTrace {
             receipts_trie,
             storage_tries,
         })
+    }
+
+    fn get_accounts_with_no_storage_access_that_have_entries_in_state_trie(
+        storage_accesses: &[(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)],
+        state_accesses: &[HashedNodeAddr],
+    ) -> Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)> {
+        let storage_accesses_set: HashSet<HashedAccountAddr> =
+            HashSet::from_iter(storage_accesses.iter().map(|(k, _)| k).cloned());
+        state_accesses
+            .iter()
+            .filter(|h_addr| !storage_accesses_set.contains(h_addr))
+            .map(|h_addr| (*h_addr, Vec::default()))
+            .collect()
     }
 
     fn create_minimal_state_partial_trie(
@@ -187,17 +209,33 @@ impl ProcessedBlockTrace {
         )
     }
 
+    // TODO!!!: We really need to be appending the empty storage tries to the base
+    // trie somewhere else! This is a big hack!
     fn create_minimal_storage_partial_tries<'a>(
-        storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
+        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
+        state_accounts_with_no_accesses_but_storage_tries: &HashMap<
+            HashedAccountAddr,
+            TrieRootHash,
+        >,
         accesses_per_account: impl Iterator<
             Item = &'a (HashedAccountAddr, Vec<HashedStorageAddrNibbles>),
         >,
     ) -> TraceParsingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {
         accesses_per_account
             .map(|(h_addr, mem_accesses)| {
-                let base_storage_trie = storage_tries
-                    .get(h_addr)
-                    .ok_or(TraceParsingError::MissingAccountStorageTrie(*h_addr))?;
+                // TODO: Clean up...
+                let base_storage_trie = match storage_tries.get(h_addr) {
+                    Some(s_trie) => s_trie,
+                    None => {
+                        let trie = state_accounts_with_no_accesses_but_storage_tries
+                            .get(h_addr)
+                            .map(|s_root| HashedPartialTrie::new(Node::Hash(*s_root)))
+                            .unwrap_or_default();
+                        storage_tries.insert(*h_addr, trie); // TODO: Really change this...
+                        storage_tries.get(h_addr).unwrap()
+                    }
+                };
+
                 let partial_storage_trie = Self::create_trie_subset_wrapped(
                     base_storage_trie,
                     mem_accesses.iter().cloned(),
@@ -216,6 +254,29 @@ impl ProcessedBlockTrace {
     ) -> TraceParsingResult<HashedPartialTrie> {
         create_trie_subset(trie, accesses)
             .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(trie_type))
+    }
+
+    // It's not clear to me if the client should have an empty storage trie for when
+    // a txn performs the accounts first storage access, but we're going to assume
+    // they won't for now and deal with that case here.
+    fn add_empty_storage_tries_that_appear_in_trace_but_not_pre_image(
+        s_tries: &mut Vec<(HashedAccountAddr, HashedPartialTrie)>,
+        txn_traces: &[TxnInfo],
+    ) {
+        // TODO: Make a bit more efficient...
+        let all_addrs_that_access_storage_iter = txn_traces
+            .iter()
+            .flat_map(|x| x.traces.keys().map(|addr| hash(addr.as_bytes())));
+        let addrs_with_storage_access_without_s_tries_iter: Vec<_> =
+            all_addrs_that_access_storage_iter
+                .filter(|addr| !s_tries.iter().any(|(a, _)| addr == a))
+                .collect();
+
+        s_tries.extend(
+            addrs_with_storage_access_without_s_tries_iter
+                .into_iter()
+                .map(|k| (k, HashedPartialTrie::default())),
+        );
     }
 
     fn apply_deltas_to_trie_state(
