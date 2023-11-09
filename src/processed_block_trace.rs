@@ -295,6 +295,7 @@ impl TxnInfo {
 
         let new_meta_state = TxnMetaState {
             txn_bytes: self.meta.byte_code,
+            receipt_node_bytes: rlp::encode(&self.meta.new_receipt_trie_node_byte).to_vec(),
             gas_used: self.meta.gas_used,
             block_bloom,
         };
@@ -353,6 +354,7 @@ pub(crate) struct StateTrieWrites {
 #[derive(Debug, Default)]
 pub(crate) struct TxnMetaState {
     pub(crate) txn_bytes: Vec<u8>,
+    pub(crate) receipt_node_bytes: Vec<u8>,
     pub(crate) gas_used: u64,
     pub(crate) block_bloom: Bloom,
 }

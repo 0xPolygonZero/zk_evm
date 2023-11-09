@@ -17,11 +17,12 @@ use plonky2_evm::{
 use thiserror::Error;
 
 use crate::{
-    processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites},
+    processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites, TxnMetaState},
     trace_protocol::TxnInfo,
     types::{
         BlockLevelData, Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_TRIE_HASH, EMPTY_ACCOUNT_BYTES_RLPED,
+        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED,
+        EMPTY_TRIE_HASH,
     },
     utils::{hash, update_val_if_some},
 };
@@ -107,6 +108,8 @@ impl ProcessedBlockTrace {
                 Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
                     txn_info.nodes_used_by_txn,
+                    &txn_info.meta,
+                    txn_idx,
                 )?;
 
                 // TODO: Clean up if this works...
@@ -136,6 +139,8 @@ impl ProcessedBlockTrace {
                     txn_idx,
                     gen_inputs,
                 };
+
+                println!("IR: {:#?}", txn_proof_gen_ir);
 
                 tot_gas_used = new_tot_gas_used;
                 curr_bloom = new_bloom;
@@ -282,6 +287,8 @@ impl ProcessedBlockTrace {
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
         deltas: NodesUsedByTxn,
+        meta: &TxnMetaState,
+        txn_idx: TxnIdx,
     ) -> TraceParsingResult<()> {
         for (hashed_acc_addr, storage_writes) in deltas.storage_writes {
             let storage_trie = trie_state.storage.get_mut(&hashed_acc_addr).ok_or(
@@ -294,7 +301,10 @@ impl ProcessedBlockTrace {
             let val_k = Nibbles::from_h256_be(hashed_acc_addr);
 
             // If the account was created, then it will not exist in the trie.
-            let val_bytes = trie_state.state.get(val_k).unwrap_or(&EMPTY_ACCOUNT_BYTES_RLPED);
+            let val_bytes = trie_state
+                .state
+                .get(val_k)
+                .unwrap_or(&EMPTY_ACCOUNT_BYTES_RLPED);
 
             let mut account: AccountRlp = rlp::decode(val_bytes).map_err(|err| {
                 TraceParsingError::AccountDecode(hex::encode(val_bytes), err.to_string())
@@ -310,6 +320,12 @@ impl ProcessedBlockTrace {
                 .state
                 .insert(val_k, updated_account_bytes.to_vec());
         }
+
+        let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
+        trie_state.txn.insert(txn_k, meta.txn_bytes.clone());
+        trie_state
+            .receipt
+            .insert(txn_k, meta.receipt_node_bytes.clone());
 
         Ok(())
     }
