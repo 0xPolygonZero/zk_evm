@@ -141,7 +141,7 @@ impl From<EthGetBlockByNumberResponse> for OtherBlockData {
             b_data: BlockLevelData {
                 b_meta: block_metadata,
                 b_hashes: BlockHashes {
-                    prev_hashes: Default::default(),
+                    prev_hashes: vec![H256::default(); 256],
                     cur_hash: value.result.hash,
                 },
             },
