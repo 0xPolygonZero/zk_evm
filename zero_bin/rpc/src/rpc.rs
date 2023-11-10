@@ -1,13 +1,12 @@
 use anyhow::{Context, Result};
 use common::ProverInput;
-use common::MATIC_CHAIN_ID;
 use ethereum_types::{Address, Bloom, H256, U256};
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
 use proof_protocol_decoder::{
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
     types::{BlockLevelData, OtherBlockData},
 };
-use reqwest::{IntoUrl, Response};
+use reqwest::IntoUrl;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::try_join;
@@ -68,7 +67,7 @@ impl JerigonTraceResponse {
         let block_number_hex = format!("0x{:x}", block_number);
         info!("Fetching block trace for block {}", block_number_hex);
 
-        let response: Response = client
+        let response = client
             .post(rpc_url)
             .json(&serde_json::json!({
                 "jsonrpc": "2.0",
@@ -82,7 +81,7 @@ impl JerigonTraceResponse {
 
         let bytes = response.bytes().await?;
         let des = &mut serde_json::Deserializer::from_slice(&bytes);
-        let parsed: JerigonTraceResponse = serde_path_to_error::deserialize(des)
+        let parsed = serde_path_to_error::deserialize(des)
             .context("deserializing debug_traceBlockByNumber")?;
 
         Ok(parsed)
@@ -110,46 +109,6 @@ struct EthGetBlockByNumberResponse {
     result: EthGetBlockByNumberResult,
 }
 
-impl From<EthGetBlockByNumberResponse> for OtherBlockData {
-    fn from(value: EthGetBlockByNumberResponse) -> Self {
-        let mut bloom = [U256::zero(); 8];
-
-        for (i, word) in value
-            .result
-            .logs_bloom
-            .as_fixed_bytes()
-            .chunks_exact(32)
-            .enumerate()
-        {
-            bloom[i] = U256::from_big_endian(word);
-        }
-
-        let block_metadata = BlockMetadata {
-            block_beneficiary: value.result.miner,
-            block_timestamp: value.result.timestamp,
-            block_number: value.result.number,
-            block_difficulty: value.result.difficulty,
-            block_random: value.result.mix_hash,
-            block_gaslimit: value.result.gas_limit,
-            block_chain_id: MATIC_CHAIN_ID.into(),
-            block_base_fee: value.result.base_fee_per_gas,
-            block_gas_used: value.result.gas_used,
-            block_bloom: bloom,
-        };
-
-        Self {
-            b_data: BlockLevelData {
-                b_meta: block_metadata,
-                b_hashes: BlockHashes {
-                    prev_hashes: vec![H256::default(); 256],
-                    cur_hash: value.result.hash,
-                },
-            },
-            genesis_state_trie_root: Default::default(),
-        }
-    }
-}
-
 impl EthGetBlockByNumberResponse {
     /// Fetches the block metadata for the given block number.
     async fn fetch<U: IntoUrl>(rpc_url: U, block_number: u64) -> Result<Self> {
@@ -157,7 +116,7 @@ impl EthGetBlockByNumberResponse {
         let block_number_hex = format!("0x{:x}", block_number);
         info!("Fetching block metadata for block {}", block_number_hex);
 
-        let response: Response = client
+        let response = client
             .post(rpc_url)
             .json(&serde_json::json!({
                 "jsonrpc": "2.0",
@@ -171,24 +130,124 @@ impl EthGetBlockByNumberResponse {
 
         let bytes = response.bytes().await?;
         let des = &mut serde_json::Deserializer::from_slice(&bytes);
-        let parsed: EthGetBlockByNumberResponse =
+        let parsed =
             serde_path_to_error::deserialize(des).context("deserializing eth_getBlockByNumber")?;
 
         Ok(parsed)
     }
 }
 
+/// The response from the `eth_chainId` RPC method.
+#[derive(Deserialize, Debug)]
+struct EthChainIdResponse {
+    result: U256,
+}
+
+impl EthChainIdResponse {
+    /// Fetches the chain id.
+    async fn fetch<U: IntoUrl>(rpc_url: U) -> Result<Self> {
+        let client = reqwest::Client::new();
+        info!("Fetching chain id");
+
+        let response = client
+            .post(rpc_url)
+            .json(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": "eth_chainId",
+                "params": [],
+                "id": 1,
+            }))
+            .send()
+            .await
+            .context("fetching eth_chainId")?;
+
+        let bytes = response.bytes().await?;
+        let des = &mut serde_json::Deserializer::from_slice(&bytes);
+        let parsed = serde_path_to_error::deserialize(des).context("deserializing eth_chainId")?;
+
+        Ok(parsed)
+    }
+}
+
+/// Product of the `eth_getBlockByNumber` and `eth_chainId` RPC methods.
+///
+/// Contains the necessary data to construct the `OtherBlockData` struct.
+struct RpcBlockMetadata {
+    block_by_number: EthGetBlockByNumberResponse,
+    chain_id: EthChainIdResponse,
+}
+
+impl RpcBlockMetadata {
+    async fn fetch(rpc_url: &str, block_number: u64) -> Result<Self> {
+        let (block_result, chain_id_result) = try_join!(
+            EthGetBlockByNumberResponse::fetch(rpc_url, block_number),
+            EthChainIdResponse::fetch(rpc_url)
+        )?;
+
+        Ok(Self {
+            block_by_number: block_result,
+            chain_id: chain_id_result,
+        })
+    }
+}
+
+impl From<RpcBlockMetadata> for OtherBlockData {
+    fn from(
+        RpcBlockMetadata {
+            block_by_number,
+            chain_id,
+        }: RpcBlockMetadata,
+    ) -> Self {
+        let mut bloom = [U256::zero(); 8];
+
+        for (i, word) in block_by_number
+            .result
+            .logs_bloom
+            .as_fixed_bytes()
+            .chunks_exact(32)
+            .enumerate()
+        {
+            bloom[i] = U256::from_big_endian(word);
+        }
+
+        let block_metadata = BlockMetadata {
+            block_beneficiary: block_by_number.result.miner,
+            block_timestamp: block_by_number.result.timestamp,
+            block_number: block_by_number.result.number,
+            block_difficulty: block_by_number.result.difficulty,
+            block_random: block_by_number.result.mix_hash,
+            block_gaslimit: block_by_number.result.gas_limit,
+            block_chain_id: chain_id.result,
+            block_base_fee: block_by_number.result.base_fee_per_gas,
+            block_gas_used: block_by_number.result.gas_used,
+            block_bloom: bloom,
+        };
+
+        Self {
+            b_data: BlockLevelData {
+                b_meta: block_metadata,
+                b_hashes: BlockHashes {
+                    prev_hashes: vec![H256::default(); 256],
+                    cur_hash: block_by_number.result.hash,
+                },
+            },
+            genesis_state_trie_root: Default::default(),
+        }
+    }
+}
+
 pub async fn fetch_prover_input(rpc_url: &str, block_number: u64) -> Result<ProverInput> {
-    let (trace_result, block_result) = try_join!(
+    let (trace_result, rpc_block_metadata) = try_join!(
         JerigonTraceResponse::fetch(rpc_url, block_number),
-        EthGetBlockByNumberResponse::fetch(rpc_url, block_number)
+        RpcBlockMetadata::fetch(rpc_url, block_number),
     )?;
 
-    debug!("Got block result: {:?}", block_result);
+    debug!("Got block result: {:?}", rpc_block_metadata.block_by_number);
     debug!("Got trace result: {:?}", trace_result);
+    debug!("Got chain_id: {:?}", rpc_block_metadata.chain_id);
 
     Ok(ProverInput {
         block_trace: trace_result.try_into()?,
-        other_data: block_result.into(),
+        other_data: rpc_block_metadata.into(),
     })
 }
