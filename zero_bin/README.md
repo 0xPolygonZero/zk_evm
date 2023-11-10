@@ -61,6 +61,7 @@ Options:
       --rpc-url <RPC_URL>            The RPC URL to use when using the `jerigon` mode
   -b, --block-number <BLOCK_NUMBER>  The block number to use when using the `jerigon` mode
   -r, --runtime <RUNTIME>            Specifies the paladin runtime to use [default: amqp] [possible values: amqp, in-memory]
+  -n, --num-workers <NUM_WORKERS>    Specifies the number of worker threads to spawn (in memory runtime only)
   -h, --help                         Print help
 ```
 

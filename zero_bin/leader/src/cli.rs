@@ -26,6 +26,10 @@ pub(crate) struct Cli {
     /// Specifies the paladin runtime to use.
     #[arg(long, short, value_enum, default_value_t = Runtime::Amqp)]
     pub(crate) runtime: Runtime,
+    /// Specifies the number of worker threads to spawn (in memory runtime
+    /// only).
+    #[arg(long, short)]
+    pub num_workers: Option<usize>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum, Default)]

@@ -19,6 +19,7 @@ async fn main() -> Result<()> {
     let args = cli::Cli::parse();
     let runtime = Runtime::from_config::<Ops>(&paladin::config::Config {
         runtime: args.runtime,
+        num_workers: args.num_workers,
         ..Default::default()
     })
     .await?;
