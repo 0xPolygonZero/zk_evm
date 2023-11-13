@@ -589,6 +589,7 @@ impl ParserState {
                 )
             }
             [WitnessEntry::Node(node), WitnessEntry::Node(NodeEntry::Hash(c_hash))] => {
+                println!("CREATING STORAGE TRIE FROM COMPACT!!");
                 Self::try_create_and_insert_partial_trie_from_node(
                     node,
                     Some((*c_hash).into()),

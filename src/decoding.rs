@@ -9,7 +9,7 @@ use eth_trie_utils::{
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     trie_subsets::create_trie_subset,
 };
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, H256, U256};
 use plonky2_evm::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::TrieRoots,
@@ -94,6 +94,15 @@ impl ProcessedBlockTrace {
             .into_iter()
             .enumerate()
             .map(|(txn_idx, txn_info)| {
+                let all_storage_roots = curr_block_tries
+                    .state
+                    .items()
+                    .filter_map(|(a, v)| v.as_val().map(|v| (a, v.clone())))
+                    .map(|(a, v)| (a, rlp::decode::<AccountRlp>(&v).unwrap().storage_root))
+                    .collect::<Vec<_>>();
+
+                println!("All storage roots (before): {:#?}", all_storage_roots);
+
                 let tries = Self::create_minimal_partial_tries_needed_by_txn(
                     &mut curr_block_tries,
                     &txn_info.nodes_used_by_txn,
@@ -101,6 +110,14 @@ impl ProcessedBlockTrace {
                 )?;
 
                 let addresses = Self::get_known_addresses_if_enabled();
+
+                let account_and_storage_hashes = curr_block_tries
+                    .state
+                    .items()
+                    .filter_map(|(a, v)| v.as_val().map(|v| (a, v.clone())))
+                    .map(|(a, v)| (a, rlp::decode::<AccountRlp>(&v).unwrap().storage_root))
+                    .collect::<Vec<_>>();
+                println!("{:#?}", account_and_storage_hashes);
 
                 let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
                 let new_bloom = txn_info.meta.block_bloom;
@@ -118,6 +135,12 @@ impl ProcessedBlockTrace {
                     transactions_root: curr_block_tries.txn.hash(),
                     receipts_root: curr_block_tries.receipt.hash(),
                 };
+
+                println!("PARTIAL TRIES BEFORE: {:?}", tries);
+
+                println!("TRIE ROOTS AFTER: {:?}", trie_roots_after);
+
+                println!("SIGNED BYTES: {}", hex::encode(&txn_info.meta.txn_bytes));
 
                 let gen_inputs = GenerationInputs {
                     txn_number_before: txn_idx.saturating_sub(1).into(),
@@ -140,10 +163,36 @@ impl ProcessedBlockTrace {
                     gen_inputs,
                 };
 
-                println!("IR: {:#?}", txn_proof_gen_ir);
+                // println!("IR: {:#?}", txn_proof_gen_ir);
 
                 tot_gas_used = new_tot_gas_used;
                 curr_bloom = new_bloom;
+
+                let all_storage_roots = curr_block_tries
+                    .state
+                    .items()
+                    .filter_map(|(a, v)| v.as_val().map(|v| (a, v.clone())))
+                    .map(|(a, v)| (a, rlp::decode::<AccountRlp>(&v).unwrap().storage_root))
+                    .collect::<Vec<_>>();
+                println!("All storage roots: {:#?}", all_storage_roots);
+
+                println!(
+                    "All state nodes: {:#?}",
+                    curr_block_tries
+                        .state
+                        .keys()
+                        .map(|k| format!("{:x}, {:x}", k, hash(&k.bytes_be())))
+                        .collect::<Vec<_>>()
+                );
+
+                for (addr, trie) in curr_block_tries.storage.iter() {
+                    println!("Storage slots for hashed addr {:x}:", addr);
+
+                    let slots = trie.keys().map(|s| format!("{:x}", s)).collect::<Vec<_>>();
+                    println!("----------");
+                    println!("{:#?}", slots);
+                    println!("----------");
+                }
 
                 Ok(txn_proof_gen_ir)
             })
@@ -176,12 +225,25 @@ impl ProcessedBlockTrace {
             TrieType::Receipt,
         )?;
 
+        let x = nodes_used_by_txn
+            .storage_accesses
+            .iter()
+            .map(|(k, v)| (H256::from_slice(&k.bytes_be()), v.clone()))
+            .collect::<Vec<_>>();
+
         let storage_tries = Self::create_minimal_storage_partial_tries(
             &mut curr_block_tries.storage,
             &nodes_used_by_txn.state_accounts_with_no_accesses_but_storage_tries,
-            nodes_used_by_txn.storage_accesses.iter(),
+            x.iter(),
         )?;
 
+        println!(
+            "{:#?}",
+            storage_tries
+                .iter()
+                .map(|(a, t)| format!("hashed account addr: {:x}: {}", a, t.keys().count()))
+                .collect::<Vec<_>>()
+        );
         Ok(TrieInputs {
             state_trie,
             transactions_trie,
@@ -226,10 +288,15 @@ impl ProcessedBlockTrace {
             Item = &'a (HashedAccountAddr, Vec<HashedStorageAddrNibbles>),
         >,
     ) -> TraceParsingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {
+        println!(
+            "BASE TRIES KEYS: {:#?}",
+            storage_tries.keys().collect::<Vec<_>>()
+        );
+
         accesses_per_account
             .map(|(h_addr, mem_accesses)| {
                 // TODO: Clean up...
-                let base_storage_trie = match storage_tries.get(h_addr) {
+                let base_storage_trie = match storage_tries.get(&H256(h_addr.0)) {
                     Some(s_trie) => s_trie,
                     None => {
                         let trie = state_accounts_with_no_accesses_but_storage_tries
@@ -290,21 +357,61 @@ impl ProcessedBlockTrace {
         meta: &TxnMetaState,
         txn_idx: TxnIdx,
     ) -> TraceParsingResult<()> {
+        println!("Applying deltas!");
+
         for (hashed_acc_addr, storage_writes) in deltas.storage_writes {
-            let storage_trie = trie_state.storage.get_mut(&hashed_acc_addr).ok_or(
-                TraceParsingError::MissingAccountStorageTrie(hashed_acc_addr),
-            )?;
-            storage_trie.extend(storage_writes);
+            let storage_trie = trie_state
+                .storage
+                .get_mut(&H256::from_slice(&hashed_acc_addr.bytes_be()))
+                .ok_or(
+                    TraceParsingError::MissingAccountStorageTrie(H256::zero()), // TODO!!! FIX
+                )?;
+
+            println!("Applying storage writes of {:?}", storage_writes);
+
+            println!(
+                "All storage slots before write apply: {:#?}",
+                storage_trie
+                    .keys()
+                    .map(|k| format!("{:x}", k))
+                    .collect::<Vec<_>>()
+            );
+
+            for (addr, write) in storage_writes.iter() {
+                if storage_trie.get(*addr).is_none() {
+                    println!(
+                        "STORAGE SLOT CREATED! (h_account: {:x}) {:x} --> {}",
+                        hashed_acc_addr,
+                        addr,
+                        hex::encode(write)
+                    );
+                }
+            }
+
+            // // TODO: Move hash of slot addr to block trace processing...
+            // storage_trie.extend(storage_writes.into_iter().map(|(slot, v)|
+            // (Nibbles::from_h256_be(hash(&slot.bytes_be())), v)));
+
+            storage_trie.extend(
+                storage_writes
+                    .into_iter()
+                    .map(|(k, v)| (Nibbles::from_h256_be(hash(&k.bytes_be())), v)),
+            );
         }
 
         for (hashed_acc_addr, s_trie_writes) in deltas.state_writes {
             let val_k = Nibbles::from_h256_be(hashed_acc_addr);
 
             // If the account was created, then it will not exist in the trie.
-            let val_bytes = trie_state
-                .state
-                .get(val_k)
-                .unwrap_or(&EMPTY_ACCOUNT_BYTES_RLPED);
+            let val_bytes = trie_state.state.get(val_k).unwrap_or_else(|| {
+                println!("ACCOUNT CREATED DURING DELTA APPLY! {}", hashed_acc_addr);
+                &EMPTY_ACCOUNT_BYTES_RLPED
+            });
+
+            println!(
+                "Empty RLP account: {:?}",
+                rlp::decode::<AccountRlp>(&EMPTY_ACCOUNT_BYTES_RLPED).unwrap()
+            );
 
             let mut account: AccountRlp = rlp::decode(val_bytes).map_err(|err| {
                 TraceParsingError::AccountDecode(hex::encode(val_bytes), err.to_string())
@@ -366,15 +473,22 @@ impl StateTrieWrites {
         h_addr: &HashedAccountAddr,
         acc_storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
     ) -> TraceParsingResult<()> {
+        println!("Applying writes!");
+
         let storage_root_hash_change = match self.storage_trie_change {
             false => None,
             true => {
                 let storage_trie = acc_storage_tries
                     .get(h_addr)
                     .ok_or(TraceParsingError::MissingAccountStorageTrie(*h_addr))?;
+
                 Some(storage_trie.hash())
             }
         };
+
+        if let Some(new_t) = storage_root_hash_change {
+            println!("NEW STORAGE ROOT BEING APPLIED: {:x}", new_t);
+        }
 
         update_val_if_some(&mut state_node.balance, self.balance);
         update_val_if_some(&mut state_node.nonce, self.nonce);

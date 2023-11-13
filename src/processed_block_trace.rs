@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::str::FromStr;
 
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -15,7 +16,7 @@ use crate::trace_protocol::{
 };
 use crate::types::{
     Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
-    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, StorageVal, TrieRootHash, TxnProofGenIR,
+    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, TrieRootHash, TxnProofGenIR,
     EMPTY_TRIE_HASH,
 };
 use crate::utils::{
@@ -52,6 +53,14 @@ impl BlockTrace {
         let pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images);
 
         print_value_and_hash_nodes_of_trie(&pre_image_data.tries.state);
+
+        println!("SPECIAL QUERY");
+        let res = pre_image_data.tries.state.get(
+            Nibbles::from_str("F36D6FADC19B5EC9189AE65683241081F7C772EC596EA1FACB9DAEF2A1396637")
+                .unwrap(),
+        );
+
+        println!("SPECIAL QUERY RES: {:?}", res);
 
         for (h_addr, s_trie) in pre_image_data.tries.storage.iter() {
             print_value_and_hash_nodes_of_storage_trie(h_addr, s_trie);
@@ -212,20 +221,20 @@ impl TxnInfo {
 
             let storage_writes = trace.storage_written.unwrap_or_default();
 
-            let storage_read_keys = trace.storage_read.into_iter().flat_map(|reads| {
-                reads
-                    .into_iter()
-                    .map(|addr| storage_addr_to_nibbles_even_nibble_fixed_hashed(&addr))
-            });
+            let storage_read_keys = trace
+                .storage_read
+                .into_iter()
+                .flat_map(|reads| reads.into_iter());
 
-            let storage_write_keys = storage_writes
-                .keys()
-                .map(storage_addr_to_nibbles_even_nibble_fixed_hashed);
-            let storage_access_keys = storage_read_keys.chain(storage_write_keys);
+            let storage_write_keys = storage_writes.keys();
+            let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
 
-            nodes_used_by_txn
-                .storage_accesses
-                .push((hashed_addr, storage_access_keys.collect()));
+            nodes_used_by_txn.storage_accesses.push((
+                Nibbles::from_h256_be(hashed_addr),
+                storage_access_keys
+                    .map(|k| storage_addr_to_nibbles_even_nibble_fixed_hashed(&k))
+                    .collect(),
+            ));
 
             let storage_trie_change = !storage_writes.is_empty();
             let code_change = trace.code_usage.is_some();
@@ -249,12 +258,12 @@ impl TxnInfo {
 
             let storage_writes_vec = storage_writes
                 .into_iter()
-                .map(|(k, v)| (storage_addr_to_nibbles_even_nibble_fixed_hashed(&k), v))
+                .map(|(k, v)| (Nibbles::from_h256_be(k), rlp::encode(&v).to_vec()))
                 .collect();
 
             nodes_used_by_txn
                 .storage_writes
-                .push((hashed_addr, storage_writes_vec));
+                .push((Nibbles::from_h256_be(hashed_addr), storage_writes_vec));
 
             nodes_used_by_txn.state_accesses.push(hashed_addr);
 
@@ -273,6 +282,11 @@ impl TxnInfo {
             }
         }
 
+        // println!(
+        //     "Storage accesses for {:x} (hashed: {:x}): {:#?}",
+        //     addr, hashed_addr, nodes_used_by_txn
+        // );
+
         let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
             nodes_used_by_txn
                 .storage_accesses
@@ -280,13 +294,19 @@ impl TxnInfo {
                 .filter(|(_, slots)| !slots.is_empty())
                 .map(|(addr, _)| *addr),
         );
+        println!(
+            "Account with storage accesses: {:#?}",
+            accounts_with_storage_accesses
+        );
 
         let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
             .iter()
             .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
 
         let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
-            .filter(|&(addr, _data)| (!accounts_with_storage_accesses.contains(addr)))
+            .filter(|&(addr, _data)| {
+                !accounts_with_storage_accesses.contains(&Nibbles::from_h256_be(*addr))
+            })
             .map(|(addr, data)| (*addr, data.storage_root));
 
         nodes_used_by_txn
@@ -334,11 +354,8 @@ pub(crate) struct NodesUsedByTxn {
     pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
-    pub(crate) storage_writes: Vec<(
-        HashedAccountAddr,
-        Vec<(HashedStorageAddrNibbles, StorageVal)>,
-    )>,
+    pub(crate) storage_accesses: Vec<(Nibbles, Vec<HashedStorageAddrNibbles>)>,
+    pub(crate) storage_writes: Vec<(Nibbles, Vec<(HashedStorageAddrNibbles, Vec<u8>)>)>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries:
         HashMap<HashedAccountAddr, TrieRootHash>,
 }
@@ -364,6 +381,32 @@ fn storage_addr_to_nibbles_even_nibble_fixed_hashed(addr: &StorageAddr) -> Nibbl
     // I think this is all we need to do? Yell at me if this breaks things.
     // H256's are never going to be truncated I think.
 
-    let hashed_addr = hash(addr.as_bytes());
-    Nibbles::from_h256_be(hashed_addr)
+    // // TODO: Disgusting hack! Remove if this works...
+    // let s = hex::encode(addr.as_bytes());
+
+    // let mut n = Nibbles::from_str(&s).unwrap();
+    // let odd_count = (n.count & 1) == 1;
+
+    // if odd_count {
+    //     n.push_nibble_front(0);
+    // }
+
+    // n
+
+    // let hashed_addr = hash(addr.as_bytes());
+    // Nibbles::from_h256_be(hashed_addr)
+
+    Nibbles::from_h256_be(hash(&addr.0))
+}
+
+// TODO: Extreme hack! Please don't keep...
+fn string_to_nibbles_even_nibble_fixed(s: &str) -> Nibbles {
+    let mut n = Nibbles::from_str(s).unwrap();
+    let odd_count = (n.count & 1) == 1;
+
+    if odd_count {
+        n.push_nibble_front(0);
+    }
+
+    n
 }

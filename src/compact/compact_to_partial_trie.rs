@@ -120,6 +120,8 @@ fn process_leaf(
         }
     };
 
+    println!("INSERTING KEY {:x}!", full_k);
+
     output.trie.insert(full_k, l_val);
 
     Ok(())
