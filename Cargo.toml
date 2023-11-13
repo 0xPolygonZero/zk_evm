@@ -5,6 +5,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bytes = "1.5.0"
 ciborium = "0.2.1"
 ciborium-io = "0.2.1"
 enum-as-inner = "0.6.0"

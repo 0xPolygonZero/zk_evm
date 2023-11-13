@@ -313,9 +313,13 @@ impl TxnInfo {
             .state_accounts_with_no_accesses_but_storage_tries
             .extend(accounts_with_storage_but_no_storage_accesses);
 
+        // TODO: Make more efficient...
+        let mut receipt_node_bytes = rlp::encode(&self.meta.new_receipt_trie_node_byte).to_vec();
+        receipt_node_bytes.insert(0, 2);
+
         let new_meta_state = TxnMetaState {
             txn_bytes: self.meta.byte_code,
-            receipt_node_bytes: rlp::encode(&self.meta.new_receipt_trie_node_byte).to_vec(),
+            receipt_node_bytes,
             gas_used: self.meta.gas_used,
             block_bloom,
         };
@@ -396,7 +400,7 @@ fn storage_addr_to_nibbles_even_nibble_fixed_hashed(addr: &StorageAddr) -> Nibbl
     // let hashed_addr = hash(addr.as_bytes());
     // Nibbles::from_h256_be(hashed_addr)
 
-    Nibbles::from_h256_be(hash(&addr.0))
+    Nibbles::from_h256_be(hash(&addr.0)) // TODO CHeck endianness...
 }
 
 // TODO: Extreme hack! Please don't keep...
