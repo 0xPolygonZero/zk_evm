@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use ethereum_types::H160;
 use ethereum_types::{Address, Bloom, H256, U256};
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
@@ -241,7 +242,9 @@ impl From<RpcBlockMetadata> for OtherBlockData {
         }
 
         let block_metadata = BlockMetadata {
-            block_beneficiary: block_by_number.result.miner,
+            block_beneficiary: H160::from_slice(
+                &hex::decode("67b1d87101671b127f5f8714789c7192f7ad340e").unwrap(),
+            ),
             block_timestamp: block_by_number.result.timestamp,
             block_number: block_by_number.result.number,
             block_difficulty: block_by_number.result.difficulty,

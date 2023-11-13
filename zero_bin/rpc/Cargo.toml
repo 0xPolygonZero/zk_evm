@@ -26,3 +26,4 @@ futures = "0.3.29"
 # Local dependencies
 common = { path = "../common" }
 prover = { path = "../prover" }
+hex = "0.4.3"
