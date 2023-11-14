@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::{self, Display, Formatter},
-    iter::{empty, once},
+    iter::once,
 };
 
 use eth_trie_utils::{
@@ -198,7 +198,11 @@ impl ProcessedBlockTrace {
             })
             .collect::<TraceParsingResult<Vec<_>>>()?;
 
-        Self::pad_gen_inputs_with_dummy_inputs_if_needed(&mut txn_gen_inputs, &other_data.b_data);
+        Self::pad_gen_inputs_with_dummy_inputs_if_needed(
+            &mut txn_gen_inputs,
+            &other_data.b_data,
+            &curr_block_tries,
+        );
         Ok(txn_gen_inputs)
     }
 
@@ -440,7 +444,10 @@ impl ProcessedBlockTrace {
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<TxnProofGenIR>,
         b_data: &BlockLevelData,
+        final_trie_state: &PartialTrieState,
     ) {
+        println!("Padding len: {}", gen_inputs.len());
+
         match gen_inputs.len() {
             0 => {
                 // Need to pad with two dummy txns.
@@ -451,6 +458,7 @@ impl ProcessedBlockTrace {
                 // block.
                 gen_inputs.push(create_dummy_txn_gen_input_single_dummy_txn(
                     &gen_inputs[0].gen_inputs,
+                    final_trie_state,
                     b_data,
                 ))
             }
@@ -509,11 +517,11 @@ fn calculate_trie_input_hashes(t_inputs: &TrieInputs) -> TrieRoots {
 
 fn create_dummy_txn_gen_input_single_dummy_txn(
     prev_real_gen_input: &GenerationInputs,
+    final_trie_state: &PartialTrieState,
     b_data: &BlockLevelData,
 ) -> TxnProofGenIR {
-    let partial_sub_storage_tries: Vec<_> = prev_real_gen_input
-        .tries
-        .storage_tries
+    let partial_sub_storage_tries: Vec<_> = final_trie_state
+        .storage
         .iter()
         .map(|(hashed_acc_addr, s_trie)| {
             (
@@ -524,15 +532,32 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         .collect();
 
     let tries = TrieInputs {
-        state_trie: create_fully_hashed_out_sub_partial_trie(&prev_real_gen_input.tries.state_trie),
-        transactions_trie: create_fully_hashed_out_sub_partial_trie(
-            &prev_real_gen_input.tries.transactions_trie,
-        ),
-        receipts_trie: create_fully_hashed_out_sub_partial_trie(
-            &prev_real_gen_input.tries.receipts_trie,
-        ),
+        state_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.state),
+        transactions_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.txn),
+        receipts_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.receipt),
         storage_tries: partial_sub_storage_tries,
     };
+
+    println!(
+        "Orig trie hash: {:x}",
+        prev_real_gen_input.tries.state_trie.hash()
+    );
+    println!("State sub trie: {:#?}", tries.state_trie);
+
+    assert_eq!(
+        tries.state_trie.hash(),
+        prev_real_gen_input.trie_roots_after.state_root
+    );
+    println!(
+        "{} == {}",
+        tries.state_trie.hash(),
+        prev_real_gen_input.trie_roots_after.state_root
+    );
+
+    println!(
+        "Fully hashed out dummy state trie: {:x}",
+        tries.state_trie.hash()
+    );
 
     let gen_inputs = GenerationInputs {
         txn_number_before: 0.into(),
@@ -557,7 +582,7 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
 // way to do it.
 fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedPartialTrie {
     // Impossible to actually fail with an empty iter.
-    create_trie_subset(trie, empty::<Nibbles>()).unwrap()
+    create_trie_subset(trie, once(0_u64)).unwrap()
 }
 
 fn create_dummy_txn_pair_for_empty_block(b_data: &BlockLevelData) -> [TxnProofGenIR; 2] {
