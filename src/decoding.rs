@@ -464,7 +464,6 @@ impl ProcessedBlockTrace {
                 let dummy_txn = create_dummy_txn_gen_input_single_dummy_txn(
                     &gen_inputs[0].gen_inputs,
                     final_trie_state,
-                    b_data,
                 );
                 gen_inputs.insert(0, dummy_txn);
             }
@@ -522,9 +521,8 @@ fn calculate_trie_input_hashes(t_inputs: &TrieInputs) -> TrieRoots {
 }
 
 fn create_dummy_txn_gen_input_single_dummy_txn(
-    prev_real_gen_input: &GenerationInputs,
+    next_real_gen_input: &GenerationInputs,
     final_trie_state: &PartialTrieState,
-    b_data: &BlockLevelData,
 ) -> TxnProofGenIR {
     let partial_sub_storage_tries: Vec<_> = final_trie_state
         .storage
@@ -546,18 +544,18 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
 
     println!(
         "Orig trie hash: {:x}",
-        prev_real_gen_input.tries.state_trie.hash()
+        next_real_gen_input.tries.state_trie.hash()
     );
     println!("State sub trie: {:#?}", tries.state_trie);
 
     assert_eq!(
         tries.state_trie.hash(),
-        prev_real_gen_input.trie_roots_after.state_root
+        next_real_gen_input.trie_roots_after.state_root
     );
     println!(
         "{} == {}",
         tries.state_trie.hash(),
-        prev_real_gen_input.trie_roots_after.state_root
+        next_real_gen_input.trie_roots_after.state_root
     );
 
     println!(
@@ -567,19 +565,14 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
 
     let gen_inputs = GenerationInputs {
         txn_number_before: 0.into(),
-        gas_used_before: prev_real_gen_input.gas_used_after,
-        block_bloom_before: prev_real_gen_input.block_bloom_after,
-        gas_used_after: prev_real_gen_input.gas_used_after,
-        block_bloom_after: prev_real_gen_input.block_bloom_after,
+        gas_used_before: 0.into(),
+        gas_used_after: 0.into(),
+        block_bloom_before: [0.into(); 8],
+        block_bloom_after: [0.into(); 8],
         signed_txn: None,
-        withdrawals: Vec::default(),
-        tries,
-        trie_roots_after: prev_real_gen_input.trie_roots_after.clone(),
-        genesis_state_trie_root: prev_real_gen_input.genesis_state_trie_root,
-        contract_code: HashMap::default(),
-        block_metadata: b_data.b_meta.clone(),
-        block_hashes: b_data.b_hashes.clone(),
-        addresses: Vec::default(),
+        withdrawals: vec![],
+        trie_roots_after: next_real_gen_input.trie_roots_after.clone(),
+        ..(next_real_gen_input.clone())
     };
 
     gen_inputs_to_ir(gen_inputs, 0)
