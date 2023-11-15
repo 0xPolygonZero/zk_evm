@@ -5,6 +5,7 @@ use eth_trie_utils::{
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
 use ethereum_types::H256;
+use log::trace;
 use plonky2_evm::generation::mpt::AccountRlp;
 
 use super::compact_prestate_processing::{
@@ -51,6 +52,8 @@ pub(super) fn create_partial_trie_from_compact_node_rec(
     curr_node: &NodeEntry,
     output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
+    trace!("Processing node {} into `PartialTrie` node...", curr_node);
+
     match curr_node {
         NodeEntry::Branch(n) => process_branch(curr_key, n, output),
         NodeEntry::Code(c_bytes) => process_code(c_bytes.clone(), output),
@@ -82,6 +85,7 @@ fn process_code(
     c_bytes: Vec<u8>,
     output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
+    println!("PROCESSING CODE NODE!!");
     let c_hash = hash(&c_bytes);
     output.code.insert(c_hash, c_bytes);
 
@@ -146,6 +150,12 @@ fn convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(
     let code_hash = match &acc_data.account_node_code {
         Some(AccountNodeCode::CodeNode(c_bytes)) => {
             let c_hash = hash(c_bytes);
+            println!(
+                "Adding code hash mapping ({:x} --> {})",
+                c_hash,
+                hex::encode(c_bytes)
+            );
+
             output.code.insert(c_hash, c_bytes.clone());
 
             c_hash

@@ -195,7 +195,10 @@ impl ContractCodeUsage {
     pub(crate) fn get_code_hash(&self) -> CodeHash {
         match self {
             ContractCodeUsage::Read(hash) => *hash,
-            ContractCodeUsage::Write(bytes) => hash(bytes),
+            ContractCodeUsage::Write(bytes) => {
+                println!("Hashing code {} ...", hex::encode(&bytes.0));
+                hash(bytes)
+            }
         }
     }
 }

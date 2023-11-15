@@ -158,6 +158,8 @@ impl ProcessedBlockTrace {
                     addresses,
                 };
 
+                println!("Code mapping: {:?}", gen_inputs.contract_code);
+
                 let txn_proof_gen_ir = TxnProofGenIR {
                     txn_idx,
                     gen_inputs,
@@ -420,11 +422,16 @@ impl ProcessedBlockTrace {
             let mut account: AccountRlp = rlp::decode(val_bytes).map_err(|err| {
                 TraceParsingError::AccountDecode(hex::encode(val_bytes), err.to_string())
             })?;
+
+            println!("Account for (before) {:x}: {:#?}", hashed_acc_addr, account);
+
             s_trie_writes.apply_writes_to_state_node(
                 &mut account,
                 &hashed_acc_addr,
                 &trie_state.storage,
             )?;
+
+            println!("Account for {:x}: {:#?}", hashed_acc_addr, account);
 
             let updated_account_bytes = rlp::encode(&account);
             trie_state

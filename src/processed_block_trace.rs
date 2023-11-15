@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::iter::once;
 use std::str::FromStr;
 
 use eth_trie_utils::nibbles::Nibbles;
@@ -17,7 +18,7 @@ use crate::trace_protocol::{
 use crate::types::{
     Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
     HashedStorageAddrNibbles, OtherBlockData, StorageAddr, TrieRootHash, TxnProofGenIR,
-    EMPTY_TRIE_HASH,
+    EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
