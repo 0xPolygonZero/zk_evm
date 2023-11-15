@@ -458,7 +458,10 @@ impl ProcessedBlockTrace {
         match gen_inputs.len() {
             0 => {
                 // Need to pad with two dummy txns.
-                gen_inputs.extend(create_dummy_txn_pair_for_empty_block(b_data));
+                gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
+                    b_data,
+                    final_trie_state,
+                ));
             }
             1 => {
                 let dummy_txn = create_dummy_txn_gen_input_single_dummy_txn(
@@ -591,35 +594,37 @@ fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedP
     create_trie_subset(trie, once(0_u64)).unwrap()
 }
 
-fn create_dummy_txn_pair_for_empty_block(b_data: &BlockLevelData) -> [TxnProofGenIR; 2] {
+fn create_dummy_txn_pair_for_empty_block(
+    b_data: &BlockLevelData,
+    final_trie_state: &PartialTrieState,
+) -> [TxnProofGenIR; 2] {
     [
-        create_dummy_gen_input(b_data, 0),
-        create_dummy_gen_input(b_data, 1),
+        create_dummy_gen_input(b_data, final_trie_state, 0),
+        create_dummy_gen_input(b_data, final_trie_state, 1),
     ]
 }
 
-fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> TxnProofGenIR {
+fn create_dummy_gen_input(
+    b_data: &BlockLevelData,
+    final_trie_state: &PartialTrieState,
+    txn_idx: TxnIdx,
+) -> TxnProofGenIR {
+    let tries = create_dummy_proof_trie_inputs(final_trie_state);
+
     let trie_roots_after = TrieRoots {
-        state_root: b_data.b_hashes.prev_hashes[255],
+        state_root: tries.state_trie.hash(),
         transactions_root: EMPTY_TRIE_HASH,
         receipts_root: EMPTY_TRIE_HASH,
     };
 
     let gen_inputs = GenerationInputs {
-        txn_number_before: txn_idx.saturating_sub(1).into(),
-        gas_used_before: 0.into(),
-        block_bloom_before: Bloom::default(),
-        gas_used_after: 0.into(),
-        block_bloom_after: Bloom::default(),
         signed_txn: None,
-        withdrawals: Vec::default(),
-        tries: create_empty_trie_inputs(),
+        tries,
         trie_roots_after,
         genesis_state_trie_root: TrieRootHash::default(),
-        contract_code: HashMap::default(),
         block_metadata: b_data.b_meta.clone(),
         block_hashes: b_data.b_hashes.clone(),
-        addresses: Vec::default(),
+        ..GenerationInputs::default()
     };
 
     gen_inputs_to_ir(gen_inputs, txn_idx)
@@ -641,11 +646,22 @@ fn gen_inputs_to_ir(gen_inputs: GenerationInputs, txn_idx: TxnIdx) -> TxnProofGe
     }
 }
 
-fn create_empty_trie_inputs() -> TrieInputs {
+fn create_dummy_proof_trie_inputs(final_trie_state: &PartialTrieState) -> TrieInputs {
+    let partial_sub_storage_tries: Vec<_> = final_trie_state
+        .storage
+        .iter()
+        .map(|(hashed_acc_addr, s_trie)| {
+            (
+                *hashed_acc_addr,
+                create_fully_hashed_out_sub_partial_trie(s_trie),
+            )
+        })
+        .collect();
+
     TrieInputs {
-        state_trie: HashedPartialTrie::default(),
+        state_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.state),
         transactions_trie: HashedPartialTrie::default(),
         receipts_trie: HashedPartialTrie::default(),
-        storage_tries: Vec::default(),
+        storage_tries: partial_sub_storage_tries,
     }
 }
