@@ -458,16 +458,10 @@ impl ProcessedBlockTrace {
         match gen_inputs.len() {
             0 => {
                 // Need to pad with two dummy txns.
-                gen_inputs.extend(create_dummy_txn_pair_for_empty_block(b_data))
+                gen_inputs.extend(create_dummy_txn_pair_for_empty_block(b_data));
             }
             1 => {
-                // Only need one dummy txn, but it needs info from the one real txn in the
-                // block.
-                gen_inputs.push(create_dummy_txn_gen_input_single_dummy_txn(
-                    &gen_inputs[0].gen_inputs,
-                    final_trie_state,
-                    b_data,
-                ))
+                gen_inputs.insert(0, create_dummy_gen_input(b_data, 0));
             }
             _ => (),
         }
