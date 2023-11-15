@@ -213,7 +213,8 @@ impl TxnInfo {
         code_hash_resolve_f: &F,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
-        let mut contract_code_accessed = HashMap::new();
+        let mut contract_code_accessed = create_empty_code_access_map();
+
         let block_bloom = self.block_bloom();
 
         for (addr, trace) in self.traces {
@@ -349,6 +350,10 @@ impl TxnInfo {
 
         bloom
     }
+}
+
+fn create_empty_code_access_map() -> HashMap<CodeHash, Vec<u8>> {
+    HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
 /// Note that "*_accesses" includes writes.
