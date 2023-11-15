@@ -563,6 +563,12 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         tries.state_trie.hash()
     );
 
+    let trie_roots_after = TrieRoots {
+        state_root: next_real_gen_input.tries.state_trie.hash(),
+        transactions_root: EMPTY_TRIE_HASH,
+        receipts_root: EMPTY_TRIE_HASH,
+    };
+
     let gen_inputs = GenerationInputs {
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
@@ -571,7 +577,7 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         block_bloom_after: [0.into(); 8],
         signed_txn: None,
         withdrawals: vec![],
-        trie_roots_after: next_real_gen_input.trie_roots_after.clone(),
+        trie_roots_after,
         ..(next_real_gen_input.clone())
     };
 
@@ -593,6 +599,12 @@ fn create_dummy_txn_pair_for_empty_block(b_data: &BlockLevelData) -> [TxnProofGe
 }
 
 fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> TxnProofGenIR {
+    let trie_roots_after = TrieRoots {
+        state_root: b_data.b_hashes.prev_hashes[255],
+        transactions_root: EMPTY_TRIE_HASH,
+        receipts_root: EMPTY_TRIE_HASH,
+    };
+
     let gen_inputs = GenerationInputs {
         txn_number_before: txn_idx.saturating_sub(1).into(),
         gas_used_before: 0.into(),
@@ -602,7 +614,7 @@ fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> TxnProofG
         signed_txn: None,
         withdrawals: Vec::default(),
         tries: create_empty_trie_inputs(),
-        trie_roots_after: create_trie_roots_for_empty_tries(),
+        trie_roots_after,
         genesis_state_trie_root: TrieRootHash::default(),
         contract_code: HashMap::default(),
         block_metadata: b_data.b_meta.clone(),
@@ -635,13 +647,5 @@ fn create_empty_trie_inputs() -> TrieInputs {
         transactions_trie: HashedPartialTrie::default(),
         receipts_trie: HashedPartialTrie::default(),
         storage_tries: Vec::default(),
-    }
-}
-
-const fn create_trie_roots_for_empty_tries() -> TrieRoots {
-    TrieRoots {
-        state_root: EMPTY_TRIE_HASH,
-        transactions_root: EMPTY_TRIE_HASH,
-        receipts_root: EMPTY_TRIE_HASH,
     }
 }
