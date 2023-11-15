@@ -461,7 +461,12 @@ impl ProcessedBlockTrace {
                 gen_inputs.extend(create_dummy_txn_pair_for_empty_block(b_data));
             }
             1 => {
-                gen_inputs.insert(0, create_dummy_gen_input(b_data, 0));
+                let dummy_txn = create_dummy_txn_gen_input_single_dummy_txn(
+                    &gen_inputs[0].gen_inputs,
+                    final_trie_state,
+                    b_data,
+                );
+                gen_inputs.insert(0, dummy_txn);
             }
             _ => (),
         }
@@ -534,8 +539,8 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
 
     let tries = TrieInputs {
         state_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.state),
-        transactions_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.txn),
-        receipts_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.receipt),
+        transactions_trie: HashedPartialTrie::default(),
+        receipts_trie: HashedPartialTrie::default(),
         storage_tries: partial_sub_storage_tries,
     };
 
@@ -577,7 +582,7 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         addresses: Vec::default(),
     };
 
-    gen_inputs_to_ir(gen_inputs, 1)
+    gen_inputs_to_ir(gen_inputs, 0)
 }
 
 // We really want to get a trie with just a hash node here, and this is an easy
