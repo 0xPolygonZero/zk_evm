@@ -140,15 +140,15 @@ impl ProcessedBlockTrace {
 
                 println!("TRIE ROOTS AFTER: {:?}", trie_roots_after);
 
-                println!("SIGNED BYTES: {}", hex::encode(&txn_info.meta.txn_bytes));
-
                 let gen_inputs = GenerationInputs {
                     txn_number_before: txn_idx.saturating_sub(1).into(),
                     gas_used_before: tot_gas_used,
                     block_bloom_before: curr_bloom,
                     gas_used_after: new_tot_gas_used,
                     block_bloom_after: new_bloom,
-                    signed_txns: vec![txn_info.meta.txn_bytes],
+                    signed_txn: txn_info.meta.txn_bytes,
+                    withdrawals: Vec::new(), /* TODO: Once this is added to the trace spec, add
+                                              * it here... */
                     tries,
                     trie_roots_after,
                     genesis_state_trie_root: other_data.genesis_state_trie_root,
@@ -440,7 +440,7 @@ impl ProcessedBlockTrace {
         }
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
-        trie_state.txn.insert(txn_k, meta.txn_bytes.clone());
+        trie_state.txn.insert(txn_k, meta.txn_bytes());
         trie_state
             .receipt
             .insert(txn_k, meta.receipt_node_bytes.clone());
@@ -572,7 +572,8 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         block_bloom_before: prev_real_gen_input.block_bloom_after,
         gas_used_after: prev_real_gen_input.gas_used_after,
         block_bloom_after: prev_real_gen_input.block_bloom_after,
-        signed_txns: Vec::default(),
+        signed_txn: None,
+        withdrawals: Vec::default(),
         tries,
         trie_roots_after: prev_real_gen_input.trie_roots_after.clone(),
         genesis_state_trie_root: prev_real_gen_input.genesis_state_trie_root,
@@ -606,7 +607,8 @@ fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> TxnProofG
         block_bloom_before: Bloom::default(),
         gas_used_after: 0.into(),
         block_bloom_after: Bloom::default(),
-        signed_txns: Vec::default(),
+        signed_txn: None,
+        withdrawals: Vec::default(),
         tries: create_empty_trie_inputs(),
         trie_roots_after: create_trie_roots_for_empty_tries(),
         genesis_state_trie_root: TrieRootHash::default(),
@@ -617,6 +619,15 @@ fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> TxnProofG
     };
 
     gen_inputs_to_ir(gen_inputs, txn_idx)
+}
+
+impl TxnMetaState {
+    fn txn_bytes(&self) -> Vec<u8> {
+        match self.txn_bytes.as_ref() {
+            Some(v) => v.clone(),
+            None => Vec::default(),
+        }
+    }
 }
 
 fn gen_inputs_to_ir(gen_inputs: GenerationInputs, txn_idx: TxnIdx) -> TxnProofGenIR {
