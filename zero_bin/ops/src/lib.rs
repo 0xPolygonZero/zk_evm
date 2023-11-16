@@ -1,7 +1,6 @@
-use anyhow::Result;
 use once_cell::sync::Lazy;
 use paladin::{
-    operation::{Monoid, Operation},
+    operation::{FatalError, Monoid, Operation, Result},
     opkind_derive::OpKind,
 };
 use plonky_block_proof_gen::{
@@ -23,7 +22,7 @@ impl Operation for TxProof {
     type Kind = Ops;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let result = generate_txn_proof(&P_STATE, input)?;
+        let result = generate_txn_proof(&P_STATE, input).map_err(FatalError::from)?;
 
         Ok(result.into())
     }
@@ -39,7 +38,8 @@ impl Monoid for AggProof {
     type Kind = Ops;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
-        let result = generate_agg_proof(&P_STATE, &a, &b, self.other.clone())?;
+        let result =
+            generate_agg_proof(&P_STATE, &a, &b, self.other.clone()).map_err(FatalError::from)?;
 
         Ok(result.into())
     }
@@ -62,12 +62,10 @@ impl Operation for BlockProof {
     type Kind = Ops;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        Ok(generate_block_proof(
-            &P_STATE,
-            self.prev.as_ref(),
-            &input,
-            self.other.clone(),
-        )?)
+        Ok(
+            generate_block_proof(&P_STATE, self.prev.as_ref(), &input, self.other.clone())
+                .map_err(FatalError::from)?,
+        )
     }
 }
 

@@ -7,7 +7,9 @@ use paladin::runtime::Runtime;
 pub(crate) async fn jerigon_main(runtime: Runtime, rpc_url: &str, block_number: u64) -> Result<()> {
     let prover_input = rpc::fetch_prover_input(rpc_url, block_number).await?;
 
-    let proof = prover_input.prove(&runtime).await?;
+    let proof = prover_input.prove(&runtime).await;
+    runtime.close().await?;
+    let proof = proof?;
     std::io::stdout().write_all(&serde_json::to_vec(&proof.intern)?)?;
 
     Ok(())

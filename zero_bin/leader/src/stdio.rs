@@ -11,7 +11,9 @@ pub(crate) async fn stdio_main(runtime: Runtime) -> Result<()> {
 
     let des = &mut serde_json::Deserializer::from_str(&buffer);
     let input: ProverInput = serde_path_to_error::deserialize(des)?;
-    let proof = input.prove(&runtime).await?;
+    let proof = input.prove(&runtime).await;
+    runtime.close().await?;
+    let proof = proof?;
 
     std::io::stdout().write_all(&serde_json::to_vec(&proof.intern)?)?;
 
