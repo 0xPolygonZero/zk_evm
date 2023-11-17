@@ -646,13 +646,9 @@ fn create_minimal_state_partial_trie(
 ) -> TraceParsingResult<HashedPartialTrie> {
     // TODO: Remove once coinbase issue is fixed...
 
-    let state_accesses_plus_coinbase = state_accesses.chain(once(
-        H256::from_str("8556274a27dd7524955417c11ecd917251cc7c4c8310f4c7e4bd3c304d3d9a79").unwrap(),
-    ));
-
     create_trie_subset_wrapped(
         state_trie,
-        state_accesses_plus_coinbase.map(Nibbles::from_h256_be),
+        state_accesses.map(Nibbles::from_h256_be),
         TrieType::State,
     )
 }
