@@ -15,7 +15,7 @@ ethereum-types = "0.14.1"
 hex = "0.4.3"
 keccak-hash = "0.10.0"
 log = "0.4.20"
-plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "0e63e66196fba06aa496a5249a0c9d997a549829" }
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "b9328815e666981d6485b0d8dc04160e93797993" }
 thiserror = "1.0.49"
 rlp = "0.5.2"
 rlp-derive = "0.1.0"
