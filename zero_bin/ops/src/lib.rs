@@ -9,9 +9,29 @@ use plonky_block_proof_gen::{
     prover_state::{ProverState, ProverStateBuilder},
 };
 use proof_protocol_decoder::types::{OtherBlockData, TxnProofGenIR};
+use prover_state::from_disk;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
-static P_STATE: Lazy<ProverState> = Lazy::new(|| ProverStateBuilder::default().build());
+mod prover_state;
+
+static P_STATE: Lazy<ProverState> = Lazy::new(|| {
+    debug!("Attempting to load prover state from disk");
+
+    match from_disk() {
+        Some(state) => {
+            debug!("Successfully loaded prover state from disk!");
+            state
+        }
+        None => {
+            debug!("Prover state not found on disk. Generating new state");
+            let state = ProverStateBuilder::default().build();
+            debug!("Saving prover state to disk");
+            prover_state::to_disk(&state);
+            state
+        }
+    }
+});
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct TxProof;

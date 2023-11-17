@@ -11,4 +11,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
+
+# Local dependencies
 ops = { path = "../ops" }

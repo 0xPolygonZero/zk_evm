@@ -17,6 +17,8 @@ serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 ethereum-types = { workspace = true }
 axum = "0.6.20"
+
+# Local dependencies
 ops = { path = "../ops" }
 common = { path = "../common" }
 rpc = { path = "../rpc" }

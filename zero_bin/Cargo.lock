@@ -1767,10 +1767,12 @@ dependencies = [
  "anyhow",
  "once_cell",
  "paladin-core",
+ "plonky2",
  "plonky_block_proof_gen",
  "proof_protocol_decoder",
  "serde",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

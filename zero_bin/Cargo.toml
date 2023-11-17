@@ -13,6 +13,8 @@ tokio = { version = "1.33.0", features = ["full"] }
 serde = "1.0.183"
 plonky_block_proof_gen = { git = "https://github.com/0xPolygonZero/plonky-block-proof-gen.git", rev = "94ba5b3a1bfc74a6d3bd80da5fa7b9cd1d2690a6" }
 proof_protocol_decoder = { git = "https://github.com/0xPolygonZero/proof-protocol-decoder.git", rev = "15ae1a1e5b8e60a056a36926746cb563507073c2" }
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "49976ea2a98dcb6052bd6cf3a65f730e55727330" }
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "49976ea2a98dcb6052bd6cf3a65f730e55727330" }
 serde_path_to_error = "0.1.14"
 serde_json = "1.0.107"
 ethereum-types = "0.14.1"
