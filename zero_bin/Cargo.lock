@@ -2413,6 +2413,7 @@ dependencies = [
  "clap",
  "common",
  "ethereum-types",
+ "futures",
  "plonky2_evm",
  "proof_protocol_decoder",
  "reqwest",

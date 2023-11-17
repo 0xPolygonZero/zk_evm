@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use common::ProverInput;
 use ethereum_types::{Address, Bloom, H256, U256};
+use futures::{stream::FuturesOrdered, TryStreamExt};
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
 use proof_protocol_decoder::{
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
@@ -100,6 +101,7 @@ struct EthGetBlockByNumberResult {
     miner: Address,
     mix_hash: H256,
     number: U256,
+    parent_hash: H256,
     timestamp: U256,
 }
 
@@ -134,6 +136,30 @@ impl EthGetBlockByNumberResponse {
             serde_path_to_error::deserialize(des).context("deserializing eth_getBlockByNumber")?;
 
         Ok(parsed)
+    }
+
+    async fn fetch_previous_block_hashes<U: IntoUrl + Copy>(
+        rpc_url: U,
+        block_number: u64,
+    ) -> Result<Vec<H256>> {
+        // Every block response includes the _parent_ hash along with its hash, so we
+        // can just fetch half the blocks to acquire all hashes for the range.
+        let start = block_number.saturating_sub(256);
+        let futs: FuturesOrdered<_> = (start..block_number)
+            .rev()
+            .step_by(2)
+            .map(|block_number| Self::fetch(rpc_url, block_number))
+            .collect();
+
+        let responses = futs.try_collect::<Vec<_>>().await?;
+        let mut hashes = vec![];
+        for response in responses {
+            hashes.push(response.result.hash);
+            hashes.push(response.result.parent_hash);
+        }
+        hashes.resize(256, H256::default());
+
+        Ok(hashes)
     }
 }
 
@@ -175,18 +201,21 @@ impl EthChainIdResponse {
 struct RpcBlockMetadata {
     block_by_number: EthGetBlockByNumberResponse,
     chain_id: EthChainIdResponse,
+    prev_hashes: Vec<H256>,
 }
 
 impl RpcBlockMetadata {
     async fn fetch(rpc_url: &str, block_number: u64) -> Result<Self> {
-        let (block_result, chain_id_result) = try_join!(
+        let (block_result, chain_id_result, prev_hashes) = try_join!(
             EthGetBlockByNumberResponse::fetch(rpc_url, block_number),
-            EthChainIdResponse::fetch(rpc_url)
+            EthChainIdResponse::fetch(rpc_url),
+            EthGetBlockByNumberResponse::fetch_previous_block_hashes(rpc_url, block_number)
         )?;
 
         Ok(Self {
             block_by_number: block_result,
             chain_id: chain_id_result,
+            prev_hashes,
         })
     }
 }
@@ -196,6 +225,7 @@ impl From<RpcBlockMetadata> for OtherBlockData {
         RpcBlockMetadata {
             block_by_number,
             chain_id,
+            prev_hashes,
         }: RpcBlockMetadata,
     ) -> Self {
         let mut bloom = [U256::zero(); 8];
@@ -227,7 +257,7 @@ impl From<RpcBlockMetadata> for OtherBlockData {
             b_data: BlockLevelData {
                 b_meta: block_metadata,
                 b_hashes: BlockHashes {
-                    prev_hashes: vec![H256::default(); 256],
+                    prev_hashes,
                     cur_hash: block_by_number.result.hash,
                 },
             },
