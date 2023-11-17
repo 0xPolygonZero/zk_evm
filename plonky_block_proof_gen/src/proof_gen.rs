@@ -1,5 +1,9 @@
 use plonky2::util::timing::TimingTree;
-use plonky2_evm::{all_stark::AllStark, config::StarkConfig, proof::PublicValues};
+use plonky2_evm::{
+    all_stark::AllStark,
+    config::StarkConfig,
+    proof::{ExtraBlockData, PublicValues},
+};
 use proof_protocol_decoder::{
     proof_gen_types::ProofBeforeAndAfterDeltas,
     types::{OtherBlockData, TxnProofGenIR},
@@ -11,7 +15,7 @@ use crate::{
         GeneratedTxnProof, ProofCommon,
     },
     prover_state::ProverState,
-    types::PlonkyProofIntern,
+    types::{PlonkyProofIntern, ProofUnderlyingTxns},
 };
 
 pub type ProofGenResult<T> = Result<T, ProofGenError>;
@@ -43,6 +47,8 @@ pub fn generate_txn_proof(
     let b_height = start_info.b_height();
     let txn_idx = start_info.txn_idx;
     let deltas = start_info.deltas();
+
+    println!("BLOCK PROOF INPUTS: {:#?}", start_info);
 
     let (txn_proof_intern, p_vals) = p_state
         .state
@@ -78,22 +84,22 @@ pub fn generate_agg_proof(
     other_data: OtherBlockData,
 ) -> ProofGenResult<GeneratedAggProof> {
     let expanded_agg_proofs = expand_aggregatable_proofs(lhs_child, rhs_child, other_data);
-    let deltas = expanded_agg_proofs.p_vals.extra_block_data.clone().into();
 
     let (agg_proof_intern, p_vals) = p_state
         .state
         .prove_aggregation(
             expanded_agg_proofs.lhs.is_agg,
             expanded_agg_proofs.lhs.intern,
+            expanded_agg_proofs.p_vals_lhs,
             expanded_agg_proofs.rhs.is_agg,
             expanded_agg_proofs.rhs.intern,
-            expanded_agg_proofs.p_vals,
+            expanded_agg_proofs.p_vals_rhs,
         )
         .map_err(|err| err.to_string())?;
 
     let common = ProofCommon {
         b_height: lhs_child.b_height(),
-        deltas,
+        deltas: expanded_agg_proofs.combined_deltas,
         roots_before: p_vals.trie_roots_before,
         roots_after: p_vals.trie_roots_after,
     };
@@ -108,9 +114,11 @@ pub fn generate_agg_proof(
 }
 
 struct ExpandedAggregatableProofs<'a> {
-    p_vals: PublicValues,
+    p_vals_lhs: PublicValues,
+    p_vals_rhs: PublicValues,
     lhs: ExpandedAggregatableProof<'a>,
     rhs: ExpandedAggregatableProof<'a>,
+    combined_deltas: ProofBeforeAndAfterDeltas,
 }
 
 struct ExpandedAggregatableProof<'a> {
@@ -118,6 +126,8 @@ struct ExpandedAggregatableProof<'a> {
     is_agg: bool,
 }
 
+// TODO: Remove of simplify, as most of this work is occurring inside plonky2
+// now.
 fn expand_aggregatable_proofs<'a>(
     lhs_child: &'a AggregatableProof,
     rhs_child: &'a AggregatableProof,
@@ -126,31 +136,50 @@ fn expand_aggregatable_proofs<'a>(
     let (expanded_lhs, lhs_common) = expand_aggregatable_proof(lhs_child);
     let (expanded_rhs, rhs_common) = expand_aggregatable_proof(rhs_child);
 
-    let p_underlying_txns = lhs_child
-        .underlying_txns()
-        .combine(&rhs_child.underlying_txns());
-    let deltas = merge_lhs_and_rhs_deltas(&lhs_common.deltas, &rhs_common.deltas);
+    let lhs_extra_data =
+        create_extra_block_data_for_child(lhs_common, &other_data, &lhs_child.underlying_txns());
 
-    let extra_block_data = create_extra_block_data(
-        deltas,
-        other_data.genesis_state_trie_root,
-        p_underlying_txns.txn_idxs.start,
-        p_underlying_txns.txn_idxs.end,
-    );
-
-    let p_vals = PublicValues {
+    let p_vals_lhs = PublicValues {
         trie_roots_before: lhs_common.roots_before.clone(),
+        trie_roots_after: lhs_common.roots_after.clone(),
+        block_metadata: other_data.b_data.b_meta.clone(),
+        block_hashes: other_data.b_data.b_hashes.clone(),
+        extra_block_data: lhs_extra_data,
+    };
+
+    let rhs_extra_data =
+        create_extra_block_data_for_child(rhs_common, &other_data, &rhs_child.underlying_txns());
+
+    let p_vals_rhs = PublicValues {
+        trie_roots_before: rhs_common.roots_before.clone(),
         trie_roots_after: rhs_common.roots_after.clone(),
         block_metadata: other_data.b_data.b_meta,
         block_hashes: other_data.b_data.b_hashes,
-        extra_block_data,
+        extra_block_data: rhs_extra_data,
     };
 
+    let combined_deltas = merge_lhs_and_rhs_deltas(&lhs_common.deltas, &rhs_common.deltas);
+
     ExpandedAggregatableProofs {
-        p_vals,
+        p_vals_lhs,
+        p_vals_rhs,
         lhs: expanded_lhs,
         rhs: expanded_rhs,
+        combined_deltas,
     }
+}
+
+fn create_extra_block_data_for_child(
+    common: &ProofCommon,
+    other_data: &OtherBlockData,
+    txn_range: &ProofUnderlyingTxns,
+) -> ExtraBlockData {
+    create_extra_block_data(
+        common.deltas.clone(),
+        other_data.genesis_state_trie_root,
+        txn_range.txn_idxs.start,
+        txn_range.txn_idxs.end,
+    )
 }
 
 fn merge_lhs_and_rhs_deltas(
