@@ -55,14 +55,6 @@ impl BlockTrace {
 
         print_value_and_hash_nodes_of_trie(&pre_image_data.tries.state);
 
-        println!("SPECIAL QUERY");
-        let res = pre_image_data.tries.state.get(
-            Nibbles::from_str("F36D6FADC19B5EC9189AE65683241081F7C772EC596EA1FACB9DAEF2A1396637")
-                .unwrap(),
-        );
-
-        println!("SPECIAL QUERY RES: {:?}", res);
-
         for (h_addr, s_trie) in pre_image_data.tries.storage.iter() {
             print_value_and_hash_nodes_of_storage_trie(h_addr, s_trie);
         }
