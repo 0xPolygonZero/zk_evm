@@ -27,13 +27,13 @@ pub struct ProverStateBuilder {
 impl Default for ProverStateBuilder {
     fn default() -> Self {
         Self {
-            arithmetic_circuit_size: 16..17,
+            arithmetic_circuit_size: 16..19,
             byte_packing_circuit_size: 10..20,
             cpu_circuit_size: 15..22,
             keccak_circuit_size: 14..17,
             keccak_sponge_circuit_size: 9..16,
             logic_circuit_size: 12..16,
-            memory_circuit_size: 18..22,
+            memory_circuit_size: 18..24,
         }
     }
 }
