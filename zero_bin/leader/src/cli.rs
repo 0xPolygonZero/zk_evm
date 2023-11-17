@@ -30,6 +30,9 @@ pub(crate) struct Cli {
     /// only).
     #[arg(long, short)]
     pub num_workers: Option<usize>,
+    /// The previous proof output.
+    #[arg(long, short)]
+    pub previous_proof: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, ValueEnum, Default)]

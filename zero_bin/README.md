@@ -55,14 +55,24 @@ cargo r --bin leader -- --help
 Usage: leader [OPTIONS]
 
 Options:
-  -m, --mode <MODE>                  The input mode. If `std-io`, the input is read from stdin. If `http`, the input is read from HTTP requests. If `jerigon`, the input is read from the `debug_traceBlockByNumber` and `eth_getBlockByNumber` RPC methods from Jerigon [default: std-io] [possible values: std-io, http, jerigon]
-  -p, --port <PORT>                  The port to listen on when using the `http` mode [default: 8080]
-  -o, --output-dir <OUTPUT_DIR>      The directory to which output should be written (`http` mode only)
-      --rpc-url <RPC_URL>            The RPC URL to use when using the `jerigon` mode
-  -b, --block-number <BLOCK_NUMBER>  The block number to use when using the `jerigon` mode
-  -r, --runtime <RUNTIME>            Specifies the paladin runtime to use [default: amqp] [possible values: amqp, in-memory]
-  -n, --num-workers <NUM_WORKERS>    Specifies the number of worker threads to spawn (in memory runtime only)
-  -h, --help                         Print help
+  -m, --mode <MODE>
+          The input mode. If `std-io`, the input is read from stdin. If `http`, the input is read from HTTP requests. If `jerigon`, the input is read from the `debug_traceBlockByNumber` and `eth_getBlockByNumber` RPC methods from Jerigon [default: std-io] [possible values: std-io, http, jerigon]
+  -p, --port <PORT>
+          The port to listen on when using the `http` mode [default: 8080]
+  -o, --output-dir <OUTPUT_DIR>
+          The directory to which output should be written (`http` mode only)
+      --rpc-url <RPC_URL>
+          The RPC URL to use when using the `jerigon` mode
+  -b, --block-number <BLOCK_NUMBER>
+          The block number to use when using the `jerigon` mode
+  -r, --runtime <RUNTIME>
+          Specifies the paladin runtime to use [default: amqp] [possible values: amqp, in-memory]
+  -n, --num-workers <NUM_WORKERS>
+          Specifies the number of worker threads to spawn (in memory runtime only)
+  -p, --previous-proof <PREVIOUS_PROOF>
+          The previous proof output
+  -h, --help
+          Print help
 ```
 
 ### Paladin Runtime

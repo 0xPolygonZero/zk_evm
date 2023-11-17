@@ -5,7 +5,10 @@ use paladin::{
     directive::{Directive, IndexedStream, Literal},
     runtime::Runtime,
 };
-use plonky_block_proof_gen::proof_types::{AggregatableProof, GeneratedBlockProof};
+use plonky_block_proof_gen::{
+    proof_types::{AggregatableProof, GeneratedBlockProof},
+    types::PlonkyProofIntern,
+};
 use proof_protocol_decoder::{
     processed_block_trace::ProcessingMeta,
     trace_protocol::BlockTrace,
@@ -28,7 +31,11 @@ impl ProverInput {
         self.other_data.b_data.b_meta.block_number
     }
 
-    pub async fn prove(self, runtime: &Runtime) -> Result<GeneratedBlockProof> {
+    pub async fn prove(
+        self,
+        runtime: &Runtime,
+        previous: Option<PlonkyProofIntern>,
+    ) -> Result<GeneratedBlockProof> {
         let block_number = self.get_block_number();
         info!("Proving block {block_number}");
 
@@ -47,9 +54,14 @@ impl ProverInput {
             .await?;
 
         if let AggregatableProof::Agg(proof) = agg_proof {
+            let prev = previous.map(|p| GeneratedBlockProof {
+                b_height: block_number.as_u64() - 1,
+                intern: p,
+            });
+
             let block_proof = Literal(proof)
                 .map(BlockProof {
-                    prev: None,
+                    prev,
                     other: other_data,
                 })
                 .run(runtime)

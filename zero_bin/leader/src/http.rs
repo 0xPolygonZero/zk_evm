@@ -5,7 +5,8 @@ use axum::{http::StatusCode, routing::post, Json, Router};
 use common::ProverInput;
 use ethereum_types::U256;
 use paladin::runtime::Runtime;
-use plonky_block_proof_gen::proof_types::GeneratedBlockProof;
+use plonky_block_proof_gen::{proof_types::GeneratedBlockProof, types::PlonkyProofIntern};
+use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
 
@@ -51,16 +52,22 @@ fn write_to_file(
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct HttpProverInput {
+    prover_input: ProverInput,
+    previous: Option<PlonkyProofIntern>,
+}
+
 async fn prove(
-    Json(payload): Json<ProverInput>,
+    Json(payload): Json<HttpProverInput>,
     runtime: Arc<Runtime>,
     output_dir: PathBuf,
 ) -> StatusCode {
     debug!("Received payload: {:#?}", payload);
 
-    let block_number = payload.get_block_number();
+    let block_number = payload.prover_input.get_block_number();
 
-    match payload.prove(&runtime).await {
+    match payload.prover_input.prove(&runtime, payload.previous).await {
         Ok(b_proof) => match write_to_file(output_dir, block_number, &b_proof) {
             Ok(file) => {
                 info!("Successfully wrote proof to {}", file.display());
