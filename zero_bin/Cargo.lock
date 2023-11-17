@@ -2283,7 +2283,7 @@ dependencies = [
 [[package]]
 name = "proof_protocol_decoder"
 version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/proof-protocol-decoder.git?branch=proof_fixes#b9b36e3153b09b0688f6242173dff427bb176c7c"
+source = "git+https://github.com/0xPolygonZero/proof-protocol-decoder.git?branch=proof_fixes#c7b9e8914e4bc2dbfefc2110a2b0be6fd38587c8"
 dependencies = [
  "bytes",
  "ciborium",
