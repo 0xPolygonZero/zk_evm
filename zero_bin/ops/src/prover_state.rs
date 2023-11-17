@@ -9,15 +9,12 @@ use plonky2::{
 };
 use plonky_block_proof_gen::{prover_state::ProverState, types::AllRecursiveCircuits};
 use tracing::warn;
-type Config = PoseidonGoldilocksConfig;
 
+type Config = PoseidonGoldilocksConfig;
 const SIZE: usize = 2;
 const PATH: &str = "./prover_state";
 
-pub fn get_serializers() -> (
-    DefaultGateSerializer,
-    DefaultGeneratorSerializer<PoseidonGoldilocksConfig, 2>,
-) {
+pub fn get_serializers() -> (DefaultGateSerializer, DefaultGeneratorSerializer<Config, 2>) {
     let gate_serializer = DefaultGateSerializer;
     let witness_serializer: DefaultGeneratorSerializer<Config, SIZE> = DefaultGeneratorSerializer {
         _phantom: Default::default(),
