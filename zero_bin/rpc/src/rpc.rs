@@ -145,7 +145,7 @@ impl EthGetBlockByNumberResponse {
     ) -> Result<Vec<H256>> {
         // Every block response includes the _parent_ hash along with its hash, so we
         // can just fetch half the blocks to acquire all hashes for the range.
-        let start = block_number.saturating_sub(256);
+        let start = block_number.saturating_sub(256).max(1);
         let futs: FuturesOrdered<_> = (start..block_number)
             .rev()
             .step_by(2)
