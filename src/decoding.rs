@@ -365,10 +365,6 @@ impl ProcessedBlockTrace {
                 }
             }
 
-            // // TODO: Move hash of slot addr to block trace processing...
-            // storage_trie.extend(storage_writes.into_iter().map(|(slot, v)|
-            // (Nibbles::from_h256_be(hash(&slot.bytes_be())), v)));
-
             storage_trie.extend(
                 storage_writes
                     .into_iter()
@@ -412,9 +408,14 @@ impl ProcessedBlockTrace {
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
         trie_state.txn.insert(txn_k, meta.txn_bytes());
+
+        // TODO: Re-evaluate if we can do this a bit nicer... Plonky2 needs this byte
+        // but we don't want it for the receipt trie.
+        let receipt_node_without_txn_type_byte = &meta.receipt_node_bytes[1..];
+
         trie_state
             .receipt
-            .insert(txn_k, meta.receipt_node_bytes.clone());
+            .insert(txn_k, receipt_node_without_txn_type_byte);
 
         Ok(())
     }
@@ -509,11 +510,10 @@ fn create_dummy_txn_gen_input_single_dummy_txn(
         })
         .collect();
 
-    let state_trie_with_coinbase =
-        create_minimal_state_partial_trie(&final_trie_state.state, empty()).unwrap();
+    let state_trie = create_minimal_state_partial_trie(&final_trie_state.state, empty()).unwrap();
 
     let tries = TrieInputs {
-        state_trie: state_trie_with_coinbase,
+        state_trie,
         transactions_trie: HashedPartialTrie::default(),
         receipts_trie: HashedPartialTrie::default(),
         storage_tries: partial_sub_storage_tries,
@@ -644,8 +644,6 @@ fn create_minimal_state_partial_trie(
     state_trie: &HashedPartialTrie,
     state_accesses: impl Iterator<Item = HashedNodeAddr>,
 ) -> TraceParsingResult<HashedPartialTrie> {
-    // TODO: Remove once coinbase issue is fixed...
-
     create_trie_subset_wrapped(
         state_trie,
         state_accesses.map(Nibbles::from_h256_be),
