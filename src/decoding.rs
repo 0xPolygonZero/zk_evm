@@ -23,7 +23,7 @@ use crate::{
     types::{
         BlockLevelData, Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
         OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED,
-        EMPTY_TRIE_HASH,
+        EMPTY_TRIE_HASH, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, update_val_if_some},
 };
@@ -131,6 +131,7 @@ impl ProcessedBlockTrace {
                     &mut curr_block_tries,
                     &txn_info.nodes_used_by_txn,
                     txn_idx,
+                    &other_data.b_data.b_meta.block_beneficiary,
                 )?;
 
                 let addresses = Self::get_known_addresses_if_enabled();
@@ -238,10 +239,20 @@ impl ProcessedBlockTrace {
         curr_block_tries: &mut PartialTrieState,
         nodes_used_by_txn: &NodesUsedByTxn,
         txn_idx: TxnIdx,
+        coin_base_addr: &Address,
     ) -> TraceParsingResult<TrieInputs> {
+        let hashed_coinbase = hash(coin_base_addr.as_bytes());
+
+        // TODO: Remove once the full node adds this to the trace...
+        let node_accesses_plus_coinbase = nodes_used_by_txn
+            .state_accesses
+            .iter()
+            .cloned()
+            .chain(once(hashed_coinbase));
+
         let state_trie = create_minimal_state_partial_trie(
             &curr_block_tries.state,
-            nodes_used_by_txn.state_accesses.iter().cloned(),
+            node_accesses_plus_coinbase,
         )?;
 
         println!("SPECIAL QUERY ON PARTIAL");
@@ -365,11 +376,18 @@ impl ProcessedBlockTrace {
                 }
             }
 
-            storage_trie.extend(
-                storage_writes
-                    .into_iter()
-                    .map(|(k, v)| (Nibbles::from_h256_be(hash(&k.bytes_be())), v)),
-            );
+            for (slot, val) in storage_writes
+                .into_iter()
+                .map(|(k, v)| (Nibbles::from_h256_be(hash(&k.bytes_be())), v))
+            {
+                // If we are writing a zero, then we actually need to perform a delete.
+                match val == ZERO_STORAGE_SLOT_VAL_RLPED {
+                    false => storage_trie.insert(slot, val),
+                    true => {
+                        storage_trie.delete(slot);
+                    }
+                };
+            }
         }
 
         for (hashed_acc_addr, s_trie_writes) in deltas.state_writes {

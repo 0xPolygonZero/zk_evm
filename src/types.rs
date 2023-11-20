@@ -42,6 +42,9 @@ pub(crate) const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
     123, 250, 216, 4, 93, 133, 164, 112,
 ];
 
+// This is just `rlp(0)`.
+pub(crate) const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
+
 /// An `IR` (Intermediate Representation) for a given txn in a block that we can
 /// use to generate a proof for that txn.
 #[derive(Clone, Debug, Deserialize, Serialize)]
