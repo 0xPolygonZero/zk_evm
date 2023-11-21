@@ -168,7 +168,7 @@ impl ProcessedBlockTrace {
                 println!("TRIE ROOTS AFTER: {:?}", trie_roots_after);
 
                 let gen_inputs = GenerationInputs {
-                    txn_number_before: txn_idx.saturating_sub(1).into(),
+                    txn_number_before: txn_idx.into(),
                     gas_used_before: tot_gas_used,
                     block_bloom_before: curr_bloom,
                     gas_used_after: new_tot_gas_used,
@@ -263,16 +263,17 @@ impl ProcessedBlockTrace {
 
         println!("SPECIAL QUERY ON PARTIAL RES: {:?}", res.map(hex::encode));
 
+        let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
         // TODO: Replace cast once `eth_trie_utils` supports `into` for `usize...
         let transactions_trie = create_trie_subset_wrapped(
             &curr_block_tries.txn,
-            once((txn_idx as u32).into()),
+            once(txn_k),
             TrieType::Txn,
         )?;
 
         let receipts_trie = create_trie_subset_wrapped(
             &curr_block_tries.receipt,
-            once((txn_idx as u32).into()),
+            once(txn_k),
             TrieType::Receipt,
         )?;
 
