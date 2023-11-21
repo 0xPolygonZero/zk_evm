@@ -31,7 +31,7 @@ pub(crate) struct Cli {
     #[arg(long, short)]
     pub num_workers: Option<usize>,
     /// The previous proof output.
-    #[arg(long, short)]
+    #[arg(long, short = 'f')]
     pub previous_proof: Option<PathBuf>,
 }
 
