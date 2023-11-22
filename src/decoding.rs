@@ -265,17 +265,11 @@ impl ProcessedBlockTrace {
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
         // TODO: Replace cast once `eth_trie_utils` supports `into` for `usize...
-        let transactions_trie = create_trie_subset_wrapped(
-            &curr_block_tries.txn,
-            once(txn_k),
-            TrieType::Txn,
-        )?;
+        let transactions_trie =
+            create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
 
-        let receipts_trie = create_trie_subset_wrapped(
-            &curr_block_tries.receipt,
-            once(txn_k),
-            TrieType::Receipt,
-        )?;
+        let receipts_trie =
+            create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
 
         let x = nodes_used_by_txn
             .storage_accesses

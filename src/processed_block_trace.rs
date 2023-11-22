@@ -115,9 +115,7 @@ fn process_block_trace_trie_pre_images(
 }
 
 fn process_combined_trie_pre_images(tries: CombinedPreImages) -> ProcessedBlockTracePreImages {
-    match tries {
-        CombinedPreImages::Compact(t) => process_compact_trie(t),
-    }
+    process_compact_trie(tries.compact.unwrap_or(TrieCompact(Vec::default())))
 }
 
 fn process_separate_trie_pre_images(tries: SeparateTriePreImages) -> ProcessedBlockTracePreImages {
@@ -161,6 +159,14 @@ fn process_multiple_storage_tries(
 }
 
 fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
+    // TODO!!! HACK! REMOVE WHEN FIXED!
+    if trie.0.is_empty() {
+        return ProcessedBlockTracePreImages {
+            tries: PartialTriePreImages::default(),
+            extra_code_hash_mappings: None,
+        };
+    }
+
     // TODO: Wrap in proper result type...
     let out = process_compact_prestate(trie).unwrap();
 
@@ -403,7 +409,7 @@ fn storage_addr_to_nibbles_even_nibble_fixed_hashed(addr: &StorageAddr) -> Nibbl
     // let hashed_addr = hash(addr.as_bytes());
     // Nibbles::from_h256_be(hashed_addr)
 
-    Nibbles::from_h256_be(hash(&addr.0)) // TODO CHeck endianness...
+    Nibbles::from_h256_be(hash(&addr.0))
 }
 
 // TODO: Extreme hack! Please don't keep...

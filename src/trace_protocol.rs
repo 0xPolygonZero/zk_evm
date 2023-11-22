@@ -74,8 +74,8 @@ pub enum SeparateTriePreImage {
 /// A trie pre-image where both state & storage are combined into one payload.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CombinedPreImages {
-    Compact(TrieCompact),
+pub struct CombinedPreImages {
+    pub compact: Option<TrieCompact>,
 }
 
 // TODO
