@@ -115,7 +115,7 @@ fn process_block_trace_trie_pre_images(
 }
 
 fn process_combined_trie_pre_images(tries: CombinedPreImages) -> ProcessedBlockTracePreImages {
-    process_compact_trie(tries.compact.unwrap_or(TrieCompact(Vec::default())))
+    process_compact_trie(tries.compact)
 }
 
 fn process_separate_trie_pre_images(tries: SeparateTriePreImages) -> ProcessedBlockTracePreImages {
@@ -159,14 +159,6 @@ fn process_multiple_storage_tries(
 }
 
 fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
-    // TODO!!! HACK! REMOVE WHEN FIXED!
-    if trie.0.is_empty() {
-        return ProcessedBlockTracePreImages {
-            tries: PartialTriePreImages::default(),
-            extra_code_hash_mappings: None,
-        };
-    }
-
     // TODO: Wrap in proper result type...
     let out = process_compact_prestate(trie).unwrap();
 

@@ -75,7 +75,7 @@ pub enum SeparateTriePreImage {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CombinedPreImages {
-    pub compact: Option<TrieCompact>,
+    pub compact: TrieCompact,
 }
 
 // TODO
