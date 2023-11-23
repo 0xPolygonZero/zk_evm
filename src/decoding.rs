@@ -587,7 +587,7 @@ fn create_dummy_txn_pair_for_empty_block(
 ) -> [TxnProofGenIR; 2] {
     [
         create_dummy_gen_input(b_data, final_trie_state, 0),
-        create_dummy_gen_input(b_data, final_trie_state, 1),
+        create_dummy_gen_input(b_data, final_trie_state, 0),
     ]
 }
 
