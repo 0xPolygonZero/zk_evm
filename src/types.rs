@@ -85,11 +85,12 @@ impl TxnProofGenIR {
         }
     }
 
-    /// Creates a dummy transaction.
+    /// Creates a dummy proof, corresponding to no actual transaction.
     ///
     /// These can be used to pad a block if the number of transactions in the
-    /// block is below `2`.
-    pub fn create_dummy(b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
+    /// block is below `2`. Dummy proofs will always be executed at the start
+    /// of a block.
+    pub fn create_dummy(b_height: BlockHeight) -> Self {
         let trie_roots_after = TrieRoots {
             state_root: EMPTY_TRIE_HASH,
             transactions_root: EMPTY_TRIE_HASH,
@@ -108,18 +109,19 @@ impl TxnProofGenIR {
         };
 
         Self {
-            txn_idx,
+            txn_idx: 0,
             gen_inputs,
         }
     }
 
     /// Copy relevant fields of the `TxnProofGenIR` to a new `TxnProofGenIR`
-    /// with a different `b_height` and `txn_idx`.
+    /// with a different `b_height`.
     ///
     /// This can be used to pad a block if there is only one transaction in the
-    /// block. Block proofs need a minimum of two transactions.
-    pub fn dummy_with_at(&self, b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
-        let mut dummy = Self::create_dummy(b_height, txn_idx);
+    /// block. Block proofs need a minimum of two transactions. Dummy proofs
+    /// will always be executed at the start of a block.
+    pub fn dummy_with_at(&self, b_height: BlockHeight) -> Self {
+        let mut dummy = Self::create_dummy(b_height);
 
         dummy.gen_inputs.gas_used_before = self.gen_inputs.gas_used_after;
         dummy.gen_inputs.gas_used_after = self.gen_inputs.gas_used_after;
