@@ -2,7 +2,7 @@ use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
-use cli::Mode;
+use cli::Command;
 use dotenvy::dotenv;
 use ops::Ops;
 use paladin::runtime::Runtime;
@@ -33,36 +33,33 @@ async fn main() -> Result<()> {
 
     let args = cli::Cli::parse();
     let runtime = Runtime::from_config::<Ops>(&paladin::config::Config {
-        runtime: args.runtime,
-        num_workers: args.num_workers,
+        runtime: args.runtime.runtime,
+        num_workers: args.runtime.num_workers,
+        amqp_uri: args.runtime.amqp_uri,
         ..Default::default()
     })
     .await?;
 
-    match args.mode {
-        Mode::StdIo => {
-            let previous_proof = get_previous_proof(args.previous_proof)?;
+    match args.command {
+        Command::Stdio { previous_proof } => {
+            let previous_proof = get_previous_proof(previous_proof)?;
             stdio::stdio_main(runtime, previous_proof).await?;
         }
-        Mode::Http => {
-            let output_dir = args
-                .output_dir
-                .expect("output-dir is required in http mode");
-
+        Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
             let output_dir_metadata = std::fs::metadata(&output_dir)?;
             if !output_dir.is_dir() || output_dir_metadata.permissions().readonly() {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(runtime, args.port, output_dir).await?;
+            http::http_main(runtime, port, output_dir).await?;
         }
-        Mode::Jerigon => {
-            let rpc_url = args.rpc_url.expect("rpc-url is required in jerigon mode");
-            let block_number = args
-                .block_number
-                .expect("block-number is required in jerigon mode");
-            let previous_proof = get_previous_proof(args.previous_proof)?;
+        Command::Jerigon {
+            rpc_url,
+            block_number,
+            previous_proof,
+        } => {
+            let previous_proof = get_previous_proof(previous_proof)?;
 
             jerigon::jerigon_main(runtime, &rpc_url, block_number, previous_proof).await?;
         }

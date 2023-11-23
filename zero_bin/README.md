@@ -7,18 +7,19 @@ A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`plo
     - [Ops](#ops)
     - [Worker](#worker)
     - [Leader](#leader)
-  - [Usage](#usage)
+    - [RPC](#rpc)
+    - [Verifier](#verifier)
+  - [Leader Usage](#leader-usage)
+    - [stdio](#stdio)
+    - [Jerigon](#jerigon)
+    - [HTTP](#http)
     - [Paladin Runtime](#paladin-runtime)
       - [Starting an AMQP enabled cluster](#starting-an-amqp-enabled-cluster)
         - [Start worker(s)](#start-workers)
         - [Start leader](#start-leader)
       - [Starting an in-memory (single process) cluster](#starting-an-in-memory-single-process-cluster)
-    - [Input mode](#input-mode)
-      - [stdin](#stdin)
-      - [HTTP](#http)
-      - [Jerigon](#jerigon)
-  - [Verifier](#verifier)
-  - [RPC](#rpc)
+  - [Verifier Usage](#verifier-usage)
+  - [RPC Usage](#rpc-usage)
   - [Docker](#docker)
 
 
@@ -36,6 +37,14 @@ leader
 ├── Cargo.toml
 └── src
    └── main.rs
+rpc
+├── Cargo.toml
+└── src
+   └── main.rs
+verifier
+├── Cargo.toml
+└── src
+   └── main.rs
 ```
 ### Ops
 Defines the proof operations that can be distributed to workers.
@@ -46,33 +55,117 @@ The worker process. Receives proof operations from the leader, and returns the r
 ### Leader
 The leader process. Receives proof generation requests, and distributes them to workers.
 
-## Usage
+### RPC
 
-Leader binary arguments and options are comprised of paladin configuration and input mode:
+A binary to generate the block trace format expected by the leader.
+
+### Verifier
+
+A binary to verify the correctness of the generated proof.
+
+## Leader Usage
+
+The leader has various subcommands for different io modes. The leader binary arguments are as follows:
 ```
-cargo r --bin leader -- --help
+cargo r --release --bin leader -- --help
 
-Usage: leader [OPTIONS]
+Usage: leader [OPTIONS] <COMMAND>
+
+Commands:
+  stdio    Reads input from stdin and writes output to stdout
+  jerigon  Reads input from a Jerigon node and writes output to stdout
+  http     Reads input from HTTP and writes output to a directory
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
-  -m, --mode <MODE>
-          The input mode. If `std-io`, the input is read from stdin. If `http`, the input is read from HTTP requests. If `jerigon`, the input is read from the `debug_traceBlockByNumber` and `eth_getBlockByNumber` RPC methods from Jerigon [default: std-io] [possible values: std-io, http, jerigon]
-  -p, --port <PORT>
-          The port to listen on when using the `http` mode [default: 8080]
-  -o, --output-dir <OUTPUT_DIR>
-          The directory to which output should be written (`http` mode only)
-      --rpc-url <RPC_URL>
-          The RPC URL to use when using the `jerigon` mode
-  -b, --block-number <BLOCK_NUMBER>
-          The block number to use when using the `jerigon` mode
-  -r, --runtime <RUNTIME>
-          Specifies the paladin runtime to use [default: amqp] [possible values: amqp, in-memory]
-  -n, --num-workers <NUM_WORKERS>
-          Specifies the number of worker threads to spawn (in memory runtime only)
-  -p, --previous-proof <PREVIOUS_PROOF>
-          The previous proof output
-  -h, --help
-          Print help
+  -n, --num-workers <NUM_WORKERS>  Specifies the number of worker threads to spawn (in memory runtime only)
+  -r, --runtime <RUNTIME>          Specifies the paladin runtime mode [default: amqp] [possible values: amqp, in-memory]
+      --amqp-uri <AMQP_URI>        Specifies the URI for the AMQP broker (AMQP runtime only) 
+  -h, --help                       Print help
+```
+
+### stdio
+The stdio command reads proof input from stdin and writes output to stdout.
+
+```
+cargo r --release --bin leader stdio --help
+
+Reads input from stdin and writes output to stdout
+
+Usage: leader stdio [OPTIONS]
+
+Options:
+  -f, --previous-proof <PREVIOUS_PROOF>  The previous proof output
+  -h, --help                             Print help
+```
+
+Pull prover input from the rpc binary.
+```bash
+cargo r --release --bin rpc fetch --rpc-url <RPC_URL> -b 6 > ./input/block_6.json
+```
+
+Pipe the block input to the leader binary.
+```bash
+cat ./input/block_6.json | cargo r --release --bin leader -- -r in-memory stdio > ./output/proof_6.json
+```
+
+### Jerigon
+
+The Jerigon command reads proof input from a Jerigon node and writes output to stdout.
+
+```
+cargo r --release --bin leader jerigon --help
+
+Reads input from a Jerigon node and writes output to stdout
+
+Usage: leader jerigon [OPTIONS] --rpc-url <RPC_URL> --block-number <BLOCK_NUMBER>
+
+Options:
+  -u, --rpc-url <RPC_URL>
+  -b, --block-number <BLOCK_NUMBER>      The block number for which to generate a proof
+  -f, --previous-proof <PREVIOUS_PROOF>  The previous proof output
+  -h, --help                             Print help
+```
+
+Prove a block.
+```bash
+cargo r --release --bin leader -- -r in-memory jerigon -u <RPC_URL> -b 16 > ./output/proof_16.json
+```
+
+### HTTP
+
+The HTTP command reads proof input from HTTP and writes output to a directory.
+```
+cargo r --release --bin leader http --help
+
+Reads input from HTTP and writes output to a directory
+
+Usage: leader http [OPTIONS] --output-dir <OUTPUT_DIR>
+
+Options:
+  -p, --port <PORT>              The port on which to listen [default: 8080]
+  -o, --output-dir <OUTPUT_DIR>  The directory to which output should be written
+  -h, --help                     Print help
+```
+
+Pull prover input from the rpc binary.
+```bash
+cargo r --release --bin rpc fetch -u <RPC_URL> -b 6 > ./input/block_6.json
+```
+
+Start the server.
+```bash
+RUST_LOG=debug cargo r --release --bin leader http --output-dir ./output
+```
+
+Note that HTTP mode requires a [slightly modified input format](./leader/src/http.rs#L56) from the rest of the commands. In particular, [the previous proof is expected to be part of the payload](./leader/src/http.rs#L58). This is due to the fact that the HTTP mode may handle multiple requests concurrently, and thus the previous proof cannot reasonably be given by a command line argument like the other modes.
+
+
+Using `jq` we can merge the previous proof and the block input into a single JSON object.
+
+```bash
+jq -s '{prover_input: .[0], previous: .[1]}' ./input/block_6.json ./output/proof_5.json | curl -X POST -H "Content-Type: application/json" -d @- http://localhost:8080/prove
+
 ```
 
 ### Paladin Runtime
@@ -91,10 +184,10 @@ RUST_LOG=debug cargo r --release --bin worker
 
 ##### Start leader
 
-Start the leader process with the desired [input mode](#input-mode). The default paladin runtime is AMQP, so no additional flags are required to enable it.
+Start the leader process with the desired [command](#leader-usage). The default paladin runtime is AMQP, so no additional flags are required to enable it.
 
 ```bash
-RUST_LOG=debug cargo r --release --bin leader -- --mode http --output-dir ./output
+RUST_LOG=debug cargo r --release --bin leader jerigon -u <RPC_URL> -b 16 > ./output/proof_16.json
 ```
 
 #### Starting an in-memory (single process) cluster
@@ -102,42 +195,10 @@ RUST_LOG=debug cargo r --release --bin leader -- --mode http --output-dir ./outp
 Paladin can emulate a cluster in memory within a single process. Useful for testing purposes.
 
 ```bash
-RUST_LOG=debug cargo r --release --bin leader -- --mode http --runtime in-memory --output-dir ./output
+cat ./input/block_6.json | cargo r --release --bin leader -- -r in-memory stdio > ./output/proof_6.json
 ```
 
-### Input mode
-Pass JSON encoded prover input to stdin or over HTTP, or point the leader to a Jerigon RPC endpoint to retrieve the prover input from the `debug_traceBlockByNumber` and `eth_getBlockByNumber` RPC methods.
-
-See [`prover_input.rs`](/leader/src/prover_input.rs) for the input format. 
-
-The `std-io` and `http` examples below assume some prover input is stored in `./block_121.json`.
-
-#### stdin
-
-```bash
-cat ./block_121.json | RUST_LOG=debug cargo r --release --bin leader > ./output/proof_121.json
-```
-
-#### HTTP
-
-Start the server
-```bash
-RUST_LOG=debug cargo r --release --bin leader -- --mode http --output-dir ./output
-```
-
-Once initialized, send a request:
-```bash
-curl -X POST -H "Content-Type: application/json" -d @./block_121.json http://localhost:8080/prove
-```
-
-#### Jerigon
-
-```bash
-RUST_LOG=debug cargo r --release --bin leader -- --mode jerigon --runtime in-memory --rpc-url <RPC_URL> --block-number 16 > ./output/proof_16.json
-```
-
-
-## Verifier
+## Verifier Usage
 
 A verifier binary is provided to verify the correctness of the generated proof. The verifier expects output in the format generated by the leader. The verifier binary arguments are as follows:
 ```
@@ -155,7 +216,7 @@ Example:
 cargo r --release --bin verifier -- -f ./output/proof_16.json
 ```
 
-## RPC
+## RPC Usage
 
 An rpc binary is provided to generate the block trace format expected by the leader.
 ```
