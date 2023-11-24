@@ -11,6 +11,7 @@ use eth_trie_utils::{
     trie_subsets::create_trie_subset,
 };
 use ethereum_types::{Address, H256, U256};
+use hex_literal::hex;
 use plonky2_evm::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::TrieRoots,
@@ -178,7 +179,7 @@ impl ProcessedBlockTrace {
                                               * it here... */
                     tries,
                     trie_roots_after,
-                    genesis_state_trie_root: other_data.genesis_state_trie_root,
+                    genesis_state_trie_root: EMPTY_TRIE_HASH, // TODO: fetch this on Jerigon side
                     contract_code: txn_info.contract_code_accessed,
                     block_metadata: other_data.b_data.b_meta.clone(),
                     block_hashes: other_data.b_data.b_hashes.clone(),
@@ -605,7 +606,10 @@ fn create_dummy_gen_input(
         signed_txn: None,
         tries,
         trie_roots_after,
-        genesis_state_trie_root: other_data.genesis_state_trie_root,
+        // TODO: fetch this on Jerigon side
+        genesis_state_trie_root: H256(hex!(
+            "c12c57a1ecc38176fa8016fed174a23264e71d2166ea7e18cb954f0f3231e36a"
+        )),
         block_metadata: other_data.b_data.b_meta.clone(),
         block_hashes: other_data.b_data.b_hashes.clone(),
         ..GenerationInputs::default()

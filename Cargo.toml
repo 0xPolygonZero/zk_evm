@@ -12,6 +12,7 @@ enum-as-inner = "0.6.0"
 enumn = "0.1.12"
 eth_trie_utils = { git = "https://github.com/0xPolygonZero/eth_trie_utils.git", rev = "e9ec4ec2aa2ae976b7c699ef40c1ffc716d87ed5" }
 ethereum-types = "0.14.1"
+hex-literal = "0.4.1"
 hex = "0.4.3"
 keccak-hash = "0.10.0"
 log = "0.4.20"
