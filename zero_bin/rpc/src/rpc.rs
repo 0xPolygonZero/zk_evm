@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use ethereum_types::{Address, Bloom, H256, U256};
 use futures::{stream::FuturesOrdered, TryStreamExt};
+use hex_literal::hex;
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
 use proof_protocol_decoder::{
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
@@ -261,7 +262,10 @@ impl From<RpcBlockMetadata> for OtherBlockData {
                     cur_hash: block_by_number.result.hash,
                 },
             },
-            genesis_state_trie_root: Default::default(),
+            // TODO: This is the empty state. Maybe fetch this from Jerigon side?
+            genesis_state_trie_root: H256(hex!(
+                "c12c57a1ecc38176fa8016fed174a23264e71d2166ea7e18cb954f0f3231e36a"
+            )),
         }
     }
 }
