@@ -229,7 +229,7 @@ impl ProcessedBlockTrace {
 
         Self::pad_gen_inputs_with_dummy_inputs_if_needed(
             &mut txn_gen_inputs,
-            &other_data.b_data,
+            &other_data,
             &curr_block_tries,
         );
         Ok(txn_gen_inputs)
@@ -435,7 +435,7 @@ impl ProcessedBlockTrace {
 
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<TxnProofGenIR>,
-        b_data: &BlockLevelData,
+        other_data: &OtherBlockData,
         final_trie_state: &PartialTrieState,
     ) {
         println!("Padding len: {}", gen_inputs.len());
@@ -444,15 +444,12 @@ impl ProcessedBlockTrace {
             0 => {
                 // Need to pad with two dummy txns.
                 gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
-                    b_data,
+                    other_data,
                     final_trie_state,
                 ));
             }
             1 => {
-                let dummy_txn = create_dummy_txn_gen_input_single_dummy_txn(
-                    &gen_inputs[0].gen_inputs,
-                    final_trie_state,
-                );
+                let dummy_txn = create_dummy_gen_input(other_data, final_trie_state, 0);
                 gen_inputs.insert(0, dummy_txn);
             }
             _ => (),
@@ -582,17 +579,17 @@ fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedP
 }
 
 fn create_dummy_txn_pair_for_empty_block(
-    b_data: &BlockLevelData,
+    other_data: &OtherBlockData,
     final_trie_state: &PartialTrieState,
 ) -> [TxnProofGenIR; 2] {
     [
-        create_dummy_gen_input(b_data, final_trie_state, 0),
-        create_dummy_gen_input(b_data, final_trie_state, 0),
+        create_dummy_gen_input(other_data, final_trie_state, 0),
+        create_dummy_gen_input(other_data, final_trie_state, 0),
     ]
 }
 
 fn create_dummy_gen_input(
-    b_data: &BlockLevelData,
+    other_data: &OtherBlockData,
     final_trie_state: &PartialTrieState,
     txn_idx: TxnIdx,
 ) -> TxnProofGenIR {
@@ -608,9 +605,9 @@ fn create_dummy_gen_input(
         signed_txn: None,
         tries,
         trie_roots_after,
-        genesis_state_trie_root: TrieRootHash::default(),
-        block_metadata: b_data.b_meta.clone(),
-        block_hashes: b_data.b_hashes.clone(),
+        genesis_state_trie_root: other_data.genesis_state_trie_root,
+        block_metadata: other_data.b_data.b_meta.clone(),
+        block_hashes: other_data.b_data.b_hashes.clone(),
         ..GenerationInputs::default()
     };
 
