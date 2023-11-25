@@ -143,22 +143,33 @@ impl EthGetBlockByNumberResponse {
         rpc_url: U,
         block_number: u64,
     ) -> Result<Vec<H256>> {
+        let mut hashes = vec![];
+
         // Every block response includes the _parent_ hash along with its hash, so we
         // can just fetch half the blocks to acquire all hashes for the range.
         let start = block_number.saturating_sub(256).max(1);
-        let futs: FuturesOrdered<_> = (start..block_number)
-            .rev()
+        let futs: FuturesOrdered<_> = (start..=block_number)
             .step_by(2)
             .map(|block_number| Self::fetch(rpc_url, block_number))
             .collect();
 
         let responses = futs.try_collect::<Vec<_>>().await?;
-        let mut hashes = vec![];
-        for response in responses {
-            hashes.push(response.result.hash);
-            hashes.push(response.result.parent_hash);
+        for response in responses.iter() {
+            if response.result.number == 1.into() {
+                // Ignore genesis
+                hashes.push(response.result.hash);
+            } else if response.result.number == block_number.into() {
+                // Ignore current hash
+                hashes.push(response.result.parent_hash);
+            } else {
+                hashes.push(response.result.parent_hash);
+                hashes.push(response.result.hash);
+            }
         }
+
+        hashes.reverse();
         hashes.resize(256, H256::default());
+        hashes.reverse();
 
         Ok(hashes)
     }
