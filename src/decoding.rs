@@ -83,6 +83,13 @@ impl ProcessedBlockTrace {
         other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<TxnProofGenIR>> {
         let mut curr_block_tries = PartialTrieState {
+            state: self.tries.state.clone(),
+            storage: self.tries.storage.clone(),
+            ..Default::default()
+        };
+
+        // This is just a copy of `curr_block_tries`.
+        let initial_tries_for_dummies = PartialTrieState {
             state: self.tries.state,
             storage: self.tries.storage,
             ..Default::default()
@@ -231,7 +238,7 @@ impl ProcessedBlockTrace {
         Self::pad_gen_inputs_with_dummy_inputs_if_needed(
             &mut txn_gen_inputs,
             &other_data,
-            &curr_block_tries,
+            &initial_tries_for_dummies,
         );
         Ok(txn_gen_inputs)
     }
@@ -437,7 +444,7 @@ impl ProcessedBlockTrace {
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<TxnProofGenIR>,
         other_data: &OtherBlockData,
-        final_trie_state: &PartialTrieState,
+        initial_trie_state: &PartialTrieState,
     ) {
         println!("Padding len: {}", gen_inputs.len());
 
@@ -446,11 +453,11 @@ impl ProcessedBlockTrace {
                 // Need to pad with two dummy txns.
                 gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
                     other_data,
-                    final_trie_state,
+                    initial_trie_state,
                 ));
             }
             1 => {
-                let dummy_txn = create_dummy_gen_input(other_data, final_trie_state, 0);
+                let dummy_txn = create_dummy_gen_input(other_data, initial_trie_state, 0);
                 gen_inputs.insert(0, dummy_txn);
             }
             _ => (),
