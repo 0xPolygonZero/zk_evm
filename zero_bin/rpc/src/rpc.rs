@@ -273,7 +273,6 @@ impl From<RpcBlockMetadata> for OtherBlockData {
                     cur_hash: block_by_number.result.hash,
                 },
             },
-            // TODO: This is the empty state. Maybe fetch this from Jerigon side?
             genesis_state_trie_root: H256(hex!(
                 "c12c57a1ecc38176fa8016fed174a23264e71d2166ea7e18cb954f0f3231e36a"
             )),
