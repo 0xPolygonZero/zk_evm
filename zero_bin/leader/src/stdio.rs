@@ -1,9 +1,9 @@
 use std::io::{Read, Write};
 
 use anyhow::Result;
-use common::ProverInput;
 use paladin::runtime::Runtime;
 use plonky_block_proof_gen::types::PlonkyProofIntern;
+use prover::ProverInput;
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(

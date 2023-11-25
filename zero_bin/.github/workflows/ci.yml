@@ -1,10 +1,10 @@
+name: ci
+
 on:
   push:
     branches:
       - main
   pull_request:
-
-name: ci
 
 jobs:
   check:
@@ -13,30 +13,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install protoc
-        run: sudo apt-get install -y protobuf-compiler
+      - name: Remove Pre-installed Rust
+        run: |
+          rustup toolchain remove stable
+          rm -f /home/runner/.cargo/bin/rust-analyzer
+          rm -f /home/runner/.cargo/bin/rustfmt
+          rm -f /home/runner/.cargo/bin/cargo-fmt
 
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust Nightly
+        run: |
+          rustup update nightly
+          rustup default nightly
+          rustup component add rustfmt --toolchain nightly
+          rustup component add clippy --toolchain nightly
+
+      - name: Get Rust Version
+        run: rustc --version > rust-version.txt
+
+      - name: Cache Cargo Registry and Build Outputs
+        uses: actions/cache@v2
         with:
-          toolchain: nightly
-          profile: minimal
-          override: true
-          components: rustfmt, clippy
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-rust-${{ hashFiles('rust-version.txt', '**/Cargo.lock') }}
 
       - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: -- -D warnings
+        run: cargo +nightly clippy -- -D warnings
 
       - name: Run cargo fmt --check
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo +nightly fmt --all -- --check
 
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: cargo test

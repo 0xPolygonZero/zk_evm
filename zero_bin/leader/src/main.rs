@@ -3,10 +3,12 @@ use std::{fs::File, path::PathBuf};
 use anyhow::Result;
 use clap::Parser;
 use cli::Command;
+use common::prover_state::set_prover_state_from_config;
 use dotenvy::dotenv;
 use ops::Ops;
 use paladin::runtime::Runtime;
 use plonky_block_proof_gen::types::PlonkyProofIntern;
+use tracing::warn;
 
 mod cli;
 mod http;
@@ -32,13 +34,17 @@ async fn main() -> Result<()> {
     init::tracing();
 
     let args = cli::Cli::parse();
-    let runtime = Runtime::from_config::<Ops>(&paladin::config::Config {
-        runtime: args.runtime.runtime,
-        num_workers: args.runtime.num_workers,
-        amqp_uri: args.runtime.amqp_uri,
-        ..Default::default()
-    })
-    .await?;
+    if let paladin::config::Runtime::InMemory = args.paladin.runtime {
+        // If running in emulation mode, we'll need to initialize the prover
+        // state here.
+        if set_prover_state_from_config(args.prover_state_config.into()).is_err() {
+            warn!(
+                "prover state already set. check the program logic to ensure it is only set once"
+            );
+        }
+    }
+
+    let runtime = Runtime::from_config::<Ops>(&args.paladin).await?;
 
     match args.command {
         Command::Stdio { previous_proof } => {

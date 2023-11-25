@@ -4,13 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = { workspace = true }
-plonky_block_proof_gen = { workspace = true }
-proof_protocol_decoder = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
-paladin-core = { workspace = true }
-ethereum-types = { workspace = true }
-anyhow = { workspace = true }
-
-# Local dependencies
-ops = { path = "../ops" }
+plonky_block_proof_gen = { workspace = true }
+plonky2 = { workspace = true }
+plonky2_evm = { workspace = true }
+clap = { workspace = true }

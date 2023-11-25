@@ -15,12 +15,14 @@ serde_path_to_error = { workspace = true }
 clap = { workspace = true }
 ethereum-types = { workspace = true }
 plonky2_evm = { workspace = true }
+thiserror = { workspace = true }
+
 reqwest = { version = "0.11.22", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
-thiserror = "1.0.50"
 futures = "0.3.29"
 
 # Local dependencies
 common = { path = "../common" }
+prover = { path = "../prover" }

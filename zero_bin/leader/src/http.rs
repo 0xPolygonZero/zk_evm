@@ -2,10 +2,10 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
-use common::ProverInput;
 use ethereum_types::U256;
 use paladin::runtime::Runtime;
 use plonky_block_proof_gen::{proof_types::GeneratedBlockProof, types::PlonkyProofIntern};
+use prover::ProverInput;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};

@@ -20,5 +20,6 @@ axum = "0.6.20"
 
 # Local dependencies
 ops = { path = "../ops" }
-common = { path = "../common" }
+prover = { path = "../prover" }
 rpc = { path = "../rpc" }
+common = { path = "../common" }

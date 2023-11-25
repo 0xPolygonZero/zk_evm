@@ -1,4 +1,4 @@
-use once_cell::sync::Lazy;
+use common::prover_state::P_STATE;
 use paladin::{
     operation::{FatalError, Monoid, Operation, Result},
     opkind_derive::OpKind,
@@ -6,35 +6,17 @@ use paladin::{
 use plonky_block_proof_gen::{
     proof_gen::{generate_agg_proof, generate_block_proof, generate_txn_proof},
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
-    prover_state::{ProverState, ProverStateBuilder},
+    prover_state::ProverState,
 };
 use proof_protocol_decoder::types::{OtherBlockData, TxnProofGenIR};
-use prover_state::from_disk;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
-
-mod prover_state;
-
-static P_STATE: Lazy<ProverState> = Lazy::new(|| {
-    debug!("Attempting to load prover state from disk");
-
-    match from_disk() {
-        Some(state) => {
-            debug!("Successfully loaded prover state from disk!");
-            state
-        }
-        None => {
-            debug!("Prover state not found on disk. Generating new state");
-            let state = ProverStateBuilder::default().build();
-            debug!("Saving prover state to disk");
-            prover_state::to_disk(&state);
-            state
-        }
-    }
-});
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct TxProof;
+
+fn p_state() -> &'static ProverState {
+    P_STATE.get().expect("Prover state is not initialized")
+}
 
 impl Operation for TxProof {
     type Input = TxnProofGenIR;
@@ -42,7 +24,7 @@ impl Operation for TxProof {
     type Kind = Ops;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let result = generate_txn_proof(&P_STATE, input).map_err(FatalError::from)?;
+        let result = generate_txn_proof(p_state(), input).map_err(FatalError::from)?;
 
         Ok(result.into())
     }
@@ -59,7 +41,7 @@ impl Monoid for AggProof {
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
         let result =
-            generate_agg_proof(&P_STATE, &a, &b, self.other.clone()).map_err(FatalError::from)?;
+            generate_agg_proof(p_state(), &a, &b, self.other.clone()).map_err(FatalError::from)?;
 
         Ok(result.into())
     }
@@ -83,7 +65,7 @@ impl Operation for BlockProof {
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         Ok(
-            generate_block_proof(&P_STATE, self.prev.as_ref(), &input, self.other.clone())
+            generate_block_proof(p_state(), self.prev.as_ref(), &input, self.other.clone())
                 .map_err(FatalError::from)?,
         )
     }

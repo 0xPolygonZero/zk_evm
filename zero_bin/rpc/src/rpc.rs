@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use common::ProverInput;
 use ethereum_types::{Address, Bloom, H256, U256};
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
@@ -7,6 +6,7 @@ use proof_protocol_decoder::{
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
     types::{BlockLevelData, OtherBlockData},
 };
+use prover::ProverInput;
 use reqwest::IntoUrl;
 use serde::Deserialize;
 use thiserror::Error;

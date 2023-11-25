@@ -1,15 +1,21 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand, ValueHint};
-use paladin::config::Runtime;
+use clap::{Parser, Subcommand, ValueHint};
+use common::prover_state::cli::CliProverStateConfig;
 
+/// zero-bin leader config
 #[derive(Parser)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Command,
 
     #[clap(flatten)]
-    pub(crate) runtime: RuntimeGroup,
+    pub(crate) paladin: paladin::config::Config,
+
+    // Note this is only relevant for the leader when running in in-memory
+    // mode.
+    #[clap(flatten)]
+    pub(crate) prover_state_config: CliProverStateConfig,
 }
 
 #[derive(Subcommand)]
@@ -41,18 +47,4 @@ pub(crate) enum Command {
         #[arg(short, long, value_hint = ValueHint::DirPath)]
         output_dir: PathBuf,
     },
-}
-
-#[derive(Args)]
-pub(crate) struct RuntimeGroup {
-    /// Specifies the number of worker threads to spawn (in memory runtime
-    /// only).
-    #[arg(long, short)]
-    pub(crate) num_workers: Option<usize>,
-    /// Specifies the paladin runtime mode.
-    #[arg(long, short, value_enum, default_value_t = Runtime::Amqp)]
-    pub(crate) runtime: Runtime,
-    /// Specifies the URI for the AMQP broker (AMQP runtime only).
-    #[arg(long, env = "AMQP_URI", value_hint = ValueHint::Url, required_if_eq("runtime", "amqp"))]
-    pub amqp_uri: Option<String>,
 }

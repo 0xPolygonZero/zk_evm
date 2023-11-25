@@ -597,13 +597,11 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 name = "common"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "ethereum-types",
- "ops",
- "paladin-core",
+ "clap",
+ "plonky2",
+ "plonky2_evm",
  "plonky_block_proof_gen",
- "proof_protocol_decoder",
- "serde",
+ "thiserror",
  "tracing",
 ]
 
@@ -1622,6 +1620,7 @@ dependencies = [
  "ops",
  "paladin-core",
  "plonky_block_proof_gen",
+ "prover",
  "rpc",
  "serde",
  "serde_json",
@@ -1861,15 +1860,11 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 name = "ops"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "once_cell",
+ "common",
  "paladin-core",
- "plonky2",
  "plonky_block_proof_gen",
  "proof_protocol_decoder",
  "serde",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -1897,9 +1892,9 @@ dependencies = [
 
 [[package]]
 name = "paladin-core"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c11bf6aa73a2dfc6a35370bbbec4a30214cea4780a6b4e4e143eb2b13dbc133"
+checksum = "6e3bc44b22dbbfef99900837ae9d335e0bb411f5a981511b8ab64e5615b0b4ae"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2308,6 +2303,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "prover"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ethereum-types",
+ "ops",
+ "paladin-core",
+ "plonky_block_proof_gen",
+ "proof_protocol_decoder",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2531,6 +2540,7 @@ dependencies = [
  "futures",
  "plonky2_evm",
  "proof_protocol_decoder",
+ "prover",
  "reqwest",
  "serde",
  "serde_json",
@@ -3610,6 +3620,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "common",
  "dotenvy",
  "ops",
  "paladin-core",
