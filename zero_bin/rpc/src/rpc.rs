@@ -143,6 +143,11 @@ impl EthGetBlockByNumberResponse {
         rpc_url: U,
         block_number: u64,
     ) -> Result<Vec<H256>> {
+        if block_number == 1 {
+            // As we ignore genesis block hash, we return an empty vector on block 1.
+            return Ok(vec![H256::default(); 256]);
+        }
+
         let mut hashes = vec![];
 
         // Every block response includes the _parent_ hash along with its hash, so we
