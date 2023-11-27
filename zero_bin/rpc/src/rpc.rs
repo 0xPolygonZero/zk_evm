@@ -143,11 +143,6 @@ impl EthGetBlockByNumberResponse {
         rpc_url: U,
         block_number: u64,
     ) -> Result<Vec<H256>> {
-        if block_number == 1 {
-            // As we ignore genesis block hash, we return an empty vector on block 1.
-            return Ok(vec![H256::default(); 256]);
-        }
-
         let mut hashes = vec![];
 
         // Every block response includes the _parent_ hash along with its hash, so we
@@ -160,10 +155,7 @@ impl EthGetBlockByNumberResponse {
 
         let responses = futs.try_collect::<Vec<_>>().await?;
         for response in responses.iter() {
-            if response.result.number == 1.into() {
-                // Ignore genesis
-                hashes.push(response.result.hash);
-            } else if response.result.number == block_number.into() {
+            if response.result.number == block_number.into() {
                 // Ignore current hash
                 hashes.push(response.result.parent_hash);
             } else {
