@@ -16,7 +16,7 @@ hex-literal = "0.4.1"
 hex = "0.4.3"
 keccak-hash = "0.10.0"
 log = "0.4.20"
-plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "b9328815e666981d6485b0d8dc04160e93797993" }
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "2039e18f29c83510e96fd985359c549344d6d601" }
 thiserror = "1.0.49"
 rlp = "0.5.2"
 rlp-derive = "0.1.0"
