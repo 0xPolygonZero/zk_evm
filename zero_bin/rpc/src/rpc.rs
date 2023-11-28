@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use ethereum_types::{Address, Bloom, H256, U256};
 use futures::{stream::FuturesOrdered, TryStreamExt};
-use hex_literal::hex;
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
 use proof_protocol_decoder::{
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
@@ -103,6 +102,7 @@ struct EthGetBlockByNumberResult {
     mix_hash: H256,
     number: U256,
     parent_hash: H256,
+    state_root: H256,
     timestamp: U256,
 }
 
@@ -170,6 +170,11 @@ impl EthGetBlockByNumberResponse {
 
         Ok(hashes)
     }
+
+    async fn fetch_genesis_state_trie_root<U: IntoUrl + Copy>(rpc_url: U) -> Result<H256> {
+        let res = Self::fetch(rpc_url, 0).await?;
+        Ok(res.result.state_root)
+    }
 }
 
 /// The response from the `eth_chainId` RPC method.
@@ -211,20 +216,23 @@ struct RpcBlockMetadata {
     block_by_number: EthGetBlockByNumberResponse,
     chain_id: EthChainIdResponse,
     prev_hashes: Vec<H256>,
+    genesis_state_trie_root: H256,
 }
 
 impl RpcBlockMetadata {
     async fn fetch(rpc_url: &str, block_number: u64) -> Result<Self> {
-        let (block_result, chain_id_result, prev_hashes) = try_join!(
+        let (block_result, chain_id_result, prev_hashes, genesis_state_trie_root) = try_join!(
             EthGetBlockByNumberResponse::fetch(rpc_url, block_number),
             EthChainIdResponse::fetch(rpc_url),
-            EthGetBlockByNumberResponse::fetch_previous_block_hashes(rpc_url, block_number)
+            EthGetBlockByNumberResponse::fetch_previous_block_hashes(rpc_url, block_number),
+            EthGetBlockByNumberResponse::fetch_genesis_state_trie_root(rpc_url)
         )?;
 
         Ok(Self {
             block_by_number: block_result,
             chain_id: chain_id_result,
             prev_hashes,
+            genesis_state_trie_root,
         })
     }
 }
@@ -235,6 +243,7 @@ impl From<RpcBlockMetadata> for OtherBlockData {
             block_by_number,
             chain_id,
             prev_hashes,
+            genesis_state_trie_root,
         }: RpcBlockMetadata,
     ) -> Self {
         let mut bloom = [U256::zero(); 8];
@@ -270,9 +279,7 @@ impl From<RpcBlockMetadata> for OtherBlockData {
                     cur_hash: block_by_number.result.hash,
                 },
             },
-            genesis_state_trie_root: H256(hex!(
-                "c12c57a1ecc38176fa8016fed174a23264e71d2166ea7e18cb954f0f3231e36a"
-            )),
+            genesis_state_trie_root,
         }
     }
 }
