@@ -37,6 +37,10 @@ pub(crate) enum Command {
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,
+        /// If provided, write the generated proof to this file instead of
+        /// stdout.
+        #[arg(long, short = 'p', value_hint = ValueHint::FilePath)]
+        proof_output_path: Option<PathBuf>,
     },
     /// Reads input from HTTP and writes output to a directory.
     Http {
