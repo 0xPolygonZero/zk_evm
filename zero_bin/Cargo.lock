@@ -2187,7 +2187,7 @@ source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=64cc1000e7dbe83d8
 [[package]]
 name = "plonky_block_proof_gen"
 version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/plonky-block-proof-gen.git?branch=proof_fixes#07fc66c7615532de5dea0f2804b25181e0b1afcd"
+source = "git+https://github.com/0xPolygonZero/plonky-block-proof-gen.git?branch=proof_fixes#cb17bd32cc9600988e2baddd73b6aa59b9722939"
 dependencies = [
  "ethereum-types",
  "log",
