@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use paladin::runtime::Runtime;
 use plonky_block_proof_gen::types::PlonkyProofIntern;
 
@@ -14,7 +14,7 @@ pub(crate) async fn jerigon_main(
     rpc_url: &str,
     block_number: u64,
     previous: Option<PlonkyProofIntern>,
-    proof_output_path: Option<PathBuf>,
+    proof_output_path_opt: Option<PathBuf>,
 ) -> Result<()> {
     let prover_input = rpc::fetch_prover_input(rpc_url, block_number).await?;
 
@@ -22,17 +22,17 @@ pub(crate) async fn jerigon_main(
     runtime.close().await?;
 
     let proof = serde_json::to_vec(&proof?.intern)?;
+    write_proof(proof, proof_output_path_opt)
+}
 
-    match proof_output_path {
+fn write_proof(proof: Vec<u8>, proof_output_path_opt: Option<PathBuf>) -> Result<()> {
+    match proof_output_path_opt {
         Some(p) => {
             if let Some(parent) = p.parent() {
                 create_dir_all(parent)?;
             }
 
-            let file_name = p
-                .file_name()
-                .with_context(|| format!("Unable to get a filename from {:?}", p))?;
-            let mut f = File::create(file_name)?;
+            let mut f = File::create(p)?;
             f.write_all(&proof)?;
         }
         None => std::io::stdout().write_all(&proof)?,
