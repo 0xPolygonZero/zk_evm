@@ -305,9 +305,7 @@ impl TxnInfo {
             .state_accounts_with_no_accesses_but_storage_tries
             .extend(accounts_with_storage_but_no_storage_accesses);
 
-        // TODO: Make more efficient...
-        let mut receipt_node_bytes = rlp::encode(&self.meta.new_receipt_trie_node_byte).to_vec();
-        receipt_node_bytes.insert(0, 2);
+        let receipt_node_bytes = rlp::encode(&self.meta.new_receipt_trie_node_byte).to_vec();
 
         let txn_bytes = match self.meta.byte_code.is_empty() {
             false => Some(self.meta.byte_code),
