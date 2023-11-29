@@ -429,13 +429,9 @@ impl ProcessedBlockTrace {
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
         trie_state.txn.insert(txn_k, meta.txn_bytes());
 
-        // TODO: Re-evaluate if we can do this a bit nicer... Plonky2 needs this byte
-        // but we don't want it for the receipt trie.
-        let receipt_node_without_txn_type_byte = &meta.receipt_node_bytes[1..];
-
         trie_state
             .receipt
-            .insert(txn_k, receipt_node_without_txn_type_byte);
+            .insert(txn_k, meta.receipt_node_bytes.as_ref());
 
         Ok(())
     }
