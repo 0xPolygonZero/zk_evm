@@ -6,7 +6,7 @@ use std::str::FromStr;
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::U256;
-use plonky2_evm::generation::mpt::AccountRlp;
+use plonky2_evm::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 
 use crate::compact::compact_prestate_processing::{process_compact_prestate, PartialTriePreImages};
 use crate::decoding::TraceParsingResult;
@@ -305,8 +305,6 @@ impl TxnInfo {
             .state_accounts_with_no_accesses_but_storage_tries
             .extend(accounts_with_storage_but_no_storage_accesses);
 
-        let receipt_node_bytes = rlp::encode(&self.meta.new_receipt_trie_node_byte).to_vec();
-
         let txn_bytes = match self.meta.byte_code.is_empty() {
             false => Some(self.meta.byte_code),
             true => None,
@@ -314,7 +312,7 @@ impl TxnInfo {
 
         let new_meta_state = TxnMetaState {
             txn_bytes,
-            receipt_node_bytes,
+            receipt_node_bytes: self.meta.new_receipt_trie_node_byte,
             gas_used: self.meta.gas_used,
             block_bloom,
         };
@@ -328,17 +326,11 @@ impl TxnInfo {
 
     fn block_bloom(&self) -> Bloom {
         let mut bloom = [U256::zero(); 8];
+        let bloom_bytes =
+            extract_bloom_from_receipt_node_bytes(&self.meta.new_receipt_trie_node_byte);
 
         // Note that bloom can be empty.
-        for (i, v) in self
-            .meta
-            .new_receipt_trie_node_byte
-            .bloom
-            .clone()
-            .into_iter()
-            .array_chunks::<32>()
-            .enumerate()
-        {
+        for (i, v) in bloom_bytes.into_iter().array_chunks::<32>().enumerate() {
             bloom[i] = U256::from_big_endian(v.as_slice());
         }
 
@@ -412,4 +404,16 @@ fn string_to_nibbles_even_nibble_fixed(s: &str) -> Nibbles {
     }
 
     n
+}
+
+fn extract_bloom_from_receipt_node_bytes(r_bytes: &[u8]) -> Vec<u8> {
+    let legacy_payload = match r_bytes[0] {
+        1 | 2 => &r_bytes[1..],
+        _ => r_bytes,
+    };
+
+    rlp::decode::<LegacyReceiptRlp>(legacy_payload)
+        .unwrap()
+        .bloom
+        .to_vec()
 }
