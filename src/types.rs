@@ -1,9 +1,12 @@
+use bytes::Bytes;
 use eth_trie_utils::nibbles::Nibbles;
 use ethereum_types::{H256, U256};
 use plonky2_evm::{
-    generation::GenerationInputs,
+    generation::{mpt::LogRlp, GenerationInputs},
     proof::{BlockHashes, BlockMetadata, TrieRoots},
 };
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
 use crate::proof_gen_types::ProofBeforeAndAfterDeltas;
@@ -127,4 +130,59 @@ impl TxnProofGenIR {
         dummy.gen_inputs.trie_roots_after = self.gen_inputs.trie_roots_after.clone();
         dummy
     }
+}
+
+// TODO: Replace with enum...
+pub type TxnType = u8;
+
+#[derive(Clone, Debug)]
+pub enum ReceiptRlp {
+    Legacy(ReceiptRlpCommon),
+    Other(TxnType, ReceiptRlpCommon),
+}
+
+impl ReceiptRlp {
+    pub fn bloom(&self) -> &Bytes {
+        match self {
+            ReceiptRlp::Legacy(c) => &c.bloom,
+            ReceiptRlp::Other(_, c) => &c.bloom,
+        }
+    }
+}
+
+impl Encodable for ReceiptRlp {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let common = match self {
+            ReceiptRlp::Legacy(c) => c,
+            ReceiptRlp::Other(t_byte, c) => {
+                s.append(t_byte);
+                c
+            }
+        };
+
+        s.append(common);
+    }
+}
+
+// TODO: Make a bit nicer...
+impl Decodable for ReceiptRlp {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        println!("-RLP- {}", rlp);
+
+        let list_rlp = rlp.as_list()?;
+
+        Ok(match list_rlp.len() {
+            4 => Self::Legacy(rlp::decode(rlp.as_raw())?),
+            5 => Self::Other(list_rlp[0], rlp::decode(&list_rlp[1..])?),
+            _ => panic!("Malformed receipt rlp!"),
+        })
+    }
+}
+
+#[derive(Clone, Debug, RlpDecodable, RlpEncodable)]
+pub struct ReceiptRlpCommon {
+    pub status: bool,
+    pub cum_gas_used: U256,
+    pub bloom: Bytes,
+    pub logs: Vec<LogRlp>,
 }

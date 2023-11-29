@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::iter::once;
-use std::str::FromStr;
 
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -17,7 +16,7 @@ use crate::trace_protocol::{
 };
 use crate::types::{
     CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-    OtherBlockData, StorageAddr, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
@@ -221,7 +220,7 @@ impl TxnInfo {
             nodes_used_by_txn.storage_accesses.push((
                 Nibbles::from_h256_be(hashed_addr),
                 storage_access_keys
-                    .map(|k| storage_addr_to_nibbles_even_nibble_fixed_hashed(&k))
+                    .map(|k| Nibbles::from_h256_be(hash(&k.0)))
                     .collect(),
             ));
 
@@ -271,11 +270,6 @@ impl TxnInfo {
             }
         }
 
-        // println!(
-        //     "Storage accesses for {:x} (hashed: {:x}): {:#?}",
-        //     addr, hashed_addr, nodes_used_by_txn
-        // );
-
         let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
             nodes_used_by_txn
                 .storage_accesses
@@ -301,6 +295,9 @@ impl TxnInfo {
         nodes_used_by_txn
             .state_accounts_with_no_accesses_but_storage_tries
             .extend(accounts_with_storage_but_no_storage_accesses);
+
+        println!("META TXN BYTES: {}", hex::encode(&self.meta.byte_code));
+        println!("META RECEIPT BYTES: {}", hex::encode(&self.meta.byte_code));
 
         let txn_bytes = match self.meta.byte_code.is_empty() {
             false => Some(self.meta.byte_code),
@@ -369,39 +366,4 @@ pub(crate) struct TxnMetaState {
     pub(crate) txn_bytes: Option<Vec<u8>>,
     pub(crate) receipt_node_bytes: Vec<u8>,
     pub(crate) gas_used: u64,
-}
-
-// TODO: Remove/rename function based on how complex this gets...
-fn storage_addr_to_nibbles_even_nibble_fixed_hashed(addr: &StorageAddr) -> Nibbles {
-    // I think this is all we need to do? Yell at me if this breaks things.
-    // H256's are never going to be truncated I think.
-
-    // // TODO: Disgusting hack! Remove if this works...
-    // let s = hex::encode(addr.as_bytes());
-
-    // let mut n = Nibbles::from_str(&s).unwrap();
-    // let odd_count = (n.count & 1) == 1;
-
-    // if odd_count {
-    //     n.push_nibble_front(0);
-    // }
-
-    // n
-
-    // let hashed_addr = hash(addr.as_bytes());
-    // Nibbles::from_h256_be(hashed_addr)
-
-    Nibbles::from_h256_be(hash(&addr.0))
-}
-
-// TODO: Extreme hack! Please don't keep...
-fn string_to_nibbles_even_nibble_fixed(s: &str) -> Nibbles {
-    let mut n = Nibbles::from_str(s).unwrap();
-    let odd_count = (n.count & 1) == 1;
-
-    if odd_count {
-        n.push_nibble_front(0);
-    }
-
-    n
 }

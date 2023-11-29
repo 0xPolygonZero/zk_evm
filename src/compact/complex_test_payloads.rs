@@ -80,15 +80,7 @@ impl TestProtocolInputAndRoot {
             .filter(|(_, s_root)| *s_root != EMPTY_TRIE_HASH)
             .map(|(addr, _)| addr);
 
-        let x: Vec<_> = non_empty_account_s_roots.collect();
-        println!("non empty account s_roots: {:#?}", x);
-
-        println!(
-            "All keys for storage tries: {:#?}",
-            images.storage.keys().collect::<Vec<_>>()
-        );
-
-        for account_with_non_empty_root in x.into_iter() {
+        for account_with_non_empty_root in non_empty_account_s_roots {
             assert!(images.storage.contains_key(&account_with_non_empty_root));
         }
     }
