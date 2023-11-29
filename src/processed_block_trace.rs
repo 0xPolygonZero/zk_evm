@@ -310,9 +310,11 @@ impl TxnInfo {
             true => None,
         };
 
+        let receipt_node_bytes = rlp::decode::<Vec<u8>>(&self.meta.new_receipt_trie_node_byte).unwrap();
+
         let new_meta_state = TxnMetaState {
             txn_bytes,
-            receipt_node_bytes: self.meta.new_receipt_trie_node_byte,
+            receipt_node_bytes,
             gas_used: self.meta.gas_used,
             block_bloom,
         };
@@ -407,9 +409,11 @@ fn string_to_nibbles_even_nibble_fixed(s: &str) -> Nibbles {
 }
 
 fn extract_bloom_from_receipt_node_bytes(r_bytes: &[u8]) -> Vec<u8> {
-    let legacy_payload = match r_bytes[0] {
-        1 | 2 => &r_bytes[1..],
-        _ => r_bytes,
+    let decoded = rlp::decode::<Vec<u8>>(r_bytes).unwrap();
+    
+    let legacy_payload = match decoded[0] {
+        1 | 2 => &decoded[1..],
+        _ => &decoded,
     };
 
     rlp::decode::<LegacyReceiptRlp>(legacy_payload)
