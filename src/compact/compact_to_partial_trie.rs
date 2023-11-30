@@ -5,6 +5,7 @@ use eth_trie_utils::{
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
 use ethereum_types::H256;
+use log::trace;
 use plonky2_evm::generation::mpt::AccountRlp;
 
 use super::compact_prestate_processing::{
@@ -51,6 +52,8 @@ pub(super) fn create_partial_trie_from_compact_node_rec(
     curr_node: &NodeEntry,
     output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
+    trace!("Processing node {} into `PartialTrie` node...", curr_node);
+
     match curr_node {
         NodeEntry::Branch(n) => process_branch(curr_key, n, output),
         NodeEntry::Code(c_bytes) => process_code(c_bytes.clone(), output),
@@ -121,7 +124,6 @@ fn process_leaf(
     };
 
     output.trie.insert(full_k, l_val);
-
     Ok(())
 }
 

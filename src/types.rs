@@ -2,7 +2,7 @@ use eth_trie_utils::nibbles::Nibbles;
 use ethereum_types::{H256, U256};
 use plonky2_evm::{
     generation::GenerationInputs,
-    proof::{BlockHashes, BlockMetadata, TrieRoots},
+    proof::{BlockHashes, BlockMetadata},
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +16,7 @@ pub type HashedNodeAddr = H256;
 pub type HashedStorageAddr = H256;
 pub type HashedStorageAddrNibbles = Nibbles;
 pub type StorageAddr = H256;
+pub type StorageAddrNibbles = H256;
 pub type StorageVal = U256;
 pub type TrieRootHash = H256;
 pub type TxnIdx = usize;
@@ -40,6 +41,9 @@ pub(crate) const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
     1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59,
     123, 250, 216, 4, 93, 133, 164, 112,
 ];
+
+// This is just `rlp(0)`.
+pub(crate) const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
 /// An `IR` (Intermediate Representation) for a given txn in a block that we can
 /// use to generate a proof for that txn.
@@ -76,53 +80,6 @@ impl TxnProofGenIR {
         ProofBeforeAndAfterDeltas {
             gas_used_before: self.gen_inputs.gas_used_before,
             gas_used_after: self.gen_inputs.gas_used_after,
-            block_bloom_before: self.gen_inputs.block_bloom_before,
-            block_bloom_after: self.gen_inputs.block_bloom_after,
         }
-    }
-
-    /// Creates a dummy transaction.
-    ///
-    /// These can be used to pad a block if the number of transactions in the
-    /// block is below `2`.
-    pub fn create_dummy(b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
-        let trie_roots_after = TrieRoots {
-            state_root: EMPTY_TRIE_HASH,
-            transactions_root: EMPTY_TRIE_HASH,
-            receipts_root: EMPTY_TRIE_HASH,
-        };
-
-        let block_metadata = BlockMetadata {
-            block_number: b_height.into(),
-            ..Default::default()
-        };
-
-        let gen_inputs = GenerationInputs {
-            trie_roots_after,
-            block_metadata,
-            ..Default::default()
-        };
-
-        Self {
-            txn_idx,
-            gen_inputs,
-        }
-    }
-
-    /// Copy relevant fields of the `TxnProofGenIR` to a new `TxnProofGenIR`
-    /// with a different `b_height` and `txn_idx`.
-    ///
-    /// This can be used to pad a block if there is only one transaction in the
-    /// block. Block proofs need a minimum of two transactions.
-    pub fn dummy_with_at(&self, b_height: BlockHeight, txn_idx: TxnIdx) -> Self {
-        let mut dummy = Self::create_dummy(b_height, txn_idx);
-
-        dummy.gen_inputs.gas_used_before = self.gen_inputs.gas_used_after;
-        dummy.gen_inputs.gas_used_after = self.gen_inputs.gas_used_after;
-        dummy.gen_inputs.block_bloom_before = self.gen_inputs.block_bloom_after;
-        dummy.gen_inputs.block_bloom_after = self.gen_inputs.block_bloom_after;
-
-        dummy.gen_inputs.trie_roots_after = self.gen_inputs.trie_roots_after.clone();
-        dummy
     }
 }

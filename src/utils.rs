@@ -1,5 +1,4 @@
 use eth_trie_utils::{
-    nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
     trie_ops::ValOrHash,
 };
@@ -16,14 +15,6 @@ pub(crate) fn update_val_if_some<T>(target: &mut T, opt: Option<T>) {
     if let Some(new_val) = opt {
         *target = new_val;
     }
-}
-
-pub(crate) fn clone_vec_and_remove_refs<T: Clone>(vec_of_refs: &[&T]) -> Vec<T> {
-    vec_of_refs.iter().map(|r| (*r).clone()).collect()
-}
-
-pub(crate) fn h256_to_nibbles(v: H256) -> Nibbles {
-    Nibbles::from_h256_be(v)
 }
 
 // TODO: Move under a feature flag...

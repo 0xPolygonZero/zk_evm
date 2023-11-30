@@ -25,7 +25,6 @@ use std::collections::HashMap;
 
 use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{Address, U256};
-use plonky2_evm::generation::mpt::LegacyReceiptRlp;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, FromInto, TryFromInto};
 
@@ -74,8 +73,8 @@ pub enum SeparateTriePreImage {
 /// A trie pre-image where both state & storage are combined into one payload.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CombinedPreImages {
-    Compact(TrieCompact),
+pub struct CombinedPreImages {
+    pub compact: TrieCompact,
 }
 
 // TODO
@@ -139,7 +138,7 @@ pub struct TxnMeta {
     /// this txn. Note that the key is not included and this is only the rlped
     /// value of the node!
     #[serde_as(as = "TryFromInto<ByteString>")]
-    pub new_receipt_trie_node_byte: LegacyReceiptRlp,
+    pub new_receipt_trie_node_byte: Vec<u8>,
 
     /// Gas used by this txn (Note: not cumulative gas used).
     pub gas_used: u64,

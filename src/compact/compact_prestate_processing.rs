@@ -22,6 +22,7 @@ use thiserror::Error;
 use super::compact_to_partial_trie::{
     convert_storage_trie_root_keyed_hashmap_to_account_addr_keyed,
     create_partial_trie_from_compact_node, create_partial_trie_from_remaining_witness_elem,
+    CompactToPartialTrieExtractionOutput,
 };
 use crate::{
     trace_protocol::TrieCompact,
@@ -338,6 +339,9 @@ impl ParserState {
 
         let res = match self.entries.len() {
             1 => create_partial_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
+            0 => Ok(CompactToPartialTrieExtractionOutput::default()), /* Case for when nothing */
+            // except the header is
+            // passed in.
             _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
                 self.entries,
             )),
@@ -682,11 +686,11 @@ impl<C: CompactCursor> WitnessBytes<C> {
         let header = self.parse_header()?;
 
         loop {
-            self.process_operator()?;
-
             if self.byte_cursor.at_eof() {
                 break;
             }
+
+            self.process_operator()?;
         }
 
         Ok((header, self.instrs))

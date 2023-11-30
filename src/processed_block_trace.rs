@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::iter::once;
 
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::U256;
-use plonky2_evm::generation::mpt::AccountRlp;
+use plonky2_evm::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 
 use crate::compact::compact_prestate_processing::{process_compact_prestate, PartialTriePreImages};
 use crate::decoding::TraceParsingResult;
@@ -14,9 +15,8 @@ use crate::trace_protocol::{
     TrieUncompressed, TxnInfo,
 };
 use crate::types::{
-    Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
-    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, StorageVal, TrieRootHash, TxnProofGenIR,
-    EMPTY_TRIE_HASH,
+    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
+    OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
@@ -113,9 +113,7 @@ fn process_block_trace_trie_pre_images(
 }
 
 fn process_combined_trie_pre_images(tries: CombinedPreImages) -> ProcessedBlockTracePreImages {
-    match tries {
-        CombinedPreImages::Compact(t) => process_compact_trie(t),
-    }
+    process_compact_trie(tries.compact)
 }
 
 fn process_separate_trie_pre_images(tries: SeparateTriePreImages) -> ProcessedBlockTracePreImages {
@@ -204,28 +202,27 @@ impl TxnInfo {
         code_hash_resolve_f: &F,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
-        let mut contract_code_accessed = HashMap::new();
-        let block_bloom = self.block_bloom();
+        let mut contract_code_accessed = create_empty_code_access_map();
 
         for (addr, trace) in self.traces {
             let hashed_addr = hash(addr.as_bytes());
 
             let storage_writes = trace.storage_written.unwrap_or_default();
 
-            let storage_read_keys = trace.storage_read.into_iter().flat_map(|reads| {
-                reads
-                    .into_iter()
-                    .map(|addr| storage_addr_to_nibbles_even_nibble_fixed_hashed(&addr))
-            });
+            let storage_read_keys = trace
+                .storage_read
+                .into_iter()
+                .flat_map(|reads| reads.into_iter());
 
-            let storage_write_keys = storage_writes
-                .keys()
-                .map(storage_addr_to_nibbles_even_nibble_fixed_hashed);
-            let storage_access_keys = storage_read_keys.chain(storage_write_keys);
+            let storage_write_keys = storage_writes.keys();
+            let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
 
-            nodes_used_by_txn
-                .storage_accesses
-                .push((hashed_addr, storage_access_keys.collect()));
+            nodes_used_by_txn.storage_accesses.push((
+                Nibbles::from_h256_be(hashed_addr),
+                storage_access_keys
+                    .map(|k| Nibbles::from_h256_be(hash(&k.0)))
+                    .collect(),
+            ));
 
             let storage_trie_change = !storage_writes.is_empty();
             let code_change = trace.code_usage.is_some();
@@ -249,12 +246,12 @@ impl TxnInfo {
 
             let storage_writes_vec = storage_writes
                 .into_iter()
-                .map(|(k, v)| (storage_addr_to_nibbles_even_nibble_fixed_hashed(&k), v))
+                .map(|(k, v)| (Nibbles::from_h256_be(k), rlp::encode(&v).to_vec()))
                 .collect();
 
             nodes_used_by_txn
                 .storage_writes
-                .push((hashed_addr, storage_writes_vec));
+                .push((Nibbles::from_h256_be(hashed_addr), storage_writes_vec));
 
             nodes_used_by_txn.state_accesses.push(hashed_addr);
 
@@ -286,18 +283,27 @@ impl TxnInfo {
             .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
 
         let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
-            .filter(|&(addr, _data)| (!accounts_with_storage_accesses.contains(addr)))
+            .filter(|&(addr, _data)| {
+                !accounts_with_storage_accesses.contains(&Nibbles::from_h256_be(*addr))
+            })
             .map(|(addr, data)| (*addr, data.storage_root));
 
         nodes_used_by_txn
             .state_accounts_with_no_accesses_but_storage_tries
             .extend(accounts_with_storage_but_no_storage_accesses);
 
+        let txn_bytes = match self.meta.byte_code.is_empty() {
+            false => Some(self.meta.byte_code),
+            true => None,
+        };
+
+        let receipt_node_bytes =
+            process_rlped_receipt_node_bytes(self.meta.new_receipt_trie_node_byte);
+
         let new_meta_state = TxnMetaState {
-            txn_bytes: self.meta.byte_code,
-            receipt_node_bytes: rlp::encode(&self.meta.new_receipt_trie_node_byte).to_vec(),
+            txn_bytes,
+            receipt_node_bytes,
             gas_used: self.meta.gas_used,
-            block_bloom,
         };
 
         ProcessedTxnInfo {
@@ -306,25 +312,20 @@ impl TxnInfo {
             meta: new_meta_state,
         }
     }
+}
 
-    fn block_bloom(&self) -> Bloom {
-        let mut bloom = [U256::zero(); 8];
-
-        // Note that bloom can be empty.
-        for (i, v) in self
-            .meta
-            .new_receipt_trie_node_byte
-            .bloom
-            .clone()
-            .into_iter()
-            .array_chunks::<32>()
-            .enumerate()
-        {
-            bloom[i] = U256::from_big_endian(v.as_slice());
+fn process_rlped_receipt_node_bytes(raw_bytes: Vec<u8>) -> Vec<u8> {
+    match rlp::decode::<LegacyReceiptRlp>(&raw_bytes) {
+        Ok(_) => raw_bytes,
+        Err(_) => {
+            // Must be non-legacy.
+            rlp::decode::<Vec<u8>>(&raw_bytes).unwrap()
         }
-
-        bloom
     }
+}
+
+fn create_empty_code_access_map() -> HashMap<CodeHash, Vec<u8>> {
+    HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
 /// Note that "*_accesses" includes writes.
@@ -334,11 +335,8 @@ pub(crate) struct NodesUsedByTxn {
     pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
-    pub(crate) storage_writes: Vec<(
-        HashedAccountAddr,
-        Vec<(HashedStorageAddrNibbles, StorageVal)>,
-    )>,
+    pub(crate) storage_accesses: Vec<(Nibbles, Vec<HashedStorageAddrNibbles>)>,
+    pub(crate) storage_writes: Vec<(Nibbles, Vec<(HashedStorageAddrNibbles, Vec<u8>)>)>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries:
         HashMap<HashedAccountAddr, TrieRootHash>,
 }
@@ -353,17 +351,7 @@ pub(crate) struct StateTrieWrites {
 
 #[derive(Debug, Default)]
 pub(crate) struct TxnMetaState {
-    pub(crate) txn_bytes: Vec<u8>,
+    pub(crate) txn_bytes: Option<Vec<u8>>,
     pub(crate) receipt_node_bytes: Vec<u8>,
     pub(crate) gas_used: u64,
-    pub(crate) block_bloom: Bloom,
-}
-
-// TODO: Remove/rename function based on how complex this gets...
-fn storage_addr_to_nibbles_even_nibble_fixed_hashed(addr: &StorageAddr) -> Nibbles {
-    // I think this is all we need to do? Yell at me if this breaks things.
-    // H256's are never going to be truncated I think.
-
-    let hashed_addr = hash(addr.as_bytes());
-    Nibbles::from_h256_be(hashed_addr)
 }

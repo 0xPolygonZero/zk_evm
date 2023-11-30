@@ -1,7 +1,7 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::{self, Display, Formatter},
-    iter::{empty, once},
+    iter::once,
 };
 
 use eth_trie_utils::{
@@ -9,7 +9,8 @@ use eth_trie_utils::{
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     trie_subsets::create_trie_subset,
 };
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, H256, U256};
+use log::trace;
 use plonky2_evm::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::TrieRoots,
@@ -18,11 +19,10 @@ use thiserror::Error;
 
 use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites, TxnMetaState},
-    trace_protocol::TxnInfo,
     types::{
-        BlockLevelData, Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED,
-        EMPTY_TRIE_HASH,
+        HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, OtherBlockData, TrieRootHash,
+        TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED, EMPTY_TRIE_HASH,
+        ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, update_val_if_some},
 };
@@ -81,13 +81,19 @@ impl ProcessedBlockTrace {
         other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<TxnProofGenIR>> {
         let mut curr_block_tries = PartialTrieState {
+            state: self.tries.state.clone(),
+            storage: self.tries.storage.clone(),
+            ..Default::default()
+        };
+
+        // This is just a copy of `curr_block_tries`.
+        let initial_tries_for_dummies = PartialTrieState {
             state: self.tries.state,
             storage: self.tries.storage,
             ..Default::default()
         };
 
         let mut tot_gas_used = U256::zero();
-        let mut curr_bloom = Bloom::default();
 
         let mut txn_gen_inputs = self
             .txn_info
@@ -98,12 +104,11 @@ impl ProcessedBlockTrace {
                     &mut curr_block_tries,
                     &txn_info.nodes_used_by_txn,
                     txn_idx,
+                    &other_data.b_data.b_meta.block_beneficiary,
                 )?;
 
                 let addresses = Self::get_known_addresses_if_enabled();
-
                 let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
-                let new_bloom = txn_info.meta.block_bloom;
 
                 Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
@@ -112,20 +117,20 @@ impl ProcessedBlockTrace {
                     txn_idx,
                 )?;
 
-                // TODO: Clean up if this works...
-                let trie_roots_after = TrieRoots {
-                    state_root: curr_block_tries.state.hash(),
-                    transactions_root: curr_block_tries.txn.hash(),
-                    receipts_root: curr_block_tries.receipt.hash(),
-                };
+                let trie_roots_after = calculate_trie_input_hashes(&curr_block_tries);
+                trace!(
+                    "Protocol expected trie roots after txn {}: {:?}",
+                    txn_idx,
+                    trie_roots_after
+                );
 
                 let gen_inputs = GenerationInputs {
-                    txn_number_before: txn_idx.saturating_sub(1).into(),
+                    txn_number_before: txn_idx.into(),
                     gas_used_before: tot_gas_used,
-                    block_bloom_before: curr_bloom,
                     gas_used_after: new_tot_gas_used,
-                    block_bloom_after: new_bloom,
-                    signed_txns: vec![txn_info.meta.txn_bytes],
+                    signed_txn: txn_info.meta.txn_bytes,
+                    withdrawals: Vec::new(), /* TODO: Once this is added to the trace spec, add
+                                              * it here... */
                     tries,
                     trie_roots_after,
                     genesis_state_trie_root: other_data.genesis_state_trie_root,
@@ -140,16 +145,17 @@ impl ProcessedBlockTrace {
                     gen_inputs,
                 };
 
-                println!("IR: {:#?}", txn_proof_gen_ir);
-
                 tot_gas_used = new_tot_gas_used;
-                curr_bloom = new_bloom;
 
                 Ok(txn_proof_gen_ir)
             })
             .collect::<TraceParsingResult<Vec<_>>>()?;
 
-        Self::pad_gen_inputs_with_dummy_inputs_if_needed(&mut txn_gen_inputs, &other_data.b_data);
+        Self::pad_gen_inputs_with_dummy_inputs_if_needed(
+            &mut txn_gen_inputs,
+            &other_data,
+            &initial_tries_for_dummies,
+        );
         Ok(txn_gen_inputs)
     }
 
@@ -157,29 +163,32 @@ impl ProcessedBlockTrace {
         curr_block_tries: &mut PartialTrieState,
         nodes_used_by_txn: &NodesUsedByTxn,
         txn_idx: TxnIdx,
+        _coin_base_addr: &Address,
     ) -> TraceParsingResult<TrieInputs> {
-        let state_trie = Self::create_minimal_state_partial_trie(
+        let state_trie = create_minimal_state_partial_trie(
             &curr_block_tries.state,
             nodes_used_by_txn.state_accesses.iter().cloned(),
         )?;
 
+        let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
         // TODO: Replace cast once `eth_trie_utils` supports `into` for `usize...
-        let transactions_trie = Self::create_trie_subset_wrapped(
-            &curr_block_tries.txn,
-            once((txn_idx as u32).into()),
-            TrieType::Txn,
-        )?;
+        let transactions_trie =
+            create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
 
-        let receipts_trie = Self::create_trie_subset_wrapped(
-            &curr_block_tries.receipt,
-            once((txn_idx as u32).into()),
-            TrieType::Receipt,
-        )?;
+        let receipts_trie =
+            create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
 
-        let storage_tries = Self::create_minimal_storage_partial_tries(
+        // TODO: Refactor so we can remove this vec alloc...
+        let storage_access_vec = nodes_used_by_txn
+            .storage_accesses
+            .iter()
+            .map(|(k, v)| (H256::from_slice(&k.bytes_be()), v.clone()))
+            .collect::<Vec<_>>();
+
+        let storage_tries = create_minimal_storage_partial_tries(
             &mut curr_block_tries.storage,
             &nodes_used_by_txn.state_accounts_with_no_accesses_but_storage_tries,
-            nodes_used_by_txn.storage_accesses.iter(),
+            storage_access_vec.iter(),
         )?;
 
         Ok(TrieInputs {
@@ -189,101 +198,6 @@ impl ProcessedBlockTrace {
             storage_tries,
         })
     }
-
-    fn get_accounts_with_no_storage_access_that_have_entries_in_state_trie(
-        storage_accesses: &[(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)],
-        state_accesses: &[HashedNodeAddr],
-    ) -> Vec<(HashedAccountAddr, Vec<HashedStorageAddrNibbles>)> {
-        let storage_accesses_set: HashSet<HashedAccountAddr> =
-            HashSet::from_iter(storage_accesses.iter().map(|(k, _)| k).cloned());
-        state_accesses
-            .iter()
-            .filter(|h_addr| !storage_accesses_set.contains(h_addr))
-            .map(|h_addr| (*h_addr, Vec::default()))
-            .collect()
-    }
-
-    fn create_minimal_state_partial_trie(
-        state_trie: &HashedPartialTrie,
-        state_accesses: impl Iterator<Item = HashedNodeAddr>,
-    ) -> TraceParsingResult<HashedPartialTrie> {
-        Self::create_trie_subset_wrapped(
-            state_trie,
-            state_accesses.map(Nibbles::from_h256_be),
-            TrieType::State,
-        )
-    }
-
-    // TODO!!!: We really need to be appending the empty storage tries to the base
-    // trie somewhere else! This is a big hack!
-    fn create_minimal_storage_partial_tries<'a>(
-        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
-        state_accounts_with_no_accesses_but_storage_tries: &HashMap<
-            HashedAccountAddr,
-            TrieRootHash,
-        >,
-        accesses_per_account: impl Iterator<
-            Item = &'a (HashedAccountAddr, Vec<HashedStorageAddrNibbles>),
-        >,
-    ) -> TraceParsingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {
-        accesses_per_account
-            .map(|(h_addr, mem_accesses)| {
-                // TODO: Clean up...
-                let base_storage_trie = match storage_tries.get(h_addr) {
-                    Some(s_trie) => s_trie,
-                    None => {
-                        let trie = state_accounts_with_no_accesses_but_storage_tries
-                            .get(h_addr)
-                            .map(|s_root| HashedPartialTrie::new(Node::Hash(*s_root)))
-                            .unwrap_or_default();
-                        storage_tries.insert(*h_addr, trie); // TODO: Really change this...
-                        storage_tries.get(h_addr).unwrap()
-                    }
-                };
-
-                let partial_storage_trie = Self::create_trie_subset_wrapped(
-                    base_storage_trie,
-                    mem_accesses.iter().cloned(),
-                    TrieType::Storage,
-                )?;
-
-                Ok((*h_addr, partial_storage_trie))
-            })
-            .collect::<TraceParsingResult<_>>()
-    }
-
-    fn create_trie_subset_wrapped(
-        trie: &HashedPartialTrie,
-        accesses: impl Iterator<Item = Nibbles>,
-        trie_type: TrieType,
-    ) -> TraceParsingResult<HashedPartialTrie> {
-        create_trie_subset(trie, accesses)
-            .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(trie_type))
-    }
-
-    // It's not clear to me if the client should have an empty storage trie for when
-    // a txn performs the accounts first storage access, but we're going to assume
-    // they won't for now and deal with that case here.
-    fn add_empty_storage_tries_that_appear_in_trace_but_not_pre_image(
-        s_tries: &mut Vec<(HashedAccountAddr, HashedPartialTrie)>,
-        txn_traces: &[TxnInfo],
-    ) {
-        // TODO: Make a bit more efficient...
-        let all_addrs_that_access_storage_iter = txn_traces
-            .iter()
-            .flat_map(|x| x.traces.keys().map(|addr| hash(addr.as_bytes())));
-        let addrs_with_storage_access_without_s_tries_iter: Vec<_> =
-            all_addrs_that_access_storage_iter
-                .filter(|addr| !s_tries.iter().any(|(a, _)| addr == a))
-                .collect();
-
-        s_tries.extend(
-            addrs_with_storage_access_without_s_tries_iter
-                .into_iter()
-                .map(|k| (k, HashedPartialTrie::default())),
-        );
-    }
-
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
         deltas: NodesUsedByTxn,
@@ -291,10 +205,25 @@ impl ProcessedBlockTrace {
         txn_idx: TxnIdx,
     ) -> TraceParsingResult<()> {
         for (hashed_acc_addr, storage_writes) in deltas.storage_writes {
-            let storage_trie = trie_state.storage.get_mut(&hashed_acc_addr).ok_or(
-                TraceParsingError::MissingAccountStorageTrie(hashed_acc_addr),
-            )?;
-            storage_trie.extend(storage_writes);
+            let storage_trie = trie_state
+                .storage
+                .get_mut(&H256::from_slice(&hashed_acc_addr.bytes_be()))
+                .ok_or(TraceParsingError::MissingAccountStorageTrie(
+                    H256::from_slice(&hashed_acc_addr.bytes_be()),
+                ))?;
+
+            for (slot, val) in storage_writes
+                .into_iter()
+                .map(|(k, v)| (Nibbles::from_h256_be(hash(&k.bytes_be())), v))
+            {
+                // If we are writing a zero, then we actually need to perform a delete.
+                match val == ZERO_STORAGE_SLOT_VAL_RLPED {
+                    false => storage_trie.insert(slot, val),
+                    true => {
+                        storage_trie.delete(slot);
+                    }
+                };
+            }
         }
 
         for (hashed_acc_addr, s_trie_writes) in deltas.state_writes {
@@ -309,6 +238,7 @@ impl ProcessedBlockTrace {
             let mut account: AccountRlp = rlp::decode(val_bytes).map_err(|err| {
                 TraceParsingError::AccountDecode(hex::encode(val_bytes), err.to_string())
             })?;
+
             s_trie_writes.apply_writes_to_state_node(
                 &mut account,
                 &hashed_acc_addr,
@@ -322,30 +252,31 @@ impl ProcessedBlockTrace {
         }
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
-        trie_state.txn.insert(txn_k, meta.txn_bytes.clone());
+        trie_state.txn.insert(txn_k, meta.txn_bytes());
+
         trie_state
             .receipt
-            .insert(txn_k, meta.receipt_node_bytes.clone());
+            .insert(txn_k, meta.receipt_node_bytes.as_ref());
 
         Ok(())
     }
 
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<TxnProofGenIR>,
-        b_data: &BlockLevelData,
+        other_data: &OtherBlockData,
+        initial_trie_state: &PartialTrieState,
     ) {
         match gen_inputs.len() {
             0 => {
                 // Need to pad with two dummy txns.
-                gen_inputs.extend(create_dummy_txn_pair_for_empty_block(b_data))
+                gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
+                    other_data,
+                    initial_trie_state,
+                ));
             }
             1 => {
-                // Only need one dummy txn, but it needs info from the one real txn in the
-                // block.
-                gen_inputs.push(create_dummy_txn_gen_input_single_dummy_txn(
-                    &gen_inputs[0].gen_inputs,
-                    b_data,
-                ))
+                let dummy_txn = create_dummy_gen_input(other_data, initial_trie_state, 0);
+                gen_inputs.insert(0, dummy_txn);
             }
             _ => (),
         }
@@ -372,6 +303,7 @@ impl StateTrieWrites {
                 let storage_trie = acc_storage_tries
                     .get(h_addr)
                     .ok_or(TraceParsingError::MissingAccountStorageTrie(*h_addr))?;
+
                 Some(storage_trie.hash())
             }
         };
@@ -385,92 +317,64 @@ impl StateTrieWrites {
     }
 }
 
-fn calculate_trie_input_hashes(t_inputs: &TrieInputs) -> TrieRoots {
+fn calculate_trie_input_hashes(t_inputs: &PartialTrieState) -> TrieRoots {
     TrieRoots {
-        state_root: t_inputs.state_trie.hash(),
-        transactions_root: t_inputs.transactions_trie.hash(),
-        receipts_root: t_inputs.receipts_trie.hash(),
+        state_root: t_inputs.state.hash(),
+        transactions_root: t_inputs.txn.hash(),
+        receipts_root: t_inputs.receipt.hash(),
     }
-}
-
-fn create_dummy_txn_gen_input_single_dummy_txn(
-    prev_real_gen_input: &GenerationInputs,
-    b_data: &BlockLevelData,
-) -> TxnProofGenIR {
-    let partial_sub_storage_tries: Vec<_> = prev_real_gen_input
-        .tries
-        .storage_tries
-        .iter()
-        .map(|(hashed_acc_addr, s_trie)| {
-            (
-                *hashed_acc_addr,
-                create_fully_hashed_out_sub_partial_trie(s_trie),
-            )
-        })
-        .collect();
-
-    let tries = TrieInputs {
-        state_trie: create_fully_hashed_out_sub_partial_trie(&prev_real_gen_input.tries.state_trie),
-        transactions_trie: create_fully_hashed_out_sub_partial_trie(
-            &prev_real_gen_input.tries.transactions_trie,
-        ),
-        receipts_trie: create_fully_hashed_out_sub_partial_trie(
-            &prev_real_gen_input.tries.receipts_trie,
-        ),
-        storage_tries: partial_sub_storage_tries,
-    };
-
-    let gen_inputs = GenerationInputs {
-        txn_number_before: 0.into(),
-        gas_used_before: prev_real_gen_input.gas_used_after,
-        block_bloom_before: prev_real_gen_input.block_bloom_after,
-        gas_used_after: prev_real_gen_input.gas_used_after,
-        block_bloom_after: prev_real_gen_input.block_bloom_after,
-        signed_txns: Vec::default(),
-        tries,
-        trie_roots_after: prev_real_gen_input.trie_roots_after.clone(),
-        genesis_state_trie_root: prev_real_gen_input.genesis_state_trie_root,
-        contract_code: HashMap::default(),
-        block_metadata: b_data.b_meta.clone(),
-        block_hashes: b_data.b_hashes.clone(),
-        addresses: Vec::default(),
-    };
-
-    gen_inputs_to_ir(gen_inputs, 1)
 }
 
 // We really want to get a trie with just a hash node here, and this is an easy
 // way to do it.
 fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedPartialTrie {
     // Impossible to actually fail with an empty iter.
-    create_trie_subset(trie, empty::<Nibbles>()).unwrap()
+    create_trie_subset(trie, once(0_u64)).unwrap()
 }
 
-fn create_dummy_txn_pair_for_empty_block(b_data: &BlockLevelData) -> [TxnProofGenIR; 2] {
+fn create_dummy_txn_pair_for_empty_block(
+    other_data: &OtherBlockData,
+    initial_trie_state: &PartialTrieState,
+) -> [TxnProofGenIR; 2] {
     [
-        create_dummy_gen_input(b_data, 0),
-        create_dummy_gen_input(b_data, 1),
+        create_dummy_gen_input(other_data, initial_trie_state, 0),
+        create_dummy_gen_input(other_data, initial_trie_state, 0),
     ]
 }
 
-fn create_dummy_gen_input(b_data: &BlockLevelData, txn_idx: TxnIdx) -> TxnProofGenIR {
+fn create_dummy_gen_input(
+    other_data: &OtherBlockData,
+    initial_trie_state: &PartialTrieState,
+    txn_idx: TxnIdx,
+) -> TxnProofGenIR {
+    let tries = create_dummy_proof_trie_inputs(initial_trie_state);
+
+    let trie_roots_after = TrieRoots {
+        state_root: tries.state_trie.hash(),
+        transactions_root: EMPTY_TRIE_HASH,
+        receipts_root: EMPTY_TRIE_HASH,
+    };
+
     let gen_inputs = GenerationInputs {
-        txn_number_before: txn_idx.saturating_sub(1).into(),
-        gas_used_before: 0.into(),
-        block_bloom_before: Bloom::default(),
-        gas_used_after: 0.into(),
-        block_bloom_after: Bloom::default(),
-        signed_txns: Vec::default(),
-        tries: create_empty_trie_inputs(),
-        trie_roots_after: create_trie_roots_for_empty_tries(),
-        genesis_state_trie_root: TrieRootHash::default(),
-        contract_code: HashMap::default(),
-        block_metadata: b_data.b_meta.clone(),
-        block_hashes: b_data.b_hashes.clone(),
-        addresses: Vec::default(),
+        signed_txn: None,
+        tries,
+        trie_roots_after,
+        genesis_state_trie_root: other_data.genesis_state_trie_root,
+        block_metadata: other_data.b_data.b_meta.clone(),
+        block_hashes: other_data.b_data.b_hashes.clone(),
+        ..GenerationInputs::default()
     };
 
     gen_inputs_to_ir(gen_inputs, txn_idx)
+}
+
+impl TxnMetaState {
+    fn txn_bytes(&self) -> Vec<u8> {
+        match self.txn_bytes.as_ref() {
+            Some(v) => v.clone(),
+            None => Vec::default(),
+        }
+    }
 }
 
 fn gen_inputs_to_ir(gen_inputs: GenerationInputs, txn_idx: TxnIdx) -> TxnProofGenIR {
@@ -480,19 +384,75 @@ fn gen_inputs_to_ir(gen_inputs: GenerationInputs, txn_idx: TxnIdx) -> TxnProofGe
     }
 }
 
-fn create_empty_trie_inputs() -> TrieInputs {
+fn create_dummy_proof_trie_inputs(final_trie_state: &PartialTrieState) -> TrieInputs {
+    let partial_sub_storage_tries: Vec<_> = final_trie_state
+        .storage
+        .iter()
+        .map(|(hashed_acc_addr, s_trie)| {
+            (
+                *hashed_acc_addr,
+                create_fully_hashed_out_sub_partial_trie(s_trie),
+            )
+        })
+        .collect();
+
     TrieInputs {
-        state_trie: HashedPartialTrie::default(),
+        state_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.state),
         transactions_trie: HashedPartialTrie::default(),
         receipts_trie: HashedPartialTrie::default(),
-        storage_tries: Vec::default(),
+        storage_tries: partial_sub_storage_tries,
     }
 }
 
-const fn create_trie_roots_for_empty_tries() -> TrieRoots {
-    TrieRoots {
-        state_root: EMPTY_TRIE_HASH,
-        transactions_root: EMPTY_TRIE_HASH,
-        receipts_root: EMPTY_TRIE_HASH,
-    }
+fn create_minimal_state_partial_trie(
+    state_trie: &HashedPartialTrie,
+    state_accesses: impl Iterator<Item = HashedNodeAddr>,
+) -> TraceParsingResult<HashedPartialTrie> {
+    create_trie_subset_wrapped(
+        state_trie,
+        state_accesses.map(Nibbles::from_h256_be),
+        TrieType::State,
+    )
+}
+
+// TODO!!!: We really need to be appending the empty storage tries to the base
+// trie somewhere else! This is a big hack!
+fn create_minimal_storage_partial_tries<'a>(
+    storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
+    state_accounts_with_no_accesses_but_storage_tries: &HashMap<HashedAccountAddr, TrieRootHash>,
+    accesses_per_account: impl Iterator<Item = &'a (HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
+) -> TraceParsingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {
+    accesses_per_account
+        .map(|(h_addr, mem_accesses)| {
+            // TODO: Clean up...
+            let base_storage_trie = match storage_tries.get(&H256(h_addr.0)) {
+                Some(s_trie) => s_trie,
+                None => {
+                    let trie = state_accounts_with_no_accesses_but_storage_tries
+                        .get(h_addr)
+                        .map(|s_root| HashedPartialTrie::new(Node::Hash(*s_root)))
+                        .unwrap_or_default();
+                    storage_tries.insert(*h_addr, trie); // TODO: Really change this...
+                    storage_tries.get(h_addr).unwrap()
+                }
+            };
+
+            let partial_storage_trie = create_trie_subset_wrapped(
+                base_storage_trie,
+                mem_accesses.iter().cloned(),
+                TrieType::Storage,
+            )?;
+
+            Ok((*h_addr, partial_storage_trie))
+        })
+        .collect::<TraceParsingResult<_>>()
+}
+
+fn create_trie_subset_wrapped(
+    trie: &HashedPartialTrie,
+    accesses: impl Iterator<Item = Nibbles>,
+    trie_type: TrieType,
+) -> TraceParsingResult<HashedPartialTrie> {
+    create_trie_subset(trie, accesses)
+        .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(trie_type))
 }

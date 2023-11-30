@@ -1,7 +1,5 @@
 //! Custom deserializers / serializers for Serde.
 use hex::{FromHex, ToHex};
-use plonky2_evm::generation::mpt::LegacyReceiptRlp;
-use rlp::DecoderError;
 use serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -27,20 +25,6 @@ impl std::ops::Deref for ByteString {
 impl From<Vec<u8>> for ByteString {
     fn from(v: Vec<u8>) -> Self {
         Self(v)
-    }
-}
-
-impl TryFrom<ByteString> for LegacyReceiptRlp {
-    type Error = DecoderError;
-
-    fn try_from(value: ByteString) -> Result<Self, Self::Error> {
-        rlp::decode(&value.0)
-    }
-}
-
-impl From<LegacyReceiptRlp> for ByteString {
-    fn from(value: LegacyReceiptRlp) -> Self {
-        Self(rlp::encode(&value).into())
     }
 }
 
