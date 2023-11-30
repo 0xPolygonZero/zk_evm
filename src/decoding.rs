@@ -152,7 +152,7 @@ impl ProcessedBlockTrace {
                 println!("{:#?}", account_and_storage_hashes);
 
                 let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
-                let new_bloom = txn_info.meta.block_bloom;
+                let new_bloom = txn_info.meta.bloom;
 
                 Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,

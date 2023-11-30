@@ -206,7 +206,7 @@ impl TxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
 
-        let block_bloom = self.block_bloom();
+        let bloom = self.bloom();
 
         for (addr, trace) in self.traces {
             let hashed_addr = hash(addr.as_bytes());
@@ -310,13 +310,14 @@ impl TxnInfo {
             true => None,
         };
 
-        let receipt_node_bytes = rlp::decode::<Vec<u8>>(&self.meta.new_receipt_trie_node_byte).unwrap();
+        let receipt_node_bytes =
+            process_rlped_receipt_node_bytes(self.meta.new_receipt_trie_node_byte);
 
         let new_meta_state = TxnMetaState {
             txn_bytes,
             receipt_node_bytes,
             gas_used: self.meta.gas_used,
-            block_bloom,
+            bloom,
         };
 
         ProcessedTxnInfo {
@@ -326,7 +327,7 @@ impl TxnInfo {
         }
     }
 
-    fn block_bloom(&self) -> Bloom {
+    fn bloom(&self) -> Bloom {
         let mut bloom = [U256::zero(); 8];
         let bloom_bytes =
             extract_bloom_from_receipt_node_bytes(&self.meta.new_receipt_trie_node_byte);
@@ -337,6 +338,21 @@ impl TxnInfo {
         }
 
         bloom
+    }
+}
+
+fn process_rlped_receipt_node_bytes(raw_bytes: Vec<u8>) -> Vec<u8> {
+    println!("PROC RAW: {}", hex::encode(&raw_bytes));
+
+    match rlp::decode::<LegacyReceiptRlp>(&raw_bytes) {
+        Ok(_) => raw_bytes,
+        Err(_) => {
+            // Must be non-legacy.
+
+            let decoded = rlp::decode::<Vec<u8>>(&raw_bytes).unwrap();
+            println!("PROC Non-legacy: {}", hex::encode(&decoded));
+            decoded
+        }
     }
 }
 
@@ -370,7 +386,7 @@ pub(crate) struct TxnMetaState {
     pub(crate) txn_bytes: Option<Vec<u8>>,
     pub(crate) receipt_node_bytes: Vec<u8>,
     pub(crate) gas_used: u64,
-    pub(crate) block_bloom: Bloom,
+    pub(crate) bloom: Bloom,
 }
 
 // TODO: Remove/rename function based on how complex this gets...
@@ -408,16 +424,17 @@ fn string_to_nibbles_even_nibble_fixed(s: &str) -> Nibbles {
     n
 }
 
-fn extract_bloom_from_receipt_node_bytes(r_bytes: &[u8]) -> Vec<u8> {
-    let decoded = rlp::decode::<Vec<u8>>(r_bytes).unwrap();
-    
-    let legacy_payload = match decoded[0] {
-        1 | 2 => &decoded[1..],
-        _ => &decoded,
-    };
+fn extract_bloom_from_receipt_node_bytes(raw_bytes: &[u8]) -> Vec<u8> {
+    match rlp::decode::<LegacyReceiptRlp>(raw_bytes) {
+        Ok(v) => v.bloom.to_vec(),
+        Err(_) => {
+            // Must be non-legacy.
 
-    rlp::decode::<LegacyReceiptRlp>(legacy_payload)
-        .unwrap()
-        .bloom
-        .to_vec()
+            let decoded = rlp::decode::<Vec<u8>>(raw_bytes).unwrap();
+            rlp::decode::<LegacyReceiptRlp>(&decoded[1..])
+                .unwrap()
+                .bloom
+                .to_vec()
+        }
+    }
 }
