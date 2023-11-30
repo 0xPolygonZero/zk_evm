@@ -189,8 +189,6 @@ fn merge_lhs_and_rhs_deltas(
     ProofBeforeAndAfterDeltas {
         gas_used_before: lhs.gas_used_before,
         gas_used_after: rhs.gas_used_after,
-        block_bloom_before: lhs.block_bloom_before,
-        block_bloom_after: rhs.block_bloom_after,
     }
 }
 

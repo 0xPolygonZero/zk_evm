@@ -25,8 +25,6 @@ pub fn create_extra_block_data(
         txn_number_after: txn_end.into(),
         gas_used_before: deltas.gas_used_before,
         gas_used_after: deltas.gas_used_after,
-        block_bloom_before: deltas.block_bloom_before,
-        block_bloom_after: deltas.block_bloom_after,
     }
 }
 
