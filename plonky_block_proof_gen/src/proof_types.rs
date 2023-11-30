@@ -25,8 +25,6 @@ pub fn create_extra_block_data(
         txn_number_after: txn_end.into(),
         gas_used_before: deltas.gas_used_before,
         gas_used_after: deltas.gas_used_after,
-        block_bloom_before: deltas.block_bloom_before,
-        block_bloom_after: deltas.block_bloom_after,
     }
 }
 
@@ -39,7 +37,12 @@ pub struct GeneratedTxnProof {
 
 impl GeneratedTxnProof {
     pub fn underlying_txns(&self) -> ProofUnderlyingTxns {
-        (self.txn_idx..=self.txn_idx).into()
+        if self.common.roots_before.transactions_root == self.common.roots_after.transactions_root {
+            // This is a dummy proof no transaction was executed.
+            (self.txn_idx..self.txn_idx).into()
+        } else {
+            (self.txn_idx..=self.txn_idx).into()
+        }
     }
 }
 
