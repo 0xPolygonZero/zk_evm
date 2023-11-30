@@ -26,14 +26,17 @@ pub struct ProverStateBuilder {
 
 impl Default for ProverStateBuilder {
     fn default() -> Self {
+        // These ranges are somewhat arbitrary, but should be enough for testing
+        // purposes against most transactions.
+        // Some heavy contract deployments may require bumping these ranges though.
         Self {
-            arithmetic_circuit_size: 16..19,
+            arithmetic_circuit_size: 16..20,
             byte_packing_circuit_size: 10..20,
-            cpu_circuit_size: 15..22,
+            cpu_circuit_size: 12..22,
             keccak_circuit_size: 14..17,
-            keccak_sponge_circuit_size: 9..16,
+            keccak_sponge_circuit_size: 9..14,
             logic_circuit_size: 12..16,
-            memory_circuit_size: 18..24,
+            memory_circuit_size: 17..25,
         }
     }
 }
