@@ -343,20 +343,20 @@ fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedP
 
 fn create_dummy_txn_pair_for_empty_block(
     other_data: &OtherBlockData,
-    final_trie_state: &PartialTrieState,
+    initial_trie_state: &PartialTrieState,
 ) -> [TxnProofGenIR; 2] {
     [
-        create_dummy_gen_input(other_data, final_trie_state, 0),
-        create_dummy_gen_input(other_data, final_trie_state, 0),
+        create_dummy_gen_input(other_data, initial_trie_state, 0),
+        create_dummy_gen_input(other_data, initial_trie_state, 0),
     ]
 }
 
 fn create_dummy_gen_input(
     other_data: &OtherBlockData,
-    final_trie_state: &PartialTrieState,
+    initial_trie_state: &PartialTrieState,
     txn_idx: TxnIdx,
 ) -> TxnProofGenIR {
-    let tries = create_dummy_proof_trie_inputs(final_trie_state);
+    let tries = create_dummy_proof_trie_inputs(initial_trie_state);
 
     let trie_roots_after = TrieRoots {
         state_root: tries.state_trie.hash(),
