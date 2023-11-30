@@ -108,15 +108,6 @@ impl ProcessedBlockTrace {
                 )?;
 
                 let addresses = Self::get_known_addresses_if_enabled();
-
-                let account_and_storage_hashes = curr_block_tries
-                    .state
-                    .items()
-                    .filter_map(|(a, v)| v.as_val().map(|v| (a, v.clone())))
-                    .map(|(a, v)| (a, rlp::decode::<AccountRlp>(&v).unwrap().storage_root))
-                    .collect::<Vec<_>>();
-                println!("{:#?}", account_and_storage_hashes);
-
                 let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
 
                 Self::apply_deltas_to_trie_state(

@@ -277,10 +277,6 @@ impl TxnInfo {
                 .filter(|(_, slots)| !slots.is_empty())
                 .map(|(addr, _)| *addr),
         );
-        println!(
-            "Account with storage accesses: {:#?}",
-            accounts_with_storage_accesses
-        );
 
         let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
             .iter()
@@ -295,9 +291,6 @@ impl TxnInfo {
         nodes_used_by_txn
             .state_accounts_with_no_accesses_but_storage_tries
             .extend(accounts_with_storage_but_no_storage_accesses);
-
-        println!("META TXN BYTES: {}", hex::encode(&self.meta.byte_code));
-        println!("META RECEIPT BYTES: {}", hex::encode(&self.meta.byte_code));
 
         let txn_bytes = match self.meta.byte_code.is_empty() {
             false => Some(self.meta.byte_code),
@@ -322,16 +315,11 @@ impl TxnInfo {
 }
 
 fn process_rlped_receipt_node_bytes(raw_bytes: Vec<u8>) -> Vec<u8> {
-    println!("PROC RAW: {}", hex::encode(&raw_bytes));
-
     match rlp::decode::<LegacyReceiptRlp>(&raw_bytes) {
         Ok(_) => raw_bytes,
         Err(_) => {
             // Must be non-legacy.
-
-            let decoded = rlp::decode::<Vec<u8>>(&raw_bytes).unwrap();
-            println!("PROC Non-legacy: {}", hex::encode(&decoded));
-            decoded
+            rlp::decode::<Vec<u8>>(&raw_bytes).unwrap()
         }
     }
 }

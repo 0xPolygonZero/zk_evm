@@ -85,7 +85,6 @@ fn process_code(
     c_bytes: Vec<u8>,
     output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
-    println!("PROCESSING CODE NODE!!");
     let c_hash = hash(&c_bytes);
     output.code.insert(c_hash, c_bytes);
 
@@ -124,10 +123,7 @@ fn process_leaf(
         }
     };
 
-    println!("INSERTING KEY {:x}!", full_k);
-
     output.trie.insert(full_k, l_val);
-
     Ok(())
 }
 
@@ -150,12 +146,6 @@ fn convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(
     let code_hash = match &acc_data.account_node_code {
         Some(AccountNodeCode::CodeNode(c_bytes)) => {
             let c_hash = hash(c_bytes);
-            println!(
-                "Adding code hash mapping ({:x} --> {})",
-                c_hash,
-                hex::encode(c_bytes)
-            );
-
             output.code.insert(c_hash, c_bytes.clone());
 
             c_hash
