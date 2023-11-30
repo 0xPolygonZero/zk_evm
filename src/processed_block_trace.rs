@@ -16,9 +16,8 @@ use crate::trace_protocol::{
     TrieUncompressed, TxnInfo,
 };
 use crate::types::{
-    Bloom, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
-    HashedStorageAddrNibbles, OtherBlockData, StorageAddr, TrieRootHash, TxnProofGenIR,
-    EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
+    OtherBlockData, StorageAddr, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
@@ -206,8 +205,6 @@ impl TxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
 
-        let bloom = self.bloom();
-
         for (addr, trace) in self.traces {
             let hashed_addr = hash(addr.as_bytes());
 
@@ -317,7 +314,6 @@ impl TxnInfo {
             txn_bytes,
             receipt_node_bytes,
             gas_used: self.meta.gas_used,
-            bloom,
         };
 
         ProcessedTxnInfo {
@@ -325,19 +321,6 @@ impl TxnInfo {
             contract_code_accessed,
             meta: new_meta_state,
         }
-    }
-
-    fn bloom(&self) -> Bloom {
-        let mut bloom = [U256::zero(); 8];
-        let bloom_bytes =
-            extract_bloom_from_receipt_node_bytes(&self.meta.new_receipt_trie_node_byte);
-
-        // Note that bloom can be empty.
-        for (i, v) in bloom_bytes.into_iter().array_chunks::<32>().enumerate() {
-            bloom[i] = U256::from_big_endian(v.as_slice());
-        }
-
-        bloom
     }
 }
 
@@ -386,7 +369,6 @@ pub(crate) struct TxnMetaState {
     pub(crate) txn_bytes: Option<Vec<u8>>,
     pub(crate) receipt_node_bytes: Vec<u8>,
     pub(crate) gas_used: u64,
-    pub(crate) bloom: Bloom,
 }
 
 // TODO: Remove/rename function based on how complex this gets...
@@ -422,19 +404,4 @@ fn string_to_nibbles_even_nibble_fixed(s: &str) -> Nibbles {
     }
 
     n
-}
-
-fn extract_bloom_from_receipt_node_bytes(raw_bytes: &[u8]) -> Vec<u8> {
-    match rlp::decode::<LegacyReceiptRlp>(raw_bytes) {
-        Ok(v) => v.bloom.to_vec(),
-        Err(_) => {
-            // Must be non-legacy.
-
-            let decoded = rlp::decode::<Vec<u8>>(raw_bytes).unwrap();
-            rlp::decode::<LegacyReceiptRlp>(&decoded[1..])
-                .unwrap()
-                .bloom
-                .to_vec()
-        }
-    }
 }

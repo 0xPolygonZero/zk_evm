@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::{self, Display, Formatter},
-    iter::{empty, once},
+    iter::once,
     str::FromStr,
 };
 
@@ -21,8 +21,8 @@ use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites, TxnMetaState},
     trace_protocol::TxnInfo,
     types::{
-        Bloom, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, OtherBlockData,
-        TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED, EMPTY_TRIE_HASH,
+        HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, OtherBlockData, TrieRootHash,
+        TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED, EMPTY_TRIE_HASH,
         ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, update_val_if_some},
@@ -95,7 +95,6 @@ impl ProcessedBlockTrace {
         };
 
         let mut tot_gas_used = U256::zero();
-        let mut curr_bloom = Bloom::default();
 
         let mut txn_gen_inputs = self
             .txn_info
@@ -152,7 +151,6 @@ impl ProcessedBlockTrace {
                 println!("{:#?}", account_and_storage_hashes);
 
                 let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
-                let new_bloom = txn_info.meta.bloom;
 
                 Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
@@ -177,9 +175,7 @@ impl ProcessedBlockTrace {
                 let gen_inputs = GenerationInputs {
                     txn_number_before: txn_idx.into(),
                     gas_used_before: tot_gas_used,
-                    block_bloom_before: curr_bloom,
                     gas_used_after: new_tot_gas_used,
-                    block_bloom_after: new_bloom,
                     signed_txn: txn_info.meta.txn_bytes,
                     withdrawals: Vec::new(), /* TODO: Once this is added to the trace spec, add
                                               * it here... */
@@ -202,7 +198,6 @@ impl ProcessedBlockTrace {
                 // println!("IR: {:#?}", txn_proof_gen_ir);
 
                 tot_gas_used = new_tot_gas_used;
-                curr_bloom = new_bloom;
 
                 let all_storage_roots = curr_block_tries
                     .state
@@ -506,72 +501,6 @@ fn calculate_trie_input_hashes(t_inputs: &TrieInputs) -> TrieRoots {
         transactions_root: t_inputs.transactions_trie.hash(),
         receipts_root: t_inputs.receipts_trie.hash(),
     }
-}
-
-fn create_dummy_txn_gen_input_single_dummy_txn(
-    next_real_gen_input: &GenerationInputs,
-    final_trie_state: &PartialTrieState,
-) -> TxnProofGenIR {
-    let partial_sub_storage_tries: Vec<_> = final_trie_state
-        .storage
-        .iter()
-        .map(|(hashed_acc_addr, s_trie)| {
-            (
-                *hashed_acc_addr,
-                create_fully_hashed_out_sub_partial_trie(s_trie),
-            )
-        })
-        .collect();
-
-    let state_trie = create_minimal_state_partial_trie(&final_trie_state.state, empty()).unwrap();
-
-    let tries = TrieInputs {
-        state_trie,
-        transactions_trie: HashedPartialTrie::default(),
-        receipts_trie: HashedPartialTrie::default(),
-        storage_tries: partial_sub_storage_tries,
-    };
-
-    println!(
-        "Orig trie hash: {:x}",
-        next_real_gen_input.tries.state_trie.hash()
-    );
-    println!("State sub trie: {:#?}", tries.state_trie);
-
-    assert_eq!(
-        tries.state_trie.hash(),
-        next_real_gen_input.trie_roots_after.state_root
-    );
-    println!(
-        "{} == {}",
-        tries.state_trie.hash(),
-        next_real_gen_input.trie_roots_after.state_root
-    );
-
-    println!(
-        "Fully hashed out dummy state trie: {:x}",
-        tries.state_trie.hash()
-    );
-
-    let trie_roots_after = TrieRoots {
-        state_root: next_real_gen_input.tries.state_trie.hash(),
-        transactions_root: EMPTY_TRIE_HASH,
-        receipts_root: EMPTY_TRIE_HASH,
-    };
-
-    let gen_inputs = GenerationInputs {
-        txn_number_before: 0.into(),
-        gas_used_before: 0.into(),
-        gas_used_after: 0.into(),
-        block_bloom_before: [0.into(); 8],
-        block_bloom_after: [0.into(); 8],
-        signed_txn: None,
-        withdrawals: vec![],
-        trie_roots_after,
-        ..(next_real_gen_input.clone())
-    };
-
-    gen_inputs_to_ir(gen_inputs, 0)
 }
 
 // We really want to get a trie with just a hash node here, and this is an easy

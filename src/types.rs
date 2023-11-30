@@ -80,8 +80,6 @@ impl TxnProofGenIR {
         ProofBeforeAndAfterDeltas {
             gas_used_before: self.gen_inputs.gas_used_before,
             gas_used_after: self.gen_inputs.gas_used_after,
-            block_bloom_before: self.gen_inputs.block_bloom_before,
-            block_bloom_after: self.gen_inputs.block_bloom_after,
         }
     }
 
@@ -125,8 +123,6 @@ impl TxnProofGenIR {
 
         dummy.gen_inputs.gas_used_before = self.gen_inputs.gas_used_after;
         dummy.gen_inputs.gas_used_after = self.gen_inputs.gas_used_after;
-        dummy.gen_inputs.block_bloom_before = self.gen_inputs.block_bloom_after;
-        dummy.gen_inputs.block_bloom_after = self.gen_inputs.block_bloom_after;
 
         dummy.gen_inputs.trie_roots_after = self.gen_inputs.trie_roots_after.clone();
         dummy
