@@ -19,3 +19,9 @@ serde_path_to_error = "0.1.14"
 serde_json = "1.0.107"
 ethereum-types = "0.14.1"
 thiserror = "1.0.50"
+
+[profile.release]
+opt-level = 3
+incremental = true
+lto = "fat"
+codegen-units = 1
