@@ -48,8 +48,6 @@ pub fn generate_txn_proof(
     let txn_idx = start_info.txn_idx;
     let deltas = start_info.deltas();
 
-    println!("BLOCK PROOF INPUTS: {:#?}", start_info);
-
     let (txn_proof_intern, p_vals) = p_state
         .state
         .prove_root(
@@ -126,7 +124,7 @@ struct ExpandedAggregatableProof<'a> {
     is_agg: bool,
 }
 
-// TODO: Remove of simplify, as most of this work is occurring inside plonky2
+// TODO: Remove or simplify, as most of this work is occurring inside plonky2
 // now.
 fn expand_aggregatable_proofs<'a>(
     lhs_child: &'a AggregatableProof,
