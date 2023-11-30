@@ -102,6 +102,7 @@ struct EthGetBlockByNumberResult {
     mix_hash: H256,
     number: U256,
     parent_hash: H256,
+    state_root: H256,
     timestamp: U256,
 }
 
@@ -142,24 +143,37 @@ impl EthGetBlockByNumberResponse {
         rpc_url: U,
         block_number: u64,
     ) -> Result<Vec<H256>> {
+        let mut hashes = vec![];
+
         // Every block response includes the _parent_ hash along with its hash, so we
         // can just fetch half the blocks to acquire all hashes for the range.
-        let start = block_number.saturating_sub(256);
-        let futs: FuturesOrdered<_> = (start..block_number)
-            .rev()
+        let start = block_number.saturating_sub(256).max(1);
+        let futs: FuturesOrdered<_> = (start..=block_number)
             .step_by(2)
             .map(|block_number| Self::fetch(rpc_url, block_number))
             .collect();
 
         let responses = futs.try_collect::<Vec<_>>().await?;
-        let mut hashes = vec![];
-        for response in responses {
-            hashes.push(response.result.hash);
-            hashes.push(response.result.parent_hash);
+        for response in responses.iter() {
+            if response.result.number == block_number.into() {
+                // Ignore current hash
+                hashes.push(response.result.parent_hash);
+            } else {
+                hashes.push(response.result.parent_hash);
+                hashes.push(response.result.hash);
+            }
         }
+
+        hashes.reverse();
         hashes.resize(256, H256::default());
+        hashes.reverse();
 
         Ok(hashes)
+    }
+
+    async fn fetch_genesis_state_trie_root<U: IntoUrl + Copy>(rpc_url: U) -> Result<H256> {
+        let res = Self::fetch(rpc_url, 0).await?;
+        Ok(res.result.state_root)
     }
 }
 
@@ -202,20 +216,23 @@ struct RpcBlockMetadata {
     block_by_number: EthGetBlockByNumberResponse,
     chain_id: EthChainIdResponse,
     prev_hashes: Vec<H256>,
+    genesis_state_trie_root: H256,
 }
 
 impl RpcBlockMetadata {
     async fn fetch(rpc_url: &str, block_number: u64) -> Result<Self> {
-        let (block_result, chain_id_result, prev_hashes) = try_join!(
+        let (block_result, chain_id_result, prev_hashes, genesis_state_trie_root) = try_join!(
             EthGetBlockByNumberResponse::fetch(rpc_url, block_number),
             EthChainIdResponse::fetch(rpc_url),
-            EthGetBlockByNumberResponse::fetch_previous_block_hashes(rpc_url, block_number)
+            EthGetBlockByNumberResponse::fetch_previous_block_hashes(rpc_url, block_number),
+            EthGetBlockByNumberResponse::fetch_genesis_state_trie_root(rpc_url)
         )?;
 
         Ok(Self {
             block_by_number: block_result,
             chain_id: chain_id_result,
             prev_hashes,
+            genesis_state_trie_root,
         })
     }
 }
@@ -226,6 +243,7 @@ impl From<RpcBlockMetadata> for OtherBlockData {
             block_by_number,
             chain_id,
             prev_hashes,
+            genesis_state_trie_root,
         }: RpcBlockMetadata,
     ) -> Self {
         let mut bloom = [U256::zero(); 8];
@@ -261,7 +279,7 @@ impl From<RpcBlockMetadata> for OtherBlockData {
                     cur_hash: block_by_number.result.hash,
                 },
             },
-            genesis_state_trie_root: Default::default(),
+            genesis_state_trie_root,
         }
     }
 }

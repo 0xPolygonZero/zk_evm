@@ -1,4 +1,8 @@
-use std::io::Write;
+use std::{
+    fs::{create_dir_all, File},
+    io::Write,
+    path::PathBuf,
+};
 
 use anyhow::Result;
 use paladin::runtime::Runtime;
@@ -10,13 +14,29 @@ pub(crate) async fn jerigon_main(
     rpc_url: &str,
     block_number: u64,
     previous: Option<PlonkyProofIntern>,
+    proof_output_path_opt: Option<PathBuf>,
 ) -> Result<()> {
     let prover_input = rpc::fetch_prover_input(rpc_url, block_number).await?;
 
     let proof = prover_input.prove(&runtime, previous).await;
     runtime.close().await?;
-    let proof = proof?;
-    std::io::stdout().write_all(&serde_json::to_vec(&proof.intern)?)?;
+
+    let proof = serde_json::to_vec(&proof?.intern)?;
+    write_proof(proof, proof_output_path_opt)
+}
+
+fn write_proof(proof: Vec<u8>, proof_output_path_opt: Option<PathBuf>) -> Result<()> {
+    match proof_output_path_opt {
+        Some(p) => {
+            if let Some(parent) = p.parent() {
+                create_dir_all(parent)?;
+            }
+
+            let mut f = File::create(p)?;
+            f.write_all(&proof)?;
+        }
+        None => std::io::stdout().write_all(&proof)?,
+    }
 
     Ok(())
 }

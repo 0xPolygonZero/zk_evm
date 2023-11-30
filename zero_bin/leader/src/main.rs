@@ -64,10 +64,18 @@ async fn main() -> Result<()> {
             rpc_url,
             block_number,
             previous_proof,
+            proof_output_path,
         } => {
             let previous_proof = get_previous_proof(previous_proof)?;
 
-            jerigon::jerigon_main(runtime, &rpc_url, block_number, previous_proof).await?;
+            jerigon::jerigon_main(
+                runtime,
+                &rpc_url,
+                block_number,
+                previous_proof,
+                proof_output_path,
+            )
+            .await?;
         }
     }
 

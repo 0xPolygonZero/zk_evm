@@ -1,2 +1,4 @@
 /target
-/prover_state*
+/prover_state
+*.zkproof
+prover_state_*
