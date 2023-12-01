@@ -45,7 +45,7 @@ do
         exit $retVal
     else
         # Remove the log on success if we don't want to keep it.
-        if [ $ALWAYS_WRITE_LOGS ]; then
+        if [ $ALWAYS_WRITE_LOGS -ne 1 ]; then
             rm $OUT_LOG_PATH
         fi
     fi
