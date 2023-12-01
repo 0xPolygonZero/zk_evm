@@ -5,7 +5,7 @@ use clap::Parser;
 use cli::Command;
 use common::prover_state::set_prover_state_from_config;
 use dotenvy::dotenv;
-use ops::Ops;
+use ops::register;
 use paladin::runtime::Runtime;
 use plonky_block_proof_gen::types::PlonkyProofIntern;
 use tracing::warn;
@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
         }
     }
 
-    let runtime = Runtime::from_config::<Ops>(&args.paladin).await?;
+    let runtime = Runtime::from_config(&args.paladin, register()).await?;
 
     match args.command {
         Command::Stdio { previous_proof } => {

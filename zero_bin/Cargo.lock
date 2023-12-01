@@ -466,6 +466,9 @@ name = "bytes"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "cbc"
@@ -1637,6 +1640,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a08173bc88b7955d1b3145aa561539096c421ac8debde8cbc3612ec635fee29b"
 
 [[package]]
+name = "linkme"
+version = "0.3.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91ed2ee9464ff9707af8e9ad834cffa4802f072caad90639c583dd3c62e6e608"
+dependencies = [
+ "linkme-impl",
+]
+
+[[package]]
+name = "linkme-impl"
+version = "0.3.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba125974b109d512fccbc6c0244e7580143e460895dfd6ea7f8bbb692fd94396"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.38",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1892,9 +1915,9 @@ dependencies = [
 
 [[package]]
 name = "paladin-core"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e3bc44b22dbbfef99900837ae9d335e0bb411f5a981511b8ab64e5615b0b4ae"
+checksum = "222ff485444015ad605235a3ce14e91db67088b953c24a08fcf62724847ffbde"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1907,6 +1930,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "lapin",
+ "linkme",
  "paladin-opkind-derive",
  "pin-project",
  "postcard",
@@ -1923,9 +1947,9 @@ dependencies = [
 
 [[package]]
 name = "paladin-opkind-derive"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b48313f3ae58c76aecb1cd100d6a5a412dd9b559cc22807a9b5df831f1f7ee2a"
+checksum = "51401ed2f91580e47caeb4f5b21fbbc8e59c1a3b1889246ec886e48dfbc9156d"
 dependencies = [
  "quote",
  "syn 2.0.38",
@@ -3356,12 +3380,13 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"
-version = "1.5.0"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88ad59a7560b41a70d191093a945f0b87bc1deeda46fb237479708a1d6b6cdfc"
+checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
 dependencies = [
  "getrandom",
  "rand",
+ "serde",
 ]
 
 [[package]]

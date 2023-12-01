@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use common::prover_state::{cli::CliProverStateConfig, set_prover_state_from_config};
 use dotenvy::dotenv;
-use ops::Ops;
+use ops::register;
 use paladin::runtime::WorkerRuntime;
 use tracing::warn;
 
@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
         warn!("prover state already set. check the program logic to ensure it is only set once");
     }
 
-    let runtime: WorkerRuntime<Ops> = WorkerRuntime::from_config(&args.paladin).await?;
+    let runtime = WorkerRuntime::from_config(&args.paladin, register()).await?;
     runtime.main_loop().await?;
 
     Ok(())

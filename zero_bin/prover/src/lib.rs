@@ -46,8 +46,8 @@ impl ProverInput {
         )?;
 
         let agg_proof = IndexedStream::from(txs)
-            .map(TxProof)
-            .fold(AggProof {
+            .map(&TxProof)
+            .fold(&AggProof {
                 other: other_data.clone(),
             })
             .run(runtime)
@@ -60,7 +60,7 @@ impl ProverInput {
             });
 
             let block_proof = Literal(proof)
-                .map(BlockProof {
+                .map(&BlockProof {
                     prev,
                     other: other_data,
                 })
