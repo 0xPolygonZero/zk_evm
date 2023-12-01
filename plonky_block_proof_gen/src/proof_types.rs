@@ -1,7 +1,8 @@
 use plonky2_evm::proof::PublicValues;
+use proof_protocol_decoder::types::BlockHeight;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{BlockHeight, PlonkyProofIntern};
+use crate::types::PlonkyProofIntern;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedTxnProof {

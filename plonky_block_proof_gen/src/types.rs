@@ -3,8 +3,6 @@ use plonky2::{
     plonk::{config::PoseidonGoldilocksConfig, proof::ProofWithPublicInputs},
 };
 
-pub type BlockHeight = u64;
-
 pub type PlonkyProofIntern = ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>;
 
 pub type AllRecursiveCircuits = plonky2_evm::fixed_recursive_verifier::AllRecursiveCircuits<
