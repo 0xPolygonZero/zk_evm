@@ -143,30 +143,43 @@ impl EthGetBlockByNumberResponse {
         rpc_url: U,
         block_number: u64,
     ) -> Result<Vec<H256>> {
-        let mut hashes = vec![];
+        let mut hashes = vec![H256::default(); 256];
 
         // Every block response includes the _parent_ hash along with its hash, so we
         // can just fetch half the blocks to acquire all hashes for the range.
-        let start = block_number.saturating_sub(256).max(1);
+        let start = block_number.saturating_sub(256);
         let futs: FuturesOrdered<_> = (start..=block_number)
+            .rev()
             .step_by(2)
             .map(|block_number| Self::fetch(rpc_url, block_number))
             .collect();
 
         let responses = futs.try_collect::<Vec<_>>().await?;
-        for response in responses.iter() {
-            if response.result.number == block_number.into() {
-                // Ignore current hash
-                hashes.push(response.result.parent_hash);
-            } else {
-                hashes.push(response.result.parent_hash);
-                hashes.push(response.result.hash);
-            }
-        }
 
-        hashes.reverse();
-        hashes.resize(256, H256::default());
-        hashes.reverse();
+        // Check first response, which may be the current block
+        let starting_offset = {
+            if responses[0].result.number == block_number.into() {
+                // Ignore hash of the current block.
+                hashes[255] = responses[0].result.parent_hash;
+                254
+            } else {
+                hashes[255] = responses[0].result.hash;
+                hashes[254] = responses[0].result.parent_hash;
+                253
+            }
+        };
+
+        // Iterate over the block responses, skipping the first (possibly current)
+        // block.
+        for (idx, response) in responses.iter().skip(1).enumerate() {
+            if response.result.number == 0.into() {
+                // Genesis has no parent block, we only write the genesis hash.
+                hashes[starting_offset - 2 * idx] = response.result.hash;
+            }
+
+            hashes[starting_offset - 2 * idx] = response.result.hash;
+            hashes[starting_offset - 2 * idx - 1] = response.result.parent_hash;
+        }
 
         Ok(hashes)
     }
