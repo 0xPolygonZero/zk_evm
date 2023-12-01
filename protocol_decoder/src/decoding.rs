@@ -121,8 +121,7 @@ impl ProcessedBlockTrace {
                     gas_used_before: tot_gas_used,
                     gas_used_after: new_tot_gas_used,
                     signed_txn: txn_info.meta.txn_bytes,
-                    withdrawals: Vec::new(), /* TODO: Once this is added to the trace spec, add
-                                              * it here... */
+                    withdrawals: self.withdrawals.clone(),
                     tries,
                     trie_roots_after,
                     checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
