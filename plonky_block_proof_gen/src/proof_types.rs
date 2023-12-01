@@ -1,55 +1,17 @@
-use ethereum_types::H256;
-use plonky2_evm::proof::{ExtraBlockData, TrieRoots};
-use proof_protocol_decoder::proof_gen_types::ProofBeforeAndAfterDeltas;
+use plonky2_evm::proof::PublicValues;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{BlockHeight, PlonkyProofIntern, ProofUnderlyingTxns, TxnIdx};
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ProofCommon {
-    pub b_height: BlockHeight,
-    pub deltas: ProofBeforeAndAfterDeltas,
-    pub roots_before: TrieRoots,
-    pub roots_after: TrieRoots,
-}
-
-pub fn create_extra_block_data(
-    deltas: ProofBeforeAndAfterDeltas,
-    genesis_root: H256,
-    txn_start: TxnIdx,
-    txn_end: TxnIdx,
-) -> ExtraBlockData {
-    ExtraBlockData {
-        genesis_state_trie_root: genesis_root,
-        txn_number_before: txn_start.into(),
-        txn_number_after: txn_end.into(),
-        gas_used_before: deltas.gas_used_before,
-        gas_used_after: deltas.gas_used_after,
-    }
-}
+use crate::types::{BlockHeight, PlonkyProofIntern};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedTxnProof {
-    pub txn_idx: TxnIdx,
-    pub common: ProofCommon,
+    pub p_vals: PublicValues,
     pub intern: PlonkyProofIntern,
-}
-
-impl GeneratedTxnProof {
-    pub fn underlying_txns(&self) -> ProofUnderlyingTxns {
-        if self.common.roots_before.transactions_root == self.common.roots_after.transactions_root {
-            // This is a dummy proof no transaction was executed.
-            (self.txn_idx..self.txn_idx).into()
-        } else {
-            (self.txn_idx..=self.txn_idx).into()
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedAggProof {
-    pub underlying_txns: ProofUnderlyingTxns,
-    pub common: ProofCommon,
+    pub p_vals: PublicValues,
     pub intern: PlonkyProofIntern,
 }
 
@@ -69,17 +31,24 @@ pub enum AggregatableProof {
 }
 
 impl AggregatableProof {
-    pub fn underlying_txns(&self) -> ProofUnderlyingTxns {
+    pub(crate) fn public_values(&self) -> PublicValues {
         match self {
-            AggregatableProof::Txn(info) => info.underlying_txns(),
-            AggregatableProof::Agg(info) => info.underlying_txns.clone(),
+            AggregatableProof::Txn(info) => info.p_vals.clone(),
+            AggregatableProof::Agg(info) => info.p_vals.clone(),
         }
     }
 
-    pub fn b_height(&self) -> BlockHeight {
+    pub(crate) fn is_agg(&self) -> bool {
         match self {
-            AggregatableProof::Txn(info) => info.common.b_height,
-            AggregatableProof::Agg(info) => info.common.b_height,
+            AggregatableProof::Txn(_) => false,
+            AggregatableProof::Agg(_) => true,
+        }
+    }
+
+    pub(crate) fn intern(&self) -> &PlonkyProofIntern {
+        match self {
+            AggregatableProof::Txn(info) => &info.intern,
+            AggregatableProof::Agg(info) => &info.intern,
         }
     }
 }
