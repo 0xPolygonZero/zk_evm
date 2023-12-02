@@ -23,9 +23,9 @@ pub struct BlockHashes {
 ```
 Note that `prev_hashes` is going to be `256` elements long (!) most of the time. 
 
-`generate_txn_proof` takes in the output from the parser lib (`TxnProofGenIR`) along with some constant block data.
+`generate_txn_proof` takes in the output from the parser lib (`TxnProofGenIR`).
 
-`generate_agg_proof` takes in the two child proofs (wrapped in `AggregatableProof`` to support txn or agg proofs) & constant block data.
+`generate_agg_proof` takes in the two child proofs (wrapped in `AggregatableProof`` to support txn or agg proofs).
 
 `generate_block_proof` is a bit less obvious. You give it an agg proof that contains all txns in the entire block, but also pass in an optional previous block proof. The previous block proof is able to be `None` on checkpoint heights.
 
