@@ -1,3 +1,8 @@
+//! This module defines the `ProverState`, that contains all pre-processed
+//! circuits necessary to handle arbitrary transaction proving and proof
+//! aggregation to generate succinct block proofs attesting validity of an
+//! entire EVM-based chain.
+
 use std::ops::Range;
 
 use log::info;
@@ -9,6 +14,7 @@ use crate::types::AllRecursiveCircuits;
 /// Plonky2 proving state. Note that this is generally going to be massive in
 /// terms of memory and has a long spin-up time,
 pub struct ProverState {
+    /// The set of pre-processed circuits to recursively prove transactions.
     pub state: AllRecursiveCircuits,
 }
 
@@ -44,6 +50,8 @@ impl Default for ProverStateBuilder {
 macro_rules! define_set_circuit_size_method {
     ($name:ident) => {
         paste! {
+            /// Specifies a range of degrees to be supported for this STARK
+            /// table's associated recursive circuits.
             pub fn [<set_ $name _circuit_size>](mut self, size: Range<usize>) -> Self {
                 self.[<$name _circuit_size>] = size;
                 self
