@@ -1,24 +1,42 @@
+//! This module defines the various proof types used throughout the block proof
+//! generation process.
+
 use plonky2_evm::proof::PublicValues;
 use proof_protocol_decoder::types::BlockHeight;
 use serde::{Deserialize, Serialize};
 
 use crate::types::PlonkyProofIntern;
 
+/// A transaction proof along with its public values, for proper connection with
+/// contiguous proofs.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedTxnProof {
+    /// Public values of this transaction proof.
     pub p_vals: PublicValues,
+    /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }
 
+/// An aggregation proof along with its public values, for proper connection
+/// with contiguous proofs.
+///
+/// Aggregation proofs can represent any contiguous range of two or more
+/// transactions, up to an entire block.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedAggProof {
+    /// Public values of this aggregation proof.
     pub p_vals: PublicValues,
+    /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }
 
+/// A block proof along with the block height against which this proof ensures
+/// the validity since the last proof checkpoint.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedBlockProof {
+    /// Associated block height.
     pub b_height: BlockHeight,
+    /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }
 
@@ -27,7 +45,9 @@ pub struct GeneratedBlockProof {
 /// away whether or not the proof was a txn or agg proof.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum AggregatableProof {
+    /// The underlying proof is a transaction proof.
     Txn(GeneratedTxnProof),
+    /// The underlying proof is an aggregation proof.
     Agg(GeneratedAggProof),
 }
 

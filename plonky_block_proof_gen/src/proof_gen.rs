@@ -1,3 +1,6 @@
+//! This module defines the proof generation methods corresponding to the three
+//! types of proofs the zkEVM internally handles.
+
 use plonky2::util::timing::TimingTree;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
 use proof_protocol_decoder::types::TxnProofGenIR;
@@ -7,8 +10,10 @@ use crate::{
     prover_state::ProverState,
 };
 
+/// A type alias for `Result<T, ProofGenError>`.
 pub type ProofGenResult<T> = Result<T, ProofGenError>;
 
+/// A custom error type to handle failure cases during proof generation.
 // Plonky2 is still using `anyhow` for proof gen, and since this is a library,
 // it's probably best if we at least convert it to a `String`.
 #[derive(Debug)]
@@ -28,7 +33,7 @@ impl From<String> for ProofGenError {
     }
 }
 
-/// Generate a txn proof from proof IR data.
+/// Generates a transaction proof from some IR data.
 pub fn generate_txn_proof(
     p_state: &ProverState,
     start_info: TxnProofGenIR,
@@ -46,9 +51,9 @@ pub fn generate_txn_proof(
     Ok(GeneratedTxnProof { p_vals, intern })
 }
 
-/// Generate a agg proof from two child proofs.
+/// Generates an aggregation proof from two child proofs.
 ///
-/// Note that the child proofs may be either txn or agg proofs.
+/// Note that the child proofs may be either transaction or aggregation proofs.
 pub fn generate_agg_proof(
     p_state: &ProverState,
     lhs_child: &AggregatableProof,
@@ -69,10 +74,10 @@ pub fn generate_agg_proof(
     Ok(GeneratedAggProof { p_vals, intern })
 }
 
-/// Generate a block proof.
+/// Generates a block proof.
 ///
-/// Note that `prev_opt_parent_b_proof` is able to be `None` on checkpoint
-/// heights.
+/// It takes an optional argument, `prev_opt_parent_b_proof`, that can be set to
+/// `None` on checkpoint heights.
 pub fn generate_block_proof(
     p_state: &ProverState,
     prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
