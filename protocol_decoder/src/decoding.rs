@@ -202,6 +202,9 @@ impl ProcessedBlockTrace {
         meta: &TxnMetaState,
         txn_idx: TxnIdx,
     ) -> TraceParsingResult<()> {
+        // Used for some errors. Note that the clone is very cheap.
+        let state_trie_initial = trie_state.state.clone();
+
         for (hashed_acc_addr, storage_writes) in deltas.storage_writes {
             let storage_trie = trie_state
                 .storage
@@ -233,9 +236,7 @@ impl ProcessedBlockTrace {
                 .get(val_k)
                 .unwrap_or(&EMPTY_ACCOUNT_BYTES_RLPED);
 
-            let mut account: AccountRlp = rlp::decode(val_bytes).map_err(|err| {
-                TraceParsingError::AccountDecode(hex::encode(val_bytes), err.to_string())
-            })?;
+            let mut account = account_from_rlped_bytes(val_bytes)?;
 
             s_trie_writes.apply_writes_to_state_node(
                 &mut account,
@@ -247,6 +248,29 @@ impl ProcessedBlockTrace {
             trie_state
                 .state
                 .insert(val_k, updated_account_bytes.to_vec());
+        }
+
+        // Remove any accounts that self-destructed.
+        for hashed_addr in deltas.self_destructed_accounts {
+            let k = Nibbles::from_h256_be(hashed_addr);
+
+            let account_data = trie_state.state.get(k).ok_or_else(|| {
+                TraceParsingError::NonExistentTrieEntry(
+                    TrieType::State,
+                    k,
+                    state_trie_initial.hash(),
+                )
+            })?;
+            let _account = account_from_rlped_bytes(account_data)?;
+
+            trie_state
+                .storage
+                .remove(&hashed_addr)
+                .ok_or(TraceParsingError::MissingAccountStorageTrie(hashed_addr))?;
+            // TODO: Once the mechanism for resolving code hashes settles, we probably want
+            // to also delete the code hash mapping here as well...
+
+            trie_state.state.delete(k);
         }
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
@@ -446,4 +470,9 @@ fn create_trie_subset_wrapped(
 ) -> TraceParsingResult<HashedPartialTrie> {
     create_trie_subset(trie, accesses)
         .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(trie_type))
+}
+
+fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {
+    rlp::decode(bytes)
+        .map_err(|err| TraceParsingError::AccountDecode(hex::encode(bytes), err.to_string()))
 }

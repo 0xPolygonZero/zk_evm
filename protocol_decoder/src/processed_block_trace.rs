@@ -268,6 +268,13 @@ impl TxnInfo {
                     }
                 }
             }
+
+            if trace
+                .self_destructed
+                .map_or(false, |self_destructed| self_destructed)
+            {
+                nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
+            }
         }
 
         let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
@@ -339,6 +346,7 @@ pub(crate) struct NodesUsedByTxn {
     pub(crate) storage_writes: Vec<(Nibbles, Vec<(HashedStorageAddrNibbles, Vec<u8>)>)>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries:
         HashMap<HashedAccountAddr, TrieRootHash>,
+    pub(crate) self_destructed_accounts: Vec<HashedAccountAddr>,
 }
 
 #[derive(Debug)]
