@@ -1,7 +1,12 @@
 [package]
 name = "prover"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 serde = { workspace = true }

@@ -20,6 +20,14 @@ serde_json = "1.0.107"
 ethereum-types = "0.14.1"
 thiserror = "1.0.50"
 
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/0xPolygonZero/zero-bin"
+authors = ["Polygon Zero <zbrown@polygon.technology>"]
+keywords = ["cryptography", "SNARK", "PLONK", "FRI", "plonky2"]
+categories = ["cryptography::cryptocurrencies"]
+
 [profile.release]
 opt-level = 3
 incremental = true
