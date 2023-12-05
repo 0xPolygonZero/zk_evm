@@ -7,10 +7,10 @@ use std::{
 use eth_trie_utils::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
+    trie_ops::ValOrHash,
     trie_subsets::create_trie_subset,
 };
-use ethereum_types::{Address, H256, U256};
-use log::trace;
+use ethereum_types::{Address, H160, H256, U256};
 use plonky2_evm::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::TrieRoots,
@@ -93,6 +93,22 @@ impl ProcessedBlockTrace {
             ..Default::default()
         };
 
+        println!("State trie initial contents:");
+        for (k, v) in curr_block_tries.state.items() {
+            let v_str = match v {
+                ValOrHash::Val(v) => hex::encode(&v),
+                ValOrHash::Hash(h) => format!("{:x}", h),
+            };
+
+            println!("k: {} --> {}", k, v_str);
+        }
+
+        println!("Initial state Root: {:x}", curr_block_tries.state.hash());
+
+        // let state_trie_json =
+        // serde_json::to_string_pretty(&curr_block_tries.state).unwrap();
+        // println!("Initial state trie: {}", state_trie_json);
+
         let mut tot_gas_used = U256::zero();
 
         let mut txn_gen_inputs = self
@@ -117,10 +133,9 @@ impl ProcessedBlockTrace {
                 )?;
 
                 let trie_roots_after = calculate_trie_input_hashes(&curr_block_tries);
-                trace!(
+                println!(
                     "Protocol expected trie roots after txn {}: {:?}",
-                    txn_idx,
-                    trie_roots_after
+                    txn_idx, trie_roots_after
                 );
 
                 let gen_inputs = GenerationInputs {
@@ -149,6 +164,13 @@ impl ProcessedBlockTrace {
             })
             .collect::<TraceParsingResult<Vec<_>>>()?;
 
+        for (k, v) in curr_block_tries.state.items() {
+            if let Some(v) = v.as_val() {
+                let acc_data = rlp::decode::<AccountRlp>(v).unwrap();
+                println!("(FULL) account data: {:x} --> {:#?}", k, acc_data);
+            }
+        }
+
         Self::pad_gen_inputs_with_dummy_inputs_if_needed(
             &mut txn_gen_inputs,
             &other_data,
@@ -167,6 +189,31 @@ impl ProcessedBlockTrace {
             &curr_block_tries.state,
             nodes_used_by_txn.state_accesses.iter().cloned(),
         )?;
+
+        let s: Vec<_> = state_trie
+            .items()
+            .map(|(_k, v)| match v {
+                ValOrHash::Val(v) => format!("V - {}", hex::encode(v)),
+                ValOrHash::Hash(h) => format!("H - {:x}", h),
+            })
+            .collect();
+
+        println!("Actual final sub state trie: {:#?}", s);
+
+        println!(
+            "Querying the hash(H160::zero()) ({}):",
+            hash(H160::zero().as_bytes())
+        );
+        state_trie.get(
+            Nibbles::from_bytes_be(
+                &hex::decode("5380c7b7ae81a58eb98d9c78de4a1fd7fd9535fc953ed2be602daaa41767312a")
+                    .unwrap(),
+            )
+            .unwrap(),
+        );
+        println!("DONE QUERY");
+
+        // println!("State partial trie: {}", s);
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
         // TODO: Replace cast once `eth_trie_utils` supports `into` for `usize...
@@ -226,6 +273,9 @@ impl ProcessedBlockTrace {
                 };
             }
         }
+
+        // trie_state.state.insert(Nibbles::from_h256_be(hash(H160::zero().as_bytes())),
+        // ValOrHash::Val(EMPTY_ACCOUNT_BYTES_RLPED.to_vec()));
 
         for (hashed_acc_addr, s_trie_writes) in deltas.state_writes {
             let val_k = Nibbles::from_h256_be(hashed_acc_addr);
@@ -322,6 +372,30 @@ impl StateTrieWrites {
                 Some(storage_trie.hash())
             }
         };
+
+        if self.balance.is_some()
+            || self.nonce.is_some()
+            || self.code_hash.is_some()
+            || storage_root_hash_change.is_some()
+        {
+            println!("DELTA FOR {:x}", h_addr);
+
+            if let Some(v) = self.balance {
+                println!("---- balance: {:x}", v);
+            }
+
+            if let Some(v) = self.nonce {
+                println!("---- nonce: {:x}", v);
+            }
+
+            if let Some(v) = self.code_hash {
+                println!("---- c_hash: {:x}", v);
+            }
+
+            if let Some(v) = storage_root_hash_change {
+                println!("---- storage change: {:x}", v);
+            }
+        }
 
         update_val_if_some(&mut state_node.balance, self.balance);
         update_val_if_some(&mut state_node.nonce, self.nonce);
@@ -425,7 +499,7 @@ fn create_minimal_state_partial_trie(
 ) -> TraceParsingResult<HashedPartialTrie> {
     create_trie_subset_wrapped(
         state_trie,
-        state_accesses.map(Nibbles::from_h256_be),
+        state_accesses.into_iter().map(Nibbles::from_h256_be),
         TrieType::State,
     )
 }

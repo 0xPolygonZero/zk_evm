@@ -69,12 +69,19 @@ fn process_branch(
     branch: &[Option<Box<NodeEntry>>],
     output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
+    println!("Full node at {:x}", curr_key);
+
     for (i, slot) in branch.iter().enumerate().take(16) {
         if let Some(child) = slot {
             // TODO: Seriously update `eth_trie_utils` to have a better API...
             let mut new_k = curr_key;
             new_k.push_nibble_back(i as Nibble);
             create_partial_trie_from_compact_node_rec(new_k, child, output)?;
+        } else {
+            println!(
+                "Full node child at {} is nil.",
+                curr_key.clone().merge_nibble(i as Nibble)
+            );
         }
     }
 
@@ -105,6 +112,8 @@ fn process_hash(
     // trie.
     p_trie.insert(curr_key, hash);
 
+    println!("Inserting hash node at {:x}", curr_key);
+
     Ok(())
 }
 
@@ -115,6 +124,8 @@ fn process_leaf(
     output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
     let full_k = curr_key.merge_nibbles(leaf_key);
+
+    println!("Inserting {:x} as a leaf", full_k);
 
     let l_val = match leaf_node_data {
         LeafNodeData::Value(v_bytes) => rlp::encode(&v_bytes.0).to_vec(),
@@ -147,6 +158,12 @@ fn convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(
         Some(AccountNodeCode::CodeNode(c_bytes)) => {
             let c_hash = hash(c_bytes);
             output.code.insert(c_hash, c_bytes.clone());
+
+            println!(
+                "ADDING ACCOUNT CODE HASH {:x} -- {}",
+                c_hash,
+                hex::encode(c_bytes)
+            );
 
             c_hash
         }

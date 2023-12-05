@@ -1419,7 +1419,7 @@ fn get_bytes_from_cursor<C: CompactCursor>(cursor: &mut C, cursor_start_pos: u64
     t_bytes
 }
 
-#[cfg(test)]
+#[cfg(all(debug_tools, test))]
 mod tests {
     use eth_trie_utils::{nibbles::Nibbles, partial_trie::PartialTrie};
 

@@ -7,7 +7,9 @@ use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::U256;
 use plonky2_evm::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 
-use crate::compact::compact_prestate_processing::{process_compact_prestate, PartialTriePreImages};
+use crate::compact::compact_prestate_processing::{
+    process_compact_prestate_debug, PartialTriePreImages,
+};
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
@@ -158,7 +160,7 @@ fn process_multiple_storage_tries(
 
 fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     // TODO: Wrap in proper result type...
-    let out = process_compact_prestate(trie).unwrap();
+    let out = process_compact_prestate_debug(trie).unwrap();
 
     // TODO: Make this into a result...
     assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
@@ -205,6 +207,8 @@ impl TxnInfo {
         let mut contract_code_accessed = create_empty_code_access_map();
 
         for (addr, trace) in self.traces {
+            println!("Addr {} --> {}", addr, hash(addr.as_bytes()));
+
             let hashed_addr = hash(addr.as_bytes());
 
             let storage_writes = trace.storage_written.unwrap_or_default();
