@@ -1338,11 +1338,15 @@ fn parse_to_instructions_and_bytes_for_instruction(
 fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
     let mut key = Nibbles::default();
 
+    if bytes.is_empty() {
+        return key;
+    }
+
     // I have no idea why Erigon is doing this with their keys, as I'm don't think
     // this is part of the yellow paper at all?
-    let is_just_term_byte = bytes.len() == 1 && bytes[0] == 0x10;
-    if is_just_term_byte {
-        return key;
+    if bytes.len() == 1 {
+        let low_nib = bytes[0] & 0b00001111;
+        key.push_nibble_back(low_nib);
     }
 
     let flags = bytes[0];
@@ -1355,7 +1359,7 @@ fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
         true => &bytes[1..],
     };
 
-    if actual_key_bytes.is_empty() || is_just_term_byte {
+    if actual_key_bytes.is_empty() {
         return key;
     }
 
@@ -1419,7 +1423,7 @@ fn get_bytes_from_cursor<C: CompactCursor>(cursor: &mut C, cursor_start_pos: u64
     t_bytes
 }
 
-#[cfg(all(debug_tools, test))]
+#[cfg(test)]
 mod tests {
     use eth_trie_utils::{nibbles::Nibbles, partial_trie::PartialTrie};
 
@@ -1428,6 +1432,7 @@ mod tests {
         compact_prestate_processing::ParserState,
         complex_test_payloads::{
             TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
+            TEST_PAYLOAD_6,
         },
     };
 
@@ -1519,5 +1524,11 @@ mod tests {
     fn complex_payload_5() {
         init();
         TEST_PAYLOAD_5.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_6() {
+        init();
+        TEST_PAYLOAD_6.parse_and_check_hash_matches_with_debug();
     }
 }
