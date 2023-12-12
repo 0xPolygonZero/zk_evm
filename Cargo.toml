@@ -1,27 +1,9 @@
-[package]
-name = "proof_protocol_decoder"
-authors = ["Polygon Zero <bgluth@polygon.technology>"]
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = ["plonky_block_proof_gen", "protocol_decoder"]
+resolver = "2"
 
-[dependencies]
-bytes = "1.5.0"
-ciborium = "0.2.1"
-ciborium-io = "0.2.1"
-enum-as-inner = "0.6.0"
-enumn = "0.1.12"
-eth_trie_utils = { git = "https://github.com/0xPolygonZero/eth_trie_utils.git", rev = "e9ec4ec2aa2ae976b7c699ef40c1ffc716d87ed5" }
+[workspace.dependencies]
 ethereum-types = "0.14.1"
-hex-literal = "0.4.1"
-hex = "0.4.3"
-keccak-hash = "0.10.0"
 log = "0.4.20"
-plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "32d009671a1af86312807ba2dc90e9bb4f4a94da" }
-thiserror = "1.0.49"
-rlp = "0.5.2"
-rlp-derive = "0.1.0"
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "7efd147e0888c5c6754a4d7ee2691a2ff5c82072" }
 serde = "1.0.166"
-serde_with = "3.4.0"
-
-[dev-dependencies]
-pretty_env_logger = "0.5.0"
