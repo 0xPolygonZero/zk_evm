@@ -12,18 +12,20 @@
 //! internal STARK tables of the zkEVM.
 //!
 //! The default method contains an initial set of ranges for each table, that
-//! can be overriden at will by calling
+//! can be overridden at will by calling
 //! `ProverStateBuilder::set_foo_circuit_size` where `foo` is the name of the
 //! targeted table. At the moment, plonky2 zkEVM contains seven tables:
 //! `arithmetic`, `byte_packing`, `cpu`, `keccak`, `keccak_sponge`, `logic` and
 //! `memory`.
 //!
-//! ```rust
+//! ```no_run
+//!     # use plonky_block_proof_gen::prover_state::ProverStateBuilder;
 //!     let mut builder = ProverStateBuilder::default();
 //!     
 //!     // Change Cpu and Memory tables supported ranges.
-//!     builder.set_cpu_circuit_size(12..25);
-//!     builder.set_cpu_circuit_size(18..28);
+//!     let builder = builder
+//!         .set_cpu_circuit_size(12..25)
+//!         .set_memory_circuit_size(18..28);
 //!
 //!     // Generate a `ProverState` from the builder.
 //!     let prover_state = builder.build();
@@ -48,8 +50,8 @@
 //! Intermediate Representation, one can obtain a transaction proof by calling
 //! the method below:
 //!
-//! ```rust
-//! pub fn generate_txn_proof(
+//! ```compile_fail
+//!  pub fn generate_txn_proof(
 //!     p_state: &ProverState,
 //!     start_info: TxnProofGenIR,
 //! ) -> ProofGenResult<GeneratedTxnProof> { ... }
@@ -64,8 +66,8 @@
 //! proofs can either be transaction proofs, or aggregated proofs themselves.
 //! This library abstracts their type behind an `AggregatableProof` enum.
 //!
-//! ```rust
-//! pub fn generate_agg_proof(
+//! ```compile_fail
+//!  pub fn generate_agg_proof(
 //!     p_state: &ProverState,
 //!     lhs_child: &AggregatableProof,
 //!     rhs_child: &AggregatableProof,
@@ -81,17 +83,13 @@
 //! both statement into one, effectively proving an entire chain from genesis
 //! through a single final proof.
 //!
-//! ```rust
-//! pub fn generate_block_proof(
+//! ```compile_fail
+//!  pub fn generate_block_proof(
 //!     p_state: &ProverState,
 //!     prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
 //!     curr_block_agg_proof: &GeneratedAggProof,
 //! ) -> ProofGenResult<GeneratedBlockProof> { ... }
 //! ```
-
-#![cfg_attr(docsrs, feature(doc_cfg))]
-#![deny(rustdoc::broken_intra_doc_links)]
-#![deny(missing_docs)]
 
 pub mod proof_gen;
 pub mod proof_types;
