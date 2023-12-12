@@ -1082,7 +1082,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "proof_protocol_decoder"
+name = "protocol_decoder"
 version = "0.1.0"
 dependencies = [
  "bytes",

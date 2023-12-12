@@ -1,3 +1,9 @@
 [workspace]
-members = ["protocol_decoder"]
+members = ["plonky_block_proof_gen", "protocol_decoder"]
 resolver = "2"
+
+[workspace.dependencies]
+ethereum-types = "0.14.1"
+log = "0.4.20"
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "7efd147e0888c5c6754a4d7ee2691a2ff5c82072" }
+serde = "1.0.166"

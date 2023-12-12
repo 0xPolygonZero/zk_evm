@@ -107,7 +107,6 @@ impl ProcessedBlockTrace {
                     &other_data.b_data.b_meta.block_beneficiary,
                 )?;
 
-                let addresses = Self::get_known_addresses_if_enabled();
                 let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
 
                 Self::apply_deltas_to_trie_state(
@@ -137,7 +136,6 @@ impl ProcessedBlockTrace {
                     contract_code: txn_info.contract_code_accessed,
                     block_metadata: other_data.b_data.b_meta.clone(),
                     block_hashes: other_data.b_data.b_hashes.clone(),
-                    addresses,
                 };
 
                 let txn_proof_gen_ir = TxnProofGenIR {
@@ -280,13 +278,6 @@ impl ProcessedBlockTrace {
             }
             _ => (),
         }
-    }
-
-    // TODO: No idea how to implement this, so I'll come back to later...
-    /// If there are known addresses, return them here.
-    /// Only needed for debugging purposes.
-    fn get_known_addresses_if_enabled() -> Vec<Address> {
-        Vec::new() // TODO
     }
 }
 

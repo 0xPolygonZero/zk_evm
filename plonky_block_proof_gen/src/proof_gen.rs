@@ -3,7 +3,7 @@
 
 use plonky2::util::timing::TimingTree;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
-use proof_protocol_decoder::types::TxnProofGenIR;
+use protocol_decoder::types::TxnProofGenIR;
 
 use crate::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
