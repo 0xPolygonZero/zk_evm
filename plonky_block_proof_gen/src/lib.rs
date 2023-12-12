@@ -51,7 +51,7 @@
 //! the method below:
 //!
 //! ```compile_fail
-//! pub fn generate_txn_proof(
+//!  pub fn generate_txn_proof(
 //!     p_state: &ProverState,
 //!     start_info: TxnProofGenIR,
 //! ) -> ProofGenResult<GeneratedTxnProof> { ... }
@@ -84,7 +84,7 @@
 //! through a single final proof.
 //!
 //! ```compile_fail
-//! pub fn generate_block_proof(
+//!  pub fn generate_block_proof(
 //!     p_state: &ProverState,
 //!     prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
 //!     curr_block_agg_proof: &GeneratedAggProof,
