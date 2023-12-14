@@ -21,7 +21,8 @@ use crate::types::{
     OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
-    hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
+    h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,
+    print_value_and_hash_nodes_of_trie,
 };
 
 #[derive(Debug)]
@@ -79,7 +80,7 @@ impl BlockTrace {
             .filter_map(|(addr, data)| {
                 data.as_val().map(|data| {
                     (
-                        HashedAccountAddr::from_slice(&addr.bytes_be()),
+                        h_addr_nibs_to_h256(&addr),
                         rlp::decode::<AccountRlp>(data).unwrap(),
                     )
                 })
