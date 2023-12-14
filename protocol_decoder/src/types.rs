@@ -57,7 +57,7 @@ pub struct TxnProofGenIR {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OtherBlockData {
     pub b_data: BlockLevelData,
-    pub genesis_state_trie_root: TrieRootHash,
+    pub checkpoint_state_trie_root: TrieRootHash,
 }
 
 /// Data that is specific to a block and is constant for all txns in a given

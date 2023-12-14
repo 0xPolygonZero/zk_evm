@@ -5,5 +5,5 @@ resolver = "2"
 [workspace.dependencies]
 ethereum-types = "0.14.1"
 log = "0.4.20"
-plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "7efd147e0888c5c6754a4d7ee2691a2ff5c82072" }
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "71dff6e9827f501bc59416dc25ce06c4aec030ab" }
 serde = "1.0.166"

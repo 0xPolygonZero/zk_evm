@@ -132,7 +132,7 @@ impl ProcessedBlockTrace {
                                               * it here... */
                     tries,
                     trie_roots_after,
-                    genesis_state_trie_root: other_data.genesis_state_trie_root,
+                    checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
                     contract_code: txn_info.contract_code_accessed,
                     block_metadata: other_data.b_data.b_meta.clone(),
                     block_hashes: other_data.b_data.b_hashes.clone(),
@@ -350,7 +350,7 @@ fn create_dummy_gen_input(
         signed_txn: None,
         tries,
         trie_roots_after,
-        genesis_state_trie_root: other_data.genesis_state_trie_root,
+        checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
         block_metadata: other_data.b_data.b_meta.clone(),
         block_hashes: other_data.b_data.b_hashes.clone(),
         ..GenerationInputs::default()
