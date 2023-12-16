@@ -1,7 +1,7 @@
 //! This module defines the proof generation methods corresponding to the three
 //! types of proofs the zkEVM internally handles.
 
-use std::sync::atomic::AtomicBool;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use plonky2::util::timing::TimingTree;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
