@@ -26,12 +26,12 @@ impl<T: Borrow<ExtraBlockData>> From<T> for ProofBeforeAndAfterDeltas {
 impl ProofBeforeAndAfterDeltas {
     pub fn into_extra_block_data(
         self,
-        genesis_state_trie_root: TrieRootHash,
+        checkpoint_state_trie_root: TrieRootHash,
         txn_start: TxnIdx,
         txn_end: TxnIdx,
     ) -> ExtraBlockData {
         ExtraBlockData {
-            genesis_state_trie_root,
+            checkpoint_state_trie_root,
             txn_number_before: txn_start.into(),
             txn_number_after: txn_end.into(),
             gas_used_before: self.gas_used_before,

@@ -1,6 +1,8 @@
 //! This module defines the proof generation methods corresponding to the three
 //! types of proofs the zkEVM internally handles.
 
+use std::sync::{atomic::AtomicBool, Arc};
+
 use plonky2::util::timing::TimingTree;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
 use protocol_decoder::types::TxnProofGenIR;
@@ -37,6 +39,7 @@ impl From<String> for ProofGenError {
 pub fn generate_txn_proof(
     p_state: &ProverState,
     start_info: TxnProofGenIR,
+    abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {
     let (intern, p_vals) = p_state
         .state
@@ -45,6 +48,7 @@ pub fn generate_txn_proof(
             &StarkConfig::standard_fast_config(),
             start_info.gen_inputs,
             &mut TimingTree::default(),
+            abort_signal,
         )
         .map_err(|err| err.to_string())?;
 
