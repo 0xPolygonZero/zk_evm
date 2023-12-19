@@ -6,8 +6,8 @@ authors = ["Polygon Zero <bgluth@polygon.technology>"]
 edition = "2021"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-homepage = "https://github.com/mir-protocol/eth-trie-utils"
-repository = "https://github.com/mir-protocol/eth-trie-utils"
+homepage = "https://github.com/0xPolygonZero/eth-trie-utils"
+repository = "https://github.com/0xPolygonZero/eth-trie-utils"
 keywords = ["ethereum", "trie"]
 categories = ["cryptography::cryptocurrencies", "data-structures"]
 

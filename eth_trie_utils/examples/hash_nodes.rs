@@ -1,8 +1,8 @@
 //! Example showing how to use `Hash` nodes.
 //!
-//!`Hash` nodes are used when you want to only want to represent part of a
+//!`Hash` nodes are used when you want to only represent part of a
 //! larger trie but still want the generated hashes to be the same as the larger
-//! trie. `Hash` nodes contain the merkle hash of the nodes of they replace.
+//! trie. `Hash` nodes contain the merkle hash of the nodes they replace.
 //!
 //! For example, say you want to generate a proof for a trie. The proof
 //! itself only needs a very small subset of the values in the trie. However,
@@ -41,9 +41,9 @@
 //! they are 16-ary.
 //!
 //! Finally, at least for the time being, it is assumed that if you are
-//! converting a large partial trie into a `PartialTrie` then you are able to
-//! calculate the hashes for the nodes you want to remove from the trie without
-//! using this library.
+//! converting a large partial trie into a smaller `PartialTrie` then you are
+//! able to calculate the hashes for the nodes you want to remove from the trie
+//! without using this library.
 
 use std::{
     iter::{once, repeat},
