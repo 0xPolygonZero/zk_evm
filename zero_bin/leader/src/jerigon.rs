@@ -13,10 +13,16 @@ pub(crate) async fn jerigon_main(
     runtime: Runtime,
     rpc_url: &str,
     block_number: u64,
+    checkpoint_block_number: u64,
     previous: Option<PlonkyProofIntern>,
     proof_output_path_opt: Option<PathBuf>,
 ) -> Result<()> {
-    let prover_input = rpc::fetch_prover_input(rpc_url, block_number).await?;
+    let prover_input = rpc::fetch_prover_input(rpc::FetchProverInputRequest {
+        rpc_url,
+        block_number,
+        checkpoint_block_number,
+    })
+    .await?;
 
     let proof = prover_input.prove(&runtime, previous).await;
     runtime.close().await?;

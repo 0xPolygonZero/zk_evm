@@ -12,6 +12,6 @@ categories.workspace = true
 paladin-core = { workspace = true }
 serde = { workspace = true }
 plonky_block_proof_gen = { workspace = true }
-proof_protocol_decoder = { workspace = true }
+protocol_decoder = { workspace = true }
 
 common = { path = "../common" }

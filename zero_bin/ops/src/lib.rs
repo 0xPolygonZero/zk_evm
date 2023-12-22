@@ -8,7 +8,7 @@ use plonky_block_proof_gen::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
     prover_state::ProverState,
 };
-use proof_protocol_decoder::types::{OtherBlockData, TxnProofGenIR};
+use protocol_decoder::types::TxnProofGenIR;
 use serde::{Deserialize, Serialize};
 
 fn p_state() -> &'static ProverState {
@@ -25,23 +25,20 @@ impl Operation for TxProof {
     type Output = AggregatableProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let result = generate_txn_proof(p_state(), input).map_err(FatalError::from)?;
+        let result = generate_txn_proof(p_state(), input, None).map_err(FatalError::from)?;
 
         Ok(result.into())
     }
 }
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct AggProof {
-    pub other: OtherBlockData,
-}
+pub struct AggProof;
 
 impl Monoid for AggProof {
     type Elem = AggregatableProof;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
-        let result =
-            generate_agg_proof(p_state(), &a, &b, self.other.clone()).map_err(FatalError::from)?;
+        let result = generate_agg_proof(p_state(), &a, &b).map_err(FatalError::from)?;
 
         Ok(result.into())
     }
@@ -54,7 +51,6 @@ impl Monoid for AggProof {
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct BlockProof {
-    pub other: OtherBlockData,
     pub prev: Option<GeneratedBlockProof>,
 }
 
@@ -64,7 +60,7 @@ impl Operation for BlockProof {
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         Ok(
-            generate_block_proof(p_state(), self.prev.as_ref(), &input, self.other.clone())
+            generate_block_proof(p_state(), self.prev.as_ref(), &input)
                 .map_err(FatalError::from)?,
         )
     }

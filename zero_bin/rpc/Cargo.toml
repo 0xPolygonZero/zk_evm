@@ -14,7 +14,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
-proof_protocol_decoder = { workspace = true }
+protocol_decoder = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 clap = { workspace = true }

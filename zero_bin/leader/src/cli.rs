@@ -34,6 +34,9 @@ pub(crate) enum Command {
         /// The block number for which to generate a proof.
         #[arg(short, long)]
         block_number: u64,
+        /// The checkpoint block number.
+        #[arg(short, long, default_value_t = 0)]
+        checkpoint_block_number: u64,
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,

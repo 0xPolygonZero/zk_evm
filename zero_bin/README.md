@@ -197,9 +197,17 @@ Usage: leader jerigon [OPTIONS] --rpc-url <RPC_URL> --block-number <BLOCK_NUMBER
 
 Options:
   -u, --rpc-url <RPC_URL>
-  -b, --block-number <BLOCK_NUMBER>      The block number for which to generate a proof
-  -f, --previous-proof <PREVIOUS_PROOF>  The previous proof output
-  -h, --help                             Print help
+
+  -b, --block-number <BLOCK_NUMBER>
+          The block number for which to generate a proof
+  -c, --checkpoint-block-number <CHECKPOINT_BLOCK_NUMBER>
+          The checkpoint block number [default: 0]
+  -f, --previous-proof <PREVIOUS_PROOF>
+          The previous proof output
+  -o, --proof-output-path <PROOF_OUTPUT_PATH>
+          If provided, write the generated proof to this file instead of stdout
+  -h, --help
+          Print help
 ```
 
 Prove a block.

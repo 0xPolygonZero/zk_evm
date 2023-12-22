@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use ethereum_types::{Address, Bloom, H256, U256};
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use plonky2_evm::proof::{BlockHashes, BlockMetadata};
-use proof_protocol_decoder::{
+use protocol_decoder::{
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
     types::{BlockLevelData, OtherBlockData},
 };
@@ -184,8 +184,11 @@ impl EthGetBlockByNumberResponse {
         Ok(hashes)
     }
 
-    async fn fetch_genesis_state_trie_root<U: IntoUrl + Copy>(rpc_url: U) -> Result<H256> {
-        let res = Self::fetch(rpc_url, 0).await?;
+    async fn fetch_checkpoint_state_trie_root<U: IntoUrl + Copy>(
+        rpc_url: U,
+        block_number: u64,
+    ) -> Result<H256> {
+        let res = Self::fetch(rpc_url, block_number).await?;
         Ok(res.result.state_root)
     }
 }
@@ -229,23 +232,26 @@ struct RpcBlockMetadata {
     block_by_number: EthGetBlockByNumberResponse,
     chain_id: EthChainIdResponse,
     prev_hashes: Vec<H256>,
-    genesis_state_trie_root: H256,
+    checkpoint_state_trie_root: H256,
 }
 
 impl RpcBlockMetadata {
-    async fn fetch(rpc_url: &str, block_number: u64) -> Result<Self> {
-        let (block_result, chain_id_result, prev_hashes, genesis_state_trie_root) = try_join!(
+    async fn fetch(rpc_url: &str, block_number: u64, checkpoint_block_number: u64) -> Result<Self> {
+        let (block_result, chain_id_result, prev_hashes, checkpoint_state_trie_root) = try_join!(
             EthGetBlockByNumberResponse::fetch(rpc_url, block_number),
             EthChainIdResponse::fetch(rpc_url),
             EthGetBlockByNumberResponse::fetch_previous_block_hashes(rpc_url, block_number),
-            EthGetBlockByNumberResponse::fetch_genesis_state_trie_root(rpc_url)
+            EthGetBlockByNumberResponse::fetch_checkpoint_state_trie_root(
+                rpc_url,
+                checkpoint_block_number
+            )
         )?;
 
         Ok(Self {
             block_by_number: block_result,
             chain_id: chain_id_result,
             prev_hashes,
-            genesis_state_trie_root,
+            checkpoint_state_trie_root,
         })
     }
 }
@@ -256,7 +262,7 @@ impl From<RpcBlockMetadata> for OtherBlockData {
             block_by_number,
             chain_id,
             prev_hashes,
-            genesis_state_trie_root,
+            checkpoint_state_trie_root,
         }: RpcBlockMetadata,
     ) -> Self {
         let mut bloom = [U256::zero(); 8];
@@ -292,15 +298,27 @@ impl From<RpcBlockMetadata> for OtherBlockData {
                     cur_hash: block_by_number.result.hash,
                 },
             },
-            genesis_state_trie_root,
+            checkpoint_state_trie_root,
         }
     }
 }
 
-pub async fn fetch_prover_input(rpc_url: &str, block_number: u64) -> Result<ProverInput> {
+pub struct FetchProverInputRequest<'a> {
+    pub rpc_url: &'a str,
+    pub block_number: u64,
+    pub checkpoint_block_number: u64,
+}
+
+pub async fn fetch_prover_input(
+    FetchProverInputRequest {
+        rpc_url,
+        block_number,
+        checkpoint_block_number,
+    }: FetchProverInputRequest<'_>,
+) -> Result<ProverInput> {
     let (trace_result, rpc_block_metadata) = try_join!(
         JerigonTraceResponse::fetch(rpc_url, block_number),
-        RpcBlockMetadata::fetch(rpc_url, block_number),
+        RpcBlockMetadata::fetch(rpc_url, block_number, checkpoint_block_number),
     )?;
 
     debug!("Got block result: {:?}", rpc_block_metadata.block_by_number);

@@ -16,5 +16,8 @@ pub(crate) enum Commands {
         /// The block number
         #[arg(short, long)]
         block_number: u64,
+        /// The checkpoint block number
+        #[arg(short, long, default_value_t = 0)]
+        checkpoint_block_number: u64,
     },
 }

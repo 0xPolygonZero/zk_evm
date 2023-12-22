@@ -9,7 +9,7 @@ use plonky_block_proof_gen::{
     proof_types::{AggregatableProof, GeneratedBlockProof},
     types::PlonkyProofIntern,
 };
-use proof_protocol_decoder::{
+use protocol_decoder::{
     processed_block_trace::ProcessingMeta,
     trace_protocol::BlockTrace,
     types::{CodeHash, OtherBlockData},
@@ -47,9 +47,7 @@ impl ProverInput {
 
         let agg_proof = IndexedStream::from(txs)
             .map(&TxProof)
-            .fold(&AggProof {
-                other: other_data.clone(),
-            })
+            .fold(&AggProof)
             .run(runtime)
             .await?;
 
@@ -60,10 +58,7 @@ impl ProverInput {
             });
 
             let block_proof = Literal(proof)
-                .map(&BlockProof {
-                    prev,
-                    other: other_data,
-                })
+                .map(&BlockProof { prev })
                 .run(runtime)
                 .await?;
 
