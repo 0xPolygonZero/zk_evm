@@ -143,42 +143,41 @@ impl EthGetBlockByNumberResponse {
         rpc_url: U,
         block_number: u64,
     ) -> Result<Vec<H256>> {
-        let mut hashes = vec![H256::default(); 256];
+        if block_number == 0 {
+            return Ok(vec![H256::default(); 256]);
+        }
+
+        let mut hashes = Vec::with_capacity(256);
+
+        let padding_delta = block_number as i64 - 256;
+        if padding_delta < 0 {
+            let default = H256::default();
+            for _ in 0..padding_delta.abs() {
+                hashes.push(default);
+            }
+        }
 
         // Every block response includes the _parent_ hash along with its hash, so we
         // can just fetch half the blocks to acquire all hashes for the range.
         let start = block_number.saturating_sub(256);
-        let futs: FuturesOrdered<_> = (start..=block_number)
-            .rev()
+        let mut futs: FuturesOrdered<_> = (start..=block_number)
             .step_by(2)
             .map(|block_number| Self::fetch(rpc_url, block_number))
             .collect();
 
-        let responses = futs.try_collect::<Vec<_>>().await?;
-
-        // Check first response, which may be the current block
-        let starting_offset = {
-            if responses[0].result.number == block_number.into() {
-                // Ignore hash of the current block.
-                hashes[255] = responses[0].result.parent_hash;
-                254
-            } else {
-                hashes[255] = responses[0].result.hash;
-                hashes[254] = responses[0].result.parent_hash;
-                253
-            }
-        };
-
-        // Iterate over the block responses, skipping the first (possibly current)
-        // block.
-        for (idx, response) in responses.iter().skip(1).enumerate() {
-            if response.result.number == 0.into() {
-                // Genesis has no parent block, we only write the genesis hash.
-                hashes[starting_offset - 2 * idx] = response.result.hash;
+        while let Some(response) = futs.try_next().await? {
+            // Ignore hash of the current block.
+            if response.result.number == block_number.into() {
+                hashes.push(response.result.parent_hash);
+                continue;
             }
 
-            hashes[starting_offset - 2 * idx] = response.result.hash;
-            hashes[starting_offset - 2 * idx - 1] = response.result.parent_hash;
+            // Ignore the parent of the start block.
+            if response.result.number != start.into() {
+                hashes.push(response.result.parent_hash);
+            }
+
+            hashes.push(response.result.hash);
         }
 
         Ok(hashes)
