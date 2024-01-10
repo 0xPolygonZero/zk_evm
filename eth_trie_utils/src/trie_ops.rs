@@ -179,8 +179,11 @@ impl<N: PartialTrie> PartialTrieIter<N> {
                 self.advance_iter_to_next_empty_leaf_or_hash_node(&children[0], curr_key)
             }
             Node::Extension { nibbles, child } => {
+                if TrieNodeType::from(child) != TrieNodeType::Hash {
                 self.trie_stack
                     .push(IterStackEntry::Extension(nibbles.count));
+                }
+
                 curr_key = curr_key.merge_nibbles(nibbles);
 
                 self.advance_iter_to_next_empty_leaf_or_hash_node(child, curr_key)
