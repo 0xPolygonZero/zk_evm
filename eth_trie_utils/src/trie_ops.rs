@@ -545,6 +545,7 @@ fn collapse_ext_node_if_needed<N: PartialTrie>(
             nibbles: leaf_nibbles,
             value,
         } => leaf(ext_nibbles.merge_nibbles(leaf_nibbles), value.clone()),
+        Node::Hash(_) => extension(*ext_nibbles, child.clone()),
         _ => panic!(
             "Extension managed to get a child node type that is impossible! (child: {})",
             TrieNodeType::from(child)
