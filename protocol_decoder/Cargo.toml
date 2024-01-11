@@ -10,7 +10,7 @@ ciborium = "0.2.1"
 ciborium-io = "0.2.1"
 enum-as-inner = "0.6.0"
 enumn = "0.1.12"
-eth_trie_utils = { git = "https://github.com/0xPolygonZero/eth_trie_utils.git", rev = "e9ec4ec2aa2ae976b7c699ef40c1ffc716d87ed5" }
+eth_trie_utils = { git = "https://github.com/0xPolygonZero/eth_trie_utils.git", rev = "7fc3c3f54b3cec9c6fc5ffc5230910bd1cb77f76" }
 ethereum-types = { workspace = true }
 hex-literal = "0.4.1"
 hex = "0.4.3"
