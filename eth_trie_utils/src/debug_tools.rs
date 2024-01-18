@@ -424,6 +424,57 @@ fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
     match n {
         Node::Empty | Node::Hash(_) | Node::Extension { .. } => None,
         Node::Branch { value, .. } => Some(value),
-        Node::Leaf { nibbles, value } => Some(value),
+        Node::Leaf { nibbles: _, value } => Some(value),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[ignore]
+    fn latest_single_node_hash_diffs_work() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn latest_single_node_node_diffs_work() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn latest_multi_node_single_node_hash_diffs_work() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn latest_multi_node_single_node_node_diffs_work() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn latest_massive_single_node_diff_tests() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn latest_multi_node_multi_node_hash_diffs_work() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn latest_multi_node_multi_node_node_diffs_work() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn latest_massive_multi_node_diff_tests() {
+        todo!()
     }
 }
