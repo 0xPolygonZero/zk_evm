@@ -10,7 +10,7 @@ use crate::{
     utils::TrieNodeType,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct TrieDiff {
     pub latest_diff_res: Option<DiffPoint>,
     // TODO: Later add a second pass for finding diffs from the bottom up (`earlist_diff_res`).
@@ -41,13 +41,13 @@ impl DiffDetectionState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DiffPoint {
-    depth: usize,
-    path: NodePath,
-    key: Nibbles,
-    a_info: NodeInfo,
-    b_info: NodeInfo,
+    pub depth: usize,
+    pub path: NodePath,
+    pub key: Nibbles,
+    pub a_info: NodeInfo,
+    pub b_info: NodeInfo,
 }
 
 impl DiffPoint {
@@ -75,8 +75,8 @@ impl Display for DiffPoint {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-struct NodePath(Vec<PathSegment>);
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+pub struct NodePath(Vec<PathSegment>);
 
 impl NodePath {
     fn dup_and_append(&self, seg: PathSegment) -> Self {
@@ -110,7 +110,7 @@ impl Display for NodePath {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct NodeInfo {
     key: Nibbles,
 
@@ -221,7 +221,7 @@ struct LatestDiffPerCallState<'a> {
     curr_path: NodePath,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 enum PathSegment {
     Empty,
     Hash,
@@ -430,10 +430,49 @@ fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+    use super::{create_diff_between_tries, DiffPoint, NodeInfo, NodePath};
+    use crate::{
+        nibbles::Nibbles,
+        partial_trie::{HashedPartialTrie, PartialTrie},
+        utils::TrieNodeType,
+    };
+
     #[test]
-    #[ignore]
     fn latest_single_node_hash_diffs_work() {
-        todo!()
+        // TODO: Reduce duplication once we identify common structures across tests...
+        let mut a = HashedPartialTrie::default();
+        a.insert(0x1234, vec![0]);
+        let a_hash = a.hash();
+
+        let mut b = a.clone();
+        b.insert(0x1234, vec![1]);
+        let b_hash = b.hash();
+
+        let diff = create_diff_between_tries(&a, &b);
+
+        let expected_a = NodeInfo {
+            key: 0x1234.into(),
+            value: Some(vec![0]),
+            node_type: TrieNodeType::Leaf,
+            hash: a_hash,
+        };
+
+        let expected_b = NodeInfo {
+            key: 0x1234.into(),
+            value: Some(vec![1]),
+            node_type: TrieNodeType::Leaf,
+            hash: b_hash,
+        };
+
+        let expected = DiffPoint {
+            depth: 0,
+            path: NodePath(vec![]),
+            key: Nibbles::default(),
+            a_info: expected_a,
+            b_info: expected_b,
+        };
+
+        assert_eq!(diff.latest_diff_res, Some(expected));
     }
 
     #[test]

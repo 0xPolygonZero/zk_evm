@@ -5,7 +5,7 @@ use num_traits::PrimInt;
 
 use crate::partial_trie::{Node, PartialTrie};
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 /// Simplified trie node type to make logging cleaner.
 pub(crate) enum TrieNodeType {
     Empty,
