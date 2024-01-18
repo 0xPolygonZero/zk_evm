@@ -17,7 +17,7 @@ exclude = [
 
 [dependencies]
 bytes = "1.4.0"
-enum-as-inner = "0.5.1"
+enum-as-inner = "0.6.0"
 ethereum-types = "0.14.1"
 hex = "0.4.3"
 keccak-hash = "0.10.0"
@@ -30,8 +30,8 @@ rlp = "0.5.2"
 serde = { version = "1.0.160", features = ["derive", "rc"] }
 
 [dev-dependencies]
-eth_trie = "0.1.0"
-pretty_env_logger = "0.4.0"
+eth_trie = "0.4.0"
+pretty_env_logger = "0.5.0"
 rand = "0.8.5"
 rlp-derive = "0.1.0"
 serde = { version = "1.0.160", features = ["derive"] }
