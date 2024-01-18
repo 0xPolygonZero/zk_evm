@@ -217,9 +217,6 @@ impl ProcessedBlockTrace {
             }
         }
 
-        // trie_state.state.insert(Nibbles::from_h256_be(hash(H160::zero().as_bytes())),
-        // ValOrHash::Val(EMPTY_ACCOUNT_BYTES_RLPED.to_vec()));
-
         for (hashed_acc_addr, s_trie_writes) in deltas.state_writes {
             let val_k = Nibbles::from_h256_be(hashed_acc_addr);
 
