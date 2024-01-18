@@ -1,8 +1,7 @@
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::{fmt::Display, ops::Deref};
 
 use ethereum_types::H256;
-use serde::de::value;
 
 use crate::nibbles::Nibble;
 use crate::{
@@ -13,7 +12,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct TrieDiff {
-    latest_diff_res: Option<DiffPoint>,
+    pub latest_diff_res: Option<DiffPoint>,
     // TODO: Later add a second pass for finding diffs from the bottom up (`earlist_diff_res`).
 }
 
@@ -42,7 +41,7 @@ impl DiffDetectionState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DiffPoint {
     depth: usize,
     path: NodePath,
@@ -57,8 +56,8 @@ impl DiffPoint {
         let b_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_b));
 
         DiffPoint {
-            depth: todo!(),
-            path: todo!(),
+            depth: 0,
+            path: NodePath::default(),
             key: parent_k,
             a_info: NodeInfo::new(child_a, a_key, get_value_from_node(child_a).cloned()),
             b_info: NodeInfo::new(child_b, b_key, get_value_from_node(child_b).cloned()),
@@ -66,20 +65,48 @@ impl DiffPoint {
     }
 }
 
-#[derive(Debug)]
-struct NodePath {
-    nodes: Vec<(TrieNodeType, Nibbles)>,
+impl Display for DiffPoint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Point Diff {{depth: {}, ", self.depth)?;
+        write!(f, "Path: ({}), ", self.path)?;
+        write!(f, "Key: {:x}", self.key)?;
+        write!(f, "A info: {}", self.a_info)?;
+        write!(f, "B info: {}", self.b_info)
+    }
 }
 
+#[derive(Clone, Debug, Default)]
+struct NodePath(Vec<PathSegment>);
+
 impl NodePath {
-    fn append<T: Clone + Debug>(&mut self, n: &Node<T>) {
-        todo!()
+    fn dup_and_append(&self, seg: PathSegment) -> Self {
+        let mut duped_vec = self.0.clone();
+        duped_vec.push(seg);
+
+        Self(duped_vec)
+    }
+
+    fn write_elem(f: &mut fmt::Formatter<'_>, seg: &PathSegment) -> fmt::Result {
+        write!(f, "{}", seg)
     }
 }
 
 impl Display for NodePath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let num_elems = self.0.len();
+
+        // For everything but the last elem.
+        for seg in self.0.iter().take(num_elems.saturating_sub(1)) {
+            Self::write_elem(f, seg)?;
+            write!(f, " --> ")?;
+        }
+
+        // Avoid the extra `-->` for the last elem.
+        if let Some(seg) = self.0.last() {
+            Self::write_elem(f, seg)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -94,6 +121,21 @@ pub struct NodeInfo {
     hash: H256,
 }
 
+impl Display for NodeInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(key: {:x}", self.key)?;
+
+        write!(f, "value: ")?;
+        match &self.value {
+            Some(v) => write!(f, "value: {}, ", hex::encode(v))?,
+            None => write!(f, "N/A, ")?,
+        }
+
+        write!(f, "Node type: {}", self.node_type)?;
+        write!(f, "Trie hash: {:x})", self.hash)
+    }
+}
+
 impl NodeInfo {
     fn new(n: &HashedPartialTrie, key: Nibbles, value: Option<Vec<u8>>) -> Self {
         Self {
@@ -101,21 +143,6 @@ impl NodeInfo {
             value,
             node_type: n.deref().into(),
             hash: n.hash(),
-        }
-    }
-}
-
-#[derive(Debug)]
-enum DiffType {
-    NodeType,
-    Hash,
-}
-
-impl Display for DiffType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DiffType::NodeType => write!(f, "node type"),
-            DiffType::Hash => write!(f, "hash"),
         }
     }
 }
@@ -139,7 +166,7 @@ fn find_latest_diff_point_where_tries_begin_to_diff(
 
     longest_state
         .longest_key_node_diff
-        .or_else(|| longest_state.longest_key_hash_diff)
+        .or(longest_state.longest_key_hash_diff)
 }
 
 #[derive(Debug, Default)]
@@ -191,7 +218,7 @@ struct LatestDiffPerCallState<'a> {
     curr_depth: usize,
 
     // Horribly inefficient, but these are debug tools, so I think we get a pass.
-    curr_path: Vec<PathSegment>,
+    curr_path: NodePath,
 }
 
 #[derive(Clone, Debug)]
@@ -201,6 +228,18 @@ enum PathSegment {
     Branch(Nibble),
     Extension(Nibbles),
     Leaf(Nibbles),
+}
+
+impl Display for PathSegment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PathSegment::Empty => write!(f, "Empty"),
+            PathSegment::Hash => write!(f, "Hash"),
+            PathSegment::Branch(nib) => write!(f, "Branch({})", nib),
+            PathSegment::Extension(nibs) => write!(f, "Extension({})", nibs),
+            PathSegment::Leaf(nibs) => write!(f, "Leaf({})", nibs),
+        }
+    }
 }
 
 impl<'a> LatestDiffPerCallState<'a> {
@@ -217,7 +256,7 @@ impl<'a> LatestDiffPerCallState<'a> {
             b,
             curr_key,
             curr_depth,
-            curr_path: Vec::default(),
+            curr_path: NodePath::default(),
         }
     }
 
@@ -240,8 +279,7 @@ impl<'a> LatestDiffPerCallState<'a> {
             TrieNodeType::Leaf => PathSegment::Leaf(*key_piece),
         };
 
-        let mut new_path = self.curr_path.clone();
-        new_path.push(new_segment);
+        let new_path = self.curr_path.dup_and_append(new_segment);
 
         Self {
             a,
@@ -260,8 +298,8 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
     let a_type: TrieNodeType = state.a.deref().into();
     let b_type: TrieNodeType = state.b.deref().into();
 
-    let a_key_piece = get_key_piece_from_node(&state.a);
-    let b_key_piece = get_key_piece_from_node(&state.b);
+    let a_key_piece = get_key_piece_from_node(state.a);
+    let b_key_piece = get_key_piece_from_node(state.b);
 
     // Note that differences in a node's `value` will be picked up by a hash
     // mismatch.
@@ -284,11 +322,11 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
                 (
                     Node::Branch {
                         children: a_children,
-                        value: a_value,
+                        value: _a_value,
                     },
                     Node::Branch {
                         children: b_children,
-                        value: b_value,
+                        value: _b_value,
                     },
                 ) => {
                     let mut most_significant_diff_found = DiffDetectionState::NoDiffDetected;
@@ -326,11 +364,11 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
                         child: a_child,
                     },
                     Node::Extension {
-                        nibbles: b_nibs,
+                        nibbles: _b_nibs,
                         child: b_child,
                     },
                 ) => find_latest_diff_point_where_tries_begin_to_diff_rec(
-                    state.new_from_parent(&a_child, &b_child, &a_nibs),
+                    state.new_from_parent(a_child, b_child, a_nibs),
                     longest_state,
                 ),
                 (Node::Leaf { .. }, Node::Leaf { .. }) => {
@@ -370,22 +408,13 @@ fn create_diff_detection_state_based_from_hashes(
     }
 }
 
-fn append_node_key_to_key_buf<T: Clone + Debug>(curr_key: &Nibbles, n: &Node<T>) -> Nibbles {
-    match n {
-        Node::Empty | Node::Hash(_) => *curr_key,
-        Node::Branch { children, value } => todo!(),
-        Node::Extension { nibbles, child } => todo!(),
-        Node::Leaf { nibbles, value } => todo!(),
-    }
-}
-
 // It might seem a bit weird to say a branch has no key piece, but this function
 // is used to detect two nodes of the same type that have different keys.
 fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>) -> Nibbles {
     match n {
         Node::Empty | Node::Hash(_) | Node::Branch { .. } => Nibbles::default(),
-        Node::Extension { nibbles, child } => *nibbles,
-        Node::Leaf { nibbles, value } => *nibbles,
+        Node::Extension { nibbles, child: _ } => *nibbles,
+        Node::Leaf { nibbles, value: _ } => *nibbles,
     }
 }
 
