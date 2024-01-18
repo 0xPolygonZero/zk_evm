@@ -208,8 +208,6 @@ impl TxnInfo {
         let mut contract_code_accessed = create_empty_code_access_map();
 
         for (addr, trace) in self.traces {
-            println!("Addr {} --> {}", addr, hash(addr.as_bytes()));
-
             let hashed_addr = hash(addr.as_bytes());
 
             let storage_writes = trace.storage_written.unwrap_or_default();

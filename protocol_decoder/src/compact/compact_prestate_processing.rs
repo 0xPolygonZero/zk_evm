@@ -1462,7 +1462,7 @@ mod tests {
         let (header, parser) = ParserState::create_and_extract_header(bytes).unwrap();
 
         assert_eq!(header.version, 1);
-        let _output = match parser.parse() {
+        let _ = match parser.parse() {
             Ok(trie) => trie,
             Err(err) => panic!("{}", err),
         };
