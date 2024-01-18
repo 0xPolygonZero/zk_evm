@@ -12,6 +12,7 @@
 
 #![allow(incomplete_features)]
 
+pub mod debug_tools;
 pub mod nibbles;
 pub mod partial_trie;
 mod trie_hashing;
