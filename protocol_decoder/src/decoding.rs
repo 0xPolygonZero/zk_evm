@@ -10,7 +10,6 @@ use eth_trie_utils::{
     trie_subsets::create_trie_subset,
 };
 use ethereum_types::{Address, H256, U256};
-use log::trace;
 use plonky2_evm::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::TrieRoots,
@@ -117,12 +116,6 @@ impl ProcessedBlockTrace {
                 )?;
 
                 let trie_roots_after = calculate_trie_input_hashes(&curr_block_tries);
-                trace!(
-                    "Protocol expected trie roots after txn {}: {:?}",
-                    txn_idx,
-                    trie_roots_after
-                );
-
                 let gen_inputs = GenerationInputs {
                     txn_number_before: txn_idx.into(),
                     gas_used_before: tot_gas_used,
@@ -202,9 +195,6 @@ impl ProcessedBlockTrace {
         meta: &TxnMetaState,
         txn_idx: TxnIdx,
     ) -> TraceParsingResult<()> {
-        // Used for some errors. Note that the clone is very cheap.
-        let state_trie_initial = trie_state.state.clone();
-
         for (hashed_acc_addr, storage_writes) in deltas.storage_writes {
             let storage_trie = trie_state
                 .storage
@@ -253,15 +243,6 @@ impl ProcessedBlockTrace {
         // Remove any accounts that self-destructed.
         for hashed_addr in deltas.self_destructed_accounts {
             let k = Nibbles::from_h256_be(hashed_addr);
-
-            let account_data = trie_state.state.get(k).ok_or_else(|| {
-                TraceParsingError::NonExistentTrieEntry(
-                    TrieType::State,
-                    k,
-                    state_trie_initial.hash(),
-                )
-            })?;
-            let _account = account_from_rlped_bytes(account_data)?;
 
             trie_state
                 .storage
@@ -425,7 +406,7 @@ fn create_minimal_state_partial_trie(
 ) -> TraceParsingResult<HashedPartialTrie> {
     create_trie_subset_wrapped(
         state_trie,
-        state_accesses.map(Nibbles::from_h256_be),
+        state_accesses.into_iter().map(Nibbles::from_h256_be),
         TrieType::State,
     )
 }

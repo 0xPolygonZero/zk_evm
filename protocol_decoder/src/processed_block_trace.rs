@@ -7,7 +7,9 @@ use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::U256;
 use plonky2_evm::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 
-use crate::compact::compact_prestate_processing::{process_compact_prestate, PartialTriePreImages};
+use crate::compact::compact_prestate_processing::{
+    process_compact_prestate_debug, PartialTriePreImages,
+};
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
@@ -19,7 +21,8 @@ use crate::types::{
     OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
-    hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
+    h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,
+    print_value_and_hash_nodes_of_trie,
 };
 
 #[derive(Debug)]
@@ -77,7 +80,7 @@ impl BlockTrace {
             .filter_map(|(addr, data)| {
                 data.as_val().map(|data| {
                     (
-                        HashedAccountAddr::from_slice(&addr.bytes_be()),
+                        h_addr_nibs_to_h256(&addr),
                         rlp::decode::<AccountRlp>(data).unwrap(),
                     )
                 })
@@ -158,7 +161,7 @@ fn process_multiple_storage_tries(
 
 fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     // TODO: Wrap in proper result type...
-    let out = process_compact_prestate(trie).unwrap();
+    let out = process_compact_prestate_debug(trie).unwrap();
 
     // TODO: Make this into a result...
     assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));

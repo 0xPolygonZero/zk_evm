@@ -24,6 +24,11 @@ pub(crate) const TEST_PAYLOAD_5: TestProtocolInputAndRoot = TestProtocolInputAnd
     root_str: "2b5a703bdec53099c42d7575f8cd6db85d6f2226a04e98e966fcaef87868869b",
 };
 
+pub(crate) const TEST_PAYLOAD_6: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/test_payload_6.txt"),
+    root_str: "135a0c66146c60d7f78049b3a3486aae3e155015db041a4650966e001f9ba301",
+};
+
 type ProcessCompactPrestateFn = fn(TrieCompact) -> CompactParsingResult<ProcessedCompactOutput>;
 
 pub(crate) struct TestProtocolInputAndRoot {

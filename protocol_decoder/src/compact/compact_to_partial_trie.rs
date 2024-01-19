@@ -4,7 +4,6 @@ use eth_trie_utils::{
     nibbles::{Nibble, Nibbles},
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
-use ethereum_types::H256;
 use log::trace;
 use plonky2_evm::generation::mpt::AccountRlp;
 
@@ -13,7 +12,7 @@ use super::compact_prestate_processing::{
 };
 use crate::{
     types::{CodeHash, HashedAccountAddr, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH},
-    utils::hash,
+    utils::{h_addr_nibs_to_h256, hash},
 };
 
 #[derive(Debug, Default)]
@@ -172,7 +171,11 @@ pub(crate) fn convert_storage_trie_root_keyed_hashmap_to_account_addr_keyed(
     let mut acc_addr_to_storage_trie_map = HashMap::new();
 
     let account_addr_and_storage_root_iter = state_trie.items()
-        .filter_map(|(h_addr_nibs, acc_bytes)| acc_bytes.as_val().map(|acc_bytes| (H256::from_slice(&h_addr_nibs.bytes_be()), rlp::decode::<AccountRlp>(acc_bytes).expect("Encoder lib managed to improperly encode an account node in the state trie! This is a major bug in the encoder.").storage_root)));
+        .filter_map(|(h_addr_nibs, acc_bytes)| {
+            acc_bytes.as_val().map(|acc_bytes| {
+                (h_addr_nibs_to_h256(&h_addr_nibs), rlp::decode::<AccountRlp>(acc_bytes).expect("Encoder lib managed to improperly encode an account node in the state trie! This is a major bug in the encoder.").storage_root)
+        })
+    });
 
     // TODO: Replace with a map...
     for (acc_addr, storage_root) in account_addr_and_storage_root_iter {
