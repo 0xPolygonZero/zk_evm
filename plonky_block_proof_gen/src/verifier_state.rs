@@ -2,8 +2,11 @@
 //! handle succinct block proofs verification.
 
 use log::info;
+use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 
+use crate::proof_gen::ProofGenResult;
 use crate::prover_state::ProverStateBuilder;
+use crate::types::PlonkyProofIntern;
 use crate::{prover_state::ProverState, types::VerifierData};
 
 /// Plonky2 verifier state.
@@ -43,5 +46,25 @@ impl From<ProverState> for VerifierState {
         VerifierState {
             state: prover_state.state.final_verifier_data(),
         }
+    }
+}
+
+impl VerifierState {
+    /// Verifies a `block_proof`.
+    pub fn verify(&self, block_proof: &PlonkyProofIntern) -> ProofGenResult<()> {
+        // Proof verification
+        self.state
+            .verify(block_proof.clone())
+            .map_err(|err| err.to_string())?;
+
+        // Verifier data verification
+        check_cyclic_proof_verifier_data(
+            block_proof,
+            &self.state.verifier_only,
+            &self.state.common,
+        )
+        .map_err(|err| err.to_string())?;
+
+        Ok(())
     }
 }
