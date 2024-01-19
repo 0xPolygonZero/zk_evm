@@ -96,7 +96,9 @@ impl VerifierStateBuilder {
 
         info!("Finished initializing Plonky2 aggregation verifier state!");
 
-        VerifierState { state }
+        VerifierState {
+            state: state.final_verifier_data(),
+        }
     }
 }
 

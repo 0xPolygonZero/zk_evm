@@ -1,5 +1,7 @@
 //! Hardcoded circuit constants to be used when generating the prover circuits.
 
+use core::ops::Range;
+
 /// Default range to be used for the `ArithmeticStark` table.
 pub(crate) const DEFAULT_ARITHMETIC_RANGE: Range<usize> = 16..20;
 /// Default range to be used for the `BytePackingStark` table.
