@@ -22,13 +22,13 @@ pub struct ProverState {
 /// Builder for the prover state.
 #[derive(Debug)]
 pub struct ProverStateBuilder {
-    arithmetic_circuit_size: Range<usize>,
-    byte_packing_circuit_size: Range<usize>,
-    cpu_circuit_size: Range<usize>,
-    keccak_circuit_size: Range<usize>,
-    keccak_sponge_circuit_size: Range<usize>,
-    logic_circuit_size: Range<usize>,
-    memory_circuit_size: Range<usize>,
+    pub(crate) arithmetic_circuit_size: Range<usize>,
+    pub(crate) byte_packing_circuit_size: Range<usize>,
+    pub(crate) cpu_circuit_size: Range<usize>,
+    pub(crate) keccak_circuit_size: Range<usize>,
+    pub(crate) keccak_sponge_circuit_size: Range<usize>,
+    pub(crate) logic_circuit_size: Range<usize>,
+    pub(crate) memory_circuit_size: Range<usize>,
 }
 
 impl Default for ProverStateBuilder {
@@ -73,10 +73,11 @@ impl ProverStateBuilder {
     // TODO: Consider adding async version?
     /// Instantiate the prover state from the builder. Note that this is a very
     /// expensive call!
-    pub fn build(self) -> ProverState {
-        info!("Initializing Plonky2 aggregation prover state (This may take a while)...");
+    pub fn build(self, verbose: bool) -> ProverState {
+        if verbose {
+            info!("Initializing Plonky2 aggregation prover state (This may take a while)...");
+        }
 
-        // ... Yeah I don't understand the mysterious ranges either :)
         let state = AllRecursiveCircuits::new(
             &AllStark::default(),
             &[
@@ -91,7 +92,9 @@ impl ProverStateBuilder {
             &StarkConfig::standard_fast_config(),
         );
 
-        info!("Finished initializing Plonky2 aggregation prover state!");
+        if verbose {
+            info!("Finished initializing Plonky2 aggregation prover state!");
+        }
 
         ProverState { state }
     }
