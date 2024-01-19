@@ -121,7 +121,9 @@ impl ProcessedBlockTrace {
                     gas_used_before: tot_gas_used,
                     gas_used_after: new_tot_gas_used,
                     signed_txn: txn_info.meta.txn_bytes,
-                    withdrawals: self.withdrawals.clone(),
+                    withdrawals: Vec::default(), /* Only ever set in a dummy txn at the end of
+                                                  * the block (see `[add_withdrawls_to_txns]` for
+                                                  * more info). */
                     tries,
                     trie_roots_after,
                     checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
@@ -141,11 +143,20 @@ impl ProcessedBlockTrace {
             })
             .collect::<TraceParsingResult<Vec<_>>>()?;
 
-        Self::pad_gen_inputs_with_dummy_inputs_if_needed(
+        let dummys_added = Self::pad_gen_inputs_with_dummy_inputs_if_needed(
             &mut txn_gen_inputs,
             &other_data,
             &initial_tries_for_dummies,
         );
+
+        Self::add_withdrawls_to_txns(
+            &mut txn_gen_inputs,
+            &other_data,
+            &curr_block_tries,
+            self.withdrawals,
+            dummys_added,
+        );
+
         Ok(txn_gen_inputs)
     }
 
@@ -267,7 +278,9 @@ impl ProcessedBlockTrace {
         gen_inputs: &mut Vec<TxnProofGenIR>,
         other_data: &OtherBlockData,
         initial_trie_state: &PartialTrieState,
-    ) {
+    ) -> bool {
+        let mut dummys_added = true;
+
         match gen_inputs.len() {
             0 => {
                 // Need to pad with two dummy txns.
@@ -280,7 +293,45 @@ impl ProcessedBlockTrace {
                 let dummy_txn = create_dummy_gen_input(other_data, initial_trie_state, 0);
                 gen_inputs.insert(0, dummy_txn);
             }
-            _ => (),
+            _ => dummys_added = false,
+        }
+
+        dummys_added
+    }
+
+    /// The withdrawls are always represented as a single "dummy" txn at the end
+    /// of the block. However, if no dummies have already been added, then
+    /// we need to append one to the end. If dummies have been added, then
+    /// add it to the last one.
+    fn add_withdrawls_to_txns(
+        txn_ir: &mut Vec<TxnProofGenIR>,
+        other_data: &OtherBlockData,
+        final_trie_state: &PartialTrieState,
+        withdrawals: Vec<(Address, U256)>,
+        dummies_already_added: bool,
+    ) {
+        if withdrawals.is_empty() {
+            return;
+        }
+
+        match dummies_already_added {
+            false => {
+                // Guarenteed to have a real txn.
+                let final_ir = txn_ir.last().unwrap();
+
+                // Dummy state will be the state after the final txn.
+                let withdrawl_dummy =
+                    create_dummy_gen_input(other_data, final_trie_state, final_ir.txn_idx + 1);
+
+                // If we have no actual dummy txns, then we create one and append it to the end
+                // of the block.
+                txn_ir.push(withdrawl_dummy);
+            }
+            true => {
+                // If we have dummy txns (note: `txn_ir[1]` is always a dummy txn in this case),
+                // then this dummy will get the withdrawls.
+                txn_ir[1].gen_inputs.withdrawals = withdrawals;
+            }
         }
     }
 }
