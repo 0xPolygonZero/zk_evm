@@ -98,6 +98,24 @@
 //! However, because the prover state can be quite heavy, the necessary verifier
 //! data to verify block proofs can be saved independently into a
 //! `VerifierState`, to allow anyone to easily verify block proofs.
+//!
+//! ```compile_fail
+//!     # use plonky_block_proof_gen::prover_state::ProverStateBuilder;
+//!     # use plonky_block_proof_gen::verifier_state::VerifierState;
+//!     let mut builder = ProverStateBuilder::default();
+//!
+//!     // Generate a `ProverState` from the builder.
+//!     let prover_state = builder.build();
+//!
+//!     // Derive a `VerifierState` from the `ProverState`.
+//!     let verifier_state: VerifierState = prover_state.into();
+//!
+//!     // The prover generates some block proof.
+//!     let block_proof = prover_state.generate_block_proof(...);
+//!     
+//!     // Have the verifier attest validity of the proof.
+//!     assert!(verifier_state.verify(block_proof.intern).is_ok());
+//! ```
 
 pub(crate) mod constants;
 pub mod proof_gen;
