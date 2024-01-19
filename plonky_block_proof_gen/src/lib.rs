@@ -90,9 +90,22 @@
 //!     curr_block_agg_proof: &GeneratedAggProof,
 //! ) -> ProofGenResult<GeneratedBlockProof> { ... }
 //! ```
+//!
+//! ## Verifying block proofs
+//!
+//! The `ProverState` can be used to verify any block proofs emitted with the
+//! same set of circuits.
+//! However, because the prover state can be quite heavy, the necessary verifier
+//! data to verify block proofs can be saved independently into a
+//! `VerifierState`, to allow anyone to easily verify block proofs.
 
 pub mod proof_gen;
 pub mod proof_types;
 pub mod prover_state;
 pub mod types;
 pub mod verifier_state;
+
+// Re-exports
+
+pub use prover_state::ProverState;
+pub use verifier_state::VerifierState;
