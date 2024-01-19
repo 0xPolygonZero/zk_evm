@@ -8,7 +8,7 @@ use crate::{prover_state::ProverState, types::VerifierData};
 
 /// Plonky2 verifier state.
 ///
-/// The default generation requires generating all the verifier data before
+/// The default generation requires generating all the prover data before
 /// extracting the verifier-related data, which can take a long time and require
 /// a large amount of memory.
 pub struct VerifierState {
