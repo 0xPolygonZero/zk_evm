@@ -99,6 +99,7 @@
 //! data to verify block proofs can be saved independently into a
 //! `VerifierState`, to allow anyone to easily verify block proofs.
 
+pub(crate) mod constants;
 pub mod proof_gen;
 pub mod proof_types;
 pub mod prover_state;
