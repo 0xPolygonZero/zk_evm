@@ -12,7 +12,8 @@ use crate::{prover_state::ProverState, types::VerifierData};
 /// extracting the verifier-related data, which can take a long time and require
 /// a large amount of memory.
 pub struct VerifierState {
-    ///
+    /// The verification circuit data associated to the block proof layer of the
+    /// plonky2 prover state.
     pub state: VerifierData,
 }
 
