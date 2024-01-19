@@ -16,6 +16,16 @@ pub struct TrieDiff {
     // TODO: Later add a second pass for finding diffs from the bottom up (`earlist_diff_res`).
 }
 
+impl Display for TrieDiff {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(diff) = &self.latest_diff_res {
+            write!(f, "{}", diff)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 enum DiffDetectionState {
     NodeTypesDiffer, // Also implies that hashes differ.
@@ -69,9 +79,9 @@ impl Display for DiffPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Point Diff {{depth: {}, ", self.depth)?;
         write!(f, "Path: ({}), ", self.path)?;
-        write!(f, "Key: {:x}", self.key)?;
-        write!(f, "A info: {}", self.a_info)?;
-        write!(f, "B info: {}", self.b_info)
+        write!(f, "Key: 0x{:x} ", self.key)?;
+        write!(f, "A info: {} ", self.a_info)?;
+        write!(f, "B info: {}}}", self.b_info)
     }
 }
 
@@ -123,15 +133,14 @@ pub struct NodeInfo {
 
 impl Display for NodeInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(key: {:x}", self.key)?;
+        write!(f, "(key: 0x{:x} ", self.key)?;
 
-        write!(f, "value: ")?;
         match &self.value {
-            Some(v) => write!(f, "value: {}, ", hex::encode(v))?,
-            None => write!(f, "N/A, ")?,
+            Some(v) => write!(f, "Value: 0x{}, ", hex::encode(v))?,
+            None => write!(f, "Value: N/A, ")?,
         }
 
-        write!(f, "Node type: {}", self.node_type)?;
+        write!(f, "Node type: {} ", self.node_type)?;
         write!(f, "Trie hash: {:x})", self.hash)
     }
 }
@@ -295,6 +304,14 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
     state: LatestDiffPerCallState,
     longest_state: &mut LatestNodeDiffState,
 ) -> DiffDetectionState {
+    let a_hash = state.a.hash();
+    let b_hash = state.b.hash();
+
+    // We're going to ignore node type differences if they have the same hash (only case I think where this can happen is if one is a hash node?).
+    if a_hash == b_hash {
+        return DiffDetectionState::NoDiffDetected;
+    }
+
     let a_type: TrieNodeType = state.a.deref().into();
     let b_type: TrieNodeType = state.b.deref().into();
 
