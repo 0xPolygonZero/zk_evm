@@ -299,7 +299,7 @@ impl ProcessedBlockTrace {
         dummys_added
     }
 
-    /// The withdrawls are always represented as a single "dummy" txn at the end
+    /// The withdrawals are always represented as a single "dummy" txn at the end
     /// of the block. However, if no dummies have already been added, then
     /// we need to append one to the end. If dummies have been added, then
     /// add it to the last one.
@@ -316,11 +316,11 @@ impl ProcessedBlockTrace {
 
         match dummies_already_added {
             false => {
-                // Guarenteed to have a real txn.
+                // Guaranteed to have a real txn.
                 let final_ir = txn_ir.last().unwrap();
 
                 // Dummy state will be the state after the final txn.
-                let withdrawl_dummy =
+                let withdrawal_dummy =
                     create_dummy_gen_input(other_data, final_trie_state, final_ir.txn_idx + 1);
 
                 // If we have no actual dummy txns, then we create one and append it to the end
