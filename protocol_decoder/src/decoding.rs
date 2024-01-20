@@ -43,6 +43,9 @@ pub enum TraceParsingError {
     // placeholder.
     #[error("Missing keys when creating sub-partial tries (Trie type: {0})")]
     MissingKeysCreatingSubPartialTrie(TrieType),
+
+    #[error("No account present at {0:x} (hashed: {1:x}) to withdrawal {2} Gwei from!")]
+    MissingWithdrawalAccount(Address, HashedAccountAddr, U256),
 }
 
 #[derive(Debug)]
@@ -153,10 +156,10 @@ impl ProcessedBlockTrace {
             Self::add_withdrawals_to_txns(
                 &mut txn_gen_inputs,
                 &other_data,
-                &curr_block_tries,
+                &mut curr_block_tries,
                 self.withdrawals,
                 dummies_added,
-            );
+            )?;
         }
 
         Ok(txn_gen_inputs)
@@ -311,10 +314,13 @@ impl ProcessedBlockTrace {
     fn add_withdrawals_to_txns(
         txn_ir: &mut Vec<TxnProofGenIR>,
         other_data: &OtherBlockData,
-        final_trie_state: &PartialTrieState,
+        final_trie_state: &mut PartialTrieState,
         withdrawals: Vec<(Address, U256)>,
         dummies_already_added: bool,
-    ) {
+    ) -> TraceParsingResult<()> {
+        // Withdrawals update balances in the account trie, so we need to do that here.
+        Self::update_trie_state_from_withdrawals(withdrawals.iter(), &mut final_trie_state.state)?;
+
         match dummies_already_added {
             false => {
                 // Guaranteed to have a real txn.
@@ -334,6 +340,32 @@ impl ProcessedBlockTrace {
                 txn_ir[1].gen_inputs.withdrawals = withdrawals;
             }
         }
+
+        Ok(())
+    }
+
+    fn update_trie_state_from_withdrawals<'a>(
+        withdrawals: impl Iterator<Item = &'a (Address, U256)> + 'a,
+        state: &mut HashedPartialTrie,
+    ) -> TraceParsingResult<()> {
+        for (addr, amt) in withdrawals {
+            let h_addr = hash(addr.as_bytes());
+            let h_addr_nibs = Nibbles::from_h256_be(h_addr);
+
+            let acc_bytes =
+                state
+                    .get(h_addr_nibs)
+                    .ok_or(TraceParsingError::MissingWithdrawalAccount(
+                        *addr, h_addr, *amt,
+                    ))?;
+            let mut acc_data = account_from_rlped_bytes(acc_bytes)?;
+
+            acc_data.balance += *amt;
+
+            state.insert(h_addr_nibs, rlp::encode(&acc_data).to_vec());
+        }
+
+        Ok(())
     }
 }
 
