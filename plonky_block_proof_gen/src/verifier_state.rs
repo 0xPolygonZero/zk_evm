@@ -1,6 +1,8 @@
 //! This module defines the `VerifierState`, that contains the necessary data to
 //! handle succinct block proofs verification.
 
+use core::borrow::Borrow;
+
 use log::info;
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 
@@ -31,7 +33,7 @@ impl VerifierStateBuilder {
     /// very expensive call!
     pub fn build_verifier(self) -> VerifierState {
         info!("Initializing Plonky2 aggregation verifier state (This may take a while)...");
-        let ProverState { state } = self.build(false);
+        let ProverState { state } = self.build();
         info!("Finished initializing Plonky2 aggregation verifier state!");
 
         VerifierState {
@@ -41,10 +43,10 @@ impl VerifierStateBuilder {
 }
 
 /// Extracts the verifier state from the entire prover state.
-impl From<ProverState> for VerifierState {
-    fn from(prover_state: ProverState) -> Self {
+impl<T: Borrow<ProverState>> From<T> for VerifierState {
+    fn from(prover_state: T) -> Self {
         VerifierState {
-            state: prover_state.state.final_verifier_data(),
+            state: prover_state.borrow().state.final_verifier_data(),
         }
     }
 }

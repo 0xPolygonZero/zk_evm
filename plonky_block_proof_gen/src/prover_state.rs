@@ -73,10 +73,8 @@ impl ProverStateBuilder {
     // TODO: Consider adding async version?
     /// Instantiate the prover state from the builder. Note that this is a very
     /// expensive call!
-    pub fn build(self, verbose: bool) -> ProverState {
-        if verbose {
-            info!("Initializing Plonky2 aggregation prover state (This may take a while)...");
-        }
+    pub fn build(self) -> ProverState {
+        info!("Initializing Plonky2 aggregation prover state (This may take a while)...");
 
         let state = AllRecursiveCircuits::new(
             &AllStark::default(),
@@ -92,9 +90,7 @@ impl ProverStateBuilder {
             &StarkConfig::standard_fast_config(),
         );
 
-        if verbose {
-            info!("Finished initializing Plonky2 aggregation prover state!");
-        }
+        info!("Finished initializing Plonky2 aggregation prover state!");
 
         ProverState { state }
     }
