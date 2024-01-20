@@ -45,7 +45,8 @@ impl BlockTrace {
     {
         let processed_block_trace =
             self.into_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone());
-        proced_block_trace.into_txn_proof_gen_ir(other_data)
+
+        processed_block_trace.into_txn_proof_gen_ir(other_data)
     }
 
     fn into_processed_block_trace<F>(
