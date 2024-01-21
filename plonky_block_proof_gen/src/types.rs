@@ -16,3 +16,11 @@ pub type AllRecursiveCircuits = plonky2_evm::fixed_recursive_verifier::AllRecurs
     PoseidonGoldilocksConfig,
     2,
 >;
+
+/// A type alias for the verifier data necessary to verify succinct block
+/// proofs.
+/// While the prover state [`AllRecursiveCircuits`] can also verify proofs, this
+/// [`VerifierData`] is much lighter, allowing anyone to verify block proofs,
+/// regardless of the underlying hardware.
+pub type VerifierData =
+    plonky2::plonk::circuit_data::VerifierCircuitData<GoldilocksField, PoseidonGoldilocksConfig, 2>;
