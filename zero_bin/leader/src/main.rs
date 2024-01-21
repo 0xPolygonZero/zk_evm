@@ -53,8 +53,11 @@ async fn main() -> Result<()> {
         }
         Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
-            let output_dir_metadata = std::fs::metadata(&output_dir)?;
-            if !output_dir.is_dir() || output_dir_metadata.permissions().readonly() {
+            let output_dir_metadata = std::fs::metadata(&output_dir);
+            if output_dir_metadata.is_err() {
+                // Create output directory
+                std::fs::create_dir(&output_dir)?;
+            } else if !output_dir.is_dir() || output_dir_metadata?.permissions().readonly() {
                 panic!("output-dir is not a writable directory");
             }
 
