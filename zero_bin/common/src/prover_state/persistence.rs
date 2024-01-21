@@ -87,7 +87,6 @@ fn prover_to_disk(circuits: &AllRecursiveCircuits, circuit_config: &CircuitConfi
         })
     {
         warn!("failed to create prover state file, {e:?}");
-        return;
     };
 }
 
@@ -103,7 +102,6 @@ pub fn verifier_to_disk(circuit: &VerifierData, circuit_config: &CircuitConfig) 
         )
     }) {
         warn!("failed to create verifier state file, {e:?}");
-        return;
     };
 }
 
