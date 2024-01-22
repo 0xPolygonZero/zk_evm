@@ -135,14 +135,9 @@ impl ProcessedBlockTrace {
                     block_hashes: other_data.b_data.b_hashes.clone(),
                 };
 
-                let txn_proof_gen_ir = TxnProofGenIR {
-                    txn_idx,
-                    gen_inputs,
-                };
-
                 tot_gas_used = new_tot_gas_used;
 
-                Ok(txn_proof_gen_ir)
+                Ok(gen_inputs)
             })
             .collect::<TraceParsingResult<Vec<_>>>()?;
 
@@ -334,7 +329,8 @@ impl ProcessedBlockTrace {
             // end of the block.
             false => {
                 // Guaranteed to have a real txn.
-                let txn_idx_of_dummy_entry = txn_ir.last().unwrap().txn_idx + 1;
+                let txn_idx_of_dummy_entry =
+                    txn_ir.last().unwrap().txn_number_before.low_u64() as usize + 1;
 
                 // Dummy state will be the state after the final txn.
                 let mut withdrawal_dummy =
@@ -345,11 +341,10 @@ impl ProcessedBlockTrace {
                     &mut final_trie_state.state,
                 )?;
 
-                withdrawal_dummy.gen_inputs.withdrawals = withdrawals;
+                withdrawal_dummy.withdrawals = withdrawals;
 
                 // Only the state root hash needs to be updated from the withdrawals.
-                withdrawal_dummy.gen_inputs.trie_roots_after.state_root =
-                    final_trie_state.state.hash();
+                withdrawal_dummy.trie_roots_after.state_root = final_trie_state.state.hash();
 
                 txn_ir.push(withdrawal_dummy);
             }
@@ -361,8 +356,8 @@ impl ProcessedBlockTrace {
 
                 // If we have dummy proofs (note: `txn_ir[1]` is always a dummy txn in this
                 // case), then this dummy will get the withdrawals.
-                txn_ir[1].gen_inputs.withdrawals = withdrawals;
-                txn_ir[1].gen_inputs.trie_roots_after.state_root = final_trie_state.state.hash();
+                txn_ir[1].withdrawals = withdrawals;
+                txn_ir[1].trie_roots_after.state_root = final_trie_state.state.hash();
             }
         }
 
@@ -461,7 +456,7 @@ fn create_dummy_gen_input(
         receipts_root: EMPTY_TRIE_HASH,
     };
 
-    let gen_inputs = GenerationInputs {
+    GenerationInputs {
         signed_txn: None,
         tries,
         trie_roots_after,
@@ -469,9 +464,7 @@ fn create_dummy_gen_input(
         block_metadata: other_data.b_data.b_meta.clone(),
         block_hashes: other_data.b_data.b_hashes.clone(),
         ..GenerationInputs::default()
-    };
-
-    gen_inputs_to_ir(gen_inputs, txn_idx)
+    }
 }
 
 impl TxnMetaState {
@@ -480,13 +473,6 @@ impl TxnMetaState {
             Some(v) => v.clone(),
             None => Vec::default(),
         }
-    }
-}
-
-fn gen_inputs_to_ir(gen_inputs: GenerationInputs, txn_idx: TxnIdx) -> TxnProofGenIR {
-    TxnProofGenIR {
-        txn_idx,
-        gen_inputs,
     }
 }
 

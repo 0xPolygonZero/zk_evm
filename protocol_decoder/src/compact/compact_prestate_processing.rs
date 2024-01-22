@@ -1,4 +1,4 @@
-//! Processing for the compact format as specified here: https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md
+//! Processing for the compact format as specified here: <https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md>
 
 use std::{
     any::type_name,

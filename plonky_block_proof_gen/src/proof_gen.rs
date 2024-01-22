@@ -38,7 +38,7 @@ impl From<String> for ProofGenError {
 /// Generates a transaction proof from some IR data.
 pub fn generate_txn_proof(
     p_state: &ProverState,
-    start_info: TxnProofGenIR,
+    gen_inputs: TxnProofGenIR,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {
     let (intern, p_vals) = p_state
@@ -46,7 +46,7 @@ pub fn generate_txn_proof(
         .prove_root(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
-            start_info.gen_inputs,
+            gen_inputs,
             &mut TimingTree::default(),
             abort_signal,
         )
