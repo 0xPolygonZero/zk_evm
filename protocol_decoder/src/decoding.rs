@@ -349,7 +349,6 @@ impl ProcessedBlockTrace {
                 // If we have dummy proofs (note: `txn_ir[1]` is always a dummy txn in this
                 // case), then this dummy will get the withdrawals.
                 txn_ir[1].gen_inputs.withdrawals = withdrawals;
-                txn_ir[1].gen_inputs.tries.state_trie = final_trie_state.state.clone();
                 txn_ir[1].gen_inputs.trie_roots_after.state_root = final_trie_state.state.hash();
             }
         }
