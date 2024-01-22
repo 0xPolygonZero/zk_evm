@@ -4,6 +4,7 @@
 # 1 --> Start block idx
 # 2 --> End block index (inclusive)
 # 3 --> Rpc endpoint:port (eg. http://35.246.1.96:8545)
+# 4 --> Ignore previous proofs (boolean)
 
 export RUST_BACKTRACE=1
 export RUST_LOG=plonky2=trace,plonky2_evm=trace
@@ -20,6 +21,7 @@ PROOF_OUTPUT_DIR="proofs"
 ALWAYS_WRITE_LOGS=0 # Change this to `1` if you always want logs to be written.
 
 TOT_BLOCKS=$(($2-$1+1))
+IGNORE_PREVIOUS_PROOFS=$4
 
 echo "Proving blocks ${1}..=${2}... (Total: ${TOT_BLOCKS})"
 mkdir -p proofs/
@@ -31,9 +33,15 @@ do
     OUT_PROOF_PATH="${PROOF_OUTPUT_DIR}/b${i}.zkproof"
     OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b${i}.log"
 
-    if [ $i -gt 1 ]; then
+    if [ $IGNORE_PREVIOUS_PROOFS ]; then
+        # Set checkpoint height to previous block number
         prev_proof_num=$((i-1))
-        PREV_PROOF_EXTRA_ARG="-f ${PROOF_OUTPUT_DIR}/b${prev_proof_num}.zkproof"
+        PREV_PROOF_EXTRA_ARG="--checkpoint-block-number ${prev_proof_num}"
+    else
+        if [ $i -gt 1 ]; then
+            prev_proof_num=$((i-1))
+            PREV_PROOF_EXTRA_ARG="-f ${PROOF_OUTPUT_DIR}/b${prev_proof_num}.zkproof"
+        fi
     fi
 
     cargo r --release --bin leader -- --runtime in-memory jerigon --rpc-url "$3" --block-number $i --proof-output-path $OUT_PROOF_PATH $PREV_PROOF_EXTRA_ARG > $OUT_LOG_PATH 2>&1
