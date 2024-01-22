@@ -11,7 +11,6 @@
 //! hash of the node it replaces.
 
 #![allow(incomplete_features)]
-#![feature(return_position_impl_trait_in_trait)]
 
 pub mod nibbles;
 pub mod partial_trie;

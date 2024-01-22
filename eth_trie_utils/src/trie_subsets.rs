@@ -464,7 +464,7 @@ mod tests {
     fn multi_node_trie_returns_proper_subset() {
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345_u64]);
 
-        let trie_subset = create_trie_subset(&trie, vec![0x1234, 0x56].into_iter()).unwrap();
+        let trie_subset = create_trie_subset(&trie, vec![0x1234, 0x56]).unwrap();
         let leaf_keys = get_all_nibbles_of_leaf_nodes_in_trie(&trie_subset);
 
         assert!(leaf_keys.contains(&(Nibbles::from(0x1234))));
