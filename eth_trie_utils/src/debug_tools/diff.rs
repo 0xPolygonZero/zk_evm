@@ -3,7 +3,7 @@ use std::{fmt::Display, ops::Deref};
 
 use ethereum_types::H256;
 
-use crate::nibbles::Nibble;
+use super::common::{get_segment_from_node_and_key_piece, NodePath};
 use crate::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
@@ -82,41 +82,6 @@ impl Display for DiffPoint {
         write!(f, "Key: 0x{:x} ", self.key)?;
         write!(f, "A info: {} ", self.a_info)?;
         write!(f, "B info: {}}}", self.b_info)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct NodePath(Vec<PathSegment>);
-
-impl NodePath {
-    fn dup_and_append(&self, seg: PathSegment) -> Self {
-        let mut duped_vec = self.0.clone();
-        duped_vec.push(seg);
-
-        Self(duped_vec)
-    }
-
-    fn write_elem(f: &mut fmt::Formatter<'_>, seg: &PathSegment) -> fmt::Result {
-        write!(f, "{}", seg)
-    }
-}
-
-impl Display for NodePath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let num_elems = self.0.len();
-
-        // For everything but the last elem.
-        for seg in self.0.iter().take(num_elems.saturating_sub(1)) {
-            Self::write_elem(f, seg)?;
-            write!(f, " --> ")?;
-        }
-
-        // Avoid the extra `-->` for the last elem.
-        if let Some(seg) = self.0.last() {
-            Self::write_elem(f, seg)?;
-        }
-
-        Ok(())
     }
 }
 
@@ -230,27 +195,6 @@ struct LatestDiffPerCallState<'a> {
     curr_path: NodePath,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-enum PathSegment {
-    Empty,
-    Hash,
-    Branch(Nibble),
-    Extension(Nibbles),
-    Leaf(Nibbles),
-}
-
-impl Display for PathSegment {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PathSegment::Empty => write!(f, "Empty"),
-            PathSegment::Hash => write!(f, "Hash"),
-            PathSegment::Branch(nib) => write!(f, "Branch({})", nib),
-            PathSegment::Extension(nibs) => write!(f, "Extension({})", nibs),
-            PathSegment::Leaf(nibs) => write!(f, "Leaf({})", nibs),
-        }
-    }
-}
-
 impl<'a> LatestDiffPerCallState<'a> {
     /// Exists solely to prevent construction of this type from going over
     /// multiple lines.
@@ -277,17 +221,7 @@ impl<'a> LatestDiffPerCallState<'a> {
         b: &'a HashedPartialTrie,
         key_piece: &Nibbles,
     ) -> Self {
-        let new_segment = match TrieNodeType::from(a.deref()) {
-            TrieNodeType::Empty => PathSegment::Empty,
-            TrieNodeType::Hash => PathSegment::Hash,
-            TrieNodeType::Branch => {
-                debug_assert_eq!(key_piece.count, 1);
-                PathSegment::Branch(key_piece.get_nibble(0))
-            }
-            TrieNodeType::Extension => PathSegment::Extension(*key_piece),
-            TrieNodeType::Leaf => PathSegment::Leaf(*key_piece),
-        };
-
+        let new_segment = get_segment_from_node_and_key_piece(a, key_piece);
         let new_path = self.curr_path.dup_and_append(new_segment);
 
         Self {
@@ -307,7 +241,8 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
     let a_hash = state.a.hash();
     let b_hash = state.b.hash();
 
-    // We're going to ignore node type differences if they have the same hash (only case I think where this can happen is if one is a hash node?).
+    // We're going to ignore node type differences if they have the same hash (only
+    // case I think where this can happen is if one is a hash node?).
     if a_hash == b_hash {
         return DiffDetectionState::NoDiffDetected;
     }
