@@ -43,6 +43,9 @@ pub enum TraceParsingError {
     // placeholder.
     #[error("Missing keys when creating sub-partial tries (Trie type: {0})")]
     MissingKeysCreatingSubPartialTrie(TrieType),
+
+    #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
+    MissingWithdrawalAccount(Address, HashedAccountAddr, U256),
 }
 
 #[derive(Debug)]
@@ -121,8 +124,9 @@ impl ProcessedBlockTrace {
                     gas_used_before: tot_gas_used,
                     gas_used_after: new_tot_gas_used,
                     signed_txn: txn_info.meta.txn_bytes,
-                    withdrawals: Vec::new(), /* TODO: Once this is added to the trace spec, add
-                                              * it here... */
+                    withdrawals: Vec::default(), /* Only ever set in a dummy txn at the end of
+                                                  * the block (see `[add_withdrawals_to_txns]`
+                                                  * for more info). */
                     tries,
                     trie_roots_after,
                     checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
@@ -142,11 +146,22 @@ impl ProcessedBlockTrace {
             })
             .collect::<TraceParsingResult<Vec<_>>>()?;
 
-        Self::pad_gen_inputs_with_dummy_inputs_if_needed(
+        let dummies_added = Self::pad_gen_inputs_with_dummy_inputs_if_needed(
             &mut txn_gen_inputs,
             &other_data,
             &initial_tries_for_dummies,
         );
+
+        if !self.withdrawals.is_empty() {
+            Self::add_withdrawals_to_txns(
+                &mut txn_gen_inputs,
+                &other_data,
+                &mut curr_block_tries,
+                self.withdrawals,
+                dummies_added,
+            )?;
+        }
+
         Ok(txn_gen_inputs)
     }
 
@@ -264,25 +279,120 @@ impl ProcessedBlockTrace {
         Ok(())
     }
 
+    /// Pads a generated IR vec with additional "dummy" entries if needed.
+    /// We need to ensure that generated IR always has at least `2` elements,
+    /// and if there are only `0` or `1` elements, then we need to pad so
+    /// that we have two entries in total. These dummy entries serve only to
+    /// allow the proof generation process to finish. Specifically, we need
+    /// at least two entries to generate an agg proof, and we need an agg
+    /// proof to generate a block proof. These entries do not mutate state
+    /// (unless there are withdrawals in the block (see
+    /// `[add_withdrawals_to_txns]`), where the final one will mutate the
+    /// state trie.
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<TxnProofGenIR>,
         other_data: &OtherBlockData,
         initial_trie_state: &PartialTrieState,
-    ) {
+    ) -> bool {
         match gen_inputs.len() {
             0 => {
-                // Need to pad with two dummy txns.
+                // Need to pad with two dummy entries.
                 gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
                     other_data,
                     initial_trie_state,
                 ));
+
+                true
             }
             1 => {
+                // Just need one.
                 let dummy_txn = create_dummy_gen_input(other_data, initial_trie_state, 0);
                 gen_inputs.insert(0, dummy_txn);
+
+                true
             }
-            _ => (),
+            _ => false,
         }
+    }
+
+    /// The withdrawals are always in the final ir payload. How they are placed
+    /// differs based on whether or not there are already dummy proofs present
+    /// in the IR. The rules for adding withdrawals to the IR list are:
+    /// - If dummy proofs are already present, then the withdrawals are added to
+    ///   the last dummy proof (always index `1`).
+    /// - If no dummy proofs are already present, then a dummy proof that just
+    ///   contains the withdrawals is appended to the end of the IR vec.
+    fn add_withdrawals_to_txns(
+        txn_ir: &mut Vec<TxnProofGenIR>,
+        other_data: &OtherBlockData,
+        final_trie_state: &mut PartialTrieState,
+        withdrawals: Vec<(Address, U256)>,
+        dummies_already_added: bool,
+    ) -> TraceParsingResult<()> {
+        match dummies_already_added {
+            // If we have no actual dummy proofs, then we create one and append it to the
+            // end of the block.
+            false => {
+                // Guaranteed to have a real txn.
+                let txn_idx_of_dummy_entry = txn_ir.last().unwrap().txn_idx + 1;
+
+                // Dummy state will be the state after the final txn.
+                let mut withdrawal_dummy =
+                    create_dummy_gen_input(other_data, final_trie_state, txn_idx_of_dummy_entry);
+
+                Self::update_trie_state_from_withdrawals(
+                    &withdrawals,
+                    &mut final_trie_state.state,
+                )?;
+
+                withdrawal_dummy.gen_inputs.withdrawals = withdrawals;
+
+                // Only the state root hash needs to be updated from the withdrawals.
+                withdrawal_dummy.gen_inputs.trie_roots_after.state_root =
+                    final_trie_state.state.hash();
+
+                txn_ir.push(withdrawal_dummy);
+            }
+            true => {
+                Self::update_trie_state_from_withdrawals(
+                    &withdrawals,
+                    &mut final_trie_state.state,
+                )?;
+
+                // If we have dummy proofs (note: `txn_ir[1]` is always a dummy txn in this
+                // case), then this dummy will get the withdrawals.
+                txn_ir[1].gen_inputs.withdrawals = withdrawals;
+                txn_ir[1].gen_inputs.trie_roots_after.state_root = final_trie_state.state.hash();
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Withdrawals update balances in the account trie, so we need to update
+    /// our local trie state.
+    fn update_trie_state_from_withdrawals<'a>(
+        withdrawals: impl IntoIterator<Item = &'a (Address, U256)> + 'a,
+        state: &mut HashedPartialTrie,
+    ) -> TraceParsingResult<()> {
+        for (addr, amt) in withdrawals {
+            let h_addr = hash(addr.as_bytes());
+            let h_addr_nibs = Nibbles::from_h256_be(h_addr);
+
+            let acc_bytes =
+                state
+                    .get(h_addr_nibs)
+                    .ok_or(TraceParsingError::MissingWithdrawalAccount(
+                        *addr, h_addr, *amt,
+                    ))?;
+            let mut acc_data = account_from_rlped_bytes(acc_bytes)?;
+
+            acc_data.balance += *amt;
+
+            state.insert(h_addr_nibs, rlp::encode(&acc_data).to_vec());
+        }
+
+        Ok(())
     }
 }
 

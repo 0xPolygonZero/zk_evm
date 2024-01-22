@@ -1,5 +1,5 @@
 use eth_trie_utils::nibbles::Nibbles;
-use ethereum_types::{H256, U256};
+use ethereum_types::{Address, H256, U256};
 use plonky2_evm::{
     generation::GenerationInputs,
     proof::{BlockHashes, BlockMetadata},
@@ -66,6 +66,7 @@ pub struct OtherBlockData {
 pub struct BlockLevelData {
     pub b_meta: BlockMetadata,
     pub b_hashes: BlockHashes,
+    pub withdrawals: Vec<(Address, U256)>,
 }
 impl TxnProofGenIR {
     pub fn b_height(&self) -> BlockHeight {
