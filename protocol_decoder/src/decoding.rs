@@ -12,7 +12,7 @@ use eth_trie_utils::{
 use ethereum_types::{Address, H256, U256};
 use plonky2_evm::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
-    proof::TrieRoots,
+    proof::{ExtraBlockData, TrieRoots},
 };
 use thiserror::Error;
 
@@ -95,7 +95,13 @@ impl ProcessedBlockTrace {
             ..Default::default()
         };
 
-        let mut tot_gas_used = U256::zero();
+        let mut extra_data = ExtraBlockData {
+            checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
+            txn_number_before: U256::zero(),
+            txn_number_after: U256::zero(),
+            gas_used_before: U256::zero(),
+            gas_used_after: U256::zero(),
+        };
 
         let mut txn_gen_inputs = self
             .txn_info
@@ -109,7 +115,10 @@ impl ProcessedBlockTrace {
                     &other_data.b_data.b_meta.block_beneficiary,
                 )?;
 
-                let new_tot_gas_used = tot_gas_used + txn_info.meta.gas_used;
+                // For each non-dummy txn, we increment `txn_number_after` by 1, and
+                // update `gas_used_after` accordingly.
+                extra_data.txn_number_after += U256::one();
+                extra_data.gas_used_after = txn_info.meta.gas_used.into();
 
                 Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
@@ -120,22 +129,25 @@ impl ProcessedBlockTrace {
 
                 let trie_roots_after = calculate_trie_input_hashes(&curr_block_tries);
                 let gen_inputs = GenerationInputs {
-                    txn_number_before: txn_idx.into(),
-                    gas_used_before: tot_gas_used,
-                    gas_used_after: new_tot_gas_used,
+                    txn_number_before: extra_data.txn_number_before,
+                    gas_used_before: extra_data.gas_used_before,
+                    gas_used_after: extra_data.gas_used_after,
                     signed_txn: txn_info.meta.txn_bytes,
                     withdrawals: Vec::default(), /* Only ever set in a dummy txn at the end of
                                                   * the block (see `[add_withdrawals_to_txns]`
                                                   * for more info). */
                     tries,
                     trie_roots_after,
-                    checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
+                    checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
                     contract_code: txn_info.contract_code_accessed,
                     block_metadata: other_data.b_data.b_meta.clone(),
                     block_hashes: other_data.b_data.b_hashes.clone(),
                 };
 
-                tot_gas_used = new_tot_gas_used;
+                // After processing a transaction, we update the remaining accumulators
+                // for the next transaction.
+                extra_data.txn_number_before += U256::one();
+                extra_data.gas_used_before = extra_data.gas_used_after;
 
                 Ok(gen_inputs)
             })
@@ -144,6 +156,7 @@ impl ProcessedBlockTrace {
         let dummies_added = Self::pad_gen_inputs_with_dummy_inputs_if_needed(
             &mut txn_gen_inputs,
             &other_data,
+            &extra_data,
             &initial_tries_for_dummies,
         );
 
@@ -151,6 +164,7 @@ impl ProcessedBlockTrace {
             Self::add_withdrawals_to_txns(
                 &mut txn_gen_inputs,
                 &other_data,
+                &extra_data,
                 &mut curr_block_tries,
                 self.withdrawals,
                 dummies_added,
@@ -199,6 +213,7 @@ impl ProcessedBlockTrace {
             storage_tries,
         })
     }
+
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
         deltas: NodesUsedByTxn,
@@ -287,21 +302,23 @@ impl ProcessedBlockTrace {
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<TxnProofGenIR>,
         other_data: &OtherBlockData,
-        initial_trie_state: &PartialTrieState,
+        extra_data: &ExtraBlockData,
+        initial_tries: &PartialTrieState,
     ) -> bool {
         match gen_inputs.len() {
             0 => {
                 // Need to pad with two dummy entries.
                 gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
                     other_data,
-                    initial_trie_state,
+                    extra_data,
+                    initial_tries,
                 ));
 
                 true
             }
             1 => {
                 // Just need one.
-                let dummy_txn = create_dummy_gen_input(other_data, initial_trie_state, 0);
+                let dummy_txn = create_dummy_gen_input(other_data, extra_data, initial_tries);
                 gen_inputs.insert(0, dummy_txn);
 
                 true
@@ -320,6 +337,7 @@ impl ProcessedBlockTrace {
     fn add_withdrawals_to_txns(
         txn_ir: &mut Vec<TxnProofGenIR>,
         other_data: &OtherBlockData,
+        extra_data: &ExtraBlockData,
         final_trie_state: &mut PartialTrieState,
         withdrawals: Vec<(Address, U256)>,
         dummies_already_added: bool,
@@ -334,7 +352,7 @@ impl ProcessedBlockTrace {
 
                 // Dummy state will be the state after the final txn.
                 let mut withdrawal_dummy =
-                    create_dummy_gen_input(other_data, final_trie_state, txn_idx_of_dummy_entry);
+                    create_dummy_gen_input(other_data, extra_data, final_trie_state);
 
                 Self::update_trie_state_from_withdrawals(
                     &withdrawals,
@@ -435,35 +453,50 @@ fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedP
 
 fn create_dummy_txn_pair_for_empty_block(
     other_data: &OtherBlockData,
-    initial_trie_state: &PartialTrieState,
+    extra_data: &ExtraBlockData,
+    final_tries: &PartialTrieState,
 ) -> [TxnProofGenIR; 2] {
     [
-        create_dummy_gen_input(other_data, initial_trie_state, 0),
-        create_dummy_gen_input(other_data, initial_trie_state, 0),
+        create_dummy_gen_input(other_data, extra_data, final_tries),
+        create_dummy_gen_input(other_data, extra_data, final_tries),
     ]
 }
 
 fn create_dummy_gen_input(
     other_data: &OtherBlockData,
-    initial_trie_state: &PartialTrieState,
-    txn_idx: TxnIdx,
+    extra_data: &ExtraBlockData,
+    final_tries: &PartialTrieState,
 ) -> TxnProofGenIR {
-    let tries = create_dummy_proof_trie_inputs(initial_trie_state);
+    let tries = create_dummy_proof_trie_inputs(final_tries);
 
     let trie_roots_after = TrieRoots {
         state_root: tries.state_trie.hash(),
-        transactions_root: EMPTY_TRIE_HASH,
-        receipts_root: EMPTY_TRIE_HASH,
+        transactions_root: tries.transactions_trie.hash(),
+        receipts_root: tries.receipts_trie.hash(),
     };
+
+    // Sanity checks
+    assert_eq!(
+        extra_data.txn_number_before, extra_data.txn_number_after,
+        "Txn numbers before/after differ in a dummy payload with no txn!"
+    );
+    assert_eq!(
+        extra_data.gas_used_before, extra_data.gas_used_after,
+        "Gas used before/after differ in a dummy payload with no txn!"
+    );
 
     GenerationInputs {
         signed_txn: None,
         tries,
         trie_roots_after,
-        checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
+        checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
         block_metadata: other_data.b_data.b_meta.clone(),
         block_hashes: other_data.b_data.b_hashes.clone(),
-        ..GenerationInputs::default()
+        txn_number_before: extra_data.txn_number_before,
+        gas_used_before: extra_data.gas_used_before,
+        gas_used_after: extra_data.gas_used_after,
+        contract_code: HashMap::default(),
+        withdrawals: vec![], // this is set after creating dummy payloads
     }
 }
 
@@ -490,8 +523,8 @@ fn create_dummy_proof_trie_inputs(final_trie_state: &PartialTrieState) -> TrieIn
 
     TrieInputs {
         state_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.state),
-        transactions_trie: HashedPartialTrie::default(),
-        receipts_trie: HashedPartialTrie::default(),
+        transactions_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.txn),
+        receipts_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.receipt),
         storage_tries: partial_sub_storage_tries,
     }
 }
