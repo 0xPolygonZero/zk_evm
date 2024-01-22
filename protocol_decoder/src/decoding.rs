@@ -329,23 +329,34 @@ impl ProcessedBlockTrace {
         withdrawals: Vec<(Address, U256)>,
         dummies_already_added: bool,
     ) -> TraceParsingResult<()> {
-        // Withdrawals update balances in the account trie, so we need to do that here.
-        Self::update_trie_state_from_withdrawals(&withdrawals, &mut final_trie_state.state)?;
-
         match dummies_already_added {
             false => {
                 // Guaranteed to have a real txn.
-                let final_ir = txn_ir.last().unwrap();
+                let txn_idx_of_dummy_entry = txn_ir.last().unwrap().txn_idx + 1;
 
                 // Dummy state will be the state after the final txn.
-                let withdrawal_dummy =
-                    create_dummy_gen_input(other_data, final_trie_state, final_ir.txn_idx + 1);
+                let mut withdrawal_dummy =
+                    create_dummy_gen_input(other_data, final_trie_state, txn_idx_of_dummy_entry);
+
+                Self::update_trie_state_from_withdrawals(
+                    &withdrawals,
+                    &mut final_trie_state.state,
+                )?;
+
+                // Only the state root hash needs to be updated from the withdrawals.
+                withdrawal_dummy.gen_inputs.trie_roots_after.state_root =
+                    final_trie_state.state.hash();
 
                 // If we have no actual dummy proofs, then we create one and append it to the
                 // end of the block.
                 txn_ir.push(withdrawal_dummy);
             }
             true => {
+                Self::update_trie_state_from_withdrawals(
+                    &withdrawals,
+                    &mut final_trie_state.state,
+                )?;
+
                 // If we have dummy proofs (note: `txn_ir[1]` is always a dummy txn in this
                 // case), then this dummy will get the withdrawals.
                 txn_ir[1].gen_inputs.withdrawals = withdrawals;
@@ -356,6 +367,8 @@ impl ProcessedBlockTrace {
         Ok(())
     }
 
+    /// Withdrawals update balances in the account trie, so we need to update
+    /// our local trie state.
     fn update_trie_state_from_withdrawals<'a>(
         withdrawals: impl IntoIterator<Item = &'a (Address, U256)> + 'a,
         state: &mut HashedPartialTrie,
