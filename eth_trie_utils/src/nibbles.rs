@@ -607,13 +607,11 @@ impl Nibbles {
         let hex_string_raw = hex_encode_f(&byte_buf[(64 - count_bytes)..64]);
         let hex_char_iter_raw = hex_string_raw.chars();
 
-        let hex_char_iter = match is_even(self.count) {
-            false => hex_char_iter_raw.skip(1),
-            true => hex_char_iter_raw.skip(0),
-        };
-
         let mut hex_string = String::from("0x");
-        hex_string.extend(hex_char_iter);
+        match is_even(self.count) {
+            false => hex_string.extend(hex_char_iter_raw.skip(1)),
+            true => hex_string.extend(hex_char_iter_raw),
+        };
 
         hex_string
     }

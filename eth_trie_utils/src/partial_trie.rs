@@ -423,7 +423,7 @@ where
     V: Into<ValOrHash>,
 {
     let mut root = N::new(Node::Empty);
-    root.extend(nodes.into_iter());
+    root.extend(nodes);
 
     root
 }

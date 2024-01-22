@@ -383,15 +383,12 @@ mod tests {
 
     #[test]
     fn replacing_branch_of_leaves_with_hash_nodes_produced_same_hash() {
-        let mut trie = HashedPartialTrie::from_iter(
-            [
-                large_entry(0x1),
-                large_entry(0x2),
-                large_entry(0x3),
-                large_entry(0x4),
-            ]
-            .into_iter(),
-        );
+        let mut trie = HashedPartialTrie::from_iter([
+            large_entry(0x1),
+            large_entry(0x2),
+            large_entry(0x3),
+            large_entry(0x4),
+        ]);
 
         let orig_hash = trie.hash();
 
