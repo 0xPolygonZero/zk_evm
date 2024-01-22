@@ -346,6 +346,9 @@ fn create_empty_code_access_map() -> HashMap<CodeHash, Vec<u8>> {
     HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
+pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
+pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
+
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
@@ -353,8 +356,8 @@ pub(crate) struct NodesUsedByTxn {
     pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(Nibbles, Vec<HashedStorageAddrNibbles>)>,
-    pub(crate) storage_writes: Vec<(Nibbles, Vec<(HashedStorageAddrNibbles, Vec<u8>)>)>,
+    pub(crate) storage_accesses: Vec<(Nibbles, StorageAccess)>,
+    pub(crate) storage_writes: Vec<(Nibbles, StorageWrite)>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries:
         HashMap<HashedAccountAddr, TrieRootHash>,
     pub(crate) self_destructed_accounts: Vec<HashedAccountAddr>,

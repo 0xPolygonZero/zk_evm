@@ -6,8 +6,6 @@ use plonky2_evm::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::proof_gen_types::ProofBeforeAndAfterDeltas;
-
 pub type BlockHeight = u64;
 pub type Bloom = [U256; 8];
 pub type CodeHash = H256;
@@ -47,11 +45,7 @@ pub(crate) const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
 /// An `IR` (Intermediate Representation) for a given txn in a block that we can
 /// use to generate a proof for that txn.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct TxnProofGenIR {
-    pub txn_idx: TxnIdx,
-    pub gen_inputs: GenerationInputs,
-}
+pub type TxnProofGenIR = GenerationInputs;
 
 /// Other data that is needed for proof gen.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -67,20 +61,4 @@ pub struct BlockLevelData {
     pub b_meta: BlockMetadata,
     pub b_hashes: BlockHashes,
     pub withdrawals: Vec<(Address, U256)>,
-}
-impl TxnProofGenIR {
-    pub fn b_height(&self) -> BlockHeight {
-        self.gen_inputs.block_metadata.block_number.as_u64()
-    }
-
-    pub fn txn_idx(&self) -> TxnIdx {
-        self.txn_idx
-    }
-
-    pub fn deltas(&self) -> ProofBeforeAndAfterDeltas {
-        ProofBeforeAndAfterDeltas {
-            gas_used_before: self.gen_inputs.gas_used_before,
-            gas_used_after: self.gen_inputs.gas_used_after,
-        }
-    }
 }

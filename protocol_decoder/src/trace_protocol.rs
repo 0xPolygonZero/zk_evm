@@ -84,7 +84,7 @@ pub struct TrieUncompressed {}
 
 // TODO
 #[serde_as]
-/// Compact representation of a trie (will likely be very close to https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md)
+/// Compact representation of a trie (will likely be very close to <https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md>)
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TrieCompact(#[serde_as(as = "FromInto<ByteString>")] pub Vec<u8>);
 
