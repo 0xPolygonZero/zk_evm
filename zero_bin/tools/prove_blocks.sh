@@ -34,7 +34,7 @@ do
     OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b${i}.log"
 
     if [ $IGNORE_PREVIOUS_PROOFS ]; then
-        # Set checkpoing height to previous block number
+        # Set checkpoint height to previous block number
         prev_proof_num=$((i-1))
         PREV_PROOF_EXTRA_ARG="--checkpoint-block-number ${prev_proof_num}"
     else
