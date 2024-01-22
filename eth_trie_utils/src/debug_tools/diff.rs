@@ -13,7 +13,7 @@ use crate::{
 #[derive(Debug, Eq, PartialEq)]
 pub struct TrieDiff {
     pub latest_diff_res: Option<DiffPoint>,
-    // TODO: Later add a second pass for finding diffs from the bottom up (`earlist_diff_res`).
+    // TODO: Later add a second pass for finding diffs from the bottom up (`earliest_diff_res`).
 }
 
 impl Display for TrieDiff {
