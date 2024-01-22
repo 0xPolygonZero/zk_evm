@@ -55,10 +55,7 @@ pub(super) fn get_segment_from_node_and_key_piece<T: PartialTrie>(
     match TrieNodeType::from(n) {
         TrieNodeType::Empty => PathSegment::Empty,
         TrieNodeType::Hash => PathSegment::Hash,
-        TrieNodeType::Branch => {
-            debug_assert_eq!(k_piece.count, 1);
-            PathSegment::Branch(k_piece.get_nibble(0))
-        }
+        TrieNodeType::Branch => PathSegment::Branch(k_piece.get_nibble(0)),
         TrieNodeType::Extension => PathSegment::Extension(*k_piece),
         TrieNodeType::Leaf => PathSegment::Leaf(*k_piece),
     }
