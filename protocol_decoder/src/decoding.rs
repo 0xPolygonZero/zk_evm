@@ -330,6 +330,8 @@ impl ProcessedBlockTrace {
         dummies_already_added: bool,
     ) -> TraceParsingResult<()> {
         match dummies_already_added {
+            // If we have no actual dummy proofs, then we create one and append it to the
+            // end of the block.
             false => {
                 // Guaranteed to have a real txn.
                 let txn_idx_of_dummy_entry = txn_ir.last().unwrap().txn_idx + 1;
@@ -343,12 +345,12 @@ impl ProcessedBlockTrace {
                     &mut final_trie_state.state,
                 )?;
 
+                withdrawal_dummy.gen_inputs.withdrawals = withdrawals;
+
                 // Only the state root hash needs to be updated from the withdrawals.
                 withdrawal_dummy.gen_inputs.trie_roots_after.state_root =
                     final_trie_state.state.hash();
 
-                // If we have no actual dummy proofs, then we create one and append it to the
-                // end of the block.
                 txn_ir.push(withdrawal_dummy);
             }
             true => {
