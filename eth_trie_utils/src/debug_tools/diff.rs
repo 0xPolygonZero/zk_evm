@@ -61,13 +61,18 @@ pub struct DiffPoint {
 }
 
 impl DiffPoint {
-    fn new(child_a: &HashedPartialTrie, child_b: &HashedPartialTrie, parent_k: Nibbles) -> Self {
+    fn new(
+        child_a: &HashedPartialTrie,
+        child_b: &HashedPartialTrie,
+        parent_k: Nibbles,
+        path: NodePath,
+    ) -> Self {
         let a_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_a));
         let b_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_b));
 
         DiffPoint {
             depth: 0,
-            path: NodePath::default(),
+            path,
             key: parent_k,
             a_info: NodeInfo::new(child_a, a_key, get_value_from_node(child_a).cloned()),
             b_info: NodeInfo::new(child_b, b_key, get_value_from_node(child_b).cloned()),
@@ -138,6 +143,11 @@ fn find_latest_diff_point_where_tries_begin_to_diff(
 
     find_latest_diff_point_where_tries_begin_to_diff_rec(state, &mut longest_state);
 
+    // If there was a node diff, we always want to prioritize displaying this over a
+    // hash diff. The reasoning behind this is hash diffs can become sort of
+    // meaningless or misleading if the trie diverges at some point (eg. saying
+    // there is a hash diff deep in two separate trie structures doesn't make much
+    // sense).
     longest_state
         .longest_key_node_diff
         .or(longest_state.longest_key_hash_diff)
@@ -156,6 +166,7 @@ impl LatestNodeDiffState {
             &state.curr_key,
             state.a,
             state.b,
+            state.curr_path.clone(),
         );
     }
 
@@ -165,6 +176,7 @@ impl LatestNodeDiffState {
             &state.curr_key,
             state.a,
             state.b,
+            state.curr_path.clone(),
         );
     }
 
@@ -173,12 +185,13 @@ impl LatestNodeDiffState {
         parent_k: &Nibbles,
         child_a: &HashedPartialTrie,
         child_b: &HashedPartialTrie,
+        path: NodePath,
     ) {
         if field
             .as_ref()
             .map_or(true, |d_point| d_point.key.count < parent_k.count)
         {
-            *field = Some(DiffPoint::new(child_a, child_b, *parent_k))
+            *field = Some(DiffPoint::new(child_a, child_b, *parent_k, path))
         }
     }
 }
