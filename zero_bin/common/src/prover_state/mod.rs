@@ -12,7 +12,7 @@
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
-use plonky_block_proof_gen::prover_state::ProverState;
+use plonky_block_proof_gen::{prover_state::ProverState, VerifierState};
 use tracing::info;
 
 pub mod circuit;
@@ -72,7 +72,7 @@ pub fn set_prover_state_from_config(
         }
         CircuitPersistence::Disk => {
             info!("attempting to load preprocessed circuits from disk...");
-            let disk_state = persistence::from_disk(&circuit_config);
+            let disk_state = persistence::prover_from_disk(&circuit_config);
             match disk_state {
                 Some(circuits) => {
                     info!("successfully loaded preprocessed circuits from disk");
@@ -92,4 +92,45 @@ pub fn set_prover_state_from_config(
     };
 
     P_STATE.set(state)
+}
+
+/// Loads a verifier state from disk or generate it.
+pub fn get_verifier_state_from_config(
+    ProverStateConfig {
+        circuit_config,
+        persistence,
+    }: ProverStateConfig,
+) -> VerifierState {
+    info!("initializing verifier state...");
+    match persistence {
+        CircuitPersistence::None => {
+            info!("generating circuit...");
+            let prover_state = circuit_config.as_all_recursive_circuits();
+            VerifierState {
+                state: prover_state.final_verifier_data(),
+            }
+        }
+        CircuitPersistence::Disk => {
+            info!("attempting to load preprocessed verifier circuit from disk...");
+            let disk_state = persistence::verifier_from_disk(&circuit_config);
+            match disk_state {
+                Some(state) => {
+                    info!("successfully loaded preprocessed verifier circuit from disk");
+                    VerifierState { state }
+                }
+                None => {
+                    info!(
+                        "failed to load preprocessed verifier circuit from disk. generating it..."
+                    );
+                    let prover_state = circuit_config.as_all_recursive_circuits();
+
+                    info!("saving preprocessed verifier circuit to disk");
+                    let state = prover_state.final_verifier_data();
+                    persistence::verifier_to_disk(&state, &circuit_config);
+
+                    VerifierState { state }
+                }
+            }
+        }
+    }
 }

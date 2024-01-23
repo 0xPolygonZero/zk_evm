@@ -2,3 +2,4 @@
 /prover_state
 *.zkproof
 prover_state_*
+verifier_state_*
