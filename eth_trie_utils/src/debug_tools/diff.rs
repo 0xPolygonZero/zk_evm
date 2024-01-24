@@ -138,10 +138,10 @@ fn find_latest_diff_point_where_tries_begin_to_diff(
     a: &HashedPartialTrie,
     b: &HashedPartialTrie,
 ) -> Option<DiffPoint> {
-    let state = LatestDiffPerCallState::new(a, b, Nibbles::default(), 0);
-    let mut longest_state = LatestNodeDiffState::default();
+    let state = DepthDiffPerCallState::new(a, b, Nibbles::default(), 0);
+    let mut longest_state = DepthNodeDiffState::default();
 
-    find_latest_diff_point_where_tries_begin_to_diff_rec(state, &mut longest_state);
+    find_diff_point_where_tries_begin_to_diff_depth_rec(state, &mut longest_state);
 
     // If there was a node diff, we always want to prioritize displaying this over a
     // hash diff. The reasoning behind this is hash diffs can become sort of
@@ -154,13 +154,13 @@ fn find_latest_diff_point_where_tries_begin_to_diff(
 }
 
 #[derive(Debug, Default)]
-struct LatestNodeDiffState {
+struct DepthNodeDiffState {
     longest_key_node_diff: Option<DiffPoint>,
     longest_key_hash_diff: Option<DiffPoint>,
 }
 
-impl LatestNodeDiffState {
-    fn try_update_longest_divergence_key_hash(&mut self, state: &LatestDiffPerCallState) {
+impl DepthNodeDiffState {
+    fn try_update_longest_divergence_key_hash(&mut self, state: &DepthDiffPerCallState) {
         Self::replace_longest_field_if_our_key_is_larger(
             &mut self.longest_key_hash_diff,
             &state.curr_key,
@@ -170,7 +170,7 @@ impl LatestNodeDiffState {
         );
     }
 
-    fn try_update_longest_divergence_key_node(&mut self, state: &LatestDiffPerCallState) {
+    fn try_update_longest_divergence_key_node(&mut self, state: &DepthDiffPerCallState) {
         Self::replace_longest_field_if_our_key_is_larger(
             &mut self.longest_key_node_diff,
             &state.curr_key,
@@ -198,7 +198,7 @@ impl LatestNodeDiffState {
 
 // State that is copied per recursive call.
 #[derive(Clone, Debug)]
-struct LatestDiffPerCallState<'a> {
+struct DepthDiffPerCallState<'a> {
     a: &'a HashedPartialTrie,
     b: &'a HashedPartialTrie,
     curr_key: Nibbles,
@@ -208,7 +208,7 @@ struct LatestDiffPerCallState<'a> {
     curr_path: NodePath,
 }
 
-impl<'a> LatestDiffPerCallState<'a> {
+impl<'a> DepthDiffPerCallState<'a> {
     /// Exists solely to prevent construction of this type from going over
     /// multiple lines.
     fn new(
@@ -234,7 +234,7 @@ impl<'a> LatestDiffPerCallState<'a> {
         b: &'a HashedPartialTrie,
         key_piece: &Nibbles,
     ) -> Self {
-        let new_segment = get_segment_from_node_and_key_piece(a, key_piece);
+        let new_segment = get_segment_from_node_and_key_piece(self.a, key_piece);
         let new_path = self.curr_path.dup_and_append(new_segment);
 
         Self {
@@ -247,9 +247,9 @@ impl<'a> LatestDiffPerCallState<'a> {
     }
 }
 
-fn find_latest_diff_point_where_tries_begin_to_diff_rec(
-    state: LatestDiffPerCallState,
-    longest_state: &mut LatestNodeDiffState,
+fn find_diff_point_where_tries_begin_to_diff_depth_rec(
+    state: DepthDiffPerCallState,
+    depth_state: &mut DepthNodeDiffState,
 ) -> DiffDetectionState {
     let a_hash = state.a.hash();
     let b_hash = state.b.hash();
@@ -270,7 +270,7 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
     // mismatch.
     match (a_type, a_key_piece) == (b_type, b_key_piece) {
         false => {
-            longest_state.try_update_longest_divergence_key_node(&state);
+            depth_state.try_update_longest_divergence_key_node(&state);
             DiffDetectionState::NodeTypesDiffer
         }
         true => {
@@ -281,7 +281,7 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
                         a_hash,
                         b_hash,
                         &state.new_from_parent(state.a, state.b, &Nibbles::default()),
-                        longest_state,
+                        depth_state,
                     )
                 }
                 (
@@ -297,13 +297,13 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
                     let mut most_significant_diff_found = DiffDetectionState::NoDiffDetected;
 
                     for i in 0..16 {
-                        let res = find_latest_diff_point_where_tries_begin_to_diff_rec(
+                        let res = find_diff_point_where_tries_begin_to_diff_depth_rec(
                             state.new_from_parent(
                                 &a_children[i as usize],
                                 &b_children[i as usize],
                                 &Nibbles::from_nibble(i as u8),
                             ),
-                            longest_state,
+                            depth_state,
                         );
                         most_significant_diff_found =
                             most_significant_diff_found.pick_most_significant_state(&res);
@@ -318,7 +318,7 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
                             // Also run a hash check if we haven't picked anything up yet.
                             create_diff_detection_state_based_from_hash_and_gen_hashes(
                                 &state,
-                                longest_state,
+                                depth_state,
                             )
                         }
                     }
@@ -332,14 +332,14 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
                         nibbles: _b_nibs,
                         child: b_child,
                     },
-                ) => find_latest_diff_point_where_tries_begin_to_diff_rec(
+                ) => find_diff_point_where_tries_begin_to_diff_depth_rec(
                     state.new_from_parent(a_child, b_child, a_nibs),
-                    longest_state,
+                    depth_state,
                 ),
                 (Node::Leaf { .. }, Node::Leaf { .. }) => {
                     create_diff_detection_state_based_from_hash_and_gen_hashes(
-                        &state,
-                        longest_state,
+                        &state.new_from_parent(state.a, state.b, &a_key_piece),
+                        depth_state,
                     )
                 }
                 _ => unreachable!(),
@@ -349,24 +349,24 @@ fn find_latest_diff_point_where_tries_begin_to_diff_rec(
 }
 
 fn create_diff_detection_state_based_from_hash_and_gen_hashes(
-    state: &LatestDiffPerCallState,
-    longest_state: &mut LatestNodeDiffState,
+    state: &DepthDiffPerCallState,
+    depth_state: &mut DepthNodeDiffState,
 ) -> DiffDetectionState {
     let a_hash = state.a.hash();
     let b_hash = state.b.hash();
 
-    create_diff_detection_state_based_from_hashes(&a_hash, &b_hash, state, longest_state)
+    create_diff_detection_state_based_from_hashes(&a_hash, &b_hash, state, depth_state)
 }
 
 fn create_diff_detection_state_based_from_hashes(
     a_hash: &H256,
     b_hash: &H256,
-    state: &LatestDiffPerCallState,
-    longest_state: &mut LatestNodeDiffState,
+    state: &DepthDiffPerCallState,
+    depth_state: &mut DepthNodeDiffState,
 ) -> DiffDetectionState {
     match a_hash == b_hash {
         false => {
-            longest_state.try_update_longest_divergence_key_hash(state);
+            depth_state.try_update_longest_divergence_key_hash(state);
             DiffDetectionState::HashDiffDetected
         }
         true => DiffDetectionState::NoDiffDetected,
@@ -403,7 +403,7 @@ mod tests {
     };
 
     #[test]
-    fn latest_single_node_hash_diffs_work() {
+    fn depth_single_node_hash_diffs_work() {
         // TODO: Reduce duplication once we identify common structures across tests...
         let mut a = HashedPartialTrie::default();
         a.insert(0x1234, vec![0]);
@@ -442,43 +442,43 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn latest_single_node_node_diffs_work() {
+    fn depth_single_node_node_diffs_work() {
         todo!()
     }
 
     #[test]
     #[ignore]
-    fn latest_multi_node_single_node_hash_diffs_work() {
+    fn depth_multi_node_single_node_hash_diffs_work() {
         todo!()
     }
 
     #[test]
     #[ignore]
-    fn latest_multi_node_single_node_node_diffs_work() {
+    fn depth_multi_node_single_node_node_diffs_work() {
         todo!()
     }
 
     #[test]
     #[ignore]
-    fn latest_massive_single_node_diff_tests() {
+    fn depth_massive_single_node_diff_tests() {
         todo!()
     }
 
     #[test]
     #[ignore]
-    fn latest_multi_node_multi_node_hash_diffs_work() {
+    fn depth_multi_node_multi_node_hash_diffs_work() {
         todo!()
     }
 
     #[test]
     #[ignore]
-    fn latest_multi_node_multi_node_node_diffs_work() {
+    fn depth_multi_node_multi_node_node_diffs_work() {
         todo!()
     }
 
     #[test]
     #[ignore]
-    fn latest_massive_multi_node_diff_tests() {
+    fn depth_massive_multi_node_diff_tests() {
         todo!()
     }
 }

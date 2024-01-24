@@ -258,15 +258,23 @@ fn get_path_from_query_rec<T: PartialTrie>(
             get_path_from_query_rec(&children[nib as usize], curr_key, query_out)
         }
         Node::Extension { nibbles, child } => {
-            curr_key.pop_nibbles_front(nibbles.count);
+            pop_nibbles_from_node_key_and_avoid_underflow(curr_key, nibbles);
             get_path_from_query_rec(child, curr_key, query_out);
         }
         Node::Leaf { nibbles, value: _ } => {
-            curr_key.pop_nibbles_front(nibbles.count);
+            pop_nibbles_from_node_key_and_avoid_underflow(curr_key, nibbles);
+            curr_key.pop_nibbles_front(nibbles.count.min(curr_key.count));
         }
     }
 
     if curr_key.is_empty() {
         query_out.node_found = true;
     }
+}
+
+/// If the key lands in the middle of a leaf/extension, then we will assume that
+/// this is a node hit even though it's not precise.
+fn pop_nibbles_from_node_key_and_avoid_underflow(curr_key: &mut Nibbles, node_key: &Nibbles) {
+    let num_nibs_to_pop = node_key.count.min(curr_key.count);
+    curr_key.pop_nibbles_front(num_nibs_to_pop);
 }
