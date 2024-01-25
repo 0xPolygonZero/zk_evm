@@ -3,7 +3,9 @@ use std::{fmt::Display, ops::Deref};
 
 use ethereum_types::H256;
 
-use super::common::{get_segment_from_node_and_key_piece, NodePath};
+use super::common::{
+    get_key_piece_from_node_no_branch_key, get_segment_from_node_and_key_piece, NodePath,
+};
 use crate::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
@@ -67,8 +69,8 @@ impl DiffPoint {
         parent_k: Nibbles,
         path: NodePath,
     ) -> Self {
-        let a_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_a));
-        let b_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_b));
+        let a_key = parent_k.merge_nibbles(&get_key_piece_from_node_no_branch_key(child_a));
+        let b_key = parent_k.merge_nibbles(&get_key_piece_from_node_no_branch_key(child_b));
 
         DiffPoint {
             depth: 0,
@@ -263,8 +265,8 @@ fn find_diff_point_where_tries_begin_to_diff_depth_rec(
     let a_type: TrieNodeType = state.a.deref().into();
     let b_type: TrieNodeType = state.b.deref().into();
 
-    let a_key_piece = get_key_piece_from_node(state.a);
-    let b_key_piece = get_key_piece_from_node(state.b);
+    let a_key_piece = get_key_piece_from_node_no_branch_key(state.a);
+    let b_key_piece = get_key_piece_from_node_no_branch_key(state.b);
 
     // Note that differences in a node's `value` will be picked up by a hash
     // mismatch.
@@ -370,16 +372,6 @@ fn create_diff_detection_state_based_from_hashes(
             DiffDetectionState::HashDiffDetected
         }
         true => DiffDetectionState::NoDiffDetected,
-    }
-}
-
-// It might seem a bit weird to say a branch has no key piece, but this function
-// is used to detect two nodes of the same type that have different keys.
-fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>) -> Nibbles {
-    match n {
-        Node::Empty | Node::Hash(_) | Node::Branch { .. } => Nibbles::default(),
-        Node::Extension { nibbles, child: _ } => *nibbles,
-        Node::Leaf { nibbles, value: _ } => *nibbles,
     }
 }
 

@@ -2,7 +2,9 @@ use std::fmt::{self, Display};
 
 use ethereum_types::H256;
 
-use super::common::{get_segment_from_node_and_key_piece, NodePath, PathSegment};
+use super::common::{
+    get_key_piece_from_node, get_segment_from_node_and_key_piece, NodePath, PathSegment,
+};
 use crate::{
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
@@ -245,7 +247,12 @@ fn get_path_from_query_rec<T: PartialTrie>(
     curr_key: &mut Nibbles,
     query_out: &mut DebugQueryOutput,
 ) {
-    let seg = get_segment_from_node_and_key_piece(node, curr_key);
+    let key_piece = get_key_piece_from_node(node, curr_key);
+
+    println!("key piece: {:x}", key_piece);
+
+    let seg = get_segment_from_node_and_key_piece(node, &key_piece);
+
     query_out.node_path.append(seg);
     query_out
         .extra_node_info
@@ -255,15 +262,24 @@ fn get_path_from_query_rec<T: PartialTrie>(
         Node::Empty | Node::Hash(_) => (),
         Node::Branch { children, value: _ } => {
             let nib = curr_key.pop_next_nibble_front();
+
+            println!("NIB: {:x}", nib);
+
+            // println!("CHILDREN: {:#?}", children);
+
             get_path_from_query_rec(&children[nib as usize], curr_key, query_out)
         }
         Node::Extension { nibbles, child } => {
-            pop_nibbles_from_node_key_and_avoid_underflow(curr_key, nibbles);
+            get_nibbles_from_node_key_and_avoid_underflow(curr_key, nibbles);
             get_path_from_query_rec(child, curr_key, query_out);
         }
         Node::Leaf { nibbles, value: _ } => {
-            pop_nibbles_from_node_key_and_avoid_underflow(curr_key, nibbles);
-            curr_key.pop_nibbles_front(nibbles.count.min(curr_key.count));
+            let curr_key_next_nibs =
+                get_nibbles_from_node_key_and_avoid_underflow(curr_key, nibbles);
+
+            if *nibbles == curr_key_next_nibs {
+                curr_key.pop_nibbles_front(curr_key_next_nibs.count);
+            }
         }
     }
 
@@ -274,7 +290,10 @@ fn get_path_from_query_rec<T: PartialTrie>(
 
 /// If the key lands in the middle of a leaf/extension, then we will assume that
 /// this is a node hit even though it's not precise.
-fn pop_nibbles_from_node_key_and_avoid_underflow(curr_key: &mut Nibbles, node_key: &Nibbles) {
-    let num_nibs_to_pop = node_key.count.min(curr_key.count);
-    curr_key.pop_nibbles_front(num_nibs_to_pop);
+fn get_nibbles_from_node_key_and_avoid_underflow(
+    curr_key: &mut Nibbles,
+    node_key: &Nibbles,
+) -> Nibbles {
+    let num_nibs_to_get = node_key.count.min(curr_key.count);
+    curr_key.get_next_nibbles(num_nibs_to_get)
 }

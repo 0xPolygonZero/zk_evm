@@ -61,6 +61,25 @@ pub(super) fn get_segment_from_node_and_key_piece<T: PartialTrie>(
     }
 }
 
+pub(super) fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>, curr_key: &Nibbles) -> Nibbles {
+    match n {
+        Node::Empty | Node::Hash(_) => Nibbles::default(),
+        Node::Branch { .. } => curr_key.get_next_nibbles(1),
+        Node::Extension { nibbles, child: _ } => *nibbles,
+        Node::Leaf { nibbles, value: _ } => *nibbles,
+    }
+}
+
+// It might seem a bit weird to say a branch has no key piece, but this function
+// is used to detect two nodes of the same type that have different keys.
+pub(super) fn get_key_piece_from_node_no_branch_key<T: PartialTrie>(n: &Node<T>) -> Nibbles {
+    match n {
+        Node::Empty | Node::Hash(_) | Node::Branch { .. } => Nibbles::default(),
+        Node::Extension { nibbles, child: _ } => *nibbles,
+        Node::Leaf { nibbles, value: _ } => *nibbles,
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct NodePath(pub(super) Vec<PathSegment>);
 
