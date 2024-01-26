@@ -118,7 +118,7 @@ impl ProcessedBlockTrace {
                 // For each non-dummy txn, we increment `txn_number_after` by 1, and
                 // update `gas_used_after` accordingly.
                 extra_data.txn_number_after += U256::one();
-                extra_data.gas_used_after = txn_info.meta.gas_used.into();
+                extra_data.gas_used_after += txn_info.meta.gas_used.into();
 
                 Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
