@@ -262,12 +262,17 @@ where
     Ok(create_partial_trie_subset_from_tracked_trie(tracked_trie))
 }
 
+/// For a given key, mark every node that we encounter that is part of the key.
+/// Note that this means non-existent keys passed into this function will mark
+/// nodes to not be hashed that are part of the given key. For example:
+/// - Relevant nodes in trie: [B(0x), B(0x1), L(0x123)]
+/// - For the key `0x1`, the marked nodes would be [B(0x), B(0x1)].
+/// - For the key `0x12`, the marked nodes still would be [B(0x), B(0x1)].
+/// - For the key `0x123`, the marked nodes would be [B(0x), B(0x1), L(0x123)].
 fn mark_nodes_that_are_needed<N: PartialTrie>(
     trie: &mut TrackedNode<N>,
     curr_nibbles: &mut Nibbles,
 ) -> SubsetTrieResult<()> {
-    trie.info.touched = true;
-
     trace!(
         "Sub-trie marking at {:x}, (type: {})",
         curr_nibbles,
@@ -275,35 +280,50 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
     );
 
     match &mut trie.node {
-        TrackedNodeIntern::Empty => Ok(()),
+        TrackedNodeIntern::Empty => {
+            trie.info.touched = true;
+        }
         TrackedNodeIntern::Hash => match curr_nibbles.is_empty() {
-            false => Err(SubsetTrieError::UnexpectedKey(
-                *curr_nibbles,
-                format!("{:?}", trie),
-            )),
-            true => Ok(()),
+            false => {
+                return Err(SubsetTrieError::UnexpectedKey(
+                    *curr_nibbles,
+                    format!("{:?}", trie),
+                ))
+            }
+            true => {
+                trie.info.touched = true;
+            }
         },
         // Note: If we end up supporting non-fixed sized keys, then we need to also check value.
         TrackedNodeIntern::Branch(children) => {
+            trie.info.touched = true;
+
             // Check against branch value.
             if curr_nibbles.is_empty() {
                 return Ok(());
             }
 
             let nib = curr_nibbles.pop_next_nibble_front();
-            mark_nodes_that_are_needed(&mut children[nib as usize], curr_nibbles)
+            return mark_nodes_that_are_needed(&mut children[nib as usize], curr_nibbles);
         }
         TrackedNodeIntern::Extension(child) => {
             let nibbles = trie.info.get_nibbles_expected();
             let r = curr_nibbles.pop_nibbles_front(nibbles.count);
 
-            match r.nibbles_are_identical_up_to_smallest_count(nibbles) {
-                false => Ok(()),
-                true => mark_nodes_that_are_needed(child, curr_nibbles),
+            if r.nibbles_are_identical_up_to_smallest_count(nibbles) {
+                trie.info.touched = true;
+                return mark_nodes_that_are_needed(child, curr_nibbles);
             }
         }
-        TrackedNodeIntern::Leaf => Ok(()),
+        TrackedNodeIntern::Leaf => {
+            let (k, _) = trie.info.get_leaf_nibbles_and_value_expected();
+            if k == curr_nibbles {
+                trie.info.touched = true;
+            }
+        }
     }
+
+    Ok(())
 }
 
 fn create_partial_trie_subset_from_tracked_trie<N: PartialTrie>(
@@ -615,8 +635,6 @@ mod tests {
 
     fn assert_nodes_are_hashed<K: Clone + Into<Nibbles>>(trie: &TrieType, keys: &[K]) {
         let nodes = get_all_nodes_in_trie(trie);
-
-        println!("{:#?}", nodes);
 
         for k in keys.iter().map(|k| k.clone().into()) {
             let node = get_node_full_nibbles_from_list(&nodes, &k);
