@@ -374,7 +374,10 @@ fn reset_tracked_trie_state<N: PartialTrie>(tracked_node: &mut TrackedNode<N>) {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, iter::once};
+    use std::{
+        collections::{HashMap, HashSet},
+        iter::once,
+    };
 
     use ethereum_types::H256;
 
@@ -633,19 +636,47 @@ mod tests {
         )));
     }
 
-    fn assert_nodes_are_hashed<K: Clone + Into<Nibbles>>(trie: &TrieType, keys: &[K]) {
+    fn assert_nodes_are_leaf_nodes<K: Clone + Into<Nibbles>, I: IntoIterator<Item = K>>(
+        trie: &TrieType,
+        keys: I,
+    ) {
+        assert_keys_point_to_nodes_of_type(
+            trie,
+            keys.into_iter().map(|k| (k.into(), TrieNodeType::Leaf)),
+        )
+    }
+
+    fn assert_nodes_are_hash_nodes<K: Clone + Into<Nibbles>, I: IntoIterator<Item = K>>(
+        trie: &TrieType,
+        keys: I,
+    ) {
+        assert_keys_point_to_nodes_of_type(
+            trie,
+            keys.into_iter().map(|k| (k.into(), TrieNodeType::Hash)),
+        )
+    }
+
+    fn assert_keys_point_to_nodes_of_type(
+        trie: &TrieType,
+        keys: impl Iterator<Item = (Nibbles, TrieNodeType)>,
+    ) {
         let nodes = get_all_nodes_in_trie(trie);
+        let keys_to_node_types: HashMap<_, _> =
+            HashMap::from_iter(nodes.into_iter().map(|n| (n.nibbles, n.n_type)));
 
-        for k in keys.iter().map(|k| k.clone().into()) {
-            let node = get_node_full_nibbles_from_list(&nodes, &k);
+        for (k, expected_n_type) in keys.map(|(k, t)| (k, t)) {
+            let actual_n_type_opt = keys_to_node_types.get(&k);
 
-            match node {
-                Some(v) => {
-                    if v.n_type != TrieNodeType::Hash {
-                        panic!("Expected trie node at {:x} to be a hash node but it wasn't! (found a {} node instead)", k, v.n_type)
+            match actual_n_type_opt {
+                Some(actual_n_type) => {
+                    if *actual_n_type != expected_n_type {
+                        panic!("Expected trie node at {:x} to be a {} node but it wasn't! (found a {} node instead)", k, expected_n_type, actual_n_type)
                     }
                 }
-                None => panic!("Expected a hash node at {:x} but no node was found!", k),
+                None => panic!(
+                    "Expected a {} node at {:x} but no node was found!",
+                    expected_n_type, k
+                ),
             }
         }
     }
@@ -675,7 +706,7 @@ mod tests {
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x12345, 0x12346, 0x1234f]);
         let partial_trie = create_trie_subset(&trie, [0x1234f]).unwrap();
 
-        assert_nodes_are_hashed(&partial_trie, &[0x12345, 0x12346]);
+        assert_nodes_are_hash_nodes(&partial_trie, [0x12345, 0x12346]);
     }
 
     #[test]
@@ -683,7 +714,7 @@ mod tests {
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346]);
         let partial_trie = create_trie_subset(&trie, [0x1234567]).unwrap();
 
-        assert_nodes_are_hashed(&partial_trie, &[0x1234589, 0x12346]);
+        assert_nodes_are_hash_nodes(&partial_trie, [0x1234589, 0x12346]);
     }
 
     #[test]
@@ -711,6 +742,25 @@ mod tests {
         assert!(trie_subsets
             .into_iter()
             .all(|p_tree| p_tree.hash() == base_hash))
+    }
+
+    #[test]
+    fn giant_random_partial_tries_hashes_leaves_correctly() {
+        let (base_trie, trie_subsets, leaf_keys_per_trie) = create_massive_trie_and_subsets(9011);
+        let all_keys: Vec<Nibbles> = base_trie.keys().collect();
+
+        for (partial_trie, leaf_trie_keys) in
+            trie_subsets.into_iter().zip(leaf_keys_per_trie.into_iter())
+        {
+            let leaf_keys_lookup: HashSet<Nibbles> = leaf_trie_keys.iter().cloned().collect();
+            let keys_of_hash_nodes = all_keys
+                .iter()
+                .filter(|k| !leaf_keys_lookup.contains(k))
+                .cloned();
+
+            assert_nodes_are_leaf_nodes(&partial_trie, leaf_trie_keys);
+            assert_nodes_are_hash_nodes(&partial_trie, keys_of_hash_nodes);
+        }
     }
 
     fn create_massive_trie_and_subsets(seed: u64) -> (TrieType, Vec<TrieType>, Vec<Vec<Nibbles>>) {
