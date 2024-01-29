@@ -86,7 +86,7 @@ impl Display for DiffPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Point Diff {{depth: {}, ", self.depth)?;
         write!(f, "Path: ({}), ", self.path)?;
-        write!(f, "Key: 0x{:x} ", self.key)?;
+        write!(f, "Key: {:x} ", self.key)?;
         write!(f, "A info: {} ", self.a_info)?;
         write!(f, "B info: {}}}", self.b_info)
     }
@@ -105,7 +105,7 @@ pub struct NodeInfo {
 
 impl Display for NodeInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(key: 0x{:x} ", self.key)?;
+        write!(f, "(key: {:x} ", self.key)?;
 
         match &self.value {
             Some(v) => write!(f, "Value: 0x{}, ", hex::encode(v))?,
@@ -339,10 +339,7 @@ fn find_diff_point_where_tries_begin_to_diff_depth_rec(
                     depth_state,
                 ),
                 (Node::Leaf { .. }, Node::Leaf { .. }) => {
-                    create_diff_detection_state_based_from_hash_and_gen_hashes(
-                        &state.new_from_parent(state.a, state.b, &a_key_piece),
-                        depth_state,
-                    )
+                    create_diff_detection_state_based_from_hash_and_gen_hashes(&state, depth_state)
                 }
                 _ => unreachable!(),
             }
