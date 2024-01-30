@@ -158,6 +158,8 @@ impl ProcessedBlockTrace {
             &other_data,
             &extra_data,
             &initial_tries_for_dummies,
+            &curr_block_tries,
+            !self.withdrawals.is_empty(),
         );
 
         if !self.withdrawals.is_empty() {
@@ -304,10 +306,13 @@ impl ProcessedBlockTrace {
         other_data: &OtherBlockData,
         extra_data: &ExtraBlockData,
         initial_tries: &PartialTrieState,
+        final_tries: &PartialTrieState,
+        has_withdrawals: bool,
     ) -> bool {
         match gen_inputs.len() {
             0 => {
-                // Need to pad with two dummy entries.
+                debug_assert!(initial_tries.state == final_tries.state);
+                // We need to pad with two dummy entries.
                 gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
                     other_data,
                     extra_data,
@@ -317,9 +322,23 @@ impl ProcessedBlockTrace {
                 true
             }
             1 => {
-                // Just need one.
-                let dummy_txn = create_dummy_gen_input(other_data, extra_data, initial_tries);
-                gen_inputs.insert(0, dummy_txn);
+                // We just need one dummy entry.
+                // If there are withdrawals, we will need to append them at the end of the block
+                // execution, in which case we directly append the dummy proof
+                // after the only txn of this block.
+                // If there are no withdrawals, then the dummy proof will be prepended to the
+                // actual txn.
+                match has_withdrawals {
+                    false => {
+                        let dummy_txn =
+                            create_dummy_gen_input(other_data, extra_data, initial_tries);
+                        gen_inputs.insert(0, dummy_txn)
+                    }
+                    true => {
+                        let dummy_txn = create_dummy_gen_input(other_data, extra_data, final_tries);
+                        gen_inputs.push(dummy_txn)
+                    }
+                };
 
                 true
             }
