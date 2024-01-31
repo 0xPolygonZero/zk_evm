@@ -662,9 +662,9 @@ mod tests {
     ) {
         let nodes = get_all_nodes_in_trie(trie);
         let keys_to_node_types: HashMap<_, _> =
-            HashMap::from_iter(nodes.into_iter().map(|n| (n.nibbles, n.n_type)));
+            HashMap::from_iter(nodes.into_iter().map(|n| (n.nibbles.reverse(), n.n_type)));
 
-        for (k, expected_n_type) in keys.map(|(k, t)| (k, t)) {
+        for (k, expected_n_type) in keys {
             let actual_n_type_opt = keys_to_node_types.get(&k);
 
             match actual_n_type_opt {
@@ -714,7 +714,8 @@ mod tests {
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346]);
         let partial_trie = create_trie_subset(&trie, [0x1234567]).unwrap();
 
-        assert_nodes_are_hash_nodes(&partial_trie, [0x1234589, 0x12346]);
+        // Note that `0x1234589` gets hashed at the branch slot at `0x12345`.
+        assert_nodes_are_hash_nodes(&partial_trie, [0x12345, 0x12346]);
     }
 
     #[test]
