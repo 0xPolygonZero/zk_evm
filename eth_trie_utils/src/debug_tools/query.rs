@@ -6,7 +6,8 @@ use std::fmt::{self, Display};
 use ethereum_types::H256;
 
 use super::common::{
-    get_key_piece_from_node, get_segment_from_node_and_key_piece, NodePath, PathSegment,
+    get_key_piece_from_node_pulling_from_key_for_branches, get_segment_from_node_and_key_piece,
+    NodePath, PathSegment,
 };
 use crate::{
     nibbles::Nibbles,
@@ -14,10 +15,21 @@ use crate::{
 };
 
 /// Params controlling how much information is reported in the query output.
+///
+/// By default, the node type along with its key piece is printed out per node
+/// (eg. "Leaf(0x1234)"). Additional node specific information can be printed
+/// out by enabling `include_node_specific_values`.
 #[derive(Clone, Debug)]
 pub struct DebugQueryParams {
+    /// Include (if applicable) the piece of the key that is contained by the
+    /// node (eg. ("0x1234")).
     include_key_piece_per_node: bool,
+
+    /// Include the type of node (eg "Branch").
     include_node_type: bool,
+
+    /// Include additional data that is specific to the node type (eg. The mask
+    /// of a `Branch` or the hash of a `Hash` node).
     include_node_specific_values: bool,
 }
 
@@ -79,6 +91,8 @@ impl From<Nibbles> for DebugQuery {
     }
 }
 
+/// Extra data that is associated with a node. Only used if
+/// `include_node_specific_values` is `true`.
 #[derive(Clone, Debug)]
 enum ExtraNodeSegmentInfo {
     Hash(H256),
@@ -119,10 +133,8 @@ impl ExtraNodeSegmentInfo {
 fn create_child_mask_from_children<T: PartialTrie>(children: &[WrappedNode<T>; 16]) -> u16 {
     let mut mask: u16 = 0;
 
-    // I think the clippy lint actually makes it a lot less readable in this case.
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..16 {
-        if !matches!(children[i].as_ref(), Node::Empty) {
+    for (i, child) in children.iter().enumerate().take(16) {
+        if !matches!(child.as_ref(), Node::Empty) {
             mask |= (1 << i) as u16;
         }
     }
@@ -255,7 +267,7 @@ fn get_path_from_query_rec<T: PartialTrie>(
     curr_key: &mut Nibbles,
     query_out: &mut DebugQueryOutput,
 ) {
-    let key_piece = get_key_piece_from_node(node, curr_key);
+    let key_piece = get_key_piece_from_node_pulling_from_key_for_branches(node, curr_key);
     let seg = get_segment_from_node_and_key_piece(node, &key_piece);
 
     query_out.node_path.append(seg);
@@ -271,12 +283,12 @@ fn get_path_from_query_rec<T: PartialTrie>(
             get_path_from_query_rec(&children[nib as usize], curr_key, query_out)
         }
         Node::Extension { nibbles, child } => {
-            get_nibbles_from_node_key_and_avoid_underflow(curr_key, nibbles);
+            get_next_nibbles_from_node_key_clamped(curr_key, nibbles.count);
             get_path_from_query_rec(child, curr_key, query_out);
         }
         Node::Leaf { nibbles, value: _ } => {
             let curr_key_next_nibs =
-                get_nibbles_from_node_key_and_avoid_underflow(curr_key, nibbles);
+                get_next_nibbles_from_node_key_clamped(curr_key, nibbles.count);
 
             if *nibbles == curr_key_next_nibs {
                 curr_key.pop_nibbles_front(curr_key_next_nibs.count);
@@ -289,12 +301,13 @@ fn get_path_from_query_rec<T: PartialTrie>(
     }
 }
 
-/// If the key lands in the middle of a leaf/extension, then we will assume that
-/// this is a node hit even though it's not precise.
-fn get_nibbles_from_node_key_and_avoid_underflow(
-    curr_key: &mut Nibbles,
-    node_key: &Nibbles,
-) -> Nibbles {
-    let num_nibs_to_get = node_key.count.min(curr_key.count);
-    curr_key.get_next_nibbles(num_nibs_to_get)
+/// Gets the next `n` [`Nibbles`] from the key and clamps it in the case of it
+/// going out of range.
+fn get_next_nibbles_from_node_key_clamped(key: &Nibbles, n_nibs: usize) -> Nibbles {
+    let num_nibs_to_get = n_nibs.min(key.count);
+    key.get_next_nibbles(num_nibs_to_get)
 }
+
+// TODO: Create some simple tests...
+#[cfg(test)]
+mod tests {}

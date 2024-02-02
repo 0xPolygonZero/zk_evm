@@ -35,13 +35,15 @@ impl<N: PartialTrie> From<&Node<N>> for TrieNodeType {
 
 impl Display for TrieNodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TrieNodeType::Empty => write!(f, "Empty"),
-            TrieNodeType::Hash => write!(f, "Hash"),
-            TrieNodeType::Branch => write!(f, "Branch"),
-            TrieNodeType::Extension => write!(f, "Extension"),
-            TrieNodeType::Leaf => write!(f, "Leaf"),
-        }
+        let s = match self {
+            TrieNodeType::Empty => "Empty",
+            TrieNodeType::Hash => "Hash",
+            TrieNodeType::Branch => "Branch",
+            TrieNodeType::Extension => "Extension",
+            TrieNodeType::Leaf => "Leaf",
+        };
+
+        write!(f, "{}", s)
     }
 }
 

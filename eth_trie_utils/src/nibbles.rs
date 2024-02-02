@@ -607,8 +607,6 @@ impl Nibbles {
         let hex_string_raw = hex_encode_f(&byte_buf[(64 - count_bytes)..64]);
         let hex_char_iter_raw = hex_string_raw.chars();
 
-        // We need this skip to make both match arms have the same type.
-        #[allow(clippy::iter_skip_zero)]
         let mut hex_string = String::from("0x");
         match is_even(self.count) {
             false => hex_string.extend(hex_char_iter_raw.skip(1)),
