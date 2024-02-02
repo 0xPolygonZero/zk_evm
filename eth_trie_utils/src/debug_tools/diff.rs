@@ -283,7 +283,7 @@ impl<'a> DepthDiffPerCallState<'a> {
 }
 
 fn find_diff_point_where_tries_begin_to_diff_depth_rec(
-    state: DepthDiffPerCallState,
+    state: &DepthDiffPerCallState,
     depth_state: &mut DepthNodeDiffState,
 ) -> DiffDetectionState {
     let a_hash = state.a.hash();
@@ -410,8 +410,7 @@ fn create_diff_detection_state_based_from_hashes(
 fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
     match n {
         Node::Empty | Node::Hash(_) | Node::Extension { .. } => None,
-        Node::Branch { value, .. } => Some(value),
-        Node::Leaf { nibbles: _, value } => Some(value),
+        Node::Branch { value, .. } | Node::Leaf { nibbles: _, value } => Some(value),
     }
 }
 
