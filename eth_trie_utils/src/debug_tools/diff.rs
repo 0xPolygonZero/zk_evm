@@ -1,5 +1,5 @@
 //! Diffing tools to compare two tries against each other. Useful when you want
-//! to find where the tries diverge from one other.
+//! to find where the tries diverge from one each other.
 //!
 //! There are a few considerations when implementing the logic to create a trie
 //! diff:
@@ -55,7 +55,7 @@ impl Display for TrieDiff {
 
 #[derive(Copy, Clone, Debug)]
 enum DiffDetectionState {
-    NodeTypesDiffer, // Also implies that hashes differ.
+    NodeTypesDiffer = 0, // Also implies that hashes differ.
     HashDiffDetected,
     NoDiffDetected,
 }
@@ -69,12 +69,8 @@ impl DiffDetectionState {
     }
 
     /// The integer representation also indicates the more "significant" state.
-    fn get_int_repr(&self) -> usize {
-        match self {
-            DiffDetectionState::NodeTypesDiffer => 2,
-            DiffDetectionState::HashDiffDetected => 1,
-            DiffDetectionState::NoDiffDetected => 0,
-        }
+    fn get_int_repr(self) -> usize {
+        self as usize
     }
 }
 
@@ -161,20 +157,20 @@ impl NodeInfo {
 /// (top-down & bottom-up).
 pub fn create_diff_between_tries(a: &HashedPartialTrie, b: &HashedPartialTrie) -> TrieDiff {
     TrieDiff {
-        latest_diff_res: find_latest_diff_point_where_tries_begin_to_diff(a, b),
+        latest_diff_res: find_latest_diff_point_between_tries(a, b),
     }
 }
 
 // Only support `HashedPartialTrie` due to it being significantly faster to
-// detect differences due to hash caching.
-fn find_latest_diff_point_where_tries_begin_to_diff(
+// detect differences because of caching hashes.
+fn find_latest_diff_point_between_tries(
     a: &HashedPartialTrie,
     b: &HashedPartialTrie,
 ) -> Option<DiffPoint> {
     let state = DepthDiffPerCallState::new(a, b, Nibbles::default(), 0);
     let mut longest_state = DepthNodeDiffState::default();
 
-    find_diff_point_where_tries_begin_to_diff_depth_rec(state, &mut longest_state);
+    find_latest_diff_point_between_tries_rec(&state, &mut longest_state);
 
     // If there was a node diff, we always want to prioritize displaying this over a
     // hash diff. The reasoning behind this is hash diffs can become sort of
@@ -224,7 +220,7 @@ impl DepthNodeDiffState {
             .as_ref()
             .map_or(true, |d_point| d_point.key.count < parent_k.count)
         {
-            *field = Some(DiffPoint::new(child_a, child_b, *parent_k, path))
+            *field = Some(DiffPoint::new(child_a, child_b, *parent_k, path));
         }
     }
 }
@@ -280,7 +276,7 @@ impl<'a> DepthDiffPerCallState<'a> {
     }
 }
 
-fn find_diff_point_where_tries_begin_to_diff_depth_rec(
+fn find_latest_diff_point_between_tries_rec(
     state: &DepthDiffPerCallState,
     depth_state: &mut DepthNodeDiffState,
 ) -> DiffDetectionState {
@@ -301,79 +297,72 @@ fn find_diff_point_where_tries_begin_to_diff_depth_rec(
 
     // Note that differences in a node's `value` will be picked up by a hash
     // mismatch.
-    match (a_type, a_key_piece) == (b_type, b_key_piece) {
-        false => {
-            depth_state.try_update_longest_divergence_key_node(&state);
-            DiffDetectionState::NodeTypesDiffer
-        }
-        true => {
-            match (&state.a.node, &state.b.node) {
-                (Node::Empty, Node::Empty) => DiffDetectionState::NoDiffDetected,
-                (Node::Hash(a_hash), Node::Hash(b_hash)) => {
-                    create_diff_detection_state_based_from_hashes(
-                        a_hash,
-                        b_hash,
-                        &state.new_from_parent(state.a, state.b, &Nibbles::default()),
-                        depth_state,
-                    )
-                }
-                (
-                    Node::Branch {
-                        children: a_children,
-                        value: _a_value,
-                    },
-                    Node::Branch {
-                        children: b_children,
-                        value: _b_value,
-                    },
-                ) => {
-                    let mut most_significant_diff_found = DiffDetectionState::NoDiffDetected;
-
-                    for i in 0..16 {
-                        let res = find_diff_point_where_tries_begin_to_diff_depth_rec(
-                            state.new_from_parent(
-                                &a_children[i as usize],
-                                &b_children[i as usize],
-                                &Nibbles::from_nibble(i as u8),
-                            ),
-                            depth_state,
-                        );
-                        most_significant_diff_found =
-                            most_significant_diff_found.pick_most_significant_state(&res);
-                    }
-
-                    match matches!(
-                        most_significant_diff_found,
-                        DiffDetectionState::NoDiffDetected
-                    ) {
-                        false => most_significant_diff_found,
-                        true => {
-                            // Also run a hash check if we haven't picked anything up yet.
-                            create_diff_detection_state_based_from_hash_and_gen_hashes(
-                                &state,
-                                depth_state,
-                            )
-                        }
-                    }
-                }
-                (
-                    Node::Extension {
-                        nibbles: a_nibs,
-                        child: a_child,
-                    },
-                    Node::Extension {
-                        nibbles: _b_nibs,
-                        child: b_child,
-                    },
-                ) => find_diff_point_where_tries_begin_to_diff_depth_rec(
-                    state.new_from_parent(a_child, b_child, a_nibs),
+    if (a_type, a_key_piece) == (b_type, b_key_piece) {
+        depth_state.try_update_longest_divergence_key_node(state);
+        DiffDetectionState::NodeTypesDiffer
+    } else {
+        match (&state.a.node, &state.b.node) {
+            (Node::Empty, Node::Empty) => DiffDetectionState::NoDiffDetected,
+            (Node::Hash(a_hash), Node::Hash(b_hash)) => {
+                create_diff_detection_state_based_from_hashes(
+                    a_hash,
+                    b_hash,
+                    &state.new_from_parent(state.a, state.b, &Nibbles::default()),
                     depth_state,
-                ),
-                (Node::Leaf { .. }, Node::Leaf { .. }) => {
-                    create_diff_detection_state_based_from_hash_and_gen_hashes(&state, depth_state)
-                }
-                _ => unreachable!(),
+                )
             }
+            (
+                Node::Branch {
+                    children: a_children,
+                    value: _a_value,
+                },
+                Node::Branch {
+                    children: b_children,
+                    value: _b_value,
+                },
+            ) => {
+                let mut most_significant_diff_found = DiffDetectionState::NoDiffDetected;
+
+                for i in 0..16_usize {
+                    let res = find_latest_diff_point_between_tries_rec(
+                        &state.new_from_parent(
+                            &a_children[i],
+                            &b_children[i],
+                            &Nibbles::from_nibble(i as u8),
+                        ),
+                        depth_state,
+                    );
+                    most_significant_diff_found =
+                        most_significant_diff_found.pick_most_significant_state(&res);
+                }
+
+                if matches!(
+                    most_significant_diff_found,
+                    DiffDetectionState::NoDiffDetected
+                ) {
+                    most_significant_diff_found
+                } else {
+                    // Also run a hash check if we haven't picked anything up yet.
+                    create_diff_detection_state_based_from_hash_and_gen_hashes(state, depth_state)
+                }
+            }
+            (
+                Node::Extension {
+                    nibbles: a_nibs,
+                    child: a_child,
+                },
+                Node::Extension {
+                    nibbles: _b_nibs,
+                    child: b_child,
+                },
+            ) => find_latest_diff_point_between_tries_rec(
+                &state.new_from_parent(a_child, b_child, a_nibs),
+                depth_state,
+            ),
+            (Node::Leaf { .. }, Node::Leaf { .. }) => {
+                create_diff_detection_state_based_from_hash_and_gen_hashes(state, depth_state)
+            }
+            _ => unreachable!(),
         }
     }
 }
