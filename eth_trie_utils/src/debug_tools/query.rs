@@ -1,3 +1,6 @@
+//! Query tooling to report info on the path taken when searching down a trie
+//! with a given key.
+
 use std::fmt::{self, Display};
 
 use ethereum_types::H256;
@@ -10,6 +13,7 @@ use crate::{
     partial_trie::{Node, PartialTrie, WrappedNode},
 };
 
+/// Params controlling how much information is reported in the query output.
 #[derive(Clone, Debug)]
 pub struct DebugQueryParams {
     include_key_piece_per_node: bool,
@@ -59,6 +63,7 @@ impl DebugQueryParamsBuilder {
     }
 }
 
+/// The payload to give to the query function. Construct this from the builder.
 #[derive(Debug)]
 pub struct DebugQuery {
     k: Nibbles,
@@ -185,6 +190,7 @@ impl DebugQueryOutput {
         }
     }
 
+    // TODO: Make the output easier to read...
     fn fmt_query_header(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Query Result {{")?;
 
@@ -194,6 +200,7 @@ impl DebugQueryOutput {
         writeln!(f, "}}")
     }
 
+    // TODO: Make the output easier to read...
     fn fmt_node_based_on_debug_params(
         f: &mut fmt::Formatter<'_>,
         seg: &PathSegment,
@@ -230,6 +237,7 @@ impl DebugQueryOutput {
     }
 }
 
+/// Get debug information on the path taken when querying a key in a given trie.
 pub fn get_path_from_query<T: PartialTrie, Q: Into<DebugQuery>>(
     trie: &Node<T>,
     q: Q,
@@ -248,9 +256,6 @@ fn get_path_from_query_rec<T: PartialTrie>(
     query_out: &mut DebugQueryOutput,
 ) {
     let key_piece = get_key_piece_from_node(node, curr_key);
-
-    println!("key piece: {:x}", key_piece);
-
     let seg = get_segment_from_node_and_key_piece(node, &key_piece);
 
     query_out.node_path.append(seg);
@@ -262,10 +267,6 @@ fn get_path_from_query_rec<T: PartialTrie>(
         Node::Empty | Node::Hash(_) => (),
         Node::Branch { children, value: _ } => {
             let nib = curr_key.pop_next_nibble_front();
-
-            println!("NIB: {:x}", nib);
-
-            // println!("CHILDREN: {:#?}", children);
 
             get_path_from_query_rec(&children[nib as usize], curr_key, query_out)
         }

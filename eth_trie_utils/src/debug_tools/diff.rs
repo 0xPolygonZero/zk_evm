@@ -1,3 +1,30 @@
+//! Diffing tools to compare two tries against each other. Useful when you want
+//! to find where the tries diverge from one other.
+//!
+//! There are a few considerations when implementing the logic to create a trie
+//! diff:
+//! - What should be reported when the trie node structures diverge (eg. two
+//!   different node types proceeding a given common node)?
+//! - If there are multiple structural differences, how do we discover the
+//!   smallest difference to report back?
+//!
+//! If the node types between the tries (structure) are identical but some
+//! values are different, then these types of diffs are easy to detect and
+//! report the lowest difference. Structural differences are more challenging
+//! and a bit hard to report well. There are two approaches (only one currently
+//! is implemented) in how to detect structural differences:
+//! - Top-down search
+//! - Bottom-up search
+//!
+//! These two searches are somewhat self-explanatory:
+//! - Top-down will find the highest point of a structural divergence and report
+//!   it. If there are multiple divergences, then only the one that is the
+//!   highest in the trie will be reported.
+//! - Bottom-up (not implemented) is a lot more complex to implement, but will
+//!   attempt to find the smallest structural trie difference between the trie.
+//!   If there are multiple differences, then this will likely be what you want
+//!   to use.
+
 use std::fmt::{self, Debug};
 use std::{fmt::Display, ops::Deref};
 
@@ -53,6 +80,7 @@ impl DiffDetectionState {
     }
 }
 
+/// A point (node) between the two tries where the children differ.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DiffPoint {
     pub depth: usize,
@@ -82,6 +110,7 @@ impl DiffPoint {
     }
 }
 
+// TODO: Redo display method so this is more readable...
 impl Display for DiffPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Point Diff {{depth: {}, ", self.depth)?;
@@ -92,6 +121,7 @@ impl Display for DiffPoint {
     }
 }
 
+/// Meta information for a node in a trie.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct NodeInfo {
     key: Nibbles,
@@ -103,6 +133,7 @@ pub struct NodeInfo {
     hash: H256,
 }
 
+// TODO: Redo display method so this is more readable...
 impl Display for NodeInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(key: {:x} ", self.key)?;
@@ -128,6 +159,8 @@ impl NodeInfo {
     }
 }
 
+/// Create a diff between two tries. Will perform both types of diff searches
+/// (top-down & bottom-up).
 pub fn create_diff_between_tries(a: &HashedPartialTrie, b: &HashedPartialTrie) -> TrieDiff {
     TrieDiff {
         latest_diff_res: find_latest_diff_point_where_tries_begin_to_diff(a, b),
@@ -198,7 +231,7 @@ impl DepthNodeDiffState {
     }
 }
 
-// State that is copied per recursive call.
+/// State that is copied per recursive call.
 #[derive(Clone, Debug)]
 struct DepthDiffPerCallState<'a> {
     a: &'a HashedPartialTrie,
@@ -429,6 +462,7 @@ mod tests {
         assert_eq!(diff.latest_diff_res, Some(expected));
     }
 
+    // TODO: Will finish these tests later (low-priority).
     #[test]
     #[ignore]
     fn depth_single_node_node_diffs_work() {
