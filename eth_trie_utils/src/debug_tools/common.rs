@@ -42,8 +42,7 @@ impl PathSegment {
         match self {
             PathSegment::Empty | PathSegment::Hash => None,
             PathSegment::Branch(nib) => Some(Nibbles::from_nibble(*nib)),
-            PathSegment::Extension(nibs) => Some(*nibs),
-            PathSegment::Leaf(nibs) => Some(*nibs),
+            PathSegment::Extension(nibs) | PathSegment::Leaf(nibs) => Some(*nibs),
         }
     }
 }
@@ -65,8 +64,7 @@ pub(super) fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>, curr_key: &Ni
     match n {
         Node::Empty | Node::Hash(_) => Nibbles::default(),
         Node::Branch { .. } => curr_key.get_next_nibbles(1),
-        Node::Extension { nibbles, child: _ } => *nibbles,
-        Node::Leaf { nibbles, value: _ } => *nibbles,
+        Node::Extension { nibbles, child: _ } | Node::Leaf { nibbles, value: _ } => *nibbles,
     }
 }
 
@@ -75,8 +73,7 @@ pub(super) fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>, curr_key: &Ni
 pub(super) fn get_key_piece_from_node_no_branch_key<T: PartialTrie>(n: &Node<T>) -> Nibbles {
     match n {
         Node::Empty | Node::Hash(_) | Node::Branch { .. } => Nibbles::default(),
-        Node::Extension { nibbles, child: _ } => *nibbles,
-        Node::Leaf { nibbles, value: _ } => *nibbles,
+        Node::Extension { nibbles, child: _ } | Node::Leaf { nibbles, value: _ } => *nibbles,
     }
 }
 
