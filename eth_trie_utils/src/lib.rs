@@ -19,5 +19,8 @@ pub mod trie_ops;
 pub mod trie_subsets;
 mod utils;
 
+#[cfg(feature = "trie_debug")]
+pub mod debug_tools;
+
 #[cfg(test)]
 mod testing_utils;
