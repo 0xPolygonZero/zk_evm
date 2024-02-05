@@ -488,6 +488,10 @@ fn delete_intern<N: PartialTrie>(
                                     children, nibble,
                                 );
 
+                            trace!("Branch {:x} became an extension when collapsing a branch (may be collapsed further still).
+                                Single remaining child in slot {:x} ({}) will be pointed at with an extension node.",
+                                nibble, child_nibble, TrieNodeType::from(non_empty_node.deref()));
+
                             // Extension may be collapsed one level above.
                             extension(Nibbles::from_nibble(child_nibble), non_empty_node.clone())
                         }
@@ -516,7 +520,10 @@ fn delete_intern<N: PartialTrie>(
         }
         Node::Leaf { nibbles, value } => {
             trace!("Delete traversed Leaf (nibbles: {:?})", nibbles);
-            (*nibbles == curr_k).then(|| (Node::Empty.into(), value.clone()))
+            (*nibbles == curr_k).then(|| {
+                trace!("Deleting leaf ({:x})", nibbles);
+                (Node::Empty.into(), value.clone())
+            })
         }
     }
 }
@@ -532,6 +539,12 @@ fn collapse_ext_node_if_needed<N: PartialTrie>(
     ext_nibbles: &Nibbles,
     child: &WrappedNode<N>,
 ) -> WrappedNode<N> {
+    trace!(
+        "Collapsing extension node ({:x}) with child {}...",
+        ext_nibbles,
+        TrieNodeType::from(child.deref())
+    );
+
     match child.as_ref() {
         Node::Branch { .. } => extension(*ext_nibbles, child.clone()),
         Node::Extension {
