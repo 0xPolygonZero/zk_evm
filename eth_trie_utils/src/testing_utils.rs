@@ -137,16 +137,6 @@ pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie<N: PartialTr
         .collect()
 }
 
-pub(crate) fn create_trie_with_random_variable_key_entries<T: PartialTrie>(
-    n: usize,
-    seed: u64,
-) -> T {
-    let mut trie = T::default();
-    trie.extend(generate_n_random_variable_trie_value_entries(n, seed));
-
-    trie
-}
-
 fn gen_fixed_nibbles(rng: &mut StdRng) -> Nibbles {
     let mut k_bytes = [0; 4];
     k_bytes[0..3].copy_from_slice(rng.gen::<[u64; 3]>().as_slice());

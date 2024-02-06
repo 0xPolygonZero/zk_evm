@@ -1,3 +1,8 @@
+//! Simple stat tooling to extract stats from tries.
+//!
+//! This is particularly useful when comparing a "base" trie against a sub-trie
+//! created from it.
+
 use std::fmt::{self, Display};
 
 use crate::partial_trie::{Node, PartialTrie};
@@ -32,13 +37,14 @@ impl TrieStats {
     }
 }
 
+/// Total node counts for a trie.
 #[derive(Debug, Default)]
 pub struct NodeCounts {
-    empty: usize,
-    hash: usize,
-    branch: usize,
-    extension: usize,
-    leaf: usize,
+    pub empty: usize,
+    pub hash: usize,
+    pub branch: usize,
+    pub extension: usize,
+    pub leaf: usize,
 }
 
 impl Display for NodeCounts {
@@ -80,10 +86,11 @@ impl NodeCounts {
     }
 }
 
+/// Information on the comparison between two tries.
 #[derive(Debug)]
 pub struct TrieComparison {
-    node_comp: NodeComparison,
-    depth_comp: DepthComparison,
+    pub node_comp: NodeComparison,
+    pub depth_comp: DepthComparison,
 }
 
 impl Display for TrieComparison {
@@ -122,9 +129,9 @@ impl Display for NodeComparison {
 }
 
 #[derive(Debug)]
-struct DepthComparison {
-    a: DepthStats,
-    b: DepthStats,
+pub struct DepthComparison {
+    pub a: DepthStats,
+    pub b: DepthStats,
 }
 
 impl Display for DepthComparison {
@@ -145,6 +152,7 @@ impl DepthComparison {
     }
 }
 
+/// Type to hold (and compare) a given variable from two different tries.s
 #[derive(Debug)]
 pub struct RatioStat {
     pub a: usize,
@@ -158,8 +166,8 @@ impl Display for RatioStat {
 }
 
 impl RatioStat {
-    /// `new` doesn't do any logic, but this will reduce the line since since
-    /// this is called so many times.
+    /// `new` doesn't do any logic, but this will reduce a lot of line lengths
+    /// since this is called so many times.
     fn new(a: usize, b: usize) -> Self {
         Self { a, b }
     }
@@ -169,9 +177,13 @@ impl RatioStat {
     }
 }
 
+/// "Raw" state that is mutated as we traverse down the trie. Is processed into
+/// a more useful format later on.
 #[derive(Debug, Default)]
 struct CurrTrackingState {
     counts: NodeCounts,
+
+    // The "*_sum" variables are just accumulators that we process later to get average depths.
     leaf_depth_sum: u64,
     hash_depth_sum: u64,
     lowest_depth: usize,
