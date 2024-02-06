@@ -5,6 +5,8 @@
 
 use std::fmt::{self, Display};
 
+use num_traits::ToPrimitive;
+
 use crate::partial_trie::{Node, PartialTrie};
 
 #[derive(Debug, Default)]
@@ -23,8 +25,8 @@ impl Display for TrieStats {
             None => writeln!(f)?,
         }
 
-        writeln!(f, "Counts: {}", self.counts)?;
-        writeln!(f, "Depth stats: {}", self.depth_stats)
+        writeln!(f, "Counts:\n{}", self.counts)?;
+        writeln!(f, "Depth stats:\n{}", self.depth_stats)
     }
 }
 
@@ -49,11 +51,25 @@ pub struct NodeCounts {
 
 impl Display for NodeCounts {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Empty: {}", self.empty)?;
-        writeln!(f, "Hash: {}", self.hash)?;
-        writeln!(f, "Branch: {}", self.branch)?;
-        writeln!(f, "Extension: {}", self.extension)?;
-        writeln!(f, "Leaf: {}", self.leaf)
+        let tot_nodes = self.total_nodes();
+
+        Self::write_node_count_stats(f, "Empty", self.empty, tot_nodes)?;
+        Self::write_node_count_stats(f, "Hash", self.hash, tot_nodes)?;
+        Self::write_node_count_stats(f, "Branch", self.branch, tot_nodes)?;
+        Self::write_node_count_stats(f, "Extension", self.extension, tot_nodes)?;
+        Self::write_node_count_stats(f, "Leaf", self.leaf, tot_nodes)
+    }
+}
+
+impl NodeCounts {
+    fn write_node_count_stats(
+        f: &mut fmt::Formatter<'_>,
+        node_t_name: &str,
+        count: usize,
+        tot_count: usize,
+    ) -> fmt::Result {
+        let perc = (count as f32 / tot_count as f32) * 100.0;
+        writeln!(f, "{}: {} ({:.3}%)", node_t_name, count, perc)
     }
 }
 
@@ -105,14 +121,14 @@ impl Display for TrieComparison {
 // TODO: Consider computing these values lazily?
 #[derive(Debug)]
 pub struct NodeComparison {
-    pub tot_node_rat: RatioStat,
-    pub non_empty_rat: RatioStat,
+    pub tot_node_rat: RatioStat<usize>,
+    pub non_empty_rat: RatioStat<usize>,
 
-    pub empty_rat: RatioStat,
-    pub hash_rat: RatioStat,
-    pub branch_rat: RatioStat,
-    pub extension_rat: RatioStat,
-    pub leaf_rat: RatioStat,
+    pub empty_rat: RatioStat<usize>,
+    pub hash_rat: RatioStat<usize>,
+    pub branch_rat: RatioStat<usize>,
+    pub extension_rat: RatioStat<usize>,
+    pub leaf_rat: RatioStat<usize>,
 }
 
 impl Display for NodeComparison {
@@ -130,50 +146,47 @@ impl Display for NodeComparison {
 
 #[derive(Debug)]
 pub struct DepthComparison {
-    pub a: DepthStats,
-    pub b: DepthStats,
+    pub lowest_depth_rat: RatioStat<usize>,
+    pub avg_leaf_depth_rat: RatioStat<f32>,
+    pub avg_hash_depth_rat: RatioStat<f32>,
 }
 
 impl Display for DepthComparison {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Self::write_depth_stats_and_header(f, &self.a, "a")?;
-        Self::write_depth_stats_and_header(f, &self.b, "b")
-    }
-}
-
-impl DepthComparison {
-    fn write_depth_stats_and_header(
-        f: &mut fmt::Formatter<'_>,
-        stats: &DepthStats,
-        trie_str: &str,
-    ) -> fmt::Result {
-        writeln!(f, "Depth stats for {}:", trie_str)?;
-        stats.fmt(f)
+        writeln!(f, "Lowest depth: {}", self.lowest_depth_rat)?;
+        writeln!(f, "Avg leaf depth: {}", self.avg_leaf_depth_rat)?;
+        writeln!(f, "Avg hah depth: {}", self.avg_hash_depth_rat)
     }
 }
 
 /// Type to hold (and compare) a given variable from two different tries.s
 #[derive(Debug)]
-pub struct RatioStat {
-    pub a: usize,
-    pub b: usize,
+pub struct RatioStat<T> {
+    pub a: T,
+    pub b: T,
 }
 
-impl Display for RatioStat {
+impl<T: Display + ToPrimitive> Display for RatioStat<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} / {} ({}%)", self.a, self.b, self.get_a_over_b_perc())
+        write!(
+            f,
+            "{:.3} / {:.3} ({:.3}%)",
+            self.a,
+            self.b,
+            self.get_a_over_b_perc()
+        )
     }
 }
 
-impl RatioStat {
+impl<T: ToPrimitive> RatioStat<T> {
     /// `new` doesn't do any logic, but this will reduce a lot of line lengths
     /// since this is called so many times.
-    fn new(a: usize, b: usize) -> Self {
+    fn new(a: T, b: T) -> Self {
         Self { a, b }
     }
 
     fn get_a_over_b_perc(&self) -> f32 {
-        (self.a as f32 / self.b as f32) * 100.0
+        (self.a.to_f32().unwrap() / self.b.to_f32().unwrap()) * 100.0
     }
 }
 
@@ -191,7 +204,7 @@ struct CurrTrackingState {
 
 impl CurrTrackingState {
     fn update_lowest_depth_if_larger(&mut self, curr_depth: usize) {
-        if self.lowest_depth > curr_depth {
+        if self.lowest_depth < curr_depth {
             self.lowest_depth = curr_depth;
         }
     }
@@ -208,16 +221,17 @@ pub struct DepthStats {
 impl Display for DepthStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Lowest depth: {}", self.lowest_depth)?;
-        writeln!(f, "Average leaf depth: {}", self.avg_leaf_depth)?;
-        writeln!(f, "Average hash depth: {}", self.avg_hash_depth)
+        writeln!(f, "Average leaf depth: {:.3}", self.avg_leaf_depth)?;
+        writeln!(f, "Average hash depth: {:.3}", self.avg_hash_depth)
     }
 }
 
 impl DepthStats {
     fn compare(&self, other: &Self) -> DepthComparison {
         DepthComparison {
-            a: self.clone(),
-            b: other.clone(),
+            lowest_depth_rat: RatioStat::new(self.lowest_depth, other.lowest_depth),
+            avg_leaf_depth_rat: RatioStat::new(self.avg_leaf_depth, other.avg_leaf_depth),
+            avg_hash_depth_rat: RatioStat::new(self.avg_hash_depth, other.avg_hash_depth),
         }
     }
 }
