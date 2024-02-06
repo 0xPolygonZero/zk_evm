@@ -1,7 +1,7 @@
 //! Simple tooling to extract stats from tries.
 //!
-//! This is particularly useful when comparing a "base" trie against a sub-trie (hashed out trie)
-//! created from it.
+//! This is particularly useful when comparing a "base" trie against a sub-trie
+//! (hashed out trie) created from it.
 
 use std::fmt::{self, Display};
 
@@ -318,8 +318,9 @@ mod tests {
         assert_eq!(stats.counts.hash, 0);
         assert_eq!(stats.counts.branch, 4);
         assert_eq!(stats.counts.extension, 2);
-        assert_eq!(stats.counts.empty, 57); // (n_branch * 4) - n_leaf -
-                                            // (n_branch - 1)
+
+        // empty = (n_branch * 4) - n_leaf - (n_branch - 1)
+        assert_eq!(stats.counts.empty, 57);
     }
 
     // TODO: Low-priority. Finish later.
@@ -331,30 +332,30 @@ mod tests {
 
     #[test]
     fn massive_leaf_trie_has_correct_leaf_node_stats() {
-        let entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 9522);
-        let trie = HashedPartialTrie::from_iter(entries);
-
-        let stats = get_trie_stats(&trie);
-
-        assert_eq!(stats.counts.leaf, MASSIVE_TRIE_SIZE);
-        assert_eq!(stats.counts.hash, 0);
+        create_trie_and_stats_from_entries_and_assert(MASSIVE_TRIE_SIZE, 0, 9522);
     }
 
     #[test]
     fn massive_hash_trie_has_correct_hash_node_stats() {
-        let entries = generate_n_random_fixed_trie_hash_entries(MASSIVE_TRIE_SIZE, 9855);
-        let trie = HashedPartialTrie::from_iter(entries);
-
-        let stats = get_trie_stats(&trie);
-
-        assert_eq!(stats.counts.hash, MASSIVE_TRIE_SIZE);
-        assert_eq!(stats.counts.leaf, 0);
+        create_trie_and_stats_from_entries_and_assert(0, MASSIVE_TRIE_SIZE, 9855);
     }
 
     #[test]
     fn massive_mixed_trie_has_correct_hash_node_stats() {
-        let val_entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE / 2, 1992);
-        let hash_entries = generate_n_random_fixed_trie_hash_entries(MASSIVE_TRIE_SIZE / 2, 404);
+        create_trie_and_stats_from_entries_and_assert(
+            MASSIVE_TRIE_SIZE / 2,
+            MASSIVE_TRIE_SIZE / 2,
+            1992,
+        );
+    }
+
+    fn create_trie_and_stats_from_entries_and_assert(
+        n_leaf_nodes: usize,
+        n_hash_nodes: usize,
+        seed: u64,
+    ) {
+        let val_entries = generate_n_random_fixed_trie_value_entries(n_leaf_nodes, seed);
+        let hash_entries = generate_n_random_fixed_trie_hash_entries(n_hash_nodes, seed + 1);
 
         let mut trie = HashedPartialTrie::default();
         trie.extend(val_entries);
@@ -362,8 +363,8 @@ mod tests {
 
         let stats = get_trie_stats(&trie);
 
-        assert_eq!(stats.counts.leaf, MASSIVE_TRIE_SIZE / 2);
-        assert_eq!(stats.counts.hash, MASSIVE_TRIE_SIZE / 2);
+        assert_eq!(stats.counts.leaf, n_leaf_nodes);
+        assert_eq!(stats.counts.hash, n_hash_nodes);
     }
 
     // TODO: Low-priority. Finish later.
