@@ -32,10 +32,14 @@ pub struct ProverStateBuilder {
 }
 
 impl Default for ProverStateBuilder {
+    /// Generates a new builder from a set of default ranges.
+    /// These ranges should be sufficient to prove any transaction,
+    /// but will require a significant amount of RAM (around 30GB).
+    ///
+    /// Specifying shorter ranges will allow for a lower memory
+    /// consumption, with the drawback of possibly not being sufficient
+    /// for some transactions.
     fn default() -> Self {
-        // The default ranges are somewhat arbitrary, but should be enough for testing
-        // purposes against most transactions.
-        // Some heavy contract deployments may require bumping these ranges though.
         Self {
             arithmetic_circuit_size: DEFAULT_ARITHMETIC_RANGE,
             byte_packing_circuit_size: DEFAULT_BYTE_PACKING_RANGE,
