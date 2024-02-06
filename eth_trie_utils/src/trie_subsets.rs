@@ -351,12 +351,13 @@ mod tests {
     use crate::{
         nibbles::Nibbles,
         partial_trie::{HashedPartialTrie, Node, PartialTrie},
-        testing_utils::{generate_n_random_fixed_trie_entries, large_entry},
+        testing_utils::{
+            create_trie_with_large_entry_nodes, generate_n_random_fixed_trie_value_entries,
+            handmade_trie_1, TrieType,
+        },
         trie_ops::ValOrHash,
         utils::TrieNodeType,
     };
-
-    type TrieType = HashedPartialTrie;
 
     const MASSIVE_TEST_NUM_SUB_TRIES: usize = 10;
     const MASSIVE_TEST_NUM_SUB_TRIE_SIZE: usize = 5000;
@@ -472,35 +473,9 @@ mod tests {
         assert!(!leaf_keys.contains(&Nibbles::from(0x12345)));
     }
 
-    // Initializes a trie with keys large enough to force hashing (nodes less than
-    // 32 bytes are not hashed).
-    fn create_trie_with_large_entry_nodes<T: Into<Nibbles> + Copy>(keys: &[T]) -> TrieType {
-        let mut trie = TrieType::default();
-        for (k, v) in keys.iter().map(|k| (*k).into()).map(large_entry) {
-            trie.insert(k, v.clone());
-        }
-
-        trie
-    }
-
     #[test]
     fn intermediate_nodes_are_included_in_subset() {
-        let ks = vec![0x1234, 0x1324, 0x132400005_u64, 0x2001, 0x2002];
-        let trie = create_trie_with_large_entry_nodes(&ks);
-
-        // Branch (0x)  --> 1, 2
-        // Branch (0x1) --> 2, 3
-        // Leaf (0x1234) --> (n: 0x34, v: [0])
-
-        // Branch (0x1324, v: [1]) --> 0
-        // Leaf (0x132400005) --> (0x0005, v: [2])
-
-        // Extension (0x2) --> n: 0x00
-        // Branch (0x200) --> 1, 2
-        // Leaf  (0x2001) --> (n: 0x1, v: [3])
-        // Leaf  (0x2002) --> (n: 0x2, v: [4])
-
-        let ks_nibbles: Vec<Nibbles> = ks.into_iter().map(|k| k.into()).collect();
+        let (trie, ks_nibbles) = handmade_trie_1();
         let trie_subset_all = create_trie_subset(&trie, ks_nibbles.iter().cloned()).unwrap();
 
         let subset_keys = get_all_nibbles_of_leaf_nodes_in_trie(&trie_subset_all);
@@ -648,7 +623,7 @@ mod tests {
         let trie_size = MASSIVE_TEST_NUM_SUB_TRIES * MASSIVE_TEST_NUM_SUB_TRIE_SIZE;
 
         let random_entries: Vec<_> =
-            generate_n_random_fixed_trie_entries(trie_size, seed).collect();
+            generate_n_random_fixed_trie_value_entries(trie_size, seed).collect();
         let entry_keys: Vec<_> = random_entries.iter().map(|(k, _)| k).cloned().collect();
         let trie = TrieType::from_iter(random_entries);
 

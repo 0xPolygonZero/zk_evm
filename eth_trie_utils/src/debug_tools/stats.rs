@@ -271,3 +271,81 @@ fn get_trie_stats_rec<T: PartialTrie>(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::get_trie_stats;
+    use crate::{
+        partial_trie::{HashedPartialTrie, PartialTrie},
+        testing_utils::{
+            generate_n_random_fixed_trie_hash_entries, generate_n_random_fixed_trie_value_entries,
+            handmade_trie_1,
+        },
+    };
+
+    const MASSIVE_TRIE_SIZE: usize = 100_000;
+
+    #[test]
+    fn hand_made_trie_has_correct_node_stats() {
+        let (trie, _) = handmade_trie_1();
+        let stats = get_trie_stats(&trie);
+
+        assert_eq!(stats.counts.leaf, 4);
+        assert_eq!(stats.counts.hash, 0);
+        assert_eq!(stats.counts.branch, 4);
+        assert_eq!(stats.counts.extension, 2);
+        assert_eq!(stats.counts.empty, 57); // (n_branch * 4) - n_leaf -
+                                            // (n_branch - 1)
+    }
+
+    // TODO: Low-priority. Finish later.
+    #[test]
+    #[ignore]
+    fn perfectly_balanced_trie_has_correct_node_stats() {
+        todo!()
+    }
+
+    #[test]
+    fn massive_leaf_trie_has_correct_leaf_node_stats() {
+        let entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 9522);
+        let trie = HashedPartialTrie::from_iter(entries);
+
+        let stats = get_trie_stats(&trie);
+
+        assert_eq!(stats.counts.leaf, MASSIVE_TRIE_SIZE);
+        assert_eq!(stats.counts.hash, 0);
+    }
+
+    #[test]
+    fn massive_hash_trie_has_correct_hash_node_stats() {
+        let entries = generate_n_random_fixed_trie_hash_entries(MASSIVE_TRIE_SIZE, 9855);
+        let trie = HashedPartialTrie::from_iter(entries);
+
+        let stats = get_trie_stats(&trie);
+
+        assert_eq!(stats.counts.hash, MASSIVE_TRIE_SIZE);
+        assert_eq!(stats.counts.leaf, 0);
+    }
+
+    #[test]
+    fn massive_mixed_trie_has_correct_hash_node_stats() {
+        let val_entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE / 2, 1992);
+        let hash_entries = generate_n_random_fixed_trie_hash_entries(MASSIVE_TRIE_SIZE / 2, 404);
+
+        let mut trie = HashedPartialTrie::default();
+        trie.extend(val_entries);
+        trie.extend(hash_entries);
+
+        let stats = get_trie_stats(&trie);
+
+        assert_eq!(stats.counts.leaf, MASSIVE_TRIE_SIZE / 2);
+        assert_eq!(stats.counts.hash, MASSIVE_TRIE_SIZE / 2);
+    }
+
+    // TODO: Low-priority. Finish later.
+    #[test]
+    #[ignore]
+    fn depth_stats_work() {
+        todo!()
+    }
+}
