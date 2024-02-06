@@ -1,6 +1,6 @@
-//! Simple stat tooling to extract stats from tries.
+//! Simple tooling to extract stats from tries.
 //!
-//! This is particularly useful when comparing a "base" trie against a sub-trie
+//! This is particularly useful when comparing a "base" trie against a sub-trie (hashed out trie)
 //! created from it.
 
 use std::fmt::{self, Display};
@@ -110,8 +110,6 @@ pub struct TrieComparison {
 }
 
 impl Display for TrieComparison {
-    // Pretty debug is pretty good by default If we want something better, we can do
-    // our own.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Node comparison: {}", self.node_comp)?;
         writeln!(f, "Depth comparison: {}", self.depth_comp)
@@ -155,7 +153,7 @@ impl Display for DepthComparison {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Lowest depth: {}", self.lowest_depth_rat)?;
         writeln!(f, "Avg leaf depth: {}", self.avg_leaf_depth_rat)?;
-        writeln!(f, "Avg hah depth: {}", self.avg_hash_depth_rat)
+        writeln!(f, "Avg hash depth: {}", self.avg_hash_depth_rat)
     }
 }
 
@@ -179,7 +177,7 @@ impl<T: Display + ToPrimitive> Display for RatioStat<T> {
 }
 
 impl<T: ToPrimitive> RatioStat<T> {
-    /// `new` doesn't do any logic, but this will reduce a lot of line lengths
+    /// `new` doesn't have any logic, but this will reduce a lot of line lengths
     /// since this is called so many times.
     fn new(a: T, b: T) -> Self {
         Self { a, b }
