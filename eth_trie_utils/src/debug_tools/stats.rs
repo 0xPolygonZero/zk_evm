@@ -11,9 +11,9 @@ use crate::partial_trie::{Node, PartialTrie};
 
 #[derive(Debug, Default)]
 pub struct TrieStats {
-    pub name: Option<String>,
-    pub counts: NodeCounts,
-    pub depth_stats: DepthStats,
+    name: Option<String>,
+    counts: NodeCounts,
+    depth_stats: DepthStats,
 }
 
 impl Display for TrieStats {
@@ -41,12 +41,12 @@ impl TrieStats {
 
 /// Total node counts for a trie.
 #[derive(Debug, Default)]
-pub struct NodeCounts {
-    pub empty: usize,
-    pub hash: usize,
-    pub branch: usize,
-    pub extension: usize,
-    pub leaf: usize,
+struct NodeCounts {
+    empty: usize,
+    hash: usize,
+    branch: usize,
+    extension: usize,
+    leaf: usize,
 }
 
 impl Display for NodeCounts {
@@ -74,19 +74,19 @@ impl NodeCounts {
 }
 
 impl NodeCounts {
-    pub fn total_nodes(&self) -> usize {
+    fn total_nodes(&self) -> usize {
         self.empty + self.total_node_non_empty()
     }
 
-    pub fn total_node_non_empty(&self) -> usize {
+    fn total_node_non_empty(&self) -> usize {
         self.branch + self.extension + self.hash_and_leaf_node_count()
     }
 
-    pub fn hash_and_leaf_node_count(&self) -> usize {
+    fn hash_and_leaf_node_count(&self) -> usize {
         self.hash + self.leaf
     }
 
-    pub fn compare(&self, other: &Self) -> NodeComparison {
+    fn compare(&self, other: &Self) -> NodeComparison {
         NodeComparison {
             tot_node_rat: RatioStat::new(self.total_nodes(), other.total_nodes()),
             non_empty_rat: RatioStat::new(
@@ -105,8 +105,8 @@ impl NodeCounts {
 /// Information on the comparison between two tries.
 #[derive(Debug)]
 pub struct TrieComparison {
-    pub node_comp: NodeComparison,
-    pub depth_comp: DepthComparison,
+    node_comp: NodeComparison,
+    depth_comp: DepthComparison,
 }
 
 impl Display for TrieComparison {
@@ -118,15 +118,15 @@ impl Display for TrieComparison {
 
 // TODO: Consider computing these values lazily?
 #[derive(Debug)]
-pub struct NodeComparison {
-    pub tot_node_rat: RatioStat<usize>,
-    pub non_empty_rat: RatioStat<usize>,
+struct NodeComparison {
+    tot_node_rat: RatioStat<usize>,
+    non_empty_rat: RatioStat<usize>,
 
-    pub empty_rat: RatioStat<usize>,
-    pub hash_rat: RatioStat<usize>,
-    pub branch_rat: RatioStat<usize>,
-    pub extension_rat: RatioStat<usize>,
-    pub leaf_rat: RatioStat<usize>,
+    empty_rat: RatioStat<usize>,
+    hash_rat: RatioStat<usize>,
+    branch_rat: RatioStat<usize>,
+    extension_rat: RatioStat<usize>,
+    leaf_rat: RatioStat<usize>,
 }
 
 impl Display for NodeComparison {
@@ -143,10 +143,10 @@ impl Display for NodeComparison {
 }
 
 #[derive(Debug)]
-pub struct DepthComparison {
-    pub lowest_depth_rat: RatioStat<usize>,
-    pub avg_leaf_depth_rat: RatioStat<f32>,
-    pub avg_hash_depth_rat: RatioStat<f32>,
+struct DepthComparison {
+    lowest_depth_rat: RatioStat<usize>,
+    avg_leaf_depth_rat: RatioStat<f32>,
+    avg_hash_depth_rat: RatioStat<f32>,
 }
 
 impl Display for DepthComparison {
@@ -159,9 +159,9 @@ impl Display for DepthComparison {
 
 /// Type to hold (and compare) a given variable from two different tries.s
 #[derive(Debug)]
-pub struct RatioStat<T> {
-    pub a: T,
-    pub b: T,
+struct RatioStat<T> {
+    a: T,
+    b: T,
 }
 
 impl<T: Display + ToPrimitive> Display for RatioStat<T> {
@@ -171,7 +171,9 @@ impl<T: Display + ToPrimitive> Display for RatioStat<T> {
             "{:.3} / {:.3} ({:.3}%)",
             self.a,
             self.b,
-            self.get_a_over_b_perc()
+            // Note that the `Error` type for `fmt` does not hold any extra information and can
+            // only indicate that something went wrong.
+            self.get_a_over_b_perc().map_err(|_| fmt::Error)?
         )
     }
 }
@@ -183,8 +185,12 @@ impl<T: ToPrimitive> RatioStat<T> {
         Self { a, b }
     }
 
-    fn get_a_over_b_perc(&self) -> f32 {
-        (self.a.to_f32().unwrap() / self.b.to_f32().unwrap()) * 100.0
+    fn get_a_over_b_perc(&self) -> Result<f32, ()> {
+        Ok((Self::try_to_f32(&self.a)? / Self::try_to_f32(&self.b)?) * 100.0)
+    }
+
+    fn try_to_f32(v: &T) -> Result<f32, ()> {
+        v.to_f32().ok_or(())
     }
 }
 
@@ -210,10 +216,10 @@ impl CurrTrackingState {
 
 /// Depth in terms of node depth (not key length).
 #[derive(Clone, Debug, Default)]
-pub struct DepthStats {
-    pub lowest_depth: usize,
-    pub avg_leaf_depth: f32,
-    pub avg_hash_depth: f32,
+struct DepthStats {
+    lowest_depth: usize,
+    avg_leaf_depth: f32,
+    avg_hash_depth: f32,
 }
 
 impl Display for DepthStats {
