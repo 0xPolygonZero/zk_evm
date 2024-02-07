@@ -184,8 +184,7 @@ pub(crate) fn unwrap_iter_item_to_val(item: ValOrHash) -> Vec<u8> {
 fn gen_rand_u256_bytes(rng: &mut StdRng) -> Vec<u8> {
     let num_bytes = 256 / 8;
 
-    let mut buf = Vec::with_capacity(num_bytes);
-    buf.resize(num_bytes, 0);
+    let mut buf = vec![0; num_bytes];
     rng.fill_bytes(&mut buf);
 
     buf
