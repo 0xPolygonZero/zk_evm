@@ -69,7 +69,7 @@ impl NodeCounts {
         tot_count: usize,
     ) -> fmt::Result {
         let perc = (count as f32 / tot_count as f32) * 100.0;
-        writeln!(f, "{}: {} ({:.3}%)", node_t_name, count, perc)
+        writeln!(f, "{}: {} ({:.2}%)", node_t_name, count, perc)
     }
 }
 
