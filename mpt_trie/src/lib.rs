@@ -20,7 +20,7 @@ pub mod partial_trie;
 mod trie_hashing;
 pub mod trie_ops;
 pub mod trie_subsets;
-mod utils;
+pub mod utils;
 
 #[cfg(feature = "trie_debug")]
 pub mod debug_tools;

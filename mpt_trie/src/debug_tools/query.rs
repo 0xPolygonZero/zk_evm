@@ -5,13 +5,11 @@ use std::fmt::{self, Display};
 
 use ethereum_types::H256;
 
-use super::common::{
-    get_key_piece_from_node_pulling_from_key_for_branches, get_segment_from_node_and_key_piece,
-    NodePath, PathSegment,
-};
+use super::common::get_key_piece_from_node_pulling_from_key_for_branches;
 use crate::{
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
+    utils::{get_segment_from_node_and_key_piece, NodePath, PathSegment},
 };
 
 /// Params controlling how much information is reported in the query output.
@@ -159,7 +157,9 @@ fn count_non_empty_branch_children_from_mask(mask: u16) -> usize {
 /// of the path used for searching for a key in the trie.
 pub struct DebugQueryOutput {
     k: Nibbles,
-    node_path: NodePath,
+
+    /// The nodes hit during the query.
+    pub node_path: NodePath,
     extra_node_info: Vec<Option<ExtraNodeSegmentInfo>>,
     node_found: bool,
     params: DebugQueryParams,

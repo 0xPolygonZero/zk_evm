@@ -384,7 +384,7 @@ mod tests {
     use super::{create_trie_subset, create_trie_subsets};
     use crate::{
         nibbles::Nibbles,
-        partial_trie::{HashedPartialTrie, Node, PartialTrie},
+        partial_trie::{Node, PartialTrie},
         testing_utils::{
             create_trie_with_large_entry_nodes, generate_n_random_fixed_trie_value_entries,
             handmade_trie_1, TrieType,

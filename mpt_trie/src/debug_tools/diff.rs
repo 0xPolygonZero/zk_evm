@@ -30,7 +30,8 @@ use std::{fmt::Display, ops::Deref};
 
 use ethereum_types::H256;
 
-use super::common::{get_key_piece_from_node, get_segment_from_node_and_key_piece, NodePath};
+use super::common::get_key_piece_from_node;
+use crate::utils::{get_segment_from_node_and_key_piece, NodePath};
 use crate::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
