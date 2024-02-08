@@ -5,11 +5,11 @@ use std::{
 
 use ethereum_types::{H256, U256, U512};
 use log::info;
-use rand::{rngs::StdRng, seq::IteratorRandom, Rng, SeedableRng};
+use rand::{rngs::StdRng, seq::IteratorRandom, Rng, RngCore, SeedableRng};
 
 use crate::{
     nibbles::Nibbles,
-    partial_trie::{Node, PartialTrie},
+    partial_trie::{HashedPartialTrie, Node, PartialTrie},
     trie_ops::ValOrHash,
     utils::is_even,
 };
@@ -20,8 +20,11 @@ use crate::{
 /// chances of these collisions occurring.
 const MIN_BYTES_FOR_VAR_KEY: usize = 5;
 
+pub(crate) type TrieType = HashedPartialTrie;
+
 pub(crate) type TestInsertValEntry = (Nibbles, Vec<u8>);
 pub(crate) type TestInsertHashEntry = (Nibbles, H256);
+type TestInsertEntry<T> = (Nibbles, T);
 
 // Don't want this exposed publicly, but it is useful for testing.
 impl From<i32> for Nibbles {
@@ -70,34 +73,51 @@ where
     (k.into(), vec![v])
 }
 
-pub(crate) fn generate_n_random_fixed_trie_entries(
+pub(crate) fn generate_n_random_fixed_trie_value_entries(
     n: usize,
     seed: u64,
 ) -> impl Iterator<Item = TestInsertValEntry> {
-    gen_n_random_trie_entries_common(n, seed, gen_fixed_nibbles)
+    gen_n_random_trie_value_entries_common(n, seed, gen_fixed_nibbles, gen_rand_u256_bytes)
 }
 
-pub(crate) fn generate_n_random_variable_keys(
+pub(crate) fn generate_n_random_fixed_trie_hash_entries(
     n: usize,
     seed: u64,
-) -> impl Iterator<Item = TestInsertValEntry> {
-    gen_n_random_trie_entries_common(n, seed, gen_variable_nibbles)
+) -> impl Iterator<Item = TestInsertHashEntry> {
+    gen_n_random_trie_value_entries_common(n, seed, gen_fixed_nibbles, |_| H256::random())
 }
 
-pub(crate) fn generate_n_random_fixed_even_nibble_padded_trie_entries(
+pub(crate) fn generate_n_random_variable_trie_value_entries(
     n: usize,
     seed: u64,
 ) -> impl Iterator<Item = TestInsertValEntry> {
-    gen_n_random_trie_entries_common(n, seed, gen_variable_nibbles_even_padded_nibbles)
+    gen_n_random_trie_value_entries_common(n, seed, gen_variable_nibbles, gen_rand_u256_bytes)
 }
 
-fn gen_n_random_trie_entries_common<F: Fn(&mut StdRng) -> Nibbles>(
+pub(crate) fn generate_n_random_fixed_even_nibble_padded_trie_value_entries(
     n: usize,
     seed: u64,
-    u256_gen_f: F,
 ) -> impl Iterator<Item = TestInsertValEntry> {
+    gen_n_random_trie_value_entries_common(
+        n,
+        seed,
+        gen_variable_nibbles_even_padded_nibbles,
+        gen_rand_u256_bytes,
+    )
+}
+
+fn gen_n_random_trie_value_entries_common<
+    T,
+    K: Fn(&mut StdRng) -> Nibbles,
+    V: Fn(&mut StdRng) -> T,
+>(
+    n: usize,
+    seed: u64,
+    key_gen_f: K,
+    val_gen_f: V,
+) -> impl Iterator<Item = TestInsertEntry<T>> {
     let mut rng = StdRng::seed_from_u64(seed);
-    (0..n).map(move |i| (u256_gen_f(&mut rng), i.to_be_bytes().to_vec()))
+    (0..n).map(move |_| (key_gen_f(&mut rng), val_gen_f(&mut rng)))
 }
 
 pub(crate) fn generate_n_hash_nodes_entries_for_empty_slots_in_trie<N: PartialTrie>(
@@ -144,7 +164,6 @@ fn gen_variable_nibbles(rng: &mut StdRng) -> Nibbles {
 
     U256::from_little_endian(&bytes).into()
 }
-
 // TODO: Replace with `PartialTrie` `iter` methods once done...
 pub(crate) fn get_non_hash_values_in_trie<N: PartialTrie>(
     trie: &Node<N>,
@@ -160,4 +179,45 @@ pub(crate) fn unwrap_iter_item_to_val(item: ValOrHash) -> Vec<u8> {
         ValOrHash::Val(v) => v,
         ValOrHash::Hash(_) => unreachable!(),
     }
+}
+
+fn gen_rand_u256_bytes(rng: &mut StdRng) -> Vec<u8> {
+    let num_bytes = 256 / 8;
+
+    let mut buf = vec![0; num_bytes];
+    rng.fill_bytes(&mut buf);
+
+    buf
+}
+
+/// Initializes a trie with keys large enough to force hashing (nodes less than
+/// 32 bytes are not hashed).
+pub(crate) fn create_trie_with_large_entry_nodes<T: Into<Nibbles> + Copy>(keys: &[T]) -> TrieType {
+    let mut trie = TrieType::default();
+    for (k, v) in keys.iter().map(|k| (*k).into()).map(large_entry) {
+        trie.insert(k, v.clone());
+    }
+
+    trie
+}
+
+pub(crate) fn handmade_trie_1() -> (TrieType, Vec<Nibbles>) {
+    let ks = vec![0x1234, 0x1324, 0x132400005_u64, 0x2001, 0x2002];
+    let ks_nibbles: Vec<Nibbles> = ks.into_iter().map(|k| k.into()).collect();
+    let trie = create_trie_with_large_entry_nodes(&ks_nibbles);
+
+    // Branch (0x)  --> 1, 2
+    // Branch (0x1) --> 2, 3
+    // Leaf (0x1234) --> (n: 0x34, v: [0])
+
+    // Extension (0x13) --> n: 0x24
+    // Branch (0x1324, v: [1]) --> 0
+    // Leaf (0x132400005) --> (0x0005, v: [2])
+
+    // Extension (0x2) --> n: 0x00
+    // Branch (0x200) --> 1, 2
+    // Leaf  (0x2001) --> (n: 0x1, v: [3])
+    // Leaf  (0x2002) --> (n: 0x2, v: [4])
+
+    (trie, ks_nibbles)
 }

@@ -23,4 +23,4 @@ mod utils;
 pub mod debug_tools;
 
 #[cfg(test)]
-mod testing_utils;
+pub(crate) mod testing_utils;

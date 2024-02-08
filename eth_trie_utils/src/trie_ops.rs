@@ -778,8 +778,9 @@ mod tests {
         testing_utils::{
             common_setup, entry, entry_with_value,
             generate_n_hash_nodes_entries_for_empty_slots_in_trie,
-            generate_n_random_fixed_trie_entries, generate_n_random_variable_keys,
-            get_non_hash_values_in_trie, unwrap_iter_item_to_val, TestInsertValEntry,
+            generate_n_random_fixed_trie_value_entries,
+            generate_n_random_variable_trie_value_entries, get_non_hash_values_in_trie,
+            unwrap_iter_item_to_val, TestInsertValEntry,
         },
         utils::create_mask_of_1s,
     };
@@ -877,7 +878,8 @@ mod tests {
     #[test]
     fn mass_inserts_fixed_sized_keys_all_entries_are_retrievable() {
         common_setup();
-        let entries: Vec<_> = generate_n_random_fixed_trie_entries(MASSIVE_TRIE_SIZE, 0).collect();
+        let entries: Vec<_> =
+            generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 0).collect();
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -885,7 +887,8 @@ mod tests {
     #[test]
     fn mass_inserts_variable_sized_keys_all_entries_are_retrievable() {
         common_setup();
-        let entries: Vec<_> = generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 0).collect();
+        let entries: Vec<_> =
+            generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 0).collect();
 
         insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
     }
@@ -894,7 +897,7 @@ mod tests {
     fn mass_inserts_variable_sized_keys_with_hash_nodes_all_entries_are_retrievable() {
         common_setup();
         let non_hash_entries: Vec<_> =
-            generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 0).collect();
+            generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 0).collect();
         let mut trie = StandardTrie::from_iter(non_hash_entries.iter().cloned());
 
         let extra_hash_entries = generate_n_hash_nodes_entries_for_empty_slots_in_trie(
@@ -925,11 +928,11 @@ mod tests {
             StandardTrie::new(Node::Empty)
         );
 
-        let entries = generate_n_random_fixed_trie_entries(MASSIVE_TRIE_SIZE, 0);
+        let entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 0);
         let big_trie_1 = StandardTrie::from_iter(entries);
         assert_eq!(big_trie_1, big_trie_1);
 
-        let entries = generate_n_random_fixed_trie_entries(MASSIVE_TRIE_SIZE, 1);
+        let entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 1);
         let big_trie_2 = StandardTrie::from_iter(entries);
 
         assert_ne!(big_trie_1, big_trie_2)
@@ -951,7 +954,7 @@ mod tests {
         common_setup();
 
         let random_entries: Vec<_> =
-            generate_n_random_fixed_trie_entries(MASSIVE_TRIE_SIZE, 9001).collect();
+            generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 9001).collect();
         let trie = StandardTrie::from_iter(random_entries.iter().cloned());
 
         for (k, v) in random_entries.into_iter() {
@@ -966,7 +969,7 @@ mod tests {
     fn held_trie_cow_references_do_not_change_as_trie_changes() {
         common_setup();
 
-        let entries = generate_n_random_variable_keys(COW_TEST_TRIE_SIZE, 9002);
+        let entries = generate_n_random_variable_trie_value_entries(COW_TEST_TRIE_SIZE, 9002);
 
         let mut all_nodes_in_trie_after_each_insert = Vec::new();
         let mut root_node_after_each_insert = Vec::new();
@@ -993,7 +996,7 @@ mod tests {
         common_setup();
 
         let entries: HashSet<_> =
-            generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 9003).collect();
+            generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 9003).collect();
         let trie = StandardTrie::from_iter(entries.iter().cloned());
 
         let trie_items: HashSet<_> = trie
@@ -1027,7 +1030,8 @@ mod tests {
     fn deletion_massive_trie() {
         common_setup();
 
-        let entries: Vec<_> = generate_n_random_variable_keys(MASSIVE_TRIE_SIZE, 7).collect();
+        let entries: Vec<_> =
+            generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 7).collect();
         let mut trie = StandardTrie::from_iter(entries.iter().cloned());
 
         // Delete half of the elements

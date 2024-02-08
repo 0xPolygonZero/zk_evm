@@ -4,3 +4,4 @@
 pub mod common;
 pub mod diff;
 pub mod query;
+pub mod stats;

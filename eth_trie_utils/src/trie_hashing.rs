@@ -108,9 +108,9 @@ mod tests {
         nibbles::{Nibble, Nibbles},
         partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode},
         testing_utils::{
-            common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_entries,
-            generate_n_random_fixed_trie_entries, generate_n_random_variable_keys, large_entry,
-            TestInsertValEntry,
+            common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_value_entries,
+            generate_n_random_fixed_trie_value_entries,
+            generate_n_random_variable_trie_value_entries, large_entry, TestInsertValEntry,
         },
         trie_hashing::hash_bytes,
     };
@@ -306,8 +306,11 @@ mod tests {
     fn massive_random_data_insert_fixed_keys_hashes_agree_with_eth_trie() {
         common_setup();
         insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(
-            &generate_n_random_fixed_trie_entries(NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST, 0)
-                .collect::<Vec<_>>(),
+            &generate_n_random_fixed_trie_value_entries(
+                NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST,
+                0,
+            )
+            .collect::<Vec<_>>(),
         );
     }
 
@@ -315,7 +318,7 @@ mod tests {
     fn massive_random_data_insert_variable_keys_hashes_agree_with_eth_trie() {
         common_setup();
         insert_entries_into_our_and_lib_tries_and_assert_equal_hashes(
-            &generate_n_random_fixed_even_nibble_padded_trie_entries(
+            &generate_n_random_fixed_even_nibble_padded_trie_value_entries(
                 NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST,
                 0,
             )
@@ -357,7 +360,7 @@ mod tests {
     fn massive_trie_data_deletion_agrees_with_eth_trie() {
         common_setup();
 
-        let entries: Vec<_> = generate_n_random_fixed_even_nibble_padded_trie_entries(
+        let entries: Vec<_> = generate_n_random_fixed_even_nibble_padded_trie_value_entries(
             NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST,
             8,
         )
@@ -412,15 +415,17 @@ mod tests {
     #[test]
     fn replacing_part_of_a_trie_with_a_hash_node_produces_same_hash() {
         let entries = (0..16).flat_map(|i| {
-            generate_n_random_variable_keys(NODES_PER_BRANCH_FOR_HASH_REPLACEMENT_TEST, i).map(
-                move |(mut k, v)| {
-                    // Force all keys to be under a given branch at root.
-                    k.truncate_n_nibbles_front_mut(1);
-                    k.push_nibble_front(i as Nibble);
-
-                    (k, v)
-                },
+            generate_n_random_variable_trie_value_entries(
+                NODES_PER_BRANCH_FOR_HASH_REPLACEMENT_TEST,
+                i,
             )
+            .map(move |(mut k, v)| {
+                // Force all keys to be under a given branch at root.
+                k.truncate_n_nibbles_front_mut(1);
+                k.push_nibble_front(i as Nibble);
+
+                (k, v)
+            })
         });
 
         let mut trie = HashedPartialTrie::from_iter(entries);
