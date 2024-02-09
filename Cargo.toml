@@ -1,5 +1,5 @@
 [package]
-name = "smt_utils"
+name = "smt_utils_hermez"
 version = "0.1.0"
 edition = "2021"
 
@@ -19,6 +19,9 @@ uint = "0.9.5"
 rlp = "0.5.2"
 serde = { version = "1.0.160", features = ["derive", "rc"] }
 rand = "0.8.5"
+plonky2 = { path = "../plonky2/plonky2"}
+hex-literal = "0.4.1"
+
 
 [dev-dependencies]
 eth_trie = "0.1.0"

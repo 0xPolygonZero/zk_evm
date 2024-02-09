@@ -63,6 +63,11 @@ impl Bits {
         b
     }
 
+    pub fn get_bit(&self, i: usize) -> Bit {
+        assert!(i < self.count, "Index out of bounds");
+        !(self.packed & (U256::one() << (self.count - 1 - i))).is_zero()
+    }
+
     pub fn push_bit(&mut self, bit: Bit) {
         self.packed = self.packed * 2 + U256::from(bit as u64);
         self.count += 1;
