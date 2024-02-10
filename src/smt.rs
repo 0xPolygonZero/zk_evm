@@ -8,7 +8,9 @@ use plonky2::plonk::config::Hasher;
 
 use crate::bits::Bits;
 use crate::db::Db;
-use crate::utils::{f2limbs, get_unique_sibling, hash0, hash_key_hash, key2u, limbs2f, u2h, u2k};
+use crate::utils::{
+    f2limbs, get_unique_sibling, hash0, hash_key_hash, hashout2u, key2u, limbs2f, u2h, u2k,
+};
 
 const HASH_TYPE: u8 = 0;
 const INTERNAL_TYPE: u8 = 1;
@@ -385,6 +387,10 @@ fn serialize<D: Db>(smt: &Smt<D>, key: Key, v: &mut Vec<U256>) -> usize {
 /// Hash a serialized state SMT, i.e., one where leaves hold accounts.
 pub fn hash_serialize(v: &[U256]) -> HashOut {
     _hash_serialize(v, 2)
+}
+
+pub fn hash_serialize_u256(v: &[U256]) -> U256 {
+    hashout2u(hash_serialize(v))
 }
 
 fn _hash_serialize(v: &[U256], ptr: usize) -> HashOut {
