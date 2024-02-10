@@ -1,5 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 
+/// This module contains functions to generate keys for the SMT.
+/// See https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt-utils.js for reference implementation.
 use ethereum_types::{Address, U256};
 use plonky2::{field::types::Field, hash::poseidon::Poseidon};
 

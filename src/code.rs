@@ -1,3 +1,5 @@
+/// Functions to hash contract bytecode using Poseidon.
+/// See `hashContractBytecode()` in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt-utils.js for reference implementation.
 use ethereum_types::U256;
 use plonky2::field::types::Field;
 use plonky2::hash::poseidon::Poseidon;
