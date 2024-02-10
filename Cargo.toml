@@ -19,7 +19,7 @@ uint = "0.9.5"
 rlp = "0.5.2"
 serde = { version = "1.0.160", features = ["derive", "rc"] }
 rand = "0.8.5"
-plonky2 = { path = "../plonky2/plonky2"}
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2", rev = "d2598bded0cb24d36b0a9900e8ffd104c470831b" }
 hex-literal = "0.4.1"
 
 
