@@ -31,7 +31,7 @@ use std::{fmt::Display, ops::Deref};
 use ethereum_types::H256;
 
 use super::common::get_key_piece_from_node;
-use crate::utils::{get_segment_from_node_and_key_piece, NodePath};
+use crate::utils::{get_segment_from_node_and_key_piece, TriePath};
 use crate::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
@@ -84,7 +84,7 @@ pub struct DiffPoint {
     /// The depth of the point in both tries.
     pub depth: usize,
     /// The path of the point in both tries.
-    pub path: NodePath,
+    pub path: TriePath,
     /// The node key in both tries.
     pub key: Nibbles,
     /// The node info in the first trie.
@@ -98,7 +98,7 @@ impl DiffPoint {
         child_a: &HashedPartialTrie,
         child_b: &HashedPartialTrie,
         parent_k: Nibbles,
-        path: NodePath,
+        path: TriePath,
     ) -> Self {
         let a_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_a));
         let b_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_b));
@@ -223,7 +223,7 @@ impl DepthNodeDiffState {
         parent_k: &Nibbles,
         child_a: &HashedPartialTrie,
         child_b: &HashedPartialTrie,
-        path: NodePath,
+        path: TriePath,
     ) {
         if field
             .as_ref()
@@ -243,7 +243,7 @@ struct DepthDiffPerCallState<'a> {
     curr_depth: usize,
 
     // Horribly inefficient, but these are debug tools, so I think we get a pass.
-    curr_path: NodePath,
+    curr_path: TriePath,
 }
 
 impl<'a> DepthDiffPerCallState<'a> {
@@ -260,7 +260,7 @@ impl<'a> DepthDiffPerCallState<'a> {
             b,
             curr_key,
             curr_depth,
-            curr_path: NodePath::default(),
+            curr_path: TriePath::default(),
         }
     }
 
@@ -412,7 +412,7 @@ fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_diff_between_tries, DiffPoint, NodeInfo, NodePath};
+    use super::{create_diff_between_tries, DiffPoint, NodeInfo, TriePath};
     use crate::{
         nibbles::Nibbles,
         partial_trie::{HashedPartialTrie, PartialTrie},
@@ -448,7 +448,7 @@ mod tests {
 
         let expected = DiffPoint {
             depth: 0,
-            path: NodePath(vec![]),
+            path: TriePath(vec![]),
             key: Nibbles::default(),
             a_info: expected_a,
             b_info: expected_b,

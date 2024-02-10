@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-struct PathSegmentIterator<N: PartialTrie> {
+pub struct TriePathIter<N: PartialTrie> {
     /// The next node in the trie to query with the remaining key.
     curr_node: WrappedNode<N>,
 
@@ -20,7 +20,7 @@ struct PathSegmentIterator<N: PartialTrie> {
     terminated: bool,
 }
 
-impl<T: PartialTrie> Iterator for PathSegmentIterator<T> {
+impl<T: PartialTrie> Iterator for TriePathIter<T> {
     type Item = PathSegment;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -94,14 +94,11 @@ fn pop_nibbles_clamped(nibbles: &mut Nibbles, n: usize) -> Nibbles {
 /// Note that if the key does not match the entire key of a node (eg. the
 /// remaining key is `0x34` but the next key is a leaf with the key `0x3456`),
 /// then the leaf will not appear in the query output.
-pub fn get_path_for_query<K, T: PartialTrie>(
-    trie: &Node<T>,
-    k: K,
-) -> impl Iterator<Item = PathSegment>
+pub fn path_for_query<K, T: PartialTrie>(trie: &Node<T>, k: K) -> impl Iterator<Item = PathSegment>
 where
     K: Into<Nibbles>,
 {
-    PathSegmentIterator {
+    TriePathIter {
         curr_node: trie.clone().into(),
         curr_key: k.into(),
         terminated: false,
@@ -112,7 +109,7 @@ where
 mod test {
     use std::str::FromStr;
 
-    use super::get_path_for_query;
+    use super::path_for_query;
     use crate::{nibbles::Nibbles, testing_utils::handmade_trie_1, utils::PathSegment};
 
     #[test]
@@ -153,7 +150,7 @@ mod test {
         ];
 
         for (q, expected) in ks.into_iter().zip(res.into_iter()) {
-            let res: Vec<_> = get_path_for_query(&trie.node, q).collect();
+            let res: Vec<_> = path_for_query(&trie.node, q).collect();
             assert_eq!(res, expected)
         }
     }
