@@ -9,7 +9,10 @@ use crate::{
 
 #[derive(Debug)]
 struct PathSegmentIterator<N: PartialTrie> {
+    /// The next node in the trie to query with the remaining key.
     curr_node: WrappedNode<N>,
+
+    /// The remaining part of the key as we traverse down the trie.
     curr_key: Nibbles,
 
     // Although wrapping `curr_node` in an option might be more "Rust like", the logic is a lot
@@ -35,6 +38,7 @@ impl<T: PartialTrie> Iterator for PathSegmentIterator<T> {
                 Some(PathSegment::Hash)
             }
             Node::Branch { children, .. } => {
+                // Our query key has ended. Stop here.
                 if self.curr_key.is_empty() {
                     self.terminated = true;
                     return None;
@@ -51,6 +55,7 @@ impl<T: PartialTrie> Iterator for PathSegmentIterator<T> {
                     .nibbles_are_identical_up_to_smallest_count(nibbles)
                 {
                     false => {
+                        // Only a partial match. Stop.
                         self.terminated = true;
                         None
                     }
@@ -75,6 +80,8 @@ impl<T: PartialTrie> Iterator for PathSegmentIterator<T> {
     }
 }
 
+/// Attempt to pop `n` nibbles from the given [`Nibbles`] and "clamp" the
+/// nibbles popped by not popping more nibbles than exist.
 fn pop_nibbles_clamped(nibbles: &mut Nibbles, n: usize) -> Nibbles {
     let n_nibs_to_pop = nibbles.count.min(n);
     nibbles.pop_nibbles_front(n_nibs_to_pop)
