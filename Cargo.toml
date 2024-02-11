@@ -1,0 +1,6 @@
+[workspace]
+members = ["eth_trie_utils"]
+resolver = "2"
+
+# TODO: Move dependencies that are common between sub-projects here...
+[workspace.dependencies]
