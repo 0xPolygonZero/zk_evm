@@ -1,0 +1,6 @@
+[workspace]
+members = ["mpt_trie"]
+resolver = "2"
+
+# TODO: Move dependencies that are common between sub-projects here...
+[workspace.dependencies]

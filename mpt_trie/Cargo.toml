@@ -1,0 +1,53 @@
+[package]
+name = "mpt_trie"
+description = "Types and utility functions for building/working with partial Ethereum tries."
+version = "0.6.0"
+authors = ["Polygon Zero <bgluth@polygon.technology>"]
+edition = "2021"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/0xPolygonZero/eth-trie-utils"
+repository = "https://github.com/0xPolygonZero/eth-trie-utils"
+keywords = ["ethereum", "trie"]
+categories = ["cryptography::cryptocurrencies", "data-structures"]
+
+exclude = [
+    "test_data/*"
+]
+
+[dependencies]
+bytes = "1.4.0"
+enum-as-inner = "0.6.0"
+ethereum-types = "0.14.1"
+hex = "0.4.3"
+keccak-hash = "0.10.0"
+parking_lot = { version = "0.12.1", features = ["serde"] }
+thiserror = "1.0.40"
+log = "0.4.17"
+num = { version = "0.4.1", optional = true }
+num-traits = "0.2.15"
+uint = "0.9.5"
+rlp = "0.5.2"
+serde = { version = "1.0.160", features = ["derive", "rc"] }
+
+[dev-dependencies]
+eth_trie = "0.4.0"
+pretty_env_logger = "0.5.0"
+rand = "0.8.5"
+rlp-derive = "0.1.0"
+serde = { version = "1.0.160", features = ["derive"] }
+serde_json = "1.0.96"
+
+[features]
+default = ["trie_debug"]
+trie_debug = ["num"]
+
+[lib]
+doc-scrape-examples = true
+
+[[example]]
+name = "simple"
+doc-scrape-examples = true
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
