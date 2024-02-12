@@ -1,6 +1,9 @@
 [workspace]
-members = ["mpt_trie"]
+members = ["mpt_trie", "proof_gen", "trace_decoder"]
 resolver = "2"
 
-# TODO: Move dependencies that are common between sub-projects here...
 [workspace.dependencies]
+ethereum-types = "0.14.1"
+log = "0.4.20"
+plonky2_evm = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "265d46a96ecfec49a32973f66f8aa811586c5d4a" }
+serde = "1.0.166"
