@@ -1,5 +1,5 @@
 [package]
-name = "eth_trie_utils"
+name = "mpt_trie"
 description = "Types and utility functions for building/working with partial Ethereum tries."
 version = "0.6.0"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]

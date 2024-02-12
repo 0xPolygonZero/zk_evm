@@ -2,8 +2,8 @@
 
 use std::iter::once;
 
-use eth_trie_utils::partial_trie::PartialTrie;
-use eth_trie_utils::{
+use mpt_trie::partial_trie::PartialTrie;
+use mpt_trie::{
     nibbles::{Nibbles, ToNibbles},
     partial_trie::{HashedPartialTrie, StandardTrie},
     trie_ops::ValOrHash,

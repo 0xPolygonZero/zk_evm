@@ -135,30 +135,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eth_trie_utils"
-version = "0.6.0"
-dependencies = [
- "bytes",
- "enum-as-inner",
- "eth_trie",
- "ethereum-types",
- "hex",
- "keccak-hash",
- "log",
- "num",
- "num-traits",
- "parking_lot",
- "pretty_env_logger",
- "rand",
- "rlp",
- "rlp-derive",
- "serde",
- "serde_json",
- "thiserror",
- "uint",
-]
-
-[[package]]
 name = "ethbloom"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -351,6 +327,30 @@ name = "memchr"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "523dc4f511e55ab87b694dc30d0f820d60906ef06413f93d4d7a1385599cc149"
+
+[[package]]
+name = "mpt_trie"
+version = "0.6.0"
+dependencies = [
+ "bytes",
+ "enum-as-inner",
+ "eth_trie",
+ "ethereum-types",
+ "hex",
+ "keccak-hash",
+ "log",
+ "num",
+ "num-traits",
+ "parking_lot",
+ "pretty_env_logger",
+ "rand",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uint",
+]
 
 [[package]]
 name = "num"

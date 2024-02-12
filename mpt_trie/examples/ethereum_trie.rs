@@ -10,13 +10,13 @@
 
 use std::ops::RangeInclusive;
 
-use eth_trie_utils::partial_trie::PartialTrie;
-use eth_trie_utils::{
+use ethereum_types::{H160, H256, U256};
+use keccak_hash::keccak;
+use mpt_trie::partial_trie::PartialTrie;
+use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, StandardTrie},
 };
-use ethereum_types::{H160, H256, U256};
-use keccak_hash::keccak;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rlp::Encodable;
 use rlp_derive::RlpEncodable;
