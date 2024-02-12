@@ -19,7 +19,7 @@
 //! `memory`.
 //!
 //! ```no_run
-//!     # use plonky_block_proof_gen::prover_state::ProverStateBuilder;
+//!     # use proof_gen::prover_state::ProverStateBuilder;
 //!     let mut builder = ProverStateBuilder::default();
 //!     
 //!     // Change Cpu and Memory tables supported ranges.
@@ -100,8 +100,8 @@
 //! `VerifierState`, to allow anyone to easily verify block proofs.
 //!
 //! ```compile_fail
-//!     # use plonky_block_proof_gen::prover_state::ProverStateBuilder;
-//!     # use plonky_block_proof_gen::verifier_state::VerifierState;
+//!     # use proof_gen::prover_state::ProverStateBuilder;
+//!     # use proof_gen::verifier_state::VerifierState;
 //!     let mut builder = ProverStateBuilder::default();
 //!
 //!     // Generate a `ProverState` from the builder.

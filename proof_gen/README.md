@@ -6,7 +6,6 @@ For the time being, the only library that produces proof IR is currently [plonky
 
 # General Usage (Extremely rough, will change)
 
-In [proof_gen.rs](https://github.com/0xPolygonZero/plonky-block-proof-gen/blob/main/src/proof_gen.rs), there are three core functions:
 
 - `generate_txn_proof`
 - `generate_agg_proof`

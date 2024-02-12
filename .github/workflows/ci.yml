@@ -37,16 +37,16 @@ jobs:
         with:
             cache-on-failure: true
 
-      - name: Check in protocol_decoder subdirectory
-        run: cargo check --manifest-path protocol_decoder/Cargo.toml
+      - name: Check in trace_decoder subdirectory
+        run: cargo check --manifest-path trace_decoder/Cargo.toml
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
           RUST_LOG: 1
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
-      - name: Check in plonky_block_proof_gen subdirectory
-        run: cargo check --manifest-path plonky_block_proof_gen/Cargo.toml
+      - name: Check in proof_gen subdirectory
+        run: cargo check --manifest-path proof_gen/Cargo.toml
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
           RUST_LOG: 1

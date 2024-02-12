@@ -5,7 +5,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 
 use plonky2::util::timing::TimingTree;
 use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
-use protocol_decoder::types::TxnProofGenIR;
+use trace_decoder::types::TxnProofGenIR;
 
 use crate::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},

@@ -1,5 +1,5 @@
 [workspace]
-members = ["mpt_trie", "plonky_block_proof_gen", "protocol_decoder"]
+members = ["mpt_trie", "proof_gen", "trace_decoder"]
 resolver = "2"
 
 [workspace.dependencies]

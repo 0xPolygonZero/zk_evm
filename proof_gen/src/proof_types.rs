@@ -2,8 +2,8 @@
 //! generation process.
 
 use plonky2_evm::proof::PublicValues;
-use protocol_decoder::types::BlockHeight;
 use serde::{Deserialize, Serialize};
+use trace_decoder::types::BlockHeight;
 
 use crate::types::PlonkyProofIntern;
 

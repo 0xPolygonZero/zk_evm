@@ -1,5 +1,5 @@
 [package]
-name = "plonky_block_proof_gen"
+name = "proof_gen"
 description = "Generates block proofs from zero proof IR."
 version = "0.1.0"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
@@ -12,5 +12,5 @@ log = { workspace = true }
 paste = "1.0.14"
 plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "265d46a96ecfec49a32973f66f8aa811586c5d4a" }
 plonky2_evm = { workspace = true }
-protocol_decoder = { path = "../protocol_decoder" }
+trace_decoder = { path = "../trace_decoder" }
 serde = { workspace = true }
