@@ -50,7 +50,7 @@ pub fn hashout2u(h: HashOut) -> U256 {
 }
 
 /// Convert a `Key` to a `U256`.
-pub(crate) fn key2u(key: Key) -> U256 {
+pub fn key2u(key: Key) -> U256 {
     U256(key.0.map(|x| x.to_canonical_u64()))
 }
 
