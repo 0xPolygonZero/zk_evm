@@ -1,0 +1,27 @@
+[package]
+name = "protocol_decoder"
+authors = ["Polygon Zero <bgluth@polygon.technology>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytes = "1.5.0"
+ciborium = "0.2.1"
+ciborium-io = "0.2.1"
+enum-as-inner = "0.6.0"
+enumn = "0.1.12"
+eth_trie_utils = { git = "https://github.com/0xPolygonZero/eth_trie_utils.git", rev = "7fc3c3f54b3cec9c6fc5ffc5230910bd1cb77f76" }
+ethereum-types = { workspace = true }
+hex-literal = "0.4.1"
+hex = "0.4.3"
+keccak-hash = "0.10.0"
+log = { workspace = true }
+plonky2_evm = { workspace = true }
+thiserror = "1.0.49"
+rlp = "0.5.2"
+rlp-derive = "0.1.0"
+serde = { workspace = true }
+serde_with = "3.4.0"
+
+[dev-dependencies]
+pretty_env_logger = "0.5.0"
