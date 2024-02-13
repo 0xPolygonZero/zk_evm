@@ -18,7 +18,7 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-  test:
+  test_mpt_trie:
     name: Test mpt_trie
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -43,6 +43,7 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
+  test_trace_decoder:
     name: Test trace_decoder
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -69,6 +70,7 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
+  test_proof_gen:
     name: Test proof_gen
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -95,6 +97,7 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
+  test_evm_arithmetization:
     name: Test evm_arithmetization
     runs-on: ubuntu-latest
     timeout-minutes: 30
