@@ -5,9 +5,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use eth_trie_utils::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
+use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;

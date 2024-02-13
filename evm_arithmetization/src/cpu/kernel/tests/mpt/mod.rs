@@ -1,6 +1,6 @@
-use eth_trie_utils::nibbles::Nibbles;
-use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{BigEndianHash, H256, U256};
+use mpt_trie::nibbles::Nibbles;
+use mpt_trie::partial_trie::HashedPartialTrie;
 
 use crate::generation::mpt::AccountRlp;
 use crate::Node;

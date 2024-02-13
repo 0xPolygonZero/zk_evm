@@ -1,8 +1,8 @@
 //! An implementation of a Type 1 zk-EVM by Polygon Zero.
 //!
 //! Following the [zk-EVM classification of V. Buterin](https://vitalik.eth.limo/general/2022/08/04/zkevm.html),
-//! the plonky2_evm crate aims at providing an efficient solution for the
-//! problem of generating cryptographic proofs of Ethereum-like transactions
+//! the evm_arithmetization crate aims at providing an efficient solution for
+//! the problem of generating cryptographic proofs of Ethereum-like transactions
 //! with *full Ethereum capability*.
 //!
 //! To this end, the plonky2 zk-EVM is tailored for an AIR-based STARK system
@@ -211,10 +211,10 @@ pub mod curve_pairings;
 pub mod extension_tower;
 pub mod util;
 
-use eth_trie_utils::partial_trie::HashedPartialTrie;
 // Set up Jemalloc
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
+use mpt_trie::partial_trie::HashedPartialTrie;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -222,7 +222,7 @@ static GLOBAL: Jemalloc = Jemalloc;
 
 // Public definitions and re-exports
 
-pub type Node = eth_trie_utils::partial_trie::Node<HashedPartialTrie>;
+pub type Node = mpt_trie::partial_trie::Node<HashedPartialTrie>;
 
 pub use all_stark::AllStark;
 pub use fixed_recursive_verifier::AllRecursiveCircuits;

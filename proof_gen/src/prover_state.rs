@@ -5,9 +5,9 @@
 
 use std::ops::Range;
 
+use evm_arithmetization::{AllStark, StarkConfig};
 use log::info;
 use paste::paste;
-use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
 
 use crate::constants::*;
 use crate::types::AllRecursiveCircuits;

@@ -4,15 +4,15 @@ use std::{
     iter::once,
 };
 
-use eth_trie_utils::{
+use ethereum_types::{Address, H256, U256};
+use evm_arithmetization::{
+    generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
+    proof::{ExtraBlockData, TrieRoots},
+};
+use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     trie_subsets::create_trie_subset,
-};
-use ethereum_types::{Address, H256, U256};
-use plonky2_evm::{
-    generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
-    proof::{ExtraBlockData, TrieRoots},
 };
 use thiserror::Error;
 
@@ -188,7 +188,7 @@ impl ProcessedBlockTrace {
         )?;
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
-        // TODO: Replace cast once `eth_trie_utils` supports `into` for `usize...
+        // TODO: Replace cast once `mpt_trie` supports `into` for `usize...
         let transactions_trie =
             create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
 

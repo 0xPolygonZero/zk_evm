@@ -1,34 +1,32 @@
 [package]
 name = "mpt_trie"
 description = "Types and utility functions for building/working with partial Ethereum tries."
-version = "0.6.0"
+version = "0.1.0"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
-edition = "2021"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
-homepage = "https://github.com/0xPolygonZero/eth-trie-utils"
-repository = "https://github.com/0xPolygonZero/eth-trie-utils"
-keywords = ["ethereum", "trie"]
-categories = ["cryptography::cryptocurrencies", "data-structures"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 exclude = [
     "test_data/*"
 ]
 
 [dependencies]
-bytes = "1.4.0"
-enum-as-inner = "0.6.0"
-ethereum-types = "0.14.1"
-hex = "0.4.3"
-keccak-hash = "0.10.0"
+bytes = { workspace = true }
+enum-as-inner = { workspace = true }
+ethereum-types = { workspace = true }
+hex = { workspace = true }
+keccak-hash = { workspace = true }
 parking_lot = { version = "0.12.1", features = ["serde"] }
 thiserror = "1.0.40"
-log = "0.4.17"
-num = { version = "0.4.1", optional = true }
+log = { workspace = true }
+num = { workspace = true, optional = true }
 num-traits = "0.2.15"
 uint = "0.9.5"
-rlp = "0.5.2"
-serde = { version = "1.0.160", features = ["derive", "rc"] }
+rlp = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }
 
 [dev-dependencies]
 eth_trie = "0.4.0"

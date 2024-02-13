@@ -3,8 +3,8 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
+use evm_arithmetization::{AllStark, StarkConfig};
 use plonky2::util::timing::TimingTree;
-use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
 use trace_decoder::types::TxnProofGenIR;
 
 use crate::{

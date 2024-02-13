@@ -10,12 +10,12 @@ use std::{
 };
 
 use enum_as_inner::EnumAsInner;
-use eth_trie_utils::{
+use ethereum_types::{H256, U256};
+use log::trace;
+use mpt_trie::{
     nibbles::{FromHexPrefixError, Nibbles},
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
-use ethereum_types::{H256, U256};
-use log::trace;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
@@ -1425,7 +1425,7 @@ fn get_bytes_from_cursor<C: CompactCursor>(cursor: &mut C, cursor_start_pos: u64
 
 #[cfg(test)]
 mod tests {
-    use eth_trie_utils::{nibbles::Nibbles, partial_trie::PartialTrie};
+    use mpt_trie::{nibbles::Nibbles, partial_trie::PartialTrie};
 
     use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
     use crate::compact::{

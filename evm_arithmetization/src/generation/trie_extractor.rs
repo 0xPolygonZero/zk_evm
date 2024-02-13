@@ -3,9 +3,9 @@
 
 use std::collections::HashMap;
 
-use eth_trie_utils::nibbles::Nibbles;
-use eth_trie_utils::partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
+use mpt_trie::nibbles::Nibbles;
+use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode};
 
 use super::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
