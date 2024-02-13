@@ -1,5 +1,5 @@
 [workspace]
-members = ["mpt_trie", "proof_gen", "trace_decoder"]
+members = ["mpt_trie", "proof_gen", "trace_decoder", "evm_arithmetization"]
 resolver = "2"
 
 [workspace.dependencies]
