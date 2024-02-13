@@ -1,7 +1,7 @@
 //! This module defines the various proof types used throughout the block proof
 //! generation process.
 
-use plonky2_evm::proof::PublicValues;
+use evm_arithmetization::proof::PublicValues;
 use serde::{Deserialize, Serialize};
 use trace_decoder::types::BlockHeight;
 

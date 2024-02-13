@@ -5,9 +5,9 @@ use core::ops::Range;
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::{anyhow, bail};
-use eth_trie_utils::partial_trie::PartialTrie;
 use ethereum_types::{BigEndianHash, H160, H256, U256, U512};
 use keccak_hash::keccak;
+use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 

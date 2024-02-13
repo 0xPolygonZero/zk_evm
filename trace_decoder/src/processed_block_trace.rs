@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::iter::once;
 
-use eth_trie_utils::nibbles::Nibbles;
-use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::{Address, U256};
-use plonky2_evm::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use mpt_trie::nibbles::Nibbles;
+use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
 use crate::compact::compact_prestate_processing::{
     process_compact_prestate_debug, PartialTriePreImages,

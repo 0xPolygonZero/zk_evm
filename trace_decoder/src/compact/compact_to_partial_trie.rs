@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use eth_trie_utils::{
+use evm_arithmetization::generation::mpt::AccountRlp;
+use log::trace;
+use mpt_trie::{
     nibbles::{Nibble, Nibbles},
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
-use log::trace;
-use plonky2_evm::generation::mpt::AccountRlp;
 
 use super::compact_prestate_processing::{
     AccountNodeCode, AccountNodeData, CompactParsingResult, LeafNodeData, NodeEntry, WitnessEntry,
@@ -70,7 +70,7 @@ fn process_branch(
 ) -> CompactParsingResult<()> {
     for (i, slot) in branch.iter().enumerate().take(16) {
         if let Some(child) = slot {
-            // TODO: Seriously update `eth_trie_utils` to have a better API...
+            // TODO: Seriously update `mpt_trie` to have a better API...
             let mut new_k = curr_key;
             new_k.push_nibble_back(i as Nibble);
             create_partial_trie_from_compact_node_rec(new_k, child, output)?;

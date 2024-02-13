@@ -4,8 +4,6 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use eth_trie_utils::nibbles::Nibbles;
-use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
@@ -18,6 +16,8 @@ use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
+use mpt_trie::nibbles::Nibbles;
+use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;

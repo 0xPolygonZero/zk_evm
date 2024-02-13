@@ -1,5 +1,5 @@
-use eth_trie_utils::partial_trie::PartialTrie;
-use plonky2_evm::generation::mpt::AccountRlp;
+use evm_arithmetization::generation::mpt::AccountRlp;
+use mpt_trie::partial_trie::PartialTrie;
 
 use super::compact_prestate_processing::{
     process_compact_prestate, process_compact_prestate_debug, CompactParsingResult,

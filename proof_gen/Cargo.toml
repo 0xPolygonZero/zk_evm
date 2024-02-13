@@ -13,7 +13,9 @@ keywords.workspace = true
 ethereum-types = { workspace = true }
 log = { workspace = true }
 paste = "1.0.14"
-plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "265d46a96ecfec49a32973f66f8aa811586c5d4a" }
-plonky2_evm = { workspace = true }
-trace_decoder = { path = "../trace_decoder" }
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
 serde = { workspace = true }
+
+# Local dependencies
+trace_decoder = { version = "0.1.0", path = "../trace_decoder" }
+evm_arithmetization = { version = "0.1.0", path = "../evm_arithmetization" }

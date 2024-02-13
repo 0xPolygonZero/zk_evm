@@ -1,10 +1,10 @@
 use std::str::FromStr;
 
 use anyhow::Result;
-use eth_trie_utils::nibbles::Nibbles;
-use eth_trie_utils::partial_trie::HashedPartialTrie;
 use ethereum_types::{BigEndianHash, H256, U256};
 use hex_literal::hex;
+use mpt_trie::nibbles::Nibbles;
+use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;

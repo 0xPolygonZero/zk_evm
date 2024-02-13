@@ -1,9 +1,9 @@
-use eth_trie_utils::nibbles::Nibbles;
 use ethereum_types::{Address, H256, U256};
-use plonky2_evm::{
+use evm_arithmetization::{
     generation::GenerationInputs,
     proof::{BlockHashes, BlockMetadata},
 };
+use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
 pub type BlockHeight = u64;
