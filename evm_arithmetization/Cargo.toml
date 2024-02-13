@@ -2,13 +2,14 @@
 name = "evm_arithmetization"
 description = "Implementation of STARKs for the Ethereum Virtual Machine"
 version = "0.1.0"
-license = "MIT or Apache-2.0"
 authors = ["Daniel Lubarov <daniel@lubarov.com>", "William Borgeaud <williamborgeaud@gmail.com>"]
 readme = "README.md"
-repository = "https://github.com/0xPolygonZero/zk_evm"
-keywords = ["EVM", "STARK", "Ethereum"]
 categories = ["cryptography"]
-edition = "2021"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
 
 [dependencies]
 anyhow = "1.0.40"

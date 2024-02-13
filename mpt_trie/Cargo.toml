@@ -2,15 +2,12 @@
 name = "mpt_trie"
 description = "Types and utility functions for building/working with partial Ethereum tries."
 version = "0.1.0"
-license = "MIT or Apache-2.0"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
-edition = "2021"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
-homepage = "https://github.com/0xPolygonZero/eth-trie-utils"
-repository = "https://github.com/0xPolygonZero/eth-trie-utils"
-keywords = ["ethereum", "trie"]
-categories = ["cryptography::cryptocurrencies", "data-structures"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 exclude = [
     "test_data/*"
