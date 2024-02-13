@@ -2,6 +2,7 @@
 name = "trace_decoder"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
 version = "0.1.0"
+license = "MIT or Apache-2.0"
 edition = "2021"
 
 [dependencies]

@@ -2,6 +2,7 @@
 name = "proof_gen"
 description = "Generates block proofs from zero proof IR."
 version = "0.1.0"
+license = "MIT or Apache-2.0"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
