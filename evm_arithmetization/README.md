@@ -18,7 +18,7 @@ Audits for the ZK-EVM will begin on November 27th, 2023. See the [Audit RC1 Mile
 
 ## Documentation / Specification
 
-The current specification is located in the [/spec](/spec) directory, with the most currently up-to-date PDF [available here](https://github.com/0xPolygonZero/plonky2/blob/main/evm/spec/zkevm.pdf). Further documentation will be made over the coming months.
+The current specification is located in the [/docs/arithmetization](/docs/arithmetization) directory, with the most currently up-to-date PDF [available here](https://github.com/0xPolygonZero/zk_evm/blob/main/docs/arithmetization/zkevm.pdf). Further documentation will be made over the coming months.
 
 ## License
 Copyright (c) 2023 PT Services DMCC
