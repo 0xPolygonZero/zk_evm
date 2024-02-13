@@ -1,7 +1,7 @@
 use std::{env, fs};
 
+use evm_arithmetization::cpu::kernel::assemble_to_bytes;
 use hex::encode;
-use plonky2_evm::cpu::kernel::assemble_to_bytes;
 
 fn main() {
     let mut args = env::args();

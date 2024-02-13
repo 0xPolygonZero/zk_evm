@@ -1,16 +1,17 @@
 use crate::memory::segments::Segment;
 
-/// These are normalized transaction fields, i.e. not specific to any transaction type.
+/// These are normalized transaction fields, i.e. not specific to any
+/// transaction type.
 ///
-/// Each value is directly scaled by the corresponding `Segment::TxnFields` value for faster
-/// memory access in the kernel.
+/// Each value is directly scaled by the corresponding `Segment::TxnFields`
+/// value for faster memory access in the kernel.
 #[allow(dead_code)]
 #[allow(clippy::enum_clike_unportable_variant)]
 #[repr(usize)]
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 pub(crate) enum NormalizedTxnField {
-    /// Whether a chain ID was present in the txn data. Type 0 transaction with v=27 or v=28 have
-    /// no chain ID. This affects what fields get signed.
+    /// Whether a chain ID was present in the txn data. Type 0 transaction with
+    /// v=27 or v=28 have no chain ID. This affects what fields get signed.
     ChainIdPresent = Segment::TxnFields as usize,
     ChainId,
     Nonce,
@@ -20,7 +21,8 @@ pub(crate) enum NormalizedTxnField {
     IntrinsicGas,
     To,
     Value,
-    /// The length of the data field. The data itself is stored in another segment.
+    /// The length of the data field. The data itself is stored in another
+    /// segment.
     DataLen,
     YParity,
     R,
@@ -28,7 +30,8 @@ pub(crate) enum NormalizedTxnField {
     Origin,
 
     /// The actual computed gas price for this transaction in the block.
-    /// This is not technically a transaction field, as it depends on the block's base fee.
+    /// This is not technically a transaction field, as it depends on the
+    /// block's base fee.
     ComputedFeePerGas,
     ComputedPriorityFeePerGas,
 }

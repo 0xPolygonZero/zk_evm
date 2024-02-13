@@ -1,7 +1,8 @@
 //! This crate enforces the correctness of reading and writing sequences
 //! of bytes in Big-Endian ordering from and to the memory.
 //!
-//! The trace layout consists in one row for an `N` byte sequence (where 32 ≥ `N` > 0).
+//! The trace layout consists in one row for an `N` byte sequence (where 32 ≥
+//! `N` > 0).
 //!
 //! At each row the `i`-th byte flag will be activated to indicate a sequence of
 //! length i+1.
@@ -12,18 +13,19 @@
 //!
 //! where b[i] is the `i`-th byte flag.
 //!
-//! Because of the discrepancy in endianness between the different tables, the byte sequences
-//! are actually written in the trace in reverse order from the order they are provided.
-//! We only store the virtual address `virt` of the first byte, and the virtual address for byte `i`
-//! can be recovered as:
+//! Because of the discrepancy in endianness between the different tables, the
+//! byte sequences are actually written in the trace in reverse order from the
+//! order they are provided. We only store the virtual address `virt` of the
+//! first byte, and the virtual address for byte `i` can be recovered as:
 //!     virt_i = virt + sequence_length - 1 - i
 //!
-//! Note that, when writing a sequence of bytes to memory, both the `U256` value and the
-//! corresponding sequence length are being read from the stack. Because of the endianness
-//! discrepancy mentioned above, we first convert the value to a byte sequence in Little-Endian,
-//! then resize the sequence to prune unneeded zeros before reverting the sequence order.
-//! This means that the higher-order bytes will be thrown away during the process, if the value
-//! is greater than 256^length, and as a result a different value will be stored in memory.
+//! Note that, when writing a sequence of bytes to memory, both the `U256` value
+//! and the corresponding sequence length are being read from the stack. Because
+//! of the endianness discrepancy mentioned above, we first convert the value to
+//! a byte sequence in Little-Endian, then resize the sequence to prune unneeded
+//! zeros before reverting the sequence order. This means that the higher-order
+//! bytes will be thrown away during the process, if the value is greater than
+//! 256^length, and as a result a different value will be stored in memory.
 
 use core::marker::PhantomData;
 
@@ -53,8 +55,9 @@ use crate::witness::memory::MemoryAddress;
 /// Strict upper bound for the individual bytes range-check.
 const BYTE_RANGE_MAX: usize = 1usize << 8;
 
-/// Creates the vector of `Columns` for `BytePackingStark` corresponding to the final packed limbs being read/written.
-/// `CpuStark` will look into these columns, as the CPU needs the output of byte packing.
+/// Creates the vector of `Columns` for `BytePackingStark` corresponding to the
+/// final packed limbs being read/written. `CpuStark` will look into these
+/// columns, as the CPU needs the output of byte packing.
 pub(crate) fn ctl_looked_data<F: Field>() -> Vec<Column<F>> {
     // Reconstruct the u32 limbs composing the final `U256` word
     // being read/written from the underlying byte values. For each,
@@ -89,7 +92,8 @@ pub(crate) fn ctl_looked_filter<F: Field>() -> Filter<F> {
     Filter::new_simple(Column::sum((0..NUM_BYTES).map(index_len)))
 }
 
-/// Column linear combination for the `BytePackingStark` table reading/writing the `i`th byte sequence from `MemoryStark`.
+/// Column linear combination for the `BytePackingStark` table reading/writing
+/// the `i`th byte sequence from `MemoryStark`.
 pub(crate) fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
     let mut res = Column::singles([IS_READ, ADDR_CONTEXT, ADDR_SEGMENT]).collect_vec();
 
@@ -117,7 +121,8 @@ pub(crate) fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
     res
 }
 
-/// CTL filter for reading/writing the `i`th byte of the byte sequence from/to memory.
+/// CTL filter for reading/writing the `i`th byte of the byte sequence from/to
+/// memory.
 pub(crate) fn ctl_looking_memory_filter<F: Field>(i: usize) -> Filter<F> {
     Filter::new_simple(Column::sum((i..NUM_BYTES).map(index_len)))
 }
@@ -314,7 +319,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for BytePackingSt
 
         // Check that all limbs after final length are 0.
         for i in 0..NUM_BYTES - 1 {
-            // If the length is i+1, then value_bytes(i+1),...,value_bytes(NUM_BYTES-1) must be 0.
+            // If the length is i+1, then value_bytes(i+1),...,value_bytes(NUM_BYTES-1) must
+            // be 0.
             for j in i + 1..NUM_BYTES {
                 yield_constr.constraint(local_values[index_len(i)] * local_values[value_bytes(j)]);
             }
@@ -377,7 +383,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for BytePackingSt
 
         // Check that all limbs after final length are 0.
         for i in 0..NUM_BYTES - 1 {
-            // If the length is i+1, then value_bytes(i+1),...,value_bytes(NUM_BYTES-1) must be 0.
+            // If the length is i+1, then value_bytes(i+1),...,value_bytes(NUM_BYTES-1) must
+            // be 0.
             for j in i + 1..NUM_BYTES {
                 let constr =
                     builder.mul_extension(local_values[index_len(i)], local_values[value_bytes(j)]);

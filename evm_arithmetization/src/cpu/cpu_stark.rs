@@ -27,8 +27,9 @@ use crate::cpu::{
 use crate::memory::segments::Segment;
 use crate::memory::{NUM_CHANNELS, VALUE_LIMBS};
 
-/// Creates the vector of `Columns` corresponding to the General Purpose channels when calling the Keccak sponge:
-/// the CPU reads the output of the sponge directly from the `KeccakSpongeStark` table.
+/// Creates the vector of `Columns` corresponding to the General Purpose
+/// channels when calling the Keccak sponge: the CPU reads the output of the
+/// sponge directly from the `KeccakSpongeStark` table.
 pub(crate) fn ctl_data_keccak_sponge<F: Field>() -> Vec<Column<F>> {
     // When executing KECCAK_GENERAL, the GP memory channels are used as follows:
     // GP channel 0: stack[-1] = addr (context, segment, virt)
@@ -81,9 +82,11 @@ fn ctl_data_ternops<F: Field>() -> Vec<Column<F>> {
     res
 }
 
-/// Creates the vector of columns corresponding to the opcode, the two inputs and the output of the logic operation.
+/// Creates the vector of columns corresponding to the opcode, the two inputs
+/// and the output of the logic operation.
 pub(crate) fn ctl_data_logic<F: Field>() -> Vec<Column<F>> {
-    // Instead of taking single columns, we reconstruct the entire opcode value directly.
+    // Instead of taking single columns, we reconstruct the entire opcode value
+    // directly.
     let mut res = vec![Column::le_bits(COL_MAP.opcode_bits)];
     res.extend(ctl_data_binops());
     res
@@ -94,9 +97,11 @@ pub(crate) fn ctl_filter_logic<F: Field>() -> Filter<F> {
     Filter::new_simple(Column::single(COL_MAP.op.logic_op))
 }
 
-/// Returns the `TableWithColumns` for the CPU rows calling arithmetic operations.
+/// Returns the `TableWithColumns` for the CPU rows calling arithmetic
+/// operations.
 pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
-    // Instead of taking single columns, we reconstruct the entire opcode value directly.
+    // Instead of taking single columns, we reconstruct the entire opcode value
+    // directly.
     let mut columns = vec![Column::le_bits(COL_MAP.opcode_bits)];
     columns.extend(ctl_data_ternops());
     // Create the CPU Table whose columns are those with the three
@@ -125,8 +130,10 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
     )
 }
 
-/// Creates the vector of `Columns` corresponding to the contents of General Purpose channels when calling byte packing.
-/// We use `ctl_data_keccak_sponge` because the `Columns` are the same as the ones computed for `KeccakSpongeStark`.
+/// Creates the vector of `Columns` corresponding to the contents of General
+/// Purpose channels when calling byte packing. We use `ctl_data_keccak_sponge`
+/// because the `Columns` are the same as the ones computed for
+/// `KeccakSpongeStark`.
 pub(crate) fn ctl_data_byte_packing<F: Field>() -> Vec<Column<F>> {
     let mut res = vec![Column::constant(F::ONE)]; // is_read
     res.extend(ctl_data_keccak_sponge());
@@ -134,7 +141,8 @@ pub(crate) fn ctl_data_byte_packing<F: Field>() -> Vec<Column<F>> {
 }
 
 /// CTL filter for the `MLOAD_32BYTES` operation.
-/// MLOAD_32 BYTES is differentiated from MSTORE_32BYTES by its fifth bit set to 1.
+/// MLOAD_32 BYTES is differentiated from MSTORE_32BYTES by its fifth bit set to
+/// 1.
 pub(crate) fn ctl_filter_byte_packing<F: Field>() -> Filter<F> {
     Filter::new(
         vec![(
@@ -145,7 +153,8 @@ pub(crate) fn ctl_filter_byte_packing<F: Field>() -> Filter<F> {
     )
 }
 
-/// Creates the vector of `Columns` corresponding to the contents of General Purpose channels when calling byte unpacking.
+/// Creates the vector of `Columns` corresponding to the contents of General
+/// Purpose channels when calling byte unpacking.
 pub(crate) fn ctl_data_byte_unpacking<F: Field>() -> Vec<Column<F>> {
     let is_read = Column::constant(F::ZERO);
 
@@ -180,7 +189,8 @@ pub(crate) fn ctl_data_byte_unpacking<F: Field>() -> Vec<Column<F>> {
 }
 
 /// CTL filter for the `MSTORE_32BYTES` operation.
-/// MSTORE_32BYTES is differentiated from MLOAD_32BYTES by its fifth bit set to 0.
+/// MSTORE_32BYTES is differentiated from MLOAD_32BYTES by its fifth bit set to
+/// 0.
 pub(crate) fn ctl_filter_byte_unpacking<F: Field>() -> Filter<F> {
     Filter::new(
         vec![(
@@ -191,8 +201,9 @@ pub(crate) fn ctl_filter_byte_unpacking<F: Field>() -> Filter<F> {
     )
 }
 
-/// Creates the vector of `Columns` corresponding to three consecutive (byte) reads in memory.
-/// It's used by syscalls and exceptions to read an address in a jumptable.
+/// Creates the vector of `Columns` corresponding to three consecutive (byte)
+/// reads in memory. It's used by syscalls and exceptions to read an address in
+/// a jumptable.
 pub(crate) fn ctl_data_jumptable_read<F: Field>() -> Vec<Column<F>> {
     let is_read = Column::constant(F::ONE);
     let mut res = vec![is_read];
@@ -225,8 +236,9 @@ pub(crate) fn ctl_filter_syscall_exceptions<F: Field>() -> Filter<F> {
     Filter::new_simple(Column::sum([COL_MAP.op.syscall, COL_MAP.op.exception]))
 }
 
-/// Creates the vector of `Columns` corresponding to the contents of the CPU registers when performing a `PUSH`.
-/// `PUSH` internal reads are done by calling `BytePackingStark`.
+/// Creates the vector of `Columns` corresponding to the contents of the CPU
+/// registers when performing a `PUSH`. `PUSH` internal reads are done by
+/// calling `BytePackingStark`.
 pub(crate) fn ctl_data_byte_packing_push<F: Field>() -> Vec<Column<F>> {
     let is_read = Column::constant(F::ONE);
     let context = Column::single(COL_MAP.code_context);
@@ -236,7 +248,8 @@ pub(crate) fn ctl_data_byte_packing_push<F: Field>() -> Vec<Column<F>> {
         Column::linear_combination_with_constant([(COL_MAP.program_counter, F::ONE)], F::ONE);
     let val = Column::singles_next_row(COL_MAP.mem_channels[0].value);
 
-    // We fetch the length from the `PUSH` opcode lower bits, that indicate `len - 1`.
+    // We fetch the length from the `PUSH` opcode lower bits, that indicate `len -
+    // 1`.
     let len = Column::le_bits_with_constant(&COL_MAP.opcode_bits[0..5], F::ONE);
 
     let num_channels = F::from_canonical_usize(NUM_CHANNELS);
@@ -283,7 +296,8 @@ fn mem_time_and_channel<F: Field>(channel: usize) -> Column<F> {
     Column::linear_combination_with_constant([(COL_MAP.clock, scalar)], addend)
 }
 
-/// Creates the vector of `Columns` corresponding to the contents of the code channel when reading code values.
+/// Creates the vector of `Columns` corresponding to the contents of the code
+/// channel when reading code values.
 pub(crate) fn ctl_data_code_memory<F: Field>() -> Vec<Column<F>> {
     let mut cols = vec![
         Column::constant(F::ONE),             // is_read
@@ -303,7 +317,8 @@ pub(crate) fn ctl_data_code_memory<F: Field>() -> Vec<Column<F>> {
     cols
 }
 
-/// Creates the vector of `Columns` corresponding to the contents of General Purpose channels.
+/// Creates the vector of `Columns` corresponding to the contents of General
+/// Purpose channels.
 pub(crate) fn ctl_data_gp_memory<F: Field>(channel: usize) -> Vec<Column<F>> {
     let channel_map = COL_MAP.mem_channels[channel];
     let mut cols: Vec<_> = Column::singles([
@@ -346,10 +361,10 @@ pub(crate) fn ctl_data_memory_old_sp_write_set_context<F: Field>() -> Vec<Column
     let mut cols = vec![
         Column::constant(F::ZERO),       // is_read
         Column::single(COL_MAP.context), // addr_context
-        Column::constant(F::from_canonical_usize(Segment::ContextMetadata.unscale())), // addr_segment
+        Column::constant(F::from_canonical_usize(Segment::ContextMetadata.unscale())), /* addr_segment */
         Column::constant(F::from_canonical_usize(
             ContextMetadata::StackSize.unscale(),
-        )), // addr_virtual
+        )), /* addr_virtual */
     ];
 
     // Low limb is current stack length minus one.
@@ -371,10 +386,10 @@ pub(crate) fn ctl_data_memory_new_sp_read_set_context<F: Field>() -> Vec<Column<
     let mut cols = vec![
         Column::constant(F::ONE),                         // is_read
         Column::single(COL_MAP.mem_channels[0].value[2]), // addr_context (in the top of the stack)
-        Column::constant(F::from_canonical_usize(Segment::ContextMetadata.unscale())), // addr_segment
+        Column::constant(F::from_canonical_usize(Segment::ContextMetadata.unscale())), /* addr_segment */
         Column::constant(F::from_canonical_u64(
             ContextMetadata::StackSize as u64 - Segment::ContextMetadata as u64,
-        )), // addr_virtual
+        )), /* addr_virtual */
     ];
 
     // Low limb is new stack length.

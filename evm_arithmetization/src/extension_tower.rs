@@ -257,8 +257,8 @@ impl Div for BLS381 {
     }
 }
 
-/// The degree 2 field extension Fp2 is given by adjoining i, the square root of -1, to BN254
-/// The arithmetic in this extension is standard complex arithmetic
+/// The degree 2 field extension Fp2 is given by adjoining i, the square root of
+/// -1, to BN254 The arithmetic in this extension is standard complex arithmetic
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct Fp2<T>
 where
@@ -809,8 +809,8 @@ impl Adj for Fp2<BLS381> {
     const FROB_Z: [Fp2<BLS381>; 12] = [Fp2::<BLS381>::ZERO; 12];
 }
 
-/// The degree 3 field extension Fp6 over Fp2 is given by adjoining t, where t^3 = 1 + i
-/// Fp6 has basis 1, t, t^2 over Fp2
+/// The degree 3 field extension Fp6 over Fp2 is given by adjoining t, where t^3
+/// = 1 + i Fp6 has basis 1, t, t^2 over Fp2
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct Fp6<T>
 where
@@ -920,8 +920,9 @@ where
     T: FieldExt,
     Fp2<T>: Adj,
 {
-    /// This function multiplies an Fp6 element by t, and hence shifts the bases,
-    /// where the t^2 coefficient picks up a factor of 1+i as the 1 coefficient of the output
+    /// This function multiplies an Fp6 element by t, and hence shifts the
+    /// bases, where the t^2 coefficient picks up a factor of 1+i as the 1
+    /// coefficient of the output
     fn sh(self) -> Fp6<T> {
         Fp6 {
             t0: self.t2.mul_adj(),
@@ -1066,12 +1067,12 @@ where
     ///     phi = Prod_{i=0}^11 x_i
     /// lands in BN254, and hence the inverse of x is given by
     ///     (Prod_{i=1}^11 x_i) / phi
-    /// The 6th Frob map is nontrivial but leaves Fp6 fixed and hence must be the conjugate:
-    ///     x_6 = (a + bz)_6 = a - bz = x.conj()
-    /// Letting prod_17 = x_1 * x_7, the remaining factors in the numerator can be expressed as:
-    ///     [(prod_17) * (prod_17)_2] * (prod_17)_4 * [(prod_17) * (prod_17)_2]_1
-    /// By Galois theory, both the following are in Fp2 and are complex conjugates
-    ///     prod_odds,  prod_evens
+    /// The 6th Frob map is nontrivial but leaves Fp6 fixed and hence must be
+    /// the conjugate:     x_6 = (a + bz)_6 = a - bz = x.conj()
+    /// Letting prod_17 = x_1 * x_7, the remaining factors in the numerator can
+    /// be expressed as:     [(prod_17) * (prod_17)_2] * (prod_17)_4 *
+    /// [(prod_17) * (prod_17)_2]_1 By Galois theory, both the following are
+    /// in Fp2 and are complex conjugates     prod_odds,  prod_evens
     /// Thus phi = ||prod_odds||^2, and hence the inverse is given by
     ///    prod_odds * prod_evens_except_six * x.conj() / ||prod_odds||^2
     fn inv(self) -> Fp12<T> {

@@ -13,11 +13,12 @@ use starky::proof::{MultiProof, StarkProofChallenges};
 use crate::all_stark::NUM_TABLES;
 use crate::util::{get_h160, get_h256, h2u};
 
-/// A STARK proof for each table, plus some metadata used to create recursive wrapper proofs.
+/// A STARK proof for each table, plus some metadata used to create recursive
+/// wrapper proofs.
 #[derive(Debug, Clone)]
 pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> {
-    /// A multi-proof containing all proofs for the different STARK modules and their
-    /// cross-table lookup challenges.
+    /// A multi-proof containing all proofs for the different STARK modules and
+    /// their cross-table lookup challenges.
     pub multi_proof: MultiProof<F, C, D, NUM_TABLES>,
     /// Public memory values used for the recursive proofs.
     pub public_values: PublicValues,
@@ -122,7 +123,8 @@ impl TrieRoots {
     }
 }
 
-// There should be 256 previous hashes stored, so the default should also contain 256 values.
+// There should be 256 previous hashes stored, so the default should also
+// contain 256 values.
 impl Default for BlockHashes {
     fn default() -> Self {
         Self {
@@ -136,12 +138,13 @@ impl Default for BlockHashes {
 /// The proofs across consecutive blocks ensure that these values
 /// are consistent (i.e. shifted by one to the left).
 ///
-/// When the block number is less than 256, dummy values, i.e. `H256::default()`,
-/// should be used for the additional block hashes.
+/// When the block number is less than 256, dummy values, i.e.
+/// `H256::default()`, should be used for the additional block hashes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockHashes {
-    /// The previous 256 hashes to the current block. The leftmost hash, i.e. `prev_hashes[0]`,
-    /// is the oldest, and the rightmost, i.e. `prev_hashes[255]` is the hash of the parent block.
+    /// The previous 256 hashes to the current block. The leftmost hash, i.e.
+    /// `prev_hashes[0]`, is the oldest, and the rightmost, i.e.
+    /// `prev_hashes[255]` is the hash of the parent block.
     pub prev_hashes: Vec<H256>,
     // The hash of the current block.
     pub cur_hash: H256,
@@ -218,22 +221,23 @@ impl BlockMetadata {
     }
 }
 
-/// Additional block data that are specific to the local transaction being proven,
-/// unlike `BlockMetadata`.
+/// Additional block data that are specific to the local transaction being
+/// proven, unlike `BlockMetadata`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ExtraBlockData {
     /// The state trie digest of the checkpoint block.
     pub checkpoint_state_trie_root: H256,
-    /// The transaction count prior execution of the local state transition, starting
-    /// at 0 for the initial transaction of a block.
+    /// The transaction count prior execution of the local state transition,
+    /// starting at 0 for the initial transaction of a block.
     pub txn_number_before: U256,
     /// The transaction count after execution of the local state transition.
     pub txn_number_after: U256,
-    /// The accumulated gas used prior execution of the local state transition, starting
-    /// at 0 for the initial transaction of a block.
+    /// The accumulated gas used prior execution of the local state transition,
+    /// starting at 0 for the initial transaction of a block.
     pub gas_used_before: U256,
-    /// The accumulated gas used after execution of the local state transition. It should
-    /// match the `block_gas_used` value after execution of the last transaction in a block.
+    /// The accumulated gas used after execution of the local state transition.
+    /// It should match the `block_gas_used` value after execution of the
+    /// last transaction in a block.
     pub gas_used_after: U256,
 }
 
@@ -258,7 +262,8 @@ impl ExtraBlockData {
 }
 
 /// Memory values which are public.
-/// Note: All the larger integers are encoded with 32-bit limbs in little-endian order.
+/// Note: All the larger integers are encoded with 32-bit limbs in little-endian
+/// order.
 #[derive(Eq, PartialEq, Debug)]
 pub struct PublicValuesTarget {
     /// Trie hashes before the execution of the local state transition.
@@ -473,7 +478,8 @@ impl PublicValuesTarget {
 }
 
 /// Circuit version of `TrieRoots`.
-/// `Target`s for trie hashes. Since a `Target` holds a 32-bit limb, each hash requires 8 `Target`s.
+/// `Target`s for trie hashes. Since a `Target` holds a 32-bit limb, each hash
+/// requires 8 `Target`s.
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 pub struct TrieRootsTarget {
     /// Targets for the state trie hash.
@@ -489,8 +495,9 @@ impl TrieRootsTarget {
     pub(crate) const HASH_SIZE: usize = 8;
     pub(crate) const SIZE: usize = Self::HASH_SIZE * 3;
 
-    /// Extracts trie hash `Target`s for all tries from the provided public input `Target`s.
-    /// The provided `pis` should start with the trie hashes.
+    /// Extracts trie hash `Target`s for all tries from the provided public
+    /// input `Target`s. The provided `pis` should start with the trie
+    /// hashes.
     pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
         let state_root = pis[0..8].try_into().unwrap();
         let transactions_root = pis[8..16].try_into().unwrap();
@@ -573,8 +580,8 @@ impl BlockMetadataTarget {
     /// Number of `Target`s required for the block metadata.
     pub(crate) const SIZE: usize = 85;
 
-    /// Extracts block metadata `Target`s from the provided public input `Target`s.
-    /// The provided `pis` should start with the block metadata.
+    /// Extracts block metadata `Target`s from the provided public input
+    /// `Target`s. The provided `pis` should start with the block metadata.
     pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
         let block_beneficiary = pis[0..5].try_into().unwrap();
         let block_timestamp = pis[5];
@@ -663,17 +670,18 @@ impl BlockMetadataTarget {
 }
 
 /// Circuit version of `BlockHashes`.
-/// `Target`s for the user-provided previous 256 block hashes and current block hash.
-/// Each block hash requires 8 `Target`s.
+/// `Target`s for the user-provided previous 256 block hashes and current block
+/// hash. Each block hash requires 8 `Target`s.
 /// The proofs across consecutive blocks ensure that these values
 /// are consistent (i.e. shifted by eight `Target`s to the left).
 ///
-/// When the block number is less than 256, dummy values, i.e. `H256::default()`,
-/// should be used for the additional block hashes.
+/// When the block number is less than 256, dummy values, i.e.
+/// `H256::default()`, should be used for the additional block hashes.
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 pub struct BlockHashesTarget {
-    /// `Target`s for the previous 256 hashes to the current block. The leftmost hash, i.e. `prev_hashes[0..8]`,
-    /// is the oldest, and the rightmost, i.e. `prev_hashes[255 * 7..255 * 8]` is the hash of the parent block.
+    /// `Target`s for the previous 256 hashes to the current block. The leftmost
+    /// hash, i.e. `prev_hashes[0..8]`, is the oldest, and the rightmost,
+    /// i.e. `prev_hashes[255 * 7..255 * 8]` is the hash of the parent block.
     pub(crate) prev_hashes: [Target; 2048],
     // `Target` for the hash of the current block.
     pub(crate) cur_hash: [Target; 8],
@@ -683,8 +691,9 @@ impl BlockHashesTarget {
     /// Number of `Target`s required for previous and current block hashes.
     pub(crate) const SIZE: usize = 2056;
 
-    /// Extracts the previous and current block hash `Target`s from the public input `Target`s.
-    /// The provided `pis` should start with the block hashes.
+    /// Extracts the previous and current block hash `Target`s from the public
+    /// input `Target`s. The provided `pis` should start with the block
+    /// hashes.
     pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
         Self {
             prev_hashes: pis[0..2048].try_into().unwrap(),
@@ -726,22 +735,24 @@ impl BlockHashesTarget {
 }
 
 /// Circuit version of `ExtraBlockData`.
-/// Additional block data that are specific to the local transaction being proven,
-/// unlike `BlockMetadata`.
+/// Additional block data that are specific to the local transaction being
+/// proven, unlike `BlockMetadata`.
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 pub struct ExtraBlockDataTarget {
     /// `Target`s for the state trie digest of the checkpoint block.
     pub checkpoint_state_trie_root: [Target; 8],
-    /// `Target` for the transaction count prior execution of the local state transition, starting
-    /// at 0 for the initial trnasaction of a block.
+    /// `Target` for the transaction count prior execution of the local state
+    /// transition, starting at 0 for the initial trnasaction of a block.
     pub txn_number_before: Target,
-    /// `Target` for the transaction count after execution of the local state transition.
+    /// `Target` for the transaction count after execution of the local state
+    /// transition.
     pub txn_number_after: Target,
-    /// `Target` for the accumulated gas used prior execution of the local state transition, starting
-    /// at 0 for the initial transaction of a block.
+    /// `Target` for the accumulated gas used prior execution of the local state
+    /// transition, starting at 0 for the initial transaction of a block.
     pub gas_used_before: Target,
-    /// `Target` for the accumulated gas used after execution of the local state transition. It should
-    /// match the `block_gas_used` value after execution of the last transaction in a block.
+    /// `Target` for the accumulated gas used after execution of the local state
+    /// transition. It should match the `block_gas_used` value after
+    /// execution of the last transaction in a block.
     pub gas_used_after: Target,
 }
 
@@ -794,7 +805,8 @@ impl ExtraBlockDataTarget {
         }
     }
 
-    /// Connects the extra block data in `ed0` with the extra block data in `ed1`.
+    /// Connects the extra block data in `ed0` with the extra block data in
+    /// `ed1`.
     pub(crate) fn connect<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         ed0: Self,

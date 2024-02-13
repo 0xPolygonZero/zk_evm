@@ -135,7 +135,8 @@ fn run_test(fn_label: &str, expected_fn: fn(U256, U256) -> U256, opname: &str) {
 
 #[test]
 fn test_sdiv() {
-    // Double-check that the expected output calculation is correct in the special case.
+    // Double-check that the expected output calculation is correct in the special
+    // case.
     let x = U256::one() << 255; // -2^255
     let y = U256::one().overflowing_neg().0; // -1
     assert_eq!(u256_sdiv(x, y), x); // SDIV(-2^255, -1) = -2^255.

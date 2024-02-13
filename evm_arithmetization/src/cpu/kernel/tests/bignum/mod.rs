@@ -67,7 +67,8 @@ fn test_data_u256(filename: &str) -> Vec<U256> {
         .collect()
 }
 
-// Convert each biguint to a vector of bignum limbs, pad to the given length, and concatenate.
+// Convert each biguint to a vector of bignum limbs, pad to the given length,
+// and concatenate.
 fn pad_bignums(biguints: &[BigUint], length: usize) -> Vec<U256> {
     biguints
         .iter()

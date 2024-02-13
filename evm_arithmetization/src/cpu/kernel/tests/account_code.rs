@@ -200,7 +200,8 @@ fn test_extcodecopy() -> Result<()> {
 
     let extcodecopy = KERNEL.global_labels["sys_extcodecopy"];
 
-    // Put random data in main memory and the `KernelAccountCode` segment for realism.
+    // Put random data in main memory and the `KernelAccountCode` segment for
+    // realism.
     let mut rng = thread_rng();
     for i in 0..2000 {
         interpreter.generation_state.memory.contexts[context].segments
@@ -255,8 +256,9 @@ fn test_extcodecopy() -> Result<()> {
     Ok(())
 }
 
-/// Prepare the interpreter for storage tests by inserting all necessary accounts
-/// in the state trie, adding the code we want to context 1 and switching the context.
+/// Prepare the interpreter for storage tests by inserting all necessary
+/// accounts in the state trie, adding the code we want to context 1 and
+/// switching the context.
 fn prepare_interpreter_all_accounts<F: Field>(
     interpreter: &mut Interpreter<F>,
     trie_inputs: TrieInputs,
@@ -387,8 +389,9 @@ fn sload() -> Result<()> {
 
     let addr_nibbles = Nibbles::from_bytes_be(addr_hashed.as_bytes()).unwrap();
 
-    // This code is similar to the one in add11_yml's contract, but we pop the added value
-    // and carry out an SLOAD instead of an SSTORE. We also add a PUSH at the end.
+    // This code is similar to the one in add11_yml's contract, but we pop the added
+    // value and carry out an SLOAD instead of an SSTORE. We also add a PUSH at
+    // the end.
     let code = [
         0x60, 0x01, 0x60, 0x01, 0x01, 0x50, 0x60, 0x00, 0x54, 0x60, 0x03, 0x00,
     ];
@@ -437,7 +440,8 @@ fn sload() -> Result<()> {
     interpreter
         .pop()
         .expect("The stack length should not be empty.");
-    // Now, execute mpt_hash_state_trie. We check that the state trie has not changed.
+    // Now, execute mpt_hash_state_trie. We check that the state trie has not
+    // changed.
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
     interpreter.set_is_kernel(true);

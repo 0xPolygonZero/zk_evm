@@ -22,7 +22,8 @@ pub(crate) mod columns;
 
 /// An enum representing different binary operations.
 ///
-/// `Shl` and `Shr` are handled differently, by leveraging `Mul` and `Div` respectively.
+/// `Shl` and `Shr` are handled differently, by leveraging `Mul` and `Div`
+/// respectively.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum BinaryOperator {
     Add,
@@ -90,7 +91,8 @@ impl BinaryOperator {
         }
     }
 
-    /// Maps a binary arithmetic operation to its associated flag column in the trace.
+    /// Maps a binary arithmetic operation to its associated flag column in the
+    /// trace.
     pub(crate) const fn row_filter(&self) -> usize {
         match self {
             BinaryOperator::Add => columns::IS_ADD,
@@ -120,7 +122,8 @@ pub(crate) enum TernaryOperator {
 }
 
 impl TernaryOperator {
-    /// Computes the result of a ternary arithmetic operation given three inputs.
+    /// Computes the result of a ternary arithmetic operation given three
+    /// inputs.
     pub(crate) fn result(&self, input0: U256, input1: U256, input2: U256) -> U256 {
         match self {
             TernaryOperator::AddMod => addmod(input0, input1, input2),
@@ -129,7 +132,8 @@ impl TernaryOperator {
         }
     }
 
-    /// Maps a ternary arithmetic operation to its associated flag column in the trace.
+    /// Maps a ternary arithmetic operation to its associated flag column in the
+    /// trace.
     pub(crate) const fn row_filter(&self) -> usize {
         match self {
             TernaryOperator::AddMod => columns::IS_ADDMOD,
@@ -139,7 +143,8 @@ impl TernaryOperator {
     }
 }
 
-/// An enum representing arithmetic operations that can be either binary or ternary.
+/// An enum representing arithmetic operations that can be either binary or
+/// ternary.
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 pub(crate) enum Operation {
@@ -242,7 +247,8 @@ impl Operation {
     ///
     /// The `is_simulated` bool indicates whether we use a native arithmetic
     /// operation or simulate one with another. This is used to distinguish
-    /// SHL and SHR operations that are simulated through MUL and DIV respectively.
+    /// SHL and SHR operations that are simulated through MUL and DIV
+    /// respectively.
     fn to_rows<F: PrimeField64>(&self) -> (Vec<F>, Option<Vec<F>>) {
         match *self {
             Operation::BinaryOperation {
@@ -269,7 +275,8 @@ impl Operation {
     }
 }
 
-/// Converts a ternary arithmetic operation to one or two rows of the `ArithmeticStark` table.
+/// Converts a ternary arithmetic operation to one or two rows of the
+/// `ArithmeticStark` table.
 fn ternary_op_to_rows<F: PrimeField64>(
     row_filter: usize,
     input0: U256,
@@ -287,7 +294,8 @@ fn ternary_op_to_rows<F: PrimeField64>(
     (row1, Some(row2))
 }
 
-/// Converts a binary arithmetic operation to one or two rows of the `ArithmeticStark` table.
+/// Converts a binary arithmetic operation to one or two rows of the
+/// `ArithmeticStark` table.
 fn binary_op_to_rows<F: PrimeField64>(
     op: BinaryOperator,
     input0: U256,

@@ -107,7 +107,8 @@ fn shortest_path(
 
     while let Some(node) = queue.pop() {
         if node.stack == dst {
-            // The destination is now the lowest-cost node, so we must have found the best path.
+            // The destination is now the lowest-cost node, so we must have found the best
+            // path.
             let mut path = vec![];
             let mut stack = &node.stack;
             // Rewind back to src, recording a list of operations which will be backwards.
@@ -122,8 +123,9 @@ fn shortest_path(
 
         let (best_cost, _) = node_info[&node.stack];
         if best_cost < node.cost {
-            // Since we can't efficiently remove nodes from the heap, it can contain duplicates.
-            // In this case, we've already visited this stack state with a lower cost.
+            // Since we can't efficiently remove nodes from the heap, it can contain
+            // duplicates. In this case, we've already visited this stack state
+            // with a lower cost.
             continue;
         }
 
@@ -177,13 +179,14 @@ impl PartialOrd for Node {
 
 impl Ord for Node {
     fn cmp(&self, other: &Self) -> Ordering {
-        // We want a min-heap rather than the default max-heap, so this is the opposite of the
-        // natural ordering of costs.
+        // We want a min-heap rather than the default max-heap, so this is the opposite
+        // of the natural ordering of costs.
         other.cost.cmp(&self.cost)
     }
 }
 
-/// Like `StackReplacement`, but without constants or macro vars, since those were expanded already.
+/// Like `StackReplacement`, but without constants or macro vars, since those
+/// were expanded already.
 #[derive(Eq, PartialEq, Hash, Clone, Debug)]
 pub(crate) enum StackItem {
     NamedItem(String),
@@ -198,7 +201,8 @@ pub(crate) enum StackOp {
     Swap(u8),
 }
 
-/// A set of candidate operations to consider for the next step in the path from `src` to `dst`.
+/// A set of candidate operations to consider for the next step in the path from
+/// `src` to `dst`.
 fn next_ops(
     src: &[StackItem],
     dst: &[StackItem],
@@ -207,12 +211,14 @@ fn next_ops(
     if let Some(top) = src.last()
         && !dst.contains(top)
     {
-        // If the top of src doesn't appear in dst, don't bother with anything other than a POP.
+        // If the top of src doesn't appear in dst, don't bother with anything other
+        // than a POP.
         return vec![StackOp::Pop];
     }
 
     if is_permutation(src, dst) {
-        // The transpositions are right-associative, so the last one gets applied first, hence pop.
+        // The transpositions are right-associative, so the last one gets applied first,
+        // hence pop.
         return vec![get_stack_ops_for_perm(src, dst).pop().unwrap()];
     }
 
@@ -237,8 +243,9 @@ fn next_ops(
 
     ops.extend(
         (1..=src_len)
-            // Only consider duplicating this item if we need more occurrences of it, otherwise swaps
-            // will be a better way to rearrange the existing occurrences as needed.
+            // Only consider duplicating this item if we need more occurrences of it, otherwise
+            // swaps will be a better way to rearrange the existing occurrences as
+            // needed.
             .filter(|i| {
                 let item = &src[src.len() - *i as usize];
                 let src_count = src.iter().filter(|x| *x == item).count();
@@ -267,7 +274,8 @@ fn should_try_swap(src: &[StackItem], dst: &[StackItem], i: u8) -> bool {
     let i_from = src.len() - 1;
     let i_to = i_from - i;
 
-    // Only consider a swap if it places one of the two affected elements in the desired position.
+    // Only consider a swap if it places one of the two affected elements in the
+    // desired position.
     let top_correct_pos = i_to < dst.len() && src[i_from] == dst[i_to];
     let other_correct_pos = i_from < dst.len() && src[i_to] == dst[i_from];
     top_correct_pos | other_correct_pos
@@ -302,8 +310,8 @@ impl StackOp {
         cpu_cost + memory_cost
     }
 
-    /// Returns an updated stack after this operation is performed, or `None` if this operation
-    /// would not be valid on the given stack.
+    /// Returns an updated stack after this operation is performed, or `None` if
+    /// this operation would not be valid on the given stack.
     fn apply_to(&self, mut stack: Vec<StackItem>) -> Option<Vec<StackItem>> {
         let len = stack.len();
         match self {

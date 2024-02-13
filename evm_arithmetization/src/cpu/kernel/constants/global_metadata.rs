@@ -1,28 +1,31 @@
 use crate::memory::segments::Segment;
 
-/// These metadata fields contain global VM state, stored in the `Segment::Metadata` segment of the
-/// kernel's context (which is zero).
+/// These metadata fields contain global VM state, stored in the
+/// `Segment::Metadata` segment of the kernel's context (which is zero).
 ///
-/// Each value is directly scaled by the corresponding `Segment::GlobalMetadata` value for faster
-/// memory access in the kernel.
+/// Each value is directly scaled by the corresponding `Segment::GlobalMetadata`
+/// value for faster memory access in the kernel.
 #[allow(clippy::enum_clike_unportable_variant)]
 #[repr(usize)]
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 pub(crate) enum GlobalMetadata {
-    /// The largest context ID that has been used so far in this execution. Tracking this allows us
-    /// give each new context a unique ID, so that its memory will be zero-initialized.
+    /// The largest context ID that has been used so far in this execution.
+    /// Tracking this allows us give each new context a unique ID, so that
+    /// its memory will be zero-initialized.
     LargestContext = Segment::GlobalMetadata as usize,
     /// The size of active memory, in bytes.
     MemorySize,
-    /// The size of the `TrieData` segment, in bytes. In other words, the next address available for
-    /// appending additional trie data.
+    /// The size of the `TrieData` segment, in bytes. In other words, the next
+    /// address available for appending additional trie data.
     TrieDataSize,
-    /// The size of the `TrieData` segment, in bytes, represented as a whole address.
-    /// In other words, the next address available for appending additional trie data.
+    /// The size of the `TrieData` segment, in bytes, represented as a whole
+    /// address. In other words, the next address available for appending
+    /// additional trie data.
     RlpDataSize,
     /// A pointer to the root of the state trie within the `TrieData` buffer.
     StateTrieRoot,
-    /// A pointer to the root of the transaction trie within the `TrieData` buffer.
+    /// A pointer to the root of the transaction trie within the `TrieData`
+    /// buffer.
     TransactionTrieRoot,
     /// A pointer to the root of the receipt trie within the `TrieData` buffer.
     ReceiptTrieRoot,

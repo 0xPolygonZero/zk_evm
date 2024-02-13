@@ -39,8 +39,8 @@ fn channels_equal_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 
 /// Set `used`, `is_read`, and address for channel.
 ///
-/// `offset` is the stack index before this instruction is executed, e.g. `0` for the top of the
-/// stack.
+/// `offset` is the stack index before this instruction is executed, e.g. `0`
+/// for the top of the stack.
 fn constrain_channel_packed<P: PackedField>(
     is_read: bool,
     filter: P,
@@ -62,8 +62,8 @@ fn constrain_channel_packed<P: PackedField>(
 
 /// Set `used`, `is_read`, and address for channel.
 ///
-/// `offset` is the stack index before this instruction is executed, e.g. `0` for the top of the
-/// stack.
+/// `offset` is the stack index before this instruction is executed, e.g. `0`
+/// for the top of the stack.
 fn constrain_channel_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     is_read: bool,
@@ -217,13 +217,15 @@ fn eval_packed_swap<P: PackedField>(
     let in2_channel = &lv.mem_channels[1];
     let out_channel = &lv.mem_channels[2];
 
-    // Constrain the first input channel value to be equal to the output channel value.
+    // Constrain the first input channel value to be equal to the output channel
+    // value.
     channels_equal_packed(filter, in1_channel, out_channel, yield_constr);
-    // We set `is_read`, `used` and the address for the first input. The first input is
-    // read from the top of the stack, and is therefore not a memory read.
+    // We set `is_read`, `used` and the address for the first input. The first input
+    // is read from the top of the stack, and is therefore not a memory read.
     constrain_channel_packed(false, filter, n_plus_one, out_channel, lv, yield_constr);
 
-    // Constrain the second input channel value to be equal to the new top of the stack.
+    // Constrain the second input channel value to be equal to the new top of the
+    // stack.
     channels_equal_packed(filter, in2_channel, &nv.mem_channels[0], yield_constr);
     // We set `is_read`, `used` and the address for the second input.
     constrain_channel_packed(true, filter, n_plus_one, in2_channel, lv, yield_constr);
@@ -254,10 +256,11 @@ fn eval_ext_circuit_swap<F: RichField + Extendable<D>, const D: usize>(
     let in2_channel = &lv.mem_channels[1];
     let out_channel = &lv.mem_channels[2];
 
-    // Constrain the first input channel value to be equal to the output channel value.
+    // Constrain the first input channel value to be equal to the output channel
+    // value.
     channels_equal_ext_circuit(builder, filter, in1_channel, out_channel, yield_constr);
-    // We set `is_read`, `used` and the address for the first input. The first input is
-    // read from the top of the stack, and is therefore not a memory read.
+    // We set `is_read`, `used` and the address for the first input. The first input
+    // is read from the top of the stack, and is therefore not a memory read.
     constrain_channel_ext_circuit(
         builder,
         false,
@@ -268,7 +271,8 @@ fn eval_ext_circuit_swap<F: RichField + Extendable<D>, const D: usize>(
         yield_constr,
     );
 
-    // Constrain the second input channel value to be equal to the new top of the stack.
+    // Constrain the second input channel value to be equal to the new top of the
+    // stack.
     channels_equal_ext_circuit(
         builder,
         filter,

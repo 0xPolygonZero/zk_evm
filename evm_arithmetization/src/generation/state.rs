@@ -30,29 +30,31 @@ pub(crate) struct GenerationState<F: Field> {
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
 
-    /// Prover inputs containing RLP data, in reverse order so that the next input can be obtained
-    /// via `pop()`.
+    /// Prover inputs containing RLP data, in reverse order so that the next
+    /// input can be obtained via `pop()`.
     pub(crate) rlp_prover_inputs: Vec<U256>,
 
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
 
-    /// The state trie only stores state keys, which are hashes of addresses, but sometimes it is
-    /// useful to see the actual addresses for debugging. Here we store the mapping for all known
-    /// addresses.
+    /// The state trie only stores state keys, which are hashes of addresses,
+    /// but sometimes it is useful to see the actual addresses for
+    /// debugging. Here we store the mapping for all known addresses.
     pub(crate) state_key_to_address: HashMap<H256, Address>,
 
-    /// Prover inputs containing the result of a MODMUL operation, in little-endian order (so that
-    /// inputs are obtained in big-endian order via `pop()`). Contains both the remainder and the
-    /// quotient, in that order.
+    /// Prover inputs containing the result of a MODMUL operation, in
+    /// little-endian order (so that inputs are obtained in big-endian order
+    /// via `pop()`). Contains both the remainder and the quotient, in that
+    /// order.
     pub(crate) bignum_modmul_result_limbs: Vec<U256>,
 
     /// Pointers, within the `TrieData` segment, of the three MPTs.
     pub(crate) trie_root_ptrs: TrieRootPtrs,
 
-    /// A hash map where the key is a context in the user's code and the value is the set of
-    /// jump destinations with its corresponding "proof". A "proof" for a jump destination is
-    /// either 0 or an address i > 32 in the code (not necessarily pointing to an opcode) such that
-    /// for every j in [i, i+32] it holds that code[j] < 0x7f - j + i.
+    /// A hash map where the key is a context in the user's code and the value
+    /// is the set of jump destinations with its corresponding "proof". A
+    /// "proof" for a jump destination is either 0 or an address i > 32 in
+    /// the code (not necessarily pointing to an opcode) such that for every
+    /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 }
 
@@ -103,8 +105,8 @@ impl<F: Field> GenerationState<F> {
         Ok(state)
     }
 
-    /// Updates `program_counter`, and potentially adds some extra handling if we're jumping to a
-    /// special location.
+    /// Updates `program_counter`, and potentially adds some extra handling if
+    /// we're jumping to a special location.
     pub(crate) fn jump_to(&mut self, dst: usize) -> Result<(), ProgramError> {
         self.registers.program_counter = dst;
         if dst == KERNEL.global_labels["observe_new_address"] {
@@ -121,18 +123,20 @@ impl<F: Field> GenerationState<F> {
         Ok(())
     }
 
-    /// Observe the given address, so that we will be able to recognize the associated state key.
-    /// This is just for debugging purposes.
+    /// Observe the given address, so that we will be able to recognize the
+    /// associated state key. This is just for debugging purposes.
     pub(crate) fn observe_address(&mut self, address: Address) {
         let state_key = keccak(address.0);
         self.state_key_to_address.insert(state_key, address);
     }
 
     /// Observe the given code hash and store the associated code.
-    /// When called, the code corresponding to `codehash` should be stored in the return data.
+    /// When called, the code corresponding to `codehash` should be stored in
+    /// the return data.
     pub(crate) fn observe_contract(&mut self, codehash: H256) -> Result<(), ProgramError> {
         if self.inputs.contract_code.contains_key(&codehash) {
-            return Ok(()); // Return early if the code hash has already been observed.
+            return Ok(()); // Return early if the code hash has already been
+                           // observed.
         }
 
         let ctx = self.registers.context;
@@ -192,8 +196,8 @@ impl<F: Field> GenerationState<F> {
     }
 }
 
-/// Withdrawals prover input array is of the form `[addr0, amount0, ..., addrN, amountN, U256::MAX, U256::MAX]`.
-/// Returns the reversed array.
+/// Withdrawals prover input array is of the form `[addr0, amount0, ..., addrN,
+/// amountN, U256::MAX, U256::MAX]`. Returns the reversed array.
 pub(crate) fn all_withdrawals_prover_inputs_reversed(withdrawals: &[(Address, U256)]) -> Vec<U256> {
     let mut withdrawal_prover_inputs = withdrawals
         .iter()

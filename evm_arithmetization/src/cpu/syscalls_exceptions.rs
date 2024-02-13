@@ -1,6 +1,7 @@
 //! Handle instructions that are implemented in terms of system calls.
 //!
-//! These are usually the ones that are too complicated to implement in one CPU table row.
+//! These are usually the ones that are too complicated to implement in one CPU
+//! table row.
 
 use plonky2::field::extension::Extendable;
 use plonky2::field::packed::PackedField;
@@ -105,7 +106,8 @@ pub(crate) fn eval_packed<P: PackedField>(
     yield_constr.constraint_transition(total_filter * nv.gas);
 
     let output = nv.mem_channels[0].value;
-    // New top of the stack: current PC + 1 (limb 0), kernel flag (limb 1), gas counter (limbs 6 and 7).
+    // New top of the stack: current PC + 1 (limb 0), kernel flag (limb 1), gas
+    // counter (limbs 6 and 7).
     yield_constr.constraint(filter_syscall * (output[0] - (lv.program_counter + P::ONES)));
     yield_constr.constraint(filter_exception * (output[0] - lv.program_counter));
     // Check the kernel mode, for syscalls only
@@ -268,14 +270,16 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 
     // New top of the stack.
     let output = nv.mem_channels[0].value;
-    // Push to stack (syscall): current PC + 1 (limb 0), kernel flag (limb 1), gas counter (limbs 6 and 7).
+    // Push to stack (syscall): current PC + 1 (limb 0), kernel flag (limb 1), gas
+    // counter (limbs 6 and 7).
     {
         let pc_plus_1 = builder.add_const_extension(lv.program_counter, F::ONE);
         let diff = builder.sub_extension(output[0], pc_plus_1);
         let constr = builder.mul_extension(filter_syscall, diff);
         yield_constr.constraint(builder, constr);
     }
-    // Push to stack (exception): current PC (limb 0), kernel flag (limb 1), gas counter (limbs 6 and 7).
+    // Push to stack (exception): current PC (limb 0), kernel flag (limb 1), gas
+    // counter (limbs 6 and 7).
     {
         let diff = builder.sub_extension(output[0], lv.program_counter);
         let constr = builder.mul_extension(filter_exception, diff);

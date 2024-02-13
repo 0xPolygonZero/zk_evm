@@ -22,18 +22,21 @@ pub type MemValue<T> = [T; memory::VALUE_LIMBS];
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct MemoryChannelView<T: Copy> {
-    /// 1 if this row includes a memory operation in the `i`th channel of the memory bus, otherwise
-    /// 0.
+    /// 1 if this row includes a memory operation in the `i`th channel of the
+    /// memory bus, otherwise 0.
     pub used: T,
-    /// 1 if a read is performed on the `i`th channel of the memory bus, otherwise 0.
+    /// 1 if a read is performed on the `i`th channel of the memory bus,
+    /// otherwise 0.
     pub is_read: T,
     /// Context of the memory operation in the `i`th channel of the memory bus.
     pub addr_context: T,
     /// Segment of the memory operation in the `ith` channel of the memory bus.
     pub addr_segment: T,
-    /// Virtual address of the memory operation in the `ith` channel of the memory bus.
+    /// Virtual address of the memory operation in the `ith` channel of the
+    /// memory bus.
     pub addr_virtual: T,
-    /// Value, subdivided into 32-bit limbs, stored in the `ith` channel of the memory bus.
+    /// Value, subdivided into 32-bit limbs, stored in the `ith` channel of the
+    /// memory bus.
     pub value: MemValue<T>,
 }
 
@@ -71,8 +74,8 @@ pub(crate) struct CpuColumnsView<T: Copy> {
     /// If CPU cycle: Gas counter.
     pub gas: T,
 
-    /// If CPU cycle: flags for EVM instructions (a few cannot be shared; see the comments in
-    /// `OpsColumnsView`).
+    /// If CPU cycle: flags for EVM instructions (a few cannot be shared; see
+    /// the comments in `OpsColumnsView`).
     pub op: OpsColumnsView<T>,
 
     /// If CPU cycle: the opcode, broken up into bits in little-endian order.

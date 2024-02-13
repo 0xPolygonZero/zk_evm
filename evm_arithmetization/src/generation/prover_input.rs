@@ -29,7 +29,8 @@ use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 use crate::witness::util::{current_context_peek, stack_peek};
 
 /// Prover input function represented as a scoped function name.
-/// Example: `PROVER_INPUT(ff::bn254_base::inverse)` is represented as `ProverInputFn([ff, bn254_base, inverse])`.
+/// Example: `PROVER_INPUT(ff::bn254_base::inverse)` is represented as
+/// `ProverInputFn([ff, bn254_base, inverse])`.
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct ProverInputFn(Vec<String>);
 
@@ -139,8 +140,8 @@ impl<F: Field> GenerationState<F> {
     }
 
     /// Account code loading.
-    /// Initializes the code segment of the given context with the code corresponding
-    /// to the provided hash.
+    /// Initializes the code segment of the given context with the code
+    /// corresponding to the provided hash.
     /// Returns the length of the code.
     fn run_account_code(&mut self) -> Result<U256, ProgramError> {
         // stack: codehash, ctx, ...
@@ -163,7 +164,8 @@ impl<F: Field> GenerationState<F> {
     // Bignum modular multiplication.
     // On the first call, calculates the remainder and quotient of the given inputs.
     // These are stored, as limbs, in self.bignum_modmul_result_limbs.
-    // Subsequent calls return one limb at a time, in order (first remainder and then quotient).
+    // Subsequent calls return one limb at a time, in order (first remainder and
+    // then quotient).
     fn run_bignum_modmul(&mut self) -> Result<U256, ProgramError> {
         if self.bignum_modmul_result_limbs.is_empty() {
             let len = stack_peek(self, 2).map(u256_to_usize)??;
@@ -237,7 +239,8 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    /// Generate either the next used jump address or the proof for the last jump address.
+    /// Generate either the next used jump address or the proof for the last
+    /// jump address.
     fn run_jumpdest_table(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[1].as_str() {
             "next_address" => self.run_next_jumpdest_table_address(),
@@ -307,18 +310,21 @@ impl<F: Field> GenerationState<F> {
 }
 
 impl<F: Field> GenerationState<F> {
-    /// Simulate the user's code and store all the jump addresses with their respective contexts.
+    /// Simulate the user's code and store all the jump addresses with their
+    /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
         let checkpoint = self.checkpoint();
 
-        // Simulate the user's code and (unnecessarily) part of the kernel code, skipping the validate table call
+        // Simulate the user's code and (unnecessarily) part of the kernel code,
+        // skipping the validate table call
         self.jumpdest_table = simulate_cpu_and_get_user_jumps("terminate_common", self);
 
         Ok(())
     }
 
-    /// Given a HashMap containing the contexts and the jumpdest addresses, compute their respective proofs,
-    /// by calling `get_proofs_and_jumpdests`
+    /// Given a HashMap containing the contexts and the jumpdest addresses,
+    /// compute their respective proofs, by calling
+    /// `get_proofs_and_jumpdests`
     pub(crate) fn set_jumpdest_analysis_inputs(
         &mut self,
         jumpdest_table: HashMap<usize, BTreeSet<usize>>,

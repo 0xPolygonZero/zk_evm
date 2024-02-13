@@ -4,7 +4,8 @@ use core::ops::Range;
 
 use crate::util::{indices_arr, transmute_no_compile_time_size_checks};
 
-/// Total number of sponge bytes: number of rate bytes + number of capacity bytes.
+/// Total number of sponge bytes: number of rate bytes + number of capacity
+/// bytes.
 pub(crate) const KECCAK_WIDTH_BYTES: usize = 200;
 /// Total number of 32-bit limbs in the sponge.
 pub(crate) const KECCAK_WIDTH_U32S: usize = KECCAK_WIDTH_BYTES / 4;
@@ -28,8 +29,8 @@ pub(crate) const KECCAK_DIGEST_U32S: usize = KECCAK_DIGEST_BYTES / 4;
 #[repr(C)]
 #[derive(Eq, PartialEq, Debug)]
 pub(crate) struct KeccakSpongeColumnsView<T: Copy> {
-    /// 1 if this row represents a full input block, i.e. one in which each byte is an input byte,
-    /// not a padding byte; 0 otherwise.
+    /// 1 if this row represents a full input block, i.e. one in which each byte
+    /// is an input byte, not a padding byte; 0 otherwise.
     pub is_full_input_block: T,
 
     /// The context of the base address at which we will read the input block.
@@ -42,11 +43,13 @@ pub(crate) struct KeccakSpongeColumnsView<T: Copy> {
     /// The timestamp at which inputs should be read from memory.
     pub timestamp: T,
 
-    /// The number of input bytes that have already been absorbed prior to this block.
+    /// The number of input bytes that have already been absorbed prior to this
+    /// block.
     pub already_absorbed_bytes: T,
 
-    /// If this row represents a final block row, the `i`th entry should be 1 if the final chunk of
-    /// input has length `i` (in other words if `len - already_absorbed == i`), otherwise 0.
+    /// If this row represents a final block row, the `i`th entry should be 1 if
+    /// the final chunk of input has length `i` (in other words if `len -
+    /// already_absorbed == i`), otherwise 0.
     ///
     /// If this row represents a full input block, this should contain all 0s.
     pub is_final_input_len: [T; KECCAK_RATE_BYTES],
@@ -54,27 +57,32 @@ pub(crate) struct KeccakSpongeColumnsView<T: Copy> {
     /// The initial rate part of the sponge, at the start of this step.
     pub original_rate_u32s: [T; KECCAK_RATE_U32S],
 
-    /// The capacity part of the sponge, encoded as 32-bit chunks, at the start of this step.
+    /// The capacity part of the sponge, encoded as 32-bit chunks, at the start
+    /// of this step.
     pub original_capacity_u32s: [T; KECCAK_CAPACITY_U32S],
 
-    /// The block being absorbed, which may contain input bytes and/or padding bytes.
+    /// The block being absorbed, which may contain input bytes and/or padding
+    /// bytes.
     pub block_bytes: [T; KECCAK_RATE_BYTES],
 
-    /// The rate part of the sponge, encoded as 32-bit chunks, after the current block is xor'd in,
-    /// but before the permutation is applied.
+    /// The rate part of the sponge, encoded as 32-bit chunks, after the current
+    /// block is xor'd in, but before the permutation is applied.
     pub xored_rate_u32s: [T; KECCAK_RATE_U32S],
 
-    /// The entire state (rate + capacity) of the sponge, encoded as 32-bit chunks, after the
-    /// permutation is applied, minus the first limbs where the digest is extracted from.
-    /// Those missing limbs can be recomputed from their corresponding bytes stored in
+    /// The entire state (rate + capacity) of the sponge, encoded as 32-bit
+    /// chunks, after the permutation is applied, minus the first limbs
+    /// where the digest is extracted from. Those missing limbs can be
+    /// recomputed from their corresponding bytes stored in
     /// `updated_digest_state_bytes`.
     pub partial_updated_state_u32s: [T; KECCAK_WIDTH_MINUS_DIGEST_U32S],
 
-    /// The first part of the state of the sponge, seen as bytes, after the permutation is applied.
-    /// This also represents the output digest of the Keccak sponge during the squeezing phase.
+    /// The first part of the state of the sponge, seen as bytes, after the
+    /// permutation is applied. This also represents the output digest of
+    /// the Keccak sponge during the squeezing phase.
     pub updated_digest_state_bytes: [T; KECCAK_DIGEST_BYTES],
 
-    /// The counter column (used for the range check) starts from 0 and increments.
+    /// The counter column (used for the range check) starts from 0 and
+    /// increments.
     pub range_counter: T,
     /// The frequencies column used in logUp.
     pub rc_frequencies: T,

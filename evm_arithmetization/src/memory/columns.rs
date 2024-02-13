@@ -6,9 +6,10 @@ use crate::memory::VALUE_LIMBS;
 /// 1 if this is an actual memory operation, or 0 if it's a padding row.
 pub(crate) const FILTER: usize = 0;
 /// Each memory operation is associated to a unique timestamp.
-/// For a given memory operation `op_i`, its timestamp is computed as `C * N + i`
-/// where `C` is the CPU clock at that time, `N` is the number of general memory channels,
-/// and `i` is the index of the memory channel at which the memory operation is performed.
+/// For a given memory operation `op_i`, its timestamp is computed as `C * N +
+/// i` where `C` is the CPU clock at that time, `N` is the number of general
+/// memory channels, and `i` is the index of the memory channel at which the
+/// memory operation is performed.
 pub(crate) const TIMESTAMP: usize = FILTER + 1;
 /// 1 if this is a read operation, 0 if it is a write one.
 pub(crate) const IS_READ: usize = TIMESTAMP + 1;
@@ -29,8 +30,8 @@ pub(crate) const fn value_limb(i: usize) -> usize {
 
 // Flags to indicate whether this part of the address differs from the next row,
 // and the previous parts do not differ.
-// That is, e.g., `SEGMENT_FIRST_CHANGE` is `F::ONE` iff `ADDR_CONTEXT` is the same in this
-// row and the next, but `ADDR_SEGMENT` is not.
+// That is, e.g., `SEGMENT_FIRST_CHANGE` is `F::ONE` iff `ADDR_CONTEXT` is the
+// same in this row and the next, but `ADDR_SEGMENT` is not.
 pub(crate) const CONTEXT_FIRST_CHANGE: usize = VALUE_START + VALUE_LIMBS;
 pub(crate) const SEGMENT_FIRST_CHANGE: usize = CONTEXT_FIRST_CHANGE + 1;
 pub(crate) const VIRTUAL_FIRST_CHANGE: usize = SEGMENT_FIRST_CHANGE + 1;

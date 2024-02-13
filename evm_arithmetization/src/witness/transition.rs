@@ -184,7 +184,8 @@ fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>) {
     } = F::ONE;
 }
 
-// Equal to the number of pops if an operation pops without pushing, and `None` otherwise.
+// Equal to the number of pops if an operation pops without pushing, and `None`
+// otherwise.
 const fn get_op_special_length(op: Operation) -> Option<usize> {
     let behavior_opt = match op {
         Operation::Push(0) | Operation::Pc => STACK_BEHAVIORS.pc_push0,
@@ -223,8 +224,9 @@ const fn get_op_special_length(op: Operation) -> Option<usize> {
     }
 }
 
-// These operations might trigger a stack overflow, typically those pushing without popping.
-// Kernel-only pushing instructions aren't considered; they can't overflow.
+// These operations might trigger a stack overflow, typically those pushing
+// without popping. Kernel-only pushing instructions aren't considered; they
+// can't overflow.
 const fn might_overflow_op(op: Operation) -> bool {
     match op {
         Operation::Push(1..) | Operation::ProverInput => MIGHT_OVERFLOW.push_prover_input,
@@ -319,9 +321,10 @@ fn perform_op<F: Field>(
     Ok(op)
 }
 
-/// Row that has the correct values for system registers and the code channel, but is otherwise
-/// blank. It fulfills the constraints that are common to successful operations and the exception
-/// operation. It also returns the opcode.
+/// Row that has the correct values for system registers and the code channel,
+/// but is otherwise blank. It fulfills the constraints that are common to
+/// successful operations and the exception operation. It also returns the
+/// opcode.
 fn base_row<F: Field>(state: &mut GenerationState<F>) -> (CpuColumnsView<F>, u8) {
     let mut row: CpuColumnsView<F> = CpuColumnsView::default();
     row.clock = F::from_canonical_usize(state.traces.clock());
@@ -402,8 +405,8 @@ fn try_perform_instruction<F: Field>(
 
     fill_stack_fields(state, &mut row)?;
 
-    // Might write in general CPU columns when it shouldn't, but the correct values will
-    // overwrite these ones during the op generation.
+    // Might write in general CPU columns when it shouldn't, but the correct values
+    // will overwrite these ones during the op generation.
     if let Some(special_len) = get_op_special_length(op) {
         let special_len = F::from_canonical_usize(special_len);
         let diff = row.stack_len - special_len;

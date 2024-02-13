@@ -20,10 +20,10 @@ fn limbs(x: U256) -> [u32; 8] {
     res
 }
 /// Form `diff_pinv`.
-/// Let `diff = val0 - val1`. Consider `x[i] = diff[i]^-1` if `diff[i] != 0` and 0 otherwise.
-/// Then `diff @ x = num_unequal_limbs`, where `@` denotes the dot product. We set
-/// `diff_pinv = num_unequal_limbs^-1 * x` if `num_unequal_limbs != 0` and 0 otherwise. We have
-/// `diff @ diff_pinv = 1 - equal` as desired.
+/// Let `diff = val0 - val1`. Consider `x[i] = diff[i]^-1` if `diff[i] != 0` and
+/// 0 otherwise. Then `diff @ x = num_unequal_limbs`, where `@` denotes the dot
+/// product. We set `diff_pinv = num_unequal_limbs^-1 * x` if `num_unequal_limbs
+/// != 0` and 0 otherwise. We have `diff @ diff_pinv = 1 - equal` as desired.
 pub(crate) fn generate_pinv_diff<F: Field>(val0: U256, val1: U256, lv: &mut CpuColumnsView<F>) {
     let val0_limbs = limbs(val0).map(F::from_canonical_u32);
     let val1_limbs = limbs(val1).map(F::from_canonical_u32);
@@ -61,14 +61,15 @@ pub(crate) fn eval_packed<P: PackedField>(
     let equal = output[0];
     let unequal = P::ONES - equal;
 
-    // Handle `EQ` and `ISZERO`. Most limbs of the output are 0, but the least-significant one is
-    // either 0 or 1.
+    // Handle `EQ` and `ISZERO`. Most limbs of the output are 0, but the
+    // least-significant one is either 0 or 1.
     yield_constr.constraint(eq_or_iszero_filter * equal * unequal);
     for &limb in &output[1..] {
         yield_constr.constraint(eq_or_iszero_filter * limb);
     }
 
-    // If `ISZERO`, constrain input1 to be zero, effectively implementing ISZERO(x) as EQ(x, 0).
+    // If `ISZERO`, constrain input1 to be zero, effectively implementing ISZERO(x)
+    // as EQ(x, 0).
     for limb in input1 {
         yield_constr.constraint(iszero_filter * limb);
     }
@@ -80,9 +81,9 @@ pub(crate) fn eval_packed<P: PackedField>(
     }
 
     // `input0[i] == input1[i]` for all `i` implies `equal`.
-    // If `unequal`, find `diff_pinv` such that `(input0 - input1) @ diff_pinv == 1`, where `@`
-    // denotes the dot product (there will be many such `diff_pinv`). This can only be done if
-    // `input0 != input1`.
+    // If `unequal`, find `diff_pinv` such that `(input0 - input1) @ diff_pinv ==
+    // 1`, where `@` denotes the dot product (there will be many such
+    // `diff_pinv`). This can only be done if `input0 != input1`.
     let dot: P = izip!(input0, input1, logic.diff_pinv)
         .map(|(limb0, limb1, diff_pinv_el)| (limb0 - limb1) * diff_pinv_el)
         .sum();
@@ -125,8 +126,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     let equal = output[0];
     let unequal = builder.sub_extension(one, equal);
 
-    // Handle `EQ` and `ISZERO`. Most limbs of the output are 0, but the least-significant one is
-    // either 0 or 1.
+    // Handle `EQ` and `ISZERO`. Most limbs of the output are 0, but the
+    // least-significant one is either 0 or 1.
     {
         let constr = builder.mul_extension(equal, unequal);
         let constr = builder.mul_extension(eq_or_iszero_filter, constr);
@@ -137,7 +138,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         yield_constr.constraint(builder, constr);
     }
 
-    // If `ISZERO`, constrain input1 to be zero, effectively implementing ISZERO(x) as EQ(x, 0).
+    // If `ISZERO`, constrain input1 to be zero, effectively implementing ISZERO(x)
+    // as EQ(x, 0).
     for limb in input1 {
         let constr = builder.mul_extension(iszero_filter, limb);
         yield_constr.constraint(builder, constr);
@@ -152,9 +154,9 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     }
 
     // `input0[i] == input1[i]` for all `i` implies `equal`.
-    // If `unequal`, find `diff_pinv` such that `(input0 - input1) @ diff_pinv == 1`, where `@`
-    // denotes the dot product (there will be many such `diff_pinv`). This can only be done if
-    // `input0 != input1`.
+    // If `unequal`, find `diff_pinv` such that `(input0 - input1) @ diff_pinv ==
+    // 1`, where `@` denotes the dot product (there will be many such
+    // `diff_pinv`). This can only be done if `input0 != input1`.
     {
         let dot: ExtensionTarget<D> = izip!(input0, input1, logic.diff_pinv).fold(
             zero,

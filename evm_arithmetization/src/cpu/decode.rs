@@ -8,29 +8,32 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 use crate::cpu::columns::{CpuColumnsView, COL_MAP};
 
 /// List of opcode blocks
-///  Each block corresponds to exactly one flag, and each flag corresponds to exactly one block.
-///  Each block of opcodes:
+///  Each block corresponds to exactly one flag, and each flag corresponds to
+/// exactly one block.  Each block of opcodes:
 /// - is contiguous,
 /// - has a length that is a power of 2, and
 /// - its start index is a multiple of its length (it is aligned).
-///  These properties permit us to check if an opcode belongs to a block of length 2^n by checking
-/// its top 8-n bits.
-///  Additionally, each block can be made available only to the user, only to the kernel, or to
-/// both. This is mainly useful for making some instructions kernel-only, while still decoding to
-/// invalid for the user. We do this by making one kernel-only block and another user-only block.
-/// The exception is the PANIC instruction which is user-only without a corresponding kernel block.
-/// This makes the proof unverifiable when PANIC is executed in kernel mode, which is the intended
-/// behavior.
-/// Note: invalid opcodes are not represented here. _Any_ opcode is permitted to decode to
-/// `is_invalid`. The kernel then verifies that the opcode was _actually_ invalid.
+///  These properties permit us to check if an opcode belongs to a block of
+/// length 2^n by checking its top 8-n bits.
+///  Additionally, each block can be made available only to the user, only to
+/// the kernel, or to both. This is mainly useful for making some instructions
+/// kernel-only, while still decoding to invalid for the user. We do this by
+/// making one kernel-only block and another user-only block. The exception is
+/// the PANIC instruction which is user-only without a corresponding kernel
+/// block. This makes the proof unverifiable when PANIC is executed in kernel
+/// mode, which is the intended behavior.
+/// Note: invalid opcodes are not represented here. _Any_ opcode is permitted to
+/// decode to `is_invalid`. The kernel then verifies that the opcode was
+/// _actually_ invalid.
 const OPCODES: [(u8, usize, bool, usize); 5] = [
     // (start index of block, number of top bits to check (log2), kernel-only, flag column)
-    // ADD, MUL, SUB, DIV, MOD, LT, GT and BYTE flags are handled partly manually here, and partly through the Arithmetic table CTL.
-    // ADDMOD, MULMOD and SUBMOD flags are handled partly manually here, and partly through the Arithmetic table CTL.
-    // FP254 operation flags are handled partly manually here, and partly through the Arithmetic table CTL.
+    // ADD, MUL, SUB, DIV, MOD, LT, GT and BYTE flags are handled partly manually here, and partly
+    // through the Arithmetic table CTL. ADDMOD, MULMOD and SUBMOD flags are handled partly
+    // manually here, and partly through the Arithmetic table CTL. FP254 operation flags are
+    // handled partly manually here, and partly through the Arithmetic table CTL.
     (0x14, 1, false, COL_MAP.op.eq_iszero),
-    // AND, OR and XOR flags are handled partly manually here, and partly through the Logic table CTL.
-    // NOT and POP are handled manually here.
+    // AND, OR and XOR flags are handled partly manually here, and partly through the Logic table
+    // CTL. NOT and POP are handled manually here.
     // SHL and SHR flags are handled partly manually here, and partly through the Logic table CTL.
     // JUMPDEST and KECCAK_GENERAL are handled manually here.
     (0x56, 1, false, COL_MAP.op.jumps),     // 0x56-0x57
@@ -106,8 +109,8 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
 
     // Finally, classify all opcodes, together with the kernel flag, into blocks
     for (oc, block_length, kernel_only, col) in OPCODES {
-        // 0 if the block/flag is available to us (is always available or we are in kernel mode) and
-        // 1 otherwise.
+        // 0 if the block/flag is available to us (is always available or we are in
+        // kernel mode) and 1 otherwise.
         let unavailable = match kernel_only {
             false => P::ZEROS,
             true => P::ONES - kernel_mode,
@@ -126,8 +129,8 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
             })
             .sum();
 
-        // If unavailable + opcode_mismatch is 0, then the opcode bits all match and we are in the
-        // correct mode.
+        // If unavailable + opcode_mismatch is 0, then the opcode bits all match and we
+        // are in the correct mode.
         yield_constr.constraint(lv[col] * (unavailable + opcode_mismatch));
     }
 
@@ -269,8 +272,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 
     // Finally, classify all opcodes, together with the kernel flag, into blocks
     for (oc, block_length, kernel_only, col) in OPCODES {
-        // 0 if the block/flag is available to us (is always available or we are in kernel mode) and
-        // 1 otherwise.
+        // 0 if the block/flag is available to us (is always available or we are in
+        // kernel mode) and 1 otherwise.
         let unavailable = match kernel_only {
             false => builder.zero_extension(),
             true => builder.sub_extension(one, kernel_mode),
@@ -290,8 +293,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
                 builder.add_extension(cumul, to_add)
             });
 
-        // If unavailable + opcode_mismatch is 0, then the opcode bits all match and we are in the
-        // correct mode.
+        // If unavailable + opcode_mismatch is 0, then the opcode bits all match and we
+        // are in the correct mode.
         let constr = builder.add_extension(unavailable, opcode_mismatch);
         let constr = builder.mul_extension(lv[col], constr);
         yield_constr.constraint(builder, constr);

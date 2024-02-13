@@ -194,7 +194,8 @@ impl CyclicGroup for Curve<Fp2<BN254>> {
     };
 }
 
-// The tate pairing takes a point each from the curve and its twist and outputs an Fp12 element
+// The tate pairing takes a point each from the curve and its twist and outputs
+// an Fp12 element
 pub(crate) fn bn_tate(p: Curve<BN254>, q: Curve<Fp2<BN254>>) -> Fp12<BN254> {
     let miller_output = bn_miller_loop(p, q);
     bn_final_exponent(miller_output)
@@ -202,7 +203,8 @@ pub(crate) fn bn_tate(p: Curve<BN254>, q: Curve<Fp2<BN254>>) -> Fp12<BN254> {
 
 /// Standard code for miller loop, can be found on page 99 at this url:
 /// <https://static1.squarespace.com/static/5fdbb09f31d71c1227082339/t/5ff394720493bd28278889c6/1609798774687/PairingsForBeginners.pdf#page=107>
-/// where BN_EXP is a hardcoding of the array of Booleans that the loop traverses
+/// where BN_EXP is a hardcoding of the array of Booleans that the loop
+/// traverses
 pub(crate) fn bn_miller_loop(p: Curve<BN254>, q: Curve<Fp2<BN254>>) -> Fp12<BN254> {
     let mut r = p;
     let mut acc: Fp12<BN254> = Fp12::<BN254>::UNIT;

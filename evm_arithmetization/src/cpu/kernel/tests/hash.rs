@@ -99,9 +99,10 @@ fn test_sha2() -> Result<()> {
     test_hash_256("sha2", (0, 1), &sha2)
 }
 
-// Since the Blake precompile requires only the blake2_f compression function instead of the full blake2b hash,
-// the full hash function is not included in the kernel. To include it, blake2/compression.asm and blake2/main.asm
-// must be added to the kernel.
+// Since the Blake precompile requires only the blake2_f compression function
+// instead of the full blake2b hash, the full hash function is not included in
+// the kernel. To include it, blake2/compression.asm and blake2/main.asm must be
+// added to the kernel.
 
 // /// Standard Blake2b implementation.
 // fn blake2b(input: Vec<u8>) -> U512 {
@@ -120,7 +121,8 @@ fn test_sha2() -> Result<()> {
 //     standard_implementation: &dyn Fn(Vec<u8>) -> U512,
 // ) -> Result<()> {
 //     let (expected, result_stack) =
-//         prepare_test(hash_fn_label, hash_input_virt, standard_implementation).unwrap();
+//         prepare_test(hash_fn_label, hash_input_virt,
+// standard_implementation).unwrap();
 
 //     // Extract the final output.
 //     let actual = combine_u256s(result_stack[0], result_stack[1]);

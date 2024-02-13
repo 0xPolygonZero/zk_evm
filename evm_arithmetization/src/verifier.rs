@@ -135,7 +135,8 @@ where
     )
 }
 
-/// Computes the extra product to multiply to the looked value. It contains memory operations not in the CPU trace:
+/// Computes the extra product to multiply to the looked value. It contains
+/// memory operations not in the CPU trace:
 /// - block metadata writes,
 /// - trie roots writes.
 pub(crate) fn get_memory_extra_looking_sum<F, const D: usize>(
@@ -236,7 +237,8 @@ where
     let segment = F::from_canonical_usize(Segment::GlobalMetadata.unscale());
 
     fields.map(|(field, val)| {
-        // These fields are already scaled by their segment, and are in context 0 (kernel).
+        // These fields are already scaled by their segment, and are in context 0
+        // (kernel).
         sum = add_data_write(challenge, segment, sum, field.unscale(), val)
     });
 
@@ -284,8 +286,8 @@ where
 pub(crate) mod debug_utils {
     use super::*;
 
-    /// Output all the extra memory rows that don't appear in the CPU trace but are
-    /// necessary to correctly check the MemoryStark CTL.
+    /// Output all the extra memory rows that don't appear in the CPU trace but
+    /// are necessary to correctly check the MemoryStark CTL.
     pub(crate) fn get_memory_extra_looking_values<F, const D: usize>(
         public_values: &PublicValues,
     ) -> Vec<Vec<F>>

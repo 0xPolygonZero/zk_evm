@@ -22,9 +22,10 @@ use crate::all_stark::{EvmStarkFrame, Table};
 use crate::arithmetic::columns::{NUM_SHARED_COLS, RANGE_COUNTER, RC_FREQUENCIES, SHARED_COLS};
 use crate::arithmetic::{addcy, byte, columns, divmod, modular, mul, Operation};
 
-/// Creates a vector of `Columns` to link the 16-bit columns of the arithmetic table,
-/// split into groups of N_LIMBS at a time in `regs`, with the corresponding 32-bit
-/// columns of the CPU table. Does this for all ops in `ops`.
+/// Creates a vector of `Columns` to link the 16-bit columns of the arithmetic
+/// table, split into groups of N_LIMBS at a time in `regs`, with the
+/// corresponding 32-bit columns of the CPU table. Does this for all ops in
+/// `ops`.
 ///
 /// This is done by taking pairs of columns (x, y) of the arithmetic
 /// table and combining them as x + y*2^16 to ensure they equal the
@@ -57,7 +58,8 @@ fn cpu_arith_data_link<F: Field>(
     res
 }
 
-/// Returns the `TableWithColumns` for `ArithmeticStark` rows where one of the arithmetic operations has been called.
+/// Returns the `TableWithColumns` for `ArithmeticStark` rows where one of the
+/// arithmetic operations has been called.
 pub(crate) fn ctl_arithmetic_rows<F: Field>() -> TableWithColumns<F> {
     // We scale each filter flag with the associated opcode value.
     // If an arithmetic operation is happening on the CPU side,
@@ -116,7 +118,8 @@ pub(crate) fn ctl_arithmetic_rows<F: Field>() -> TableWithColumns<F> {
     )
 }
 
-/// Structure representing the `Arithmetic` STARK, which carries out all the arithmetic operations.
+/// Structure representing the `Arithmetic` STARK, which carries out all the
+/// arithmetic operations.
 #[derive(Copy, Clone, Default)]
 pub(crate) struct ArithmeticStark<F, const D: usize> {
     pub f: PhantomData<F>,
@@ -240,7 +243,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticSta
         addcy::eval_packed_generic(lv, yield_constr);
         // Evaluate constraints for DIV and MOD operations.
         divmod::eval_packed(lv, nv, yield_constr);
-        // Evaluate constraints for ADDMOD, SUBMOD, MULMOD and for FP254 modular operations.
+        // Evaluate constraints for ADDMOD, SUBMOD, MULMOD and for FP254 modular
+        // operations.
         modular::eval_packed(lv, nv, yield_constr);
         // Evaluate constraints for the BYTE operation.
         byte::eval_packed(lv, yield_constr);
@@ -301,7 +305,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticSta
         addcy::eval_ext_circuit(builder, lv, yield_constr);
         // Evaluate constraints for DIV and MOD operations.
         divmod::eval_ext_circuit(builder, lv, nv, yield_constr);
-        // Evaluate constraints for ADDMOD, SUBMOD, MULMOD and for FP254 modular operations.
+        // Evaluate constraints for ADDMOD, SUBMOD, MULMOD and for FP254 modular
+        // operations.
         modular::eval_ext_circuit(builder, lv, nv, yield_constr);
         // Evaluate constraints for the BYTE operation.
         byte::eval_ext_circuit(builder, lv, yield_constr);

@@ -1,5 +1,6 @@
-//! Once the CPU execution is over (i.e. reached the `halt` label in the kernel),
-//! the CPU trace will be padded with special dummy rows, incurring no memory overhead.
+//! Once the CPU execution is over (i.e. reached the `halt` label in the
+//! kernel), the CPU trace will be padded with special dummy rows, incurring no
+//! memory overhead.
 
 use plonky2::field::extension::Extendable;
 use plonky2::field::packed::PackedField;

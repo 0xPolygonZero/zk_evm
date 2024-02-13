@@ -50,12 +50,14 @@ use crate::recursive_verifier::{
 };
 use crate::util::h256_limbs;
 
-/// The recursion threshold. We end a chain of recursive proofs once we reach this size.
+/// The recursion threshold. We end a chain of recursive proofs once we reach
+/// this size.
 const THRESHOLD_DEGREE_BITS: usize = 13;
 
-/// Contains all recursive circuits used in the system. For each STARK and each initial
-/// `degree_bits`, this contains a chain of recursive circuits for shrinking that STARK from
-/// `degree_bits` to a constant `THRESHOLD_DEGREE_BITS`. It also contains a special root circuit
+/// Contains all recursive circuits used in the system. For each STARK and each
+/// initial `degree_bits`, this contains a chain of recursive circuits for
+/// shrinking that STARK from `degree_bits` to a constant
+/// `THRESHOLD_DEGREE_BITS`. It also contains a special root circuit
 /// for combining each STARK's shrunk wrapper proof into a single proof.
 #[derive(Eq, PartialEq, Debug)]
 pub struct AllRecursiveCircuits<F, C, const D: usize>
@@ -64,19 +66,22 @@ where
     C: GenericConfig<D, F = F>,
     C::Hasher: AlgebraicHasher<F>,
 {
-    /// The EVM root circuit, which aggregates the (shrunk) per-table recursive proofs.
+    /// The EVM root circuit, which aggregates the (shrunk) per-table recursive
+    /// proofs.
     pub root: RootCircuitData<F, C, D>,
-    /// The aggregation circuit, which verifies two proofs that can either be root or
-    /// aggregation proofs.
+    /// The aggregation circuit, which verifies two proofs that can either be
+    /// root or aggregation proofs.
     pub aggregation: AggregationCircuitData<F, C, D>,
-    /// The block circuit, which verifies an aggregation root proof and an optional previous block proof.
+    /// The block circuit, which verifies an aggregation root proof and an
+    /// optional previous block proof.
     pub block: BlockCircuitData<F, C, D>,
-    /// Holds chains of circuits for each table and for each initial `degree_bits`.
+    /// Holds chains of circuits for each table and for each initial
+    /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
 }
 
-/// Data for the EVM root circuit, which is used to combine each STARK's shrunk wrapper proof
-/// into a single proof.
+/// Data for the EVM root circuit, which is used to combine each STARK's shrunk
+/// wrapper proof into a single proof.
 #[derive(Eq, PartialEq, Debug)]
 pub struct RootCircuitData<F, C, const D: usize>
 where
@@ -85,13 +90,15 @@ where
 {
     pub circuit: CircuitData<F, C, D>,
     proof_with_pis: [ProofWithPublicInputsTarget<D>; NUM_TABLES],
-    /// For each table, various inner circuits may be used depending on the initial table size.
-    /// This target holds the index of the circuit (within `final_circuits()`) that was used.
+    /// For each table, various inner circuits may be used depending on the
+    /// initial table size. This target holds the index of the circuit
+    /// (within `final_circuits()`) that was used.
     index_verifier_data: [Target; NUM_TABLES],
     /// Public inputs containing public values.
     public_values: PublicValuesTarget,
-    /// Public inputs used for cyclic verification. These aren't actually used for EVM root
-    /// proofs; the circuit has them just to match the structure of aggregation proofs.
+    /// Public inputs used for cyclic verification. These aren't actually used
+    /// for EVM root proofs; the circuit has them just to match the
+    /// structure of aggregation proofs.
     cyclic_vk: VerifierCircuitTarget,
 }
 
@@ -145,8 +152,9 @@ where
     }
 }
 
-/// Data for the aggregation circuit, which is used to compress two proofs into one. Each inner
-/// proof can be either an EVM root proof or another aggregation proof.
+/// Data for the aggregation circuit, which is used to compress two proofs into
+/// one. Each inner proof can be either an EVM root proof or another aggregation
+/// proof.
 #[derive(Eq, PartialEq, Debug)]
 pub struct AggregationCircuitData<F, C, const D: usize>
 where
@@ -303,11 +311,15 @@ where
     ///
     /// # Arguments
     ///
-    /// - `skip_tables`: a boolean indicating whether to serialize only the upper circuits
-    /// or the entire prover state, including recursive circuits to shrink STARK proofs.
-    /// - `gate_serializer`: a custom gate serializer needed to serialize recursive circuits
+    /// - `skip_tables`: a boolean indicating whether to serialize only the
+    ///   upper circuits
+    /// or the entire prover state, including recursive circuits to shrink STARK
+    /// proofs.
+    /// - `gate_serializer`: a custom gate serializer needed to serialize
+    ///   recursive circuits
     /// common data.
-    /// - `generator_serializer`: a custom generator serializer needed to serialize recursive
+    /// - `generator_serializer`: a custom generator serializer needed to
+    ///   serialize recursive
     /// circuits proving data.
     pub fn to_bytes(
         &self,
@@ -315,7 +327,8 @@ where
         gate_serializer: &dyn GateSerializer<F, D>,
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<Vec<u8>> {
-        // TODO: would be better to initialize it dynamically based on the supported max degree.
+        // TODO: would be better to initialize it dynamically based on the supported max
+        // degree.
         let mut buffer = Vec::with_capacity(1 << 34);
         self.root
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
@@ -331,16 +344,21 @@ where
         Ok(buffer)
     }
 
-    /// Deserializes a sequence of bytes into an entire prover state containing all recursive circuits.
+    /// Deserializes a sequence of bytes into an entire prover state containing
+    /// all recursive circuits.
     ///
     /// # Arguments
     ///
     /// - `bytes`: a slice of bytes to deserialize this prover state from.
-    /// - `skip_tables`: a boolean indicating whether to deserialize only the upper circuits
-    /// or the entire prover state, including recursive circuits to shrink STARK proofs.
-    /// - `gate_serializer`: a custom gate serializer needed to serialize recursive circuits
+    /// - `skip_tables`: a boolean indicating whether to deserialize only the
+    ///   upper circuits
+    /// or the entire prover state, including recursive circuits to shrink STARK
+    /// proofs.
+    /// - `gate_serializer`: a custom gate serializer needed to serialize
+    ///   recursive circuits
     /// common data.
-    /// - `generator_serializer`: a custom generator serializer needed to serialize recursive
+    /// - `generator_serializer`: a custom generator serializer needed to
+    ///   serialize recursive
     /// circuits proving data.
     pub fn from_bytes(
         bytes: &[u8],
@@ -398,15 +416,20 @@ where
     ///
     /// # Arguments
     ///
-    /// - `all_stark`: a structure defining the logic of all STARK modules and their associated
+    /// - `all_stark`: a structure defining the logic of all STARK modules and
+    ///   their associated
     /// cross-table lookups.
-    /// - `degree_bits_ranges`: the logarithmic ranges to be supported for the recursive tables.
-    /// Transactions may yield arbitrary trace lengths for each STARK module (within some bounds),
-    /// unknown prior generating the witness to create a proof. Thus, for each STARK module, we
-    /// construct a map from `2^{degree_bits} = length` to a chain of shrinking recursion circuits,
-    /// starting from that length, for each `degree_bits` in the range specified for this STARK module.
-    /// Specifying a wide enough range allows a prover to cover all possible scenarios.
-    /// - `stark_config`: the configuration to be used for the STARK prover. It will usually be a fast
+    /// - `degree_bits_ranges`: the logarithmic ranges to be supported for the
+    ///   recursive tables.
+    /// Transactions may yield arbitrary trace lengths for each STARK module
+    /// (within some bounds), unknown prior generating the witness to create
+    /// a proof. Thus, for each STARK module, we construct a map from
+    /// `2^{degree_bits} = length` to a chain of shrinking recursion circuits,
+    /// starting from that length, for each `degree_bits` in the range specified
+    /// for this STARK module. Specifying a wide enough range allows a
+    /// prover to cover all possible scenarios.
+    /// - `stark_config`: the configuration to be used for the STARK prover. It
+    ///   will usually be a fast
     /// one yielding large proofs.
     pub fn new(
         all_stark: &AllStark<F, D>,
@@ -485,9 +508,10 @@ where
 
     /// Outputs the `VerifierCircuitData` needed to verify any block proof
     /// generated by an honest prover.
-    /// While the [`AllRecursiveCircuits`] prover state can also verify proofs, verifiers
-    /// only need a fraction of the state to verify proofs. This allows much less powerful
-    /// entities to behave as verifiers, by only loading the necessary data to verify block proofs.
+    /// While the [`AllRecursiveCircuits`] prover state can also verify proofs,
+    /// verifiers only need a fraction of the state to verify proofs. This
+    /// allows much less powerful entities to behave as verifiers, by only
+    /// loading the necessary data to verify block proofs.
     ///
     /// # Usage
     ///
@@ -617,8 +641,9 @@ where
             );
         }
 
-        // We want EVM root proofs to have the exact same structure as aggregation proofs, so we add
-        // public inputs for cyclic verification, even though they'll be ignored.
+        // We want EVM root proofs to have the exact same structure as aggregation
+        // proofs, so we add public inputs for cyclic verification, even though
+        // they'll be ignored.
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         builder.add_gate(
@@ -731,7 +756,8 @@ where
             builder.connect(limb0, limb1);
         }
 
-        // Connect the transaction number in public values to the lhs and rhs values correctly.
+        // Connect the transaction number in public values to the lhs and rhs values
+        // correctly.
         builder.connect(pvs.txn_number_before, lhs.txn_number_before);
         builder.connect(pvs.txn_number_after, rhs.txn_number_after);
 
@@ -768,8 +794,9 @@ where
     }
 
     fn create_block_circuit(agg: &AggregationCircuitData<F, C, D>) -> BlockCircuitData<F, C, D> {
-        // The block circuit is similar to the agg circuit; both verify two inner proofs.
-        // We need to adjust a few things, but it's easier than making a new CommonCircuitData.
+        // The block circuit is similar to the agg circuit; both verify two inner
+        // proofs. We need to adjust a few things, but it's easier than making a
+        // new CommonCircuitData.
         let expected_common_data = CommonCircuitData {
             fri_params: FriParams {
                 degree_bits: 14,
@@ -818,7 +845,8 @@ where
             agg_pv.extra_block_data,
         );
 
-        // Make connections between block proofs, and check initial and final block values.
+        // Make connections between block proofs, and check initial and final block
+        // values.
         Self::connect_block_proof(&mut builder, has_parent_block, &parent_pv, &agg_pv);
 
         let cyclic_vk = builder.add_verifier_data_public_inputs();
@@ -901,12 +929,15 @@ where
         // Check initial block values.
         Self::connect_initial_values_block(builder, rhs);
 
-        // Connect intermediary values for gas_used and bloom filters to the block's final values. We only plug on the right, so there is no need to check the left-handside block.
+        // Connect intermediary values for gas_used and bloom filters to the block's
+        // final values. We only plug on the right, so there is no need to check the
+        // left-handside block.
         Self::connect_final_block_values_to_intermediary(builder, rhs);
 
         let has_not_parent_block = builder.sub(one, has_parent_block.target);
 
-        // Check that the checkpoint block has the predetermined state trie root in `ExtraBlockData`.
+        // Check that the checkpoint block has the predetermined state trie root in
+        // `ExtraBlockData`.
         Self::connect_checkpoint_block(builder, rhs, has_not_parent_block);
     }
 
@@ -960,29 +991,36 @@ where
         }
     }
 
-    /// For a given transaction payload passed as [`GenerationInputs`], create a proof
-    /// for each STARK module, then recursively shrink and combine them, eventually
-    /// culminating in a transaction proof, also called root proof.
+    /// For a given transaction payload passed as [`GenerationInputs`], create a
+    /// proof for each STARK module, then recursively shrink and combine
+    /// them, eventually culminating in a transaction proof, also called
+    /// root proof.
     ///
     /// # Arguments
     ///
-    /// - `all_stark`: a structure defining the logic of all STARK modules and their associated
+    /// - `all_stark`: a structure defining the logic of all STARK modules and
+    ///   their associated
     /// cross-table lookups.
-    /// - `config`: the configuration to be used for the STARK prover. It will usually be a fast
+    /// - `config`: the configuration to be used for the STARK prover. It will
+    ///   usually be a fast
     /// one yielding large proofs.
-    /// - `generation_inputs`: a transaction and auxiliary data needed to generate a proof, provided
+    /// - `generation_inputs`: a transaction and auxiliary data needed to
+    ///   generate a proof, provided
     /// in Intermediary Representation.
-    /// - `timing`: a profiler defining a scope hierarchy and the time consumed by each one.
-    /// - `abort_signal`: an optional [`AtomicBool`] wrapped behind an [`Arc`], to send a kill signal
-    /// early. This is only necessary in a distributed setting where a worker may be blocking the entire
-    /// queue.
+    /// - `timing`: a profiler defining a scope hierarchy and the time consumed
+    ///   by each one.
+    /// - `abort_signal`: an optional [`AtomicBool`] wrapped behind an [`Arc`],
+    ///   to send a kill signal
+    /// early. This is only necessary in a distributed setting where a worker
+    /// may be blocking the entire queue.
     ///
     /// # Outputs
     ///
-    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and its [`PublicValues`]. Only
-    /// the proof with public inputs is necessary for a verifier to assert correctness of the computation,
-    /// but the public values are output for the prover convenience, as these are necessary during proof
-    /// aggregation.
+    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
+    /// its [`PublicValues`]. Only the proof with public inputs is necessary
+    /// for a verifier to assert correctness of the computation,
+    /// but the public values are output for the prover convenience, as these
+    /// are necessary during proof aggregation.
     pub fn prove_root(
         &self,
         all_stark: &AllStark<F, D>,
@@ -1048,18 +1086,21 @@ where
         Ok((root_proof, all_proof.public_values))
     }
 
-    /// From an initial set of STARK proofs passed with their associated recursive table circuits,
-    /// generate a recursive transaction proof.
-    /// It is aimed at being used when preprocessed table circuits have not been loaded to memory.
+    /// From an initial set of STARK proofs passed with their associated
+    /// recursive table circuits, generate a recursive transaction proof.
+    /// It is aimed at being used when preprocessed table circuits have not been
+    /// loaded to memory.
     ///
     /// **Note**:
     /// The type of the `table_circuits` passed as arguments is
-    /// `&[(RecursiveCircuitsForTableSize<F, C, D>, u8); NUM_TABLES]`. In particular, for each STARK
-    /// proof contained within the `AllProof` object provided to this method, we need to pass a tuple
-    /// of [`RecursiveCircuitsForTableSize<F, C, D>`] and a [`u8`]. The former is the recursive chain
-    /// corresponding to the initial degree size of the associated STARK proof. The latter is the
-    /// index of this degree in the range that was originally passed when constructing the entire prover
-    /// state.
+    /// `&[(RecursiveCircuitsForTableSize<F, C, D>, u8); NUM_TABLES]`. In
+    /// particular, for each STARK proof contained within the `AllProof`
+    /// object provided to this method, we need to pass a tuple
+    /// of [`RecursiveCircuitsForTableSize<F, C, D>`] and a [`u8`]. The former
+    /// is the recursive chain corresponding to the initial degree size of
+    /// the associated STARK proof. The latter is the index of this degree
+    /// in the range that was originally passed when constructing the entire
+    /// prover state.
     ///
     /// # Usage
     ///
@@ -1142,31 +1183,38 @@ where
         self.root.circuit.verify(agg_proof)
     }
 
-    /// Create an aggregation proof, combining two contiguous proofs into a single one. The combined
-    /// proofs can either be transaction (aka root) proofs, or other aggregation proofs, as long as
-    /// their states are contiguous, meaning that the final state of the left child proof is the initial
-    /// state of the right child proof.
+    /// Create an aggregation proof, combining two contiguous proofs into a
+    /// single one. The combined proofs can either be transaction (aka root)
+    /// proofs, or other aggregation proofs, as long as their states are
+    /// contiguous, meaning that the final state of the left child proof is the
+    /// initial state of the right child proof.
     ///
-    /// While regular transaction proofs can only assert validity of a single transaction, aggregation
-    /// proofs can cover an arbitrary range, up to an entire block with all its transactions.
+    /// While regular transaction proofs can only assert validity of a single
+    /// transaction, aggregation proofs can cover an arbitrary range, up to
+    /// an entire block with all its transactions.
     ///
     /// # Arguments
     ///
-    /// - `lhs_is_agg`: a boolean indicating whether the left child proof is an aggregation proof or
+    /// - `lhs_is_agg`: a boolean indicating whether the left child proof is an
+    ///   aggregation proof or
     /// a regular transaction proof.
     /// - `lhs_proof`: the left child proof.
-    /// - `lhs_public_values`: the public values associated to the right child proof.
-    /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an aggregation proof or
+    /// - `lhs_public_values`: the public values associated to the right child
+    ///   proof.
+    /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
+    ///   aggregation proof or
     /// a regular transaction proof.
     /// - `rhs_proof`: the right child proof.
-    /// - `rhs_public_values`: the public values associated to the right child proof.
+    /// - `rhs_public_values`: the public values associated to the right child
+    ///   proof.
     ///
     /// # Outputs
     ///
-    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and its [`PublicValues`]. Only
-    /// the proof with public inputs is necessary for a verifier to assert correctness of the computation,
-    /// but the public values are output for the prover convenience, as these are necessary during proof
-    /// aggregation.
+    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
+    /// its [`PublicValues`]. Only the proof with public inputs is necessary
+    /// for a verifier to assert correctness of the computation,
+    /// but the public values are output for the prover convenience, as these
+    /// are necessary during proof aggregation.
     pub fn prove_aggregation(
         &self,
         lhs_is_agg: bool,
@@ -1233,23 +1281,28 @@ where
         )
     }
 
-    /// Create a final block proof, once all transactions of a given block have been combined into a
-    /// single aggregation proof.
+    /// Create a final block proof, once all transactions of a given block have
+    /// been combined into a single aggregation proof.
     ///
-    /// Block proofs can either be generated as standalone, or combined with a previous block proof
-    /// to assert validity of a range of blocks.
+    /// Block proofs can either be generated as standalone, or combined with a
+    /// previous block proof to assert validity of a range of blocks.
     ///
     /// # Arguments
     ///
-    /// - `opt_parent_block_proof`: an optional parent block proof. Passing one will generate a proof of
-    /// validity for both the block range covered by the previous proof and the current block.
-    /// - `agg_root_proof`: the final aggregation proof containing all transactions within the current block.
-    /// - `public_values`: the public values associated to the aggregation proof.
+    /// - `opt_parent_block_proof`: an optional parent block proof. Passing one
+    ///   will generate a proof of
+    /// validity for both the block range covered by the previous proof and the
+    /// current block.
+    /// - `agg_root_proof`: the final aggregation proof containing all
+    ///   transactions within the current block.
+    /// - `public_values`: the public values associated to the aggregation
+    ///   proof.
     ///
     /// # Outputs
     ///
-    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and its [`PublicValues`]. Only
-    /// the proof with public inputs is necessary for a verifier to assert correctness of the computation.
+    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
+    /// its [`PublicValues`]. Only the proof with public inputs is necessary
+    /// for a verifier to assert correctness of the computation.
     pub fn prove_block(
         &self,
         opt_parent_block_proof: Option<&ProofWithPublicInputs<F, C, D>>,
@@ -1276,7 +1329,8 @@ where
                 )));
             }
 
-            // Initialize some public inputs for correct connection between the checkpoint block and the current one.
+            // Initialize some public inputs for correct connection between the checkpoint
+            // block and the current one.
             let mut nonzero_pis = HashMap::new();
 
             // Initialize the checkpoint block roots before, and state root after.
@@ -1344,7 +1398,8 @@ where
             }
 
             // Initialize the checkpoint block number.
-            // Subtraction would result in an invalid proof for genesis, but we shouldn't try proving this block anyway.
+            // Subtraction would result in an invalid proof for genesis, but we shouldn't
+            // try proving this block anyway.
             let block_number_key = TrieRootsTarget::SIZE * 2 + 6;
             nonzero_pis.insert(
                 block_number_key,
@@ -1366,8 +1421,8 @@ where
         block_inputs
             .set_verifier_data_target(&self.block.cyclic_vk, &self.block.circuit.verifier_only);
 
-        // This is basically identical to this block public values, apart from the `trie_roots_before`
-        // that may come from the previous proof, if any.
+        // This is basically identical to this block public values, apart from the
+        // `trie_roots_before` that may come from the previous proof, if any.
         let block_public_values = PublicValues {
             trie_roots_before: opt_parent_block_proof
                 .map(|p| TrieRoots::from_public_inputs(&p.public_inputs[0..TrieRootsTarget::SIZE]))
@@ -1398,7 +1453,8 @@ where
     }
 }
 
-/// A map between initial degree sizes and their associated shrinking recursion circuits.
+/// A map between initial degree sizes and their associated shrinking recursion
+/// circuits.
 #[derive(Eq, PartialEq, Debug)]
 pub struct RecursiveCircuitsForTable<F, C, const D: usize>
 where
@@ -1406,8 +1462,8 @@ where
     C: GenericConfig<D, F = F>,
     C::Hasher: AlgebraicHasher<F>,
 {
-    /// A map from `log_2(height)` to a chain of shrinking recursion circuits starting at that
-    /// height.
+    /// A map from `log_2(height)` to a chain of shrinking recursion circuits
+    /// starting at that height.
     pub by_stark_size: BTreeMap<usize, RecursiveCircuitsForTableSize<F, C, D>>,
 }
 
@@ -1474,8 +1530,9 @@ where
         Self { by_stark_size }
     }
 
-    /// For each initial `degree_bits`, get the final circuit at the end of that shrinking chain.
-    /// Each of these final circuits should have degree `THRESHOLD_DEGREE_BITS`.
+    /// For each initial `degree_bits`, get the final circuit at the end of that
+    /// shrinking chain. Each of these final circuits should have degree
+    /// `THRESHOLD_DEGREE_BITS`.
     fn final_circuits(&self) -> Vec<&CircuitData<F, C, D>> {
         self.by_stark_size
             .values()
@@ -1490,8 +1547,8 @@ where
     }
 }
 
-/// A chain of shrinking wrapper circuits, ending with a final circuit with `degree_bits`
-/// `THRESHOLD_DEGREE_BITS`.
+/// A chain of shrinking wrapper circuits, ending with a final circuit with
+/// `degree_bits` `THRESHOLD_DEGREE_BITS`.
 #[derive(Eq, PartialEq, Debug)]
 pub struct RecursiveCircuitsForTableSize<F, C, const D: usize>
 where
@@ -1642,9 +1699,10 @@ where
     }
 }
 
-/// Our usual recursion threshold is 2^12 gates, but for these shrinking circuits, we use a few more
-/// gates for a constant inner VK and for public inputs. This pushes us over the threshold to 2^13.
-/// As long as we're at 2^13 gates, we might as well use a narrower witness.
+/// Our usual recursion threshold is 2^12 gates, but for these shrinking
+/// circuits, we use a few more gates for a constant inner VK and for public
+/// inputs. This pushes us over the threshold to 2^13. As long as we're at 2^13
+/// gates, we might as well use a narrower witness.
 fn shrinking_config() -> CircuitConfig {
     CircuitConfig {
         num_routed_wires: 40,

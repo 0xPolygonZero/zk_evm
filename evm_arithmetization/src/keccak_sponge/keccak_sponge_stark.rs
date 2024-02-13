@@ -64,9 +64,9 @@ pub(crate) fn ctl_looked_data<F: Field>() -> Vec<Column<F>> {
     res
 }
 
-/// Creates the vector of `Columns` corresponding to the inputs of the Keccak sponge.
-/// This is used to check that the inputs of the sponge correspond to the inputs
-/// given by `KeccakStark`.
+/// Creates the vector of `Columns` corresponding to the inputs of the Keccak
+/// sponge. This is used to check that the inputs of the sponge correspond to
+/// the inputs given by `KeccakStark`.
 pub(crate) fn ctl_looking_keccak_inputs<F: Field>() -> Vec<Column<F>> {
     let cols = KECCAK_SPONGE_COL_MAP;
     let mut res: Vec<_> = Column::singles(
@@ -82,9 +82,9 @@ pub(crate) fn ctl_looking_keccak_inputs<F: Field>() -> Vec<Column<F>> {
     res
 }
 
-/// Creates the vector of `Columns` corresponding to the outputs of the Keccak sponge.
-/// This is used to check that the outputs of the sponge correspond to the outputs
-/// given by `KeccakStark`.
+/// Creates the vector of `Columns` corresponding to the outputs of the Keccak
+/// sponge. This is used to check that the outputs of the sponge correspond to
+/// the outputs given by `KeccakStark`.
 pub(crate) fn ctl_looking_keccak_outputs<F: Field>() -> Vec<Column<F>> {
     let cols = KECCAK_SPONGE_COL_MAP;
 
@@ -106,7 +106,8 @@ pub(crate) fn ctl_looking_keccak_outputs<F: Field>() -> Vec<Column<F>> {
     res
 }
 
-/// Creates the vector of `Columns` corresponding to the address and value of the byte being read from memory.
+/// Creates the vector of `Columns` corresponding to the address and value of
+/// the byte being read from memory.
 pub(crate) fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
     let cols = KECCAK_SPONGE_COL_MAP;
 
@@ -157,15 +158,17 @@ pub(crate) fn ctl_looking_logic<F: Field>(i: usize) -> Vec<Column<F>> {
         Column::constant(F::from_canonical_u8(0x18)), // is_xor
     ];
 
-    // Input 0 contains some of the sponge's original rate chunks. If this is the last CTL, we won't
-    // need to use all of the CTL's inputs, so we will pass some zeros.
+    // Input 0 contains some of the sponge's original rate chunks. If this is the
+    // last CTL, we won't need to use all of the CTL's inputs, so we will pass
+    // some zeros.
     res.extend(
         Column::singles(&cols.original_rate_u32s[i * U32S_PER_CTL..])
             .chain(repeat(Column::zero()))
             .take(U32S_PER_CTL),
     );
 
-    // Input 1 contains some of block's chunks. Again, for the last CTL it will include some zeros.
+    // Input 1 contains some of block's chunks. Again, for the last CTL it will
+    // include some zeros.
     res.extend(
         cols.block_bytes[i * U8S_PER_CTL..]
             .chunks(size_of::<u32>())
@@ -186,8 +189,8 @@ pub(crate) fn ctl_looking_logic<F: Field>(i: usize) -> Vec<Column<F>> {
 
 /// CTL filter for the final block rows of the `KeccakSponge` table.
 pub(crate) fn ctl_looked_filter<F: Field>() -> Filter<F> {
-    // The CPU table is only interested in our final-block rows, since those contain the final
-    // sponge output.
+    // The CPU table is only interested in our final-block rows, since those contain
+    // the final sponge output.
     Filter::new_simple(Column::sum(KECCAK_SPONGE_COL_MAP.is_final_input_len))
 }
 
@@ -235,7 +238,8 @@ pub(crate) struct KeccakSpongeOp {
     pub(crate) input: Vec<u8>,
 }
 
-/// Structure representing the `KeccakSponge` STARK, which carries out the sponge permutation.
+/// Structure representing the `KeccakSponge` STARK, which carries out the
+/// sponge permutation.
 #[derive(Copy, Clone, Default)]
 pub(crate) struct KeccakSpongeStark<F, const D: usize> {
     f: PhantomData<F>,
@@ -289,8 +293,9 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
     }
 
     /// Generates the rows associated to a given operation:
-    /// Performs a Keccak sponge permutation and fills the STARK's rows accordingly.
-    /// The number of rows is the number of input chunks of size `KECCAK_RATE_BYTES`.
+    /// Performs a Keccak sponge permutation and fills the STARK's rows
+    /// accordingly. The number of rows is the number of input chunks of
+    /// size `KECCAK_RATE_BYTES`.
     fn generate_rows_for_op(&self, op: KeccakSpongeOp) -> Vec<[F; NUM_KECCAK_SPONGE_COLUMNS]> {
         let mut rows = Vec::with_capacity(op.input.len() / KECCAK_RATE_BYTES + 1);
 
@@ -308,8 +313,9 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
             );
 
             // We update the state limbs for the next block absorption.
-            // The first `KECCAK_DIGEST_U32s` limbs are stored as bytes after the computation,
-            // so we recompute the corresponding `u32` and update the first state limbs.
+            // The first `KECCAK_DIGEST_U32s` limbs are stored as bytes after the
+            // computation, so we recompute the corresponding `u32` and update
+            // the first state limbs.
             sponge_state[..KECCAK_DIGEST_U32S]
                 .iter_mut()
                 .zip(row.updated_digest_state_bytes.chunks_exact(4))
@@ -321,8 +327,8 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
                         .sum();
                 });
 
-            // The rest of the bytes are already stored in the expected form, so we can directly
-            // update the state with the stored values.
+            // The rest of the bytes are already stored in the expected form, so we can
+            // directly update the state with the stored values.
             sponge_state[KECCAK_DIGEST_U32S..]
                 .iter_mut()
                 .zip(row.partial_updated_state_u32s)
@@ -399,9 +405,9 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
         row
     }
 
-    /// Generate fields that are common to both full-input-block rows and final-block rows.
-    /// Also updates the sponge state with a single absorption.
-    /// Given a state S = R || C and a block input B,
+    /// Generate fields that are common to both full-input-block rows and
+    /// final-block rows. Also updates the sponge state with a single
+    /// absorption. Given a state S = R || C and a block input B,
     /// - R is updated with R XOR B,
     /// - S is replaced by keccakf_u32s(S).
     fn generate_common_fields(
@@ -555,7 +561,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let range_max = P::Scalar::from_canonical_u64((BYTE_RANGE_MAX - 1) as u64);
         yield_constr.constraint_last_row(rc1 - range_max);
 
-        // Each flag (full-input block, final block or implied dummy flag) must be boolean.
+        // Each flag (full-input block, final block or implied dummy flag) must be
+        // boolean.
         let is_full_input_block = local_values.is_full_input_block;
         yield_constr.constraint(is_full_input_block * (is_full_input_block - P::ONES));
 
@@ -566,10 +573,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint(is_final_len * (is_final_len - P::ONES));
         }
 
-        // Ensure that full-input block and final block flags are not set to 1 at the same time.
+        // Ensure that full-input block and final block flags are not set to 1 at the
+        // same time.
         yield_constr.constraint(is_final_block * is_full_input_block);
 
-        // If this is the first row, the original sponge state should be 0 and already_absorbed_bytes = 0.
+        // If this is the first row, the original sponge state should be 0 and
+        // already_absorbed_bytes = 0.
         let already_absorbed_bytes = local_values.already_absorbed_bytes;
         yield_constr.constraint_first_row(already_absorbed_bytes);
         for &original_rate_elem in local_values.original_rate_u32s.iter() {
@@ -579,7 +588,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint_first_row(original_capacity_elem);
         }
 
-        // If this is a final block, the next row's original sponge state should be 0 and already_absorbed_bytes = 0.
+        // If this is a final block, the next row's original sponge state should be 0
+        // and already_absorbed_bytes = 0.
         yield_constr.constraint_transition(is_final_block * next_values.already_absorbed_bytes);
         for &original_rate_elem in next_values.original_rate_u32s.iter() {
             yield_constr.constraint_transition(is_final_block * original_rate_elem);
@@ -588,7 +598,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint_transition(is_final_block * original_capacity_elem);
         }
 
-        // If this is a full-input block, the next row's address, time and len must match as well as its timestamp.
+        // If this is a full-input block, the next row's address, time and len must
+        // match as well as its timestamp.
         yield_constr.constraint_transition(
             is_full_input_block * (local_values.context - next_values.context),
         );
@@ -601,7 +612,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             is_full_input_block * (local_values.timestamp - next_values.timestamp),
         );
 
-        // If this is a full-input block, the next row's "before" should match our "after" state.
+        // If this is a full-input block, the next row's "before" should match our
+        // "after" state.
         for (current_bytes_after, next_before) in local_values
             .updated_digest_state_bytes
             .chunks_exact(4)
@@ -631,14 +643,16 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint_transition(is_full_input_block * (next_before - current_after));
         }
 
-        // If this is a full-input block, the next row's already_absorbed_bytes should be ours plus `KECCAK_RATE_BYTES`.
+        // If this is a full-input block, the next row's already_absorbed_bytes should
+        // be ours plus `KECCAK_RATE_BYTES`.
         yield_constr.constraint_transition(
             is_full_input_block
                 * (already_absorbed_bytes + P::from(FE::from_canonical_usize(KECCAK_RATE_BYTES))
                     - next_values.already_absorbed_bytes),
         );
 
-        // A dummy row is always followed by another dummy row, so the prover can't put dummy rows "in between" to avoid the above checks.
+        // A dummy row is always followed by another dummy row, so the prover can't put
+        // dummy rows "in between" to avoid the above checks.
         let is_dummy = P::ONES - is_full_input_block - is_final_block;
         let next_is_final_block: P = next_values.is_final_input_len.iter().copied().sum();
         yield_constr.constraint_transition(
@@ -675,7 +689,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let t = builder.sub_extension(rc1, range_max);
         yield_constr.constraint_last_row(builder, t);
 
-        // Each flag (full-input block, final block or implied dummy flag) must be boolean.
+        // Each flag (full-input block, final block or implied dummy flag) must be
+        // boolean.
         let is_full_input_block = local_values.is_full_input_block;
         let constraint = builder.mul_sub_extension(
             is_full_input_block,
@@ -693,11 +708,13 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint(builder, constraint);
         }
 
-        // Ensure that full-input block and final block flags are not set to 1 at the same time.
+        // Ensure that full-input block and final block flags are not set to 1 at the
+        // same time.
         let constraint = builder.mul_extension(is_final_block, is_full_input_block);
         yield_constr.constraint(builder, constraint);
 
-        // If this is the first row, the original sponge state should be 0 and already_absorbed_bytes = 0.
+        // If this is the first row, the original sponge state should be 0 and
+        // already_absorbed_bytes = 0.
         let already_absorbed_bytes = local_values.already_absorbed_bytes;
         yield_constr.constraint_first_row(builder, already_absorbed_bytes);
         for &original_rate_elem in local_values.original_rate_u32s.iter() {
@@ -707,7 +724,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint_first_row(builder, original_capacity_elem);
         }
 
-        // If this is a final block, the next row's original sponge state should be 0 and already_absorbed_bytes = 0.
+        // If this is a final block, the next row's original sponge state should be 0
+        // and already_absorbed_bytes = 0.
         let constraint = builder.mul_extension(is_final_block, next_values.already_absorbed_bytes);
         yield_constr.constraint_transition(builder, constraint);
         for &original_rate_elem in next_values.original_rate_u32s.iter() {
@@ -719,7 +737,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint_transition(builder, constraint);
         }
 
-        // If this is a full-input block, the next row's address, time and len must match as well as its timestamp.
+        // If this is a full-input block, the next row's address, time and len must
+        // match as well as its timestamp.
         let context_diff = builder.sub_extension(local_values.context, next_values.context);
         let constraint = builder.mul_extension(is_full_input_block, context_diff);
         yield_constr.constraint_transition(builder, constraint);
@@ -736,7 +755,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let constraint = builder.mul_extension(is_full_input_block, timestamp_diff);
         yield_constr.constraint_transition(builder, constraint);
 
-        // If this is a full-input block, the next row's "before" should match our "after" state.
+        // If this is a full-input block, the next row's "before" should match our
+        // "after" state.
         for (current_bytes_after, next_before) in local_values
             .updated_digest_state_bytes
             .chunks_exact(4)
@@ -774,7 +794,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint_transition(builder, constraint);
         }
 
-        // If this is a full-input block, the next row's already_absorbed_bytes should be ours plus `KECCAK_RATE_BYTES`.
+        // If this is a full-input block, the next row's already_absorbed_bytes should
+        // be ours plus `KECCAK_RATE_BYTES`.
         let absorbed_bytes = builder.add_const_extension(
             already_absorbed_bytes,
             F::from_canonical_usize(KECCAK_RATE_BYTES),
@@ -784,7 +805,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let constraint = builder.mul_extension(is_full_input_block, absorbed_diff);
         yield_constr.constraint_transition(builder, constraint);
 
-        // A dummy row is always followed by another dummy row, so the prover can't put dummy rows "in between" to avoid the above checks.
+        // A dummy row is always followed by another dummy row, so the prover can't put
+        // dummy rows "in between" to avoid the above checks.
         let is_dummy = {
             let tmp = builder.sub_extension(one, is_final_block);
             builder.sub_extension(tmp, is_full_input_block)

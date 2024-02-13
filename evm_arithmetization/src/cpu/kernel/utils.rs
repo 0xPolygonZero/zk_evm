@@ -3,9 +3,11 @@ use core::fmt::Debug;
 use ethereum_types::U256;
 use plonky2_util::ceil_div_usize;
 
-/// Enumerate the length `W` windows of `vec`, and run `maybe_replace` on each one.
+/// Enumerate the length `W` windows of `vec`, and run `maybe_replace` on each
+/// one.
 ///
-/// Whenever `maybe_replace` returns `Some(replacement)`, the given replacement will be applied.
+/// Whenever `maybe_replace` returns `Some(replacement)`, the given replacement
+/// will be applied.
 pub(crate) fn replace_windows<const W: usize, T, F>(vec: &mut Vec<T>, maybe_replace: F)
 where
     T: Clone + Debug,

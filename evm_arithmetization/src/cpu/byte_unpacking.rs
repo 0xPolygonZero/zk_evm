@@ -19,7 +19,8 @@ pub(crate) fn eval_packed<P: PackedField>(
 
     // The address to write to is stored in the first memory channel.
     // It contains virt, segment, ctx in its first 3 limbs, and 0 otherwise.
-    // The new address is identical, except for its `virtual` limb that is increased by the corresponding `len` offset.
+    // The new address is identical, except for its `virtual` limb that is increased
+    // by the corresponding `len` offset.
     let new_addr = nv.mem_channels[0].value;
     let written_addr = lv.mem_channels[0].value;
 
@@ -57,7 +58,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 
     // The address to write to is stored in the first memory channel.
     // It contains virt, segment, ctx in its first 3 limbs, and 0 otherwise.
-    // The new address is identical, except for its `virtual` limb that is increased by the corresponding `len` offset.
+    // The new address is identical, except for its `virtual` limb that is increased
+    // by the corresponding `len` offset.
     let new_addr = nv.mem_channels[0].value;
     let written_addr = lv.mem_channels[0].value;
 

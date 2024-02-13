@@ -82,7 +82,8 @@ fn eval_packed_accumulate<P: PackedField>(
     yield_constr.constraint_transition(lv.op.jumps * (gas_diff - jump_gas_cost));
 
     // For binary_ops.
-    // MUL, DIV and MOD are differentiated from ADD, SUB, LT, GT and BYTE by their first and fifth bits set to 0.
+    // MUL, DIV and MOD are differentiated from ADD, SUB, LT, GT and BYTE by their
+    // first and fifth bits set to 0.
     let cost_filter = lv.opcode_bits[0] + lv.opcode_bits[4] - lv.opcode_bits[0] * lv.opcode_bits[4];
     let binary_op_cost = P::Scalar::from_canonical_u32(G_LOW.unwrap())
         + cost_filter
@@ -113,7 +114,8 @@ fn eval_packed_accumulate<P: PackedField>(
     );
 
     // For PROVER_INPUT and PUSH operations.
-    // PUSH operations are differentiated from PROVER_INPUT by their 6th bit set to 1.
+    // PUSH operations are differentiated from PROVER_INPUT by their 6th bit set to
+    // 1.
     let push_prover_input_gas_cost = lv.opcode_bits[5]
         * P::Scalar::from_canonical_u32(G_VERYLOW.unwrap())
         + (P::ONES - lv.opcode_bits[5]) * P::Scalar::from_canonical_u32(KERNEL_ONLY_INSTR.unwrap());
@@ -211,7 +213,8 @@ fn eval_ext_circuit_accumulate<F: RichField + Extendable<D>, const D: usize>(
     yield_constr.constraint_transition(builder, constr);
 
     // For binary_ops.
-    // MUL, DIV and MOD are differentiated from ADD, SUB, LT, GT and BYTE by their first and fifth bits set to 0.
+    // MUL, DIV and MOD are differentiated from ADD, SUB, LT, GT and BYTE by their
+    // first and fifth bits set to 0.
     let filter = lv.op.binary_op;
     let cost_filter = {
         let a = builder.add_extension(lv.opcode_bits[0], lv.opcode_bits[4]);
@@ -279,7 +282,8 @@ fn eval_ext_circuit_accumulate<F: RichField + Extendable<D>, const D: usize>(
     yield_constr.constraint_transition(builder, constr);
 
     // For PROVER_INPUT and PUSH operations.
-    // PUSH operations are differentiated from PROVER_INPUT by their 6th bit set to 1.
+    // PUSH operations are differentiated from PROVER_INPUT by their 6th bit set to
+    // 1.
     let push_prover_input_gas_cost = builder.arithmetic_extension(
         F::from_canonical_u32(G_VERYLOW.unwrap())
             - F::from_canonical_u32(KERNEL_ONLY_INSTR.unwrap()),

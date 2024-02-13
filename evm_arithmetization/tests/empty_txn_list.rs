@@ -5,15 +5,15 @@ use std::time::Duration;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::{BigEndianHash, H256};
+use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
 use log::info;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
-use plonky2_evm::generation::{GenerationInputs, TrieInputs};
-use plonky2_evm::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
-use plonky2_evm::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -74,7 +74,8 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     // Initialize the preprocessed circuits for the zkEVM.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 9..11, 12..13, 14..15, 9..11, 12..13, 17..18], // Minimal ranges to prove an empty list
+        &[16..17, 9..11, 12..13, 14..15, 9..11, 12..13, 17..18], /* Minimal ranges to prove an
+                                                                  * empty list */
         &config,
     );
 
@@ -140,7 +141,8 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let retrieved_public_values = PublicValues::from_public_inputs(&block_proof.public_inputs);
     assert_eq!(retrieved_public_values, block_public_values);
 
-    // Get the verifier associated to these preprocessed circuits, and have it verify the block_proof.
+    // Get the verifier associated to these preprocessed circuits, and have it
+    // verify the block_proof.
     let verifier = all_circuits.final_verifier_data();
     verifier.verify(block_proof)
 }

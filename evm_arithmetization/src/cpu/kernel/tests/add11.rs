@@ -169,7 +169,8 @@ fn test_add11_yml() {
 
 #[test]
 fn test_add11_yml_with_exception() {
-    // In this test, we make sure that the user code throws a stack underflow exception.
+    // In this test, we make sure that the user code throws a stack underflow
+    // exception.
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
@@ -222,7 +223,8 @@ fn test_add11_yml_with_exception() {
     let txn_gas_limit = 400_000;
     let gas_price = 10;
 
-    // Here, since the transaction fails, it consumes its gas limit, and does nothing else.
+    // Here, since the transaction fails, it consumes its gas limit, and does
+    // nothing else.
     let expected_state_trie_after = {
         let beneficiary_account_after = beneficiary_account_before;
         // This is the only account that changes: the nonce and the balance are updated.

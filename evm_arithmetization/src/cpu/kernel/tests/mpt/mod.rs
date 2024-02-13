@@ -54,7 +54,8 @@ pub(crate) fn test_account_2_rlp() -> Vec<u8> {
     rlp::encode(&test_account_2()).to_vec()
 }
 
-/// A `PartialTrie` where an extension node leads to a leaf node containing an account.
+/// A `PartialTrie` where an extension node leads to a leaf node containing an
+/// account.
 pub(crate) fn extension_to_leaf(value: Vec<u8>) -> HashedPartialTrie {
     Node::Extension {
         nibbles: 0xABC_u64.into(),

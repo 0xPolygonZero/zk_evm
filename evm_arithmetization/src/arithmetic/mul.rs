@@ -67,7 +67,8 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 use crate::arithmetic::columns::*;
 use crate::arithmetic::utils::*;
 
-/// Given the two limbs of `left_in` and `right_in`, computes `left_in * right_in`.
+/// Given the two limbs of `left_in` and `right_in`, computes `left_in *
+/// right_in`.
 pub(crate) fn generate_mul<F: PrimeField64>(lv: &mut [F], left_in: [i64; 16], right_in: [i64; 16]) {
     const MASK: i64 = (1i64 << LIMB_BITS) - 1i64;
 

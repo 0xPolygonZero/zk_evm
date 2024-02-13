@@ -2,8 +2,8 @@ use core::borrow::{Borrow, BorrowMut};
 use core::fmt::{Debug, Formatter};
 use core::mem::{size_of, transmute};
 
-/// General purpose columns, which can have different meanings depending on what CTL or other
-/// operation is occurring at this row.
+/// General purpose columns, which can have different meanings depending on what
+/// CTL or other operation is occurring at this row.
 #[derive(Clone, Copy)]
 pub(crate) union CpuGeneralColumnsView<T: Copy> {
     exception: CpuExceptionView<T>,
@@ -14,14 +14,16 @@ pub(crate) union CpuGeneralColumnsView<T: Copy> {
 }
 
 impl<T: Copy> CpuGeneralColumnsView<T> {
-    /// View of the columns used for exceptions: they are the exception code bits.
-    /// SAFETY: Each view is a valid interpretation of the underlying array.
+    /// View of the columns used for exceptions: they are the exception code
+    /// bits. SAFETY: Each view is a valid interpretation of the underlying
+    /// array.
     pub(crate) fn exception(&self) -> &CpuExceptionView<T> {
         unsafe { &self.exception }
     }
 
-    /// Mutable view of the column required for exceptions: they are the exception code bits.
-    /// SAFETY: Each view is a valid interpretation of the underlying array.
+    /// Mutable view of the column required for exceptions: they are the
+    /// exception code bits. SAFETY: Each view is a valid interpretation of
+    /// the underlying array.
     pub(crate) fn exception_mut(&mut self) -> &mut CpuExceptionView<T> {
         unsafe { &mut self.exception }
     }
@@ -112,14 +114,17 @@ pub(crate) struct CpuExceptionView<T: Copy> {
     pub(crate) exc_code_bits: [T; 3],
 }
 
-/// View of the `CpuGeneralColumns` storing pseudo-inverses used to prove logic operations.
+/// View of the `CpuGeneralColumns` storing pseudo-inverses used to prove logic
+/// operations.
 #[derive(Copy, Clone)]
 pub(crate) struct CpuLogicView<T: Copy> {
-    /// Pseudoinverse of `(input0 - input1)`. Used prove that they are unequal. Assumes 32-bit limbs.
+    /// Pseudoinverse of `(input0 - input1)`. Used prove that they are unequal.
+    /// Assumes 32-bit limbs.
     pub(crate) diff_pinv: [T; 8],
 }
 
-/// View of the first two `CpuGeneralColumns` storing a flag and a pseudoinverse used to prove jumps.
+/// View of the first two `CpuGeneralColumns` storing a flag and a pseudoinverse
+/// used to prove jumps.
 #[derive(Copy, Clone)]
 pub(crate) struct CpuJumpsView<T: Copy> {
     /// A flag indicating whether a jump should occur.
@@ -128,7 +133,8 @@ pub(crate) struct CpuJumpsView<T: Copy> {
     pub(crate) cond_sum_pinv: T,
 }
 
-/// View of the first `CpuGeneralColumns` storing a pseudoinverse used to prove shift operations.
+/// View of the first `CpuGeneralColumns` storing a pseudoinverse used to prove
+/// shift operations.
 #[derive(Copy, Clone)]
 pub(crate) struct CpuShiftView<T: Copy> {
     /// For a shift amount of displacement: [T], this is the inverse of
@@ -136,9 +142,10 @@ pub(crate) struct CpuShiftView<T: Copy> {
     pub(crate) high_limb_sum_inv: T,
 }
 
-/// View of the last four `CpuGeneralColumns` storing stack-related variables. The first three are used
-/// for conditionally enabling and disabling channels when reading the next `stack_top`, and the fourth one
-/// is used to check for stack overflow.
+/// View of the last four `CpuGeneralColumns` storing stack-related variables.
+/// The first three are used for conditionally enabling and disabling channels
+/// when reading the next `stack_top`, and the fourth one is used to check for
+/// stack overflow.
 #[derive(Copy, Clone)]
 pub(crate) struct CpuStackView<T: Copy> {
     _unused: [T; 4],
@@ -148,7 +155,8 @@ pub(crate) struct CpuStackView<T: Copy> {
     pub(crate) stack_inv_aux: T,
     /// Used to reduce the degree of stack constraints when needed.
     pub(crate) stack_inv_aux_2: T,
-    /// Pseudoinverse of `nv.stack_len - (MAX_USER_STACK_SIZE + 1)` to check for stack overflow.
+    /// Pseudoinverse of `nv.stack_len - (MAX_USER_STACK_SIZE + 1)` to check for
+    /// stack overflow.
     pub(crate) stack_len_bounds_aux: T,
 }
 

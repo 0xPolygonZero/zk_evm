@@ -17,9 +17,10 @@ use crate::cpu::kernel::stack::stack_manipulation::expand_stack_manipulation;
 use crate::cpu::kernel::utils::u256_to_trimmed_be_bytes;
 use crate::generation::prover_input::ProverInputFn;
 
-/// The number of bytes to push when pushing an offset within the code (i.e. when assembling jumps).
-/// Ideally we would automatically use the minimal number of bytes required, but that would be
-/// nontrivial given the circular dependency between an offset and its size.
+/// The number of bytes to push when pushing an offset within the code (i.e.
+/// when assembling jumps). Ideally we would automatically use the minimal
+/// number of bytes required, but that would be nontrivial given the circular
+/// dependency between an offset and its size.
 pub(crate) const BYTES_PER_OFFSET: u8 = 3;
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -68,7 +69,8 @@ impl Kernel {
         serde_json::from_slice(&bytes).unwrap()
     }
 
-    /// Get a string representation of the current offset for debugging purposes.
+    /// Get a string representation of the current offset for debugging
+    /// purposes.
     pub(crate) fn offset_name(&self, offset: usize) -> String {
         match self
             .ordered_labels
@@ -435,8 +437,9 @@ mod tests {
 
     #[test]
     fn two_files() {
-        // We will test two simple files, with a label and a jump, to ensure that jump offsets
-        // are correctly shifted based on the offset of the containing file.
+        // We will test two simple files, with a label and a jump, to ensure that jump
+        // offsets are correctly shifted based on the offset of the containing
+        // file.
 
         let file_1 = File {
             body: vec![
@@ -678,7 +681,8 @@ mod tests {
         let mut consts = HashMap::new();
         consts.insert("LIFE".into(), 42.into());
         parse_and_assemble_ext(&["%stack (a, b) -> (b, @LIFE)"], consts, true);
-        // We won't check the code since there are two equally efficient implementations.
+        // We won't check the code since there are two equally efficient
+        // implementations.
 
         let kernel = parse_and_assemble(&["start: %stack (a, b) -> (start)"]);
         assert_eq!(kernel.code, vec![pop, pop, push_label, 0, 0, 0]);

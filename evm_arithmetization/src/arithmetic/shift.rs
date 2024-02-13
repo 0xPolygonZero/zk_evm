@@ -71,8 +71,9 @@ pub(crate) fn generate<F: PrimeField64>(
         // We generate the multiplication input0 * input1 using mul.rs.
         mul::generate_mul(lv, input0, input1);
     } else {
-        // If the operation is SHR, we compute: `input / shifted_displacement` if `shifted_displacement == 0`
-        // otherwise, the output is 0. We use the logic in divmod.rs to achieve that.
+        // If the operation is SHR, we compute: `input / shifted_displacement` if
+        // `shifted_displacement == 0` otherwise, the output is 0. We use the
+        // logic in divmod.rs to achieve that.
         divmod::generate_divmod(lv, nv, IS_SHR, INPUT_REGISTER_1, INPUT_REGISTER_2);
     }
 }

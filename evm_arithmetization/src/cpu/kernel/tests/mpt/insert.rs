@@ -152,8 +152,9 @@ fn mpt_insert_branch_to_leaf_same_key() -> Result<()> {
     test_state_trie(state_trie, nibbles_64(0xABCD), test_account_2())
 }
 
-/// Note: The account's storage_root is ignored, as we can't insert a new storage_root without the
-/// accompanying trie data. An empty trie's storage_root is used instead.
+/// Note: The account's storage_root is ignored, as we can't insert a new
+/// storage_root without the accompanying trie data. An empty trie's
+/// storage_root is used instead.
 fn test_state_trie(
     mut state_trie: HashedPartialTrie,
     k: Nibbles,

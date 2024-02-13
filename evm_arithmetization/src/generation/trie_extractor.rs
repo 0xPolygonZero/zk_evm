@@ -1,4 +1,5 @@
-//! Code for extracting trie data after witness generation. This is intended only for debugging.
+//! Code for extracting trie data after witness generation. This is intended
+//! only for debugging.
 
 use std::collections::HashMap;
 
@@ -13,7 +14,8 @@ use crate::util::{u256_to_bool, u256_to_h160, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{MemoryAddress, MemoryState};
 
-/// Account data as it's stored in the state trie, with a pointer to the storage trie.
+/// Account data as it's stored in the state trie, with a pointer to the storage
+/// trie.
 #[derive(Debug)]
 pub(crate) struct AccountTrieRecord {
     pub(crate) nonce: u64,
@@ -129,7 +131,8 @@ pub(crate) fn read_receipt_trie_value(
         .iter()
         .map(|&x| u256_to_u8(x))
         .collect::<Result<_, _>>()?;
-    // We read the number of logs at position `2 + 256 + 1`, and skip over the next element before parsing the logs.
+    // We read the number of logs at position `2 + 256 + 1`, and skip over the next
+    // element before parsing the logs.
     let logs = read_logs(u256_to_usize(slice[2 + 256 + 1])?, &slice[2 + 256 + 3..])?;
 
     Ok((

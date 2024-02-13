@@ -16,7 +16,8 @@ pub(crate) const fn index_len(i: usize) -> usize {
     LEN_INDICES_START + i
 }
 
-// Note: Those are used to obtain the length of a sequence of bytes being processed.
+// Note: Those are used to obtain the length of a sequence of bytes being
+// processed.
 pub(crate) const LEN_INDICES_COLS: Range<usize> = LEN_INDICES_START..LEN_INDICES_START + NUM_BYTES;
 
 pub(crate) const ADDR_CONTEXT: usize = LEN_INDICES_START + NUM_BYTES;

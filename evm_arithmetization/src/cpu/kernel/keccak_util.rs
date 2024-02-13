@@ -2,7 +2,8 @@ use tiny_keccak::keccakf;
 
 use crate::keccak_sponge::columns::{KECCAK_WIDTH_BYTES, KECCAK_WIDTH_U32S};
 
-/// Like tiny-keccak's `keccakf`, but deals with `u32` limbs instead of `u64` limbs.
+/// Like tiny-keccak's `keccakf`, but deals with `u32` limbs instead of `u64`
+/// limbs.
 pub(crate) fn keccakf_u32s(state_u32s: &mut [u32; KECCAK_WIDTH_U32S]) {
     let mut state_u64s: [u64; 25] = core::array::from_fn(|i| {
         let lo = state_u32s[i * 2] as u64;

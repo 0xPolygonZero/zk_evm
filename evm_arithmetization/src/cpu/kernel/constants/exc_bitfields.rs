@@ -2,8 +2,8 @@ use core::ops::RangeInclusive;
 
 use ethereum_types::U256;
 
-/// Create a U256, where the bits at indices inside the specified ranges are set to 1, and all other
-/// bits are set to 0.
+/// Create a U256, where the bits at indices inside the specified ranges are set
+/// to 1, and all other bits are set to 0.
 const fn u256_from_set_index_ranges<const N: usize>(ranges: &[RangeInclusive<u8>; N]) -> U256 {
     let mut j = 0;
     let mut res_limbs = [0u64; 4];
@@ -35,7 +35,8 @@ pub(crate) const STACK_LENGTH_INCREASING_OPCODES_USER: U256 = u256_from_set_inde
     0x38..=0x38, // CODESIZE
     0x3a..=0x3a, // GASPRICE
     0x3d..=0x3d, // RETURNDATASIZE
-    0x41..=0x48, // COINBASE, TIMESTAMP, NUMBER, DIFFICULTY, GASLIMIT, CHAINID, SELFBALANCE, BASEFEE
+    0x41..=0x48, /* COINBASE, TIMESTAMP, NUMBER, DIFFICULTY, GASLIMIT, CHAINID, SELFBALANCE,
+                  * BASEFEE */
     0x58..=0x5a, // PC, MSIZE, GAS
     0x5f..=0x8f, // PUSH*, DUP*
 ]);

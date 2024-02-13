@@ -18,9 +18,10 @@ pub(crate) fn eval_packed_exit_kernel<P: PackedField>(
     let input = lv.mem_channels[0].value;
     let filter = lv.op.exit_kernel;
 
-    // If we are executing `EXIT_KERNEL` then we simply restore the program counter, kernel mode
-    // flag, and gas counter. The middle 4 (32-bit) limbs are ignored (this is not part of the spec,
-    // but we trust the kernel to set them to zero).
+    // If we are executing `EXIT_KERNEL` then we simply restore the program counter,
+    // kernel mode flag, and gas counter. The middle 4 (32-bit) limbs are
+    // ignored (this is not part of the spec, but we trust the kernel to set
+    // them to zero).
     yield_constr.constraint_transition(filter * (input[0] - nv.program_counter));
     yield_constr.constraint_transition(filter * (input[1] - nv.is_kernel_mode));
     yield_constr.constraint_transition(filter * (input[6] - nv.gas));
@@ -39,9 +40,9 @@ pub(crate) fn eval_ext_circuit_exit_kernel<F: RichField + Extendable<D>, const D
     let input = lv.mem_channels[0].value;
     let filter = lv.op.exit_kernel;
 
-    // If we are executing `EXIT_KERNEL` then we simply restore the program counter and kernel mode
-    // flag. The top 6 (32-bit) limbs are ignored (this is not part of the spec, but we trust the
-    // kernel to set them to zero).
+    // If we are executing `EXIT_KERNEL` then we simply restore the program counter
+    // and kernel mode flag. The top 6 (32-bit) limbs are ignored (this is not
+    // part of the spec, but we trust the kernel to set them to zero).
 
     let pc_constr = builder.sub_extension(input[0], nv.program_counter);
     let pc_constr = builder.mul_extension(filter, pc_constr);
@@ -100,8 +101,9 @@ pub(crate) fn eval_packed_jump_jumpi<P: PackedField>(
     let empty_stack_filter = filter * (lv.general.stack().stack_inv_aux - P::ONES);
     yield_constr.constraint_transition(empty_stack_filter * channel.used);
 
-    // If `JUMP`, re-use the `JUMPI` logic, but setting the second input (the predicate) to be 1.
-    // In other words, we implement `JUMP(dst)` as `JUMPI(dst, cond=1)`.
+    // If `JUMP`, re-use the `JUMPI` logic, but setting the second input (the
+    // predicate) to be 1. In other words, we implement `JUMP(dst)` as
+    // `JUMPI(dst, cond=1)`.
     yield_constr.constraint(is_jump * (cond[0] - P::ONES));
     for &limb in &cond[1..] {
         // Set all limbs (other than the least-significant limb) to 0.
@@ -119,9 +121,10 @@ pub(crate) fn eval_packed_jump_jumpi<P: PackedField>(
     // If we're jumping, then the high 7 limbs of the destination must be 0.
     let dst_hi_sum: P = dst[1..].iter().copied().sum();
     yield_constr.constraint(filter * jumps_lv.should_jump * dst_hi_sum);
-    // Check that the destination address holds a `JUMPDEST` instruction. Note that this constraint
-    // does not need to be conditioned on `should_jump` because no read takes place if we're not
-    // jumping, so we're free to set the channel to 1.
+    // Check that the destination address holds a `JUMPDEST` instruction. Note that
+    // this constraint does not need to be conditioned on `should_jump` because
+    // no read takes place if we're not jumping, so we're free to set the
+    // channel to 1.
     yield_constr.constraint(filter * (jumpdest_flag_channel.value[0] - P::ONES));
 
     // Make sure that the JUMPDEST flag channel is constrained.
@@ -233,8 +236,9 @@ pub(crate) fn eval_ext_circuit_jump_jumpi<F: RichField + Extendable<D>, const D:
         yield_constr.constraint_transition(builder, constr);
     }
 
-    // If `JUMP`, re-use the `JUMPI` logic, but setting the second input (the predicate) to be 1.
-    // In other words, we implement `JUMP(dst)` as `JUMPI(dst, cond=1)`.
+    // If `JUMP`, re-use the `JUMPI` logic, but setting the second input (the
+    // predicate) to be 1. In other words, we implement `JUMP(dst)` as
+    // `JUMPI(dst, cond=1)`.
     {
         let constr = builder.mul_sub_extension(is_jump, cond[0], is_jump);
         yield_constr.constraint(builder, constr);
@@ -277,9 +281,10 @@ pub(crate) fn eval_ext_circuit_jump_jumpi<F: RichField + Extendable<D>, const D:
         let constr = builder.mul_extension(filter, constr);
         yield_constr.constraint(builder, constr);
     }
-    // Check that the destination address holds a `JUMPDEST` instruction. Note that this constraint
-    // does not need to be conditioned on `should_jump` because no read takes place if we're not
-    // jumping, so we're free to set the channel to 1.
+    // Check that the destination address holds a `JUMPDEST` instruction. Note that
+    // this constraint does not need to be conditioned on `should_jump` because
+    // no read takes place if we're not jumping, so we're free to set the
+    // channel to 1.
     {
         let constr = builder.mul_sub_extension(filter, jumpdest_flag_channel.value[0], filter);
         yield_constr.constraint(builder, constr);

@@ -2,8 +2,8 @@ use crate::memory::segments::Segment;
 
 /// These metadata fields contain VM state specific to a particular context.
 ///
-/// Each value is directly scaled by the corresponding `Segment::ContextMetadata` value for faster
-/// memory access in the kernel.
+/// Each value is directly scaled by the corresponding
+/// `Segment::ContextMetadata` value for faster memory access in the kernel.
 #[allow(clippy::enum_clike_unportable_variant)]
 #[repr(usize)]
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
@@ -17,18 +17,18 @@ pub(crate) enum ContextMetadata {
     /// The address of the account associated with this context.
     Address,
     /// The size of the code under the account associated with this context.
-    /// While this information could be obtained from the state trie, it is best to cache it since
-    /// the `CODESIZE` instruction is very cheap.
+    /// While this information could be obtained from the state trie, it is best
+    /// to cache it since the `CODESIZE` instruction is very cheap.
     CodeSize,
     /// The address of the caller who spawned this context.
     Caller,
     /// The value (in wei) deposited by the caller.
     CallValue,
-    /// Whether this context was created by `STATICCALL`, in which case state changes are
-    /// prohibited.
+    /// Whether this context was created by `STATICCALL`, in which case state
+    /// changes are prohibited.
     Static,
-    /// Pointer to the initial version of the state trie, at the creation of this context. Used when
-    /// we need to revert a context.
+    /// Pointer to the initial version of the state trie, at the creation of
+    /// this context. Used when we need to revert a context.
     StateTrieCheckpointPointer,
     /// Size of the active main memory, in (32 byte) words.
     MemWords,

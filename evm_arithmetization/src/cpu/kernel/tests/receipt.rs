@@ -70,7 +70,8 @@ fn test_process_receipt() -> Result<()> {
 
     let segment_read = interpreter.get_memory_segment(Segment::TrieData);
 
-    // The expected TrieData has the form [payload_len, status, cum_gas_used, bloom_filter, logs_payload_len, num_logs, [logs]]
+    // The expected TrieData has the form [payload_len, status, cum_gas_used,
+    // bloom_filter, logs_payload_len, num_logs, [logs]]
     let mut expected_trie_data: Vec<U256> = vec![323.into(), success, 2000.into()];
     expected_trie_data.extend(
         expected_bloom
@@ -266,7 +267,9 @@ fn test_receipt_bloom_filter() -> Result<()> {
         .copied()
         .map(U256::from);
     logs.extend(cur_data);
-    // The Bloom filter initialization is required for this test to ensure we have the correct length for the filters. Otherwise, some trailing zeroes could be missing.
+    // The Bloom filter initialization is required for this test to ensure we have
+    // the correct length for the filters. Otherwise, some trailing zeroes could be
+    // missing.
     interpreter.set_memory_segment(Segment::TxnBloom, vec![0.into(); 256]); // Initialize transaction Bloom filter.
     interpreter.set_memory_segment(Segment::LogsData, logs);
     interpreter.set_memory_segment(Segment::Logs, vec![0.into()]);
@@ -339,8 +342,8 @@ fn test_mpt_insert_receipt() -> Result<()> {
     // This test simulates a receipt processing to test `mpt_insert_receipt_trie`.
     // For this, we need to set the data correctly in memory.
     // In TrieData, we need to insert a receipt of the form:
-    // `[payload_len, status, cum_gas_used, bloom, logs_payload_len, num_logs, [logs]]`.
-    // We also need to set TrieDataSize correctly.
+    // `[payload_len, status, cum_gas_used, bloom, logs_payload_len, num_logs,
+    // [logs]]`. We also need to set TrieDataSize correctly.
 
     let retdest = 0xDEADBEEFu32.into();
     let trie_inputs = Default::default();
@@ -520,7 +523,8 @@ fn test_mpt_insert_receipt() -> Result<()> {
         .push(retdest)
         .expect("The stack should not overflow");
     interpreter
-        .push(1.into()) // Initial length of the trie data segment, unused.; // Initial length of the trie data segment, unused.
+        .push(1.into()) // Initial length of the trie data segment, unused.; // Initial length of the trie data
+        // segment, unused.
         .expect("The stack should not overflow");
     interpreter.run()?;
     assert_eq!(

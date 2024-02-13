@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use plonky2_evm::cpu::kernel::assemble_to_bytes;
+use evm_arithmetization::cpu::kernel::assemble_to_bytes;
 
 fn criterion_benchmark(c: &mut Criterion) {
     rotl_group(c);

@@ -6,7 +6,8 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 
 use crate::cpu::columns::CpuColumnsView;
 
-/// General-purpose memory channels; they can read and write to all contexts/segments/addresses.
+/// General-purpose memory channels; they can read and write to all
+/// contexts/segments/addresses.
 pub(crate) const NUM_GP_CHANNELS: usize = 3;
 
 /// Indices for code and general purpose memory channels.
@@ -17,20 +18,22 @@ pub mod channel_indices {
     pub(crate) const GP: Range<usize> = CODE + 1..(CODE + 1) + super::NUM_GP_CHANNELS;
 }
 
-/// Total memory channels used by the CPU table. This includes all the `GP_MEM_CHANNELS` as well as
-/// all special-purpose memory channels.
+/// Total memory channels used by the CPU table. This includes all the
+/// `GP_MEM_CHANNELS` as well as all special-purpose memory channels.
 ///
-/// Currently, there is one special-purpose memory channel, which reads the opcode from memory. Its
-/// limitations are:
+/// Currently, there is one special-purpose memory channel, which reads the
+/// opcode from memory. Its limitations are:
 ///  - it is enabled by `is_cpu_cycle`,
 ///  - it always reads and cannot write,
-///  - the context is derived from the current context and the `is_kernel_mode` flag,
+///  - the context is derived from the current context and the `is_kernel_mode`
+///    flag,
 ///  - the segment is hard-wired to the code segment,
 ///  - the address is `program_counter`,
-///  - the value must fit in one byte (in the least-significant position) and its eight bits are
-///    found in `opcode_bits`.
+///  - the value must fit in one byte (in the least-significant position) and
+///    its eight bits are found in `opcode_bits`.
 ///
-/// There is also a partial channel, which shares its values with another general purpose channel.
+/// There is also a partial channel, which shares its values with another
+/// general purpose channel.
 ///
 /// These limitations save us numerous columns in the CPU table.
 pub(crate) const NUM_CHANNELS: usize = channel_indices::GP.end + 1;

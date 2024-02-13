@@ -15,14 +15,16 @@ use crate::witness::errors::ProgramError;
 
 /// Construct an integer from its constituent bits (in little-endian order)
 pub(crate) fn limb_from_bits_le<P: PackedField>(iter: impl IntoIterator<Item = P>) -> P {
-    // TODO: This is technically wrong, as 1 << i won't be canonical for all fields...
+    // TODO: This is technically wrong, as 1 << i won't be canonical for all
+    // fields...
     iter.into_iter()
         .enumerate()
         .map(|(i, bit)| bit * P::Scalar::from_canonical_u64(1 << i))
         .sum()
 }
 
-/// Construct an integer from its constituent bits (in little-endian order): recursive edition
+/// Construct an integer from its constituent bits (in little-endian order):
+/// recursive edition
 pub(crate) fn limb_from_bits_le_recursive<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut plonky2::plonk::circuit_builder::CircuitBuilder<F, D>,
     iter: impl IntoIterator<Item = ExtensionTarget<D>>,
@@ -30,7 +32,8 @@ pub(crate) fn limb_from_bits_le_recursive<F: RichField + Extendable<D>, const D:
     iter.into_iter()
         .enumerate()
         .fold(builder.zero_extension(), |acc, (i, bit)| {
-            // TODO: This is technically wrong, as 1 << i won't be canonical for all fields...
+            // TODO: This is technically wrong, as 1 << i won't be canonical for all
+            // fields...
             builder.mul_const_add_extension(F::from_canonical_u64(1 << i), bit, acc)
         })
 }
@@ -58,17 +61,20 @@ pub(crate) fn u256_to_u64<F: Field>(u256: U256) -> Result<(F, F), ProgramError> 
     ))
 }
 
-/// Safe alternative to `U256::as_usize()`, which errors in case of overflow instead of panicking.
+/// Safe alternative to `U256::as_usize()`, which errors in case of overflow
+/// instead of panicking.
 pub(crate) fn u256_to_usize(u256: U256) -> Result<usize, ProgramError> {
     u256.try_into().map_err(|_| ProgramError::IntegerTooLarge)
 }
 
-/// Converts a `U256` to a `u8`, erroring in case of overflow instead of panicking.
+/// Converts a `U256` to a `u8`, erroring in case of overflow instead of
+/// panicking.
 pub(crate) fn u256_to_u8(u256: U256) -> Result<u8, ProgramError> {
     u256.try_into().map_err(|_| ProgramError::IntegerTooLarge)
 }
 
-/// Converts a `U256` to a `bool`, erroring in case of overflow instead of panicking.
+/// Converts a `U256` to a `bool`, erroring in case of overflow instead of
+/// panicking.
 pub(crate) fn u256_to_bool(u256: U256) -> Result<bool, ProgramError> {
     if u256 == U256::zero() {
         Ok(false)
@@ -79,7 +85,8 @@ pub(crate) fn u256_to_bool(u256: U256) -> Result<bool, ProgramError> {
     }
 }
 
-/// Converts a `U256` to a `H160`, erroring in case of overflow instead of panicking.
+/// Converts a `U256` to a `H160`, erroring in case of overflow instead of
+/// panicking.
 pub(crate) fn u256_to_h160(u256: U256) -> Result<H160, ProgramError> {
     if u256.bits() / 8 > 20 {
         return Err(ProgramError::IntegerTooLarge);

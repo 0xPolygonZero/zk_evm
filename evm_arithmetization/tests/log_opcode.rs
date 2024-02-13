@@ -7,18 +7,20 @@ use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use eth_trie_utils::nibbles::Nibbles;
 use eth_trie_utils::partial_trie::{HashedPartialTrie, PartialTrie};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use evm_arithmetization::generation::mpt::transaction_testing::{
+    AddressOption, LegacyTransactionRlp,
+};
+use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
+use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
+use evm_arithmetization::prover::prove;
+use evm_arithmetization::verifier::verify_proof;
+use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
-use plonky2_evm::generation::mpt::transaction_testing::{AddressOption, LegacyTransactionRlp};
-use plonky2_evm::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
-use plonky2_evm::generation::{GenerationInputs, TrieInputs};
-use plonky2_evm::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use plonky2_evm::prover::prove;
-use plonky2_evm::verifier::verify_proof;
-use plonky2_evm::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -46,7 +48,9 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
     let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
 
-    // For the first code transaction code, we consider two LOG opcodes. The first deals with 0 topics and empty data. The second deals with two topics, and data of length 5, stored in memory.
+    // For the first code transaction code, we consider two LOG opcodes. The first
+    // deals with 0 topics and empty data. The second deals with two topics, and
+    // data of length 5, stored in memory.
     let code = [
         0x64, 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0x60, 0x0, 0x52, // MSTORE(0x0, 0xA1B2C3D4E5)
         0x60, 0x0, 0x60, 0x0, 0xA0, // LOG0(0x0, 0x0)
@@ -88,7 +92,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
 
-    // We now add two receipts with logs and data. This updates the receipt trie as well.
+    // We now add two receipts with logs and data. This updates the receipt trie as
+    // well.
     let log_0 = LogRlp {
         address: hex!("7ef66b77759e12Caf3dDB3E4AFF524E577C59D8D").into(),
         topics: vec![
@@ -108,7 +113,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
             logs: vec![log_0],
         };
 
-    // Insert the first receipt into the initial receipt trie. The initial receipts trie has an initial node with a random nibble.
+    // Insert the first receipt into the initial receipt trie. The initial receipts
+    // trie has an initial node with a random nibble.
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
     receipts_trie.insert(
         Nibbles::from_str("0x1337").unwrap(),
@@ -143,8 +149,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     contract_code.insert(keccak(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
-    // Update the state and receipt tries after the transaction, so that we have the correct expected tries:
-    // Update accounts
+    // Update the state and receipt tries after the transaction, so that we have the
+    // correct expected tries: Update accounts
     let beneficiary_account_after = AccountRlp {
         nonce: 1.into(),
         ..AccountRlp::default()
@@ -172,8 +178,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let second_log = LogRlp {
         address: to.into(),
         topics: vec![
-            hex!("0000000000000000000000000000000000000000000000000000000000000062").into(), // dec: 98
-            hex!("0000000000000000000000000000000000000000000000000000000000000063").into(), // dec: 99
+            hex!("0000000000000000000000000000000000000000000000000000000000000062").into(), /* dec: 98 */
+            hex!("0000000000000000000000000000000000000000000000000000000000000063").into(), /* dec: 99 */
         ],
         data: hex!("a1b2c3d4e5").to_vec().into(),
     };
@@ -305,7 +311,8 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
-    // In the first transaction, the sender account sends `txn_value` to `to_account`.
+    // In the first transaction, the sender account sends `txn_value` to
+    // `to_account`.
     let gas_price = 10;
     let txn_value = 0xau64;
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
@@ -450,10 +457,12 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
     all_circuits.verify_root(root_proof_first.clone())?;
 
-    // The gas used and transaction number are fed to the next transaction, so the two proofs can be correctly aggregated.
+    // The gas used and transaction number are fed to the next transaction, so the
+    // two proofs can be correctly aggregated.
     let gas_used_second = public_values_first.extra_block_data.gas_used_after;
 
-    // Prove second transaction. In this second transaction, the code with logs is executed.
+    // Prove second transaction. In this second transaction, the code with logs is
+    // executed.
 
     let state_trie_before = expected_state_trie_after;
 
@@ -472,8 +481,8 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     contract_code.insert(keccak(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
-    // Update the state and receipt tries after the transaction, so that we have the correct expected tries:
-    // Update accounts.
+    // Update the state and receipt tries after the transaction, so that we have the
+    // correct expected tries: Update accounts.
     let beneficiary_account_after = AccountRlp {
         nonce: 1.into(),
         ..AccountRlp::default()
@@ -506,8 +515,8 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let second_log = LogRlp {
         address: to.into(),
         topics: vec![
-            hex!("0000000000000000000000000000000000000000000000000000000000000062").into(), // dec: 98
-            hex!("0000000000000000000000000000000000000000000000000000000000000063").into(), // dec: 99
+            hex!("0000000000000000000000000000000000000000000000000000000000000062").into(), /* dec: 98 */
+            hex!("0000000000000000000000000000000000000000000000000000000000000063").into(), /* dec: 99 */
         ],
         data: hex!("a1b2c3d4e5").to_vec().into(),
     };
@@ -655,7 +664,8 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
 /// Values taken from the block 1000000 of Goerli: https://goerli.etherscan.io/txs?block=1000000
 #[test]
 fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
-    // This test checks that inserting into the transaction and receipt `HashedPartialTrie`s works as expected.
+    // This test checks that inserting into the transaction and receipt
+    // `HashedPartialTrie`s works as expected.
     let mut example_txn_trie = HashedPartialTrie::from(Node::Empty);
 
     // We consider two transactions, with one log each.

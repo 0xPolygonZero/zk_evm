@@ -67,13 +67,15 @@ pub(crate) fn fill_channel_with_value<F: Field>(row: &mut CpuColumnsView<F>, n: 
     }
 }
 
-/// Pushes without writing in memory. This happens in opcodes where a push immediately follows a pop.
+/// Pushes without writing in memory. This happens in opcodes where a push
+/// immediately follows a pop.
 pub(crate) fn push_no_write<F: Field>(state: &mut GenerationState<F>, val: U256) {
     state.registers.stack_top = val;
     state.registers.stack_len += 1;
 }
 
-/// Pushes and (maybe) writes the previous stack top in memory. This happens in opcodes which only push.
+/// Pushes and (maybe) writes the previous stack top in memory. This happens in
+/// opcodes which only push.
 pub(crate) fn push_with_write<F: Field>(
     state: &mut GenerationState<F>,
     row: &mut CpuColumnsView<F>,

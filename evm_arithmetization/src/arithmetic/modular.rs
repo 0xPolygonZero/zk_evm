@@ -81,8 +81,8 @@
 //!    - given modulus can be 0 or non-zero
 //!    - updated modulus is same as given
 //!    - if modulus is non-zero, correct output is obtained
-//!    - if modulus is 0, then the test output < modulus, checking that
-//!      the output is reduced, will fail, because output is non-negative.
+//!    - if modulus is 0, then the test output < modulus, checking that the
+//!      output is reduced, will fail, because output is non-negative.
 //!
 //! In the case of DIV, we do something similar, except that we "replace"
 //! the modulus with "2^256" to force the quotient to be zero.
@@ -95,18 +95,17 @@
 //! general modular code, they also take 144 columns. Possible
 //! improvements:
 //!
-//! - We could reduce the number of columns to 112 for ADDMOD, SUBMOD,
-//!   etc. if they were implemented separately, so they don't pay the
-//!   full cost of the general MULMOD.
+//! - We could reduce the number of columns to 112 for ADDMOD, SUBMOD, etc. if
+//!   they were implemented separately, so they don't pay the full cost of the
+//!   general MULMOD.
 //!
-//! - All these operations could have alternative forms where the
-//!   output was not guaranteed to be reduced, which is often sufficient
-//!   in practice, and which would save a further 16 columns.
+//! - All these operations could have alternative forms where the output was not
+//!   guaranteed to be reduced, which is often sufficient in practice, and which
+//!   would save a further 16 columns.
 //!
 //! - If the modulus is known in advance (such as for elliptic curve
-//!   arithmetic), specialised handling of MULMOD in that case would
-//!   only require 96 columns, or 80 if the output doesn't need to be
-//!   reduced.
+//!   arithmetic), specialised handling of MULMOD in that case would only
+//!   require 96 columns, or 80 if the output doesn't need to be reduced.
 
 use core::ops::Range;
 

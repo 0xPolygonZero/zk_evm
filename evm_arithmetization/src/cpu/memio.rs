@@ -24,7 +24,8 @@ fn eval_packed_load<P: PackedField>(
     nv: &CpuColumnsView<P>,
     yield_constr: &mut ConstraintConsumer<P>,
 ) {
-    // The opcode for MLOAD_GENERAL is 0xfb. If the operation is MLOAD_GENERAL, lv.opcode_bits[0] = 1.
+    // The opcode for MLOAD_GENERAL is 0xfb. If the operation is MLOAD_GENERAL,
+    // lv.opcode_bits[0] = 1.
     let filter = lv.op.m_op_general * lv.opcode_bits[0];
 
     let (addr_context, addr_segment, addr_virtual) = get_addr_load(lv);
@@ -70,7 +71,8 @@ fn eval_ext_circuit_load<F: RichField + Extendable<D>, const D: usize>(
     nv: &CpuColumnsView<ExtensionTarget<D>>,
     yield_constr: &mut RecursiveConstraintConsumer<F, D>,
 ) {
-    // The opcode for MLOAD_GENERAL is 0xfb. If the operation is MLOAD_GENERAL, lv.opcode_bits[0] = 1.
+    // The opcode for MLOAD_GENERAL is 0xfb. If the operation is MLOAD_GENERAL,
+    // lv.opcode_bits[0] = 1.
     let mut filter = lv.op.m_op_general;
     filter = builder.mul_extension(filter, lv.opcode_bits[0]);
 
@@ -169,7 +171,8 @@ fn eval_packed_store<P: PackedField>(
                 * (channel.addr_segment
                     - P::Scalar::from_canonical_usize(Segment::Stack.unscale())),
         );
-        // Remember that the first read (`i == 1`) is for the second stack element at `stack[stack_len - 1]`.
+        // Remember that the first read (`i == 1`) is for the second stack element at
+        // `stack[stack_len - 1]`.
         let addr_virtual = lv.stack_len - P::Scalar::from_canonical_usize(i + 1);
         yield_constr.constraint(filter * (channel.addr_virtual - addr_virtual));
     }
@@ -179,7 +182,8 @@ fn eval_packed_store<P: PackedField>(
         lv.op.m_op_general
             * (len_diff * lv.general.stack().stack_inv - lv.general.stack().stack_inv_aux),
     );
-    // If stack_len != 2 and MSTORE, read new top of the stack in nv.mem_channels[0].
+    // If stack_len != 2 and MSTORE, read new top of the stack in
+    // nv.mem_channels[0].
     let top_read_channel = nv.mem_channels[0];
     let is_top_read = lv.general.stack().stack_inv_aux * (P::ONES - lv.opcode_bits[0]);
     // Constrain `stack_inv_aux_2`. It contains `stack_inv_aux * opcode_bits[0]`.
@@ -271,7 +275,8 @@ fn eval_ext_circuit_store<F: RichField + Extendable<D>, const D: usize>(
             let constr = builder.mul_extension(filter, diff);
             yield_constr.constraint(builder, constr);
         }
-        // Remember that the first read (`i == 1`) is for the second stack element at `stack[stack_len - 1]`.
+        // Remember that the first read (`i == 1`) is for the second stack element at
+        // `stack[stack_len - 1]`.
         let addr_virtual =
             builder.add_const_extension(lv.stack_len, -F::from_canonical_usize(i + 1));
         let diff = builder.sub_extension(channel.addr_virtual, addr_virtual);
@@ -289,11 +294,13 @@ fn eval_ext_circuit_store<F: RichField + Extendable<D>, const D: usize>(
         let constr = builder.mul_extension(lv.op.m_op_general, diff);
         yield_constr.constraint(builder, constr);
     }
-    // If stack_len != 2 and MSTORE, read new top of the stack in nv.mem_channels[0].
+    // If stack_len != 2 and MSTORE, read new top of the stack in
+    // nv.mem_channels[0].
     let top_read_channel = nv.mem_channels[0];
     let is_top_read = builder.mul_extension(lv.general.stack().stack_inv_aux, lv.opcode_bits[0]);
     let is_top_read = builder.sub_extension(lv.general.stack().stack_inv_aux, is_top_read);
-    // Constrain `stack_inv_aux_2`. It contains `stack_inv_aux * (1 - opcode_bits[0])`.
+    // Constrain `stack_inv_aux_2`. It contains `stack_inv_aux * (1 -
+    // opcode_bits[0])`.
     {
         let diff = builder.sub_extension(lv.general.stack().stack_inv_aux_2, is_top_read);
         let constr = builder.mul_extension(lv.op.m_op_general, diff);

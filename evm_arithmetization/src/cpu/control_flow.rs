@@ -53,16 +53,17 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
 
     let next_halt_state = P::ONES - is_cpu_cycle_next;
 
-    // Once we start executing instructions, then we continue until the end of the table
-    // or we reach dummy padding rows. This, along with the constraints on the first row,
-    // enforces that operation flags and the halt flag are mutually exclusive over the entire
-    // CPU trace.
+    // Once we start executing instructions, then we continue until the end of the
+    // table or we reach dummy padding rows. This, along with the constraints on
+    // the first row, enforces that operation flags and the halt flag are
+    // mutually exclusive over the entire CPU trace.
     yield_constr
         .constraint_transition(is_cpu_cycle * (is_cpu_cycle_next + next_halt_state - P::ONES));
 
-    // If a row is a CPU cycle and executing a native instruction (implemented as a table row; not
-    // microcoded) then the program counter is incremented by 1 to obtain the next row's program
-    // counter. Also, the next row has the same kernel flag.
+    // If a row is a CPU cycle and executing a native instruction (implemented as a
+    // table row; not microcoded) then the program counter is incremented by 1
+    // to obtain the next row's program counter. Also, the next row has the same
+    // kernel flag.
     let is_native_instruction: P = NATIVE_INSTRUCTIONS.iter().map(|&col_i| lv[col_i]).sum();
     yield_constr.constraint_transition(
         is_native_instruction * (lv.program_counter - nv.program_counter + P::ONES),
@@ -78,7 +79,8 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
     yield_constr.constraint_transition(is_prover_input * (lv.is_kernel_mode - nv.is_kernel_mode));
 
     // If a non-CPU cycle row is followed by a CPU cycle row, then:
-    //  - the `program_counter` of the CPU cycle row is `main` (the entry point of our kernel),
+    //  - the `program_counter` of the CPU cycle row is `main` (the entry point of
+    //    our kernel),
     //  - execution is in kernel mode, and
     //  - the stack is empty.
     let is_last_noncpu_cycle = (is_cpu_cycle - P::ONES) * is_cpu_cycle_next;
@@ -103,19 +105,20 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 
     let next_halt_state = builder.sub_extension(one, is_cpu_cycle_next);
 
-    // Once we start executing instructions, then we continue until the end of the table
-    // or we reach dummy padding rows. This, along with the constraints on the first row,
-    // enforces that operation flags and the halt flag are mutually exclusive over the entire
-    // CPU trace.
+    // Once we start executing instructions, then we continue until the end of the
+    // table or we reach dummy padding rows. This, along with the constraints on
+    // the first row, enforces that operation flags and the halt flag are
+    // mutually exclusive over the entire CPU trace.
     {
         let constr = builder.add_extension(is_cpu_cycle_next, next_halt_state);
         let constr = builder.mul_sub_extension(is_cpu_cycle, constr, is_cpu_cycle);
         yield_constr.constraint_transition(builder, constr);
     }
 
-    // If a row is a CPU cycle and executing a native instruction (implemented as a table row; not
-    // microcoded) then the program counter is incremented by 1 to obtain the next row's program
-    // counter. Also, the next row has the same kernel flag.
+    // If a row is a CPU cycle and executing a native instruction (implemented as a
+    // table row; not microcoded) then the program counter is incremented by 1
+    // to obtain the next row's program counter. Also, the next row has the same
+    // kernel flag.
     {
         let filter = builder.add_many_extension(NATIVE_INSTRUCTIONS.iter().map(|&col_i| lv[col_i]));
         let pc_diff = builder.sub_extension(lv.program_counter, nv.program_counter);
@@ -138,7 +141,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     }
 
     // If a non-CPU cycle row is followed by a CPU cycle row, then:
-    //  - the `program_counter` of the CPU cycle row is `main` (the entry point of our kernel),
+    //  - the `program_counter` of the CPU cycle row is `main` (the entry point of
+    //    our kernel),
     //  - execution is in kernel mode, and
     //  - the stack is empty.
     {

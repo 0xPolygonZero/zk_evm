@@ -93,7 +93,8 @@ fn test_ecrecover() -> Result<()> {
     test_invalid_ecrecover(
         "0x0",
         "0x1c",
-        "0x3a18b21408d275dde53c0ea86f9c1982eca60193db0ce15008fa408d43024847", // r^3 + 7 isn't a square
+        "0x3a18b21408d275dde53c0ea86f9c1982eca60193db0ce15008fa408d43024847", /* r^3 + 7 isn't a
+                                                                               * square */
         "0x5db9745f44089305b2f2c980276e7025a594828d878e6e36dd2abd34ca6b9e3d",
     )?;
 

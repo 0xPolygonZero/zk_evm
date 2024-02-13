@@ -312,9 +312,10 @@ where
     }
 }
 
-/// Add gates that are sometimes used by recursive circuits, even if it's not actually used by this
-/// particular recursive circuit. This is done for uniformity. We sometimes want all recursion
-/// circuits to have the same gate set, so that we can do 1-of-n conditional recursion efficiently.
+/// Add gates that are sometimes used by recursive circuits, even if it's not
+/// actually used by this particular recursive circuit. This is done for
+/// uniformity. We sometimes want all recursion circuits to have the same gate
+/// set, so that we can do 1-of-n conditional recursion efficiently.
 pub(crate) fn add_common_recursion_gates<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
 ) {

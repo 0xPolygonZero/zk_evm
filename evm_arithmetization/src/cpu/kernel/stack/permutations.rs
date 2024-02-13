@@ -1,15 +1,16 @@
-//! This module contains logic for finding the optimal sequence of swaps to get from one stack state
-//! to another, specifically for the case where the source and destination states are permutations
-//! of one another.
+//! This module contains logic for finding the optimal sequence of swaps to get
+//! from one stack state to another, specifically for the case where the source
+//! and destination states are permutations of one another.
 //!
 //! We solve the problem in three steps:
 //! 1. Find a permutation `P` such that `P A = B`.
-//! 2. If `A` contains duplicates, optimize `P` by reducing the number of cycles.
-//! 3. Convert each cycle into a set of `(0 i)` transpositions, which correspond to swap
-//!    instructions in the EVM.
+//! 2. If `A` contains duplicates, optimize `P` by reducing the number of
+//!    cycles.
+//! 3. Convert each cycle into a set of `(0 i)` transpositions, which correspond
+//!    to swap instructions in the EVM.
 //!
-//! We typically represent a permutation as a sequence of cycles. For example, the permutation
-//! `(1 2 3)(1 2)(4 5)` acts as:
+//! We typically represent a permutation as a sequence of cycles. For example,
+//! the permutation `(1 2 3)(1 2)(4 5)` acts as:
 //!
 //! ```ignore
 //! (1 2 3)(1 2)(4 5)[A_0, A_1, A_2, A_3, A_4, A_5] = (1 2 3)(1 2)[A_0, A_1, A_2, A_3, A_5, A_4]
@@ -24,11 +25,12 @@ use std::collections::{HashMap, HashSet};
 
 use crate::cpu::kernel::stack::stack_manipulation::{StackItem, StackOp};
 
-/// Find the optimal sequence of stack operations to get from `src` to `dst`. Assumes that `src` and
-/// `dst` are permutations of one another.
+/// Find the optimal sequence of stack operations to get from `src` to `dst`.
+/// Assumes that `src` and `dst` are permutations of one another.
 pub(crate) fn get_stack_ops_for_perm(src: &[StackItem], dst: &[StackItem]) -> Vec<StackOp> {
-    // We store stacks with the tip at the end, but the permutation calls below use the opposite
-    // convention. They're a bit simpler when SWAP are (0 i) transposes.
+    // We store stacks with the tip at the end, but the permutation calls below use
+    // the opposite convention. They're a bit simpler when SWAP are (0 i)
+    // transposes.
     let mut src = src.to_vec();
     let mut dst = dst.to_vec();
     src.reverse();
@@ -59,12 +61,14 @@ fn apply_perm<T: Eq + Hash + Clone>(permutation: Vec<Vec<usize>>, mut lst: Vec<T
 /// This function does STEP 1.
 /// Given 2 lists A, B find a permutation P such that P . A = B.
 pub(crate) fn find_permutation<T: Eq + Hash + Clone>(lst_a: &[T], lst_b: &[T]) -> Vec<Vec<usize>> {
-    // We should check to ensure that A and B are indeed rearrangements of each other.
+    // We should check to ensure that A and B are indeed rearrangements of each
+    // other.
     assert!(is_permutation(lst_a, lst_b));
 
     let n = lst_a.len();
 
-    // Keep track of the A_i's which have been already placed into the correct position.
+    // Keep track of the A_i's which have been already placed into the correct
+    // position.
     let mut correct_a = HashSet::new();
 
     // loc_b is a dictionary where loc_b[b] is the indices i where b = B_i != A_i.
@@ -91,7 +95,8 @@ pub(crate) fn find_permutation<T: Eq + Hash + Clone>(lst_a: &[T], lst_b: &[T]) -
     }
 
     for i in 0..n {
-        // If i is both not in the correct position and not already in a cycle, it will start a new cycle.
+        // If i is both not in the correct position and not already in a cycle, it will
+        // start a new cycle.
         if correct_a.contains(&i) {
             continue;
         }
@@ -102,7 +107,8 @@ pub(crate) fn find_permutation<T: Eq + Hash + Clone>(lst_a: &[T], lst_b: &[T]) -
         // lst_a[i] need to be swapped into an index j such that lst_b[j] = lst_a[i].
         // This exactly means j should be an element of loc_b[lst_a[i]].
         // We pop as each j should only be used once.
-        // In this step we simply find any permutation. We will improve it to an optimal one in STEP 2.
+        // In this step we simply find any permutation. We will improve it to an optimal
+        // one in STEP 2.
         let mut j = loc_b.get_mut(&lst_a[i]).unwrap().pop().unwrap();
 
         // Keep adding elements to the cycle until we return to our initial index
@@ -117,7 +123,8 @@ pub(crate) fn find_permutation<T: Eq + Hash + Clone>(lst_a: &[T], lst_b: &[T]) -
     permutation
 }
 
-/// This function does STEP 2. It tests to see if cycles can be combined which might occur if A has duplicates.
+/// This function does STEP 2. It tests to see if cycles can be combined which
+/// might occur if A has duplicates.
 fn combine_cycles<T: Eq + Hash + Clone>(mut perm: Vec<Vec<usize>>, lst_a: &[T]) -> Vec<Vec<usize>> {
     // If perm is a single cycle, there is nothing to combine.
     if perm.len() == 1 {
@@ -132,8 +139,8 @@ fn combine_cycles<T: Eq + Hash + Clone>(mut perm: Vec<Vec<usize>>, lst_a: &[T]) 
         all_a_positions.entry(lst_a[i].clone()).or_default().push(i);
     }
 
-    // For each element a which occurs at positions i1, ..., ij, combine cycles such that all
-    // ik which occur in a cycle occur in the same cycle.
+    // For each element a which occurs at positions i1, ..., ij, combine cycles such
+    // that all ik which occur in a cycle occur in the same cycle.
     for positions in all_a_positions.values() {
         if positions.len() == 1 {
             continue;
@@ -154,8 +161,9 @@ fn combine_cycles<T: Eq + Hash + Clone>(mut perm: Vec<Vec<usize>>, lst_a: &[T]) 
                         pos = cycl.iter().position(|x| x == term).unwrap();
                     } else {
                         // Need to merge 2 cycles. If A_i = A_j then the permutations
-                        // (C_1, ..., C_k1, i, C_{k1 + 1}, ... C_k2)(D_1, ..., D_k3, j, D_{k3 + 1}, ... D_k4)
-                        // (C_1, ..., C_k1, i, D_{k3 + 1}, ... D_k4, D_1, ..., D_k3, j, C_{k1 + 1}, ... C_k2)
+                        // (C_1, ..., C_k1, i, C_{k1 + 1}, ... C_k2)(D_1, ..., D_k3, j, D_{k3 + 1},
+                        // ... D_k4) (C_1, ..., C_k1, i, D_{k3 + 1}, ...
+                        // D_k4, D_1, ..., D_k3, j, C_{k1 + 1}, ... C_k2)
                         // lead to the same oupput but the second will require less transpositions.
                         let newpos = cycl.iter().position(|x| x == term).unwrap();
                         joinedperm = [

@@ -62,9 +62,10 @@ pub(crate) enum Operation {
 // the segment and virtual address components in a single U256 word.
 pub(crate) const CONTEXT_SCALING_FACTOR: usize = 64;
 
-/// Adds a CPU row filled with the two inputs and the output of a logic operation.
-/// Generates a new logic operation and adds it to the vector of operation in `LogicStark`.
-/// Adds three memory read operations to `MemoryStark`: for the two inputs and the output.
+/// Adds a CPU row filled with the two inputs and the output of a logic
+/// operation. Generates a new logic operation and adds it to the vector of
+/// operation in `LogicStark`. Adds three memory read operations to
+/// `MemoryStark`: for the two inputs and the output.
 pub(crate) fn generate_binary_logic_op<F: Field>(
     op: logic::Op,
     state: &mut GenerationState<F>,
@@ -340,7 +341,8 @@ pub(crate) fn generate_get_context<F: Field>(
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
-    // Same logic as push_with_write, but we have to use channel 3 for stack constraint reasons.
+    // Same logic as push_with_write, but we have to use channel 3 for stack
+    // constraint reasons.
     let write = if state.registers.stack_len == 0 {
         None
     } else {
@@ -380,9 +382,10 @@ pub(crate) fn generate_set_context<F: Field>(
     let old_sp_addr = MemoryAddress::new(old_ctx, Segment::ContextMetadata, sp_field);
     let new_sp_addr = MemoryAddress::new(new_ctx, Segment::ContextMetadata, sp_field);
 
-    // This channel will hold in limb 0 and 1 the one-limb value of two separate memory operations:
-    // the old stack pointer write and the new stack pointer read.
-    // Channels only matter for time stamps: the write must happen before the read.
+    // This channel will hold in limb 0 and 1 the one-limb value of two separate
+    // memory operations: the old stack pointer write and the new stack pointer
+    // read. Channels only matter for time stamps: the write must happen before
+    // the read.
     let log_write_old_sp = mem_write_log(GeneralPurpose(1), old_sp_addr, state, sp_to_save);
     let (new_sp, log_read_new_sp) = if old_ctx == new_ctx {
         let op = MemoryOp::new(
@@ -445,8 +448,8 @@ pub(crate) fn generate_push<F: Field>(
     let initial_offset = state.registers.program_counter + 1;
 
     let base_address = MemoryAddress::new(code_context, Segment::Code, initial_offset);
-    // First read val without going through `mem_read_with_log` type methods, so we can pass it
-    // to stack_push_log_and_fill.
+    // First read val without going through `mem_read_with_log` type methods, so we
+    // can pass it to stack_push_log_and_fill.
     let bytes = (0..num_bytes)
         .map(|i| {
             state
@@ -502,8 +505,9 @@ pub(crate) fn generate_dup<F: Field>(
         state.registers.stack_len - 1 - n as usize,
     );
 
-    // If n = 0, we read a value that hasn't been written to memory: the corresponding write
-    // is buffered in the mem_ops queue, but hasn't been applied yet.
+    // If n = 0, we read a value that hasn't been written to memory: the
+    // corresponding write is buffered in the mem_ops queue, but hasn't been
+    // applied yet.
     let (val, log_read) = if n == 0 {
         let op = MemoryOp::new(
             MemoryChannel::GeneralPurpose(2),
@@ -616,7 +620,8 @@ fn append_shift<F: Field>(
         let (_, read) = mem_read_gp_with_log_and_fill(LOOKUP_CHANNEL, lookup_addr, state, &mut row);
         state.traces.push_memory(read);
     } else {
-        // The shift constraints still expect the address to be set, even though no read will occur.
+        // The shift constraints still expect the address to be set, even though no read
+        // will occur.
         let channel = &mut row.mem_channels[LOOKUP_CHANNEL];
         channel.addr_context = F::from_canonical_usize(lookup_addr.context);
         channel.addr_segment = F::from_canonical_usize(lookup_addr.segment);
@@ -738,9 +743,10 @@ pub(crate) fn generate_syscall<F: Field>(
         U256::from(opcode),
         syscall_info,
     );
-    // Set registers before pushing to the stack; in particular, we need to set kernel mode so we
-    // can't incorrectly trigger a stack overflow. However, note that we have to do it _after_ we
-    // make `syscall_info`, which should contain the old values.
+    // Set registers before pushing to the stack; in particular, we need to set
+    // kernel mode so we can't incorrectly trigger a stack overflow. However,
+    // note that we have to do it _after_ we make `syscall_info`, which should
+    // contain the old values.
     state.registers.program_counter = new_program_counter;
     state.registers.is_kernel = true;
     state.registers.gas_used = 0;
@@ -810,8 +816,9 @@ pub(crate) fn generate_mload_general<F: Field>(
         mem_read_gp_with_log_and_fill(1, MemoryAddress::new_bundle(addr)?, state, &mut row);
     push_no_write(state, val);
 
-    // Because MLOAD_GENERAL performs 1 pop and 1 push, it does not make use of the `stack_inv_aux` general columns.
-    // We hence can set the diff to 2 (instead of 1) so that the stack constraint for MSTORE_GENERAL applies to both
+    // Because MLOAD_GENERAL performs 1 pop and 1 push, it does not make use of the
+    // `stack_inv_aux` general columns. We hence can set the diff to 2 (instead
+    // of 1) so that the stack constraint for MSTORE_GENERAL applies to both
     // operations, which are combined into a single CPU flag.
     let diff = row.stack_len - F::TWO;
     if let Some(inv) = diff.try_inverse() {
@@ -986,9 +993,10 @@ pub(crate) fn generate_exception<F: Field>(
         opcode,
         exc_info,
     );
-    // Set registers before pushing to the stack; in particular, we need to set kernel mode so we
-    // can't incorrectly trigger a stack overflow. However, note that we have to do it _after_ we
-    // make `exc_info`, which should contain the old values.
+    // Set registers before pushing to the stack; in particular, we need to set
+    // kernel mode so we can't incorrectly trigger a stack overflow. However,
+    // note that we have to do it _after_ we make `exc_info`, which should
+    // contain the old values.
     state.registers.program_counter = new_program_counter;
     state.registers.is_kernel = true;
     state.registers.gas_used = 0;

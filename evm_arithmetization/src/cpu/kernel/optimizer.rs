@@ -44,7 +44,8 @@ fn constant_propagation(code: &mut Vec<Item>) {
         }
     });
 
-    // Constant propagation for binary ops: `[PUSH y, PUSH x, BINOP] -> [PUSH BINOP(x, y)]`
+    // Constant propagation for binary ops: `[PUSH y, PUSH x, BINOP] -> [PUSH
+    // BINOP(x, y)]`
     replace_windows_if_better(code, |window| {
         if let [Push(Literal(y)), Push(Literal(x)), StandardOp(op)] = window {
             match op.as_str() {
@@ -138,7 +139,8 @@ fn remove_swaps_commutative(code: &mut Vec<Item>) {
 }
 
 /// Remove push-pop type patterns, such as: `[DUP1, POP]`.
-// Could be extended to other non-side-effecting operations, e.g. [DUP1, ADD, POP] -> [POP].
+// Could be extended to other non-side-effecting operations, e.g. [DUP1, ADD,
+// POP] -> [POP].
 fn remove_ignored_values(code: &mut Vec<Item>) {
     replace_windows(code, |[a, b]| {
         if let StandardOp(pop) = b
@@ -155,8 +157,9 @@ fn remove_ignored_values(code: &mut Vec<Item>) {
     });
 }
 
-/// Like `replace_windows`, but specifically for code, and only makes replacements if our cost
-/// estimator thinks that the new code is more efficient.
+/// Like `replace_windows`, but specifically for code, and only makes
+/// replacements if our cost estimator thinks that the new code is more
+/// efficient.
 fn replace_windows_if_better<const W: usize, F>(code: &mut Vec<Item>, maybe_replace: F)
 where
     F: Fn([Item; W]) -> Option<Vec<Item>>,
@@ -197,10 +200,10 @@ mod tests {
         ];
         let mut code = original.clone();
         constant_propagation(&mut code);
-        // Constant propagation could replace the code with [PUSH U256::MAX], but that's actually
-        // more expensive, so the code shouldn't be changed.
-        // (The code could also be replaced with [PUSH 0; NOT], which would be an improvement, but
-        // our optimizer isn't smart enough yet.)
+        // Constant propagation could replace the code with [PUSH U256::MAX], but that's
+        // actually more expensive, so the code shouldn't be changed.
+        // (The code could also be replaced with [PUSH 0; NOT], which would be an
+        // improvement, but our optimizer isn't smart enough yet.)
         assert_eq!(code, original);
     }
 

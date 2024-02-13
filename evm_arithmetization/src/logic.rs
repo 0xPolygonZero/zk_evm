@@ -23,9 +23,11 @@ use crate::util::{limb_from_bits_le, limb_from_bits_le_recursive};
 
 /// Total number of bits per input/output.
 const VAL_BITS: usize = 256;
-/// Number of bits stored per field element. Ensure that this fits; it is not checked.
+/// Number of bits stored per field element. Ensure that this fits; it is not
+/// checked.
 pub(crate) const PACKED_LIMB_BITS: usize = 32;
-/// Number of field elements needed to store each input/output at the specified packing.
+/// Number of field elements needed to store each input/output at the specified
+/// packing.
 const PACKED_LEN: usize = ceil_div_usize(VAL_BITS, PACKED_LIMB_BITS);
 
 /// `LogicStark` columns.
@@ -63,7 +65,8 @@ pub(crate) mod columns {
     pub(crate) const NUM_COLUMNS: usize = RESULT.end;
 }
 
-/// Creates the vector of `Columns` corresponding to the opcode, the two inputs and the output of the logic operation.
+/// Creates the vector of `Columns` corresponding to the opcode, the two inputs
+/// and the output of the logic operation.
 pub(crate) fn ctl_data<F: Field>() -> Vec<Column<F>> {
     // We scale each filter flag with the associated opcode value.
     // If a logic operation is happening on the CPU side, the CTL
@@ -125,8 +128,8 @@ pub(crate) struct Operation {
 }
 
 impl Operation {
-    /// Computes the expected result of an operator with the two provided inputs,
-    /// and returns the associated logic `Operation`.
+    /// Computes the expected result of an operator with the two provided
+    /// inputs, and returns the associated logic `Operation`.
     pub(crate) fn new(operator: Op, input0: U256, input1: U256) -> Self {
         let result = operator.result(input0, input1);
         Operation {
@@ -137,7 +140,8 @@ impl Operation {
         }
     }
 
-    /// Given an `Operation`, fills a row with the corresponding flag, inputs and output.
+    /// Given an `Operation`, fills a row with the corresponding flag, inputs
+    /// and output.
     fn into_row<F: Field>(self) -> [F; NUM_COLUMNS] {
         let Operation {
             operator,
@@ -172,7 +176,8 @@ impl<F: RichField, const D: usize> LogicStark<F, D> {
         min_rows: usize,
         timing: &mut TimingTree,
     ) -> Vec<PolynomialValues<F>> {
-        // First, turn all provided operations into rows in `LogicStark`, and pad if necessary.
+        // First, turn all provided operations into rows in `LogicStark`, and pad if
+        // necessary.
         let trace_rows = timed!(
             timing,
             "generate trace rows",
@@ -187,8 +192,9 @@ impl<F: RichField, const D: usize> LogicStark<F, D> {
         trace_polys
     }
 
-    /// Generate the `LogicStark` traces based on the provided vector of operations.
-    /// The trace is padded to a power of two with all-zero rows.
+    /// Generate the `LogicStark` traces based on the provided vector of
+    /// operations. The trace is padded to a power of two with all-zero
+    /// rows.
     fn generate_trace_rows(
         &self,
         operations: Vec<Operation>,
@@ -242,8 +248,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for LogicStark<F,
         let all_flags = is_and + is_or + is_xor;
         yield_constr.constraint(all_flags * (all_flags - P::ONES));
 
-        // The result will be `in0 OP in1 = sum_coeff * (in0 + in1) + and_coeff * (in0 AND in1)`.
-        // `AND => sum_coeff = 0, and_coeff = 1`
+        // The result will be `in0 OP in1 = sum_coeff * (in0 + in1) + and_coeff * (in0
+        // AND in1)`. `AND => sum_coeff = 0, and_coeff = 1`
         // `OR  => sum_coeff = 1, and_coeff = -1`
         // `XOR => sum_coeff = 1, and_coeff = -2`
         let sum_coeff = is_or + is_xor;
@@ -301,8 +307,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for LogicStark<F,
         let constraint = builder.mul_sub_extension(all_flags, all_flags, all_flags);
         yield_constr.constraint(builder, constraint);
 
-        // The result will be `in0 OP in1 = sum_coeff * (in0 + in1) + and_coeff * (in0 AND in1)`.
-        // `AND => sum_coeff = 0, and_coeff = 1`
+        // The result will be `in0 OP in1 = sum_coeff * (in0 + in1) + and_coeff * (in0
+        // AND in1)`. `AND => sum_coeff = 0, and_coeff = 1`
         // `OR  => sum_coeff = 1, and_coeff = -1`
         // `XOR => sum_coeff = 1, and_coeff = -2`
         let sum_coeff = builder.add_extension(is_or, is_xor);

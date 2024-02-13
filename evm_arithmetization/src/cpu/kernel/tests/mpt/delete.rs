@@ -76,8 +76,9 @@ fn test_after_mpt_delete_extension_branch() -> Result<()> {
     test_state_trie(state_trie, key, test_account_2())
 }
 
-/// Note: The account's storage_root is ignored, as we can't insert a new storage_root without the
-/// accompanying trie data. An empty trie's storage_root is used instead.
+/// Note: The account's storage_root is ignored, as we can't insert a new
+/// storage_root without the accompanying trie data. An empty trie's
+/// storage_root is used instead.
 fn test_state_trie(
     state_trie: HashedPartialTrie,
     k: Nibbles,

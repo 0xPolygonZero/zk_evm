@@ -77,7 +77,8 @@ fn test_jumpdest_analysis() -> Result<()> {
     interpreter.push(code_len.into());
     interpreter.push(U256::from(CONTEXT) << CONTEXT_SCALING_FACTOR);
 
-    // We need to manually pop the jumpdest_table and push its value on the top of the stack
+    // We need to manually pop the jumpdest_table and push its value on the top of
+    // the stack
     interpreter
         .generation_state
         .jumpdest_table
@@ -134,7 +135,8 @@ fn test_packed_verification() -> Result<()> {
 
     assert_eq!(jumpdest_bits, interpreter.get_jumpdest_bits(CONTEXT));
 
-    // If we add 1 to each opcode the jumpdest at position 32 is never a valid jumpdest
+    // If we add 1 to each opcode the jumpdest at position 32 is never a valid
+    // jumpdest
     for i in 1..=32 {
         code[i] += 1;
         let mut interpreter: Interpreter<F> =

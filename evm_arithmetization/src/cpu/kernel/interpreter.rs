@@ -77,8 +77,8 @@ struct InterpreterRegistersState {
 }
 
 /// Interpreter state at the last checkpoint: we only need to store
-/// the state of the registers and the length of the vector of memory operations.
-/// This data is enough to revert in case of an exception.
+/// the state of the registers and the length of the vector of memory
+/// operations. This data is enough to revert in case of an exception.
 struct InterpreterCheckpoint {
     registers: InterpreterRegistersState,
     mem_len: usize,
@@ -134,8 +134,8 @@ pub(crate) fn run<'a, F: Field>(
     Ok(interpreter)
 }
 
-/// Simulates the CPU execution from `state` until the program counter reaches `final_label`  
-/// in the current context.
+/// Simulates the CPU execution from `state` until the program counter reaches
+/// `final_label` in the current context.
 pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
     final_label: &str,
     state: &GenerationState<F>,
@@ -164,13 +164,16 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
     }
 }
 
-/// Different types of Memory operations in the interpreter, and the data required to revert them.
+/// Different types of Memory operations in the interpreter, and the data
+/// required to revert them.
 enum InterpreterMemOpKind {
     /// We need to provide the context.
     Push(usize),
-    /// If we pop a certain value, we need to push it back to the correct context when reverting.
+    /// If we pop a certain value, we need to push it back to the correct
+    /// context when reverting.
     Pop(U256, usize),
-    /// If we write a value at a certain address, we need to write the old value back when reverting.
+    /// If we write a value at a certain address, we need to write the old value
+    /// back when reverting.
     Write(U256, usize, usize, usize),
 }
 
@@ -186,8 +189,8 @@ impl<'a, F: Field> Interpreter<'a, F> {
         result
     }
 
-    /// Returns an instance of `Interpreter` given `GenerationInputs`, and assuming we are
-    /// initializing with the `KERNEL` code.
+    /// Returns an instance of `Interpreter` given `GenerationInputs`, and
+    /// assuming we are initializing with the `KERNEL` code.
     pub(crate) fn new_with_generation_inputs_and_kernel(
         initial_offset: usize,
         initial_stack: Vec<U256>,
@@ -248,7 +251,8 @@ impl<'a, F: Field> Interpreter<'a, F> {
         }
     }
 
-    /// Initializes the interpreter state given `GenerationInputs`, using the KERNEL code.
+    /// Initializes the interpreter state given `GenerationInputs`, using the
+    /// KERNEL code.
     pub(crate) fn initialize_interpreter_state_with_kernel(&mut self, inputs: GenerationInputs) {
         self.initialize_interpreter_state(inputs, KERNEL.code_hash, KERNEL.code.len());
     }
@@ -867,7 +871,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
                 );
                 Err(ProgramError::KernelPanic)
             } // "PANIC",
-            x if (0xc0..0xe0).contains(&x) => self.run_mstore_32bytes(x - 0xc0 + 1), // "MSTORE_32BYTES",
+            x if (0xc0..0xe0).contains(&x) => self.run_mstore_32bytes(x - 0xc0 + 1), /* "MSTORE_32BYTES", */
             0xf0 => self.run_syscall(opcode, 3, false),                              // "CREATE",
             0xf1 => self.run_syscall(opcode, 7, false),                              // "CALL",
             0xf2 => self.run_syscall(opcode, 7, false),                              // "CALLCODE",
@@ -1458,9 +1462,10 @@ impl<'a, F: Field> Interpreter<'a, F> {
 
         self.push(exc_info)?;
 
-        // Set registers before pushing to the stack; in particular, we need to set kernel mode so we
-        // can't incorrectly trigger a stack overflow. However, note that we have to do it _after_ we
-        // make `exc_info`, which should contain the old values.
+        // Set registers before pushing to the stack; in particular, we need to set
+        // kernel mode so we can't incorrectly trigger a stack overflow.
+        // However, note that we have to do it _after_ we make `exc_info`, which
+        // should contain the old values.
         self.generation_state.registers.program_counter = new_program_counter;
         self.set_is_kernel(true);
         self.generation_state.registers.gas_used = 0;

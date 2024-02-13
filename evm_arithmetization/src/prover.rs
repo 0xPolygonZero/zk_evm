@@ -77,7 +77,8 @@ where
     let rate_bits = config.fri_config.rate_bits;
     let cap_height = config.fri_config.cap_height;
 
-    // For each STARK, we compute the polynomial commitments for the polynomials interpolating its trace.
+    // For each STARK, we compute the polynomial commitments for the polynomials
+    // interpolating its trace.
     let trace_commitments = timed!(
         timing,
         "compute all trace commitments",
@@ -114,7 +115,8 @@ where
     observe_public_values::<F, C, D>(&mut challenger, &public_values)
         .map_err(|_| anyhow::Error::msg("Invalid conversion of public values."))?;
 
-    // For each STARK, compute its cross-table lookup Z polynomials and get the associated `CtlData`.
+    // For each STARK, compute its cross-table lookup Z polynomials and get the
+    // associated `CtlData`.
     let (ctl_challenges, ctl_data_per_table) = timed!(
         timing,
         "compute CTL data",
@@ -143,7 +145,8 @@ where
         )?
     );
 
-    // This is an expensive check, hence is only run when `debug_assertions` are enabled.
+    // This is an expensive check, hence is only run when `debug_assertions` are
+    // enabled.
     #[cfg(debug_assertions)]
     {
         let mut extra_values = HashMap::new();
@@ -168,8 +171,9 @@ where
 }
 
 /// Generates a proof for each STARK.
-/// At this stage, we have computed the trace polynomials commitments for the various STARKs,
-/// and we have the cross-table lookup data for each table, including the associated challenges.
+/// At this stage, we have computed the trace polynomials commitments for the
+/// various STARKs, and we have the cross-table lookup data for each table,
+/// including the associated challenges.
 /// - `trace_poly_values` are the trace values for each STARK.
 /// - `trace_commitments` are the trace polynomials commitments for each STARK.
 /// - `ctl_data_per_table` group all the cross-table lookup data for each STARK.
@@ -348,9 +352,9 @@ where
     })
 }
 
-/// Utility method that checks whether a kill signal has been emitted by one of the workers,
-/// which will result in an early abort for all the other processes involved in the same set
-/// of transactions.
+/// Utility method that checks whether a kill signal has been emitted by one of
+/// the workers, which will result in an early abort for all the other processes
+/// involved in the same set of transactions.
 pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     if let Some(signal) = abort_signal {
         if signal.load(Ordering::Relaxed) {

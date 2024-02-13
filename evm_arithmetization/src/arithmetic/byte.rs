@@ -50,14 +50,15 @@
 //!
 //! 1. The given L, w and y are range-checked to be less than 2^16.
 //! 2. y * 256 ∈ {0, 256, 512, ..., 2^24 - 512, 2^24 - 256}
-//! 3. w / 256 = L - y * 256 ∈ {-2^24 + 256, -2^24 + 257, ..., 2^16 - 2, 2^16 - 1}
-//! 4. By inspection, for w < 2^16, if w / 256 < 2^16 or
-//!    w / 256 >= P - 2^24 + 256 (i.e. if w / 256 falls in the range
-//!    of point 3 above), then w = 256 * m for some 0 <= m < 256.
+//! 3. w / 256 = L - y * 256 ∈ {-2^24 + 256, -2^24 + 257, ..., 2^16 - 2, 2^16 -
+//!    1}
+//! 4. By inspection, for w < 2^16, if w / 256 < 2^16 or w / 256 >= P - 2^24 +
+//!    256 (i.e. if w / 256 falls in the range of point 3 above), then w = 256 *
+//!    m for some 0 <= m < 256.
 //! 5. Hence w / 256 ∈ {0, 1, ..., 255}
 //! 6. Hence y * 256 = L - w / 256 ∈ {-255, -254, ..., 2^16 - 1}
-//! 7. Taking the intersection of ranges in 2. and 6. we see that
-//!    y * 256 ∈ {0, 256, 512, ..., 2^16 - 256}
+//! 7. Taking the intersection of ranges in 2. and 6. we see that y * 256 ∈ {0,
+//!    256, 512, ..., 2^16 - 256}
 //! 8. Hence y ∈ {0, 1, ..., 255}
 
 use core::ops::Range;
