@@ -5,15 +5,27 @@ resolver = "2"
 [workspace.dependencies]
 bytes = "1.5.0"
 enum-as-inner = "0.6.0"
+env_logger = "0.10.0"
 ethereum-types = "0.14.1"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 keccak-hash = "0.10.0"
 log = "0.4.20"
 num = "0.4.1"
+rand = "0.8.5"
 rlp = "0.5.2"
 rlp-derive = "0.1.0"
 serde = "1.0.166"
+serde_json = "1.0.96"
+thiserror = "1.0.49"
+
+# plonky2-related dependencies
+# TODO: Switch to versioning whenever possible
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
+plonky2_maybe_rayon = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
+plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
+starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
+
 
 [workspace.package]
 edition = "2021"
