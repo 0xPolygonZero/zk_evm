@@ -485,7 +485,13 @@ where
             &all_stark.cross_table_lookups,
             stark_config,
         );
-        let poseidon = todo!();
+        let poseidon = RecursiveCircuitsForTable::new(
+            Table::Poseidon,
+            &all_stark.poseidon_stark,
+            degree_bits_ranges[*Table::Poseidon].clone(),
+            &all_stark.cross_table_lookups,
+            stark_config,
+        );
 
         let by_table = [
             arithmetic,

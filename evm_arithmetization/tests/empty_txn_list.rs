@@ -50,7 +50,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         receipts_root: receipts_trie.hash(),
     };
     let mut initial_block_hashes = vec![H256::default(); 256];
-    initial_block_hashes[255] = H256::from_uint(&0x200.into());
+    initial_block_hashes[255] = H256::from_uint(&hashout2u(state_smt.root));
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
@@ -61,13 +61,13 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         },
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: H256::from_uint(&hashout2u(state_smt.root)),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0.into(),
         block_hashes: BlockHashes {
-            prev_hashes: initial_block_hashes,
+            prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
     };
@@ -75,7 +75,8 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     // Initialize the preprocessed circuits for the zkEVM.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 9..11, 12..13, 14..15, 9..11, 12..13, 17..18, 12..13], /* Minimal ranges to prove an empty list */
+        // Minimal ranges to prove an empty list
+        &[16..17, 9..10, 12..13, 14..15, 9..10, 12..13, 17..18, 4..5],
         &config,
     );
 
