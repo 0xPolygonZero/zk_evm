@@ -1,6 +1,13 @@
-use anyhow::Result;
-use ethereum_types::BigEndianHash;
+use anyhow::{anyhow, Result};
+use ethereum_types::{BigEndianHash, H160, U256};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
+use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
+use rand::{thread_rng, Rng};
+use smt_utils_hermez::db::MemoryDb;
+use smt_utils_hermez::keys::key_balance;
+use smt_utils_hermez::smt::{Key, Smt};
+use smt_utils_hermez::utils::key2u;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -10,15 +17,18 @@ use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1, test_acc
 use crate::generation::TrieInputs;
 
 #[test]
-fn mpt_read() -> Result<()> {
+fn smt_read() -> Result<()> {
+    let mut state_smt = Smt::<MemoryDb>::default();
+    let key = key_balance(H160(thread_rng().gen()));
+    let value = U256(thread_rng().gen());
+    state_smt.set(key, value);
     let trie_inputs = TrieInputs {
-        state_trie: extension_to_leaf(test_account_1_rlp()),
+        state_smt: state_smt.serialize(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
-        storage_tries: vec![],
     };
 
-    let mpt_read = KERNEL.global_labels["mpt_read"];
+    let smt_read_state = KERNEL.global_labels["smt_read_state"];
 
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
@@ -26,29 +36,19 @@ fn mpt_read() -> Result<()> {
     assert_eq!(interpreter.stack(), vec![]);
 
     // Now, execute mpt_read on the state trie.
-    interpreter.generation_state.registers.program_counter = mpt_read;
+    interpreter.generation_state.registers.program_counter = smt_read_state;
     interpreter
         .push(0xdeadbeefu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(0xABCDEFu64.into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push(6.into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .push(key2u(key))
         .expect("The stack should not overflow");
     interpreter.run()?;
 
     assert_eq!(interpreter.stack().len(), 1);
     let result_ptr = interpreter.stack()[0].as_usize();
-    let result = &interpreter.get_trie_data()[result_ptr..][..4];
-    assert_eq!(result[0], test_account_1().nonce);
-    assert_eq!(result[1], test_account_1().balance);
-    // result[2] is the storage root pointer. We won't check that it matches a
-    // particular address, since that seems like over-specifying.
-    assert_eq!(result[3], test_account_1().code_hash.into_uint());
+    let result = interpreter.get_trie_data()[result_ptr];
+    assert_eq!(result, value);
 
     Ok(())
 }

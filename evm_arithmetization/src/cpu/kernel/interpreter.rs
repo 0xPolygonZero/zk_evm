@@ -9,7 +9,12 @@ use ethereum_types::{BigEndianHash, H160, H256, U256, U512};
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::field::types::Field;
+use plonky2::field::types::{Field, PrimeField64};
+use plonky2::hash::hash_types::RichField;
+use plonky2::hash::poseidon::Poseidon;
+use serde::Serialize;
+use smt_utils_hermez::smt::{hash_serialize, hash_serialize_u256};
+use smt_utils_hermez::utils::hashout2u;
 
 use super::assembler::BYTES_PER_OFFSET;
 use super::utils::u256_from_bool;
@@ -56,7 +61,7 @@ impl MemoryState {
     }
 }
 
-pub(crate) struct Interpreter<'a, F: Field> {
+pub(crate) struct Interpreter<'a, F: RichField> {
     pub(crate) generation_state: GenerationState<F>,
     prover_inputs_map: &'a HashMap<usize, ProverInputFn>,
     pub(crate) halt_offsets: Vec<usize>,
@@ -84,7 +89,7 @@ struct InterpreterCheckpoint {
     mem_len: usize,
 }
 
-pub(crate) fn run_interpreter<F: Field>(
+pub(crate) fn run_interpreter<F: RichField>(
     initial_offset: usize,
     initial_stack: Vec<U256>,
 ) -> anyhow::Result<Interpreter<'static, F>> {
@@ -104,7 +109,7 @@ pub(crate) struct InterpreterMemoryInitialization {
     pub memory: Vec<(usize, Vec<U256>)>,
 }
 
-pub(crate) fn run_interpreter_with_memory<F: Field>(
+pub(crate) fn run_interpreter_with_memory<F: RichField>(
     memory_init: InterpreterMemoryInitialization,
 ) -> anyhow::Result<Interpreter<'static, F>> {
     let label = KERNEL.global_labels[&memory_init.label];
@@ -123,7 +128,7 @@ pub(crate) fn run_interpreter_with_memory<F: Field>(
     Ok(interpreter)
 }
 
-pub(crate) fn run<'a, F: Field>(
+pub(crate) fn run<'a, F: RichField>(
     code: &'a [u8],
     initial_offset: usize,
     initial_stack: Vec<U256>,
@@ -136,7 +141,7 @@ pub(crate) fn run<'a, F: Field>(
 
 /// Simulates the CPU execution from `state` until the program counter reaches
 /// `final_label` in the current context.
-pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
+pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
     final_label: &str,
     state: &GenerationState<F>,
 ) -> Option<HashMap<usize, Vec<usize>>> {
@@ -177,7 +182,7 @@ enum InterpreterMemOpKind {
     Write(U256, usize, usize, usize),
 }
 
-impl<'a, F: Field> Interpreter<'a, F> {
+impl<'a, F: RichField> Interpreter<'a, F> {
     pub(crate) fn new_with_kernel(initial_offset: usize, initial_stack: Vec<U256>) -> Self {
         let mut result = Self::new(
             &KERNEL.code,
@@ -319,7 +324,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             ),
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
-                h2u(tries.state_trie.hash()),
+                hash_serialize_u256(&tries.state_smt),
             ),
             (
                 GlobalMetadata::TransactionTrieRootDigestBefore,
@@ -816,6 +821,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             0x1d => self.run_syscall(opcode, 2, false), // "SAR",
             0x20 => self.run_syscall(opcode, 2, false), // "KECCAK256",
             0x21 => self.run_keccak_general(),          // "KECCAK_GENERAL",
+            0x22 => self.run_poseidon(),                // "POSEIDON",
             0x30 => self.run_syscall(opcode, 0, true),  // "ADDRESS",
             0x31 => self.run_syscall(opcode, 1, false), // "BALANCE",
             0x32 => self.run_syscall(opcode, 0, true),  // "ORIGIN",
@@ -1121,6 +1127,21 @@ impl<'a, F: Field> Interpreter<'a, F> {
         self.push(U256::from_big_endian(hash.as_bytes()))
     }
 
+    fn run_poseidon(&mut self) -> anyhow::Result<(), ProgramError> {
+        let x = self.pop()?;
+        let y = self.pop()?;
+        let z = self.pop()?;
+
+        let mut arr = [
+            x.0[0], x.0[1], x.0[2], x.0[3], y.0[0], y.0[1], y.0[2], y.0[3], z.0[0], z.0[1], z.0[2],
+            z.0[3],
+        ]
+        .map(F::from_canonical_u64);
+        let hash = F::poseidon(arr);
+        let hash = U256(std::array::from_fn(|i| hash[i].to_canonical_u64()));
+        self.push(hash)
+    }
+
     fn run_prover_input(&mut self) -> Result<(), ProgramError> {
         let prover_input_fn = self
             .prover_inputs_map
@@ -1276,8 +1297,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             self.generation_state.observe_address(tip_h160);
         } else if offset == KERNEL.global_labels["observe_new_contract"] {
             let tip_u256 = stack_peek(&self.generation_state, 0)?;
-            let tip_h256 = H256::from_uint(&tip_u256);
-            self.generation_state.observe_contract(tip_h256)?;
+            self.generation_state.observe_contract(tip_u256)?;
         }
 
         if !self.is_kernel() {
@@ -1547,6 +1567,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x1d => "SAR",
         0x20 => "KECCAK256",
         0x21 => "KECCAK_GENERAL",
+        0x22 => "POSEIDON",
         0x30 => "ADDRESS",
         0x31 => "BALANCE",
         0x32 => "ORIGIN",

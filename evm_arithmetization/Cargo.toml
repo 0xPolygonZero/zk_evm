@@ -21,15 +21,18 @@ hex-literal = { workspace = true }
 itertools = "0.11.0"
 keccak-hash = { workspace = true }
 log = { workspace = true }
-plonky2_maybe_rayon = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
+plonky2_maybe_rayon = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
 num = { workspace = true }
 num-bigint = "0.4.3"
 once_cell = "1.13.0"
 pest = "2.1.3"
 pest_derive = "2.1.0"
-plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
-plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
-starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
+# TODO: Reset to regular `main` revision once `packed` methods for Poseidon are merged.
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
+plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
+starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
+# TODO: Move to zk_evm monorepo
+smt_utils_hermez = { git = "https://github.com/Nashtare/smt-utils-hermez", rev = "6539a7dbee1ebabf647db4c533d8f99961406386"}
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rlp = { workspace = true }

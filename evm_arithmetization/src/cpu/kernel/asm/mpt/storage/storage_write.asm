@@ -96,32 +96,12 @@ sstore_after_refund:
     // stack: slot, value, kexit_info
     DUP2 ISZERO %jumpi(sstore_delete)
 
-    // First we write the value to MPT data, and get a pointer to it.
-    %get_trie_data_size
-    // stack: value_ptr, slot, value, kexit_info
-    SWAP2
-    // stack: value, slot, value_ptr, kexit_info
-    %append_to_trie_data
-    // stack: slot, value_ptr, kexit_info
-
-    // Next, call mpt_insert on the current account's storage root.
-    %stack (slot, value_ptr) -> (slot, value_ptr, after_storage_insert)
-    %slot_to_storage_key
-    // stack: storage_key, value_ptr, after_storage_insert, kexit_info
-    PUSH 64 // storage_key has 64 nibbles
-    %current_storage_trie
-    // stack: storage_root_ptr, 64, storage_key, value_ptr, after_storage_insert, kexit_info
-    %jump(mpt_insert)
-
-after_storage_insert:
-    // stack: new_storage_root_ptr, kexit_info
-    %current_account_data
-    // stack: account_ptr, new_storage_root_ptr, kexit_info
-
-    // Update the copied account with our new storage root pointer.
-    %add_const(2)
-    // stack: account_storage_root_ptr_ptr, new_storage_root_ptr, kexit_info
-    %mstore_trie_data
+    // stack: slot, value, kexit_info
+    %address
+    // stack: addr, slot, value, kexit_info
+    %key_storage
+    // stack: storage_key, value, kexit_info
+    %smt_insert_state
     // stack: kexit_info
     EXIT_KERNEL
 
@@ -133,12 +113,10 @@ sstore_noop:
 // Delete the slot from the storage trie.
 sstore_delete:
     // stack: slot, value, kexit_info
-    SWAP1 POP
-    PUSH after_storage_insert SWAP1
-    // stack: slot, after_storage_insert, kexit_info
-    %slot_to_storage_key
-    // stack: storage_key, after_storage_insert, kexit_info
-    PUSH 64 // storage_key has 64 nibbles
-    %current_storage_trie
-    // stack: storage_root_ptr, 64, storage_key, after_storage_insert, kexit_info
-    %jump(mpt_delete)
+    %address
+    // stack: address, slot, value, kexit_info
+    %key_storage
+    // stack: key_storage, value, kexit_info
+    %smt_delete_state
+    // stack: value, kexit_info
+    POP EXIT_KERNEL

@@ -34,6 +34,10 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
+use plonky2::field::types::PrimeField64;
+use smt_utils_hermez::smt::{hash_serialize, hash_serialize_u256};
+
+use self::mpt::{load_all_mpts, TrieRootPtrs};
 use crate::witness::util::{mem_write_log, stack_peek};
 
 /// Inputs needed for trace generation.
@@ -67,7 +71,7 @@ pub struct GenerationInputs {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    pub contract_code: HashMap<H256, Vec<u8>>,
+    pub contract_code: HashMap<U256, Vec<u8>>,
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,
@@ -77,12 +81,12 @@ pub struct GenerationInputs {
     pub block_hashes: BlockHashes,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TrieInputs {
-    /// A partial version of the state trie prior to these transactions. It
-    /// should include all nodes that will be accessed by these
-    /// transactions.
-    pub state_trie: HashedPartialTrie,
+    /// A serialized partial version of the state SMT prior to these
+    /// transactions. It should include all nodes that will be accessed by
+    /// these transactions.
+    pub state_smt: Vec<U256>,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
@@ -93,11 +97,18 @@ pub struct TrieInputs {
     /// should include all nodes that will be accessed by these
     /// transactions.
     pub receipts_trie: HashedPartialTrie,
+}
 
-    /// A partial version of each storage trie prior to these transactions. It
-    /// should include all storage tries, and nodes therein, that will be
-    /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+impl Default for TrieInputs {
+    fn default() -> Self {
+        Self {
+            // First 2 zeros are for the default empty node.
+            // The next 2 are for the current empty state trie root.
+            state_smt: vec![U256::zero(); 4],
+            transactions_trie: Default::default(),
+            receipts_trie: Default::default(),
+        }
+    }
 }
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
@@ -136,7 +147,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         ),
         (
             GlobalMetadata::StateTrieRootDigestBefore,
-            h2u(tries.state_trie.hash()),
+            hash_serialize_u256(&tries.state_smt),
         ),
         (
             GlobalMetadata::TransactionTrieRootDigestBefore,
@@ -309,7 +320,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     Ok((tables, public_values))
 }
 
-fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
+fn simulate_cpu<F: RichField>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
     let halt_pc = KERNEL.global_labels["halt"];
 
     loop {

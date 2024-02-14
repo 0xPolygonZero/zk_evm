@@ -3,6 +3,9 @@ use std::collections::HashMap;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
+use smt_utils_hermez::code::{hash_bytecode_u256, hash_contract_bytecode};
+use smt_utils_hermez::utils::hashout2u;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
 use super::TrieInputs;
@@ -24,7 +27,7 @@ pub(crate) struct GenerationStateCheckpoint {
 }
 
 #[derive(Debug)]
-pub(crate) struct GenerationState<F: Field> {
+pub(crate) struct GenerationState<F: RichField> {
     pub(crate) inputs: GenerationInputs,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
@@ -58,7 +61,7 @@ pub(crate) struct GenerationState<F: Field> {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     fn preinitialize_mpts(&mut self, trie_inputs: &TrieInputs) -> TrieRootPtrs {
         let (trie_roots_ptrs, trie_data) =
             load_all_mpts(trie_inputs).expect("Invalid MPT data for preinitialization");
@@ -69,13 +72,12 @@ impl<F: Field> GenerationState<F> {
     }
     pub(crate) fn new(inputs: GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
         log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
-        log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
+        log::debug!("Input state_trie: {:?}", &inputs.tries.state_smt);
         log::debug!(
             "Input transactions_trie: {:?}",
             &inputs.tries.transactions_trie
         );
         log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
-        log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
         log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 
         let rlp_prover_inputs =
@@ -116,8 +118,7 @@ impl<F: Field> GenerationState<F> {
             self.observe_address(tip_h160);
         } else if dst == KERNEL.global_labels["observe_new_contract"] {
             let tip_u256 = stack_peek(self, 0)?;
-            let tip_h256 = H256::from_uint(&tip_u256);
-            self.observe_contract(tip_h256)?;
+            self.observe_contract(tip_u256)?;
         }
 
         Ok(())
@@ -133,7 +134,7 @@ impl<F: Field> GenerationState<F> {
     /// Observe the given code hash and store the associated code.
     /// When called, the code corresponding to `codehash` should be stored in
     /// the return data.
-    pub(crate) fn observe_contract(&mut self, codehash: H256) -> Result<(), ProgramError> {
+    pub(crate) fn observe_contract(&mut self, codehash: U256) -> Result<(), ProgramError> {
         if self.inputs.contract_code.contains_key(&codehash) {
             return Ok(()); // Return early if the code hash has already been
                            // observed.
@@ -149,7 +150,7 @@ impl<F: Field> GenerationState<F> {
             .iter()
             .map(|x| x.low_u32() as u8)
             .collect::<Vec<_>>();
-        debug_assert_eq!(keccak(&code), codehash);
+        debug_assert_eq!(hash_bytecode_u256(code.clone()), codehash);
 
         self.inputs.contract_code.insert(codehash, code);
 

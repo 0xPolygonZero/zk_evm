@@ -15,6 +15,7 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
+use crate::poseidon::poseidon_stark::PoseidonOp;
 use crate::witness::memory::MemoryOp;
 use crate::{arithmetic, keccak, keccak_sponge, logic};
 
@@ -27,10 +28,11 @@ pub(crate) struct TraceCheckpoint {
     pub(self) keccak_sponge_len: usize,
     pub(self) logic_len: usize,
     pub(self) memory_len: usize,
+    pub(self) poseidon_len: usize,
 }
 
 #[derive(Debug)]
-pub(crate) struct Traces<T: Copy> {
+pub(crate) struct Traces<T: Copy + RichField> {
     pub(crate) arithmetic_ops: Vec<arithmetic::Operation>,
     pub(crate) byte_packing_ops: Vec<BytePackingOp>,
     pub(crate) cpu: Vec<CpuColumnsView<T>>,
@@ -38,9 +40,10 @@ pub(crate) struct Traces<T: Copy> {
     pub(crate) memory_ops: Vec<MemoryOp>,
     pub(crate) keccak_inputs: Vec<([u64; keccak::keccak_stark::NUM_INPUTS], usize)>,
     pub(crate) keccak_sponge_ops: Vec<KeccakSpongeOp>,
+    pub(crate) poseidon_ops: Vec<PoseidonOp<T>>,
 }
 
-impl<T: Copy> Traces<T> {
+impl<T: Copy + RichField> Traces<T> {
     pub(crate) fn new() -> Self {
         Traces {
             arithmetic_ops: vec![],
@@ -50,6 +53,7 @@ impl<T: Copy> Traces<T> {
             memory_ops: vec![],
             keccak_inputs: vec![],
             keccak_sponge_ops: vec![],
+            poseidon_ops: vec![],
         }
     }
 
@@ -85,6 +89,7 @@ impl<T: Copy> Traces<T> {
             // This is technically a lower-bound, as we may fill gaps,
             // but this gives a relatively good estimate.
             memory_len: self.memory_ops.len(),
+            poseidon_len: self.poseidon_ops.len(),
         }
     }
 
@@ -98,6 +103,7 @@ impl<T: Copy> Traces<T> {
             keccak_sponge_len: self.keccak_sponge_ops.len(),
             logic_len: self.logic_ops.len(),
             memory_len: self.memory_ops.len(),
+            poseidon_len: self.poseidon_ops.len(),
         }
     }
 
@@ -110,6 +116,7 @@ impl<T: Copy> Traces<T> {
             .truncate(checkpoint.keccak_sponge_len);
         self.logic_ops.truncate(checkpoint.logic_len);
         self.memory_ops.truncate(checkpoint.memory_len);
+        self.poseidon_ops.truncate(checkpoint.poseidon_len);
     }
 
     pub(crate) fn mem_ops_since(&self, checkpoint: TraceCheckpoint) -> &[MemoryOp] {
@@ -180,6 +187,7 @@ impl<T: Copy> Traces<T> {
             memory_ops,
             keccak_inputs,
             keccak_sponge_ops,
+            poseidon_ops,
         } = self;
 
         let arithmetic_trace = timed!(
@@ -222,6 +230,13 @@ impl<T: Copy> Traces<T> {
             "generate memory trace",
             all_stark.memory_stark.generate_trace(memory_ops, timing)
         );
+        let poseidon_trace = timed!(
+            timing,
+            "generate memory trace",
+            all_stark
+                .poseidon_stark
+                .generate_trace(poseidon_ops, cap_elements, timing)
+        );
 
         [
             arithmetic_trace,
@@ -231,11 +246,12 @@ impl<T: Copy> Traces<T> {
             keccak_sponge_trace,
             logic_trace,
             memory_trace,
+            poseidon_trace,
         ]
     }
 }
 
-impl<T: Copy> Default for Traces<T> {
+impl<T: Copy + RichField> Default for Traces<T> {
     fn default() -> Self {
         Self::new()
     }

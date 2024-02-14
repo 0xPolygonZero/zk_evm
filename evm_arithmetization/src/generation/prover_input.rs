@@ -7,6 +7,7 @@ use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
 use num_bigint::BigUint;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
@@ -40,7 +41,7 @@ impl From<Vec<String>> for ProverInputFn {
     }
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     pub(crate) fn prover_input(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[0].as_str() {
             "no_txn" => self.no_txn(),
@@ -152,7 +153,7 @@ impl<F: Field> GenerationState<F> {
         let code = self
             .inputs
             .contract_code
-            .get(&H256::from_uint(&codehash))
+            .get(&codehash)
             .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
         for &byte in code {
             self.memory.set(address, byte.into());
@@ -309,7 +310,7 @@ impl<F: Field> GenerationState<F> {
     }
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
