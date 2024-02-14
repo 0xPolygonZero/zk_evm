@@ -239,12 +239,13 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    /// Generate either the next used jump address or the proof for the last
-    /// jump address.
+    /// Generate either the next used jump address, the proof for the last
+    /// jump address, or a non-jumpdest proof.
     fn run_jumpdest_table(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[1].as_str() {
             "next_address" => self.run_next_jumpdest_table_address(),
             "next_proof" => self.run_next_jumpdest_table_proof(),
+            "non_jumpdest_proof" => self.run_next_non_jumpdest_proof(),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -306,6 +307,15 @@ impl<F: Field> GenerationState<F> {
                 ProverInputError::InvalidJumpdestSimulation,
             ))
         }
+    }
+    /// Returns a non-jumpdest proof for the address on the top of the stack. A
+    /// non-jumpdest proof is the clossest address to address on the top of
+    /// the stack.
+    fn run_next_non_jumpdest_proof(&mut self) -> Result<U256, ProgramError> {
+        let code = self.get_current_code()?;
+        let address = u256_to_usize(stack_peek(self, 0)?)?;
+        let proof = get_closest_opcode(&code, address);
+        Ok(proof.into())
     }
 }
 
@@ -420,6 +430,17 @@ fn get_proofs_and_jumpdests(
         },
     );
     proofs
+}
+
+/// Return the largest prev_addr in `code` such that `code[pred_addr]` is an
+/// opcode (and not the argument of some PUSHXX) and pred_addr <= address
+fn get_closest_opcode(code: &[u8], address: usize) -> usize {
+    const PUSH1_OPCODE: u8 = 0x60;
+    const PUSH32_OPCODE: u8 = 0x7f;
+    let (prev_addr, _) = CodeIterator::until(code, address + 1)
+        .last()
+        .unwrap_or((0, 0));
+    prev_addr
 }
 
 /// An iterator over the EVM code contained in `code`, which skips the bytes
