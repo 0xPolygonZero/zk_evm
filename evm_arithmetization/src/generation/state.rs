@@ -4,8 +4,8 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
-use smt_utils_hermez::code::{hash_bytecode_u256, hash_contract_bytecode};
-use smt_utils_hermez::utils::hashout2u;
+use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
+use smt_trie::utils::hashout2u;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
 use super::TrieInputs;

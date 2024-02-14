@@ -18,10 +18,10 @@ use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
-use smt_utils_hermez::code::hash_bytecode_u256;
-use smt_utils_hermez::db::{Db, MemoryDb};
-use smt_utils_hermez::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
-use smt_utils_hermez::smt::Smt;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::db::{Db, MemoryDb};
+use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
+use smt_trie::smt::Smt;
 
 type F = GoldilocksField;
 const D: usize = 2;

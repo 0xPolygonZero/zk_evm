@@ -31,8 +31,6 @@ pest_derive = "2.1.0"
 plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
 plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
 starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
-# TODO: Move to zk_evm monorepo
-smt_utils_hermez = { git = "https://github.com/Nashtare/smt-utils-hermez", rev = "6539a7dbee1ebabf647db4c533d8f99961406386"}
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rlp = { workspace = true }
@@ -45,6 +43,7 @@ serde_json = "1.0"
 
 # Local dependencies
 mpt_trie = { version = "0.1.0", path = "../mpt_trie" }
+smt_trie = { version = "0.1.0", path = "../smt_trie" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"

@@ -8,8 +8,8 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use smt_utils_hermez::code::{hash_bytecode_u256, hash_contract_bytecode};
-use smt_utils_hermez::utils::hashout2u;
+use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
+use smt_trie::utils::hashout2u;
 
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;

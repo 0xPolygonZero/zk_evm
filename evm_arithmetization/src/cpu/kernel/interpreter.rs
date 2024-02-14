@@ -13,8 +13,8 @@ use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::poseidon::Poseidon;
 use serde::Serialize;
-use smt_utils_hermez::smt::{hash_serialize, hash_serialize_u256};
-use smt_utils_hermez::utils::hashout2u;
+use smt_trie::smt::{hash_serialize, hash_serialize_u256};
+use smt_trie::utils::hashout2u;
 
 use super::assembler::BYTES_PER_OFFSET;
 use super::utils::u256_from_bool;

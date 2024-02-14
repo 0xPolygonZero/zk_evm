@@ -7,10 +7,10 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::{thread_rng, Rng};
-use smt_utils_hermez::db::MemoryDb;
-use smt_utils_hermez::keys::key_balance;
-use smt_utils_hermez::smt::Smt;
-use smt_utils_hermez::utils::key2u;
+use smt_trie::db::MemoryDb;
+use smt_trie::keys::key_balance;
+use smt_trie::smt::Smt;
+use smt_trie::utils::key2u;
 
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::smt_type::PartialSmtType;

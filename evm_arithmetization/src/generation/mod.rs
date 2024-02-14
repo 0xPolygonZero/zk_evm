@@ -35,7 +35,7 @@ pub(crate) mod state;
 mod trie_extractor;
 
 use plonky2::field::types::PrimeField64;
-use smt_utils_hermez::smt::{hash_serialize, hash_serialize_u256};
+use smt_trie::smt::{hash_serialize, hash_serialize_u256};
 
 use self::mpt::{load_all_mpts, TrieRootPtrs};
 use crate::witness::util::{mem_write_log, stack_peek};

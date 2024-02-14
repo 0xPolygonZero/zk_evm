@@ -3,10 +3,10 @@ use ethereum_types::{BigEndianHash, H160, H256, U256};
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::{thread_rng, Rng};
-use smt_utils_hermez::db::MemoryDb;
-use smt_utils_hermez::keys::key_balance;
-use smt_utils_hermez::smt::{hash_serialize_u256, Smt};
-use smt_utils_hermez::utils::hashout2u;
+use smt_trie::db::MemoryDb;
+use smt_trie::keys::key_balance;
+use smt_trie::smt::{hash_serialize_u256, Smt};
+use smt_trie::utils::hashout2u;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;

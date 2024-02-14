@@ -13,10 +13,10 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
-use smt_utils_hermez::code::hash_bytecode_u256;
-use smt_utils_hermez::db::MemoryDb;
-use smt_utils_hermez::smt::Smt;
-use smt_utils_hermez::utils::hashout2u;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::db::MemoryDb;
+use smt_trie::smt::Smt;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;

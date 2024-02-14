@@ -10,11 +10,11 @@ use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
-use smt_utils_hermez::code::{hash_bytecode_u256, hash_contract_bytecode};
-use smt_utils_hermez::db::{Db, MemoryDb};
-use smt_utils_hermez::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
-use smt_utils_hermez::smt::Smt;
-use smt_utils_hermez::utils::{hashout2u, key2u};
+use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
+use smt_trie::db::{Db, MemoryDb};
+use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
+use smt_trie::smt::Smt;
+use smt_trie::utils::{hashout2u, key2u};
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
