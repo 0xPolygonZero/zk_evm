@@ -198,6 +198,12 @@ fn test_extcodecopy() -> Result<()> {
         [Segment::ContextMetadata.unscale()]
     .set(GasLimit.unscale(), U256::from(1000000000000u64));
 
+    // Pre-initialize the accessed addresses list.
+    let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
+    interpreter.generation_state.registers.program_counter = init_accessed_addresses;
+    interpreter.push(0xdeadbeefu32.into());
+    interpreter.run()?;
+
     let extcodecopy = KERNEL.global_labels["sys_extcodecopy"];
 
     // Put random data in main memory and the `KernelAccountCode` segment for
@@ -327,6 +333,12 @@ fn sstore() -> Result<()> {
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
 
+    // Pre-initialize the accessed addresses list.
+    let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
+    interpreter.generation_state.registers.program_counter = init_accessed_addresses;
+    interpreter.push(0xdeadbeefu32.into());
+    interpreter.run()?;
+
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;
 
@@ -416,6 +428,12 @@ fn sload() -> Result<()> {
 
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+
+    // Pre-initialize the accessed addresses list.
+    let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
+    interpreter.generation_state.registers.program_counter = init_accessed_addresses;
+    interpreter.push(0xdeadbeefu32.into());
+    interpreter.run()?;
 
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;
