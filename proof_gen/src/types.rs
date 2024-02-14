@@ -11,7 +11,7 @@ pub type PlonkyProofIntern = ProofWithPublicInputs<GoldilocksField, PoseidonGold
 
 /// A type alias for the set of preprocessed circuits necessary to generate
 /// succinct block proofs.
-pub type AllRecursiveCircuits = plonky2_evm::fixed_recursive_verifier::AllRecursiveCircuits<
+pub type AllRecursiveCircuits = evm_arithmetization::fixed_recursive_verifier::AllRecursiveCircuits<
     GoldilocksField,
     PoseidonGoldilocksConfig,
     2,

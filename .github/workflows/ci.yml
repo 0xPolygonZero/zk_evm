@@ -18,8 +18,33 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test Suite
+  test_mpt_trie:
+    name: Test mpt_trie
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Test in mpt_trie subdirectory
+        run: cargo test --manifest-path mpt_trie/Cargo.toml
+        env:
+          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
+          RUST_LOG: 1
+          CARGO_INCREMENTAL: 1
+          RUST_BACKTRACE: 1
+
+  test_trace_decoder:
+    name: Test trace_decoder
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
@@ -28,33 +53,65 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly-2024-02-01
+        uses: dtolnay/rust-toolchain@nightly
 
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
             cache-on-failure: true
 
-      - name: Check in trace_decoder subdirectory
-        run: cargo check --manifest-path trace_decoder/Cargo.toml
+      - name: Test in trace_decoder subdirectory
+        run: cargo test --manifest-path trace_decoder/Cargo.toml
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
           RUST_LOG: 1
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
-      - name: Check in proof_gen subdirectory
-        run: cargo check --manifest-path proof_gen/Cargo.toml
+  test_proof_gen:
+    name: Test proof_gen
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Test in proof_gen subdirectory
+        run: cargo test --manifest-path proof_gen/Cargo.toml
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
           RUST_LOG: 1
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
-      - name: Run cargo test
-        run: cargo test --workspace
+  test_evm_arithmetization:
+    name: Test evm_arithmetization
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Test in evm_arithmetization subdirectory
+        run: cargo test --manifest-path evm_arithmetization/Cargo.toml
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
           RUST_LOG: 1
@@ -71,15 +128,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly-2024-02-01
-          components: rustfmt, clippy
+            components: rustfmt, clippy
 
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          cache-on-failure: true
+            cache-on-failure: true
 
       - name: Run cargo fmt
         run: cargo fmt --all --check

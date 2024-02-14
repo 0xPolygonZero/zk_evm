@@ -1,10 +1,10 @@
-use eth_trie_utils::{
+use ethereum_types::H256;
+use keccak_hash::keccak;
+use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
     trie_ops::ValOrHash,
 };
-use ethereum_types::H256;
-use keccak_hash::keccak;
 
 use crate::types::HashedStorageAddr;
 
@@ -47,7 +47,7 @@ fn print_value_and_hash_nodes_of_trie_common(trie: &HashedPartialTrie) -> Vec<St
 }
 
 pub(crate) fn h_addr_nibs_to_h256(h_addr_nibs: &Nibbles) -> H256 {
-    // TODO: HACK! This fix really needs to be in `eth_trie_utils`...
+    // TODO: HACK! This fix really needs to be in `mpt_trie`...
     let mut nib_bytes = h_addr_nibs.bytes_be();
     if nib_bytes.len() < 32 {
         for _ in nib_bytes.len()..32 {
