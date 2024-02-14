@@ -410,7 +410,6 @@ fn _hash_serialize(v: &[U256], ptr: usize) -> HashOut {
         LEAF_TYPE => {
             let rem_key = u2k(v[ptr + 1]);
             let value = f2limbs(v[ptr + 2]);
-            dbg!(key2u(rem_key), v[ptr + 2]);
             let value_h = hash0(value);
             let mut node = Node([F::ZERO; 12]);
             node.0[8] = F::ONE;
