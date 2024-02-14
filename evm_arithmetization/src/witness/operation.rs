@@ -401,7 +401,7 @@ pub(crate) fn generate_set_context<F: Field>(
     };
 
     // If the new stack isn't empty, read stack_top from memory.
-    let new_sp = u256_to_usize(new_sp)?;
+    let new_sp = new_sp.as_usize();
     if new_sp > 0 {
         // Set up columns to disable the channel if it *is* empty.
         let new_sp_field = F::from_canonical_usize(new_sp);

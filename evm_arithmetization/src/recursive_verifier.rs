@@ -376,7 +376,9 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
         ),
     ];
 
-    let beneficiary_random_base_fee_cur_hash_fields: [(GlobalMetadata, &[Target]); 4] = [
+    // This contains the `block_beneficiary`, `block_random`, `block_base_fee`,
+    // `block_blob_base_fee` as well as `cur_hash`.
+    let block_fields_arrays: [(GlobalMetadata, &[Target]); 5] = [
         (
             GlobalMetadata::BlockBeneficiary,
             &public_values.block_metadata.block_beneficiary,
@@ -388,6 +390,10 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
         (
             GlobalMetadata::BlockBaseFee,
             &public_values.block_metadata.block_base_fee,
+        ),
+        (
+            GlobalMetadata::BlockBlobBaseFee,
+            &public_values.block_metadata.block_blob_base_fee,
         ),
         (
             GlobalMetadata::BlockCurrentHash,
@@ -409,7 +415,7 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
         );
     });
 
-    beneficiary_random_base_fee_cur_hash_fields.map(|(field, targets)| {
+    block_fields_arrays.map(|(field, targets)| {
         sum = add_data_write(
             builder,
             challenge,
@@ -593,6 +599,7 @@ pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: 
     let block_chain_id = builder.add_virtual_public_input();
     let block_base_fee = builder.add_virtual_public_input_arr();
     let block_gas_used = builder.add_virtual_public_input();
+    let block_blob_base_fee = builder.add_virtual_public_input_arr();
     let block_bloom = builder.add_virtual_public_input_arr();
     BlockMetadataTarget {
         block_beneficiary,
@@ -604,6 +611,7 @@ pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: 
         block_chain_id,
         block_base_fee,
         block_gas_used,
+        block_blob_base_fee,
         block_bloom,
     }
 }
@@ -773,6 +781,10 @@ where
         block_metadata_target.block_gas_used,
         u256_to_u32(block_metadata.block_gas_used)?,
     );
+    // Blobbasefee fits in 2 limbs
+    let blob_basefee = u256_to_u64(block_metadata.block_blob_base_fee)?;
+    witness.set_target(block_metadata_target.block_blob_base_fee[0], blob_basefee.0);
+    witness.set_target(block_metadata_target.block_blob_base_fee[1], blob_basefee.1);
     let mut block_bloom_limbs = [F::ZERO; 64];
     for (i, limbs) in block_bloom_limbs.chunks_exact_mut(8).enumerate() {
         limbs.copy_from_slice(&u256_limbs(block_metadata.block_bloom[i]));

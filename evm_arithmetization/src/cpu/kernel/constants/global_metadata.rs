@@ -91,13 +91,17 @@ pub(crate) enum GlobalMetadata {
     LogsPayloadLen,
     TxnNumberBefore,
     TxnNumberAfter,
+    BlockBlobBaseFee,
+
+    /// Number of created contracts during the current transaction.
+    CreatedContractsLen,
 
     KernelHash,
     KernelLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 47;
+    pub(crate) const COUNT: usize = 49;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -151,6 +155,8 @@ impl GlobalMetadata {
             Self::BlockCurrentHash,
             Self::TxnNumberBefore,
             Self::TxnNumberAfter,
+            Self::BlockBlobBaseFee,
+            Self::CreatedContractsLen,
             Self::KernelHash,
             Self::KernelLen,
         ]
@@ -204,6 +210,8 @@ impl GlobalMetadata {
             Self::LogsPayloadLen => "GLOBAL_METADATA_LOGS_PAYLOAD_LEN",
             Self::TxnNumberBefore => "GLOBAL_METADATA_TXN_NUMBER_BEFORE",
             Self::TxnNumberAfter => "GLOBAL_METADATA_TXN_NUMBER_AFTER",
+            Self::BlockBlobBaseFee => "GLOBAL_METADATA_BLOCK_BLOB_BASE_FEE",
+            Self::CreatedContractsLen => "GLOBAL_METADATA_CREATED_CONTRACTS_LEN",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
         }

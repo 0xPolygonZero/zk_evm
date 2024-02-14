@@ -842,6 +842,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             0x47 => self.run_syscall(opcode, 0, true),  // SELFABALANCE,
             0x48 => self.run_syscall(opcode, 0, true),  // "BASEFEE",
             0x49 => self.run_prover_input(),            // "PROVER_INPUT",
+            0x4a => self.run_syscall(opcode, 0, true),  // "BLOBBASEFEE",
             0x50 => self.run_pop(),                     // "POP",
             0x51 => self.run_syscall(opcode, 1, false), // "MLOAD",
             0x52 => self.run_syscall(opcode, 2, false), // "MSTORE",
@@ -854,6 +855,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             0x59 => self.run_syscall(opcode, 0, true),  // "MSIZE",
             0x5a => self.run_syscall(opcode, 0, true),  // "GAS",
             0x5b => self.run_jumpdest(),                // "JUMPDEST",
+            0x5e => self.run_syscall(opcode, 3, false), // "MCOPY",
             x if (0x5f..0x80).contains(&x) => self.run_push(x - 0x5f), // "PUSH"
             x if (0x80..0x90).contains(&x) => self.run_dup(x - 0x7f), // "DUP"
             x if (0x90..0xa0).contains(&x) => self.run_swap(x - 0x8f), // "SWAP"
@@ -1250,6 +1252,10 @@ impl<'a, F: Field> Interpreter<'a, F> {
         Ok(())
     }
 
+    fn run_blobbasefee(&mut self) -> anyhow::Result<(), ProgramError> {
+        self.push(self.get_global_metadata_field(GlobalMetadata::BlockBlobBaseFee))
+    }
+
     fn run_pc(&mut self) -> anyhow::Result<(), ProgramError> {
         self.push(
             (self
@@ -1263,6 +1269,33 @@ impl<'a, F: Field> Interpreter<'a, F> {
 
     fn run_jumpdest(&mut self) -> anyhow::Result<(), ProgramError> {
         assert!(!self.is_kernel(), "JUMPDEST is not needed in kernel code");
+        Ok(())
+    }
+
+    fn run_mcopy(&mut self) -> anyhow::Result<(), ProgramError> {
+        let dest_offset = self.pop()?.as_usize();
+        let offset = self.pop()?.as_usize();
+        let size = self.pop()?.as_usize();
+
+        let intermediary_memory: Vec<U256> = (0..size)
+            .map(|i| {
+                self.generation_state.memory.mload_general(
+                    self.context(),
+                    Segment::MainMemory,
+                    offset + i,
+                )
+            })
+            .collect();
+
+        for i in 0..size {
+            self.generation_state.memory.mstore_general(
+                self.context(),
+                Segment::MainMemory,
+                dest_offset + i,
+                intermediary_memory[i],
+            );
+        }
+
         Ok(())
     }
 
@@ -1572,6 +1605,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x46 => "CHAINID",
         0x48 => "BASEFEE",
         0x49 => "PROVER_INPUT",
+        0x4a => "BLOBBASEFEE",
         0x50 => "POP",
         0x51 => "MLOAD",
         0x52 => "MSTORE",
@@ -1584,6 +1618,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x59 => "MSIZE",
         0x5a => "GAS",
         0x5b => "JUMPDEST",
+        0x5e => "MCOPY",
         0x5f => "PUSH0",
         0x60 => "PUSH1",
         0x61 => "PUSH2",

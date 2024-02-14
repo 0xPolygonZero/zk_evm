@@ -185,6 +185,8 @@ pub struct BlockMetadata {
     pub block_base_fee: U256,
     /// The total gas used in this block. It must fit in a `u32`.
     pub block_gas_used: U256,
+    /// The blob base fee. It must fit in a `u64`.
+    pub block_blob_base_fee: U256,
     /// The block bloom of this block, represented as the consecutive
     /// 32-byte chunks of a block's final bloom filter string.
     pub block_bloom: [U256; 8],
@@ -204,7 +206,10 @@ impl BlockMetadata {
         let block_base_fee =
             (pis[18].to_canonical_u64() + (pis[19].to_canonical_u64() << 32)).into();
         let block_gas_used = pis[20].to_canonical_u64().into();
-        let block_bloom = core::array::from_fn(|i| h2u(get_h256(&pis[21 + 8 * i..29 + 8 * i])));
+        let block_blob_base_fee =
+            (pis[21].to_canonical_u64() + (pis[22].to_canonical_u64() << 32)).into();
+        let block_bloom =
+            core::array::from_fn(|i| h2u(get_h256(&pis[23 + 8 * i..23 + 8 * (i + 1)])));
 
         Self {
             block_beneficiary,
@@ -216,6 +221,7 @@ impl BlockMetadata {
             block_chain_id,
             block_base_fee,
             block_gas_used,
+            block_blob_base_fee,
             block_bloom,
         }
     }
@@ -311,6 +317,7 @@ impl PublicValuesTarget {
             block_chain_id,
             block_base_fee,
             block_gas_used,
+            block_blob_base_fee,
             block_bloom,
         } = self.block_metadata;
 
@@ -323,6 +330,7 @@ impl PublicValuesTarget {
         buffer.write_target(block_chain_id)?;
         buffer.write_target_array(&block_base_fee)?;
         buffer.write_target(block_gas_used)?;
+        buffer.write_target_array(&block_blob_base_fee)?;
         buffer.write_target_array(&block_bloom)?;
 
         let BlockHashesTarget {
@@ -372,6 +380,7 @@ impl PublicValuesTarget {
             block_chain_id: buffer.read_target()?,
             block_base_fee: buffer.read_target_array()?,
             block_gas_used: buffer.read_target()?,
+            block_blob_base_fee: buffer.read_target_array()?,
             block_bloom: buffer.read_target_array()?,
         };
 
@@ -564,21 +573,23 @@ pub struct BlockMetadataTarget {
     pub(crate) block_difficulty: Target,
     /// `Target`s for the `mix_hash` value of this block.
     pub(crate) block_random: [Target; 8],
-    /// `Target`s for the gas limit of this block.
+    /// `Target` for the gas limit of this block.
     pub(crate) block_gaslimit: Target,
     /// `Target` for the chain id of this block.
     pub(crate) block_chain_id: Target,
     /// `Target`s for the base fee of this block.
     pub(crate) block_base_fee: [Target; 2],
-    /// `Target`s for the gas used of this block.
+    /// `Target` for the gas used of this block.
     pub(crate) block_gas_used: Target,
+    /// `Target`s for the blob base fee of this block.
+    pub(crate) block_blob_base_fee: [Target; 2],
     /// `Target`s for the block bloom of this block.
     pub(crate) block_bloom: [Target; 64],
 }
 
 impl BlockMetadataTarget {
     /// Number of `Target`s required for the block metadata.
-    pub(crate) const SIZE: usize = 85;
+    pub(crate) const SIZE: usize = 87;
 
     /// Extracts block metadata `Target`s from the provided public input
     /// `Target`s. The provided `pis` should start with the block metadata.
@@ -592,7 +603,8 @@ impl BlockMetadataTarget {
         let block_chain_id = pis[17];
         let block_base_fee = pis[18..20].try_into().unwrap();
         let block_gas_used = pis[20];
-        let block_bloom = pis[21..85].try_into().unwrap();
+        let block_blob_base_fee = pis[21..23].try_into().unwrap();
+        let block_bloom = pis[23..87].try_into().unwrap();
 
         Self {
             block_beneficiary,
@@ -604,6 +616,7 @@ impl BlockMetadataTarget {
             block_chain_id,
             block_base_fee,
             block_gas_used,
+            block_blob_base_fee,
             block_bloom,
         }
     }
@@ -636,6 +649,13 @@ impl BlockMetadataTarget {
                 builder.select(condition, bm0.block_base_fee[i], bm1.block_base_fee[i])
             }),
             block_gas_used: builder.select(condition, bm0.block_gas_used, bm1.block_gas_used),
+            block_blob_base_fee: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    bm0.block_blob_base_fee[i],
+                    bm1.block_blob_base_fee[i],
+                )
+            }),
             block_bloom: core::array::from_fn(|i| {
                 builder.select(condition, bm0.block_bloom[i], bm1.block_bloom[i])
             }),
@@ -663,6 +683,9 @@ impl BlockMetadataTarget {
             builder.connect(bm0.block_base_fee[i], bm1.block_base_fee[i])
         }
         builder.connect(bm0.block_gas_used, bm1.block_gas_used);
+        for i in 0..2 {
+            builder.connect(bm0.block_blob_base_fee[i], bm1.block_blob_base_fee[i])
+        }
         for i in 0..64 {
             builder.connect(bm0.block_bloom[i], bm1.block_bloom[i])
         }
