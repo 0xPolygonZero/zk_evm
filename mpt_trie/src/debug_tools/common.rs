@@ -1,3 +1,4 @@
+//! Common utilities for the debugging tools.
 use std::fmt::{self, Display};
 
 use crate::{
@@ -88,6 +89,7 @@ pub(super) fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>) -> Nibbles {
 }
 
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+/// A vector of path segments representing a path in the trie.
 pub struct NodePath(pub(super) Vec<PathSegment>);
 
 impl NodePath {

@@ -38,7 +38,10 @@ use crate::{
 };
 
 #[derive(Debug, Eq, PartialEq)]
+/// The difference between two Tries, represented as the highest
+/// point of a structural divergence.
 pub struct TrieDiff {
+    /// The highest point of structural divergence.
     pub latest_diff_res: Option<DiffPoint>,
     // TODO: Later add a second pass for finding diffs from the bottom up (`earliest_diff_res`).
 }
@@ -77,10 +80,15 @@ impl DiffDetectionState {
 /// A point (node) between the two tries where the children differ.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DiffPoint {
+    /// The depth of the point in both tries.
     pub depth: usize,
+    /// The path of the point in both tries.
     pub path: NodePath,
+    /// The node key in both tries.
     pub key: Nibbles,
+    /// The node info in the first trie.
     pub a_info: NodeInfo,
+    /// The node info in the second trie.
     pub b_info: NodeInfo,
 }
 
