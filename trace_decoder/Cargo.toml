@@ -23,7 +23,7 @@ rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true }
 serde_with = "3.4.0"
-thiserror = "1.0.49"
+thiserror = { workspace = true }
 
 # Local dependencies
 mpt_trie = { version = "0.1.0", path = "../mpt_trie" }
