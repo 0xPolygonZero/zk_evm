@@ -26,8 +26,8 @@ serde_with = "3.4.0"
 thiserror = "1.0.49"
 
 # Local dependencies
-mpt_trie = { version = "0.1.0", path = "../mpt_trie" }
-# TODO: update decoder to take local version again
+# TODO: update decoder to take local versions again
+mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm.git", rev = "c910e54fd519e6cf26131fcffda438aa0ebc3957" }
 evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm.git", rev = "c910e54fd519e6cf26131fcffda438aa0ebc3957" }
 
 [dev-dependencies]

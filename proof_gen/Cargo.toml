@@ -18,4 +18,4 @@ serde = { workspace = true }
 
 # Local dependencies
 trace_decoder = { version = "0.1.0", path = "../trace_decoder" }
-evm_arithmetization = { version = "0.1.0", path = "../evm_arithmetization" }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm.git", rev = "c910e54fd519e6cf26131fcffda438aa0ebc3957" }
