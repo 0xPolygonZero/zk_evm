@@ -66,7 +66,8 @@ pub(crate) fn u2k(x: U256) -> Key {
     Key(x.0.map(F::from_canonical_u64))
 }
 
-/// Given a node, return the index of the unique non-zero sibling, or -1 if there is no such sibling.
+/// Given a node, return the index of the unique non-zero sibling, or -1 if
+/// there is no such sibling.
 pub(crate) fn get_unique_sibling(node: Node) -> isize {
     let mut nfound = 0;
     let mut fnd = 0;

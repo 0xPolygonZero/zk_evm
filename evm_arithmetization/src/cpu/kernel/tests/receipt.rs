@@ -115,11 +115,11 @@
 //     let log_1 = LogRlp {
 //         address: hex!("7ef66b77759e12Caf3dDB3E4AFF524E577C59D8D").into(),
 //         topics: vec![
-//             
+//
 // hex!("8a22ee899102a366ac8ad0495127319cb1ff2403cfae855f83a89cda1266674d").
-// into(),             
+// into(),
 // hex!("0000000000000000000000000000000000000000000000000000000000000004").
-// into(),             
+// into(),
 // hex!("00000000000000000000000000000000000000000000000000000000004920ea").
 // into(),         ],
 //         data:
@@ -559,7 +559,7 @@
 //     assert_eq!(
 //         interpreter.stack()[1],
 //         U256::from(hex!(
-//             
+//
 // "da46cdd329bfedace32da95f2b344d314bc6f55f027d65f9f4ac04ee425e1f98"         ))
 //     );
 //     Ok(())

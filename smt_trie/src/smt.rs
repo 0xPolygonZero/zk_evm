@@ -73,10 +73,10 @@ impl Node {
 }
 
 /// Sparse Merkle tree (SMT).
-/// Represented as a map from keys to leaves and a map from keys to internal nodes.
-/// Leaves hold either a value node, representing an account in the state SMT or a value in the storage SMT,
-/// or a hash node, representing a hash of a subtree.
-/// Internal nodes hold the hashes of their children.
+/// Represented as a map from keys to leaves and a map from keys to internal
+/// nodes. Leaves hold either a value node, representing an account in the state
+/// SMT or a value in the storage SMT, or a hash node, representing a hash of a
+/// subtree. Internal nodes hold the hashes of their children.
 /// The root is the hash of the root internal node.
 /// Leaves are hashed using a prefix of 0, internal nodes using a prefix of 1.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -107,7 +107,8 @@ impl<D: Db> Smt<D> {
         h
     }
 
-    /// Returns the value associated with the key if it is in the SMT, otherwise returns 0.
+    /// Returns the value associated with the key if it is in the SMT, otherwise
+    /// returns 0.
     pub fn get(&self, key: Key) -> U256 {
         let keys = key.split();
         let mut level = 0;
@@ -145,8 +146,8 @@ impl<D: Db> Smt<D> {
     }
 
     /// Set the value associated with the key in the SMT.
-    /// If the value is 0 and the key is in the SMT, the key is removed from the SMT.
-    /// Reference implementation in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt.js.
+    /// If the value is 0 and the key is in the SMT, the key is removed from the
+    /// SMT. Reference implementation in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt.js.
     pub fn set(&mut self, key: Key, value: U256) {
         let mut r = Key(self.root.elements);
         let mut new_root = self.root;
@@ -325,8 +326,8 @@ impl<D: Db> Smt<D> {
     }
 
     /// Serialize the SMT into a vector of U256.
-    /// Starts with a [0, 0] for convenience, that way `ptr=0` is a canonical empty node.
-    /// Therefore the root of the SMT is at `ptr=2`.
+    /// Starts with a [0, 0] for convenience, that way `ptr=0` is a canonical
+    /// empty node. Therefore the root of the SMT is at `ptr=2`.
     /// Serialization rules:
     /// ```pseudocode
     /// serialize( HashNode { h } ) = [HASH_TYPE, h]

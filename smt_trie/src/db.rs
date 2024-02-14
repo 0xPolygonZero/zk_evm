@@ -1,5 +1,6 @@
-use crate::smt::{Key, Node};
 use std::collections::HashMap;
+
+use crate::smt::{Key, Node};
 
 pub trait Db: Default {
     fn get_node(&self, key: &Key) -> Option<&Node>;

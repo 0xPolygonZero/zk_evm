@@ -39,8 +39,9 @@ pub fn hash_bytecode_u256(code: Vec<u8>) -> U256 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use hex_literal::hex;
+
+    use super::*;
 
     #[test]
     fn test_empty_code() {
