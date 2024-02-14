@@ -19,14 +19,22 @@ use GlobalMetadata::{
 use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::assembler::Kernel;
+use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::state::GenerationState;
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
-use crate::proof::{BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots};
+use crate::proof::{
+    BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
+};
+use crate::prover::{check_abort_signal, get_mem_after_value_from_row};
 use crate::util::{h2u, u256_to_u8, u256_to_usize};
-use crate::witness::memory::{MemoryAddress, MemoryChannel};
-use crate::witness::transition::transition;
+use crate::witness::errors::{ProgramError, ProverInputError};
+use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryState};
+use crate::witness::state::RegistersState;
+use crate::witness::traces::Traces;
+use crate::witness::transition::{final_exception, transition};
 
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -34,7 +42,13 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
-use crate::witness::util::{mem_write_log, stack_peek};
+use self::mpt::{load_all_mpts, TrieRootPtrs};
+use crate::witness::util::{mem_write_log, mem_write_log_timestamp_zero, stack_peek};
+
+pub const NUM_EXTRA_CYCLES_AFTER: usize = 78;
+pub const NUM_EXTRA_CYCLES_BEFORE: usize = 64;
+/// Memory values used to initialize `MemBefore`.
+pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -100,9 +114,19 @@ pub struct TrieInputs {
     pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
+pub(crate) struct SegmentData<F: RichField> {
+    pub(crate) max_cpu_len: usize,
+    pub(crate) starting_state: GenerationState<F>,
+    pub(crate) memory_before: Vec<(MemoryAddress, U256)>,
+    pub(crate) registers_before: RegistersData,
+    pub(crate) registers_after: RegistersData,
+}
+
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
     state: &mut GenerationState<F>,
     inputs: &GenerationInputs,
+    registers_before: &RegistersData,
+    registers_after: &RegistersData,
 ) {
     let metadata = &inputs.block_metadata;
     let tries = &inputs.tries;
@@ -199,23 +223,84 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
             .collect::<Vec<_>>(),
     );
 
+    // Write initial registers.
+    let registers_before = [
+        registers_before.program_counter,
+        registers_before.is_kernel,
+        registers_before.stack_len,
+        registers_before.stack_top,
+        registers_before.context,
+        registers_before.gas_used,
+    ];
+    ops.extend((0..registers_before.len()).map(|i| {
+        mem_write_log(
+            channel,
+            MemoryAddress::new(0, Segment::RegistersStates, i),
+            state,
+            registers_before[i],
+        )
+    }));
+
+    let length = registers_before.len();
+
+    // Write final registers.
+    let registers_after = [
+        registers_after.program_counter,
+        registers_after.is_kernel,
+        registers_after.stack_len,
+        registers_after.stack_top,
+        registers_after.context,
+        registers_after.gas_used,
+    ];
+    ops.extend((0..registers_before.len()).map(|i| {
+        mem_write_log(
+            channel,
+            MemoryAddress::new(0, Segment::RegistersStates, length + i),
+            state,
+            registers_after[i],
+        )
+    }));
+
     state.memory.apply_ops(&ops);
     state.traces.memory_ops.extend(ops);
 }
 
-pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
     config: &StarkConfig,
+    segment_data: SegmentData<F>,
     timing: &mut TimingTree,
-) -> anyhow::Result<([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues)> {
-    let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
-        .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
+) -> anyhow::Result<(
+    [Vec<PolynomialValues<F>>; NUM_TABLES],
+    PublicValues,
+    Vec<Vec<F>>,
+)> {
+    // Initialize the state with the state at the end of the
+    // previous segment execution, if any.
 
-    apply_metadata_and_tries_memops(&mut state, &inputs);
+    let SegmentData {
+        max_cpu_len,
+        starting_state: mut state,
+        memory_before,
+        registers_before,
+        registers_after,
+    } = segment_data;
 
-    let cpu_res = timed!(timing, "simulate CPU", simulate_cpu(&mut state));
-    if cpu_res.is_err() {
+    for &(address, val) in &memory_before {
+        state.memory.set(address, val);
+    }
+
+    apply_metadata_and_tries_memops(&mut state, &inputs, &registers_before, &registers_after);
+
+    let cpu_res = timed!(
+        timing,
+        "simulate CPU",
+        simulate_cpu(&mut state, max_cpu_len)
+    );
+    let final_registers = if let Ok(res) = cpu_res {
+        res
+    } else {
         // Retrieve previous PC (before jumping to KernelPanic), to see if we reached
         // `hash_final_tries`. We will output debugging information on the final
         // tries only if we got a root mismatch.
@@ -263,7 +348,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         }
 
         cpu_res?;
-    }
+        RegistersState::default()
+    };
 
     log::info!(
         "Trace lengths (before padding): {:?}",
@@ -293,32 +379,63 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         gas_used_after,
     };
 
+    // `mem_before` and `mem_after` are intialized with an empty cap.
+    // But they are set to the caps of `MemBefore` and `MemAfter`
+    // respectively while proving.
     let public_values = PublicValues {
         trie_roots_before,
         trie_roots_after,
         block_metadata: inputs.block_metadata,
         block_hashes: inputs.block_hashes,
         extra_block_data,
+        registers_before,
+        registers_after,
+        mem_before: MemCap { mem_cap: vec![] },
+        mem_after: MemCap { mem_cap: vec![] },
     };
 
-    let tables = timed!(
+    let (tables, final_values) = timed!(
         timing,
         "convert trace data to tables",
-        state.traces.into_tables(all_stark, config, timing)
+        state
+            .traces
+            .into_tables(all_stark, &memory_before, config, timing)
     );
-    Ok((tables, public_values))
+    Ok((tables, public_values, final_values))
 }
 
-fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
+fn simulate_cpu<F: Field>(
+    state: &mut GenerationState<F>,
+    max_cpu_len: usize,
+) -> anyhow::Result<RegistersState> {
     let halt_pc = KERNEL.global_labels["halt"];
-
+    let halt_final_pc = KERNEL.global_labels["halt_final"];
+    let mut final_registers = RegistersState::default();
+    let mut running = true;
     loop {
         // If we've reached the kernel's halt routine, and our trace length is a power
         // of 2, stop.
         let pc = state.registers.program_counter;
         let halt = state.registers.is_kernel && pc == halt_pc;
-        if halt {
+        // If the maximum trace length (minus some cycles for running `exc_stop`) is
+        // reached, or if we reached the halt routine, raise the stop exception.
+        if running && (halt || state.traces.clock() == max_cpu_len - NUM_EXTRA_CYCLES_AFTER) {
+            running = false;
+            final_registers = state.registers;
+            // If `stack_len` is 0, `stack_top` still contains a residual value.
+            if final_registers.stack_len == 0 {
+                final_registers.stack_top = 0.into();
+            }
+            final_exception(state)?;
+        }
+        let halt_final = pc == halt_final_pc;
+        if halt_final {
             log::info!("CPU halted after {} cycles", state.traces.clock());
+            log::info!(
+                "halt label at {}, halt_final label at {}",
+                halt_pc,
+                halt_final_pc
+            );
 
             // Padding
             let mut row = CpuColumnsView::<F>::default();
@@ -332,16 +449,105 @@ fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> 
             loop {
                 state.traces.push_cpu(row);
                 row.clock += F::ONE;
-                if state.traces.clock().is_power_of_two() {
+                if (state.traces.clock() - 1).is_power_of_two() {
                     break;
                 }
             }
 
-            log::info!("CPU trace padded to {} cycles", state.traces.clock());
+            log::info!("CPU trace padded to {} cycles", state.traces.clock() - 1);
 
-            return Ok(());
+            return Ok(final_registers);
         }
 
         transition(state)?;
+    }
+    Ok(final_registers)
+}
+
+fn simulate_cpu_between_labels_and_get_user_jumps<F: Field>(
+    initial_label: &str,
+    final_label: &str,
+    state: &mut GenerationState<F>,
+) -> Option<HashMap<usize, BTreeSet<usize>>> {
+    if state.jumpdest_table.is_some() {
+        None
+    } else {
+        const JUMP_OPCODE: u8 = 0x56;
+        const JUMPI_OPCODE: u8 = 0x57;
+
+        let halt_pc = KERNEL.global_labels[final_label];
+        let mut jumpdest_addresses: HashMap<_, BTreeSet<usize>> = HashMap::new();
+
+        state.registers.program_counter = KERNEL.global_labels[initial_label];
+        let initial_clock = state.traces.clock();
+        let initial_context = state.registers.context;
+
+        log::debug!("Simulating CPU for jumpdest analysis.");
+
+        loop {
+            // skip jumpdest table validations in simulations
+            if state.registers.is_kernel
+                && state.registers.program_counter == KERNEL.global_labels["jumpdest_analysis"]
+            {
+                state.registers.program_counter = KERNEL.global_labels["jumpdest_analysis_end"]
+            }
+            let pc = state.registers.program_counter;
+            let context = state.registers.context;
+            let mut halt = state.registers.is_kernel
+                && pc == halt_pc
+                && state.registers.context == initial_context;
+            let Ok(opcode) = u256_to_u8(state.memory.get(MemoryAddress::new(
+                context,
+                Segment::Code,
+                state.registers.program_counter,
+            ))) else {
+                log::debug!(
+                    "Simulated CPU for jumpdest analysis halted after {} cycles",
+                    state.traces.clock() - initial_clock
+                );
+                return Some(jumpdest_addresses);
+            };
+            let cond = if let Ok(cond) = stack_peek(state, 1) {
+                cond != U256::zero()
+            } else {
+                false
+            };
+            if !state.registers.is_kernel
+                && (opcode == JUMP_OPCODE || (opcode == JUMPI_OPCODE && cond))
+            {
+                // Avoid deeper calls to abort
+                let Ok(jumpdest) = u256_to_usize(state.registers.stack_top) else {
+                    log::debug!(
+                        "Simulated CPU for jumpdest analysis halted after {} cycles",
+                        state.traces.clock() - initial_clock
+                    );
+                    return Some(jumpdest_addresses);
+                };
+                state.memory.set(
+                    MemoryAddress::new(context, Segment::JumpdestBits, jumpdest),
+                    U256::one(),
+                );
+                let jumpdest_opcode =
+                    state
+                        .memory
+                        .get(MemoryAddress::new(context, Segment::Code, jumpdest));
+                if let Some(ctx_addresses) = jumpdest_addresses.get_mut(&context) {
+                    ctx_addresses.insert(jumpdest);
+                } else {
+                    jumpdest_addresses.insert(context, BTreeSet::from([jumpdest]));
+                }
+            }
+            if halt {
+                final_exception(state);
+            }
+            let halt_final = state.registers.program_counter == KERNEL.global_labels["halt_final"];
+            if halt_final || transition(state).is_err() {
+                log::debug!(
+                    "Simulated CPU for jumpdest analysis halted after {} cycles",
+                    state.traces.clock() - initial_clock
+                );
+                return Some(jumpdest_addresses);
+            }
+        }
     }
 }

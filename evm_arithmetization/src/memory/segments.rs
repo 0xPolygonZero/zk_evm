@@ -75,10 +75,13 @@ pub(crate) enum Segment {
     ContextCheckpoints = 32 << SEGMENT_SCALING_FACTOR,
     /// List of 256 previous block hashes.
     BlockHashes = 33 << SEGMENT_SCALING_FACTOR,
+    /// Segment storing the registers before/after the current execution,
+    /// as well as `exit_kernel` for the `registers_before`, in that order.
+    RegistersStates = 34 << SEGMENT_SCALING_FACTOR,
 }
 
 impl Segment {
-    pub(crate) const COUNT: usize = 34;
+    pub(crate) const COUNT: usize = 35;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
     pub(crate) const fn unscale(&self) -> usize {
@@ -121,6 +124,7 @@ impl Segment {
             Self::TouchedAddresses,
             Self::ContextCheckpoints,
             Self::BlockHashes,
+            Self::RegistersStates,
         ]
     }
 
@@ -161,6 +165,7 @@ impl Segment {
             Segment::TouchedAddresses => "SEGMENT_TOUCHED_ADDRESSES",
             Segment::ContextCheckpoints => "SEGMENT_CONTEXT_CHECKPOINTS",
             Segment::BlockHashes => "SEGMENT_BLOCK_HASHES",
+            Segment::RegistersStates => "SEGMENT_REGISTERS_STATES",
         }
     }
 
@@ -200,6 +205,7 @@ impl Segment {
             Segment::TouchedAddresses => 256,
             Segment::ContextCheckpoints => 256,
             Segment::BlockHashes => 256,
+            Segment::RegistersStates => 256,
         }
     }
 

@@ -17,7 +17,7 @@ fn test_encode_rlp_scalar_small() -> Result<()> {
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_kernel(encode_rlp_scalar, initial_stack);
 
-    interpreter.run()?;
+    interpreter.run(None)?;
     let expected_stack = vec![pos + U256::from(1)]; // pos' = pos + rlp_len = 2 + 1
     let expected_rlp = vec![0, 0, 42];
     assert_eq!(interpreter.stack(), expected_stack);
@@ -37,7 +37,7 @@ fn test_encode_rlp_scalar_medium() -> Result<()> {
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_kernel(encode_rlp_scalar, initial_stack);
 
-    interpreter.run()?;
+    interpreter.run(None)?;
     let expected_stack = vec![pos + U256::from(4)]; // pos' = pos + rlp_len = 2 + 4
     let expected_rlp = vec![0, 0, 0x80 + 3, 0x01, 0x23, 0x45];
     assert_eq!(interpreter.stack(), expected_stack);
@@ -57,7 +57,7 @@ fn test_encode_rlp_160() -> Result<()> {
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_kernel(encode_rlp_fixed, initial_stack);
 
-    interpreter.run()?;
+    interpreter.run(None)?;
     let expected_stack = vec![pos + U256::from(1 + 20)]; // pos'
     #[rustfmt::skip]
     let expected_rlp = vec![0x80 + 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x23, 0x45];
@@ -78,7 +78,7 @@ fn test_encode_rlp_256() -> Result<()> {
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_kernel(encode_rlp_fixed, initial_stack);
 
-    interpreter.run()?;
+    interpreter.run(None)?;
     let expected_stack = vec![pos + U256::from(1 + 32)]; // pos'
     #[rustfmt::skip]
     let expected_rlp = vec![0x80 + 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x23, 0x45];
@@ -105,7 +105,7 @@ fn test_prepend_rlp_list_prefix_small() -> Result<()> {
         1, 2, 3, 4, 5,
     ]);
 
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let expected_rlp_len = 6.into();
     let expected_start_pos = U256::from(Segment::RlpRaw as usize + 8);
@@ -142,7 +142,7 @@ fn test_prepend_rlp_list_prefix_large() -> Result<()> {
         50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
     ]);
 
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let expected_rlp_len = 62.into();
     let expected_start_pos = U256::from(Segment::RlpRaw as usize + 7);

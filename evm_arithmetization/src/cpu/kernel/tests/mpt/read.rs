@@ -39,7 +39,7 @@ fn mpt_read() -> Result<()> {
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
         .expect("The stack should not overflow");
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     assert_eq!(interpreter.stack().len(), 1);
     let result_ptr = interpreter.stack()[0].as_usize();

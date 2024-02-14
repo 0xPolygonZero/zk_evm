@@ -47,6 +47,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
+
     let mut initial_block_hashes = vec![H256::default(); 256];
     initial_block_hashes[255] = H256::from_uint(&0x200.into());
     let inputs = GenerationInputs {
@@ -74,8 +75,18 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     // Initialize the preprocessed circuits for the zkEVM.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 9..11, 12..13, 14..15, 9..11, 12..13, 17..18], /* Minimal ranges to prove an
-                                                                  * empty list */
+        // Minimal ranges to prove an empty list
+        &[
+            16..17,
+            8..10,
+            7..11,
+            4..15,
+            8..11,
+            4..13,
+            11..18,
+            8..18,
+            10..18,
+        ],
         &config,
     );
 
@@ -108,37 +119,107 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         assert_eq!(all_circuits, all_circuits_from_bytes);
     }
 
+    let max_cpu_len = 1 << 20;
     let mut timing = TimingTree::new("prove", log::Level::Info);
-    let (root_proof, public_values) =
-        all_circuits.prove_root(&all_stark, &config, inputs, &mut timing, None)?;
+
+    let root_proof_data = all_circuits.prove_segment(
+        &all_stark,
+        &config,
+        inputs.clone(),
+        max_cpu_len,
+        0,
+        &mut timing,
+        None,
+    )?;
+
+    let ProverOutputData {
+        proof_with_pis: root_proof,
+        public_values,
+    } = root_proof_data;
     timing.filter(Duration::from_millis(100)).print();
     all_circuits.verify_root(root_proof.clone())?;
 
+    let final_root_proof_data = all_circuits.prove_segment(
+        &all_stark,
+        &config,
+        inputs,
+        max_cpu_len,
+        1,
+        &mut timing,
+        None,
+    )?;
+    let ProverOutputData {
+        proof_with_pis: final_root_proof,
+        public_values: final_public_values,
+        ..
+    } = final_root_proof_data;
+    all_circuits.verify_root(final_root_proof.clone())?;
+
+    let first_mem_before = public_values.mem_before.mem_cap.clone();
+    let first_mem_after = public_values.mem_after.mem_cap.clone();
+    let final_mem_before = final_public_values.mem_before.mem_cap.clone();
+    let final_mem_after = final_public_values.mem_after.mem_cap.clone();
+
     // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&root_proof.public_inputs);
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &root_proof.public_inputs,
+        first_mem_before.len(),
+        first_mem_after.len(),
+    );
     assert_eq!(retrieved_public_values, public_values);
 
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &final_root_proof.public_inputs,
+        final_mem_before.len(),
+        final_mem_after.len(),
+    );
+    assert_eq!(retrieved_public_values, final_public_values);
+
     // We can duplicate the proofs here because the state hasn't mutated.
-    let (agg_proof, agg_public_values) = all_circuits.prove_aggregation(
-        false,
-        &root_proof,
-        public_values.clone(),
-        false,
-        &root_proof,
-        public_values,
-    )?;
-    all_circuits.verify_aggregation(&agg_proof)?;
+    let (segmented_agg_proof, segmented_agg_public_values) = all_circuits
+        .prove_segment_aggregation(
+            false,
+            &root_proof,
+            public_values.clone(),
+            false,
+            &final_root_proof,
+            final_public_values,
+        )?;
+    all_circuits.verify_segment_aggregation(&segmented_agg_proof)?;
 
     // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&agg_proof.public_inputs);
-    assert_eq!(retrieved_public_values, agg_public_values);
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &segmented_agg_proof.public_inputs,
+        segmented_agg_public_values.mem_before.mem_cap.len(),
+        segmented_agg_public_values.mem_before.mem_cap.len(),
+    );
+    assert_eq!(retrieved_public_values, segmented_agg_public_values);
+
+    let (txn_proof, txn_public_values) = all_circuits.prove_transaction_aggregation(
+        None,
+        &segmented_agg_proof,
+        segmented_agg_public_values,
+    )?;
+    all_circuits.verify_txn_aggregation(&txn_proof)?;
+
+    // Test retrieved public values from the proof public inputs.
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &txn_proof.public_inputs,
+        txn_public_values.mem_before.mem_cap.len(),
+        txn_public_values.mem_before.mem_cap.len(),
+    );
+    assert_eq!(retrieved_public_values, txn_public_values);
 
     let (block_proof, block_public_values) =
-        all_circuits.prove_block(None, &agg_proof, agg_public_values)?;
+        all_circuits.prove_block(None, &txn_proof, txn_public_values)?;
     all_circuits.verify_block(&block_proof)?;
 
     // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&block_proof.public_inputs);
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &block_proof.public_inputs,
+        block_public_values.mem_before.mem_cap.len(),
+        block_public_values.mem_before.mem_cap.len(),
+    );
     assert_eq!(retrieved_public_values, block_public_values);
 
     // Get the verifier associated to these preprocessed circuits, and have it

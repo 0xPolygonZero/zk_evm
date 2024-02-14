@@ -40,7 +40,7 @@ fn process_type_0_txn() -> Result<()> {
     // rlp.encode(signed_txn).hex()
     interpreter.set_rlp_memory(hex!("f861050a8255f0940000000000000000000000000000000000000000648242421ca07c5c61ed975ebd286f6b027b8c504842e50a47d318e1e801719dd744fe93e6c6a01e7b5119b57dd54e175ff2f055c91f3ab1b53eba0b2c184f347cdff0e745aca2").to_vec());
 
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     assert_eq!(interpreter.get_txn_field(ChainIdPresent), 0.into());
     assert_eq!(interpreter.get_txn_field(ChainId), 0.into());

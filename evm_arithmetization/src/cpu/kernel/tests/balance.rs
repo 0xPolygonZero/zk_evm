@@ -48,16 +48,16 @@ fn prepare_interpreter<F: Field>(
     if trie_data.is_empty() {
         // In the assembly we skip over 0, knowing trie_data[0] = 0 by default.
         // Since we don't explicitly set it to 0, we need to do so here.
-        trie_data.push(0.into());
+        trie_data.push(Some(0.into()));
     }
     let value_ptr = trie_data.len();
-    trie_data.push(account.nonce);
-    trie_data.push(account.balance);
+    trie_data.push(Some(account.nonce));
+    trie_data.push(Some(account.balance));
     // In memory, storage_root gets interpreted as a pointer to a storage trie,
     // so we have to ensure the pointer is valid. It's easiest to set it to 0,
     // which works as an empty node, since trie_data[0] = 0 = MPT_TYPE_EMPTY.
-    trie_data.push(H256::zero().into_uint());
-    trie_data.push(account.code_hash.into_uint());
+    trie_data.push(Some(H256::zero().into_uint()));
+    trie_data.push(Some(account.code_hash.into_uint()));
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
     interpreter
@@ -70,7 +70,7 @@ fn prepare_interpreter<F: Field>(
         .push(k.try_into_u256().unwrap())
         .expect("The stack should not overflow"); // key
 
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(
         interpreter.stack().len(),
         0,
@@ -86,7 +86,7 @@ fn prepare_interpreter<F: Field>(
     interpreter
         .push(1.into()) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     assert_eq!(
         interpreter.stack().len(),
@@ -125,7 +125,7 @@ fn test_balance() -> Result<()> {
     interpreter
         .push(U256::from_big_endian(address.as_bytes()))
         .expect("The stack should not overflow");
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     assert_eq!(interpreter.stack(), vec![balance]);
 

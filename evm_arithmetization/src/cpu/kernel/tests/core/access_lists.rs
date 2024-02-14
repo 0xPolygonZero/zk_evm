@@ -47,7 +47,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
         MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
         U256::from(n),
     );
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(interpreter.stack(), &[U256::zero()]);
     assert_eq!(
         interpreter
@@ -72,7 +72,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
         MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
         U256::from(n),
     );
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(interpreter.stack(), &[U256::one()]);
     assert_eq!(
         interpreter
@@ -139,7 +139,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
         U256::from(3 * n),
     );
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(interpreter.stack(), &[storage_key_in_list.2, U256::zero()]);
     assert_eq!(
         interpreter
@@ -177,7 +177,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
         U256::from(3 * n),
     );
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(
         interpreter.stack(),
         &[storage_key_not_in_list.2, U256::one()]

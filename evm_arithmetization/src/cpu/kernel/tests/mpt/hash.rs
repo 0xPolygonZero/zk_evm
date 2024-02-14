@@ -125,7 +125,7 @@ fn test_state_trie(trie_inputs: TrieInputs) -> Result<()> {
     interpreter
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     assert_eq!(
         interpreter.stack().len(),

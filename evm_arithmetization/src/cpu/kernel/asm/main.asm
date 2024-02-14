@@ -1,5 +1,69 @@
 global main:
+    PUSH @SEGMENT_REGISTERS_STATES
+    // stack: addr_registers
+    // First, set the registers correctly and verify their values.
+    PUSH 2
+    %stack_length SUB
+    // stack: prev_stack_len, addr_registers
+    // First, check the stack length.
+    DUP1
+    DUP3 %add_const(2) 
+    // stack: stack_len_addr, prev_stack_len, prev_stack_len, addr_registers
+    MLOAD_GENERAL
+    %assert_eq
+
+    // Now, we want to check the stack top. For this, we load
+    // the value at offset (prev_stack_len - 1) * (stack_len > 0),
+    // since we do not constrain the stack top when the stack is empty.
+    // stack: prev_stack_len, addr_registers
+    DUP1 PUSH 0 LT
+    // stack: 0 < prev_stack_len, prev_stack_len, addr_registers
+    PUSH 1 DUP3 SUB
+    // stack: prev_stack_len - 1, 0 < prev_stack_len, prev_stack_len, addr_registers
+    MUL
+    PUSH @SEGMENT_STACK
+    GET_CONTEXT
+    %build_address
+    // stack: stack_top_addr, prev_stack_len, addr_registers
+    MLOAD_GENERAL
+
+    // stack: stack_top, prev_stack_len, addr_registers
+    DUP3 %add_const(3)
+    MLOAD_GENERAL
+    // stack: pv_stack_top, stack_top, prev_stack_len, addr_registers
+    SUB
+    // If the stack length was previously 0, we do not need to check the previous stack top.
+    MUL
+    // stack: (pv_stack_top - stack_top) * prev_stack_len, addr_registers
+    %assert_zero
+
+    // Check the context.
+    GET_CONTEXT
+    // stack: context, addr_registers
+    DUP2 %add_const(4)
+    MLOAD_GENERAL
+    // stack: stored_context, context, addr_registers
+    %assert_eq
+
+    // Construct `exit_kernel`.
+    DUP1 MLOAD_GENERAL
+    // stack: program_counter, addr_registers
+    DUP2 %increment
+    MLOAD_GENERAL
+    // stack: is_kernel, program_counter, addr_registers
+    %shl_const(32) ADD
+    // stack: is_kernel << 32 + program_counter, addr_registers
+    SWAP1 %add_const(5) MLOAD_GENERAL
+    // stack: gas_used, is_kernel << 32 + program_counter
+    %shl_const(192) ADD
+    // stack: kexit_info =  gas_used << 192 + is_kernel << 32 + program_counter
+    // Now, we set the PC, is_kernel and gas_used to the correct values and continue the execution.
+    EXIT_KERNEL
+
+global main_contd:
     // First, hash the kernel code
+    // Start with PUSH0 to avoid having a BytePacking operation at timestamp 0.
+    // Timestamp 0 is reserved for memory initialization.
     %mload_global_metadata(@GLOBAL_METADATA_KERNEL_LEN)
     PUSH 0
     // stack: addr, len
@@ -9,15 +73,9 @@ global main:
     // stack: expected_hash, hash
     %assert_eq
 
-    // Initialise the shift table
-    %shift_table_init
-
     // Initialize the RLP DATA pointer to its initial position (ctx == virt == 0, segment = RLP)
     PUSH @SEGMENT_RLP_RAW
     %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
-
-    // Encode constant nodes
-    %initialize_rlp_segment
    
     // Initialize the state, transaction and receipt trie root pointers.
     PROVER_INPUT(trie_ptr::state)

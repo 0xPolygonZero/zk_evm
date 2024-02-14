@@ -66,7 +66,7 @@ fn test_process_receipt() -> Result<()> {
     interpreter.set_global_metadata_field(GlobalMetadata::LogsPayloadLen, 58.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, U256::from(1));
     interpreter.set_global_metadata_field(GlobalMetadata::ReceiptTrieRoot, 500.into());
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let segment_read = interpreter.get_memory_segment(Segment::TrieData);
 
@@ -197,7 +197,7 @@ fn test_receipt_encoding() -> Result<()> {
     interpreter.set_global_metadata_field(GlobalMetadata::LogsPayloadLen, 157.into());
     interpreter.set_memory_segment(Segment::TrieData, receipt);
 
-    interpreter.run()?;
+    interpreter.run(None)?;
     let rlp_pos = interpreter.pop().expect("The stack should not be empty");
 
     let rlp_read: Vec<u8> = interpreter.get_rlp_memory();
@@ -274,7 +274,7 @@ fn test_receipt_bloom_filter() -> Result<()> {
     interpreter.set_memory_segment(Segment::LogsData, logs);
     interpreter.set_memory_segment(Segment::Logs, vec![0.into()]);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, U256::from(1));
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     // Second transaction.
     let loaded_bloom_u256 = interpreter.get_memory_segment(Segment::TxnBloom);
@@ -309,7 +309,7 @@ fn test_receipt_bloom_filter() -> Result<()> {
     interpreter.set_memory_segment(Segment::LogsData, logs2);
     interpreter.set_memory_segment(Segment::Logs, vec![0.into()]);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, U256::from(1));
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let second_bloom_bytes = vec![
         00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00,
@@ -444,7 +444,7 @@ fn test_mpt_insert_receipt() -> Result<()> {
     interpreter.set_memory_segment(Segment::TrieData, cur_trie_data.clone());
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, cur_trie_data.len().into());
     // First insertion.
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     // receipt_1:
     let status_1 = 1;
@@ -514,7 +514,7 @@ fn test_mpt_insert_receipt() -> Result<()> {
     interpreter.generation_state.registers.program_counter = mpt_insert;
     interpreter.set_memory_segment(Segment::TrieData, cur_trie_data.clone());
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, cur_trie_data.len().into());
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     // Finally, check that the hashes correspond.
     let mpt_hash_receipt = KERNEL.global_labels["mpt_hash_receipt_trie"];
@@ -526,7 +526,7 @@ fn test_mpt_insert_receipt() -> Result<()> {
         .push(1.into()) // Initial length of the trie data segment, unused.; // Initial length of the trie data
         // segment, unused.
         .expect("The stack should not overflow");
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(
         interpreter.stack()[1],
         U256::from(hex!(
@@ -574,7 +574,7 @@ fn test_bloom_two_logs() -> Result<()> {
     interpreter.set_memory_segment(Segment::LogsData, logs);
     interpreter.set_memory_segment(Segment::Logs, vec![0.into(), 4.into()]);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, U256::from(2));
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let loaded_bloom_bytes: Vec<u8> = interpreter
         .get_memory_segment(Segment::TxnBloom)

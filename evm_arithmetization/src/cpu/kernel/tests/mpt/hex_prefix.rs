@@ -17,7 +17,7 @@ fn hex_prefix_even_nonterminated() -> Result<()> {
     let rlp_pos = U256::from(Segment::RlpRaw as usize);
     let initial_stack = vec![retdest, terminated, packed_nibbles, num_nibbles, rlp_pos];
     let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(hex_prefix, initial_stack);
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(interpreter.stack(), vec![rlp_pos + U256::from(5)]);
 
     assert_eq!(
@@ -45,7 +45,7 @@ fn hex_prefix_odd_terminated() -> Result<()> {
     let rlp_pos = U256::from(Segment::RlpRaw as usize);
     let initial_stack = vec![retdest, terminated, packed_nibbles, num_nibbles, rlp_pos];
     let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(hex_prefix, initial_stack);
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(interpreter.stack(), vec![rlp_pos + U256::from(4)]);
 
     assert_eq!(
@@ -72,7 +72,7 @@ fn hex_prefix_odd_terminated_tiny() -> Result<()> {
     let rlp_pos = U256::from(Segment::RlpRaw as usize + 2);
     let initial_stack = vec![retdest, terminated, packed_nibbles, num_nibbles, rlp_pos];
     let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(hex_prefix, initial_stack);
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(
         interpreter.stack(),
         vec![U256::from(Segment::RlpRaw as usize + 3)]

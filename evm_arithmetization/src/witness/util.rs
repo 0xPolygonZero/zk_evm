@@ -135,6 +135,15 @@ pub(crate) fn mem_write_log<F: Field>(
     )
 }
 
+pub(crate) fn mem_write_log_timestamp_zero<F: Field>(
+    address: MemoryAddress,
+    state: &GenerationState<F>,
+    val: U256,
+) -> MemoryOp {
+    // Code  corresponds to channel number 0.
+    MemoryOp::new(MemoryChannel::Code, 0, address, MemoryOpKind::Write, val)
+}
+
 pub(crate) fn mem_read_code_with_log_and_fill<F: Field>(
     address: MemoryAddress,
     state: &GenerationState<F>,
@@ -298,7 +307,7 @@ pub(crate) fn keccak_sponge_log<F: Field>(
         xor_into_sponge(state, &mut sponge_state, block.try_into().unwrap());
         state
             .traces
-            .push_keccak_bytes(sponge_state, clock * NUM_CHANNELS);
+            .push_keccak_bytes(sponge_state, (clock - 1) * NUM_CHANNELS + 1);
         keccakf_u8s(&mut sponge_state);
     }
 
@@ -325,11 +334,11 @@ pub(crate) fn keccak_sponge_log<F: Field>(
     xor_into_sponge(state, &mut sponge_state, &final_block);
     state
         .traces
-        .push_keccak_bytes(sponge_state, clock * NUM_CHANNELS);
+        .push_keccak_bytes(sponge_state, (clock - 1) * NUM_CHANNELS + 1);
 
     state.traces.push_keccak_sponge(KeccakSpongeOp {
         base_address,
-        timestamp: clock * NUM_CHANNELS,
+        timestamp: (clock - 1) * NUM_CHANNELS + 1,
         input,
     });
 }
@@ -356,7 +365,7 @@ pub(crate) fn byte_packing_log<F: Field>(
     state.traces.push_byte_packing(BytePackingOp {
         is_read: true,
         base_address,
-        timestamp: clock * NUM_CHANNELS,
+        timestamp: (clock - 1) * NUM_CHANNELS + 1,
         bytes,
     });
 }
@@ -389,7 +398,7 @@ pub(crate) fn byte_unpacking_log<F: Field>(
     state.traces.push_byte_packing(BytePackingOp {
         is_read: false,
         base_address,
-        timestamp: clock * NUM_CHANNELS,
+        timestamp: (clock - 1) * NUM_CHANNELS + 1,
         bytes,
     });
 }

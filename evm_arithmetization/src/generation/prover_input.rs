@@ -198,12 +198,12 @@ impl<F: Field> GenerationState<F> {
         m_start_loc: usize,
     ) -> (Vec<U256>, Vec<U256>) {
         let n = self.memory.contexts.len();
-        let a = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
-            [a_start_loc..a_start_loc + len];
-        let b = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
-            [b_start_loc..b_start_loc + len];
-        let m = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
-            [m_start_loc..m_start_loc + len];
+        let a = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()]
+            .return_content()[a_start_loc..a_start_loc + len];
+        let b = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()]
+            .return_content()[b_start_loc..b_start_loc + len];
+        let m = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()]
+            .return_content()[m_start_loc..m_start_loc + len];
 
         let a_biguint = mem_vec_to_biguint(a);
         let b_biguint = mem_vec_to_biguint(b);
@@ -359,6 +359,17 @@ impl<F: Field> GenerationState<F> {
         Ok(code)
     }
 
+    fn set_code_len(&mut self, len: usize) {
+        self.memory.set(
+            MemoryAddress::new(
+                self.registers.context,
+                Segment::ContextMetadata,
+                ContextMetadata::CodeSize.unscale(),
+            ),
+            len.into(),
+        )
+    }
+
     fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
         let code_len = u256_to_usize(self.memory.get(MemoryAddress::new(
             context,
@@ -368,7 +379,7 @@ impl<F: Field> GenerationState<F> {
         Ok(code_len)
     }
 
-    fn get_current_code_len(&self) -> Result<usize, ProgramError> {
+    fn get_current_code_len(&mut self) -> Result<usize, ProgramError> {
         self.get_code_len(self.registers.context)
     }
 

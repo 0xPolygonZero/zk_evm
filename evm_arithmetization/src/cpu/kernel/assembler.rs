@@ -30,7 +30,7 @@ pub struct Kernel {
     /// Computed using `hash_kernel`.
     pub(crate) code_hash: H256,
 
-    pub(crate) global_labels: HashMap<String, usize>,
+    pub global_labels: HashMap<String, usize>,
     pub(crate) ordered_labels: Vec<String>,
 
     /// Map from `PROVER_INPUT` offsets to their corresponding `ProverInputFn`.

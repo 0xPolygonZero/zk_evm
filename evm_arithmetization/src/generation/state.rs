@@ -24,11 +24,11 @@ pub(crate) struct GenerationStateCheckpoint {
 }
 
 #[derive(Debug)]
-pub(crate) struct GenerationState<F: Field> {
+pub struct GenerationState<F: Field> {
     pub(crate) inputs: GenerationInputs,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
-    pub(crate) traces: Traces<F>,
+    pub traces: Traces<F>,
 
     /// Prover inputs containing RLP data, in reverse order so that the next
     /// input can be obtained via `pop()`.
@@ -63,7 +63,8 @@ impl<F: Field> GenerationState<F> {
         let (trie_roots_ptrs, trie_data) =
             load_all_mpts(trie_inputs).expect("Invalid MPT data for preinitialization");
 
-        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content = trie_data;
+        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
+            trie_data.iter().map(|&val| Some(val)).collect();
 
         trie_roots_ptrs
     }
@@ -147,7 +148,7 @@ impl<F: Field> GenerationState<F> {
         let code = self.memory.contexts[ctx].segments[Segment::Returndata.unscale()].content
             [..returndata_size]
             .iter()
-            .map(|x| x.low_u32() as u8)
+            .map(|x| x.unwrap_or_default().low_u32() as u8)
             .collect::<Vec<_>>();
         debug_assert_eq!(keccak(&code), codehash);
 

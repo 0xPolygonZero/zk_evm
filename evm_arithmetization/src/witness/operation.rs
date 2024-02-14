@@ -973,7 +973,10 @@ pub(crate) fn generate_exception<F: Field>(
 
     let gas = U256::from(state.registers.gas_used);
 
-    let exc_info = U256::from(state.registers.program_counter) + (gas << 192);
+    // `is_kernel_mode` is only necessary for the halting `exc_stop` exception.
+    let exc_info = U256::from(state.registers.program_counter)
+        + (U256::from(state.registers.is_kernel as u64) << 32)
+        + (gas << 192);
 
     // Get the opcode so we can provide it to the range_check operation.
     let code_context = state.registers.code_context();

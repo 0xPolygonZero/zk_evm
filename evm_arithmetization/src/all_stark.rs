@@ -1,4 +1,5 @@
 use core::ops::Deref;
+use std::iter;
 
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
@@ -19,10 +20,12 @@ use crate::keccak::keccak_stark::KeccakStark;
 use crate::keccak_sponge::columns::KECCAK_RATE_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeStark;
-use crate::logic;
 use crate::logic::LogicStark;
+use crate::mem_after::mem_after_stark::{self, MemAfterStark};
+use crate::mem_before::mem_before_stark::{self, MemBeforeStark};
 use crate::memory::memory_stark;
 use crate::memory::memory_stark::MemoryStark;
+use crate::{logic, mem_before};
 
 /// Structure containing all STARKs and the cross-table lookups.
 #[derive(Clone)]
@@ -34,6 +37,8 @@ pub struct AllStark<F: RichField + Extendable<D>, const D: usize> {
     pub(crate) keccak_sponge_stark: KeccakSpongeStark<F, D>,
     pub(crate) logic_stark: LogicStark<F, D>,
     pub(crate) memory_stark: MemoryStark<F, D>,
+    pub(crate) mem_before_stark: MemBeforeStark<F, D>,
+    pub(crate) mem_after_stark: MemAfterStark<F, D>,
     pub(crate) cross_table_lookups: Vec<CrossTableLookup<F>>,
 }
 
@@ -49,6 +54,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Default for AllStark<F, D> {
             keccak_sponge_stark: KeccakSpongeStark::default(),
             logic_stark: LogicStark::default(),
             memory_stark: MemoryStark::default(),
+            mem_before_stark: MemBeforeStark::default(),
+            mem_after_stark: MemAfterStark::default(),
             cross_table_lookups: all_cross_table_lookups(),
         }
     }
@@ -64,6 +71,8 @@ impl<F: RichField + Extendable<D>, const D: usize> AllStark<F, D> {
             self.keccak_sponge_stark.num_lookup_helper_columns(config),
             self.logic_stark.num_lookup_helper_columns(config),
             self.memory_stark.num_lookup_helper_columns(config),
+            self.mem_before_stark.num_lookup_helper_columns(config),
+            self.mem_after_stark.num_lookup_helper_columns(config),
         ]
     }
 }
@@ -80,6 +89,8 @@ pub enum Table {
     KeccakSponge = 4,
     Logic = 5,
     Memory = 6,
+    MemBefore = 7,
+    MemAfter = 8,
 }
 
 impl Deref for Table {
@@ -88,12 +99,13 @@ impl Deref for Table {
     fn deref(&self) -> &Self::Target {
         // Hacky way to implement `Deref` for `Table` so that we don't have to
         // call `Table::Foo as usize`, but perhaps too ugly to be worth it.
-        [&0, &1, &2, &3, &4, &5, &6][*self as TableIdx]
+        [&0, &1, &2, &3, &4, &5, &6, &7, &8][*self as TableIdx]
     }
 }
 
 /// Number of STARK tables.
-pub(crate) const NUM_TABLES: usize = Table::Memory as usize + 1;
+pub(crate) const NUM_TABLES: usize = Table::MemAfter as usize + 1;
+// pub(crate) const NUM_TABLES: usize = Table::MemAfter as usize + 1;
 
 impl Table {
     /// Returns all STARK table indices.
@@ -106,6 +118,8 @@ impl Table {
             Self::KeccakSponge,
             Self::Logic,
             Self::Memory,
+            Self::MemBefore,
+            Self::MemAfter,
         ]
     }
 }
@@ -120,6 +134,8 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
         ctl_keccak_outputs(),
         ctl_logic(),
         ctl_memory(),
+        ctl_mem_before(),
+        ctl_mem_after(),
     ]
 }
 
@@ -288,6 +304,11 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
             Some(byte_packing_stark::ctl_looking_memory_filter(i)),
         )
     });
+    let mem_before_ops = TableWithColumns::new(
+        *Table::MemBefore,
+        mem_before_stark::ctl_data_memory(),
+        Some(mem_before_stark::ctl_filter()),
+    );
     let all_lookers = vec![
         cpu_memory_code_read,
         cpu_push_write_ops,
@@ -298,6 +319,7 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
     .chain(cpu_memory_gp_ops)
     .chain(keccak_sponge_reads)
     .chain(byte_packing_ops)
+    .chain(iter::once(mem_before_ops))
     .collect();
     let memory_looked = TableWithColumns::new(
         *Table::Memory,
@@ -305,4 +327,38 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
         Some(memory_stark::ctl_filter()),
     );
     CrossTableLookup::new(all_lookers, memory_looked)
+}
+
+/// `CrossTableLookup` for `MemBeforeStark` to connect it with the `Memory`
+/// module.
+fn ctl_mem_before<F: Field>() -> CrossTableLookup<F> {
+    let memory_looking = TableWithColumns::new(
+        *Table::Memory,
+        memory_stark::ctl_looking_mem(),
+        Some(memory_stark::ctl_filter_mem_before()),
+    );
+    let mut all_lookers = vec![memory_looking];
+    let mem_before_looked = TableWithColumns::new(
+        *Table::MemBefore,
+        mem_before_stark::ctl_data(),
+        Some(mem_before_stark::ctl_filter()),
+    );
+    CrossTableLookup::new(all_lookers, mem_before_looked)
+}
+
+/// `CrossTableLookup` for `MemAfterStark` to connect it with the `Memory`
+/// module.
+fn ctl_mem_after<F: Field>() -> CrossTableLookup<F> {
+    let memory_looking = TableWithColumns::new(
+        *Table::Memory,
+        memory_stark::ctl_looking_mem(),
+        Some(memory_stark::ctl_filter_mem_after()),
+    );
+    let mut all_lookers = vec![memory_looking];
+    let mem_after_looked = TableWithColumns::new(
+        *Table::MemAfter,
+        mem_after_stark::ctl_data(),
+        Some(mem_after_stark::ctl_filter()),
+    );
+    CrossTableLookup::new(all_lookers, mem_after_looked)
 }

@@ -19,7 +19,7 @@ fn test_mstore_unpacking() -> Result<()> {
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_kernel(mstore_unpacking, initial_stack);
 
-    interpreter.run()?;
+    interpreter.run(None)?;
     assert_eq!(interpreter.stack(), vec![addr + U256::from(4)]);
     assert_eq!(
         &interpreter.get_txn_data(),

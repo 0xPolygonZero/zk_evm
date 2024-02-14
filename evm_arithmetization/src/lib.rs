@@ -191,6 +191,8 @@ pub mod cpu;
 pub mod keccak;
 pub mod keccak_sponge;
 pub mod logic;
+pub mod mem_after;
+pub mod mem_before;
 pub mod memory;
 
 // Proving system components

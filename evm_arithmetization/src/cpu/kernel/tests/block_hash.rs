@@ -25,7 +25,7 @@ fn test_correct_block_hash() -> Result<()> {
     interpreter.set_memory_segment(Segment::BlockHashes, hashes[0..256].to_vec());
     interpreter.set_global_metadata_field(GlobalMetadata::BlockCurrentHash, hashes[256]);
     interpreter.set_global_metadata_field(GlobalMetadata::BlockNumber, 256.into());
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let result = interpreter.stack();
     assert_eq!(
@@ -55,7 +55,7 @@ fn test_big_index_block_hash() -> Result<()> {
     interpreter.set_memory_segment(Segment::BlockHashes, hashes[0..256].to_vec());
     interpreter.set_global_metadata_field(GlobalMetadata::BlockCurrentHash, hashes[256]);
     interpreter.set_global_metadata_field(GlobalMetadata::BlockNumber, cur_block_number.into());
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let result = interpreter.stack();
     assert_eq!(
@@ -86,7 +86,7 @@ fn test_small_index_block_hash() -> Result<()> {
     interpreter.set_memory_segment(Segment::BlockHashes, hashes[0..256].to_vec());
     interpreter.set_global_metadata_field(GlobalMetadata::BlockCurrentHash, hashes[256]);
     interpreter.set_global_metadata_field(GlobalMetadata::BlockNumber, cur_block_number.into());
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let result = interpreter.stack();
     assert_eq!(
@@ -115,7 +115,7 @@ fn test_block_hash_with_overflow() -> Result<()> {
     interpreter.set_memory_segment(Segment::BlockHashes, hashes[0..256].to_vec());
     interpreter.set_global_metadata_field(GlobalMetadata::BlockCurrentHash, hashes[256]);
     interpreter.set_global_metadata_field(GlobalMetadata::BlockNumber, cur_block_number.into());
-    interpreter.run()?;
+    interpreter.run(None)?;
 
     let result = interpreter.stack();
     assert_eq!(
