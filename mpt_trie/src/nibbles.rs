@@ -21,7 +21,7 @@ use uint::FromHexError;
 use crate::utils::{create_mask_of_1s, is_even};
 
 // Use a whole byte for a Nibble just for convenience
-/// A Nibble has 4 bits and is stored as `u8``.
+/// A Nibble has 4 bits and is stored as `u8`.
 pub type Nibble = u8;
 /// Used for the internal representation of a sequence of nibbles.
 pub type NibblesIntern = U512;
@@ -766,7 +766,7 @@ impl Nibbles {
     }
 
     // TODO: REMOVE BEFORE NEXT CRATE VERSION! THIS IS A TEMP HACK!
-    /// Convert to u256 returning an error if not possible.
+    /// Converts to u256 returning an error if not possible.
     pub fn try_into_u256(&self) -> Result<U256, String> {
         match self.count <= 64 {
             false => Err(format!(

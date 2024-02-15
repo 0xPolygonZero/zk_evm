@@ -11,7 +11,7 @@ use crate::partial_trie::{Node, PartialTrie};
 
 #[derive(Debug, Default)]
 /// Statistics for a given trie, consisting of node count aggregated
-/// by time, lowest depth and average depth of leaf of and hash nodes.
+/// by time, lowest depth and average depth of leaf and hash nodes.
 pub struct TrieStats {
     name: Option<String>,
     counts: NodeCounts,
@@ -33,7 +33,7 @@ impl Display for TrieStats {
 }
 
 impl TrieStats {
-    /// Compare with the statistics of another trie.
+    /// Compares with the statistics of another trie.
     pub fn compare(&self, other: &Self) -> TrieComparison {
         TrieComparison {
             node_comp: self.counts.compare(&other.counts),

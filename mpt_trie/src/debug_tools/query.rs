@@ -68,7 +68,7 @@ impl DebugQueryParamsBuilder {
         self
     }
 
-    /// Build a new debug query for a given key.
+    /// Builds a new debug query for a given key.
     pub fn build<K: Into<Nibbles>>(self, k: K) -> DebugQuery {
         DebugQuery {
             k: k.into(),
