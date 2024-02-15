@@ -420,17 +420,6 @@ mod tests {
                 nibbles: nibbles.into(),
             }
         }
-
-        fn with_key(&self, k: &Nibbles) -> bool {
-            self.nibbles.reverse() == *k
-        }
-    }
-
-    fn get_node_full_nibbles_from_list<'a>(
-        nodes: &'a [NodeFullNibbles],
-        k: &'a Nibbles,
-    ) -> Option<&'a NodeFullNibbles> {
-        nodes.iter().find(|x| x.with_key(k))
     }
 
     fn get_all_nodes_in_trie(trie: &TrieType) -> Vec<NodeFullNibbles> {
