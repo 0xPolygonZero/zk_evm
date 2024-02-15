@@ -81,7 +81,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         block_base_fee: 0xa.into(),
         block_gas_used: 26002.into(),
         block_blob_base_fee: 0x2.into(),
-        block_bloom: [0.into(); 8],
+        ..Default::default()
     };
 
     let contract_code = [(keccak(&code), code.clone()), (keccak([]), vec![])].into();

@@ -41,10 +41,13 @@ global hash_initial_tries:
     // stack: trie_data_full_len
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
+    // If txn_idx == 0, update the beacon_root.
+    %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+    ISZERO
+    %jumpi(set_beacon_root)
+
 global start_txn:
     // stack: (empty)
-    // The special case of an empty trie (i.e. for the first transaction)
-    // is handled outside of the kernel.
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
     // stack: txn_nb
     DUP1 %scalar_to_rlp

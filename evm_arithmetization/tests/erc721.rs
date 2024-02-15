@@ -158,6 +158,7 @@ fn test_erc721() -> anyhow::Result<()> {
         block_gas_used: gas_used,
         block_blob_base_fee: 0x2.into(),
         block_bloom: bloom.try_into().unwrap(),
+        ..Default::default()
     };
 
     let inputs = GenerationInputs {

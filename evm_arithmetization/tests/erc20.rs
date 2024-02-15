@@ -94,6 +94,7 @@ fn test_erc20() -> anyhow::Result<()> {
         block_gas_used: gas_used,
         block_blob_base_fee: 0x2.into(),
         block_bloom: bloom,
+        ..Default::default()
     };
 
     let contract_code = [giver_bytecode(), token_bytecode(), vec![]]

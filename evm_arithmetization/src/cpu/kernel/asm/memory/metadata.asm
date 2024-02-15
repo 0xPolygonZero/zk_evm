@@ -447,3 +447,7 @@ global sys_prevrandao:
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_RANDOM)
     %stack (random, kexit_info) -> (kexit_info, random)
     EXIT_KERNEL
+
+%macro parent_beacon_block_root
+    %mload_global_metadata(@GLOBAL_METADATA_PARENT_BEACON_BLOCK_ROOT)
+%endmacro

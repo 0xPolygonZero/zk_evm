@@ -183,6 +183,10 @@ where
             public_values.block_metadata.block_base_fee,
         ),
         (
+            GlobalMetadata::ParentBeaconBlockRoot,
+            h2u(public_values.block_metadata.parent_beacon_block_root),
+        ),
+        (
             GlobalMetadata::BlockCurrentHash,
             h2u(public_values.block_hashes.cur_hash),
         ),
@@ -343,6 +347,10 @@ pub(crate) mod debug_utils {
             (
                 GlobalMetadata::BlockBlobBaseFee,
                 public_values.block_metadata.block_blob_base_fee,
+            ),
+            (
+                GlobalMetadata::ParentBeaconBlockRoot,
+                h2u(public_values.block_metadata.parent_beacon_block_root),
             ),
             (
                 GlobalMetadata::TxnNumberBefore,

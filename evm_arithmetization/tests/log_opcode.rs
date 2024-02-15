@@ -141,9 +141,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         block_gaslimit: 0xffffffffu32.into(),
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
-        block_gas_used: 0.into(),
         block_blob_base_fee: 0x2.into(),
-        block_bloom: [0.into(); 8],
+        ..Default::default()
     };
 
     let mut contract_code = HashMap::new();
@@ -364,7 +363,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             .unwrap(),
             U256::from_dec_str("2722259584404615024560450425766186844160").unwrap(),
         ],
-        block_random: Default::default(),
+        ..Default::default()
     };
 
     let beneficiary_account_after = AccountRlp {

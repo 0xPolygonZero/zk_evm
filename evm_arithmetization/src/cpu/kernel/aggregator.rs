@@ -13,6 +13,7 @@ pub(crate) fn combined_kernel() -> Kernel {
     let files = vec![
         "global jumped_to_0: PANIC",
         "global jumped_to_1: PANIC",
+        include_str!("asm/beacon_roots.asm"),
         include_str!("asm/bignum/add.asm"),
         include_str!("asm/bignum/addmul.asm"),
         include_str!("asm/bignum/cmp.asm"),

@@ -4,11 +4,15 @@ use std::time::Duration;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{BigEndianHash, H256};
+use evm_arithmetization::cpu::kernel::{
+    BEACON_ROOTS_ACCOUNT, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
+};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
 use log::info;
+use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
@@ -33,10 +37,17 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let state_trie = HashedPartialTrie::from(Node::Empty);
+    let state_trie: HashedPartialTrie = Node::Leaf {
+        nibbles: Nibbles::from_bytes_be(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED).unwrap(),
+        value: rlp::encode(&BEACON_ROOTS_ACCOUNT).to_vec(),
+    }
+    .into();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
-    let storage_tries = vec![];
+    let storage_tries = vec![(
+        H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
+        Node::Empty.into(),
+    )];
 
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
