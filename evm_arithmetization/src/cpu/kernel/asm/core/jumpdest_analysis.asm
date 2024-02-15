@@ -349,11 +349,13 @@ check_proof:
 // Non-deterministacally find the closest opcode to addr
 // and call write_table_if_jumpdest so that `@SEGMENT_JUMPDEST_BITS`
 // will contain a 0 if and only if addr is not a jumpdest
+// stack: addr, retdest
+// stack: (empty)
 global verify_non_jumpdest:
     // stack: addr, retdest
     GET_CONTEXT
     SWAP1
-    // stack: addr, ctx, addr
+    // stack: addr, ctx
     PROVER_INPUT(jumpdest_table::non_jumpdest_proof)
     // stack: proof, addr, ctx,
     // Chack that proof <= addr as otherwise it allows
@@ -363,3 +365,9 @@ global verify_non_jumpdest:
     %assert_le
     %write_table_if_jumpdest
     JUMP
+
+%macro verify_non_jumpdest
+    %stack (addr) -> (addr, %%after)
+    %jump(verify_non_jumpdest)
+%%after:
+%endmacro

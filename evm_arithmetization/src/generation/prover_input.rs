@@ -310,12 +310,16 @@ impl<F: Field> GenerationState<F> {
     }
     /// Returns a non-jumpdest proof for the address on the top of the stack. A
     /// non-jumpdest proof is the clossest address to address on the top of
-    /// the stack.
+    /// the stack, if the closses address is >= 32, or zero otherwise.
     fn run_next_non_jumpdest_proof(&mut self) -> Result<U256, ProgramError> {
         let code = self.get_current_code()?;
         let address = u256_to_usize(stack_peek(self, 0)?)?;
-        let proof = get_closest_opcode(&code, address);
-        Ok(proof.into())
+        let closest_opcode_addr = get_closest_opcode_address(&code, address);
+        Ok(if closest_opcode_addr < 32 {
+            U256::zero()
+        } else {
+            closest_opcode_addr.into()
+        })
     }
 }
 
@@ -434,7 +438,7 @@ fn get_proofs_and_jumpdests(
 
 /// Return the largest prev_addr in `code` such that `code[pred_addr]` is an
 /// opcode (and not the argument of some PUSHXX) and pred_addr <= address
-fn get_closest_opcode(code: &[u8], address: usize) -> usize {
+fn get_closest_opcode_address(code: &[u8], address: usize) -> usize {
     const PUSH1_OPCODE: u8 = 0x60;
     const PUSH32_OPCODE: u8 = 0x7f;
     let (prev_addr, _) = CodeIterator::until(code, address + 1)

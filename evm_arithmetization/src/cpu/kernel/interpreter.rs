@@ -1176,7 +1176,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
         self.push(syscall_info)
     }
 
-    fn get_jumpdest_bit(&self, offset: usize) -> U256 {
+    pub(crate) fn get_jumpdest_bit(&self, offset: usize) -> U256 {
         if self.generation_state.memory.contexts[self.context()].segments
             [Segment::JumpdestBits.unscale()]
         .content
