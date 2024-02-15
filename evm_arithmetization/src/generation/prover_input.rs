@@ -309,7 +309,7 @@ impl<F: Field> GenerationState<F> {
         }
     }
     /// Returns a non-jumpdest proof for the address on the top of the stack. A
-    /// non-jumpdest proof is the clossest address to address on the top of
+    /// non-jumpdest proof is the clossest address to the address on the top of
     /// the stack, if the closses address is >= 32, or zero otherwise.
     fn run_next_non_jumpdest_proof(&mut self) -> Result<U256, ProgramError> {
         let code = self.get_current_code()?;

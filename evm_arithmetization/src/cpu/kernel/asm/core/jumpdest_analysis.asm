@@ -278,7 +278,7 @@ global write_table_if_jumpdest:
     PUSH 0x8080808080808080808080808080808080808080808080808080808080808080
     AND
     // If we received a proof it MUST be valid or we abort immediately. This
-    // is especially important for non-jupdest proofs. Otherwise a malicious
+    // is especially important for non-jumpdest proofs. Otherwise a malicious
     // prover might mark a valid jumpdest as invalid by providing an invalid proof
     // that makes verify_non_jumpdest return prematurely.
     %assert_eq_const(0x8080808080808080808080808080808080808080808080808080808080808080)
@@ -358,7 +358,7 @@ global verify_non_jumpdest:
     // stack: addr, ctx
     PROVER_INPUT(jumpdest_table::non_jumpdest_proof)
     // stack: proof, addr, ctx,
-    // Chack that proof <= addr as otherwise it allows
+    // Check that proof <= addr as otherwise it allows
     // a malicious prover to leave `@SEGMENT_JUMPDEST_BITS` as 0
     // at position addr while it shouldn't.
     DUP2 DUP2
