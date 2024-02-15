@@ -390,8 +390,8 @@ mod tests {
         nibbles::Nibbles,
         partial_trie::{Node, PartialTrie},
         testing_utils::{
-            create_trie_with_large_entry_nodes, generate_n_random_fixed_trie_value_entries,
-            handmade_trie_1, TrieType,
+            common_setup, create_trie_with_large_entry_nodes,
+            generate_n_random_fixed_trie_value_entries, handmade_trie_1, TrieType,
         },
         trie_ops::ValOrHash,
         utils::TrieNodeType,
@@ -497,6 +497,8 @@ mod tests {
 
     #[test]
     fn empty_trie_does_not_return_err_on_query() {
+        common_setup();
+
         let trie = TrieType::default();
         let nibbles: Nibbles = 0x1234.into();
         let res = create_trie_subset(&trie, once(nibbles));
@@ -506,6 +508,8 @@ mod tests {
 
     #[test]
     fn non_existent_key_does_not_return_err() {
+        common_setup();
+
         let mut trie = TrieType::default();
         trie.insert(0x1234, vec![0, 1, 2]);
         let res = create_trie_subset(&trie, once(0x5678));
@@ -515,6 +519,8 @@ mod tests {
 
     #[test]
     fn encountering_a_hash_node_returns_err() {
+        common_setup();
+
         let trie = TrieType::new(Node::Hash(H256::zero()));
         let res = create_trie_subset(&trie, once(0x1234));
 
@@ -523,6 +529,8 @@ mod tests {
 
     #[test]
     fn single_node_trie_is_queryable() {
+        common_setup();
+
         let mut trie = TrieType::default();
         trie.insert(0x1234, vec![0, 1, 2]);
         let trie_subset = create_trie_subset(&trie, once(0x1234)).unwrap();
@@ -532,6 +540,8 @@ mod tests {
 
     #[test]
     fn multi_node_trie_returns_proper_subset() {
+        common_setup();
+
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345_u64]);
 
         let trie_subset = create_trie_subset(&trie, vec![0x1234, 0x56]).unwrap();
@@ -544,6 +554,8 @@ mod tests {
 
     #[test]
     fn intermediate_nodes_are_included_in_subset() {
+        common_setup();
+
         let (trie, ks_nibbles) = handmade_trie_1();
         let trie_subset_all = create_trie_subset(&trie, ks_nibbles.iter().cloned()).unwrap();
 
@@ -687,6 +699,8 @@ mod tests {
 
     #[test]
     fn all_leafs_of_keys_to_create_subset_are_included_in_subset_for_giant_trie() {
+        common_setup();
+
         let (_, trie_subsets, keys_of_subsets) = create_massive_trie_and_subsets(9009);
 
         for (sub_trie, ks_used) in trie_subsets.into_iter().zip(keys_of_subsets.into_iter()) {
@@ -707,6 +721,8 @@ mod tests {
 
     #[test]
     fn sub_trie_that_includes_branch_but_not_children_hashes_out_children() {
+        common_setup();
+
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x12345, 0x12346, 0x1234f]);
         let partial_trie = create_trie_subset(&trie, [0x1234f]).unwrap();
 
@@ -715,6 +731,8 @@ mod tests {
 
     #[test]
     fn sub_trie_for_non_existent_key_that_hits_branch_leaf_hashes_out_leaf() {
+        common_setup();
+
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346]);
         let partial_trie = create_trie_subset(&trie, [0x1234567]).unwrap();
 
@@ -724,6 +742,7 @@ mod tests {
 
     #[test]
     fn hash_of_branch_partial_tries_matches_original_trie() {
+        common_setup();
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345]);
 
         let base_hash: H256 = trie.hash();
@@ -741,6 +760,8 @@ mod tests {
 
     #[test]
     fn hash_of_giant_random_partial_tries_matches_original_trie() {
+        common_setup();
+
         let (base_trie, trie_subsets, _) = create_massive_trie_and_subsets(9010);
         let base_hash = base_trie.hash();
 
@@ -751,6 +772,8 @@ mod tests {
 
     #[test]
     fn giant_random_partial_tries_hashes_leaves_correctly() {
+        common_setup();
+
         let (base_trie, trie_subsets, leaf_keys_per_trie) = create_massive_trie_and_subsets(9011);
         let all_keys: Vec<Nibbles> = base_trie.keys().collect();
 
