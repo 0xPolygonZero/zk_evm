@@ -362,10 +362,14 @@ fn create_partial_trie_subset_from_tracked_trie<N: PartialTrie>(
 
 fn reset_tracked_trie_state<N: PartialTrie>(tracked_node: &mut TrackedNode<N>) {
     match tracked_node.node {
-        TrackedNodeIntern::Branch(ref mut children) => {
-            children.iter_mut().for_each(|c| c.info.reset())
+        TrackedNodeIntern::Branch(ref mut children) => children.iter_mut().for_each(|c| {
+            c.info.reset();
+            reset_tracked_trie_state(c);
+        }),
+        TrackedNodeIntern::Extension(ref mut child) => {
+            child.info.reset();
+            reset_tracked_trie_state(child);
         }
-        TrackedNodeIntern::Extension(ref mut child) => child.info.reset(),
         TrackedNodeIntern::Empty | TrackedNodeIntern::Hash | TrackedNodeIntern::Leaf => {
             tracked_node.info.reset()
         }
@@ -760,7 +764,17 @@ mod tests {
                 .cloned();
 
             assert_nodes_are_leaf_nodes(&partial_trie, leaf_trie_keys);
-            assert_nodes_are_hash_nodes(&partial_trie, keys_of_hash_nodes);
+
+            // We have no idea were the paths to the hashed out nodes will start in the
+            // trie, so the best we can do is to check that they don't exist (if we traverse
+            // over a `Hash` node, we return `None`.)
+            assert_all_keys_do_not_exist(&partial_trie, keys_of_hash_nodes);
+        }
+    }
+
+    fn assert_all_keys_do_not_exist(trie: &TrieType, ks: impl Iterator<Item = Nibbles>) {
+        for k in ks {
+            assert!(trie.get(k).is_none());
         }
     }
 
