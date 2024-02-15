@@ -1,6 +1,7 @@
 //! Various types and logic that don't fit well into any other module.
 
 use std::{
+    borrow::Borrow,
     fmt::{self, Display},
     ops::BitAnd,
     sync::Arc,
@@ -12,7 +13,6 @@ use num_traits::PrimInt;
 use crate::{
     nibbles::{Nibble, Nibbles},
     partial_trie::{Node, PartialTrie},
-    special_query::TriePathIter,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -100,6 +100,30 @@ pub enum PathSegment {
     Leaf(Nibbles),
 }
 
+/// Trait for a type that can be converted into a trie key ([`Nibbles`]).
+pub trait IntoTrieKey {
+    /// Reconstruct the key of the type.
+    fn into_key(self) -> Nibbles;
+}
+
+impl<P: Borrow<PathSegment>, T: Iterator<Item = P>> IntoTrieKey for T {
+    fn into_key(self) -> Nibbles {
+        let mut key = Nibbles::default();
+
+        for seg in self {
+            match seg.borrow() {
+                PathSegment::Empty | PathSegment::Hash => (),
+                PathSegment::Branch(nib) => key.push_nibble_back(*nib),
+                PathSegment::Extension(nibs) | PathSegment::Leaf(nibs) => {
+                    key.push_nibbles_back(nibs)
+                }
+            }
+        }
+
+        key
+    }
+}
+
 /// A vector of path segments representing a path in the trie.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub struct TriePath(pub Vec<PathSegment>);
@@ -123,7 +147,34 @@ impl Display for TriePath {
     }
 }
 
+impl IntoIterator for TriePath {
+    type Item = PathSegment;
+
+    type IntoIter = <Vec<Self::Item> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl From<Vec<PathSegment>> for TriePath {
+    fn from(v: Vec<PathSegment>) -> Self {
+        Self(v)
+    }
+}
+
+impl FromIterator<PathSegment> for TriePath {
+    fn from_iter<T: IntoIterator<Item = PathSegment>>(iter: T) -> Self {
+        Self(Vec::from_iter(iter))
+    }
+}
+
 impl TriePath {
+    /// Get an iterator of the individual path segments in the [`TriePath`].
+    pub fn iter(&self) -> impl Iterator<Item = &'_ PathSegment> {
+        self.0.iter()
+    }
+
     pub(crate) fn dup_and_append(&self, seg: PathSegment) -> Self {
         let mut duped_vec = self.0.clone();
         duped_vec.push(seg);
@@ -137,35 +188,6 @@ impl TriePath {
 
     fn write_elem(f: &mut fmt::Formatter<'_>, seg: &PathSegment) -> fmt::Result {
         write!(f, "{}", seg)
-    }
-}
-
-/// A trie path that is constructed lazily.
-#[derive(Debug)]
-pub struct TriePathLazy<T: PartialTrie>(pub TriePathIter<T>);
-
-impl<T: PartialTrie> TriePathLazy<T> {
-    /// Extract the key from the trie path.
-    pub fn into_key(self) -> Nibbles {
-        let mut key = Nibbles::default();
-
-        for seg in self.0 {
-            match seg {
-                PathSegment::Empty | PathSegment::Hash => (),
-                PathSegment::Branch(nib) => key.push_nibble_front(nib),
-                PathSegment::Extension(nibs) | PathSegment::Leaf(nibs) => {
-                    key.push_nibbles_front(&nibs)
-                }
-            }
-        }
-
-        key
-    }
-}
-
-impl<T: PartialTrie> From<TriePathIter<T>> for TriePathLazy<T> {
-    fn from(v: TriePathIter<T>) -> Self {
-        Self(v)
     }
 }
 
@@ -218,5 +240,27 @@ pub fn get_segment_from_node_and_key_piece<T: PartialTrie>(
         TrieNodeType::Branch => PathSegment::Branch(k_piece.get_nibble(0)),
         TrieNodeType::Extension => PathSegment::Extension(*k_piece),
         TrieNodeType::Leaf => PathSegment::Leaf(*k_piece),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::{IntoTrieKey, PathSegment, TriePath};
+    use crate::nibbles::Nibbles;
+
+    #[test]
+    fn path_from_query_works() {
+        let query_path: TriePath = vec![
+            PathSegment::Branch(1),
+            PathSegment::Branch(2),
+            PathSegment::Extension(0x34.into()),
+            PathSegment::Leaf(0x567.into()),
+        ]
+        .into();
+
+        let reconstructed_key = query_path.iter().into_key();
+        assert_eq!(reconstructed_key, Nibbles::from_str("0x1234567").unwrap());
     }
 }

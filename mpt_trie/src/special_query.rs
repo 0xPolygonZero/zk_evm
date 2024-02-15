@@ -7,6 +7,7 @@ use crate::{
     utils::PathSegment,
 };
 
+/// An iterator for a trie query. Note that this iterator is lazy.
 #[derive(Debug)]
 pub struct TriePathIter<N: PartialTrie> {
     /// The next node in the trie to query with the remaining key.
@@ -94,7 +95,7 @@ fn pop_nibbles_clamped(nibbles: &mut Nibbles, n: usize) -> Nibbles {
 /// Note that if the key does not match the entire key of a node (eg. the
 /// remaining key is `0x34` but the next key is a leaf with the key `0x3456`),
 /// then the leaf will not appear in the query output.
-pub fn path_for_query<K, T: PartialTrie>(trie: &Node<T>, k: K) -> impl Iterator<Item = PathSegment>
+pub fn path_for_query<K, T: PartialTrie>(trie: &Node<T>, k: K) -> TriePathIter<T>
 where
     K: Into<Nibbles>,
 {

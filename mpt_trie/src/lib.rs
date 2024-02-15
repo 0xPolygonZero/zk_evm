@@ -17,7 +17,7 @@
 
 pub mod nibbles;
 pub mod partial_trie;
-mod special_query;
+pub mod special_query;
 mod trie_hashing;
 pub mod trie_ops;
 pub mod trie_subsets;
