@@ -9,7 +9,7 @@ use super::common::get_key_piece_from_node_pulling_from_key_for_branches;
 use crate::{
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
-    utils::{get_segment_from_node_and_key_piece, PathSegment, TriePath},
+    utils::{get_segment_from_node_and_key_piece, TriePath, TrieSegment},
 };
 
 /// Params controlling how much information is reported in the query output.
@@ -219,7 +219,7 @@ impl DebugQueryOutput {
     // TODO: Make the output easier to read...
     fn fmt_node_based_on_debug_params(
         f: &mut fmt::Formatter<'_>,
-        seg: &PathSegment,
+        seg: &TrieSegment,
         extra_seg_info: &Option<ExtraNodeSegmentInfo>,
         params: &DebugQueryParams,
     ) -> fmt::Result {

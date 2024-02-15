@@ -4,7 +4,7 @@
 use crate::{
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
-    utils::PathSegment,
+    utils::TrieSegment,
 };
 
 /// An iterator for a trie query. Note that this iterator is lazy.
@@ -22,7 +22,7 @@ pub struct TriePathIter<N: PartialTrie> {
 }
 
 impl<T: PartialTrie> Iterator for TriePathIter<T> {
-    type Item = PathSegment;
+    type Item = TrieSegment;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.terminated {
@@ -32,11 +32,11 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
         match self.curr_node.as_ref() {
             Node::Empty => {
                 self.terminated = true;
-                Some(PathSegment::Empty)
+                Some(TrieSegment::Empty)
             }
             Node::Hash(_) => {
                 self.terminated = true;
-                Some(PathSegment::Hash)
+                Some(TrieSegment::Hash)
             }
             Node::Branch { children, .. } => {
                 // Our query key has ended. Stop here.
@@ -48,7 +48,7 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
                 let nib = self.curr_key.pop_next_nibble_front();
                 self.curr_node = children[nib as usize].clone();
 
-                Some(PathSegment::Branch(nib))
+                Some(TrieSegment::Branch(nib))
             }
             Node::Extension { nibbles, child } => {
                 match self
@@ -62,7 +62,7 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
                     }
                     true => {
                         pop_nibbles_clamped(&mut self.curr_key, nibbles.count);
-                        let res = Some(PathSegment::Extension(*nibbles));
+                        let res = Some(TrieSegment::Extension(*nibbles));
                         self.curr_node = child.clone();
 
                         res
@@ -74,7 +74,7 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
 
                 match self.curr_key == *nibbles {
                     false => None,
-                    true => Some(PathSegment::Leaf(*nibbles)),
+                    true => Some(TrieSegment::Leaf(*nibbles)),
                 }
             }
         }
@@ -88,8 +88,6 @@ fn pop_nibbles_clamped(nibbles: &mut Nibbles, n: usize) -> Nibbles {
     nibbles.pop_nibbles_front(n_nibs_to_pop)
 }
 
-// TODO: Move to a blanket impl...
-// TODO: Could make this return an `Iterator` with some work...
 /// Returns all nodes in the trie that are traversed given a query (key).
 ///
 /// Note that if the key does not match the entire key of a node (eg. the
@@ -111,7 +109,7 @@ mod test {
     use std::str::FromStr;
 
     use super::path_for_query;
-    use crate::{nibbles::Nibbles, testing_utils::handmade_trie_1, utils::PathSegment};
+    use crate::{nibbles::Nibbles, testing_utils::handmade_trie_1, utils::TrieSegment};
 
     #[test]
     fn query_iter_works() {
@@ -120,33 +118,33 @@ mod test {
         // ks --> vec![0x1234, 0x1324, 0x132400005_u64, 0x2001, 0x2002];
         let res = vec![
             vec![
-                PathSegment::Branch(1),
-                PathSegment::Branch(2),
-                PathSegment::Leaf(0x34.into()),
+                TrieSegment::Branch(1),
+                TrieSegment::Branch(2),
+                TrieSegment::Leaf(0x34.into()),
             ],
             vec![
-                PathSegment::Branch(1),
-                PathSegment::Branch(3),
-                PathSegment::Extension(0x24.into()),
+                TrieSegment::Branch(1),
+                TrieSegment::Branch(3),
+                TrieSegment::Extension(0x24.into()),
             ],
             vec![
-                PathSegment::Branch(1),
-                PathSegment::Branch(3),
-                PathSegment::Extension(0x24.into()),
-                PathSegment::Branch(0),
-                PathSegment::Leaf(Nibbles::from_str("0x0005").unwrap()),
+                TrieSegment::Branch(1),
+                TrieSegment::Branch(3),
+                TrieSegment::Extension(0x24.into()),
+                TrieSegment::Branch(0),
+                TrieSegment::Leaf(Nibbles::from_str("0x0005").unwrap()),
             ],
             vec![
-                PathSegment::Branch(2),
-                PathSegment::Extension(Nibbles::from_str("0x00").unwrap()),
-                PathSegment::Branch(0x1),
-                PathSegment::Leaf(Nibbles::default()),
+                TrieSegment::Branch(2),
+                TrieSegment::Extension(Nibbles::from_str("0x00").unwrap()),
+                TrieSegment::Branch(0x1),
+                TrieSegment::Leaf(Nibbles::default()),
             ],
             vec![
-                PathSegment::Branch(2),
-                PathSegment::Extension(Nibbles::from_str("0x00").unwrap()),
-                PathSegment::Branch(0x2),
-                PathSegment::Leaf(Nibbles::default()),
+                TrieSegment::Branch(2),
+                TrieSegment::Extension(Nibbles::from_str("0x00").unwrap()),
+                TrieSegment::Branch(0x2),
+                TrieSegment::Leaf(Nibbles::default()),
             ],
         ];
 

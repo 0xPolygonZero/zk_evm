@@ -83,7 +83,7 @@ pub(crate) fn bytes_to_h256(b: &[u8; 32]) -> H256 {
 /// the key piece of the node if applicable (eg. [`Node::Empty`] &
 /// [`Node::Hash`] do not have associated key pieces).
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum PathSegment {
+pub enum TrieSegment {
     /// Empty node.
     Empty,
 
@@ -106,15 +106,15 @@ pub trait IntoTrieKey {
     fn into_key(self) -> Nibbles;
 }
 
-impl<P: Borrow<PathSegment>, T: Iterator<Item = P>> IntoTrieKey for T {
+impl<P: Borrow<TrieSegment>, T: Iterator<Item = P>> IntoTrieKey for T {
     fn into_key(self) -> Nibbles {
         let mut key = Nibbles::default();
 
         for seg in self {
             match seg.borrow() {
-                PathSegment::Empty | PathSegment::Hash => (),
-                PathSegment::Branch(nib) => key.push_nibble_back(*nib),
-                PathSegment::Extension(nibs) | PathSegment::Leaf(nibs) => {
+                TrieSegment::Empty | TrieSegment::Hash => (),
+                TrieSegment::Branch(nib) => key.push_nibble_back(*nib),
+                TrieSegment::Extension(nibs) | TrieSegment::Leaf(nibs) => {
                     key.push_nibbles_back(nibs)
                 }
             }
@@ -126,7 +126,7 @@ impl<P: Borrow<PathSegment>, T: Iterator<Item = P>> IntoTrieKey for T {
 
 /// A vector of path segments representing a path in the trie.
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
-pub struct TriePath(pub Vec<PathSegment>);
+pub struct TriePath(pub Vec<TrieSegment>);
 
 impl Display for TriePath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -148,7 +148,7 @@ impl Display for TriePath {
 }
 
 impl IntoIterator for TriePath {
-    type Item = PathSegment;
+    type Item = TrieSegment;
 
     type IntoIter = <Vec<Self::Item> as IntoIterator>::IntoIter;
 
@@ -157,89 +157,89 @@ impl IntoIterator for TriePath {
     }
 }
 
-impl From<Vec<PathSegment>> for TriePath {
-    fn from(v: Vec<PathSegment>) -> Self {
+impl From<Vec<TrieSegment>> for TriePath {
+    fn from(v: Vec<TrieSegment>) -> Self {
         Self(v)
     }
 }
 
-impl FromIterator<PathSegment> for TriePath {
-    fn from_iter<T: IntoIterator<Item = PathSegment>>(iter: T) -> Self {
+impl FromIterator<TrieSegment> for TriePath {
+    fn from_iter<T: IntoIterator<Item = TrieSegment>>(iter: T) -> Self {
         Self(Vec::from_iter(iter))
     }
 }
 
 impl TriePath {
     /// Get an iterator of the individual path segments in the [`TriePath`].
-    pub fn iter(&self) -> impl Iterator<Item = &'_ PathSegment> {
+    pub fn iter(&self) -> impl Iterator<Item = &'_ TrieSegment> {
         self.0.iter()
     }
 
-    pub(crate) fn dup_and_append(&self, seg: PathSegment) -> Self {
+    pub(crate) fn dup_and_append(&self, seg: TrieSegment) -> Self {
         let mut duped_vec = self.0.clone();
         duped_vec.push(seg);
 
         Self(duped_vec)
     }
 
-    pub(crate) fn append(&mut self, seg: PathSegment) {
+    pub(crate) fn append(&mut self, seg: TrieSegment) {
         self.0.push(seg);
     }
 
-    fn write_elem(f: &mut fmt::Formatter<'_>, seg: &PathSegment) -> fmt::Result {
+    fn write_elem(f: &mut fmt::Formatter<'_>, seg: &TrieSegment) -> fmt::Result {
         write!(f, "{}", seg)
     }
 }
 
-impl Display for PathSegment {
+impl Display for TrieSegment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PathSegment::Empty => write!(f, "Empty"),
-            PathSegment::Hash => write!(f, "Hash"),
-            PathSegment::Branch(nib) => write!(f, "Branch({})", nib),
-            PathSegment::Extension(nibs) => write!(f, "Extension({})", nibs),
-            PathSegment::Leaf(nibs) => write!(f, "Leaf({})", nibs),
+            TrieSegment::Empty => write!(f, "Empty"),
+            TrieSegment::Hash => write!(f, "Hash"),
+            TrieSegment::Branch(nib) => write!(f, "Branch({})", nib),
+            TrieSegment::Extension(nibs) => write!(f, "Extension({})", nibs),
+            TrieSegment::Leaf(nibs) => write!(f, "Leaf({})", nibs),
         }
     }
 }
 
-impl PathSegment {
-    /// Get the node type of the [`PathSegment`].
+impl TrieSegment {
+    /// Get the node type of the [`TrieSegment`].
     pub fn node_type(&self) -> TrieNodeType {
         match self {
-            PathSegment::Empty => TrieNodeType::Empty,
-            PathSegment::Hash => TrieNodeType::Hash,
-            PathSegment::Branch(_) => TrieNodeType::Branch,
-            PathSegment::Extension(_) => TrieNodeType::Extension,
-            PathSegment::Leaf(_) => TrieNodeType::Leaf,
+            TrieSegment::Empty => TrieNodeType::Empty,
+            TrieSegment::Hash => TrieNodeType::Hash,
+            TrieSegment::Branch(_) => TrieNodeType::Branch,
+            TrieSegment::Extension(_) => TrieNodeType::Extension,
+            TrieSegment::Leaf(_) => TrieNodeType::Leaf,
         }
     }
 
     /// Extracts the key piece used by the segment (if applicable).
     pub fn get_key_piece_from_seg_if_present(&self) -> Option<Nibbles> {
         match self {
-            PathSegment::Empty | PathSegment::Hash => None,
-            PathSegment::Branch(nib) => Some(Nibbles::from_nibble(*nib)),
-            PathSegment::Extension(nibs) | PathSegment::Leaf(nibs) => Some(*nibs),
+            TrieSegment::Empty | TrieSegment::Hash => None,
+            TrieSegment::Branch(nib) => Some(Nibbles::from_nibble(*nib)),
+            TrieSegment::Extension(nibs) | TrieSegment::Leaf(nibs) => Some(*nibs),
         }
     }
 }
 
-/// Creates a [`PathSegment`] given a node and a key we are querying.
+/// Creates a [`TrieSegment`] given a node and a key we are querying.
 ///
 /// This function is intended to be used during a trie query as we are
 /// traversing down a trie. Depending on the current node, we pop off nibbles
-/// and use these to create `PathSegment`s.
+/// and use these to create `TrieSegment`s.
 pub fn get_segment_from_node_and_key_piece<T: PartialTrie>(
     n: &Node<T>,
     k_piece: &Nibbles,
-) -> PathSegment {
+) -> TrieSegment {
     match TrieNodeType::from(n) {
-        TrieNodeType::Empty => PathSegment::Empty,
-        TrieNodeType::Hash => PathSegment::Hash,
-        TrieNodeType::Branch => PathSegment::Branch(k_piece.get_nibble(0)),
-        TrieNodeType::Extension => PathSegment::Extension(*k_piece),
-        TrieNodeType::Leaf => PathSegment::Leaf(*k_piece),
+        TrieNodeType::Empty => TrieSegment::Empty,
+        TrieNodeType::Hash => TrieSegment::Hash,
+        TrieNodeType::Branch => TrieSegment::Branch(k_piece.get_nibble(0)),
+        TrieNodeType::Extension => TrieSegment::Extension(*k_piece),
+        TrieNodeType::Leaf => TrieSegment::Leaf(*k_piece),
     }
 }
 
@@ -247,16 +247,16 @@ pub fn get_segment_from_node_and_key_piece<T: PartialTrie>(
 mod tests {
     use std::str::FromStr;
 
-    use super::{IntoTrieKey, PathSegment, TriePath};
+    use super::{IntoTrieKey, TriePath, TrieSegment};
     use crate::nibbles::Nibbles;
 
     #[test]
     fn path_from_query_works() {
         let query_path: TriePath = vec![
-            PathSegment::Branch(1),
-            PathSegment::Branch(2),
-            PathSegment::Extension(0x34.into()),
-            PathSegment::Leaf(0x567.into()),
+            TrieSegment::Branch(1),
+            TrieSegment::Branch(2),
+            TrieSegment::Extension(0x34.into()),
+            TrieSegment::Leaf(0x567.into()),
         ]
         .into();
 
