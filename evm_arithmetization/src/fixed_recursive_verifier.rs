@@ -1075,8 +1075,7 @@ where
         let halt_label = builder.constant(F::from_canonical_usize(KERNEL.global_labels["halt"]));
         builder.connect(x.registers_after.program_counter, halt_label);
 
-        let main_label =
-            builder.constant(F::from_canonical_usize(KERNEL.global_labels["main_contd"]));
+        let main_label = builder.constant(F::from_canonical_usize(KERNEL.global_labels["main"]));
         builder.connect(x.registers_before.program_counter, main_label);
     }
 

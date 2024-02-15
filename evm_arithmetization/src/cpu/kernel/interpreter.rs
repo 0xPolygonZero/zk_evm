@@ -25,7 +25,7 @@ use crate::generation::mpt::load_all_mpts;
 use crate::generation::prover_input::ProverInputFn;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{self, all_withdrawals_prover_inputs_reversed, GenerationState};
-use crate::generation::{GenerationInputs, NUM_EXTRA_CYCLES_AFTER, NUM_EXTRA_CYCLES_BEFORE};
+use crate::generation::{GenerationInputs, NUM_EXTRA_CYCLES_AFTER};
 use crate::memory::segments::{Segment, SEGMENT_SCALING_FACTOR};
 use crate::util::{h2u, u256_to_u8, u256_to_usize};
 use crate::witness::errors::{ProgramError, ProverInputError};
@@ -53,6 +53,7 @@ pub(crate) struct Interpreter<'a, F: Field> {
     memops: Vec<InterpreterMemOpKind>,
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     preinitialized_segments: HashMap<Segment, MemorySegmentState>,
+    is_jumpdest_analysis: bool,
 }
 
 /// Structure storing the state of the interpreter's registers.
@@ -134,17 +135,12 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
             let mut interpreter =
                 Interpreter::new_with_state_and_halt_condition(state, halt_pc, initial_context);
 
-            log::debug!("Simulating CPU for jumpdest analysis.");
-
             interpreter.run(None);
-
-            log::debug!("jdt = {:?}", interpreter.jumpdest_table);
 
             interpreter
                 .generation_state
                 .set_jumpdest_analysis_inputs(interpreter.jumpdest_table);
 
-            log::debug!("Simulated CPU for jumpdest analysis halted.");
             interpreter.generation_state.jumpdest_table
         }
     }
@@ -155,83 +151,68 @@ pub(crate) fn generate_segment<F: Field>(
     index: usize,
     inputs: &GenerationInputs,
 ) -> anyhow::Result<(RegistersState, RegistersState, MemoryState)> {
-    let main_label = KERNEL.global_labels["main"];
+    let init_label = KERNEL.global_labels["init"];
     let initial_registers = RegistersState::new_with_main_label();
     let interpreter_inputs = GenerationInputs { ..inputs.clone() };
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs_and_kernel(
-        main_label,
+        init_label,
         vec![],
         interpreter_inputs,
     );
 
-    let (mut registers_before_previous, mut registers_before, mut memory_before) =
-        (initial_registers, initial_registers, MemoryState::default());
+    let (
+        mut registers_before_previous,
+        mut registers_before,
+        mut registers_after,
+        mut before_mem_values,
+        mut after_mem_values,
+    ) = (
+        initial_registers,
+        initial_registers,
+        initial_registers,
+        MemoryState::default(),
+        MemoryState::default(),
+    );
 
-    if index > 0 {
-        let num_cycles_before = max_cpu_len - NUM_EXTRA_CYCLES_AFTER
-            + (index - 1) * (max_cpu_len - (NUM_EXTRA_CYCLES_AFTER + NUM_EXTRA_CYCLES_BEFORE - 1));
-        (registers_before_previous, registers_before, memory_before) =
-            interpreter.run_before_segment(max_cpu_len, index)?;
-    }
-    interpreter.generation_state.registers = RegistersState {
-        program_counter: main_label,
-        is_kernel: true,
-        ..registers_before
-    };
-
-    // Write initial registers.
-    let registers_before_values = [
-        registers_before.program_counter.into(),
-        (registers_before.is_kernel as usize).into(),
-        registers_before.stack_len.into(),
-        registers_before.stack_top,
-        registers_before.context.into(),
-        registers_before.gas_used.into(),
-    ];
-    let registers_before_fields = (0..registers_before_values.len())
-        .map(|i| {
-            (
-                MemoryAddress::new_u256s(
-                    0.into(),
-                    (Segment::RegistersStates.unscale()).into(),
-                    i.into(),
+    for i in 0..index + 1 {
+        if index > 0 && i == index - 1 {
+            registers_before_previous = registers_after;
+        }
+        // Write initial registers.
+        let registers_before_field_values = [
+            registers_after.program_counter.into(),
+            (registers_after.is_kernel as usize).into(),
+            registers_after.stack_len.into(),
+            registers_after.stack_top,
+            registers_after.context.into(),
+            registers_after.gas_used.into(),
+        ];
+        let registers_before_fields = (0..registers_before_field_values.len())
+            .map(|i| {
+                (
+                    MemoryAddress::new_u256s(
+                        0.into(),
+                        (Segment::RegistersStates.unscale()).into(),
+                        i.into(),
+                    )
+                    .unwrap(),
+                    registers_before_field_values[i],
                 )
-                .unwrap(),
-                registers_before_values[i],
-            )
-        })
-        .collect::<Vec<_>>();
-    interpreter.set_memory_multi_addresses(&registers_before_fields);
+            })
+            .collect::<Vec<_>>();
 
-    // Also write initial registers in memory_before.
-    let registers_before_previous_values = [
-        registers_before_previous.program_counter.into(),
-        (registers_before_previous.is_kernel as usize).into(),
-        registers_before_previous.stack_len.into(),
-        registers_before_previous.stack_top,
-        registers_before_previous.context.into(),
-        registers_before_previous.gas_used.into(),
-    ];
-    let registers_before_previous_fields = (0..registers_before_previous_values.len())
-        .map(|i| {
-            (
-                MemoryAddress::new_u256s(
-                    0.into(),
-                    (Segment::RegistersStates.unscale()).into(),
-                    i.into(),
-                )
-                .unwrap(),
-                registers_before_previous_values[i],
-            )
-        })
-        .collect::<Vec<_>>();
-    for (address, value) in registers_before_previous_fields {
-        memory_before.set(address, value);
+        interpreter.set_memory_multi_addresses(&registers_before_fields);
+
+        (registers_before, before_mem_values) = (registers_after, after_mem_values);
+        interpreter.generation_state.registers = registers_before;
+        interpreter.generation_state.registers.program_counter = init_label;
+        interpreter.generation_state.registers.is_kernel = true;
+
+        (registers_after, after_mem_values) =
+            interpreter.run(Some(max_cpu_len - NUM_EXTRA_CYCLES_AFTER))?;
     }
 
-    let (registers_after, _) = interpreter.run(Some(max_cpu_len - NUM_EXTRA_CYCLES_AFTER))?;
-
-    Ok((registers_before, registers_after, memory_before))
+    Ok((registers_before, registers_after, before_mem_values))
 }
 
 /// Different types of Memory operations in the interpreter, and the data
@@ -286,6 +267,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             memops: vec![],
             jumpdest_table: HashMap::new(),
             preinitialized_segments: HashMap::default(),
+            is_jumpdest_analysis: false,
         };
         result.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -296,7 +278,6 @@ impl<'a, F: Field> Interpreter<'a, F> {
                 .iter()
                 .map(|&elt| Some(elt))
                 .collect::<Vec<_>>();
-            // result.stack_segment_mut().truncate(initial_stack_len - 1);
         }
 
         result
@@ -317,6 +298,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             memops: vec![],
             jumpdest_table: HashMap::new(),
             preinitialized_segments: HashMap::new(),
+            is_jumpdest_analysis: true,
         }
     }
 
@@ -629,127 +611,11 @@ impl<'a, F: Field> Interpreter<'a, F> {
             ProgramError::StackOverflow => 5,
             _ => bail!("TODO: figure out what to do with this..."),
         };
-
+        let checkpoint = self.checkpoint();
         self.run_exception(exc_code)
-            .map_err(|_| anyhow::Error::msg("error handling errored..."))
-    }
-
-    /// Generates a segment by returning the state and memory values after
-    /// `MAX_SIZE` CPU rows. Specialized for segment generation.
-    /// Returns the registers before the previous segment, the registers before
-    /// the given segment, and the memory state before the given statement.
-    pub(crate) fn run_before_segment(
-        &mut self,
-        max_cpu_len: usize,
-        segment_index: usize,
-    ) -> anyhow::Result<(RegistersState, RegistersState, MemoryState)> {
-        let mut previous_before_registers = RegistersState::new_with_main_label();
-
-        // If segment_index is 0, you don't need to run the interpreter.
-        assert!(segment_index > 0);
-
-        let num_cycles_previous_before = if segment_index >= 2 {
-            max_cpu_len - NUM_EXTRA_CYCLES_AFTER
-                + (segment_index - 2)
-                    * (max_cpu_len - (NUM_EXTRA_CYCLES_AFTER + NUM_EXTRA_CYCLES_BEFORE - 1))
-        }
-        // If segment_index is 1, then previous_before is just default and won't be updated.
-        else {
-            usize::MAX
-        };
-        let num_cycles_before = max_cpu_len - NUM_EXTRA_CYCLES_AFTER
-            + (segment_index - 1)
-                * (max_cpu_len - (NUM_EXTRA_CYCLES_AFTER + NUM_EXTRA_CYCLES_BEFORE - 1));
-
-        let mut cpu_counter = 0;
-        let mut previous_registers = self.generation_state.registers;
-        let mut previous_mem = self.generation_state.memory.clone();
-        let mut running = true;
-        loop {
-            let pc = self.generation_state.registers.program_counter;
-            if cpu_counter == num_cycles_previous_before {
-                previous_before_registers = self.generation_state.registers;
-            }
-            if running
-                && (self.is_kernel() && pc == KERNEL.global_labels["halt"]
-                    || (cpu_counter == num_cycles_before - 1))
-            {
-                running = false;
-                previous_registers = self.generation_state.registers;
-
-                // Write final registers.
-                let registers_before = [
-                    previous_registers.program_counter.into(),
-                    (previous_registers.is_kernel as usize).into(),
-                    previous_registers.stack_len.into(),
-                    previous_registers.stack_top,
-                    previous_registers.context.into(),
-                    previous_registers.gas_used.into(),
-                ];
-
-                let length = registers_before.len();
-                let registers_after_fields = (0..length)
-                    .map(|i| {
-                        (
-                            MemoryAddress::new(0, Segment::RegistersStates, length + i),
-                            registers_before[i],
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                self.set_memory_multi_addresses(&registers_after_fields);
-                let checkpoint = self.checkpoint();
-                self.run_exception(6);
-                self.apply_memops(checkpoint.mem_len);
-            };
-            if self.is_kernel() && self.halt_offsets.contains(&pc) {
-                previous_mem = self.generation_state.memory.clone();
-                return Ok((previous_before_registers, previous_registers, previous_mem));
-            }
-
-            if self.generation_state.registers.is_stack_top_read {
-                self.memops.push(InterpreterMemOpKind::Read(
-                    match self.stack_top() {
-                        Ok(val) => val,
-                        Err(e) => 0.into(),
-                    },
-                    MemoryAddress {
-                        context: self.context(),
-                        segment: Segment::Stack.unscale(),
-                        virt: self.stack_len() - 1,
-                    },
-                ));
-                self.generation_state.registers.is_stack_top_read = false;
-            }
-            if self.generation_state.registers.check_overflow {
-                self.generation_state.registers.check_overflow = false;
-            }
-
-            let checkpoint = self.checkpoint();
-            let result = self.run_opcode();
-
-            match result {
-                Ok(()) => self.apply_memops(checkpoint.mem_len),
-                Err(e) => {
-                    if self.is_kernel() {
-                        let offset_name =
-                            KERNEL.offset_name(self.generation_state.registers.program_counter);
-                        bail!(
-                            "{:?} in kernel at pc={}, stack={:?}, memory={:?} (cycle: {})",
-                            e,
-                            offset_name,
-                            self.generation_state.stack(),
-                            self.generation_state.memory.contexts[0].segments
-                                [Segment::KernelGeneral.unscale()]
-                            .content,
-                            cpu_counter,
-                        );
-                    }
-                    self.rollback(checkpoint);
-                    self.handle_error(e)
-                }
-            }?;
-            cpu_counter += 1;
-        }
+            .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
+        self.apply_memops(checkpoint.mem_len);
+        Ok(())
     }
 
     /// Generates a segment by returning the state and memory values after
@@ -764,6 +630,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
         let mut running = true;
         loop {
             let pc = self.generation_state.registers.program_counter;
+
             if running
                 && (self.is_kernel() && pc == KERNEL.global_labels["halt"]
                     || (max_cpu_len.is_some() && cpu_counter == max_cpu_len.unwrap() - 1))
@@ -796,8 +663,15 @@ impl<'a, F: Field> Interpreter<'a, F> {
                 self.apply_memops(checkpoint.mem_len);
             };
             if self.is_kernel() && self.halt_offsets.contains(&pc) {
-                final_mem = self.generation_state.memory.clone();
-                return Ok((final_registers, final_mem));
+                if let Some(halt_context) = self.halt_context {
+                    if self.context() == halt_context {
+                        // Only happens during jumpdest analysis, we don't care about the output.
+                        return Ok((final_registers, final_mem));
+                    }
+                } else {
+                    final_mem = self.generation_state.memory.clone();
+                    return Ok((final_registers, final_mem));
+                }
             }
 
             if self.generation_state.registers.is_stack_top_read {
@@ -866,7 +740,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
 
     fn code_slice(&self, n: usize) -> Vec<u8> {
         let pc = self.generation_state.registers.program_counter;
-        self.code().content[pc..pc + n]
+        self.code().content[pc + 1..pc + n + 1]
             .iter()
             .map(|u256| u256.unwrap_or_default().byte(0))
             .collect::<Vec<_>>()
@@ -1127,9 +1001,15 @@ impl<'a, F: Field> Interpreter<'a, F> {
         // Jumpdest analysis is performed natively by the interpreter and not
         // using the non-deterministic Kernel assembly code.
         if self.is_kernel()
+            && self.is_jumpdest_analysis
             && self.generation_state.registers.program_counter
                 == KERNEL.global_labels["jumpdest_analysis"]
         {
+            let opcode = self
+                .code()
+                .get(self.generation_state.registers.program_counter)
+                .byte(0);
+
             self.generation_state.registers.program_counter =
                 KERNEL.global_labels["jumpdest_analysis_end"];
             self.generation_state
@@ -1140,9 +1020,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             .code()
             .get(self.generation_state.registers.program_counter)
             .byte(0);
-        self.opcode_count[opcode as usize] += 1;
-        self.incr(1);
-
+        println!("opcode {:?}", get_mnemonic(opcode));
         let op = decode(self.generation_state.registers, opcode)
             // We default to prover inputs, as those are kernel-only instructions that charge
             // nothing.
@@ -1150,8 +1028,8 @@ impl<'a, F: Field> Interpreter<'a, F> {
 
         #[cfg(debug_assertions)]
         if !self.is_kernel() {
-            println!(
-                "User instruction {:?}, stack = {:?}, ctx = {}",
+            log::debug!(
+                "########## User instruction {:?}, stack = {:?}, ctx = {}",
                 op,
                 {
                     let mut stack = self.stack();
@@ -1163,7 +1041,9 @@ impl<'a, F: Field> Interpreter<'a, F> {
         }
 
         if let Some(special_len) = get_op_special_length(op) {
-            self.generation_state.registers.is_stack_top_read = true;
+            if self.stack_len() != special_len {
+                self.generation_state.registers.is_stack_top_read = true;
+            }
         };
         match opcode {
             0x00 => self.run_syscall(opcode, 0, false), // "STOP",
@@ -1312,6 +1192,13 @@ impl<'a, F: Field> Interpreter<'a, F> {
         if might_overflow_op(op) {
             self.generation_state.registers.check_overflow = true;
         }
+
+        self.opcode_count[opcode as usize] += 1;
+        if self.generation_state.registers.program_counter == usize::MAX {
+            self.generation_state.registers.program_counter = 0;
+        } else {
+            self.incr(1)
+        };
 
         Ok(())
     }
@@ -1473,6 +1360,9 @@ impl<'a, F: Field> Interpreter<'a, F> {
     fn run_shl(&mut self) -> anyhow::Result<(), ProgramError> {
         let vals = self.interpreter_pop::<2>()?;
         let (shift, value) = (vals[0], vals[1]);
+        if shift.bits() <= 32 {
+            self.mload_queue(0, Segment::ShiftTable, shift.low_u32() as usize);
+        }
         self.interpreter_push_no_write(if shift < U256::from(256usize) {
             value << shift
         } else {
@@ -1483,6 +1373,9 @@ impl<'a, F: Field> Interpreter<'a, F> {
     fn run_shr(&mut self) -> anyhow::Result<(), ProgramError> {
         let vals = self.interpreter_pop::<2>()?;
         let (shift, value) = (vals[0], vals[1]);
+        if shift.bits() <= 32 {
+            self.mload_queue(0, Segment::ShiftTable, shift.low_u32() as usize);
+        }
         self.interpreter_push_no_write(value >> shift)
     }
 
@@ -1505,7 +1398,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
     fn run_prover_input(&mut self) -> Result<(), ProgramError> {
         let prover_input_fn = self
             .prover_inputs_map
-            .get(&(self.generation_state.registers.program_counter - 1))
+            .get(&self.generation_state.registers.program_counter)
             .ok_or(ProgramError::ProverInputError(
                 ProverInputError::InvalidMptInput,
             ))?;
@@ -1550,10 +1443,15 @@ impl<'a, F: Field> Interpreter<'a, F> {
         let new_program_counter =
             u256_to_usize(handler_addr).map_err(|_| ProgramError::IntegerTooLarge)?;
 
-        let syscall_info = U256::from(self.generation_state.registers.program_counter)
+        let syscall_info = U256::from(self.generation_state.registers.program_counter + 1)
             + U256::from((self.is_kernel() as usize) << 32)
             + (U256::from(self.generation_state.registers.gas_used) << 192);
-        self.generation_state.registers.program_counter = new_program_counter;
+        // -1 because the PC will be incremented at the end of run_opcode
+        self.generation_state.registers.program_counter = if new_program_counter == 0 {
+            usize::MAX
+        } else {
+            new_program_counter - 1
+        };
 
         self.set_is_kernel(true);
         self.generation_state.registers.gas_used = 0;
@@ -1600,18 +1498,24 @@ impl<'a, F: Field> Interpreter<'a, F> {
     }
 
     fn run_jump(&mut self) -> anyhow::Result<(), ProgramError> {
-        let x = self.interpreter_pop::<1>()?[0];
+        let offset = self.interpreter_pop::<1>()?[0];
 
-        let x: usize = u256_to_usize(x)?;
+        let offset: usize = offset
+            .try_into()
+            .map_err(|_| ProgramError::InvalidJumpDestination)?;
 
-        let jumpdest_bit = self.get_jumpdest_bit(x);
+        if !self.is_kernel() && self.is_jumpdest_analysis {
+            self.add_jumpdest_offset(offset);
+        } else {
+            let jumpdest_bit = self.get_jumpdest_bit(offset);
 
-        // Check that the destination is valid.
-        if !self.is_kernel() && jumpdest_bit != U256::one() {
-            return Err(ProgramError::InvalidJumpDestination);
+            // Check that the destination is valid.
+            if !self.is_kernel() && jumpdest_bit != U256::one() {
+                return Err(ProgramError::InvalidJumpDestination);
+            }
         }
 
-        self.jump_to(x as usize, false)
+        self.jump_to(offset as usize, false)
     }
 
     fn run_jumpi(&mut self) -> anyhow::Result<(), ProgramError> {
@@ -1622,27 +1526,25 @@ impl<'a, F: Field> Interpreter<'a, F> {
             .try_into()
             .map_err(|_| ProgramError::InvalidJumpiDestination)?;
 
-        let jumpdest_bit = self.get_jumpdest_bit(offset);
+        if !cond.is_zero() {
+            if !self.is_kernel() && self.is_jumpdest_analysis {
+                self.add_jumpdest_offset(offset);
+            } else {
+                let jumpdest_bit = self.get_jumpdest_bit(offset);
 
-        if !cond.is_zero() && (self.is_kernel() || jumpdest_bit == U256::one()) {
+                // Check that the destination is valid.
+                if !self.is_kernel() && jumpdest_bit != U256::one() {
+                    return Err(ProgramError::InvalidJumpiDestination);
+                }
+            }
             self.jump_to(offset, true)?;
         }
 
-        if !cond.is_zero() && !self.is_kernel() && jumpdest_bit != U256::one() {
-            return Err(ProgramError::InvalidJumpiDestination);
-        }
         Ok(())
     }
 
     fn run_pc(&mut self) -> anyhow::Result<(), ProgramError> {
-        self.interpreter_push_with_write(
-            (self
-                .generation_state
-                .registers
-                .program_counter
-                .saturating_sub(1))
-            .into(),
-        )
+        self.interpreter_push_with_write(self.generation_state.registers.program_counter.into())
     }
 
     fn run_jumpdest(&mut self) -> anyhow::Result<(), ProgramError> {
@@ -1651,7 +1553,8 @@ impl<'a, F: Field> Interpreter<'a, F> {
     }
 
     fn jump_to(&mut self, offset: usize, is_jumpi: bool) -> anyhow::Result<(), ProgramError> {
-        self.generation_state.registers.program_counter = offset;
+        // -1 because the PC will be incremented at the end of run_opcode.
+        self.generation_state.registers.program_counter = offset - 1;
 
         if offset == KERNEL.global_labels["observe_new_address"] {
             let tip_u256 = stack_peek(&self.generation_state, 0)?;
@@ -1662,6 +1565,10 @@ impl<'a, F: Field> Interpreter<'a, F> {
             let tip_u256 = stack_peek(&self.generation_state, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
             self.generation_state.observe_contract(tip_h256)?;
+        }
+
+        if !self.is_kernel() {
+            self.add_jumpdest_offset(offset);
         }
 
         Ok(())
@@ -1782,11 +1689,11 @@ impl<'a, F: Field> Interpreter<'a, F> {
         if self.stack_len() != 2 {
             self.generation_state.registers.is_stack_top_read = true;
         }
-
         let vals = self.interpreter_pop::<2>()?;
         let (value, addr) = (vals[0], vals[1]);
         let (context, segment, offset) = unpack_address!(addr);
         self.mstore_queue(context, segment, offset, value);
+
         Ok(())
     }
 
@@ -1818,7 +1725,13 @@ impl<'a, F: Field> Interpreter<'a, F> {
         let gas_used_val = kexit_info.0[3];
         TryInto::<u64>::try_into(gas_used_val).map_err(|_| ProgramError::GasLimitError)?;
 
-        self.generation_state.registers.program_counter = program_counter;
+        // -1 because the PC will be incremented at the end of run_opcode.
+        self.generation_state.registers.program_counter = if program_counter == 0 {
+            usize::MAX
+        } else {
+            program_counter - 1
+        };
+
         self.set_is_kernel(is_kernel_mode);
         self.generation_state.registers.gas_used = gas_used_val;
 

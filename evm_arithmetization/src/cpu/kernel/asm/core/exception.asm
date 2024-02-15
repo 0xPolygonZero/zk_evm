@@ -106,6 +106,7 @@ global exc_invalid_jump_destination:
 // addition to trap_info). This is expected; it means that the exc_stack_underflow handler should
 // have been used instead.
 global exc_invalid_jumpi_destination:
+PANIC
     // stack: trap_info, jump_dest, condition
     // check that the triggering opcode is indeed JUMPI
     %opcode_from_exp_trap_info

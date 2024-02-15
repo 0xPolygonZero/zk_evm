@@ -168,7 +168,7 @@ fn test_add11_yml() {
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_generation_inputs_and_kernel(0, initial_stack, tries_inputs);
 
-    let route_txn_label = KERNEL.global_labels["main"];
+    let route_txn_label = KERNEL.global_labels["init"];
     // Switch context and initialize memory with the data we need for the tests.
     interpreter.generation_state.registers.program_counter = route_txn_label;
     interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
@@ -291,11 +291,6 @@ fn test_add11_yml_with_exception() {
         block_bloom: [0.into(); 8],
     };
 
-    let mut registers_after = RegistersState::default();
-    registers_after.program_counter = KERNEL.global_labels["halt"];
-    registers_after.stack_top = 146028888070u64.into();
-    registers_after.stack_len = 0;
-    registers_after.gas_used = 31848;
     let tries_inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
@@ -317,7 +312,7 @@ fn test_add11_yml_with_exception() {
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_generation_inputs_and_kernel(0, initial_stack, tries_inputs);
 
-    let route_txn_label = KERNEL.global_labels["main"];
+    let route_txn_label = KERNEL.global_labels["init"];
     // Switch context and initialize memory with the data we need for the tests.
     interpreter.generation_state.registers.program_counter = route_txn_label;
     interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());

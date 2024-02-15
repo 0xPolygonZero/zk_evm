@@ -87,7 +87,7 @@ fn test_jumpdest_analysis() -> Result<()> {
         .get_mut(&CONTEXT)
         .unwrap()
         .pop();
-    interpreter.push(U256::one());
+    interpreter.push(41.into());
 
     interpreter.run(None)?;
     assert_eq!(interpreter.stack(), vec![]);

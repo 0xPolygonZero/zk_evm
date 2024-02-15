@@ -43,7 +43,7 @@ impl RegistersState {
     /// of a full transaction proof.
     pub fn new_with_main_label() -> Self {
         Self {
-            program_counter: KERNEL.global_labels["main_contd"],
+            program_counter: KERNEL.global_labels["main"],
             is_kernel: true,
             stack_len: 0,
             stack_top: U256::zero(),
@@ -73,7 +73,7 @@ impl RegistersState {
 impl Default for RegistersState {
     fn default() -> Self {
         Self {
-            program_counter: KERNEL.global_labels["main"],
+            program_counter: KERNEL.global_labels["init"],
             is_kernel: true,
             stack_len: 0,
             stack_top: U256::zero(),

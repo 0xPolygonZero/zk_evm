@@ -105,7 +105,6 @@ impl Deref for Table {
 
 /// Number of STARK tables.
 pub(crate) const NUM_TABLES: usize = Table::MemAfter as usize + 1;
-// pub(crate) const NUM_TABLES: usize = Table::MemAfter as usize + 1;
 
 impl Table {
     /// Returns all STARK table indices.

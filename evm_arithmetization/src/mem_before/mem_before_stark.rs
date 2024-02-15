@@ -115,6 +115,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemBeforeStar
         FE: FieldExtension<D2, BaseField = F>,
         P: PackedField<Scalar = FE>,
     {
+        let local_values = vars.get_local_values();
+        // The filter must be binary.
+        let filter = local_values[FILTER];
+        yield_constr.constraint(filter * (filter - P::ONES));
     }
 
     fn eval_ext_circuit(
@@ -123,10 +127,20 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemBeforeStar
         vars: &Self::EvaluationFrameTarget,
         yield_constr: &mut RecursiveConstraintConsumer<F, D>,
     ) {
+        let local_values = vars.get_local_values();
+        // The filter must be binary.
+        let filter = local_values[FILTER];
+        let constr = builder.add_const_extension(filter, F::NEG_ONE);
+        let constr = builder.mul_extension(constr, filter);
+        yield_constr.constraint(builder, constr);
     }
 
     fn constraint_degree(&self) -> usize {
         3
+    }
+
+    fn requires_ctls(&self) -> bool {
+        true
     }
 
     fn lookups(&self) -> Vec<Lookup<F>> {

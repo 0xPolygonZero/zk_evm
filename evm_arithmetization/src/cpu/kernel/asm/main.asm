@@ -1,4 +1,4 @@
-global main:
+global init:
     PUSH @SEGMENT_REGISTERS_STATES
     // stack: addr_registers
     // First, set the registers correctly and verify their values.
@@ -60,7 +60,7 @@ global main:
     // Now, we set the PC, is_kernel and gas_used to the correct values and continue the execution.
     EXIT_KERNEL
 
-global main_contd:
+global main:
     // First, hash the kernel code
     // Start with PUSH0 to avoid having a BytePacking operation at timestamp 0.
     // Timestamp 0 is reserved for memory initialization.
