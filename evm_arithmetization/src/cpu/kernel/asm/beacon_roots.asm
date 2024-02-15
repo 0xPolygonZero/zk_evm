@@ -12,9 +12,8 @@ global set_beacon_root:
     PUSH write_beacon_roots_to_storage
     %parent_beacon_block_root
     // stack: calldata, write_beacon_roots_to_storage, timestamp_idx, timestamp, start_txns
-    DUP2
-    PUSH @HISTORY_BUFFER_LENGTH
-    ADD
+    DUP3
+    %add_const(@HISTORY_BUFFER_LENGTH)
     // stack: root_idx, calldata, write_beacon_roots_to_storage, timestamp_idx, timestamp, start_txns
 
 write_beacon_roots_to_storage:
@@ -38,16 +37,11 @@ write_beacon_roots_to_storage:
 
 after_beacon_roots_storage_insert:
     // stack: new_storage_root_ptr, retdest
-    %current_account_data
+    %get_account_data(@BEACON_ROOTS_ADDRESS)
     // stack: account_ptr, new_storage_root_ptr, retdest
 
     // Update the copied account with our new storage root pointer.
     %add_const(2)
     // stack: account_storage_root_ptr_ptr, new_storage_root_ptr, retdest
     %mstore_trie_data
-    JUMP
-
-skip_beacon_roots_update:
-    // stack: account_ptr, 64, storage_key, value_ptr, after_beacon_roots_storage_insert, retdest
-    %pop5
     JUMP

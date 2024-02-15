@@ -8,6 +8,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode};
 
 use super::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
+use crate::cpu::kernel::cancun_constants::BEACON_ROOTS_CONTRACT_CODE_HASH;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::memory::segments::Segment;
 use crate::util::{u256_to_bool, u256_to_h160, u256_to_u8, u256_to_usize};

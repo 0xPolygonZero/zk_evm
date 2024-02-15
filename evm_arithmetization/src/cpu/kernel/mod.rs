@@ -12,9 +12,7 @@ mod utils;
 
 pub(crate) mod interpreter;
 
-pub use constants::{
-    BEACON_ROOTS_ACCOUNT, BEACON_ROOTS_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
-};
+pub use constants::cancun_constants;
 
 #[cfg(test)]
 mod tests;

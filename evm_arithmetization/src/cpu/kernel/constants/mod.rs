@@ -58,12 +58,12 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c.insert(MAX_NONCE.0.into(), U256::from(MAX_NONCE.1));
     c.insert(CALL_STACK_LIMIT.0.into(), U256::from(CALL_STACK_LIMIT.1));
     c.insert(
-        BEACON_ROOTS_ADDRESS.0.into(),
-        U256::from_big_endian(&BEACON_ROOTS_ADDRESS.1),
+        cancun_constants::BEACON_ROOTS_ADDRESS.0.into(),
+        U256::from_big_endian(&cancun_constants::BEACON_ROOTS_ADDRESS.1),
     );
     c.insert(
-        HISTORY_BUFFER_LENGTH.0.into(),
-        HISTORY_BUFFER_LENGTH.1.into(),
+        cancun_constants::HISTORY_BUFFER_LENGTH.0.into(),
+        cancun_constants::HISTORY_BUFFER_LENGTH.1.into(),
     );
 
     for segment in Segment::all() {
@@ -295,27 +295,31 @@ const CODE_SIZE_LIMIT: [(&str, u64); 3] = [
 const MAX_NONCE: (&str, u64) = ("MAX_NONCE", 0xffffffffffffffff);
 const CALL_STACK_LIMIT: (&str, u64) = ("CALL_STACK_LIMIT", 1024);
 
-// Cancun-related constants
+/// Cancun-related constants
+pub mod cancun_constants {
+    use super::*;
 
-pub const BEACON_ROOTS_ADDRESS: (&str, [u8; 20]) = (
-    "BEACON_ROOTS_ADDRESS",
-    hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"),
-);
+    pub const BEACON_ROOTS_ADDRESS: (&str, [u8; 20]) = (
+        "BEACON_ROOTS_ADDRESS",
+        hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"),
+    );
 
-const HISTORY_BUFFER_LENGTH: (&str, u64) = ("HISTORY_BUFFER_LENGTH", 8191);
+    pub const HISTORY_BUFFER_LENGTH: (&str, u64) = ("HISTORY_BUFFER_LENGTH", 8191);
 
-pub const BEACON_ROOTS_CONTRACT_CODE: [u8; 106] = hex!("60618060095f395ff33373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500");
-pub const BEACON_ROOTS_CONTRACT_CODE_HASH: [u8; 32] =
-    hex!("468e991a328ab315e08296896adc222230a4960692e90cb6e096006ba6ae75d5");
+    pub const BEACON_ROOTS_CONTRACT_CODE: [u8; 106] = hex!("60618060095f395ff33373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500");
+    pub const BEACON_ROOTS_CONTRACT_CODE_HASH: [u8; 32] =
+        hex!("468e991a328ab315e08296896adc222230a4960692e90cb6e096006ba6ae75d5");
 
-pub const BEACON_ROOTS_CONTRACT_ADDRESS_HASHED: [u8; 32] =
-    hex!("37d65eaa92c6bc4c13a5ec45527f0c18ea8932588728769ec7aecfe6d9f32e42");
+    pub const BEACON_ROOTS_CONTRACT_ADDRESS_HASHED: [u8; 32] =
+        hex!("37d65eaa92c6bc4c13a5ec45527f0c18ea8932588728769ec7aecfe6d9f32e42");
 
-pub const BEACON_ROOTS_ACCOUNT: AccountRlp = AccountRlp {
-    nonce: U256::zero(),
-    balance: U256::zero(),
-    storage_root: H256(hex!(
-        "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
-    )),
-    code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
-};
+    pub const BEACON_ROOTS_ACCOUNT: AccountRlp = AccountRlp {
+        nonce: U256::zero(),
+        balance: U256::zero(),
+        // Storage root for this account at genesis.
+        storage_root: H256(hex!(
+            "f58e5f1eae7ce386de44266ff0286a88dafe7e4269c1ffa97f79dbbcf4f59e5c"
+        )),
+        code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
+    };
+}

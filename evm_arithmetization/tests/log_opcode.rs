@@ -3,7 +3,6 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bytes::Bytes;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
@@ -12,6 +11,11 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp}
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
+    initial_state_and_storage_tries_with_beacon_roots, update_beacon_roots_account_storage,
+    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
+};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -84,13 +88,17 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     // Initialize the state trie with three accounts.
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let (mut state_trie_before, mut storage_tries) =
+        initial_state_and_storage_tries_with_beacon_roots();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_before).to_vec(),
     );
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+
+    storage_tries.push((to_hashed, Node::Empty.into()));
 
     // We now add two receipts with logs and data. This updates the receipt trie as
     // well.
@@ -125,7 +133,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         state_trie: state_trie_before,
         transactions_trie: Node::Empty.into(),
         receipts_trie: receipts_trie.clone(),
-        storage_tries: vec![(to_hashed, Node::Empty.into())],
+        storage_tries,
     };
 
     // Prove a transaction which carries out two LOG opcodes.
@@ -168,6 +176,13 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
+    update_beacon_roots_account_storage(
+        &mut beacon_roots_account_storage,
+        block_metadata.block_timestamp,
+        block_metadata.parent_beacon_block_root,
+    );
+    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
     // Update the receipt trie.
     let first_log = LogRlp {
         address: to.into(),
@@ -203,6 +218,10 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     );
     expected_state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+    expected_state_trie_after.insert(
+        beacon_roots_account_nibbles(),
+        rlp::encode(&beacon_roots_account).to_vec(),
+    );
 
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
@@ -315,7 +334,9 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     // `to_account`.
     let gas_price = 10;
     let txn_value = 0xau64;
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let (mut state_trie_before, storage_tries) =
+        initial_state_and_storage_tries_with_beacon_roots();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_before).to_vec(),
@@ -332,7 +353,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         state_trie: state_trie_before,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![],
+        storage_tries,
     };
 
     let txn = hex!("f85f800a82520894095e7baea6a6c7c4c2dfeb977efac326af552d870a8026a0122f370ed4023a6c253350c6bfb87d7d7eb2cd86447befee99e0a26b70baec20a07100ab1b3977f2b4571202b9f4b68850858caf5469222794600b5ce1cfb348ad");
@@ -382,6 +403,13 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
+    update_beacon_roots_account_storage(
+        &mut beacon_roots_account_storage,
+        block_1_metadata.block_timestamp,
+        block_1_metadata.parent_beacon_block_root,
+    );
+    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
@@ -396,6 +424,10 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     expected_state_trie_after.insert(
         to_second_nibbles,
         rlp::encode(&to_account_second_before).to_vec(),
+    );
+    expected_state_trie_after.insert(
+        beacon_roots_account_nibbles(),
+        rlp::encode(&beacon_roots_account).to_vec(),
     );
 
     // Compute new receipt trie.
@@ -546,6 +578,14 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         rlp::encode(&to_account_second_after).to_vec(),
     );
 
+    // Copy without the beacon roots account for the next block.
+    let mut state_trie_after_block2 = expected_state_trie_after.clone();
+
+    expected_state_trie_after.insert(
+        beacon_roots_account_nibbles(),
+        rlp::encode(&beacon_roots_account).to_vec(),
+    );
+
     transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec());
 
     let block_1_state_root = expected_state_trie_after.hash();
@@ -601,7 +641,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
 
     let block_2_metadata = BlockMetadata {
         block_beneficiary: Address::from(beneficiary),
-        block_timestamp: 0x03e8.into(),
+        block_timestamp: 0x03e9.into(),
         block_number: 2.into(),
         block_difficulty: 0x020000.into(),
         block_gaslimit: 0x445566u32.into(),
@@ -613,6 +653,19 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
 
+    let initial_beacon_roots_account_storage = beacon_roots_account_storage.clone();
+    update_beacon_roots_account_storage(
+        &mut beacon_roots_account_storage,
+        block_2_metadata.block_timestamp,
+        block_2_metadata.parent_beacon_block_root,
+    );
+    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
+    state_trie_after_block2.insert(
+        beacon_roots_account_nibbles(),
+        rlp::encode(&beacon_roots_account).to_vec(),
+    );
+
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
@@ -620,10 +673,13 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             state_trie: expected_state_trie_after,
             transactions_trie: Node::Empty.into(),
             receipts_trie: Node::Empty.into(),
-            storage_tries: vec![],
+            storage_tries: vec![(
+                H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
+                initial_beacon_roots_account_storage,
+            )],
         },
         trie_roots_after: TrieRoots {
-            state_root: trie_roots_after.state_root,
+            state_root: state_trie_after_block2.hash(),
             transactions_root: HashedPartialTrie::from(Node::Empty).hash(),
             receipts_root: HashedPartialTrie::from(Node::Empty).hash(),
         },
@@ -775,8 +831,4 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     );
 
     Ok(())
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }

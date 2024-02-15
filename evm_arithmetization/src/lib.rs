@@ -209,6 +209,7 @@ pub mod witness;
 // Utility modules
 pub mod curve_pairings;
 pub mod extension_tower;
+pub mod testing_utils;
 pub mod util;
 
 // Set up Jemalloc

@@ -2,17 +2,17 @@ use core::marker::PhantomData;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{BigEndianHash, H256};
-use evm_arithmetization::cpu::kernel::{
-    BEACON_ROOTS_ACCOUNT, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
-};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
+    initial_state_and_storage_tries_with_beacon_roots, update_beacon_roots_account_storage,
+};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
+use hex_literal::hex;
 use keccak_hash::keccak;
 use log::info;
-use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
@@ -34,27 +34,39 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
 
     let block_metadata = BlockMetadata {
         block_number: 1.into(),
+        parent_beacon_block_root: H256(hex!(
+            "44e2566c06c03b132e0ede3e90af477ebca74393b89dd6cb29f9c79cbcb6e963"
+        )),
         ..Default::default()
     };
 
-    let state_trie: HashedPartialTrie = Node::Leaf {
-        nibbles: Nibbles::from_bytes_be(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED).unwrap(),
-        value: rlp::encode(&BEACON_ROOTS_ACCOUNT).to_vec(),
-    }
-    .into();
+    let (state_trie, storage_tries) = initial_state_and_storage_tries_with_beacon_roots();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
-    let storage_tries = vec![(
-        H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
-        Node::Empty.into(),
-    )];
+
+    let state_trie_after: HashedPartialTrie = {
+        update_beacon_roots_account_storage(
+            &mut beacon_roots_account_storage,
+            block_metadata.block_timestamp,
+            block_metadata.parent_beacon_block_root,
+        );
+        let beacon_roots_account =
+            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
+        Node::Leaf {
+            nibbles: beacon_roots_account_nibbles(),
+            value: rlp::encode(&beacon_roots_account).to_vec(),
+        }
+        .into()
+    };
 
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
 
-    // No transactions, so no trie roots change.
+    // No transactions, but the beacon roots contract has been updated.
     let trie_roots_after = TrieRoots {
-        state_root: state_trie.hash(),
+        state_root: state_trie_after.hash(),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -85,8 +97,8 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     // Initialize the preprocessed circuits for the zkEVM.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 9..11, 12..13, 14..15, 9..11, 12..13, 17..18], /* Minimal ranges to prove an
-                                                                  * empty list */
+        // Minimal ranges to prove an empty list
+        &[16..17, 11..12, 13..14, 14..15, 9..10, 12..13, 17..18],
         &config,
     );
 
@@ -156,8 +168,4 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     // verify the block_proof.
     let verifier = all_circuits.final_verifier_data();
     verifier.verify(block_proof)
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }
