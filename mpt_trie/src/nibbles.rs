@@ -735,7 +735,7 @@ impl Nibbles {
 
     // TODO: Make not terrible at some point... Consider moving away from `U256`
     // internally?
-    /// Returns the nibbles btyes in big-endian format.
+    /// Returns the nibbles bytes in big-endian format.
     pub fn bytes_be(&self) -> Vec<u8> {
         let mut byte_buf = [0; 64];
         self.packed.to_big_endian(&mut byte_buf);
@@ -766,7 +766,7 @@ impl Nibbles {
     }
 
     // TODO: REMOVE BEFORE NEXT CRATE VERSION! THIS IS A TEMP HACK!
-    /// Converto to u256 returning an error if not possible.
+    /// Convert to u256 returning an error if not possible.
     pub fn try_into_u256(&self) -> Result<U256, String> {
         match self.count <= 64 {
             false => Err(format!(
