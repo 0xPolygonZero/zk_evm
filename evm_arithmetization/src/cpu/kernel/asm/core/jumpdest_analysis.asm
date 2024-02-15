@@ -277,13 +277,16 @@ global write_table_if_jumpdest:
     // pos 0102030405060708091011121314151617181920212223242526272829303132
     PUSH 0x8080808080808080808080808080808080808080808080808080808080808080
     AND
-    %jump_neq_const(0x8080808080808080808080808080808080808080808080808080808080808080, return_pop_opcode)
+    // If we received a proof it MUST be valid or we abort immediately. This
+    // is especially important for non-jupdest proofs. Otherwise a malicious
+    // prover might mark a valid jumpdest as invalid by providing an invalid proof
+    // that makes verify_non_jumpdest return prematurely.
+    %assert_eq_const(0x8080808080808080808080808080808080808080808080808080808080808080)
     POP
     %add_const(32)
 
     // check the remaining path
     %jump(verify_path_and_write_jumpdest_table)
-return_pop_opcode:
     POP
 return:
     // stack: proof_prefix_addr, ctx, jumpdest, retdest
