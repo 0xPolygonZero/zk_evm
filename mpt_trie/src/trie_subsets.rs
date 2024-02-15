@@ -17,12 +17,14 @@ use crate::{
     utils::{bytes_to_h256, TrieNodeType},
 };
 
+/// The output type of trie_subset operations.
 pub type SubsetTrieResult<T> = Result<T, SubsetTrieError>;
 
 /// Errors that may occur when creating a subset [`PartialTrie`].
 #[derive(Debug, Error)]
 pub enum SubsetTrieError {
     #[error("Tried to mark nodes in a tracked trie for a key that does not exist! (Key: {0}, trie: {1})")]
+    /// The key does not exist in the trie.
     UnexpectedKey(Nibbles, String),
 }
 

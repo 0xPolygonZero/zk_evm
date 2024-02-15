@@ -44,6 +44,7 @@ impl Default for DebugQueryParams {
 }
 
 #[derive(Debug, Default)]
+/// A wrapper for `DebugQueryParams`.
 pub struct DebugQueryParamsBuilder {
     params: DebugQueryParams,
 }
@@ -67,6 +68,7 @@ impl DebugQueryParamsBuilder {
         self
     }
 
+    /// Builds a new debug query for a given key.
     pub fn build<K: Into<Nibbles>>(self, k: K) -> DebugQuery {
         DebugQuery {
             k: k.into(),
@@ -153,6 +155,8 @@ fn count_non_empty_branch_children_from_mask(mask: u16) -> usize {
 }
 
 #[derive(Clone, Debug)]
+/// The result of a debug query contains information
+/// of the path used for searching for a key in the trie.
 pub struct DebugQueryOutput {
     k: Nibbles,
     node_path: NodePath,

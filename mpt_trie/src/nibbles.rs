@@ -1,3 +1,6 @@
+//! Define [`Nibbles`] and how to convert bytes, hex prefix encodings and
+//! strings into nibbles.
+
 use std::mem::size_of;
 use std::{
     fmt::{self, Debug},
@@ -18,7 +21,9 @@ use uint::FromHexError;
 use crate::utils::{create_mask_of_1s, is_even};
 
 // Use a whole byte for a Nibble just for convenience
+/// A Nibble has 4 bits and is stored as `u8`.
 pub type Nibble = u8;
+/// Used for the internal representation of a sequence of nibbles.
 pub type NibblesIntern = U512;
 
 /// Because there are two different ways to convert to `Nibbles`, we don't want
@@ -46,25 +51,32 @@ pub trait ToNibbles {
 }
 
 #[derive(Debug, Error)]
+/// Errors encountered when converting from `Bytes` to `Nibbles`.
 pub enum BytesToNibblesError {
     #[error("Tried constructing `Nibbles` from a zero byte slice")]
+    /// The size is zero.
     ZeroSizedKey,
 
     #[error("Tried constructing `Nibbles` from a byte slice with more than 33 bytes (len: {0})")]
+    /// The slice is too large.
     TooManyBytes(usize),
 }
 
 #[derive(Debug, Error)]
+/// Errors encountered when converting to hex prefix encoding to nibbles.
 pub enum FromHexPrefixError {
     #[error("Tried to convert a hex prefix byte string into `Nibbles` with invalid flags at the start: {0:#04b}")]
+    /// The hex prefix encoding flag is invalid.
     InvalidFlags(Nibble),
 
     #[error("Tried to convert a hex prefix byte string into `Nibbles` that was longer than 64 bytes: (length: {0}, bytes: {1})")]
+    /// The hex prefix encoding is too large.
     TooLong(String, usize),
 }
 
 #[derive(Debug, Error)]
 #[error(transparent)]
+/// An error encountered when converting a string to a sequence of nibbles.
 pub struct StrToNibblesError(#[from] FromHexError);
 
 /// The default conversion to nibbles will be to be precise down to the
@@ -723,6 +735,7 @@ impl Nibbles {
 
     // TODO: Make not terrible at some point... Consider moving away from `U256`
     // internally?
+    /// Returns the nibbles bytes in big-endian format.
     pub fn bytes_be(&self) -> Vec<u8> {
         let mut byte_buf = [0; 64];
         self.packed.to_big_endian(&mut byte_buf);
@@ -753,6 +766,7 @@ impl Nibbles {
     }
 
     // TODO: REMOVE BEFORE NEXT CRATE VERSION! THIS IS A TEMP HACK!
+    /// Converts to u256 returning an error if not possible.
     pub fn try_into_u256(&self) -> Result<U256, String> {
         match self.count <= 64 {
             false => Err(format!(

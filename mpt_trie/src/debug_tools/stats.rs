@@ -10,6 +10,8 @@ use num_traits::ToPrimitive;
 use crate::partial_trie::{Node, PartialTrie};
 
 #[derive(Debug, Default)]
+/// Statistics for a given trie, consisting of node count aggregated
+/// by time, lowest depth and average depth of leaf and hash nodes.
 pub struct TrieStats {
     name: Option<String>,
     counts: NodeCounts,
@@ -31,6 +33,7 @@ impl Display for TrieStats {
 }
 
 impl TrieStats {
+    /// Compares with the statistics of another trie.
     pub fn compare(&self, other: &Self) -> TrieComparison {
         TrieComparison {
             node_comp: self.counts.compare(&other.counts),
@@ -240,10 +243,13 @@ impl DepthStats {
     }
 }
 
+/// Returns trie statistics consisting of node type counts as well as depth
+/// statistics.
 pub fn get_trie_stats<T: PartialTrie>(trie: &T) -> TrieStats {
     get_trie_stats_common(trie, None)
 }
 
+/// Returns trie statistics with a given name.
 pub fn get_trie_stats_with_name<T: PartialTrie>(trie: &T, name: String) -> TrieStats {
     get_trie_stats_common(trie, Some(name))
 }

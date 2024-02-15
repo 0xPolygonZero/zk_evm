@@ -152,6 +152,8 @@ struct BranchStackEntry<N> {
 }
 
 #[derive(Debug)]
+/// An iterator that ranges over all the leafs and hash nodes
+/// of the trie, in lexicographic order.
 pub struct PartialTrieIter<N> {
     curr_key_after_last_branch: Nibbles,
     trie_stack: Vec<IterStackEntry<N>>,
