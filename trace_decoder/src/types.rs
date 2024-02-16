@@ -3,7 +3,7 @@ use evm_arithmetization::{
     generation::GenerationInputs,
     proof::{BlockHashes, BlockMetadata},
 };
-use mpt_trie::nibbles::Nibbles;
+use mpt_trie::{nibbles::Nibbles, partial_trie::HashedPartialTrie};
 use serde::{Deserialize, Serialize};
 
 /// A type alias around `u64` for a block height.
@@ -30,6 +30,8 @@ pub type StorageVal = U256;
 pub type TrieRootHash = H256;
 /// A type alias around `usize` for a transaction's index within a block.
 pub type TxnIdx = usize;
+
+pub(crate) type TriePathIter = mpt_trie::special_query::TriePathIter<HashedPartialTrie>;
 
 /// A function which turns a code hash into bytes.
 pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;
