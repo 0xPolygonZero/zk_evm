@@ -114,11 +114,11 @@ fn eval_packed_accumulate<P: PackedField>(
     );
 
     // For PROVER_INPUT and PUSH operations.
-    // PUSH operations are differentiated from PROVER_INPUT by their 6th bit set to
+    // PUSH operations are differentiated from PROVER_INPUT by their 8th bit set to
     // 1.
-    let push_prover_input_gas_cost = lv.opcode_bits[5]
+    let push_prover_input_gas_cost = (P::ONES - lv.opcode_bits[7])
         * P::Scalar::from_canonical_u32(G_VERYLOW.unwrap())
-        + (P::ONES - lv.opcode_bits[5]) * P::Scalar::from_canonical_u32(KERNEL_ONLY_INSTR.unwrap());
+        + lv.opcode_bits[7] * P::Scalar::from_canonical_u32(KERNEL_ONLY_INSTR.unwrap());
     yield_constr
         .constraint_transition(lv.op.push_prover_input * (gas_diff - push_prover_input_gas_cost));
 }
@@ -282,13 +282,13 @@ fn eval_ext_circuit_accumulate<F: RichField + Extendable<D>, const D: usize>(
     yield_constr.constraint_transition(builder, constr);
 
     // For PROVER_INPUT and PUSH operations.
-    // PUSH operations are differentiated from PROVER_INPUT by their 6th bit set to
+    // PUSH operations are differentiated from PROVER_INPUT by their 8th bit set to
     // 1.
     let push_prover_input_gas_cost = builder.arithmetic_extension(
-        F::from_canonical_u32(G_VERYLOW.unwrap())
-            - F::from_canonical_u32(KERNEL_ONLY_INSTR.unwrap()),
-        F::from_canonical_u32(KERNEL_ONLY_INSTR.unwrap()),
-        lv.opcode_bits[5],
+        F::from_canonical_u32(KERNEL_ONLY_INSTR.unwrap())
+            - F::from_canonical_u32(G_VERYLOW.unwrap()),
+        F::from_canonical_u32(G_VERYLOW.unwrap()),
+        lv.opcode_bits[7],
         one,
         one,
     );
