@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
-    iter::{self, empty, once},
+    iter::once,
 };
 
 use ethereum_types::{Address, H256, U256};
@@ -20,8 +20,7 @@ use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites, TxnMetaState},
     types::{
         HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, OtherBlockData, TrieRootHash,
-        TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED, EMPTY_TRIE_HASH,
-        ZERO_STORAGE_SLOT_VAL_RLPED,
+        TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, update_val_if_some},
 };
@@ -369,10 +368,7 @@ impl ProcessedBlockTrace {
             // If we have no actual dummy proofs, then we create one and append it to the
             // end of the block.
             false => {
-                // Guaranteed to have a real txn.
-                let txn_idx_of_dummy_entry =
-                    txn_ir.last().unwrap().txn_number_before.low_u64() as usize + 1;
-
+                // TODO: Decide if we want this allocation...
                 // To avoid double hashing the addrs, but I don't know if the extra `Vec`
                 // allocation is worth it.
                 let withdrawals_with_hashed_addrs: Vec<_> =
@@ -562,10 +558,10 @@ fn create_dummy_gen_input_common(
 }
 
 fn create_dummy_proof_trie_inputs(
-    final_trie_state: &PartialTrieState,
+    final_tries_at_end_of_block: &PartialTrieState,
     state_trie: HashedPartialTrie,
 ) -> TrieInputs {
-    let partial_sub_storage_tries: Vec<_> = final_trie_state
+    let partial_sub_storage_tries: Vec<_> = final_tries_at_end_of_block
         .storage
         .iter()
         .map(|(hashed_acc_addr, s_trie)| {
@@ -578,8 +574,12 @@ fn create_dummy_proof_trie_inputs(
 
     TrieInputs {
         state_trie,
-        transactions_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.txn),
-        receipts_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.receipt),
+        transactions_trie: create_fully_hashed_out_sub_partial_trie(
+            &final_tries_at_end_of_block.txn,
+        ),
+        receipts_trie: create_fully_hashed_out_sub_partial_trie(
+            &final_tries_at_end_of_block.receipt,
+        ),
         storage_tries: partial_sub_storage_tries,
     }
 }
