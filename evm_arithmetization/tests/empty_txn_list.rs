@@ -8,6 +8,7 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieR
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
     initial_state_and_storage_tries_with_beacon_roots, update_beacon_roots_account_storage,
+    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -72,24 +73,24 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     };
     let mut initial_block_hashes = vec![H256::default(); 256];
     initial_block_hashes[255] = H256::from_uint(&0x200.into());
-    let inputs = GenerationInputs {
+    let inputs1 = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
         tries: TrieInputs {
-            state_trie,
-            transactions_trie,
-            receipts_trie,
-            storage_tries,
+            state_trie: state_trie.clone(),
+            transactions_trie: transactions_trie.clone(),
+            receipts_trie: receipts_trie.clone(),
+            storage_tries: storage_tries.clone(),
         },
         trie_roots_after,
-        contract_code,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
-        block_metadata,
+        contract_code: contract_code.clone(),
+        checkpoint_state_trie_root: state_trie.hash(),
+        block_metadata: block_metadata.clone(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0.into(),
         block_hashes: BlockHashes {
-            prev_hashes: initial_block_hashes,
+            prev_hashes: initial_block_hashes.clone(),
             cur_hash: H256::default(),
         },
     };
@@ -98,7 +99,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
         // Minimal ranges to prove an empty list
-        &[16..17, 11..12, 13..14, 14..15, 9..10, 12..13, 17..18],
+        &[16..17, 11..13, 13..15, 14..15, 9..10, 12..13, 17..18],
         &config,
     );
 
@@ -131,9 +132,9 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         assert_eq!(all_circuits, all_circuits_from_bytes);
     }
 
-    let mut timing = TimingTree::new("prove", log::Level::Info);
+    let mut timing = TimingTree::new("prove first dummy", log::Level::Info);
     let (root_proof, public_values) =
-        all_circuits.prove_root(&all_stark, &config, inputs, &mut timing, None)?;
+        all_circuits.prove_root(&all_stark, &config, inputs1, &mut timing, None)?;
     timing.filter(Duration::from_millis(100)).print();
     all_circuits.verify_root(root_proof.clone())?;
 
@@ -141,14 +142,51 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let retrieved_public_values = PublicValues::from_public_inputs(&root_proof.public_inputs);
     assert_eq!(retrieved_public_values, public_values);
 
-    // We can duplicate the proofs here because the state hasn't mutated.
+    // We cannot duplicate the proof here because even though there weren't any
+    // transactions, the state has mutated when updating the beacon roots contract.
+    let trie_roots_after = TrieRoots {
+        state_root: state_trie_after.hash(),
+        transactions_root: transactions_trie.hash(),
+        receipts_root: receipts_trie.hash(),
+    };
+    let inputs2 = GenerationInputs {
+        signed_txn: None,
+        withdrawals: vec![],
+        tries: TrieInputs {
+            state_trie: state_trie_after,
+            transactions_trie,
+            receipts_trie,
+            storage_tries: vec![(
+                H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
+                beacon_roots_account_storage,
+            )],
+        },
+        trie_roots_after,
+        contract_code,
+        checkpoint_state_trie_root: state_trie.hash(),
+        block_metadata,
+        txn_number_before: 0.into(),
+        gas_used_before: 0.into(),
+        gas_used_after: 0.into(),
+        block_hashes: BlockHashes {
+            prev_hashes: initial_block_hashes,
+            cur_hash: H256::default(),
+        },
+    };
+
+    let mut timing = TimingTree::new("prove second dummy", log::Level::Info);
+    let (root_proof2, public_values2) =
+        all_circuits.prove_root(&all_stark, &config, inputs2, &mut timing, None)?;
+    timing.filter(Duration::from_millis(100)).print();
+    all_circuits.verify_root(root_proof2.clone())?;
+
     let (agg_proof, agg_public_values) = all_circuits.prove_aggregation(
         false,
         &root_proof,
         public_values.clone(),
         false,
-        &root_proof,
-        public_values,
+        &root_proof2,
+        public_values2,
     )?;
     all_circuits.verify_aggregation(&agg_proof)?;
 

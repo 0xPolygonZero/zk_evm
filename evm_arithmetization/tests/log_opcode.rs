@@ -694,19 +694,31 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             cur_hash: block_2_hash,
         },
     };
+    let mut inputs2 = inputs.clone();
 
     let (root_proof, public_values) =
         all_circuits.prove_root(&all_stark, &config, inputs, &mut timing, None)?;
     all_circuits.verify_root(root_proof.clone())?;
 
-    // We can just duplicate the initial proof as the state didn't change.
+    // We cannot duplicate the proof here because even though there weren't any
+    // transactions, the state has mutated when updating the beacon roots contract.
+    inputs2.tries.storage_tries = vec![(
+        H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
+        beacon_roots_account_storage,
+    )];
+    inputs2.tries.state_trie = state_trie_after_block2;
+
+    let (root_proof2, public_values2) =
+        all_circuits.prove_root(&all_stark, &config, inputs2, &mut timing, None)?;
+    all_circuits.verify_root(root_proof2.clone())?;
+
     let (agg_proof, updated_agg_public_values) = all_circuits.prove_aggregation(
         false,
         &root_proof,
         public_values.clone(),
         false,
-        &root_proof,
-        public_values,
+        &root_proof2,
+        public_values2,
     )?;
     all_circuits.verify_aggregation(&agg_proof)?;
 
