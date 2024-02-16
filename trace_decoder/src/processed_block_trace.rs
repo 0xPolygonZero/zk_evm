@@ -211,7 +211,7 @@ struct CodeHashResolving<F> {
 }
 
 impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
-    fn resolve_code_hash(&mut self, c_hash: &CodeHash) -> Vec<u8> {
+    fn resolve(&mut self, c_hash: &CodeHash) -> Vec<u8> {
         match self.extra_code_hash_mappings.get(c_hash) {
             Some(code) => code.clone(),
             None => (self.client_code_hash_resolve_f)(c_hash),
@@ -227,7 +227,7 @@ impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
-        code_hash_resolve: &mut CodeHashResolving<F>,
+        code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
@@ -288,13 +288,13 @@ impl TxnInfo {
                     ContractCodeUsage::Read(c_hash) => {
                         contract_code_accessed
                             .entry(c_hash)
-                            .or_insert_with(|| code_hash_resolve.resolve_code_hash(&c_hash));
+                            .or_insert_with(|| code_hash_resolver.resolve(&c_hash));
                     }
                     ContractCodeUsage::Write(c_bytes) => {
                         let c_hash = hash(&c_bytes);
 
                         contract_code_accessed.insert(c_hash, c_bytes.0.clone());
-                        code_hash_resolve.insert_code(c_hash, c_bytes.0);
+                        code_hash_resolver.insert_code(c_hash, c_bytes.0);
                     }
                 }
             }
