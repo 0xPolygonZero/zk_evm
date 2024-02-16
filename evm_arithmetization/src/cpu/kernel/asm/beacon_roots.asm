@@ -1,4 +1,5 @@
 /// EIP-4788: Beacon block root in the EVM
+/// <https://eips.ethereum.org/EIPS/eip-4788#pseudocode>
 
 global set_beacon_root:
     PUSH start_txn
@@ -6,7 +7,7 @@ global set_beacon_root:
     // stack: timestamp, start_txns
     PUSH @HISTORY_BUFFER_LENGTH
     DUP2
-    // stack: timestamp, mod, timestamp, start_txns
+    // stack: timestamp, 8191, timestamp, start_txns
     MOD
     // stack: timestamp_idx, timestamp, start_txns
     PUSH write_beacon_roots_to_storage

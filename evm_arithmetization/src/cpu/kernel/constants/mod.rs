@@ -296,6 +296,7 @@ const MAX_NONCE: (&str, u64) = ("MAX_NONCE", 0xffffffffffffffff);
 const CALL_STACK_LIMIT: (&str, u64) = ("CALL_STACK_LIMIT", 1024);
 
 /// Cancun-related constants
+/// See <https://eips.ethereum.org/EIPS/eip-4788#deployment>.
 pub mod cancun_constants {
     use super::*;
 
