@@ -206,7 +206,7 @@ struct CodeHashResolving<F> {
 
     /// Code hash mappings that we have constructed from parsing the block
     /// trace. If there are any txns that create contracts, then they will also
-    /// get added here as we processes the deltas.
+    /// get added here as we process the deltas.
     extra_code_hash_mappings: HashMap<CodeHash, Vec<u8>>,
 }
 
