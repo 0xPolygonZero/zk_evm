@@ -369,23 +369,24 @@ impl ProcessedBlockTrace {
             return false;
         }
 
-        // Node we need to check is the second last.
-        let seg_idx = old_path.0.len() - 1;
+        // Node we need to check is the last node in the new path.
+        let seg_idx = new_path.0.len() - 1;
+        let old_seg_at_idx = &old_path.0[seg_idx];
 
-        // The second last node needs to be a branch in order for a collapse to occur.
-        if matches!(&old_path.0[seg_idx], TrieSegment::Branch(_)) {
+        // The last node needs to be a branch in order for a collapse to occur.
+        if !matches!(old_seg_at_idx, TrieSegment::Branch(_)) {
             return false;
         }
 
         let new_seg_at_idx = &new_path.0[seg_idx];
 
-        if matches!(new_seg_at_idx, TrieSegment::Branch(_)) {
+        if old_seg_at_idx.node_type() == new_seg_at_idx.node_type() {
             return false;
         }
 
         // Additional sanity check as this should be the only valid node type after a
         // collapse.
-        assert!(matches!(new_seg_at_idx, TrieSegment::Extension(_)));
+        assert!(matches!(new_seg_at_idx, TrieSegment::Leaf(_)));
 
         true
     }
