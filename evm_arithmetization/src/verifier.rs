@@ -199,6 +199,14 @@ where
             public_values.block_metadata.block_blob_base_fee,
         ),
         (
+            GlobalMetadata::BlockBlobGasUsed,
+            public_values.block_metadata.block_blob_gas_used,
+        ),
+        (
+            GlobalMetadata::BlockExcessBlobGas,
+            public_values.block_metadata.block_excess_blob_gas,
+        ),
+        (
             GlobalMetadata::TxnNumberBefore,
             public_values.extra_block_data.txn_number_before,
         ),
@@ -347,6 +355,14 @@ pub(crate) mod debug_utils {
             (
                 GlobalMetadata::BlockBlobBaseFee,
                 public_values.block_metadata.block_blob_base_fee,
+            ),
+            (
+                GlobalMetadata::BlockBlobGasUsed,
+                public_values.block_metadata.block_blob_gas_used,
+            ),
+            (
+                GlobalMetadata::BlockExcessBlobGas,
+                public_values.block_metadata.block_excess_blob_gas,
             ),
             (
                 GlobalMetadata::ParentBeaconBlockRoot,
