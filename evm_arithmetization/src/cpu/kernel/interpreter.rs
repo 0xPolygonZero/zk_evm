@@ -306,6 +306,10 @@ impl<'a, F: Field> Interpreter<'a, F> {
             (GlobalMetadata::BlockChainId, metadata.block_chain_id),
             (GlobalMetadata::BlockBaseFee, metadata.block_base_fee),
             (
+                GlobalMetadata::BlockBlobBaseFee,
+                metadata.block_blob_base_fee,
+            ),
+            (
                 GlobalMetadata::BlockCurrentHash,
                 h2u(inputs.block_hashes.cur_hash),
             ),
