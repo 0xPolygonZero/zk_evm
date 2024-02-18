@@ -30,12 +30,13 @@ pub(crate) fn eval_round_flags<F: Field, P: PackedField<Scalar = F>>(
         .sum::<P>();
     let next_any_flag = (0..NUM_ROUNDS).map(|i| next_values[reg_step(i)]).sum::<P>();
     let last_round_flag = local_values[reg_step(NUM_ROUNDS - 1)];
+    let padding_constraint =
+        (next_any_flag - F::ONE) * current_any_flag * (last_round_flag - F::ONE);
     for i in 0..NUM_ROUNDS {
         let current_round_flag = local_values[reg_step(i)];
         let next_round_flag = next_values[reg_step((i + 1) % NUM_ROUNDS)];
         yield_constr.constraint_transition(
-            next_any_flag * (next_round_flag - current_round_flag)
-                + (next_any_flag - F::ONE) * current_any_flag * (last_round_flag - F::ONE),
+            next_any_flag * (next_round_flag - current_round_flag) + padding_constraint,
         );
     }
 
@@ -65,16 +66,15 @@ pub(crate) fn eval_round_flags_recursively<F: RichField + Extendable<D>, const D
     let next_any_flag =
         builder.add_many_extension((0..NUM_ROUNDS).map(|i| next_values[reg_step(i)]));
     let last_round_flag = local_values[reg_step(NUM_ROUNDS - 1)];
+    let padding_constraint = {
+        let tmp = builder.mul_sub_extension(current_any_flag, next_any_flag, current_any_flag);
+        builder.mul_sub_extension(tmp, last_round_flag, tmp)
+    };
     for i in 0..NUM_ROUNDS {
         let current_round_flag = local_values[reg_step(i)];
         let next_round_flag = next_values[reg_step((i + 1) % NUM_ROUNDS)];
         let flag_diff = builder.sub_extension(next_round_flag, current_round_flag);
-        let constraint1 = builder.mul_extension(next_any_flag, flag_diff);
-        let constraint2 = {
-            let tmp = builder.mul_sub_extension(current_any_flag, next_any_flag, current_any_flag);
-            builder.mul_sub_extension(tmp, last_round_flag, tmp)
-        };
-        let constraint = builder.add_extension(constraint1, constraint2);
+        let constraint = builder.mul_add_extension(next_any_flag, flag_diff, padding_constraint);
         yield_constr.constraint_transition(builder, constraint);
     }
 
