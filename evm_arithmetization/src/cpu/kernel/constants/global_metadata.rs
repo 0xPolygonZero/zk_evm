@@ -56,6 +56,8 @@ pub(crate) enum GlobalMetadata {
     BlockGasUsedAfter,
     /// Current block header hash
     BlockCurrentHash,
+    /// EIP-4788: hash tree root of the beacon chain parent block.
+    ParentBeaconBlockRoot,
 
     /// Gas to refund at the end of the transaction.
     RefundCounter,
@@ -101,7 +103,7 @@ pub(crate) enum GlobalMetadata {
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 49;
+    pub(crate) const COUNT: usize = 50;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -134,6 +136,7 @@ impl GlobalMetadata {
             Self::BlockGasUsed,
             Self::BlockGasUsedBefore,
             Self::BlockGasUsedAfter,
+            Self::ParentBeaconBlockRoot,
             Self::RefundCounter,
             Self::AccessedAddressesLen,
             Self::AccessedStorageKeysLen,
@@ -190,6 +193,7 @@ impl GlobalMetadata {
             Self::BlockGasUsedBefore => "GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE",
             Self::BlockGasUsedAfter => "GLOBAL_METADATA_BLOCK_GAS_USED_AFTER",
             Self::BlockCurrentHash => "GLOBAL_METADATA_BLOCK_CURRENT_HASH",
+            Self::ParentBeaconBlockRoot => "GLOBAL_METADATA_PARENT_BEACON_BLOCK_ROOT",
             Self::RefundCounter => "GLOBAL_METADATA_REFUND_COUNTER",
             Self::AccessedAddressesLen => "GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN",
             Self::AccessedStorageKeysLen => "GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN",
