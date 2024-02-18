@@ -29,13 +29,13 @@ pub(crate) fn eval_round_flags<F: Field, P: PackedField<Scalar = F>>(
         .map(|i| local_values[reg_step(i)])
         .sum::<P>();
     let next_any_flag = (0..NUM_ROUNDS).map(|i| next_values[reg_step(i)]).sum::<P>();
-    let last_row_flag = local_values[reg_step(NUM_ROUNDS - 1)];
+    let last_round_flag = local_values[reg_step(NUM_ROUNDS - 1)];
     for i in 0..NUM_ROUNDS {
         let current_round_flag = local_values[reg_step(i)];
         let next_round_flag = next_values[reg_step((i + 1) % NUM_ROUNDS)];
         yield_constr.constraint_transition(
             next_any_flag * (next_round_flag - current_round_flag)
-                + (next_any_flag - F::ONE) * current_any_flag * (last_row_flag - F::ONE),
+                + (next_any_flag - F::ONE) * current_any_flag * (last_round_flag - F::ONE),
         );
     }
 
@@ -64,16 +64,16 @@ pub(crate) fn eval_round_flags_recursively<F: RichField + Extendable<D>, const D
         builder.add_many_extension((0..NUM_ROUNDS).map(|i| local_values[reg_step(i)]));
     let next_any_flag =
         builder.add_many_extension((0..NUM_ROUNDS).map(|i| next_values[reg_step(i)]));
-    let last_row_flag = local_values[reg_step(NUM_ROUNDS - 1)];
+    let last_round_flag = local_values[reg_step(NUM_ROUNDS - 1)];
     for i in 0..NUM_ROUNDS {
         let current_round_flag = local_values[reg_step(i)];
         let next_round_flag = next_values[reg_step((i + 1) % NUM_ROUNDS)];
-        let diff1 = builder.sub_extension(next_round_flag, current_round_flag);
-        let constraint1 = builder.mul_extension(next_any_flag, diff1);
-        let diff2 = builder.sub_extension(next_any_flag, one);
-        let diff3 = builder.sub_extension(last_row_flag, one);
-        let prod = builder.mul_extension(diff2, diff3);
-        let constraint2 = builder.mul_extension(current_any_flag, prod);
+        let flag_diff = builder.sub_extension(next_round_flag, current_round_flag);
+        let constraint1 = builder.mul_extension(next_any_flag, flag_diff);
+        let constraint2 = {
+            let tmp = builder.mul_sub_extension(current_any_flag, next_any_flag, current_any_flag);
+            builder.mul_sub_extension(tmp, last_round_flag, tmp)
+        };
         let constraint = builder.add_extension(constraint1, constraint2);
         yield_constr.constraint_transition(builder, constraint);
     }
