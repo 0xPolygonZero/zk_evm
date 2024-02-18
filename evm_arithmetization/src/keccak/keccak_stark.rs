@@ -276,9 +276,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakStark<F
         let next_values = vars.get_next_values();
 
         // If this is not the final step, the filter must be off.
-        let final_step = local_values[reg_step(NUM_ROUNDS - 1)];
-        let not_final_step = P::ONES - final_step;
-        yield_constr.constraint(not_final_step * final_step);
+        let not_final_step = P::ONES - local_values[reg_step(NUM_ROUNDS - 1)];
 
         // If this is not the final step or a padding row,
         // the local and next timestamps must match.
@@ -443,10 +441,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakStark<F
         let next_values = vars.get_next_values();
 
         // If this is not the final step, the filter must be off.
-        let final_step = local_values[reg_step(NUM_ROUNDS - 1)];
-        let not_final_step = builder.sub_extension(one_ext, final_step);
-        let constraint = builder.mul_extension(not_final_step, final_step);
-        yield_constr.constraint(builder, constraint);
+        let not_final_step = builder.sub_extension(one_ext, local_values[reg_step(NUM_ROUNDS - 1)]);
 
         // If this is not the final step or a padding row,
         // the local and next timestamps must match.
