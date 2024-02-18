@@ -29,6 +29,7 @@ pub(crate) fn eval_round_flags<F: Field, P: PackedField<Scalar = F>>(
         .map(|i| local_values[reg_step(i)])
         .sum::<P>();
     let next_any_flag = (0..NUM_ROUNDS).map(|i| next_values[reg_step(i)]).sum::<P>();
+    // Padding row should only start after the last round row.
     let not_final_step = P::ONES - local_values[reg_step(NUM_ROUNDS - 1)];
     let padding_constraint = (next_any_flag - F::ONE) * current_any_flag * not_final_step;
     for i in 0..NUM_ROUNDS {
@@ -64,6 +65,7 @@ pub(crate) fn eval_round_flags_recursively<F: RichField + Extendable<D>, const D
         builder.add_many_extension((0..NUM_ROUNDS).map(|i| local_values[reg_step(i)]));
     let next_any_flag =
         builder.add_many_extension((0..NUM_ROUNDS).map(|i| next_values[reg_step(i)]));
+    // Padding row should only start after the last round row.
     let not_final_step = builder.sub_extension(one, local_values[reg_step(NUM_ROUNDS - 1)]);
     let padding_constraint = {
         let tmp = builder.mul_sub_extension(current_any_flag, next_any_flag, current_any_flag);
