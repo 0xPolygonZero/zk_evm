@@ -166,7 +166,7 @@ pub(crate) fn generate_prover_input<F: Field>(
     let pc = state.registers.program_counter;
     let input_fn = &KERNEL.prover_inputs[&pc];
     let input = state.prover_input(input_fn)?;
-    let opcode = 0x49.into();
+    let opcode = 0xee.into();
     // `ArithmeticStark` range checks `mem_channels[0]`, which contains
     // the top of the stack, `mem_channels[1]`, `mem_channels[2]` and
     // next_row's `mem_channels[0]` which contains the next top of the stack.
