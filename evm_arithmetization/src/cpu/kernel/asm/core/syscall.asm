@@ -69,7 +69,7 @@ global syscall_jumptable:
     JUMPTABLE sys_chainid
     JUMPTABLE sys_selfbalance
     JUMPTABLE sys_basefee
-    JUMPTABLE panic // 0x49 is invalid
+    JUMPTABLE sys_blobhash
     JUMPTABLE sys_blobbasefee
     %rep 5
         JUMPTABLE panic // 0x4b-0x4f are invalid opcodes

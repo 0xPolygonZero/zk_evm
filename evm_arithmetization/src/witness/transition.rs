@@ -107,6 +107,7 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
         (0x46, _) => Ok(Operation::Syscall(opcode, 0, true)), // CHAINID
         (0x47, _) => Ok(Operation::Syscall(opcode, 0, true)), // SELFBALANCE
         (0x48, _) => Ok(Operation::Syscall(opcode, 0, true)), // BASEFEE
+        (0x49, _) => Ok(Operation::Syscall(opcode, 1, false)), // BLOBHASH
         (0x4a, _) => Ok(Operation::Syscall(opcode, 0, true)), // BLOBBASEFEE
         (0x50, _) => Ok(Operation::Pop),
         (0x51, _) => Ok(Operation::Syscall(opcode, 1, false)), // MLOAD

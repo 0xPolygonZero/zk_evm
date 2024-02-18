@@ -853,6 +853,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             0x46 => self.run_syscall(opcode, 0, true),  // "CHAINID",
             0x47 => self.run_syscall(opcode, 0, true),  // SELFABALANCE,
             0x48 => self.run_syscall(opcode, 0, true),  // "BASEFEE",
+            0x49 => self.run_syscall(opcode, 1, false), // "BLOBHASH",
             0x4a => self.run_syscall(opcode, 0, true),  // "BLOBBASEFEE",
             0x50 => self.run_pop(),                     // "POP",
             0x51 => self.run_syscall(opcode, 1, false), // "MLOAD",

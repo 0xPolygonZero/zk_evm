@@ -34,7 +34,8 @@ use crate::{arithmetic, logic};
 pub(crate) enum Operation {
     Iszero,
     Not,
-    Syscall(u8, usize, bool), // (syscall number, minimum stack length, increases stack length)
+    /// (syscall number, minimum stack length, increases stack length)
+    Syscall(u8, usize, bool),
     Eq,
     BinaryLogic(logic::Op),
     BinaryArithmetic(arithmetic::BinaryOperator),

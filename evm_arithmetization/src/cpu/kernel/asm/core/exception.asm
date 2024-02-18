@@ -236,7 +236,7 @@ min_stack_len_for_opcode:
     BYTES 0  // 0x46, CHAINID
     BYTES 0  // 0x47, SELFBALANCE
     BYTES 0  // 0x48, BASEFEE
-    BYTES 0  // 0x49, invalid
+    BYTES 1  // 0x49, BLOBHASH
     BYTES 0  // 0x4a, BLOBBASEFEE 
     %rep 5  // 0x4b-0x4f, invalid
         BYTES 0
@@ -371,11 +371,11 @@ gas_cost_for_opcode:
         BYTES 0
     %endrep
 
-    %rep 25 //0x30-0x48, only syscalls
+    %rep 26 //0x30-0x49, only syscalls
     BYTES 0  
     %endrep
 
-    %rep 7  // 0x49-0x4f, invalid
+    %rep 6  // 0x4a-0x4f, invalid
         BYTES 0
     %endrep
 

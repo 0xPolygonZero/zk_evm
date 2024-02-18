@@ -215,7 +215,7 @@ const EC_CONSTANTS: [(&str, [u8; 32]); 20] = [
     ),
 ];
 
-const GAS_CONSTANTS: [(&str, u16); 36] = [
+const GAS_CONSTANTS: [(&str, u16); 37] = [
     ("GAS_ZERO", 0),
     ("GAS_JUMPDEST", 1),
     ("GAS_BASE", 2),
@@ -252,6 +252,7 @@ const GAS_CONSTANTS: [(&str, u16); 36] = [
     ("GAS_KECCAK256WORD", 6),
     ("GAS_COPY", 3),
     ("GAS_BLOCKHASH", 20),
+    ("GAS_HASH_OPCODE", 3),
 ];
 
 const REFUND_CONSTANTS: [(&str, u16); 2] = [("REFUND_SCLEAR", 4_800), ("MAX_REFUND_QUOTIENT", 5)];
