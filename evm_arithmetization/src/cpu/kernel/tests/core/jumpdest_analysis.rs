@@ -48,7 +48,7 @@ fn test_jumpdest_analysis() -> Result<()> {
             .chain(std::iter::once(true)),
     );
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(jumpdest_analysis, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(jumpdest_analysis, vec![]);
     let code_len = code.len();
 
     interpreter.set_code(CONTEXT, code);
@@ -87,7 +87,7 @@ fn test_jumpdest_analysis() -> Result<()> {
         .get_mut(&CONTEXT)
         .unwrap()
         .pop();
-    interpreter.push(U256::one());
+    interpreter.push(41.into());
 
     interpreter.run()?;
     assert_eq!(interpreter.stack(), vec![]);
@@ -127,7 +127,7 @@ fn test_packed_verification() -> Result<()> {
         U256::one(),
     ];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(write_table_if_jumpdest, initial_stack.clone());
+        Interpreter::new(write_table_if_jumpdest, initial_stack.clone());
     interpreter.set_code(CONTEXT, code.clone());
     interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
 
@@ -140,7 +140,7 @@ fn test_packed_verification() -> Result<()> {
     for i in 1..=32 {
         code[i] += 1;
         let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_kernel(write_table_if_jumpdest, initial_stack.clone());
+            Interpreter::new(write_table_if_jumpdest, initial_stack.clone());
         interpreter.set_code(CONTEXT, code.clone());
         interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
 

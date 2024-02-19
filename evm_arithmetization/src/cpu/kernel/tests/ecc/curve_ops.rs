@@ -184,8 +184,7 @@ mod bn {
 
             let mut initial_stack = u256ify(["0xdeadbeef"])?;
             initial_stack.push(k);
-            let mut int: Interpreter<F> =
-                Interpreter::new(&KERNEL.code, glv, initial_stack, &KERNEL.prover_inputs);
+            let mut int: Interpreter<F> = Interpreter::new(glv, initial_stack);
             int.run()?;
 
             assert_eq!(line, int.stack());
@@ -203,21 +202,12 @@ mod bn {
             "0x10d7cf0621b6e42c1dbb421f5ef5e1936ca6a87b38198d1935be31e28821d171",
             "0x11b7d55f16aaac07de9a0ed8ac2e8023570dbaa78571fc95e553c4b3ba627689",
         ])?;
-        let mut int: Interpreter<F> = Interpreter::new(
-            &KERNEL.code,
-            precompute,
-            initial_stack,
-            &KERNEL.prover_inputs,
-        );
+        let mut int: Interpreter<F> = Interpreter::new(precompute, initial_stack);
         int.run()?;
 
         let mut computed_table = Vec::new();
         for i in 0..32 {
-            computed_table.push(
-                int.generation_state
-                    .memory
-                    .mload_general(0, Segment::BnTableQ, i),
-            );
+            computed_table.push(int.mload_queue(0, Segment::BnTableQ, i));
         }
 
         let table = u256ify([
@@ -305,9 +295,7 @@ mod secp {
         assert_eq!(stack, u256ify([point2.1, point2.0])?);
         // Standard addition #2
         let initial_stack = u256ify(["0xdeadbeef", point1.1, point1.0, point0.1, point0.0])?;
-        let stack = run::<F>(&kernel.code, ec_add, initial_stack, &kernel.prover_inputs)?
-            .stack()
-            .to_vec();
+        let stack = run::<F>(ec_add, initial_stack)?.stack().to_vec();
         assert_eq!(stack, u256ify([point2.1, point2.0])?);
 
         // Standard doubling #1
@@ -361,8 +349,7 @@ mod secp {
 
             let mut initial_stack = u256ify(["0xdeadbeef"])?;
             initial_stack.push(k);
-            let mut int: Interpreter<F> =
-                Interpreter::new(&KERNEL.code, glv, initial_stack, &KERNEL.prover_inputs);
+            let mut int: Interpreter<F> = Interpreter::new(glv, initial_stack);
             int.run()?;
 
             assert_eq!(line, int.stack());

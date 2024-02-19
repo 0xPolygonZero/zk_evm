@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
 use ethereum_types::{Address, U256};
@@ -35,7 +35,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
     // Test for address already in list.
     let initial_stack = vec![retaddr, U256::from(addr_in_list.0.as_slice())];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(insert_accessed_addresses, initial_stack);
+        Interpreter::new(insert_accessed_addresses, initial_stack);
     for i in 0..n {
         let addr = U256::from(addresses[i].0.as_slice());
         interpreter
@@ -50,17 +50,18 @@ fn test_insert_accessed_addresses() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[U256::zero()]);
     assert_eq!(
-        interpreter
-            .generation_state
-            .memory
-            .get(MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap()),
+        interpreter.generation_state.memory.get(
+            MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
+            false,
+            &HashMap::default()
+        ),
         U256::from(n)
     );
 
     // Test for address not in list.
     let initial_stack = vec![retaddr, U256::from(addr_not_in_list.0.as_slice())];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(insert_accessed_addresses, initial_stack);
+        Interpreter::new(insert_accessed_addresses, initial_stack);
     for i in 0..n {
         let addr = U256::from(addresses[i].0.as_slice());
         interpreter
@@ -75,17 +76,19 @@ fn test_insert_accessed_addresses() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[U256::one()]);
     assert_eq!(
-        interpreter
-            .generation_state
-            .memory
-            .get(MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap()),
+        interpreter.generation_state.memory.get(
+            MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
+            false,
+            &HashMap::default()
+        ),
         U256::from(n + 1)
     );
     assert_eq!(
-        interpreter
-            .generation_state
-            .memory
-            .get(MemoryAddress::new(0, AccessedAddresses, n)),
+        interpreter.generation_state.memory.get(
+            MemoryAddress::new(0, AccessedAddresses, n),
+            false,
+            &HashMap::default()
+        ),
         U256::from(addr_not_in_list.0.as_slice())
     );
 
@@ -119,7 +122,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         U256::from(storage_key_in_list.0 .0.as_slice()),
     ];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(insert_accessed_storage_keys, initial_stack);
+        Interpreter::new(insert_accessed_storage_keys, initial_stack);
     for i in 0..n {
         let addr = U256::from(storage_keys[i].0 .0.as_slice());
         interpreter
@@ -142,10 +145,11 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[storage_key_in_list.2, U256::zero()]);
     assert_eq!(
-        interpreter
-            .generation_state
-            .memory
-            .get(MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap()),
+        interpreter.generation_state.memory.get(
+            MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
+            false,
+            &HashMap::default()
+        ),
         U256::from(3 * n)
     );
 
@@ -157,7 +161,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         U256::from(storage_key_not_in_list.0 .0.as_slice()),
     ];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(insert_accessed_storage_keys, initial_stack);
+        Interpreter::new(insert_accessed_storage_keys, initial_stack);
     for i in 0..n {
         let addr = U256::from(storage_keys[i].0 .0.as_slice());
         interpreter
@@ -183,33 +187,35 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         &[storage_key_not_in_list.2, U256::one()]
     );
     assert_eq!(
-        interpreter
-            .generation_state
-            .memory
-            .get(MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap()),
+        interpreter.generation_state.memory.get(
+            MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize),).unwrap(),
+            false,
+            &HashMap::default()
+        ),
         U256::from(3 * (n + 1))
     );
     assert_eq!(
-        interpreter
-            .generation_state
-            .memory
-            .get(MemoryAddress::new(0, AccessedStorageKeys, 3 * n,)),
+        interpreter.generation_state.memory.get(
+            MemoryAddress::new(0, AccessedStorageKeys, 3 * n,),
+            false,
+            &HashMap::default()
+        ),
         U256::from(storage_key_not_in_list.0 .0.as_slice())
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(MemoryAddress::new(
-            0,
-            AccessedStorageKeys,
-            3 * n + 1,
-        )),
+        interpreter.generation_state.memory.get(
+            MemoryAddress::new(0, AccessedStorageKeys, 3 * n + 1,),
+            false,
+            &HashMap::default()
+        ),
         storage_key_not_in_list.1
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(MemoryAddress::new(
-            0,
-            AccessedStorageKeys,
-            3 * n + 2,
-        )),
+        interpreter.generation_state.memory.get(
+            MemoryAddress::new(0, AccessedStorageKeys, 3 * n + 2,),
+            false,
+            &HashMap::default()
+        ),
         storage_key_not_in_list.2
     );
 
