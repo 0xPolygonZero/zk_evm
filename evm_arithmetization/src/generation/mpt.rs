@@ -347,6 +347,8 @@ pub(crate) fn load_all_mpts(
 }
 
 pub mod transaction_testing {
+    use ethereum_types::H160;
+
     use super::*;
 
     #[derive(RlpEncodable, RlpDecodable, Debug, Clone, PartialEq, Eq)]
@@ -432,7 +434,8 @@ pub mod transaction_testing {
         pub max_priority_fee_per_gas: U256,
         pub max_fee_per_gas: U256,
         pub gas: U256,
-        pub to: AddressOption,
+        // As per EIP-4844, blob transactions cannot have the form of a create transaction.
+        pub to: H160,
         pub value: U256,
         pub data: Bytes,
         pub access_list: Vec<AccessListItemRlp>,
