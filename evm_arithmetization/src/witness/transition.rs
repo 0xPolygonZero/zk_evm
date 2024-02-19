@@ -120,6 +120,8 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
         (0x59, _) => Ok(Operation::Syscall(opcode, 0, true)), // MSIZE
         (0x5a, _) => Ok(Operation::Syscall(opcode, 0, true)), // GAS
         (0x5b, _) => Ok(Operation::Jumpdest),
+        (0x5c, _) => Ok(Operation::Syscall(opcode, 1, false)), // TLOAD
+        (0x5d, _) => Ok(Operation::Syscall(opcode, 2, false)), // TSTORE
         (0x5f..=0x7f, _) => Ok(Operation::Push(opcode - 0x5f)),
         (0x80..=0x8f, _) => Ok(Operation::Dup(opcode & 0xf)),
         (0x90..=0x9f, _) => Ok(Operation::Swap(opcode & 0xf)),

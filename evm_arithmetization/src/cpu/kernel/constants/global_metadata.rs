@@ -94,10 +94,13 @@ pub(crate) enum GlobalMetadata {
 
     KernelHash,
     KernelLen,
+
+    /// The length of the transient storage segment
+    TransientStorageLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 47;
+    pub(crate) const COUNT: usize = 48;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -153,6 +156,7 @@ impl GlobalMetadata {
             Self::TxnNumberAfter,
             Self::KernelHash,
             Self::KernelLen,
+            Self::TransientStorageLen,
         ]
     }
 
@@ -206,6 +210,7 @@ impl GlobalMetadata {
             Self::TxnNumberAfter => "GLOBAL_METADATA_TXN_NUMBER_AFTER",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
+            Self::TransientStorageLen => "GLOBAL_METADATA_TRANSIENT_STORAGE_LEN",
         }
     }
 }

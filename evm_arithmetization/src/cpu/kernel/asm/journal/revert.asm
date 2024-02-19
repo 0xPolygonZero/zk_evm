@@ -6,17 +6,18 @@
     // stack: ptr, %%after, journal_size-1
     DUP1 %mload_journal_data
     // stack: entry_type, ptr, %%after, journal_size-1
-    DUP1 %eq_const(@JOURNAL_ENTRY_ACCOUNT_LOADED)    %jumpi(revert_account_loaded)
-    DUP1 %eq_const(@JOURNAL_ENTRY_ACCOUNT_DESTROYED) %jumpi(revert_account_destroyed)
-    DUP1 %eq_const(@JOURNAL_ENTRY_ACCOUNT_TOUCHED)   %jumpi(revert_account_touched)
-    DUP1 %eq_const(@JOURNAL_ENTRY_BALANCE_TRANSFER)  %jumpi(revert_balance_transfer)
-    DUP1 %eq_const(@JOURNAL_ENTRY_NONCE_CHANGE)      %jumpi(revert_nonce_change)
-    DUP1 %eq_const(@JOURNAL_ENTRY_STORAGE_CHANGE)    %jumpi(revert_storage_change)
-    DUP1 %eq_const(@JOURNAL_ENTRY_STORAGE_LOADED)    %jumpi(revert_storage_loaded)
-    DUP1 %eq_const(@JOURNAL_ENTRY_CODE_CHANGE)       %jumpi(revert_code_change)
-    DUP1 %eq_const(@JOURNAL_ENTRY_REFUND)            %jumpi(revert_refund)
-    DUP1 %eq_const(@JOURNAL_ENTRY_ACCOUNT_CREATED)   %jumpi(revert_account_created)
-    DUP1 %eq_const(@JOURNAL_ENTRY_LOG)               %jumpi(revert_log)
+    DUP1 %eq_const(@JOURNAL_ENTRY_ACCOUNT_LOADED)           %jumpi(revert_account_loaded)
+    DUP1 %eq_const(@JOURNAL_ENTRY_ACCOUNT_DESTROYED)        %jumpi(revert_account_destroyed)
+    DUP1 %eq_const(@JOURNAL_ENTRY_ACCOUNT_TOUCHED)          %jumpi(revert_account_touched)
+    DUP1 %eq_const(@JOURNAL_ENTRY_BALANCE_TRANSFER)         %jumpi(revert_balance_transfer)
+    DUP1 %eq_const(@JOURNAL_ENTRY_NONCE_CHANGE)             %jumpi(revert_nonce_change)
+    DUP1 %eq_const(@JOURNAL_ENTRY_STORAGE_CHANGE)           %jumpi(revert_storage_change)
+    DUP1 %eq_const(@JOURNAL_ENTRY_STORAGE_LOADED)           %jumpi(revert_storage_loaded)
+    DUP1 %eq_const(@JOURNAL_ENTRY_CODE_CHANGE)              %jumpi(revert_code_change)
+    DUP1 %eq_const(@JOURNAL_ENTRY_REFUND)                   %jumpi(revert_refund)
+    DUP1 %eq_const(@JOURNAL_ENTRY_ACCOUNT_CREATED)          %jumpi(revert_account_created)
+    DUP1 %eq_const(@JOURNAL_ENTRY_LOG)                      %jumpi(revert_log)
+    DUP1 %eq_const(@JOURNAL_ENTRY_TRANSIENT_STORAGE_CHANGE) %jumpi(revert_transient_storage_change)
     PANIC // This should never happen.
 %%after:
     // stack: journal_size-1
