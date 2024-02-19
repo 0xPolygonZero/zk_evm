@@ -294,10 +294,10 @@ global sys_blobhash:
     // stack: kexit_info, index
     SWAP1
     // stack: index, kexit_info
-    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN)
+    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN)
     DUP2
-    GT
-    // stack: index > len, index, kexit_info
+    LT ISZERO // == GE
+    // stack: index >= len, index, kexit_info
     %jumpi(%%index_too_big)
     PUSH @SEGMENT_TXN_BLOB_VERSIONED_HASHES
     %build_kernel_address

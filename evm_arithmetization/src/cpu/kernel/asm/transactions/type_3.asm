@@ -67,17 +67,13 @@ type_3_compute_signed_data:
     %encode_rlp_scalar_swapped_inputs
     // stack: rlp_addr, rlp_start, retdest
 
+    // As per EIP-4844, blob transactions cannot have the form of a create transaction.
     %mload_txn_field(@TXN_FIELD_TO)
-    %mload_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION) %jumpi(zero_to)
+    %mload_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION) %jumpi(panic)
     // stack: to, rlp_addr, rlp_start, retdest
     SWAP1 %encode_rlp_160
-    %jump(after_to)
-zero_to:
-    // stack: to, rlp_addr, rlp_start, retdest
-    %encode_rlp_scalar_swapped_inputs
     // stack: rlp_addr, rlp_start, retdest
 
-after_to:
     %mload_txn_field(@TXN_FIELD_VALUE)
     %encode_rlp_scalar_swapped_inputs
     // stack: rlp_addr, rlp_start, retdest

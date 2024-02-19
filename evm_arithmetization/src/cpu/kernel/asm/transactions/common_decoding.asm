@@ -157,6 +157,10 @@
 // The blob versioned hashes are just a list of hashes.
 global decode_and_store_blob_versioned_hashes:
     // stack: len, rlp_addr
+    // Store the list length
+    DUP1 %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN)
+
+    // stack: len, rlp_addr
     DUP2 ADD
     // stack: end_rlp_addr, rlp_addr
     // Store the RLP length.
@@ -176,7 +180,7 @@ decode_and_store_blob_versioned_hashes_loop:
     // stack: store_addr, end_rlp_addr, rlp_addr
     %increment SWAP2
     // stack: rlp_addr, end_rlp_addr, store_addr' 
-    %jump(decode_and_store_access_list_loop)
+    %jump(decode_and_store_blob_versioned_hashes_loop)
 decode_and_store_blob_versioned_hashes_finish:
     %stack (rlp_addr, end_rlp_addr, store_addr, retdest) -> (retdest, rlp_addr)
     JUMP

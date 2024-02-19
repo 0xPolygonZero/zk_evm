@@ -107,10 +107,12 @@ pub(crate) enum GlobalMetadata {
     BlobVersionedHashesRlpStart,
     // Length of the blob versioned hashes in the RLP for type-3 txns.
     BlobVersionedHashesRlpLen,
+    // Number of blob versioned hashes contained in the current type-3 transaction.
+    BlobVersionedHashesLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 54;
+    pub(crate) const COUNT: usize = 55;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -173,6 +175,7 @@ impl GlobalMetadata {
             Self::KernelLen,
             Self::BlobVersionedHashesRlpStart,
             Self::BlobVersionedHashesRlpLen,
+            Self::BlobVersionedHashesLen,
         ]
     }
 
@@ -233,6 +236,7 @@ impl GlobalMetadata {
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
             Self::BlobVersionedHashesRlpStart => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START",
             Self::BlobVersionedHashesRlpLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN",
+            Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",
         }
     }
 }
