@@ -18,6 +18,12 @@ pub(crate) fn eval_round_flags<F: Field, P: PackedField<Scalar = F>>(
     let local_values = vars.get_local_values();
     let next_values = vars.get_next_values();
 
+    // Constrain the flags to be either 0 or 1.
+    for i in 0..NUM_ROUNDS {
+        let current_round_flag = local_values[reg_step(i)];
+        yield_constr.constraint(current_round_flag * (current_round_flag - F::ONE));
+    }
+
     // Initially, the first step flag should be 1 while the others should be 0.
     yield_constr.constraint_first_row(local_values[reg_step(0)] - F::ONE);
     for i in 1..NUM_ROUNDS {
@@ -53,6 +59,14 @@ pub(crate) fn eval_round_flags_recursively<F: RichField + Extendable<D>, const D
     let one = builder.one_extension();
     let local_values = vars.get_local_values();
     let next_values = vars.get_next_values();
+
+    // Constrain the flags to be either 0 or 1.
+    for i in 0..NUM_ROUNDS {
+        let current_round_flag = local_values[reg_step(i)];
+        let constraint =
+            builder.mul_sub_extension(current_round_flag, current_round_flag, current_round_flag);
+        yield_constr.constraint(builder, constraint);
+    }
 
     // Initially, the first step flag should be 1 while the others should be 0.
     let step_0_minus_1 = builder.sub_extension(local_values[reg_step(0)], one);
