@@ -1,6 +1,6 @@
 # Usage Diagrams
 
-These are some diagrams showing how the protocol will (likely) be implemented.
+These are some diagrams showing how the protocol is implemented.
 
 ## Proof Generation
 

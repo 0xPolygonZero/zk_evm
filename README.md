@@ -1,12 +1,12 @@
 # zk_evm
 
 A collection of libraries to prove Ethereum blocks with Polygon Zero Type 1 zkEVM,
-powered by starky and plonky2 proving systems.
+powered by [starky and plonky2](https://github.com/0xPolygonZero/plonky2) proving systems.
 
 
 ## Directory structure
 
-This repository contains several Rust crates:
+This repository contains the following Rust crates:
 
 * [mpt_trie](./mpt_trie/README.md): A collection of types and functions to work with Ethereum Merkle Patricie Tries.
 
@@ -16,12 +16,12 @@ understood by the zkEVM prover.
 * [evm_arithmetization](./evm_arithmetization/README.md): Defines all the STARK constraints and recursive circuits to generate succinct proofs of EVM execution.
 It uses starky and plonky2 as proving backend: https://github.com/0xPolygonZero/plonky2.
 
-* [proof_gen](./proof_gen/README.md): A convenience library for generating proofs from inputs in Intermediate Representation (IR) format.
+* [proof_gen](./proof_gen/README.md): A convenience library for generating proofs from inputs already in Intermediate Representation (IR) format.
 
 
 ## Documentation
 
-Although documentation is still at its early stage and being currently worked on, useful material can
+Documentation is still incomplete and will be improved over time, a lot of useful material can
 be found in the [docs](./docs/) section, including:
 
 * [sequence diagrams](./docs/usage_seq_diagrams.md) for the proof generation flow
