@@ -11,7 +11,7 @@ categories.workspace = true
 [dependencies]
 thiserror = { workspace = true }
 tracing = { workspace = true }
-plonky_block_proof_gen = { workspace = true }
+proof_gen = { workspace = true }
 plonky2 = { workspace = true }
-plonky2_evm = { workspace = true }
+evm_arithmetization = { workspace = true }
 clap = { workspace = true }

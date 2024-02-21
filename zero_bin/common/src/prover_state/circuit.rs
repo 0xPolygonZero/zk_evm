@@ -5,8 +5,8 @@ use std::{
     str::FromStr,
 };
 
-use plonky2_evm::{all_stark::AllStark, config::StarkConfig};
-use plonky_block_proof_gen::types::AllRecursiveCircuits;
+use evm_arithmetization::{AllStark, StarkConfig};
+use proof_gen::types::AllRecursiveCircuits;
 
 use crate::parsing::{parse_range, RangeParseError};
 

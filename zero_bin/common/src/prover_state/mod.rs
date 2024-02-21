@@ -12,7 +12,7 @@
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
-use plonky_block_proof_gen::{prover_state::ProverState, VerifierState};
+use proof_gen::{prover_state::ProverState, VerifierState};
 use tracing::info;
 
 pub mod circuit;

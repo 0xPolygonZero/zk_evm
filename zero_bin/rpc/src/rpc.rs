@@ -1,16 +1,16 @@
 use anyhow::{Context, Result};
 use ethereum_types::{Address, Bloom, H256, U256};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use futures::{stream::FuturesOrdered, TryStreamExt};
-use plonky2_evm::proof::{BlockHashes, BlockMetadata};
-use protocol_decoder::{
-    trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
-    types::{BlockLevelData, OtherBlockData},
-};
 use prover::ProverInput;
 use reqwest::IntoUrl;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::try_join;
+use trace_decoder::{
+    trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
+    types::{BlockLevelData, OtherBlockData},
+};
 use tracing::{debug, info};
 
 #[derive(Deserialize, Debug)]
@@ -104,6 +104,20 @@ struct EthGetBlockByNumberResult {
     parent_hash: H256,
     state_root: H256,
     timestamp: U256,
+    withdrawals: Vec<Withdrawal>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Withdrawal {
+    address: Address,
+    amount: U256,
+}
+
+impl From<Withdrawal> for (Address, U256) {
+    fn from(v: Withdrawal) -> Self {
+        (v.address, v.amount)
+    }
 }
 
 /// The response from the `eth_getBlockByNumber` RPC method.
@@ -289,6 +303,12 @@ impl From<RpcBlockMetadata> for OtherBlockData {
             block_bloom: bloom,
         };
 
+        let withdrawals = block_by_number
+            .result
+            .withdrawals
+            .into_iter()
+            .map(|w| w.into())
+            .collect();
         Self {
             b_data: BlockLevelData {
                 b_meta: block_metadata,
@@ -296,6 +316,7 @@ impl From<RpcBlockMetadata> for OtherBlockData {
                     prev_hashes,
                     cur_hash: block_by_number.result.hash,
                 },
+                withdrawals,
             },
             checkpoint_state_trie_root,
         }

@@ -19,9 +19,9 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
 name = "ahash"
-version = "0.8.6"
+version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91429305e9f0a25f6205c5b8e0d2db09e0708a7a6df0f42212bb56c32c8ac97a"
+checksum = "d713b3834d76b85304d4d525563c1276e2e30dc97cc67bfb4585a4a29fc2c89f"
 dependencies = [
  "cfg-if",
  "const-random",
@@ -601,9 +601,9 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "evm_arithmetization",
  "plonky2",
- "plonky2_evm",
- "plonky_block_proof_gen",
+ "proof_gen",
  "thiserror",
  "tracing",
 ]
@@ -619,9 +619,9 @@ dependencies = [
 
 [[package]]
 name = "const-random"
-version = "0.1.16"
+version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11df32a13d7892ec42d51d3d175faba5211ffe13ed25d4fb348ac9e9ce835593"
+checksum = "5aaf16c9c2c612020bcfd042e170f6e32de9b9d75adb5277cdbbd2e2c8c8299a"
 dependencies = [
  "const-random-macro",
 ]
@@ -811,7 +811,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
- "hashbrown 0.14.2",
+ "hashbrown 0.14.3",
  "lock_api",
  "once_cell",
  "parking_lot_core",
@@ -882,18 +882,6 @@ dependencies = [
 
 [[package]]
 name = "enum-as-inner"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9720bba047d567ffc8a3cba48bf19126600e249ab7f128e9233e6376976a116"
-dependencies = [
- "heck",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "enum-as-inner"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ffccbb6966c05b32ef8fbac435df276c4ae4d3dc55a8cd0eb9745e6c12f546a"
@@ -945,25 +933,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eth_trie_utils"
-version = "0.6.0"
-source = "git+https://github.com/0xPolygonZero/eth_trie_utils.git?rev=7fc3c3f54b3cec9c6fc5ffc5230910bd1cb77f76#7fc3c3f54b3cec9c6fc5ffc5230910bd1cb77f76"
-dependencies = [
- "bytes",
- "enum-as-inner 0.5.1",
- "ethereum-types",
- "hex",
- "keccak-hash 0.10.0",
- "log",
- "num-traits",
- "parking_lot",
- "rlp",
- "serde",
- "thiserror",
- "uint",
-]
-
-[[package]]
 name = "ethbloom"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -995,6 +964,42 @@ name = "event-listener"
 version = "2.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
+
+[[package]]
+name = "evm_arithmetization"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d80801ec98b39dde6182d34f76f11abe050302f36d8847bfcd4456ecd990c9b"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "env_logger",
+ "ethereum-types",
+ "hashbrown 0.14.3",
+ "hex-literal",
+ "itertools",
+ "jemallocator",
+ "keccak-hash 0.10.0",
+ "log",
+ "mpt_trie",
+ "num",
+ "num-bigint",
+ "once_cell",
+ "pest",
+ "pest_derive",
+ "plonky2",
+ "plonky2_maybe_rayon",
+ "plonky2_util",
+ "rand",
+ "rand_chacha",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "serde_json",
+ "starky",
+ "static_assertions",
+ "tiny-keccak",
+]
 
 [[package]]
 name = "executor-trait"
@@ -1249,9 +1254,9 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
-version = "0.14.2"
+version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93e7192158dbcda357bdec5fb5788eebf8bbac027f3f33e719d29135ae84156"
+checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
  "ahash",
  "allocator-api2",
@@ -1479,7 +1484,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8adf3ddd720272c6ea8bf59463c04e0f93d0bbf7c5439b691bca2987e0270897"
 dependencies = [
  "equivalent",
- "hashbrown 0.14.2",
+ "hashbrown 0.14.3",
  "serde",
 ]
 
@@ -1634,7 +1639,7 @@ dependencies = [
  "ethereum-types",
  "ops",
  "paladin-core",
- "plonky_block_proof_gen",
+ "proof_gen",
  "prover",
  "rpc",
  "serde",
@@ -1760,6 +1765,27 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys",
+]
+
+[[package]]
+name = "mpt_trie"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cc408af26fe8f58787fb1be1a3bbfdd041bc36a15d4075fdadde07028469381"
+dependencies = [
+ "bytes",
+ "enum-as-inner",
+ "ethereum-types",
+ "hex",
+ "keccak-hash 0.10.0",
+ "log",
+ "num",
+ "num-traits",
+ "parking_lot",
+ "rlp",
+ "serde",
+ "thiserror",
+ "uint",
 ]
 
 [[package]]
@@ -1897,9 +1923,9 @@ version = "0.1.0"
 dependencies = [
  "common",
  "paladin-core",
- "plonky_block_proof_gen",
- "protocol_decoder",
+ "proof_gen",
  "serde",
+ "trace_decoder",
 ]
 
 [[package]]
@@ -2137,13 +2163,14 @@ dependencies = [
 
 [[package]]
 name = "plonky2"
-version = "0.1.4"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=265d46a96ecfec49a32973f66f8aa811586c5d4a#265d46a96ecfec49a32973f66f8aa811586c5d4a"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b25deb9a4b9c2014c2f99cd36078f30e453d188d0ca8dd4c5ffd1d494b661ac1"
 dependencies = [
  "ahash",
  "anyhow",
  "getrandom",
- "hashbrown 0.14.2",
+ "hashbrown 0.14.3",
  "itertools",
  "keccak-hash 0.8.0",
  "log",
@@ -2154,49 +2181,16 @@ dependencies = [
  "rand",
  "rand_chacha",
  "serde",
- "serde_json",
  "static_assertions",
  "unroll",
-]
-
-[[package]]
-name = "plonky2_evm"
-version = "0.1.1"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=265d46a96ecfec49a32973f66f8aa811586c5d4a#265d46a96ecfec49a32973f66f8aa811586c5d4a"
-dependencies = [
- "anyhow",
- "bytes",
- "env_logger",
- "eth_trie_utils",
- "ethereum-types",
- "hashbrown 0.14.2",
- "hex-literal",
- "itertools",
- "jemallocator",
- "keccak-hash 0.10.0",
- "log",
- "num",
- "num-bigint",
- "once_cell",
- "pest",
- "pest_derive",
- "plonky2",
- "plonky2_maybe_rayon",
- "plonky2_util",
- "rand",
- "rand_chacha",
- "rlp",
- "rlp-derive",
- "serde",
- "serde_json",
- "static_assertions",
- "tiny-keccak",
+ "web-time",
 ]
 
 [[package]]
 name = "plonky2_field"
-version = "0.1.1"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=265d46a96ecfec49a32973f66f8aa811586c5d4a#265d46a96ecfec49a32973f66f8aa811586c5d4a"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "465a741ba134485af571152aab5086457a470aa8893391186cf78dd389694440"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2210,30 +2204,18 @@ dependencies = [
 
 [[package]]
 name = "plonky2_maybe_rayon"
-version = "0.1.1"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=265d46a96ecfec49a32973f66f8aa811586c5d4a#265d46a96ecfec49a32973f66f8aa811586c5d4a"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92ff44a90aaca13e10e7ddf8fab815ba1b404c3f7c3ca82aaf11c46beabaa923"
 dependencies = [
  "rayon",
 ]
 
 [[package]]
 name = "plonky2_util"
-version = "0.1.1"
-source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=265d46a96ecfec49a32973f66f8aa811586c5d4a#265d46a96ecfec49a32973f66f8aa811586c5d4a"
-
-[[package]]
-name = "plonky_block_proof_gen"
-version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/proof-protocol-decoder.git?rev=604e956f674dc1ea7d6c5e71c594b328e7b25399#604e956f674dc1ea7d6c5e71c594b328e7b25399"
-dependencies = [
- "ethereum-types",
- "log",
- "paste",
- "plonky2",
- "plonky2_evm",
- "protocol_decoder",
- "serde",
-]
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b16136f5f3019c1e83035af76cccddd56d789a5e2933306270185c3f99f12259"
 
 [[package]]
 name = "polling"
@@ -2318,27 +2300,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "protocol_decoder"
+name = "proof_gen"
 version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/proof-protocol-decoder.git?rev=604e956f674dc1ea7d6c5e71c594b328e7b25399#604e956f674dc1ea7d6c5e71c594b328e7b25399"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24a304cfc3e741ebb7bc40258d0da52c0f2924b6817372d15f051e02673af3aa"
 dependencies = [
- "bytes",
- "ciborium",
- "ciborium-io",
- "enum-as-inner 0.6.0",
- "enumn",
- "eth_trie_utils",
  "ethereum-types",
- "hex",
- "hex-literal",
- "keccak-hash 0.10.0",
+ "evm_arithmetization",
  "log",
- "plonky2_evm",
- "rlp",
- "rlp-derive",
+ "paste",
+ "plonky2",
  "serde",
- "serde_with",
- "thiserror",
+ "trace_decoder",
 ]
 
 [[package]]
@@ -2349,9 +2322,9 @@ dependencies = [
  "ethereum-types",
  "ops",
  "paladin-core",
- "plonky_block_proof_gen",
- "protocol_decoder",
+ "proof_gen",
  "serde",
+ "trace_decoder",
  "tracing",
 ]
 
@@ -2576,11 +2549,10 @@ dependencies = [
  "clap",
  "common",
  "ethereum-types",
+ "evm_arithmetization",
  "futures",
  "hex",
  "hex-literal",
- "plonky2_evm",
- "protocol_decoder",
  "prover",
  "reqwest",
  "serde",
@@ -2588,6 +2560,7 @@ dependencies = [
  "serde_path_to_error",
  "thiserror",
  "tokio",
+ "trace_decoder",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2934,6 +2907,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "starky"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2edb3b04ef3bb95f31805b9c88a9de39767089adadc1966ddc3c43348a11464a"
+dependencies = [
+ "ahash",
+ "anyhow",
+ "hashbrown 0.14.3",
+ "itertools",
+ "log",
+ "num-bigint",
+ "plonky2",
+ "plonky2_maybe_rayon",
+ "plonky2_util",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3246,6 +3236,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 
 [[package]]
+name = "trace_decoder"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5719c4c8f671ee782b78df96e7832207a2486a4fa137b20a3885beaf3a4ad724"
+dependencies = [
+ "bytes",
+ "ciborium",
+ "ciborium-io",
+ "enum-as-inner",
+ "enumn",
+ "ethereum-types",
+ "evm_arithmetization",
+ "hex",
+ "hex-literal",
+ "keccak-hash 0.10.0",
+ "log",
+ "mpt_trie",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "serde_with",
+ "thiserror",
+]
+
+[[package]]
 name = "tracing"
 version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3415,7 +3430,7 @@ dependencies = [
  "anyhow",
  "clap",
  "common",
- "plonky_block_proof_gen",
+ "proof_gen",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -3521,6 +3536,16 @@ name = "web-sys"
 version = "0.3.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b85cbef8c220a6abc02aefd892dfc0fc23afb1c6a426316ec33253a3877249b"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "web-time"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ee269d72cc29bf77a2c4bc689cc750fb39f5cbd493d2205bbb3f5c7779cf7b0"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
@@ -3689,18 +3714,18 @@ checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
 
 [[package]]
 name = "zerocopy"
-version = "0.7.15"
+version = "0.7.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81ba595b9f2772fbee2312de30eeb80ec773b4cb2f1e8098db024afadda6c06f"
+checksum = "74d4d3961e53fa4c9a25a8637fc2bfaf2595b3d3ae34875568a5cf64787716be"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.7.15"
+version = "0.7.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "772666c41fb6dceaf520b564b962d738a8e1a83b41bd48945f50837aed78bb1d"
+checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
 dependencies = [
  "proc-macro2",
  "quote",

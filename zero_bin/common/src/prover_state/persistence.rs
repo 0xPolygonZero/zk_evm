@@ -7,7 +7,7 @@ use plonky2::{
     plonk::config::PoseidonGoldilocksConfig,
     util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer},
 };
-use plonky_block_proof_gen::types::{AllRecursiveCircuits, VerifierData};
+use proof_gen::types::{AllRecursiveCircuits, VerifierData};
 use tracing::{info, warn};
 
 use super::circuit::CircuitConfig;
@@ -106,7 +106,11 @@ pub fn verifier_to_disk(circuit: &VerifierData, circuit_config: &CircuitConfig) 
 }
 
 fn write_bytes_to_file(bytes: &[u8], path: String) {
-    let file = OpenOptions::new().write(true).create(true).open(path);
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path);
 
     let mut file = match file {
         Ok(file) => file,

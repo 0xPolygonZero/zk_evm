@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use paladin::runtime::Runtime;
-use plonky_block_proof_gen::types::PlonkyProofIntern;
+use proof_gen::types::PlonkyProofIntern;
 
 /// The main function for the jerigon mode.
 pub(crate) async fn jerigon_main(

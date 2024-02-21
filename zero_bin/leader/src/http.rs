@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
 use ethereum_types::U256;
 use paladin::runtime::Runtime;
-use plonky_block_proof_gen::{proof_types::GeneratedBlockProof, types::PlonkyProofIntern};
+use proof_gen::{proof_types::GeneratedBlockProof, types::PlonkyProofIntern};
 use prover::ProverInput;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;

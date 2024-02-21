@@ -3,13 +3,13 @@ use paladin::{
     operation::{FatalError, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
-use plonky_block_proof_gen::{
+use proof_gen::{
     proof_gen::{generate_agg_proof, generate_block_proof, generate_txn_proof},
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
     prover_state::ProverState,
 };
-use protocol_decoder::types::TxnProofGenIR;
 use serde::{Deserialize, Serialize};
+use trace_decoder::types::TxnProofGenIR;
 
 fn p_state() -> &'static ProverState {
     P_STATE.get().expect("Prover state is not initialized")

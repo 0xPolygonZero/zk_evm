@@ -7,7 +7,7 @@ use common::prover_state::set_prover_state_from_config;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::Runtime;
-use plonky_block_proof_gen::types::PlonkyProofIntern;
+use proof_gen::types::PlonkyProofIntern;
 use tracing::warn;
 
 mod cli;

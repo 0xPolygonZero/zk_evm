@@ -14,12 +14,12 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
-protocol_decoder = { workspace = true }
+trace_decoder = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 clap = { workspace = true }
 ethereum-types = { workspace = true }
-plonky2_evm = { workspace = true }
+evm_arithmetization = { workspace = true }
 thiserror = { workspace = true }
 
 reqwest = { version = "0.11.22", default-features = false, features = [

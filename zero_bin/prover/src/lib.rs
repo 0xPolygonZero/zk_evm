@@ -5,16 +5,16 @@ use paladin::{
     directive::{Directive, IndexedStream, Literal},
     runtime::Runtime,
 };
-use plonky_block_proof_gen::{
+use proof_gen::{
     proof_types::{AggregatableProof, GeneratedBlockProof},
     types::PlonkyProofIntern,
 };
-use protocol_decoder::{
+use serde::{Deserialize, Serialize};
+use trace_decoder::{
     processed_block_trace::ProcessingMeta,
     trace_protocol::BlockTrace,
     types::{CodeHash, OtherBlockData},
 };
-use serde::{Deserialize, Serialize};
 use tracing::info;
 
 #[derive(Debug, Deserialize, Serialize)]
