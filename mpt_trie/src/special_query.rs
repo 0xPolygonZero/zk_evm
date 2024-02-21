@@ -81,8 +81,8 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
     }
 }
 
-/// Attempt to pop `n` nibbles from the given [`Nibbles`] and "clamp" the
-/// nibbles popped by not popping more nibbles than exist.
+/// Attempts to pop `n` nibbles from the given [`Nibbles`] and "clamp" the
+/// nibbles popped by not popping more nibbles than there are.
 fn pop_nibbles_clamped(nibbles: &mut Nibbles, n: usize) -> Nibbles {
     let n_nibs_to_pop = nibbles.count.min(n);
     nibbles.pop_nibbles_front(n_nibs_to_pop)
