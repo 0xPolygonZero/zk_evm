@@ -377,8 +377,9 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
     ];
 
     // This contains the `block_beneficiary`, `block_random`, `block_base_fee`,
-    // `block_blob_base_fee`, `parent_beacon_block_root` as well as `cur_hash`.
-    let block_fields_arrays: [(GlobalMetadata, &[Target]); 6] = [
+    // `block_blob_base_fee`, `block_blob_gas_used`, `block_excess_blob_gas`,
+    // `parent_beacon_block_root` as well as `cur_hash`.
+    let block_fields_arrays: [(GlobalMetadata, &[Target]); 8] = [
         (
             GlobalMetadata::BlockBeneficiary,
             &public_values.block_metadata.block_beneficiary,
@@ -394,6 +395,14 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
         (
             GlobalMetadata::BlockBlobBaseFee,
             &public_values.block_metadata.block_blob_base_fee,
+        ),
+        (
+            GlobalMetadata::BlockBlobGasUsed,
+            &public_values.block_metadata.block_blob_gas_used,
+        ),
+        (
+            GlobalMetadata::BlockExcessBlobGas,
+            &public_values.block_metadata.block_excess_blob_gas,
         ),
         (
             GlobalMetadata::ParentBeaconBlockRoot,
@@ -604,6 +613,8 @@ pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: 
     let block_base_fee = builder.add_virtual_public_input_arr();
     let block_gas_used = builder.add_virtual_public_input();
     let block_blob_base_fee = builder.add_virtual_public_input_arr();
+    let block_blob_gas_used = builder.add_virtual_public_input_arr();
+    let block_excess_blob_gas = builder.add_virtual_public_input_arr();
     let parent_beacon_block_root = builder.add_virtual_public_input_arr();
     let block_bloom = builder.add_virtual_public_input_arr();
     BlockMetadataTarget {
@@ -617,6 +628,8 @@ pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: 
         block_base_fee,
         block_gas_used,
         block_blob_base_fee,
+        block_blob_gas_used,
+        block_excess_blob_gas,
         parent_beacon_block_root,
         block_bloom,
     }
@@ -787,10 +800,30 @@ where
         block_metadata_target.block_gas_used,
         u256_to_u32(block_metadata.block_gas_used)?,
     );
-    // Blobbasefee fits in 2 limbs
+    // BlobBaseFee fits in 2 limbs
     let blob_basefee = u256_to_u64(block_metadata.block_blob_base_fee)?;
     witness.set_target(block_metadata_target.block_blob_base_fee[0], blob_basefee.0);
     witness.set_target(block_metadata_target.block_blob_base_fee[1], blob_basefee.1);
+    // BlobGasUsed fits in 2 limbs
+    let blob_gas_used = u256_to_u64(block_metadata.block_blob_gas_used)?;
+    witness.set_target(
+        block_metadata_target.block_blob_gas_used[0],
+        blob_gas_used.0,
+    );
+    witness.set_target(
+        block_metadata_target.block_blob_gas_used[1],
+        blob_gas_used.1,
+    );
+    // ExcessBlobGas fits in 2 limbs
+    let excess_blob_gas = u256_to_u64(block_metadata.block_excess_blob_gas)?;
+    witness.set_target(
+        block_metadata_target.block_excess_blob_gas[0],
+        excess_blob_gas.0,
+    );
+    witness.set_target(
+        block_metadata_target.block_excess_blob_gas[1],
+        excess_blob_gas.1,
+    );
 
     witness.set_target_arr(
         &block_metadata_target.parent_beacon_block_root,

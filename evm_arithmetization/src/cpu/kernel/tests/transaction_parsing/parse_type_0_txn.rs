@@ -7,6 +7,7 @@ use NormalizedTxnField::*;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::cpu::kernel::interpreter::Interpreter;
+use crate::memory::segments::Segment;
 
 #[test]
 fn process_type_0_txn() -> Result<()> {
@@ -14,8 +15,9 @@ fn process_type_0_txn() -> Result<()> {
     let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
 
     let retaddr = 0xDEADBEEFu32.into();
+    let rlp_addr = (Segment::RlpRaw as usize).into();
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(process_type_0_txn, vec![retaddr]);
+        Interpreter::new_with_kernel(process_type_0_txn, vec![retaddr, rlp_addr]);
 
     // When we reach process_normalized_txn, we're done with parsing and
     // normalizing. Processing normalized transactions is outside the scope of

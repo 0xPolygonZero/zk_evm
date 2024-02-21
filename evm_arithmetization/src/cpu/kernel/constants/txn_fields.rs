@@ -24,6 +24,7 @@ pub(crate) enum NormalizedTxnField {
     /// The length of the data field. The data itself is stored in another
     /// segment.
     DataLen,
+    MaxFeePerBlobGas,
     YParity,
     R,
     S,
@@ -37,7 +38,7 @@ pub(crate) enum NormalizedTxnField {
 }
 
 impl NormalizedTxnField {
-    pub(crate) const COUNT: usize = 16;
+    pub(crate) const COUNT: usize = 17;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -56,6 +57,7 @@ impl NormalizedTxnField {
             Self::To,
             Self::Value,
             Self::DataLen,
+            Self::MaxFeePerBlobGas,
             Self::YParity,
             Self::R,
             Self::S,
@@ -78,6 +80,7 @@ impl NormalizedTxnField {
             NormalizedTxnField::To => "TXN_FIELD_TO",
             NormalizedTxnField::Value => "TXN_FIELD_VALUE",
             NormalizedTxnField::DataLen => "TXN_FIELD_DATA_LEN",
+            NormalizedTxnField::MaxFeePerBlobGas => "TXN_FIELD_MAX_FEE_PER_BLOB_GAS",
             NormalizedTxnField::YParity => "TXN_FIELD_Y_PARITY",
             NormalizedTxnField::R => "TXN_FIELD_R",
             NormalizedTxnField::S => "TXN_FIELD_S",

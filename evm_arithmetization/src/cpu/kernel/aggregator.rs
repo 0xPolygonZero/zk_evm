@@ -154,6 +154,7 @@ pub(crate) fn combined_kernel() -> Kernel {
         include_str!("asm/transactions/type_0.asm"),
         include_str!("asm/transactions/type_1.asm"),
         include_str!("asm/transactions/type_2.asm"),
+        include_str!("asm/transactions/type_3.asm"),
         include_str!("asm/util/assertions.asm"),
         include_str!("asm/util/basic_macros.asm"),
         include_str!("asm/util/keccak.asm"),

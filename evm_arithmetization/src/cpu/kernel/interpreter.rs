@@ -306,10 +306,22 @@ impl<'a, F: Field> Interpreter<'a, F> {
             (GlobalMetadata::BlockChainId, metadata.block_chain_id),
             (GlobalMetadata::BlockBaseFee, metadata.block_base_fee),
             (
+                GlobalMetadata::BlockBlobBaseFee,
+                metadata.block_blob_base_fee,
+            ),
+            (
                 GlobalMetadata::BlockCurrentHash,
                 h2u(inputs.block_hashes.cur_hash),
             ),
             (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+            (
+                GlobalMetadata::BlockBlobGasUsed,
+                metadata.block_blob_gas_used,
+            ),
+            (
+                GlobalMetadata::BlockExcessBlobGas,
+                metadata.block_excess_blob_gas,
+            ),
             (GlobalMetadata::BlockGasUsedBefore, inputs.gas_used_before),
             (GlobalMetadata::BlockGasUsedAfter, inputs.gas_used_after),
             (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
@@ -841,6 +853,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             0x46 => self.run_syscall(opcode, 0, true),  // "CHAINID",
             0x47 => self.run_syscall(opcode, 0, true),  // SELFABALANCE,
             0x48 => self.run_syscall(opcode, 0, true),  // "BASEFEE",
+            0x49 => self.run_syscall(opcode, 1, false), // "BLOBHASH",
             0x4a => self.run_syscall(opcode, 0, true),  // "BLOBBASEFEE",
             0x50 => self.run_pop(),                     // "POP",
             0x51 => self.run_syscall(opcode, 1, false), // "MLOAD",

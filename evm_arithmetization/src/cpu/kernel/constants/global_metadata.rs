@@ -49,6 +49,9 @@ pub(crate) enum GlobalMetadata {
     BlockGasLimit,
     BlockChainId,
     BlockBaseFee,
+    BlockBlobBaseFee,
+    BlockBlobGasUsed,
+    BlockExcessBlobGas,
     BlockGasUsed,
     /// Before current transactions block values.
     BlockGasUsedBefore,
@@ -93,17 +96,23 @@ pub(crate) enum GlobalMetadata {
     LogsPayloadLen,
     TxnNumberBefore,
     TxnNumberAfter,
-    BlockBlobBaseFee,
 
     /// Number of created contracts during the current transaction.
     CreatedContractsLen,
 
     KernelHash,
     KernelLen,
+
+    // Start of the blob versioned hashes in the RLP for type-3 txns.
+    BlobVersionedHashesRlpStart,
+    // Length of the blob versioned hashes in the RLP for type-3 txns.
+    BlobVersionedHashesRlpLen,
+    // Number of blob versioned hashes contained in the current type-3 transaction.
+    BlobVersionedHashesLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 50;
+    pub(crate) const COUNT: usize = 55;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -134,6 +143,9 @@ impl GlobalMetadata {
             Self::BlockChainId,
             Self::BlockBaseFee,
             Self::BlockGasUsed,
+            Self::BlockBlobBaseFee,
+            Self::BlockBlobGasUsed,
+            Self::BlockExcessBlobGas,
             Self::BlockGasUsedBefore,
             Self::BlockGasUsedAfter,
             Self::ParentBeaconBlockRoot,
@@ -158,10 +170,12 @@ impl GlobalMetadata {
             Self::BlockCurrentHash,
             Self::TxnNumberBefore,
             Self::TxnNumberAfter,
-            Self::BlockBlobBaseFee,
             Self::CreatedContractsLen,
             Self::KernelHash,
             Self::KernelLen,
+            Self::BlobVersionedHashesRlpStart,
+            Self::BlobVersionedHashesRlpLen,
+            Self::BlobVersionedHashesLen,
         ]
     }
 
@@ -189,6 +203,9 @@ impl GlobalMetadata {
             Self::BlockGasLimit => "GLOBAL_METADATA_BLOCK_GAS_LIMIT",
             Self::BlockChainId => "GLOBAL_METADATA_BLOCK_CHAIN_ID",
             Self::BlockBaseFee => "GLOBAL_METADATA_BLOCK_BASE_FEE",
+            Self::BlockBlobBaseFee => "GLOBAL_METADATA_BLOCK_BLOB_BASE_FEE",
+            Self::BlockBlobGasUsed => "GLOBAL_METADATA_BLOCK_BLOB_GAS_USED",
+            Self::BlockExcessBlobGas => "GLOBAL_METADATA_BLOCK_EXCESS_BLOB_GAS",
             Self::BlockGasUsed => "GLOBAL_METADATA_BLOCK_GAS_USED",
             Self::BlockGasUsedBefore => "GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE",
             Self::BlockGasUsedAfter => "GLOBAL_METADATA_BLOCK_GAS_USED_AFTER",
@@ -214,10 +231,12 @@ impl GlobalMetadata {
             Self::LogsPayloadLen => "GLOBAL_METADATA_LOGS_PAYLOAD_LEN",
             Self::TxnNumberBefore => "GLOBAL_METADATA_TXN_NUMBER_BEFORE",
             Self::TxnNumberAfter => "GLOBAL_METADATA_TXN_NUMBER_AFTER",
-            Self::BlockBlobBaseFee => "GLOBAL_METADATA_BLOCK_BLOB_BASE_FEE",
             Self::CreatedContractsLen => "GLOBAL_METADATA_CREATED_CONTRACTS_LEN",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
+            Self::BlobVersionedHashesRlpStart => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START",
+            Self::BlobVersionedHashesRlpLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN",
+            Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",
         }
     }
 }

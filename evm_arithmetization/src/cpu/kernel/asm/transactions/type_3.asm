@@ -1,15 +1,14 @@
-// Type 2 transactions, introduced by EIP 1559, have the format
-//     0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas,
-//                  gas_limit, to, value, data, access_list, y_parity, r, s])
+// Type 3 transactions, introduced by EIP 4844, have the format
+//     0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to, value,
+//                  data, access_list, max_fee_per_blob_gas, blob_versioned_hashes, y_parity, r, s])
 //
 // The signed data is
-//     keccak256(0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas,
-//                            max_fee_per_gas, gas_limit, to, value, data,
-//                            access_list]))
+//     keccak256(0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit,
+//                       to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes]))
 
-global process_type_2_txn:
+global process_type_3_txn:
     // stack: rlp_addr, retdest
-    // Initial rlp address offset of 1 (skipping over the 0x02 byte)
+    // Initial rlp address offset of 1 (skipping over the 0x03 byte)
     %add_const(1)
     // stack: rlp_addr, retdest
     %decode_rlp_list_len
@@ -27,6 +26,8 @@ global process_type_2_txn:
     %decode_and_store_value
     %decode_and_store_data
     %decode_and_store_access_list
+    %decode_and_store_max_fee_per_blob_gas
+    %decode_and_store_blob_versioned_hashes
     %decode_and_store_y_parity
     %decode_and_store_r
     %decode_and_store_s
@@ -35,10 +36,10 @@ global process_type_2_txn:
     POP
     // stack: retdest
 
-// From EIP-1559:
+// From EIP-4844:
 // The signature_y_parity, signature_r, signature_s elements of this transaction represent a secp256k1 signature over
-// keccak256(0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, destination, amount, data, access_list]))
-type_2_compute_signed_data:
+// keccak256(0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes]))
+type_3_compute_signed_data:
     %alloc_rlp_block
     // stack: rlp_addr_start, retdest
     %mload_txn_field(@TXN_FIELD_CHAIN_ID)
@@ -64,17 +65,13 @@ type_2_compute_signed_data:
     %encode_rlp_scalar_swapped_inputs
     // stack: rlp_addr, rlp_start, retdest
 
+    // As per EIP-4844, blob transactions cannot have the form of a create transaction.
     %mload_txn_field(@TXN_FIELD_TO)
-    %mload_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION) %jumpi(zero_to)
+    %mload_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION) %jumpi(panic)
     // stack: to, rlp_addr, rlp_start, retdest
     SWAP1 %encode_rlp_160
-    %jump(after_to)
-zero_to:
-    // stack: to, rlp_addr, rlp_start, retdest
-    %encode_rlp_scalar_swapped_inputs
     // stack: rlp_addr, rlp_start, retdest
 
-after_to:
     %mload_txn_field(@TXN_FIELD_VALUE)
     %encode_rlp_scalar_swapped_inputs
     // stack: rlp_addr, rlp_start, retdest
@@ -105,16 +102,33 @@ after_serializing_access_list:
     // stack: rlp_addr, rlp_start, retdest
     %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN) ADD
     // stack: rlp_addr, rlp_start, retdest
+
+    %mload_txn_field(@TXN_FIELD_MAX_FEE_PER_BLOB_GAS)
+    %encode_rlp_scalar_swapped_inputs
+    // stack: rlp_addr, rlp_start, retdest
+
+    // Instead of manually encoding the blob versioned hashes, we just copy the raw RLP from the transaction.
+    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START)
+    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN)
+    %stack (bvh_len, bvh_start, rlp_addr, rlp_start, retdest) ->
+        (
+            rlp_addr,
+            bvh_start,
+            bvh_len,
+            after_serializing_blob_versioned_hashes,
+            rlp_addr, rlp_start, retdest)
+    %jump(memcpy_bytes)
+after_serializing_blob_versioned_hashes:
     %prepend_rlp_list_prefix
     // stack: prefix_start_pos, rlp_len, retdest
 
-    // Store a `2` in front of the RLP
+    // Store a `3` in front of the RLP
     %decrement
-    %stack (rlp_addr) -> (2, rlp_addr, rlp_addr)
+    %stack (rlp_addr) -> (3, rlp_addr, rlp_addr)
     MSTORE_GENERAL
     // stack: rlp_addr, rlp_len, retdest
 
-    // Hash the RLP + the leading `2`
+    // Hash the RLP + the leading `3`
     SWAP1 %increment SWAP1
     // stack: ADDR, len, retdest
     KECCAK_GENERAL
