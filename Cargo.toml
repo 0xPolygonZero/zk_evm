@@ -31,4 +31,4 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/0xPolygonZero/zk_evm"
 homepage = "https://github.com/0xPolygonZero/zk_evm"
-keywords = ["cryptography", "SNARK", "PLONK", "FRI", "plonky2", "EVM", "ETHEREUM"]
+keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
