@@ -39,8 +39,8 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
                 Some(TrieSegment::Hash)
             }
             Node::Branch { children, .. } => {
-                // Our query key has ended. Stop here.
                 if self.curr_key.is_empty() {
+                    // Our query key has ended. Stop here.
                     self.terminated = true;
                     return None;
                 }

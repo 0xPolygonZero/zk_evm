@@ -26,6 +26,11 @@ pub type Nibble = u8;
 /// Used for the internal representation of a sequence of nibbles.
 pub type NibblesIntern = U512;
 
+const NIBBLES_APPEND_ASSERT_ERR_MSG: &str =
+    "Attempted to append nibbles together that produced nibbles longer than 64 nibbles!";
+const NIBBLE_APPEND_ASSERT_ERR_MSG: &str =
+    "Attempted to append a single nibble that was greater than 15!";
+
 /// Because there are two different ways to convert to `Nibbles`, we don't want
 /// to rely on `From`. Instead, we'll define a new trait that defines both
 /// conversions.
@@ -776,12 +781,12 @@ impl Nibbles {
     }
 
     fn nibble_append_safety_asserts(&self, n: Nibble) {
-        assert!(self.count < 64);
-        assert!(n < 16);
+        assert!(self.count < 64, "{}", NIBBLES_APPEND_ASSERT_ERR_MSG);
+        assert!(n < 16, "{}", NIBBLE_APPEND_ASSERT_ERR_MSG);
     }
 
     fn nibbles_append_safety_asserts(&self, new_count: usize) {
-        assert!(new_count <= 64);
+        assert!(new_count <= 64, "{}", NIBBLES_APPEND_ASSERT_ERR_MSG);
     }
 
     // TODO: REMOVE BEFORE NEXT CRATE VERSION! THIS IS A TEMP HACK!
@@ -806,8 +811,12 @@ mod tests {
     use super::{Nibble, Nibbles, ToNibbles};
     use crate::nibbles::FromHexPrefixError;
 
-    const LONG_ZERO_NIBS_STR_LEN_63: &str =
-        "0x000000000000000000000000000000000000000000000000000000000000000";
+    const ZERO_NIBS_63: &str = "0x000000000000000000000000000000000000000000000000000000000000000";
+    const ZERO_NIBS_64: &str = "0x0000000000000000000000000000000000000000000000000000000000000000";
+    const ZERO_NIBS_64_LEADING_1: &str =
+        "0x1000000000000000000000000000000000000000000000000000000000000000";
+    const ZERO_NIBS_64_TRAILING_1: &str =
+        "0x0000000000000000000000000000000000000000000000000000000000000001";
 
     #[test]
     fn get_nibble_works() {
@@ -925,9 +934,8 @@ mod tests {
         test_and_assert_nib_push_func(Nibbles::default(), 0x1, |n| n.push_nibble_front(0x1));
         test_and_assert_nib_push_func(0x1, 0x21, |n| n.push_nibble_front(0x2));
         test_and_assert_nib_push_func(
-            Nibbles::from_str(LONG_ZERO_NIBS_STR_LEN_63).unwrap(),
-            Nibbles::from_str("0x1000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap(),
+            Nibbles::from_str(ZERO_NIBS_63).unwrap(),
+            Nibbles::from_str(ZERO_NIBS_64_LEADING_1).unwrap(),
             |n| n.push_nibble_front(0x1),
         );
     }
@@ -937,9 +945,8 @@ mod tests {
         test_and_assert_nib_push_func(Nibbles::default(), 0x1, |n| n.push_nibble_back(0x1));
         test_and_assert_nib_push_func(0x1, 0x12, |n| n.push_nibble_back(0x2));
         test_and_assert_nib_push_func(
-            Nibbles::from_str(LONG_ZERO_NIBS_STR_LEN_63).unwrap(),
-            Nibbles::from_str("0x0000000000000000000000000000000000000000000000000000000000000001")
-                .unwrap(),
+            Nibbles::from_str(ZERO_NIBS_63).unwrap(),
+            Nibbles::from_str(ZERO_NIBS_64_TRAILING_1).unwrap(),
             |n| n.push_nibble_back(0x1),
         );
     }
@@ -951,9 +958,8 @@ mod tests {
         });
         test_and_assert_nib_push_func(0x1234, 0x5671234, |n| n.push_nibbles_front(&0x567.into()));
         test_and_assert_nib_push_func(
-            Nibbles::from_str(LONG_ZERO_NIBS_STR_LEN_63).unwrap(),
-            Nibbles::from_str("0x1000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap(),
+            Nibbles::from_str(ZERO_NIBS_63).unwrap(),
+            Nibbles::from_str(ZERO_NIBS_64_LEADING_1).unwrap(),
             |n| n.push_nibbles_front(&0x1.into()),
         );
     }
@@ -965,9 +971,8 @@ mod tests {
         });
         test_and_assert_nib_push_func(0x1234, 0x1234567, |n| n.push_nibbles_back(&0x567.into()));
         test_and_assert_nib_push_func(
-            Nibbles::from_str(LONG_ZERO_NIBS_STR_LEN_63).unwrap(),
-            Nibbles::from_str("0x0000000000000000000000000000000000000000000000000000000000000001")
-                .unwrap(),
+            Nibbles::from_str(ZERO_NIBS_63).unwrap(),
+            Nibbles::from_str(ZERO_NIBS_64_TRAILING_1).unwrap(),
             |n| n.push_nibbles_back(&0x1.into()),
         );
     }
@@ -1264,7 +1269,7 @@ mod tests {
     fn nibbles_from_h256_works() {
         assert_eq!(
             format!("{:x}", Nibbles::from_h256_be(H256::from_low_u64_be(0))),
-            "0x0000000000000000000000000000000000000000000000000000000000000000",
+            ZERO_NIBS_64,
         );
         assert_eq!(
             format!("{:x}", Nibbles::from_h256_be(H256::from_low_u64_be(2048))),
@@ -1272,7 +1277,7 @@ mod tests {
         );
         assert_eq!(
             format!("{:x}", Nibbles::from_h256_le(H256::from_low_u64_be(0))),
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
+            ZERO_NIBS_64
         );
 
         // Note that the first bit of the `Nibbles` changes if the count is odd.
