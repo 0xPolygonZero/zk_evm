@@ -17,7 +17,7 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 dotenvy = { workspace = true }
 tokio = { workspace = true }
-plonky_block_proof_gen = { workspace = true }
+proof_gen = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 ethereum-types = { workspace = true }

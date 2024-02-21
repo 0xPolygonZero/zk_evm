@@ -1,16 +1,16 @@
 use anyhow::{Context, Result};
 use ethereum_types::{Address, Bloom, H256, U256};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use futures::{stream::FuturesOrdered, TryStreamExt};
-use plonky2_evm::proof::{BlockHashes, BlockMetadata};
-use protocol_decoder::{
-    trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
-    types::{BlockLevelData, OtherBlockData},
-};
 use prover::ProverInput;
 use reqwest::IntoUrl;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio::try_join;
+use trace_decoder::{
+    trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
+    types::{BlockLevelData, OtherBlockData},
+};
 use tracing::{debug, info};
 
 #[derive(Deserialize, Debug)]

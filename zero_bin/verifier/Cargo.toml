@@ -11,7 +11,7 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
-plonky_block_proof_gen = { workspace = true }
+proof_gen = { workspace = true }
 
 # Local dependencies
 common = { path = "../common" }

@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 
 use anyhow::Result;
 use paladin::runtime::Runtime;
-use plonky_block_proof_gen::types::PlonkyProofIntern;
+use proof_gen::types::PlonkyProofIntern;
 use prover::ProverInput;
 
 /// The main function for the stdio mode.

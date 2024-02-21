@@ -7,7 +7,7 @@ use plonky2::{
     plonk::config::PoseidonGoldilocksConfig,
     util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer},
 };
-use plonky_block_proof_gen::types::{AllRecursiveCircuits, VerifierData};
+use proof_gen::types::{AllRecursiveCircuits, VerifierData};
 use tracing::{info, warn};
 
 use super::circuit::CircuitConfig;
