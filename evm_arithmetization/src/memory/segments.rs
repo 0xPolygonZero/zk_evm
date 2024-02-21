@@ -169,7 +169,7 @@ impl Segment {
             Segment::ContextCheckpoints => "SEGMENT_CONTEXT_CHECKPOINTS",
             Segment::BlockHashes => "SEGMENT_BLOCK_HASHES",
             Segment::CreatedContracts => "SEGMENT_CREATED_CONTRACTS",
-            Self::TxnBlobVersionedHashes => "SEGMENT_TXN_BLOB_VERSIONED_HASHES",
+            Segment::TxnBlobVersionedHashes => "SEGMENT_TXN_BLOB_VERSIONED_HASHES",
         }
     }
 
