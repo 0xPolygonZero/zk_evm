@@ -464,9 +464,23 @@ impl<'a, F: Field> Interpreter<'a, F> {
                     && halt_context == self.generation_state.registers.context
                 {
                     self.running = false;
+                    println!("Opcode count:");
+                    for i in 0..0x100 {
+                        if self.opcode_count[i] > 0 {
+                            println!("{}: {}", get_mnemonic(i as u8), self.opcode_count[i])
+                        }
+                    }
+                    println!("Total: {}", self.opcode_count.into_iter().sum::<usize>());
                     return Ok(());
                 }
             } else if self.halt_offsets.contains(&pc) {
+                println!("Opcode count:");
+                for i in 0..0x100 {
+                    if self.opcode_count[i] > 0 {
+                        println!("{}: {}", get_mnemonic(i as u8), self.opcode_count[i])
+                    }
+                }
+                println!("Total: {}", self.opcode_count.into_iter().sum::<usize>());
                 return Ok(());
             }
 
@@ -493,7 +507,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
                 }
             }?;
         }
-        #[cfg(debug_assertions)]
+        // #[cfg(debug_assertions)]
         {
             println!("Opcode count:");
             for i in 0..0x100 {
@@ -769,7 +783,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
         let op = decode(self.generation_state.registers, opcode)?;
         self.generation_state.registers.gas_used += gas_to_charge(op);
 
-        #[cfg(debug_assertions)]
+        // #[cfg(debug_assertions)]
         if !self.is_kernel() {
             println!(
                 "User instruction {:?}, stack = {:?}, ctx = {}",
@@ -853,6 +867,8 @@ impl<'a, F: Field> Interpreter<'a, F> {
             0x58 => self.run_pc(),                      // "PC",
             0x59 => self.run_syscall(opcode, 0, true),  // "MSIZE",
             0x5a => self.run_syscall(opcode, 0, true),  // "GAS",
+            0x5c => self.run_syscall(opcode, 1, false), // "TLOAD",
+            0x5d => self.run_syscall(opcode, 2, false), // "TSTORE",
             0x5b => self.run_jumpdest(),                // "JUMPDEST",
             x if (0x5f..0x80).contains(&x) => self.run_push(x - 0x5f), // "PUSH"
             x if (0x80..0x90).contains(&x) => self.run_dup(x - 0x7f), // "DUP"
@@ -903,14 +919,18 @@ impl<'a, F: Field> Interpreter<'a, F> {
             }
         }?;
 
-        #[cfg(debug_assertions)]
+        // #[cfg(debug_assertions)]
         if self
             .debug_offsets
             .contains(&self.generation_state.registers.program_counter)
         {
             println!("At {},", self.offset_name());
         } else if let Some(label) = self.offset_label() {
-            println!("At {label}");
+            println!("At {label}, stack = {:?}", {
+                let mut stack = self.stack();
+                stack.reverse();
+                stack
+            });
         }
 
         if !self.is_kernel() {
@@ -1584,6 +1604,8 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x59 => "MSIZE",
         0x5a => "GAS",
         0x5b => "JUMPDEST",
+        0x5c => "TLOAD",
+        0x5d => "TSTORE",
         0x5f => "PUSH0",
         0x60 => "PUSH1",
         0x61 => "PUSH2",
