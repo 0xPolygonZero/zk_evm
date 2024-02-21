@@ -39,4 +39,5 @@ pub enum ProverInputError {
     NumBitsError,
     InvalidJumpDestination,
     InvalidJumpdestSimulation,
+    Unimplemented,
 }

@@ -125,6 +125,13 @@ pub(crate) const BLS_BASE: U512 = U512([
     0x0,
 ]);
 
+pub(crate) const BLS_SCALAR: U256 = U256([
+    0xffffffff00000001,
+    0x53bda402fffe5bfe,
+    0x3339d80809a1d805,
+    0x73eda753299d7d48,
+]);
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct BLS381 {
     pub val: U512,
@@ -805,8 +812,483 @@ impl Adj for Fp2<BLS381> {
             im: self.re + self.im,
         }
     }
-    const FROB_T: [[Fp2<BLS381>; 6]; 2] = [[Fp2::<BLS381>::ZERO; 6]; 2];
-    const FROB_Z: [Fp2<BLS381>; 12] = [Fp2::<BLS381>::ZERO; 12];
+
+    const FROB_T: [[Fp2<BLS381>; 6]; 2] = [
+        [
+            Fp2 {
+                re: BLS381 { val: U512::one() },
+                im: BLS381 { val: U512::zero() },
+            },
+            Fp2 {
+                re: BLS381 {
+                    val: U512([
+                        0xa86dad41e23bdd38,
+                        0xd21a7d8a357b742d,
+                        0xba22b416cd517abf,
+                        0x9be09286c15cba7e,
+                        0x701e03efa187b455,
+                        0x10d5857320cec009,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+                im: BLS381 {
+                    val: U512([
+                        0xd144131a92a923c9,
+                        0xa352bb6999934490,
+                        0xdefad843b794cdfa,
+                        0x2c43092d1a75f183,
+                        0x57c1d2ee07271c94,
+                        0xbe0989ca177ae77,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+            },
+            Fp2 {
+                re: BLS381 {
+                    val: U512([
+                        0x2e01fffffffefffe,
+                        0xde17d813620a0002,
+                        0xddb3a93be6f89688,
+                        0xba69c6076a0f77ea,
+                        0x5f19672fdf76ce51,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+                im: BLS381 { val: U512::zero() },
+            },
+            Fp2 {
+                re: BLS381 {
+                    val: U512([
+                        0x134d727018decf99,
+                        0x6e7100777a21f373,
+                        0xadd54c3151066b6b,
+                        0x526d638eeb975eff,
+                        0x5fd8df1be0b014d,
+                        0x156b012cbca4db60,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+                im: BLS381 {
+                    val: U512([
+                        0xa74868bd2134b1d9,
+                        0xf1ad973f70afada3,
+                        0x93a33fe7c85e2d6b,
+                        0x6e52f44a90c2c084,
+                        0x2c1e2cdf86bf9f96,
+                        0xa679a24a5bc211b,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+            },
+            Fp2 {
+                re: BLS381 {
+                    val: U512([
+                        0x8bfd00000000aaac,
+                        0x409427eb4f49fffd,
+                        0x897d29650fb85f9b,
+                        0xaa0d857d89759ad4,
+                        0xec02408663d4de85,
+                        0x1a0111ea397fe699,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+                im: BLS381 { val: U512::zero() },
+            },
+            Fp2 {
+                re: BLS381 {
+                    val: U512([
+                        0xb842e04e04e4a885,
+                        0xfccc81fbb30a985e,
+                        0x6669a4f9cf0a061c,
+                        0xdaa0a0f43a160c00,
+                        0x201bbd8b2704a40b,
+                        0xdc19d34958c31cb,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+                im: BLS381 {
+                    val: U512([
+                        0x417284284c21d509,
+                        0x89abad55a7110dcb,
+                        0xf492ba7576bdfabd,
+                        0xc9e14e0d484c60b6,
+                        0xc73ba7e8b564f0ac,
+                        0x3b8df28f24c1707,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+            },
+        ],
+        [
+            Fp2 {
+                re: BLS381 { val: U512::one() },
+                im: BLS381 { val: U512::zero() },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x4291e987f40fbc69,
+                            0xc9e90dd5d30a4cf1,
+                            0x9625943c9a0386df,
+                            0x7a1d5ac1567d1c19,
+                            0x83df3779efc38703,
+                            0x157bb32f5d9d8082,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: {
+                    BLS381 {
+                        val: U512([
+                            0xaa3bd731b4a632b7,
+                            0x82549803646666f2,
+                            0xd3cc7e8cac21954e,
+                            0x9c553f3960e1cc1a,
+                            0xb2e3a1e13d8391b2,
+                            0x1541812587e80e45,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x1bed00000008aabd,
+                            0x4fd567503ef9ffec,
+                            0x9bdfdf85d7f3ab54,
+                            0xd6bf554238f9db7d,
+                            0xf3370707681e6bf7,
+                            0x1a0111ea397fe696,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: {
+                    BLS381 {
+                        val: U512([
+                            0x8bfd00000000aaad,
+                            0x409427eb4f49fffd,
+                            0x897d29650fb85f9b,
+                            0xaa0d857d89759ad4,
+                            0xec02408663d4de85,
+                            0x1a0111ea397fe699,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x2ab63dd0b12079f3,
+                            0x4a578829cacfaac2,
+                            0x948a7c74ca9cdc96,
+                            0xd5ab3606a308caf,
+                            0xc3d6404a1cffb502,
+                            0x126b19cec9e34091,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: {
+                    BLS381 {
+                        val: U512([
+                            0xd0a05fbb6a58ce68,
+                            0x22717962c5218f76,
+                            0x91e0aaa41348d5bf,
+                            0x23fd5aa662a23785,
+                            0x8613a030215e5ae6,
+                            0x42a3d52913dfc8,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x1cb7ffff35a335a4,
+                            0xa110f2531f99b916,
+                            0x701a15c7281e186e,
+                            0x7445045a522e6b57,
+                            0x388cdb880d7ea276,
+                            0x4b2c,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: {
+                    BLS381 {
+                        val: U512([
+                            0x41f7ffff83038304,
+                            0x2c22169159d9106e,
+                            0x42d39ad7c59e7a4e,
+                            0xbc0a86abe54fce95,
+                            0xeafcc35d84e2aebe,
+                            0x2e6d,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x7cb57fd8214fd941,
+                            0x47ce8e26c263a044,
+                            0xb2e49f58d6f06e72,
+                            0xd73b58c7acaa9679,
+                            0x6ea07d6d126234da,
+                            0x111baa10ce2b976b,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: {
+                    BLS381 {
+                        val: U512([
+                            0x49c2fe5d4346764,
+                            0xb41aa8c9abea8ab1,
+                            0xc11dda25f78334c3,
+                            0xbffba438d43ff534,
+                            0x1c1f04d68eef5dbf,
+                            0x45e0a9f59061d1d,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+            },
+        ],
+    ];
+
+    const FROB_Z: [Fp2<BLS381>; 12] = [
+        Fp2 {
+            re: { BLS381 { val: U512::one() } },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0xd60b35dadcc9e470,
+                        0x5c521e08292f2176,
+                        0xe8b99fdd76e68b60,
+                        0x1284b71c2865a7df,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0xca5cf05f80f362ac,
+                        0x747992778eeec7e5,
+                        0xa6327cfe12150b8e,
+                        0x246996f3b4fae7e6,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0xe4bd44e5607cfd49,
+                        0xc28f069fbb966e3d,
+                        0x5e6dd9e7e0acccb0,
+                        0x30644e72e131a029,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0xe86f7d391ed4a67f,
+                        0x894cb38dbe55d24a,
+                        0xefe9608cd0acaa90,
+                        0x19dc81cfcc82e4bb,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0x7694aa2bf4c0c101,
+                        0x7f03a5e397d439ec,
+                        0x06cbeee33576139d,
+                        0xabf8b60be77d73,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0xe4bd44e5607cfd48,
+                        0xc28f069fbb966e3d,
+                        0x5e6dd9e7e0acccb0,
+                        0x30644e72e131a029,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x1264475e420ac20f,
+                        0x2cfa95859526b0d4,
+                        0x072fc0af59c61f30,
+                        0x757cab3a41d3cdc,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0xe85845e34c4a5b9c,
+                        0xa20b7dfd71573c93,
+                        0x18e9b79ba4e2606c,
+                        0xca6b035381e35b6,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x3c208c16d87cfd46,
+                        0x97816a916871ca8d,
+                        0xb85045b68181585d,
+                        0x30644e72e131a029,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x6615563bfbb318d7,
+                        0x3b2f4c893f42a916,
+                        0xcf96a5d90a9accfd,
+                        0x1ddf9756b8cbf849,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0x71c39bb757899a9b,
+                        0x2307d819d98302a7,
+                        0x121dc8b86f6c4ccf,
+                        0x0bfab77f2c36b843,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x5763473177fffffe,
+                        0xd4f263f1acdb5c4f,
+                        0x59e26bcea0d48bac,
+                        0x0,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x53b10eddb9a856c8,
+                        0x0e34b703aa1bf842,
+                        0xc866e529b0d4adcd,
+                        0x1687cca314aebb6d,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0xc58be1eae3bc3c46,
+                        0x187dc4add09d90a0,
+                        0xb18456d34c0b44c0,
+                        0x2fb855bcd54a22b6,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x5763473177ffffff,
+                        0xd4f263f1acdb5c4f,
+                        0x59e26bcea0d48bac,
+                        0x0,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x29bc44b896723b38,
+                        0x6a86d50bd34b19b9,
+                        0xb120850727bb392d,
+                        0x290c83bf3d14634d,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0x53c846338c32a1ab,
+                        0xf575ec93f71a8df9,
+                        0x9f668e1adc9ef7f0,
+                        0x23bd9e3da9136a73,
+                    ]),
+                }
+            },
+        },
+    ];
 }
 
 /// The degree 3 field extension Fp6 over Fp2 is given by adjoining t, where t^3
@@ -1183,7 +1665,7 @@ where
     T: FieldExt,
     Fp2<T>: Adj,
 {
-    fn conj(self) -> Fp12<T> {
+    pub fn conj(self) -> Fp12<T> {
         Fp12 {
             z0: self.z0,
             z1: -self.z1,

@@ -19,6 +19,7 @@ global handle_precompiles:
     DUP1 %eq_const(@BN_MUL) %jumpi(precompile_bn_mul)
     DUP1 %eq_const(@SNARKV) %jumpi(precompile_snarkv)
     %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
+    %eq_const(@KZG_PEVAL) %jumpi(precompile_kzg_peval)
     // stack: retdest
     JUMP
 

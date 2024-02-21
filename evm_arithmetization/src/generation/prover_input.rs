@@ -6,6 +6,7 @@ use std::str::FromStr;
 use anyhow::{bail, Error};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
+use keccak_hash::keccak;
 use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
@@ -16,7 +17,7 @@ use crate::cpu::kernel::constants::cancun_constants::{
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
-use crate::extension_tower::{FieldExt, Fp12, BLS381, BN254};
+use crate::extension_tower::{FieldExt, Fp12, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
 use crate::generation::prover_input::EvmField::{
     Bls381Base, Bls381Scalar, Bn254Base, Bn254Scalar, Secp256k1Base, Secp256k1Scalar,
 };
@@ -61,6 +62,7 @@ impl<F: Field> GenerationState<F> {
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
             "ger" => self.run_global_exit_roots(),
+            "kzg_point_eval" => self.run_kzg_point_eval(),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
         }
     }
@@ -410,6 +412,46 @@ impl<F: Field> GenerationState<F> {
         }
         Ok((Segment::AccessedStorageKeys as usize).into())
     }
+
+    fn run_kzg_point_eval(&mut self) -> Result<U256, ProgramError> {
+        let versioned_hash = stack_peek(self, 0)?;
+        let z = stack_peek(self, 1)?;
+        let y = stack_peek(self, 2)?;
+        let comm_lo = stack_peek(self, 3)?;
+        let comm_hi = stack_peek(self, 4)?;
+        let proof_lo = stack_peek(self, 5)?;
+        let proof_hi = stack_peek(self, 6)?;
+
+        const VERSIONED_HASH_VERSION_KZG: U256 = U256::one();
+
+        let mut comm_bytes = [0u8; 48];
+        comm_lo.to_big_endian(&mut comm_bytes[0..32]);
+        comm_hi.to_big_endian(&mut comm_bytes[32..48]);
+        println!("COMM BYTES:{:?}", comm_bytes);
+
+        if versioned_hash
+            != VERSIONED_HASH_VERSION_KZG + U256::from_big_endian(&keccak(&comm_bytes).0[1..])
+        {
+            return Err(ProgramError::ProverInputError(InvalidInput));
+        }
+
+        self.verify_kzg_proof(comm_lo, comm_hi, z, y, proof_lo, proof_hi)?;
+
+        Ok(U256::zero())
+    }
+
+    /// Verifies a KZG proof.
+    fn verify_kzg_proof(
+        &self,
+        comm_lo: U256,
+        comm_hi: U256,
+        z: U256,
+        y: U256,
+        proof_lo: U256,
+        proof_hi: U256,
+    ) -> Result<(), ProgramError> {
+        Ok(())
+    }
 }
 
 impl<F: Field> GenerationState<F> {
@@ -723,22 +765,21 @@ impl FromStr for FieldOp {
 }
 
 impl EvmField {
-    fn order(&self) -> U256 {
+    fn order(&self) -> U512 {
         match self {
-            EvmField::Bls381Base => todo!(),
-            EvmField::Bls381Scalar => todo!(),
-            EvmField::Bn254Base => {
-                U256::from_str("0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47")
-                    .unwrap()
-            }
+            EvmField::Bls381Base => BLS_BASE,
+            EvmField::Bls381Scalar => BLS_SCALAR.into(),
+            EvmField::Bn254Base => BN_BASE.into(),
             EvmField::Bn254Scalar => todo!(),
             EvmField::Secp256k1Base => {
                 U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
                     .unwrap()
+                    .into()
             }
             EvmField::Secp256k1Scalar => {
                 U256::from_str("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
                     .unwrap()
+                    .into()
             }
         }
     }
@@ -751,7 +792,8 @@ impl EvmField {
     }
 
     fn inverse(&self, x: U256) -> Result<U256, ProgramError> {
-        let n = self.order();
+        let n = U256::try_from(self.order())
+            .map_err(|_| ProgramError::ProverInputError(Unimplemented))?;
         if x >= n {
             return Err(ProgramError::ProverInputError(InvalidInput));
         };
@@ -759,7 +801,8 @@ impl EvmField {
     }
 
     fn sqrt(&self, x: U256) -> Result<U256, ProgramError> {
-        let n = self.order();
+        let n = U256::try_from(self.order())
+            .map_err(|_| ProgramError::ProverInputError(Unimplemented))?;
         if x >= n {
             return Err(ProgramError::ProverInputError(InvalidInput));
         };

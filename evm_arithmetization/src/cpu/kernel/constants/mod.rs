@@ -276,7 +276,7 @@ const GAS_CONSTANTS: [(&str, u16); 37] = [
 
 const REFUND_CONSTANTS: [(&str, u16); 2] = [("REFUND_SCLEAR", 4_800), ("MAX_REFUND_QUOTIENT", 5)];
 
-const PRECOMPILES: [(&str, u16); 9] = [
+const PRECOMPILES: [(&str, u16); 10] = [
     ("ECREC", 1),
     ("SHA256", 2),
     ("RIP160", 3),
@@ -286,9 +286,10 @@ const PRECOMPILES: [(&str, u16); 9] = [
     ("BN_MUL", 7),
     ("SNARKV", 8),
     ("BLAKE2_F", 9),
+    ("KZG_PEVAL", 10),
 ];
 
-const PRECOMPILES_GAS: [(&str, u16); 13] = [
+const PRECOMPILES_GAS: [(&str, u16); 14] = [
     ("ECREC_GAS", 3_000),
     ("SHA256_STATIC_GAS", 60),
     ("SHA256_DYNAMIC_GAS", 12),
@@ -302,6 +303,7 @@ const PRECOMPILES_GAS: [(&str, u16); 13] = [
     ("SNARKV_STATIC_GAS", 45_000),
     ("SNARKV_DYNAMIC_GAS", 34_000),
     ("BLAKE2_F__GAS", 1),
+    ("KZG_PEVAL_GAS", 50_000),
 ];
 
 const SNARKV_POINTERS: [(&str, u64); 2] = [("SNARKV_INP", 112), ("SNARKV_OUT", 100)];
