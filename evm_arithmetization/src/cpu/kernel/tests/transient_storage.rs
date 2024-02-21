@@ -104,9 +104,85 @@ fn test_tstore_tload() -> Result<()> {
 
     interpreter.run()?;
 
-    let val = interpreter.stack()[0];
+    let val = interpreter.pop().unwrap();
 
     assert_eq!(val, 1.into());
+
+    // Load non-existing slot
+    interpreter.generation_state.registers.program_counter = sys_tload;
+    interpreter.generation_state.registers.is_kernel = true;
+    let slot: U256 = 4.into();
+    interpreter.push(slot);
+    interpreter.push(kexit_info);
+
+    interpreter.run()?;
+
+    println!("{:?}", interpreter.stack());
+    let val = interpreter.stack()[0];
+
+    assert_eq!(U256::zero(), val);
+    Ok(())
+}
+
+#[test]
+fn test_many_tstore_tload() -> Result<()> {
+    let kexit_info = 0xdeadbeefu32.into();
+
+    let initial_stack = vec![
+        1.into(), // val
+        2.into(), // slot
+        kexit_info,
+    ];
+
+    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let gas_limit_address = MemoryAddress {
+        context: 0,
+        segment: Segment::ContextMetadata.unscale(),
+        virt: ContextMetadata::GasLimit.unscale(),
+    };
+    let addr_addr = MemoryAddress {
+        context: 0,
+        segment: Segment::ContextMetadata.unscale(),
+        virt: ContextMetadata::Address.unscale(),
+    };
+
+    interpreter
+        .generation_state
+        .memory
+        .set(gas_limit_address, (200 * 200).into());
+    interpreter.generation_state.memory.set(addr_addr, 3.into());
+
+    let sys_tstore = KERNEL.global_labels["sys_tstore"];
+
+    for i in (0..100) {
+        interpreter.generation_state.registers.program_counter = sys_tstore;
+        interpreter.generation_state.registers.is_kernel = true;
+        let val: U256 = i.into();
+        let slot: U256 = i.into();
+        interpreter.push(val);
+        interpreter.push(slot);
+        interpreter.push(kexit_info);
+
+        interpreter.run()?;
+        println!("Store {i}");
+    }
+
+    let sys_tload = KERNEL.global_labels["sys_tload"];
+
+    for i in (0..100) {
+        interpreter.generation_state.registers.program_counter = sys_tload;
+        interpreter.generation_state.registers.is_kernel = true;
+        let slot: U256 = i.into();
+        interpreter.push(slot);
+        interpreter.push(kexit_info);
+
+        interpreter.run()?;
+
+        let val = interpreter.pop().unwrap();
+
+        println!("Load {i}");
+        assert_eq!(U256::from(i), val);
+    }
 
     Ok(())
 }

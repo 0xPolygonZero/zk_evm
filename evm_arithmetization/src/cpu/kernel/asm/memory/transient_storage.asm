@@ -71,14 +71,16 @@ global debug_found:
 global tload_current:
     %address
     // stack: addr, slot, retdest
+global debug_before_search:
     %search_transient_storage
 global debug_mira_lo_que_me_encontre:
     // stack: found, pos, addr, val, slot, retdest
     %jumpi(tload_found)
     // The value is not in memory so we return 0
-    %pop3
+    %pop4
     PUSH 0
     SWAP1
+global debug_before_jmp:
     JUMP
 tload_found:
     // stack: pos, addr, val, slot, retdest
@@ -94,11 +96,12 @@ global sys_tload:
     SWAP1
     // stack: slot, kexit_info
     %tload_current
-
+global debug_after_tload_current:
     SWAP1
 
     %charge_gas_const(@GAS_WARMACCESS)
     // stack: kexit_info, value
+global debug_before_exit_k:
     EXIT_KERNEL
 
 // Write a word to the current account's transient storage.
