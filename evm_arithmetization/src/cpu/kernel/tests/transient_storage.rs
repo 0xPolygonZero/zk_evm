@@ -101,6 +101,8 @@ fn test_tstore_tload() -> Result<()> {
     interpreter.run()?;
 
     let sys_tload = KERNEL.global_labels["sys_tload"];
+    let kexit_info = U256::from(0xdeadbeefu32)
+        + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
     interpreter.generation_state.registers.program_counter = sys_tload;
     interpreter.generation_state.registers.is_kernel = true;
     interpreter.push(2.into());
@@ -153,7 +155,7 @@ fn test_many_tstore_many_tload() -> Result<()> {
     interpreter
         .generation_state
         .memory
-        .set(gas_limit_address, (200 * 200).into());
+        .set(gas_limit_address, (100 * 200).into());
     interpreter.generation_state.memory.set(addr_addr, 3.into());
 
     let sys_tstore = KERNEL.global_labels["sys_tstore"];
@@ -161,6 +163,8 @@ fn test_many_tstore_many_tload() -> Result<()> {
     for i in (0..100) {
         interpreter.generation_state.registers.program_counter = sys_tstore;
         interpreter.generation_state.registers.is_kernel = true;
+        let kexit_info = U256::from(0xdeadbeefu32)
+            + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
         let val: U256 = i.into();
         let slot: U256 = i.into();
         interpreter.push(val);
@@ -176,6 +180,8 @@ fn test_many_tstore_many_tload() -> Result<()> {
     for i in (0..100) {
         interpreter.generation_state.registers.program_counter = sys_tload;
         interpreter.generation_state.registers.is_kernel = true;
+        let kexit_info = U256::from(0xdeadbeefu32)
+            + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
         let slot: U256 = i.into();
         interpreter.push(slot);
         interpreter.push(kexit_info);
@@ -231,39 +237,55 @@ fn test_revert() -> Result<()> {
     interpreter.push(2.into()); // slot
     interpreter.push(kexit_info);
     interpreter.run()?;
+    assert!(interpreter.stack().is_empty());
 
-    println!("Santa chachucha!");
+    let gas = interpreter.generation_state.registers.gas_used;
 
     // We will revert to this point
     let checkpoint = KERNEL.global_labels["debug_checkpoint"];
-    println!(
-        "checkpoint = {checkpoint}, ajale = {:?}",
-        KERNEL.global_labels["debug_ajale"]
-    );
     interpreter.generation_state.registers.program_counter = checkpoint;
     interpreter.generation_state.registers.is_kernel = true;
     interpreter.push(0xdeadbeefu32.into());
     interpreter.run()?;
+    assert!(interpreter.stack().is_empty());
+    // Don't charge gas for the checkpoint
+
+    interpreter.generation_state.registers.gas_used = gas;
 
     // Store 2 at 2
     interpreter.generation_state.registers.program_counter = sys_tstore;
     interpreter.generation_state.registers.is_kernel = true;
+    let kexit_info = U256::from(0xdeadbeefu32)
+        + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
     interpreter.push(2.into()); // val
     interpreter.push(2.into()); // slot
     interpreter.push(kexit_info);
     interpreter.run()?;
+    assert!(interpreter.stack().is_empty());
 
-    // We will run out of gas
+    println!(
+        "gas used = {:?}",
+        interpreter.generation_state.registers.gas_used
+    );
+
+    // The interpreter will run out of gas
     interpreter.generation_state.registers.program_counter = sys_tstore;
     interpreter.generation_state.registers.is_kernel = true;
-    interpreter.push(2.into()); // val
+    let kexit_info = U256::from(0xdeadbeefu32)
+        + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
+    interpreter.push(3.into()); // val
     interpreter.push(2.into()); // slot
     interpreter.push(kexit_info);
+    println!("sir lonjamas");
     assert!(interpreter.run().is_err());
+
+    println!("Comimimim");
 
     // Now we should load the value before the revert
     let sys_tload = KERNEL.global_labels["sys_tload"];
     interpreter.generation_state.registers.program_counter = sys_tload;
+    interpreter.generation_state.registers.gas_used = 0;
+    let kexit_info = U256::from(0xdeadbeefu32);
     interpreter.generation_state.registers.is_kernel = true;
     interpreter.push(2.into());
     interpreter.push(kexit_info);

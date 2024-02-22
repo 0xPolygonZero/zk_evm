@@ -112,6 +112,7 @@ global debug_before_exit_k:
 global sys_tstore:
     %check_static
 global debug_holam:
+    %charge_gas_const(@GAS_WARMACCESS)
     %stack (kexit_info, slot, value) -> (slot, value, kexit_info)
     %address
     %search_transient_storage
@@ -148,11 +149,10 @@ sys_tstore_charge_gas:
     EQ %jumpi(sstore_noop)
 
     // stack: addr, slot, original_value, kexit_info
+global debug_journal:
     %journal_add_transient_storage_change
 
     // stack: kexit_info
-    %charge_gas_const(@GAS_WARMACCESS)
-global debug_pagadita_la_bencina:
     EXIT_KERNEL
 
 new_transient_storage_len:

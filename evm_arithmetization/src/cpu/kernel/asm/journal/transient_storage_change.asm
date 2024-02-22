@@ -13,10 +13,10 @@ global revert_transient_storage_change:
     %search_transient_storage
     // The value must have been stored
     %assert_nonzero
-    // stack: pos, addr, original_value, prev_value, retdest
+    // stack: pos, addr, value, key, prev_value, retdest
     %add_const(2)
-    DUP4
-    // 
+    DUP5
+global debug_before_store:
     MSTORE_GENERAL
-    %pop2
+    %pop4
     JUMP

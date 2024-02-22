@@ -178,8 +178,6 @@
 %endmacro
 
 global debug_checkpoint:
-    PUSH 1 POP
-global debug_ajale:
     %checkpoint
     JUMP
 
