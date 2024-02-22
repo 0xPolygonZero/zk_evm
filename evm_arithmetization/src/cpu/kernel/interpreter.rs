@@ -152,7 +152,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 
             interpreter.run();
 
-            log::debug!("jdt = {:?}", interpreter.jumpdest_table);
+            log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);
 
             interpreter
                 .generation_state

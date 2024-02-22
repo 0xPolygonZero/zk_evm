@@ -346,7 +346,7 @@ check_proof:
 %%after:
 %endmacro
 
-// Non-deterministacally find the closest opcode to addr
+// Non-deterministically find the closest opcode to addr
 // and call write_table_if_jumpdest so that `@SEGMENT_JUMPDEST_BITS`
 // will contain a 0 if and only if addr is not a jumpdest
 // stack: addr, retdest

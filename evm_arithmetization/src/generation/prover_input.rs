@@ -308,6 +308,7 @@ impl<F: Field> GenerationState<F> {
             ))
         }
     }
+
     /// Returns a non-jumpdest proof for the address on the top of the stack. A
     /// non-jumpdest proof is the clossest address to the address on the top of
     /// the stack, if the closses address is >= 32, or zero otherwise.
@@ -439,8 +440,6 @@ fn get_proofs_and_jumpdests(
 /// Return the largest prev_addr in `code` such that `code[pred_addr]` is an
 /// opcode (and not the argument of some PUSHXX) and pred_addr <= address
 fn get_closest_opcode_address(code: &[u8], address: usize) -> usize {
-    const PUSH1_OPCODE: u8 = 0x60;
-    const PUSH32_OPCODE: u8 = 0x7f;
     let (prev_addr, _) = CodeIterator::until(code, address + 1)
         .last()
         .unwrap_or((0, 0));
