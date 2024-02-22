@@ -152,6 +152,7 @@ sys_tstore_charge_gas:
 
     // stack: kexit_info
     %charge_gas_const(@GAS_WARMACCESS)
+global debug_pagadita_la_bencina:
     EXIT_KERNEL
 
 new_transient_storage_len:
@@ -163,6 +164,7 @@ global debug_new_len:
     %jump(sys_tstore_charge_gas)
 
 sstore_noop:
+global debug_noop:
     // stack: current_value, slot, value, kexit_info
     %pop3
     EXIT_KERNEL

@@ -8,8 +8,7 @@ global revert_transient_storage_change:
     // stack: entry_type, ptr, retdest
     POP
     %journal_load_3
-    // We will always write a new value since for
-    // deletions it doesn't make any difference
+    // We will always write 0 for deletions as it makes no difference.
     // stack: address, slot, prev_value, retdest
     %search_transient_storage
     // The value must have been stored

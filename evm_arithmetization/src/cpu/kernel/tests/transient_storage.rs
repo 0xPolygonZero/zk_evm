@@ -1,13 +1,17 @@
+use std::array;
+
 use anyhow::Result;
 use ethereum_types::{Address, U256};
+use pest::error::Error;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::{thread_rng, Rng};
 
-use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::aggregator::{combined_kernel_from_files, KERNEL, KERNEL_FILES};
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::memory::segments::Segment;
+use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryAddress;
 
 #[test]
@@ -125,7 +129,7 @@ fn test_tstore_tload() -> Result<()> {
 }
 
 #[test]
-fn test_many_tstore_tload() -> Result<()> {
+fn test_many_tstore_many_tload() -> Result<()> {
     let kexit_info = 0xdeadbeefu32.into();
 
     let initial_stack = vec![
@@ -183,6 +187,88 @@ fn test_many_tstore_tload() -> Result<()> {
         println!("Load {i}");
         assert_eq!(U256::from(i), val);
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_revert() -> Result<()> {
+    let kernel_files: [&str; 150] = array::from_fn(|i| {
+        if i < KERNEL_FILES.len() {
+            KERNEL_FILES[i]
+        } else {
+            include_str!("transient_storage.asm")
+        }
+    });
+    let kernel = combined_kernel_from_files(kernel_files);
+
+    let sys_tstore = kernel.global_labels["sys_tstore"];
+
+    let mut interpreter: Interpreter<F> =
+        Interpreter::new(&kernel.code, sys_tstore, vec![], &kernel.prover_inputs);
+
+    let gas_limit_address = MemoryAddress {
+        context: 0,
+        segment: Segment::ContextMetadata.unscale(),
+        virt: ContextMetadata::GasLimit.unscale(),
+    };
+    let addr_addr = MemoryAddress {
+        context: 0,
+        segment: Segment::ContextMetadata.unscale(),
+        virt: ContextMetadata::Address.unscale(),
+    };
+
+    interpreter
+        .generation_state
+        .memory
+        .set(gas_limit_address, 200.into());
+    interpreter.generation_state.memory.set(addr_addr, 3.into());
+
+    // Store 1 at 2
+    let kexit_info = 0xdeadbeefu32.into();
+
+    interpreter.push(1.into()); // val
+    interpreter.push(2.into()); // slot
+    interpreter.push(kexit_info);
+    interpreter.run()?;
+
+    println!("Santa chachucha!");
+
+    // We will revert to this point
+    let checkpoint = kernel.global_labels["checkpoint"];
+    println!("checkpoint = {checkpoint}");
+    interpreter.generation_state.registers.program_counter = checkpoint;
+    interpreter.generation_state.registers.is_kernel = true;
+    interpreter.run()?;
+
+    // Store 2 at 2
+    interpreter.generation_state.registers.program_counter = sys_tstore;
+    interpreter.generation_state.registers.is_kernel = true;
+    interpreter.push(2.into()); // val
+    interpreter.push(2.into()); // slot
+    interpreter.push(kexit_info);
+    interpreter.run()?;
+
+    // We will run out of gas
+    interpreter.generation_state.registers.program_counter = sys_tstore;
+    interpreter.generation_state.registers.is_kernel = true;
+    interpreter.push(2.into()); // val
+    interpreter.push(2.into()); // slot
+    interpreter.push(kexit_info);
+    assert!(interpreter.run().is_err());
+
+    // Now we should load the value before the revert
+    let sys_tload = kernel.global_labels["sys_tload"];
+    interpreter.generation_state.registers.program_counter = sys_tload;
+    interpreter.generation_state.registers.is_kernel = true;
+    interpreter.push(2.into());
+    interpreter.push(kexit_info);
+
+    interpreter.run()?;
+
+    let val = interpreter.pop().unwrap();
+
+    assert_eq!(val, 1.into());
 
     Ok(())
 }

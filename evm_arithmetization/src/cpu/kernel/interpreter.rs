@@ -1454,7 +1454,6 @@ impl<'a, F: Field> Interpreter<'a, F> {
         self.generation_state.registers.program_counter = program_counter;
         self.set_is_kernel(is_kernel_mode);
         self.generation_state.registers.gas_used = gas_used_val;
-        println!("stack top = {:?}", stack_peek(&self.generation_state, 0));
 
         Ok(())
     }
