@@ -21,19 +21,15 @@ global search_transient_storage:
     // stack: addr, key, retdest
     %mload_global_metadata(@GLOBAL_METADATA_TRANSIENT_STORAGE_LEN)
     // stack: len, addr, key, retdest
-global debug_len:
     PUSH @SEGMENT_TRANSIENT_STORAGE ADD
     PUSH @SEGMENT_TRANSIENT_STORAGE
-global debug_wtf:
 search_transient_storage_loop:
     // `i` and `len` are both scaled by SEGMENT_TRANSIENT_STORAGE
     %stack (i, len, addr, key, retdest) -> (i, len, i, len, addr, key, retdest)
-global debug_i:
     EQ %jumpi(search_transient_storage_not_found)
     // stack: i, len, addr, key, retdest
     DUP1
     MLOAD_GENERAL
-global debug_loaded_addr:
     // stack: loaded_addr, i, len, addr, key, retdest
     DUP4
     // stack: addr, loaded_addr, i, len, addr, retdest
@@ -52,14 +48,12 @@ global debug_loaded_addr:
 
 search_transient_storage_not_found:
     %stack (i, len, addr, key, retdest) -> (retdest, 0, i, addr, 0, key) // Return 0 to indicate that the address, key was not found.
-global debug_not_found:
     JUMP
 
 search_transient_storage_found:
     DUP1 %add_const(2)
     MLOAD_GENERAL
     %stack (val, i, len, addr, key, retdest) -> (retdest, 1, i, addr, val, key) // Return 1 to indicate that the address was already present.
-global debug_found:
     JUMP
 
 %macro tload_current
@@ -71,16 +65,13 @@ global debug_found:
 global tload_current:
     %address
     // stack: addr, slot, retdest
-global debug_before_search:
     %search_transient_storage
-global debug_mira_lo_que_me_encontre:
     // stack: found, pos, addr, val, slot, retdest
     %jumpi(tload_found)
     // The value is not in memory so we return 0
     %pop4
     PUSH 0
     SWAP1
-global debug_before_jmp:
     JUMP
 tload_found:
     // stack: pos, addr, val, slot, retdest
@@ -96,12 +87,10 @@ global sys_tload:
     SWAP1
     // stack: slot, kexit_info
     %tload_current
-global debug_after_tload_current:
     SWAP1
 
     %charge_gas_const(@GAS_WARMACCESS)
     // stack: kexit_info, value
-global debug_before_exit_k:
     EXIT_KERNEL
 
 // Write a word to the current account's transient storage.
@@ -111,26 +100,22 @@ global debug_before_exit_k:
 
 global sys_tstore:
     %check_static
-global debug_holam:
+    %charge_gas_const(@GAS_WARMACCESS)
     %stack (kexit_info, slot, value) -> (slot, value, kexit_info)
     %address
     %search_transient_storage
-global debug_after_search:
     // stack: found, pos, addr, original_value, slot, value, kexit_info
     POP
     // If the address and slot pair was not present pos will be pointing to the end of the array.
     DUP1 DUP3
     // stack: addr, pos, pos, addr, original_value, slot, value, kexit_info
-global debug_store_1:
     MSTORE_GENERAL
     %increment DUP1
     DUP5
     // stack: slot, pos', pos', addr, original_value, slot, value, kexit_info
-global debug_store_2:
     MSTORE_GENERAL
     %increment DUP1
     DUP6
-global debug_store_3:
     MSTORE_GENERAL
     // stack: pos'', addr, original_value, slot, value, kexit_info
     // If pos'' > @GLOBAL_METADATA_TRANSIENT_STORAGE_LEN we need to also store the new @GLOBAL_METADATA_TRANSIENT_STORAGE_LEN
@@ -151,12 +136,9 @@ sys_tstore_charge_gas:
     %journal_add_transient_storage_change
 
     // stack: kexit_info
-    %charge_gas_const(@GAS_WARMACCESS)
-global debug_pagadita_la_bencina:
     EXIT_KERNEL
 
 new_transient_storage_len:
-global debug_new_len:
     // Store the new length.
     %sub_const(@SEGMENT_TRANSIENT_STORAGE)
     %increment
@@ -164,7 +146,6 @@ global debug_new_len:
     %jump(sys_tstore_charge_gas)
 
 sstore_noop:
-global debug_noop:
     // stack: current_value, slot, value, kexit_info
     %pop3
     EXIT_KERNEL
