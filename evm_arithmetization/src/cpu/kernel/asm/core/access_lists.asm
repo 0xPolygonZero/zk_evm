@@ -65,6 +65,7 @@ global init_access_lists:
 
 // Multiply the ptr a the top of the stack by 2
 // and abort if 2*ptr - @SEGMENT_ACCESSED_ADDRESSES >= @GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN
+// In this way ptr must be pointing to the begining of a node.
 %macro get_valid_addr_ptr
     // stack: ptr
     %mul_const(2)
@@ -205,6 +206,7 @@ global remove_accessed_addresses:
 
 // Multiply the ptr a the top of the stack by 4
 // and abort if 4*ptr - SEGMENT_ACCESSED_STORAGE_KEYS >= @GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN
+// In this way ptr must be poiting to the begining of a node.
 %macro get_valid_storage_ptr
     // stack: ptr
     %mul_const(4)
@@ -216,7 +218,7 @@ global remove_accessed_addresses:
 
 /// Inserts the storage key and value into the access list if it is not already present.
 /// `value` should be the current storage value at the slot `(addr, key)`.
-/// Return `1, original_value` if the storage key was inserted, `0, original_value` if it was already present.
+/// Return `1, value` if the storage key was inserted, `0, original_value` if it was already present.
 global insert_accessed_storage_keys:
     // stack: addr, key, value, retdest
     PROVER_INPUT(access_lists::storage_insert)
