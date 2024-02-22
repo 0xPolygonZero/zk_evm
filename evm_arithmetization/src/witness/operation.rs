@@ -222,7 +222,8 @@ pub(crate) fn generate_jump<F: Field>(
     mut row: CpuColumnsView<F>,
     is_jumpdest_analysis: bool,
 ) -> Result<(), ProgramError> {
-    let [(dst, _)] = stack_pop_with_log_and_fill::<1, _>(state.get_generation_state(), &mut row)?;
+    let [(dst, _)] =
+        stack_pop_with_log_and_fill::<1, _>(state.get_mut_generation_state(), &mut row)?;
 
     let dst: u32 = dst
         .try_into()
@@ -240,7 +241,10 @@ pub(crate) fn generate_jump<F: Field>(
             }
         }
     } else {
-        let gen_state = state.get_generation_state();
+        let gen_state = state.get_mut_generation_state();
+        // Even though we might be in the interpreter, `JumpdestBits` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
         let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
             NUM_GP_CHANNELS - 1,
             MemoryAddress::new(
@@ -283,7 +287,7 @@ pub(crate) fn generate_jump<F: Field>(
 
         gen_state.traces.push_cpu(row);
     }
-    state.get_generation_state().jump_to(dst as usize)?;
+    state.get_mut_generation_state().jump_to(dst as usize)?;
     Ok(())
 }
 
@@ -293,7 +297,7 @@ pub(crate) fn generate_jumpi<F: Field>(
     is_jumpdest_analysis: bool,
 ) -> Result<(), ProgramError> {
     let [(dst, _), (cond, log_cond)] =
-        stack_pop_with_log_and_fill::<2, _>(state.get_generation_state(), &mut row)?;
+        stack_pop_with_log_and_fill::<2, _>(state.get_mut_generation_state(), &mut row)?;
 
     let should_jump = !cond.is_zero();
     if should_jump {
@@ -318,14 +322,17 @@ pub(crate) fn generate_jumpi<F: Field>(
             let cond_sum = F::from_canonical_u64(cond_sum_u64);
             row.general.jumps_mut().cond_sum_pinv = cond_sum.inverse();
         }
-        state.get_generation_state().jump_to(dst as usize)?;
+        state.get_mut_generation_state().jump_to(dst as usize)?;
     } else {
         row.general.jumps_mut().should_jump = F::ZERO;
         row.general.jumps_mut().cond_sum_pinv = F::ZERO;
         state.incr_pc(1);
     }
 
-    let gen_state = state.get_generation_state();
+    let gen_state = state.get_mut_generation_state();
+    // Even though we might be in the interpreter, `JumpdestBits` is not part of the
+    // preinitialized segments, so we don't need to carry out the additional checks
+    // when get the value from memory.
     let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
         NUM_GP_CHANNELS - 1,
         MemoryAddress::new(
@@ -441,6 +448,9 @@ pub(crate) fn generate_set_context<F: Field>(
         );
         (sp_to_save, op)
     } else {
+        // Even though we might be in the interpreter, `Stack` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
         mem_read_with_log(
             GeneralPurpose(2),
             new_sp_addr,
@@ -466,6 +476,9 @@ pub(crate) fn generate_set_context<F: Field>(
         }
 
         let new_top_addr = MemoryAddress::new(new_ctx, Segment::Stack, new_sp - 1);
+        // Even though we might be in the interpreter, `Stack` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
         let (new_top, log_read_new_top) = mem_read_gp_with_log_and_fill(
             2,
             new_top_addr,
@@ -515,6 +528,10 @@ pub(crate) fn generate_push<F: Field>(
                         virt: base_address.virt + i,
                         ..base_address
                     },
+                    // Even though we might be in the interpreter, `Code` is not part of
+                    // the preinitialized segments, so we don't need to carry
+                    // out the additional checks when get the value from
+                    // memory.
                     false,
                     &HashMap::default(),
                 )
@@ -592,6 +609,9 @@ pub(crate) fn generate_dup<F: Field>(
 
         (stack_top, op)
     } else {
+        // Even though we might be in the interpreter, `Stack` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
         mem_read_gp_with_log_and_fill(2, other_addr, state, &mut row, false, &HashMap::default())
     };
     push_no_write(state, val);
@@ -614,6 +634,9 @@ pub(crate) fn generate_swap<F: Field>(
     let other_addr = MemoryAddress::new(state.registers.context, Segment::Stack, other_addr_lo);
 
     let [(in0, _)] = stack_pop_with_log_and_fill::<1, _>(state, &mut row)?;
+    // Even though we might be in the interpreter, `Stack` is not part of the
+    // preinitialized segments, so we don't need to carry out the additional checks
+    // when get the value from memory.
     let (in1, log_in1) =
         mem_read_gp_with_log_and_fill(1, other_addr, state, &mut row, false, &HashMap::default());
     let log_out0 = mem_write_gp_log_and_fill(2, other_addr, state, &mut row, in0);
@@ -678,6 +701,9 @@ fn append_shift<F: Field>(
     const LOOKUP_CHANNEL: usize = 2;
     let lookup_addr = MemoryAddress::new(0, Segment::ShiftTable, input0.low_u32() as usize);
     if input0.bits() <= 32 {
+        // Even though we might be in the interpreter, `ShiftTable` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
         let (_, read) = mem_read_gp_with_log_and_fill(
             LOOKUP_CHANNEL,
             lookup_addr,
@@ -774,6 +800,9 @@ pub(crate) fn generate_syscall<F: Field>(
                 virt: base_address.virt + i,
                 ..base_address
             };
+            // Even though we might be in the interpreter, `Code` is not part of the
+            // preinitialized segments, so we don't need to carry out the additional checks
+            // when get the value from memory.
             let val = state.memory.get(address, false, &HashMap::default());
             val.low_u32() as u8
         })
@@ -1035,6 +1064,9 @@ pub(crate) fn generate_exception<F: Field>(
                 virt: base_address.virt + i,
                 ..base_address
             };
+            // Even though we might be in the interpreter, `Code` is not part of the
+            // preinitialized segments, so we don't need to carry out the additional checks
+            // when get the value from memory.
             let val = state.memory.get(address, false, &HashMap::default());
             val.low_u32() as u8
         })
@@ -1059,6 +1091,9 @@ pub(crate) fn generate_exception<F: Field>(
     // Get the opcode so we can provide it to the range_check operation.
     let code_context = state.registers.code_context();
     let address = MemoryAddress::new(code_context, Segment::Code, state.registers.program_counter);
+    // Even though we might be in the interpreter, `Code` is not part of the
+    // preinitialized segments, so we don't need to carry out the additional checks
+    // when get the value from memory.
     let opcode = state.memory.get(address, false, &HashMap::default());
 
     // `ArithmeticStark` range checks `mem_channels[0]`, which contains

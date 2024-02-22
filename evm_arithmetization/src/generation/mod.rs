@@ -319,13 +319,6 @@ pub(crate) enum State<'a, F: Field> {
     Interpreter(&'a mut Interpreter<F>),
 }
 
-// /// A Checkpoint for a `State`: it can be either an `Interpreter`'s or a
-// /// `GenerationState`'s checkpoint.
-// pub(crate) enum Checkpoint {
-//     Generation(GenerationStateCheckpoint),
-//     Interpreter(InterpreterCheckpoint),
-// }
-
 impl<'a, F: Field> State<'a, F> {
     /// Returns a `State`'s `Checkpoint`.
     pub(crate) fn checkpoint(&mut self) -> GenerationStateCheckpoint {
@@ -381,16 +374,8 @@ impl<'a, F: Field> State<'a, F> {
         }
     }
 
-    /// Returns a `GenerationState` from a `State`.
-    pub(crate) fn get_generation_state(&mut self) -> &mut GenerationState<F> {
-        match self {
-            Self::Generation(state) => state,
-            Self::Interpreter(interpreter) => &mut interpreter.generation_state,
-        }
-    }
-
     /// Returns a mutable `GenerationState` from a `State`.
-    pub(crate) fn get_mut_state(&mut self) -> &mut GenerationState<F> {
+    pub(crate) fn get_mut_generation_state(&mut self) -> &mut GenerationState<F> {
         match self {
             Self::Generation(state) => state,
             Self::Interpreter(interpreter) => &mut interpreter.generation_state,
@@ -420,24 +405,6 @@ impl<'a, F: Field> State<'a, F> {
             Self::Interpreter(interpreter) => interpreter.clock,
         }
     }
-
-    // fn get_generation_state_checkpoint(ckpt: Checkpoint) ->
-    // GenerationStateCheckpoint {     match ckpt {
-    //         Checkpoint::Generation(checkpoint) => checkpoint,
-    //         Checkpoint::Interpreter(checkpoint) => {
-    //             panic!("Cannot get a GenerationStateCheckpoint from an
-    // InterpreterCheckpoint")         }
-    //     }
-    // }
-
-    // fn get_interpreter_checkpoint(ckpt: Checkpoint) -> InterpreterCheckpoint {
-    //     match ckpt {
-    //         Checkpoint::Generation(checkpoint) => {
-    //             panic!("Cannot get an InterpreterCheckpoint from a
-    // GenerationStateCheckpoint")         }
-    //         Checkpoint::Interpreter(checkpoint) => checkpoint,
-    //     }
-    // }
 
     /// Rolls back a `State`.
     pub(crate) fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
@@ -483,13 +450,14 @@ impl<'a, F: Field> State<'a, F> {
         }
     }
 
-    /// Applies a `State`'s operations since a checkpoint `ckpt`.
+    /// Applies a `State`'s operations since a checkpoint.
     pub(crate) fn apply_ops(&mut self, checkpoint: GenerationStateCheckpoint) {
         match self {
             Self::Generation(state) => state
                 .memory
                 .apply_ops(state.traces.mem_ops_since(checkpoint.traces)),
             Self::Interpreter(interpreter) => {
+                // An interpreter `checkpoint()` clears all operations before the checkpoint.
                 interpreter.apply_memops();
             }
         }
@@ -509,13 +477,14 @@ pub(crate) fn run_cpu<F: Field>(
 
     loop {
         // If we've reached the kernel's halt routine.
-        let pc = any_state.get_registers().program_counter;
+        let registers = any_state.get_registers();
+        let pc = registers.program_counter;
 
-        let halt = any_state.get_registers().is_kernel && halt_offsets.contains(&pc);
+        let halt = registers.is_kernel && halt_offsets.contains(&pc);
 
         if halt {
             if let Some(halt_context) = any_state.get_halt_context() {
-                if any_state.get_context() == halt_context {
+                if registers.context == halt_context {
                     // Only happens during jumpdest analysis.
                     return Ok(());
                 }

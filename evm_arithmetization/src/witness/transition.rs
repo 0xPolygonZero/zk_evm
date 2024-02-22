@@ -14,7 +14,7 @@ use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MAX_USER_STACK_SIZE,
     MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::state::GenerationState;
+use crate::generation::state::{GenerationState, GenerationStateCheckpoint};
 use crate::generation::State;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
@@ -191,7 +191,7 @@ fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>) {
 
 // Equal to the number of pops if an operation pops without pushing, and `None`
 // otherwise.
-pub(crate) const fn get_op_special_length(op: Operation) -> Option<usize> {
+const fn get_op_special_length(op: Operation) -> Option<usize> {
     let behavior_opt = match op {
         Operation::Push(0) | Operation::Pc => STACK_BEHAVIORS.pc_push0,
         Operation::Push(1..) | Operation::ProverInput => STACK_BEHAVIORS.push_prover_input,
@@ -232,7 +232,7 @@ pub(crate) const fn get_op_special_length(op: Operation) -> Option<usize> {
 // These operations might trigger a stack overflow, typically those pushing
 // without popping. Kernel-only pushing instructions aren't considered; they
 // can't overflow.
-pub(crate) const fn might_overflow_op(op: Operation) -> bool {
+const fn might_overflow_op(op: Operation) -> bool {
     match op {
         Operation::Push(1..) | Operation::ProverInput => MIGHT_OVERFLOW.push_prover_input,
         Operation::Dup(_) | Operation::Swap(_) => MIGHT_OVERFLOW.dup_swap,
@@ -265,11 +265,11 @@ fn perform_op<F: Field>(
     opcode: u8,
     row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
-    // Jumpdest analysis is performed natively by the interpreter and not
-    // using the non-deterministic Kernel assembly code.
     let (op, is_interpreter, preinitialized_segments, is_jumpdest_analysis) = match any_state {
         State::Generation(state) => (op, false, HashMap::default(), false),
         State::Interpreter(interpreter) => {
+            // Jumpdest analysis is performed natively by the interpreter and not
+            // using the non-deterministic Kernel assembly code.
             let op = if interpreter.is_kernel()
                 && interpreter.is_jumpdest_analysis
                 && interpreter.generation_state.registers.program_counter
@@ -312,7 +312,7 @@ fn perform_op<F: Field>(
         );
     }
 
-    let state = any_state.get_generation_state();
+    let state = any_state.get_mut_generation_state();
 
     match op {
         Operation::Push(n) => generate_push(n, state, row)?,
@@ -472,7 +472,7 @@ fn try_perform_instruction<F: Field>(any_state: &mut State<F>) -> Result<Operati
     let is_generation = any_state.is_generation_state();
     let registers = any_state.get_registers();
 
-    let state = any_state.get_mut_state();
+    let state = any_state.get_mut_generation_state();
     let (mut row, opcode) = base_row(state);
 
     let op = decode(registers, opcode)?;
@@ -553,16 +553,24 @@ fn handle_error<F: Field>(any_state: &mut State<F>, err: ProgramError) -> anyhow
         _ => bail!("TODO: figure out what to do with this..."),
     };
 
-    let checkpoint = any_state.checkpoint();
-
-    let (is_generation, state): (bool, &mut GenerationState<_>) = match any_state {
-        State::Generation(state) => (true, state),
-        State::Interpreter(interpreter) => (false, &mut interpreter.generation_state),
+    let (checkpoint, is_generation, state): (
+        GenerationStateCheckpoint,
+        bool,
+        &mut GenerationState<_>,
+    ) = match any_state {
+        State::Generation(state) => (state.checkpoint(), true, state),
+        State::Interpreter(interpreter) => (
+            interpreter.checkpoint(),
+            false,
+            &mut interpreter.generation_state,
+        ),
     };
     let (row, _) = base_row(state);
     generate_exception(exc_code, state, row, is_generation);
     match any_state {
         State::Generation(state) => {}
+        // If we are in the interpreter, we do not need all the traces. We only need the memory
+        // traces of the current operation.
         State::Interpreter(interpreter) => interpreter.clear_traces(),
     }
     any_state.apply_ops(checkpoint);

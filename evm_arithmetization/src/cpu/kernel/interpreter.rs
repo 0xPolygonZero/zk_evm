@@ -37,8 +37,6 @@ use crate::witness::memory::{
 };
 use crate::witness::operation::{Operation, CONTEXT_SCALING_FACTOR};
 use crate::witness::state::RegistersState;
-use crate::witness::traces::{TraceCheckpoint, Traces};
-use crate::witness::transition::{decode, get_op_special_length, might_overflow_op};
 use crate::witness::util::{push_no_write, stack_peek};
 use crate::{arithmetic, logic};
 
@@ -478,8 +476,6 @@ impl<F: Field> Interpreter<F> {
         }
     }
 
-    /// Generates a segment by returning the state and memory values after
-    /// `MAX_SIZE` CPU rows.
     pub(crate) fn run(&mut self) -> Result<(), anyhow::Error> {
         let mut state = State::Interpreter(self);
         run_cpu(&mut state, false)?;
@@ -646,6 +642,8 @@ impl<F: Field> Interpreter<F> {
         self.set_memory_segment_bytes(Segment::RlpRaw, rlp)
     }
 
+    /// Clears all traces of the interpreter's `GenerationState` except for
+    /// memory_ops, which are necessary to apply operations.
     pub(crate) fn clear_traces(&mut self) {
         self.generation_state.traces.arithmetic_ops = vec![];
         self.generation_state.traces.arithmetic_ops = vec![];
@@ -792,14 +790,17 @@ impl<F: Field> Interpreter<F> {
         .len()
             > offset
         {
+            // Even though we are in the interpreter, `JumpdestBits` is not part of the
+            // preinitialized segments, so we don't need to carry out the additional checks
+            // when get the value from memory.
             self.generation_state.memory.get(
                 MemoryAddress {
                     context: self.context(),
                     segment: Segment::JumpdestBits.unscale(),
                     virt: offset,
                 },
-                true,
-                &self.preinitialized_segments,
+                false,
+                &HashMap::default(),
             )
         } else {
             0.into()
