@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Refactor accessed lists as sorted linked lists ([#30](https://github.com/0xPolygonZero/zk_evm/pull/30))
+- Change visibility of `compact` mod ([#57](https://github.com/0xPolygonZero/zk_evm/pull/57))
+- Remove compilation flag for `debug_tools` mod ([#57](https://github.com/0xPolygonZero/zk_evm/pull/57))
 
 ## [0.1.0] - 2024-02-21
 * Initial release.
