@@ -63,7 +63,7 @@ global init_access_lists:
     POP
 %endmacro
 
-// Multiply the ptr a the top of the stack by 2
+// Multiply the ptr at the top of the stack by 2
 // and abort if 2*ptr - @SEGMENT_ACCESSED_ADDRESSES >= @GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN
 %macro get_valid_addr_ptr
     // stack: ptr
