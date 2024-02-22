@@ -7,3 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2024-02-21
 * Initial release.
+
+### Security
+- Add verification for invalid jumps. https://github.com/0xPolygonZero/zk_evm/pull/36
