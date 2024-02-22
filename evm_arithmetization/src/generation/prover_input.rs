@@ -453,9 +453,9 @@ impl<F: Field> GenerationState<F> {
     }
 
     pub(crate) fn get_addresses_access_list(&self) -> Result<AccList, ProgramError> {
-        // GlobalMetadata::AccessedAddressesLen stores the value of the next available
+        // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
         // virtual address in the segment. In order to get the length we need
-        // to substract Segment::AccessedAddresses as usize
+        // to substract `Segment::AccessedAddresses` as usize.
         let acc_addr_len =
             u256_to_usize(self.get_global_metadata(GlobalMetadata::AccessedAddressesLen))?
                 - Segment::AccessedAddresses as usize;

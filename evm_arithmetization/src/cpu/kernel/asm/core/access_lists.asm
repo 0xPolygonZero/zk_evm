@@ -63,16 +63,17 @@ global init_access_lists:
     POP
 %endmacro
 
-// Multiply the ptr a the top of the stack by 2
+// Multiply the ptr at the top of the stack by 2
 // and abort if 2*ptr - @SEGMENT_ACCESSED_ADDRESSES >= @GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN
 // In this way ptr must be pointing to the begining of a node.
 %macro get_valid_addr_ptr
     // stack: ptr
     %mul_const(2)
-    DUP1
-    %sub_const(@SEGMENT_ACCESSED_ADDRESSES)
+    PUSH @SEGMENT_ACCESSED_ADDRESSES
+    DUP2
+    SUB
     %assert_lt_const(@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN)
-    // sack: 2*ptr
+    // stack: 2*ptr
 %endmacro
 
 
@@ -159,7 +160,7 @@ insert_new_address:
     SWAP1
     JUMP
 
-/// Remove the address from the access list. 
+/// Remove the address from the access list.
 /// Panics if the address is not in the access list.
 /// Otherwise it guesses the node before the address (pred)
 /// such that (pred)->(next)->(next_next), where the (next) node
@@ -204,16 +205,17 @@ global remove_accessed_addresses:
     // stack: cold_access, original_value
 %endmacro
 
-// Multiply the ptr a the top of the stack by 4
+// Multiply the ptr at the top of the stack by 4
 // and abort if 4*ptr - SEGMENT_ACCESSED_STORAGE_KEYS >= @GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN
 // In this way ptr must be poiting to the begining of a node.
 %macro get_valid_storage_ptr
     // stack: ptr
     %mul_const(4)
-    DUP1
-    %sub_const(@SEGMENT_ACCESSED_STORAGE_KEYS)
+    PUSH @SEGMENT_ACCESSED_STORAGE_KEYS
+    DUP2
+    SUB
     %assert_lt_const(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
-    // sack: 2*ptr
+    // stack: 2*ptr
 %endmacro
 
 /// Inserts the storage key and value into the access list if it is not already present.
