@@ -177,6 +177,12 @@
     %mload_global_metadata(@GLOBAL_METADATA_CURRENT_CHECKPOINT)
 %endmacro
 
+global debug_checkpoint:
+    PUSH 1 POP
+global debug_ajale:
+    %checkpoint
+    JUMP
+
 
 %macro checkpoint
     // stack: (empty)

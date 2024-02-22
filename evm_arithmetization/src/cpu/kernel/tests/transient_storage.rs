@@ -193,19 +193,19 @@ fn test_many_tstore_many_tload() -> Result<()> {
 
 #[test]
 fn test_revert() -> Result<()> {
-    let kernel_files: [&str; 150] = array::from_fn(|i| {
-        if i < KERNEL_FILES.len() {
-            KERNEL_FILES[i]
-        } else {
-            include_str!("transient_storage.asm")
-        }
-    });
-    let kernel = combined_kernel_from_files(kernel_files);
+    // let kernel_files: [&str; 150] = array::from_fn(|i| {
+    //     if i < KERNEL_FILES.len() {
+    //         KERNEL_FILES[i]
+    //     } else {
+    //         include_str!("transient_storage.asm")
+    //     }
+    // });
+    // let kernel = combined_kernel_from_files(kernel_files);
 
-    let sys_tstore = kernel.global_labels["sys_tstore"];
+    let sys_tstore = KERNEL.global_labels["sys_tstore"];
 
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(&kernel.code, sys_tstore, vec![], &kernel.prover_inputs);
+        Interpreter::new(&KERNEL.code, sys_tstore, vec![], &KERNEL.prover_inputs);
 
     let gas_limit_address = MemoryAddress {
         context: 0,
@@ -235,10 +235,14 @@ fn test_revert() -> Result<()> {
     println!("Santa chachucha!");
 
     // We will revert to this point
-    let checkpoint = kernel.global_labels["checkpoint"];
-    println!("checkpoint = {checkpoint}");
+    let checkpoint = KERNEL.global_labels["debug_checkpoint"];
+    println!(
+        "checkpoint = {checkpoint}, ajale = {:?}",
+        KERNEL.global_labels["debug_ajale"]
+    );
     interpreter.generation_state.registers.program_counter = checkpoint;
     interpreter.generation_state.registers.is_kernel = true;
+    interpreter.push(0xdeadbeefu32.into());
     interpreter.run()?;
 
     // Store 2 at 2
@@ -258,7 +262,7 @@ fn test_revert() -> Result<()> {
     assert!(interpreter.run().is_err());
 
     // Now we should load the value before the revert
-    let sys_tload = kernel.global_labels["sys_tload"];
+    let sys_tload = KERNEL.global_labels["sys_tload"];
     interpreter.generation_state.registers.program_counter = sys_tload;
     interpreter.generation_state.registers.is_kernel = true;
     interpreter.push(2.into());
