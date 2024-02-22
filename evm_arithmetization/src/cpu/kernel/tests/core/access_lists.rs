@@ -162,7 +162,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
             (offset + 2 + 2 * (i + 1)).into(),
         );
     }
-    // Set (U256::MAX)-> (addreses[0]) and (addresses[n-1]) -> (U256::MAX)
+    // Set (U256::MAX)-> (addresses[0]) and (addresses[n-1]) -> (U256::MAX)
     interpreter.generation_state.memory.set(
         MemoryAddress::new(0, AccessedAddresses, 1),
         (offset + 2).into(), // the address of (addr[0])
