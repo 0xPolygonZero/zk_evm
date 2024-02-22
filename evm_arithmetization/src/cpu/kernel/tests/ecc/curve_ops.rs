@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod bn {
+    use std::collections::HashMap;
+
     use anyhow::Result;
     use ethereum_types::U256;
     use plonky2::field::goldilocks_field::GoldilocksField as F;
@@ -8,6 +10,7 @@ mod bn {
     use crate::cpu::kernel::interpreter::{run_interpreter, Interpreter};
     use crate::cpu::kernel::tests::u256ify;
     use crate::memory::segments::Segment;
+    use crate::witness::memory::MemoryAddress;
 
     #[test]
     fn test_ec_ops() -> Result<()> {
@@ -207,7 +210,15 @@ mod bn {
 
         let mut computed_table = Vec::new();
         for i in 0..32 {
-            computed_table.push(int.mload_queue(0, Segment::BnTableQ, i));
+            computed_table.push(int.generation_state.memory.get(
+                MemoryAddress {
+                    context: 0,
+                    segment: Segment::BnTableQ.unscale(),
+                    virt: i,
+                },
+                false,
+                &HashMap::default(),
+            ));
         }
 
         let table = u256ify([

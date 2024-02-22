@@ -341,97 +341,6 @@ impl<F: Field> Interpreter<F> {
         self.set_memory_multi_addresses(&block_hashes_fields);
     }
 
-    fn interpreter_pop<const N: usize>(&mut self) -> Result<[U256; N], ProgramError> {
-        if self.stack_len() < N {
-            return Err(ProgramError::StackUnderflow);
-        }
-        let new_stack_top = if self.generation_state.registers.stack_len == N {
-            None
-        } else {
-            Some(stack_peek(&self.generation_state, N)?)
-        };
-        let result = core::array::from_fn(|i| {
-            if i == 0 {
-                self.stack_top().unwrap()
-            } else {
-                let address =
-                    MemoryAddress::new(self.context(), Segment::Stack, self.stack_len() - 1 - i);
-                let val =
-                    self.generation_state
-                        .memory
-                        .get(address, true, &self.preinitialized_segments);
-                self.push_memop(InterpreterMemOpKind::Read(val, address));
-                val
-            }
-        });
-
-        self.generation_state.registers.stack_len -= N;
-
-        if let Some(val) = new_stack_top {
-            self.generation_state.registers.stack_top = val;
-        }
-
-        Ok(result)
-    }
-
-    fn interpreter_push_no_write(&mut self, val: U256) -> Result<(), ProgramError> {
-        self.generation_state.registers.stack_top = val;
-        self.generation_state.registers.stack_len += 1;
-
-        Ok(())
-    }
-
-    fn interpreter_push_with_write(&mut self, val: U256) -> Result<(), ProgramError> {
-        if !self.is_kernel() && self.stack_len() >= MAX_USER_STACK_SIZE {
-            return Err(ProgramError::StackOverflow);
-        }
-
-        if self.stack_len() > 0 {
-            let addr = MemoryAddress::new(self.context(), Segment::Stack, self.stack_len() - 1);
-            self.push_memop(InterpreterMemOpKind::Write(
-                self.stack_top().expect("Stack is not empty."),
-                addr,
-            ));
-        }
-        self.interpreter_push_no_write(val);
-
-        Ok(())
-    }
-
-    // Does NOT change the memory. All queued operations will be applied at the end
-    // of the transition step.
-    pub(crate) fn mload_queue(&mut self, context: usize, segment: Segment, offset: usize) -> U256 {
-        let address = MemoryAddress::new(context, segment, offset);
-        let val = self.generation_state.memory.get_option(address);
-        let val = if val.is_none()
-            && self.preinitialized_segments.contains_key(&segment)
-            && offset
-                < self
-                    .preinitialized_segments
-                    .get(&segment)
-                    .unwrap()
-                    .content
-                    .len()
-        {
-            self.preinitialized_segments.get(&segment).unwrap().content[offset].unwrap()
-        } else if val.is_none() {
-            U256::zero()
-        } else {
-            val.unwrap()
-        };
-        self.push_memop(InterpreterMemOpKind::Read(val, address));
-        val
-    }
-
-    // Does NOT change the memory. All queued operations will be applied at the end
-    // of the transition step.
-    fn mstore_queue(&mut self, context: usize, segment: Segment, offset: usize, value: U256) {
-        self.push_memop(InterpreterMemOpKind::Write(
-            value,
-            MemoryAddress::new(context, segment, offset),
-        ));
-    }
-
     /// Applies all memory operations since the last checkpoint.
     pub(crate) fn apply_memops(&mut self) -> Result<(), anyhow::Error> {
         for memop in &self.generation_state.traces.memory_ops {
@@ -752,12 +661,6 @@ impl<F: Field> Interpreter<F> {
         }
         self.generation_state.registers.stack_top = x;
         self.generation_state.registers.stack_len += 1;
-
-        Ok(())
-    }
-
-    fn push_bool_no_write(&mut self, x: bool) -> Result<(), ProgramError> {
-        self.interpreter_push_no_write(if x { U256::one() } else { U256::zero() });
 
         Ok(())
     }
