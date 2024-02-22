@@ -16,6 +16,7 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+pub mod debug_tools;
 pub mod nibbles;
 pub mod partial_trie;
 pub mod special_query;
@@ -23,9 +24,6 @@ mod trie_hashing;
 pub mod trie_ops;
 pub mod trie_subsets;
 pub mod utils;
-
-#[cfg(feature = "trie_debug")]
-pub mod debug_tools;
 
 #[cfg(test)]
 pub(crate) mod testing_utils;
