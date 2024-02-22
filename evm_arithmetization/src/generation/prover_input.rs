@@ -453,9 +453,9 @@ impl<F: Field> GenerationState<F> {
     }
 
     pub(crate) fn get_addresses_access_list(&self) -> Result<AccList, ProgramError> {
-        // GlobalMetadata::AccessedAddressesLen stores the value of the next available
-        // virtual address in the segment. In ordert to get the length we need
-        // to substract Segment::AccessedAddresses as usize
+        // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
+        // virtual address in the segment. In order to get the length we need
+        // to substract `Segment::AccessedAddresses` as usize.
         let acc_addr_len =
             u256_to_usize(self.get_global_metadata(GlobalMetadata::AccessedAddressesLen))?
                 - Segment::AccessedAddresses as usize;
@@ -577,10 +577,10 @@ impl<'a> Iterator for CodeIterator<'a> {
     }
 }
 
-// Iterates over a linked list implemented using a vector `access_list_mem`.
-// In this representation, the values of nodes are stored in the range
-// `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
-// 1]` holds the address of the next node, where i = node_size * j.
+/// Iterates over a linked list implemented using a vector `access_list_mem`.
+/// In this representation, the values of nodes are stored in the range
+/// `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
+/// 1]` holds the address of the next node, where i = node_size * j.
 pub(crate) struct AccList {
     access_list_mem: Vec<U256>,
     node_size: usize,
