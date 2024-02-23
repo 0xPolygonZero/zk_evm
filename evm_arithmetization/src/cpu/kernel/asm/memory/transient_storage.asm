@@ -133,6 +133,7 @@ sys_tstore_charge_gas:
     EQ %jumpi(sstore_noop)
 
     // stack: addr, slot, original_value, kexit_info
+global debug_journal:
     %journal_add_transient_storage_change
 
     // stack: kexit_info
