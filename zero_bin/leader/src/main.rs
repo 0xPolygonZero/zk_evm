@@ -3,12 +3,11 @@ use std::{fs::File, path::PathBuf};
 use anyhow::Result;
 use clap::Parser;
 use cli::Command;
-use common::prover_state::set_prover_state_from_config;
+use common::prover_state::TableLoadStrategy;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::types::PlonkyProofIntern;
-use tracing::warn;
 
 mod cli;
 mod http;
@@ -37,11 +36,12 @@ async fn main() -> Result<()> {
     if let paladin::config::Runtime::InMemory = args.paladin.runtime {
         // If running in emulation mode, we'll need to initialize the prover
         // state here.
-        if set_prover_state_from_config(args.prover_state_config.into()).is_err() {
-            warn!(
-                "prover state already set. check the program logic to ensure it is only set once"
-            );
-        }
+        args.prover_state_config
+            .into_prover_state_manager()
+            // Use the monolithic load strategy for the prover state when running in
+            // emulation mode.
+            .with_load_strategy(TableLoadStrategy::Monolithic)
+            .initialize()?;
     }
 
     let runtime = Runtime::from_config(&args.paladin, register()).await?;

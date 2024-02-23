@@ -15,3 +15,5 @@ proof_gen = { workspace = true }
 plonky2 = { workspace = true }
 evm_arithmetization = { workspace = true }
 clap = { workspace = true }
+anyhow = { workspace = true }
+trace_decoder = { workspace = true }

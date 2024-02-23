@@ -1,19 +1,14 @@
-use common::prover_state::P_STATE;
+use common::prover_state::{p_manager, p_state};
 use paladin::{
-    operation::{FatalError, Monoid, Operation, Result},
+    operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
 use proof_gen::{
-    proof_gen::{generate_agg_proof, generate_block_proof, generate_txn_proof},
+    proof_gen::{generate_agg_proof, generate_block_proof},
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
-    prover_state::ProverState,
 };
 use serde::{Deserialize, Serialize};
 use trace_decoder::types::TxnProofGenIR;
-
-fn p_state() -> &'static ProverState {
-    P_STATE.get().expect("Prover state is not initialized")
-}
 
 registry!();
 
@@ -25,9 +20,11 @@ impl Operation for TxProof {
     type Output = AggregatableProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let result = generate_txn_proof(p_state(), input, None).map_err(FatalError::from)?;
+        let proof = p_manager()
+            .generate_txn_proof(input)
+            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
 
-        Ok(result.into())
+        Ok(proof.into())
     }
 }
 

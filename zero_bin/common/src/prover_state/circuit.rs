@@ -11,7 +11,9 @@ use proof_gen::types::AllRecursiveCircuits;
 use crate::parsing::{parse_range, RangeParseError};
 
 /// Number of tables defined in plonky2.
-const NUM_TABLES: usize = 7;
+///
+/// TODO: This should be made public in the evm_arithmetization crate.
+pub(crate) const NUM_TABLES: usize = 7;
 
 /// New type wrapper for [`Range`] that implements [`FromStr`] and [`Display`].
 ///
@@ -111,6 +113,19 @@ impl Circuit {
             Circuit::Memory => "memory",
         }
     }
+
+    /// Get the circuit name as a short str literal.
+    pub const fn as_short_str(&self) -> &'static str {
+        match self {
+            Circuit::Arithmetic => "a",
+            Circuit::BytePacking => "bp",
+            Circuit::Cpu => "c",
+            Circuit::Keccak => "k",
+            Circuit::KeccakSponge => "ks",
+            Circuit::Logic => "l",
+            Circuit::Memory => "m",
+        }
+    }
 }
 
 impl From<usize> for Circuit {
@@ -128,9 +143,25 @@ impl From<usize> for Circuit {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CircuitConfig {
     circuits: [Range<usize>; NUM_TABLES],
+}
+
+impl std::ops::Index<usize> for CircuitConfig {
+    type Output = Range<usize>;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.circuits[index]
+    }
+}
+
+impl std::ops::Index<Circuit> for CircuitConfig {
+    type Output = Range<usize>;
+
+    fn index(&self, index: Circuit) -> &Self::Output {
+        &self.circuits[index as usize]
+    }
 }
 
 impl Default for CircuitConfig {
@@ -176,16 +207,8 @@ impl CircuitConfig {
     /// Get a unique string representation of the config.
     pub fn get_configuration_digest(&self) -> String {
         self.enumerate()
-            .map(|(circuit, range)| match circuit {
-                Circuit::Arithmetic => format!("a_{}-{}", range.start, range.end),
-                Circuit::BytePacking => format!("b_p_{}-{}", range.start, range.end),
-                Circuit::Cpu => format!("c_{}-{}", range.start, range.end),
-                Circuit::Keccak => format!("k_{}-{}", range.start, range.end),
-                Circuit::KeccakSponge => {
-                    format!("k_s_{}-{}", range.start, range.end)
-                }
-                Circuit::Logic => format!("l_{}-{}", range.start, range.end),
-                Circuit::Memory => format!("m_{}-{}", range.start, range.end),
+            .map(|(circuit, range)| {
+                format!("{}_{}-{}", circuit.as_short_str(), range.start, range.end)
             })
             .fold(String::new(), |mut acc, s| {
                 if !acc.is_empty() {

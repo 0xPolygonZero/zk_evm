@@ -1,126 +1,256 @@
 use std::{
+    fmt::{Debug, Display},
     fs::{self, OpenOptions},
     io::Write,
+    path::Path,
 };
 
-use plonky2::{
-    plonk::config::PoseidonGoldilocksConfig,
-    util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer},
+use plonky2::util::serialization::{
+    Buffer, DefaultGateSerializer, DefaultGeneratorSerializer, IoError,
 };
 use proof_gen::types::{AllRecursiveCircuits, VerifierData};
-use tracing::{info, warn};
+use thiserror::Error;
 
-use super::circuit::CircuitConfig;
+use super::{
+    circuit::{Circuit, CircuitConfig},
+    Config, RecursiveCircuitsForTableSize, SIZE,
+};
 
-type Config = PoseidonGoldilocksConfig;
-const SIZE: usize = 2;
 const PROVER_STATE_FILE_PREFIX: &str = "./prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "./verifier_state";
 
-fn get_serializers() -> (DefaultGateSerializer, DefaultGeneratorSerializer<Config, 2>) {
+fn get_serializers() -> (
+    DefaultGateSerializer,
+    DefaultGeneratorSerializer<Config, SIZE>,
+) {
     let gate_serializer = DefaultGateSerializer;
-    let witness_serializer: DefaultGeneratorSerializer<Config, SIZE> = DefaultGeneratorSerializer {
-        _phantom: Default::default(),
-    };
+    let witness_serializer: DefaultGeneratorSerializer<Config, SIZE> =
+        DefaultGeneratorSerializer::default();
 
     (gate_serializer, witness_serializer)
 }
 
-#[inline]
-fn disk_path(circuit_config: &CircuitConfig, prefix: &str) -> String {
-    format!("{}_{}", prefix, circuit_config.get_configuration_digest())
+#[derive(Error, Debug)]
+pub(crate) enum DiskResourceError<E> {
+    #[error("Serialization error: {0}")]
+    Serialization(E),
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
-/// Loads [`AllRecursiveCircuits`] from disk.
-pub fn prover_from_disk(circuit_config: &CircuitConfig) -> Option<AllRecursiveCircuits> {
-    let path = disk_path(circuit_config, PROVER_STATE_FILE_PREFIX);
-    let bytes = fs::read(&path).ok()?;
-    info!("found prover state at {path}");
-    let (gate_serializer, witness_serializer) = get_serializers();
-    info!("deserializing prover state...");
-    let state =
-        AllRecursiveCircuits::from_bytes(&bytes, false, &gate_serializer, &witness_serializer);
+/// A trait for generic resources that may be written to and read from disk,
+/// each with their own serialization and deserialization logic.
+pub(crate) trait DiskResource {
+    /// The type of error that may arise while serializing or deserializing the
+    /// resource.
+    type Error: Debug + Display;
+    /// The type of resource being serialized, deserialized, and written to
+    /// disk.
+    type Resource;
+    /// The input type / configuration used to generate a unique path to the
+    /// resource on disk.
+    type PathConstrutor;
 
-    match state {
-        Ok(state) => Some(state),
-        Err(e) => {
-            warn!("failed to deserialize prover state, {e:?}");
-            None
-        }
+    /// Returns the path to the resource on disk.
+    fn path(p: &Self::PathConstrutor) -> impl AsRef<Path>;
+
+    /// Serializes the resource to bytes.
+    fn serialize(r: &Self::Resource) -> Result<Vec<u8>, DiskResourceError<Self::Error>>;
+
+    /// Deserializes the resource from bytes.
+    fn deserialize(bytes: &[u8]) -> Result<Self::Resource, DiskResourceError<Self::Error>>;
+
+    /// Reads the resource from disk and deserializes it.
+    fn get(p: &Self::PathConstrutor) -> Result<Self::Resource, DiskResourceError<Self::Error>> {
+        Self::deserialize(&fs::read(Self::path(p))?)
+    }
+
+    /// Writes the resource to disk after serializing it.
+    fn put(
+        p: &Self::PathConstrutor,
+        r: &Self::Resource,
+    ) -> Result<(), DiskResourceError<Self::Error>> {
+        Ok(OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(Self::path(p))?
+            .write_all(&Self::serialize(r)?)?)
     }
 }
 
-/// Loads [`VerifierData`] from disk.
-pub fn verifier_from_disk(circuit_config: &CircuitConfig) -> Option<VerifierData> {
-    let path = disk_path(circuit_config, VERIFIER_STATE_FILE_PREFIX);
-    let bytes = fs::read(&path).ok()?;
-    info!("found verifier state at {path}");
-    let (gate_serializer, _witness_serializer) = get_serializers();
-    info!("deserializing verifier state...");
-    let state = VerifierData::from_bytes(bytes, &gate_serializer);
+/// Pre-generated circuits containing just the three higher-level circuits.
+/// These are sufficient for generating aggregation proofs and block
+/// proofs, but not for transaction proofs.
+#[derive(Debug, Default)]
+pub(crate) struct BaseProverResource;
 
-    match state {
-        Ok(state) => Some(state),
-        Err(e) => {
-            warn!("failed to deserialize verifier state, {e:?}");
-            None
-        }
+impl DiskResource for BaseProverResource {
+    type Resource = AllRecursiveCircuits;
+    type Error = IoError;
+    type PathConstrutor = CircuitConfig;
+
+    fn path(p: &Self::PathConstrutor) -> String {
+        format!(
+            "{}_base_{}",
+            PROVER_STATE_FILE_PREFIX,
+            p.get_configuration_digest()
+        )
+    }
+
+    fn serialize(r: &Self::Resource) -> Result<Vec<u8>, DiskResourceError<Self::Error>> {
+        let (gate_serializer, witness_serializer) = get_serializers();
+
+        r
+            // Note we are using the `true` flag to write only the upper circuits.
+            // The individual circuit tables are written separately below.
+            .to_bytes(true, &gate_serializer, &witness_serializer)
+            .map_err(DiskResourceError::Serialization)
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<AllRecursiveCircuits, DiskResourceError<Self::Error>> {
+        let (gate_serializer, witness_serializer) = get_serializers();
+        AllRecursiveCircuits::from_bytes(bytes, true, &gate_serializer, &witness_serializer)
+            .map_err(DiskResourceError::Serialization)
     }
 }
 
-/// Writes the provided [`AllRecursiveCircuits`] to disk, along with the
-/// associated [`VerifierData`], in two distinct files.
-pub fn to_disk(circuits: &AllRecursiveCircuits, circuit_config: &CircuitConfig) {
-    prover_to_disk(circuits, circuit_config);
-    verifier_to_disk(&circuits.final_verifier_data(), circuit_config);
+/// Pre-generated circuits containing all circuits.
+#[derive(Debug, Default)]
+pub(crate) struct MonolithicProverResource;
+
+impl DiskResource for MonolithicProverResource {
+    type Resource = AllRecursiveCircuits;
+    type Error = IoError;
+    type PathConstrutor = CircuitConfig;
+
+    fn path(p: &Self::PathConstrutor) -> String {
+        format!(
+            "{}_monolithic_{}",
+            PROVER_STATE_FILE_PREFIX,
+            p.get_configuration_digest()
+        )
+    }
+
+    fn serialize(r: &Self::Resource) -> Result<Vec<u8>, DiskResourceError<Self::Error>> {
+        let (gate_serializer, witness_serializer) = get_serializers();
+
+        r
+            // Note we are using the `false` flag to write all circuits.
+            .to_bytes(false, &gate_serializer, &witness_serializer)
+            .map_err(DiskResourceError::Serialization)
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<AllRecursiveCircuits, DiskResourceError<Self::Error>> {
+        let (gate_serializer, witness_serializer) = get_serializers();
+        AllRecursiveCircuits::from_bytes(bytes, false, &gate_serializer, &witness_serializer)
+            .map_err(DiskResourceError::Serialization)
+    }
+}
+
+/// An individual circuit table with a specific size.
+#[derive(Debug, Default)]
+pub(crate) struct RecursiveCircuitResource;
+
+impl DiskResource for RecursiveCircuitResource {
+    type Resource = RecursiveCircuitsForTableSize;
+    type Error = IoError;
+    type PathConstrutor = (Circuit, usize);
+
+    fn path((circuit_type, size): &Self::PathConstrutor) -> String {
+        format!(
+            "{}_{}_{}",
+            PROVER_STATE_FILE_PREFIX,
+            circuit_type.as_short_str(),
+            size
+        )
+    }
+
+    fn serialize(r: &Self::Resource) -> Result<Vec<u8>, DiskResourceError<Self::Error>> {
+        let (gate_serializer, witness_serializer) = get_serializers();
+        let mut buf = Vec::new();
+
+        r.to_buffer(&mut buf, &gate_serializer, &witness_serializer)
+            .map_err(DiskResourceError::Serialization)?;
+
+        Ok(buf)
+    }
+
+    fn deserialize(
+        bytes: &[u8],
+    ) -> Result<RecursiveCircuitsForTableSize, DiskResourceError<Self::Error>> {
+        let (gate_serializer, witness_serializer) = get_serializers();
+        let mut buffer = Buffer::new(bytes);
+        RecursiveCircuitsForTableSize::from_buffer(
+            &mut buffer,
+            &gate_serializer,
+            &witness_serializer,
+        )
+        .map_err(DiskResourceError::Serialization)
+    }
+}
+
+/// An individual circuit table with a specific size.
+#[derive(Debug, Default)]
+pub(crate) struct VerifierResource;
+
+impl DiskResource for VerifierResource {
+    type Resource = VerifierData;
+    type Error = IoError;
+    type PathConstrutor = CircuitConfig;
+
+    fn path(p: &Self::PathConstrutor) -> String {
+        format!(
+            "{}_{}",
+            VERIFIER_STATE_FILE_PREFIX,
+            p.get_configuration_digest()
+        )
+    }
+
+    fn serialize(r: &Self::Resource) -> Result<Vec<u8>, DiskResourceError<Self::Error>> {
+        let (gate_serializer, _witness_serializer) = get_serializers();
+        r.to_bytes(&gate_serializer)
+            .map_err(DiskResourceError::Serialization)
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<Self::Resource, DiskResourceError<Self::Error>> {
+        let (gate_serializer, _) = get_serializers();
+        VerifierData::from_bytes(bytes.to_vec(), &gate_serializer)
+            .map_err(DiskResourceError::Serialization)
+    }
+}
+
+/// Writes the provided [`AllRecursiveCircuits`] to disk with all
+/// configurations, along with the associated [`VerifierData`].
+pub fn persist_all_to_disk(
+    circuits: &AllRecursiveCircuits,
+    circuit_config: &CircuitConfig,
+) -> anyhow::Result<()> {
+    prover_to_disk(circuit_config, circuits)?;
+    VerifierResource::put(circuit_config, &circuits.final_verifier_data())?;
+
+    Ok(())
 }
 
 /// Writes the provided [`AllRecursiveCircuits`] to disk.
-fn prover_to_disk(circuits: &AllRecursiveCircuits, circuit_config: &CircuitConfig) {
-    let (gate_serializer, witness_serializer) = get_serializers();
+///
+/// In particular, we cover both the monolothic and base prover states, as well
+/// as the individual circuit tables.
+fn prover_to_disk(
+    circuit_config: &CircuitConfig,
+    circuits: &AllRecursiveCircuits,
+) -> Result<(), DiskResourceError<IoError>> {
+    BaseProverResource::put(circuit_config, circuits)?;
+    MonolithicProverResource::put(circuit_config, circuits)?;
 
-    // Write prover state to disk
-    if let Err(e) = circuits
-        .to_bytes(false, &gate_serializer, &witness_serializer)
-        .map(|bytes| {
-            write_bytes_to_file(&bytes, disk_path(circuit_config, PROVER_STATE_FILE_PREFIX))
-        })
-    {
-        warn!("failed to create prover state file, {e:?}");
-    };
-}
-
-/// Writes the provided [`VerifierData`] to disk.
-pub fn verifier_to_disk(circuit: &VerifierData, circuit_config: &CircuitConfig) {
-    let (gate_serializer, _witness_serializer) = get_serializers();
-
-    // Write verifier state to disk
-    if let Err(e) = circuit.to_bytes(&gate_serializer).map(|bytes| {
-        write_bytes_to_file(
-            &bytes,
-            disk_path(circuit_config, VERIFIER_STATE_FILE_PREFIX),
-        )
-    }) {
-        warn!("failed to create verifier state file, {e:?}");
-    };
-}
-
-fn write_bytes_to_file(bytes: &[u8], path: String) {
-    let file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(path);
-
-    let mut file = match file {
-        Ok(file) => file,
-        Err(e) => {
-            warn!("failed to create circuits file, {e:?}");
-            return;
+    // Write individual circuit tables to disk, by circuit type and size. This
+    // allows us to load only the necessary tables when needed.
+    for (circuit_type, tables) in circuits.by_table.iter().enumerate() {
+        let circuit_type: Circuit = circuit_type.into();
+        for (size, table) in tables.by_stark_size.iter() {
+            RecursiveCircuitResource::put(&(circuit_type, *size), table)?;
         }
-    };
-
-    if let Err(e) = file.write_all(bytes) {
-        warn!("failed to write circuits file, {e:?}");
     }
+
+    Ok(())
 }
