@@ -35,6 +35,8 @@ pub(crate) struct ProcessedBlockTrace {
 const COMPATIBLE_HEADER_VERSION: u8 = 1;
 
 impl BlockTrace {
+    /// Processes and returns the `GenerationInputs` for all transactions in the
+    /// block.
     pub fn into_txn_proof_gen_ir<F>(
         self,
         p_meta: &ProcessingMeta<F>,
@@ -172,6 +174,7 @@ fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     }
 }
 
+/// Structure storing a function turning a `CodeHash` into bytes.
 #[derive(Debug)]
 pub struct ProcessingMeta<F>
 where
@@ -184,6 +187,8 @@ impl<F> ProcessingMeta<F>
 where
     F: CodeHashResolveFunc,
 {
+    /// Returns a `ProcessingMeta` given the provided code hash resolving
+    /// function.
     pub fn new(resolve_code_hash_fn: F) -> Self {
         Self {
             resolve_code_hash_fn,

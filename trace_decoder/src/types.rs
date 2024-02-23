@@ -6,19 +6,32 @@ use evm_arithmetization::{
 use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
+/// A block height's type.
 pub type BlockHeight = u64;
+/// A bloom filter's type.
 pub type Bloom = [U256; 8];
+/// A code hash's type.
 pub type CodeHash = H256;
+/// The type of an account address's hash.
 pub type HashedAccountAddr = H256;
+/// The type of a node address's hash.
 pub type HashedNodeAddr = H256;
+/// The type of a storage address's hash.
 pub type HashedStorageAddr = H256;
+/// The type of a hashed storage address"s nibbles.
 pub type HashedStorageAddrNibbles = Nibbles;
+/// The type of a storage address.
 pub type StorageAddr = H256;
+/// The type of a storage address's nibbles.
 pub type StorageAddrNibbles = H256;
+/// A storage value's type.
 pub type StorageVal = U256;
+/// A trie root hash's type.
 pub type TrieRootHash = H256;
+/// Type of a transaction's index within a block.
 pub type TxnIdx = usize;
 
+/// A function which turns a code hash into bytes.
 pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;
 
 // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
@@ -50,7 +63,9 @@ pub type TxnProofGenIR = GenerationInputs;
 /// Other data that is needed for proof gen.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OtherBlockData {
+    /// Data that is specific to the block.
     pub b_data: BlockLevelData,
+    /// State trie root hash at the checkpoint.
     pub checkpoint_state_trie_root: TrieRootHash,
 }
 
@@ -58,7 +73,10 @@ pub struct OtherBlockData {
 /// block.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockLevelData {
+    /// All block data excluding block hashes and withdrawals.
     pub b_meta: BlockMetadata,
+    /// Block hashes: the previous 256 block hashes and the current block hash.
     pub b_hashes: BlockHashes,
+    /// Block withdrawal addresses and values.
     pub withdrawals: Vec<(Address, U256)>,
 }
