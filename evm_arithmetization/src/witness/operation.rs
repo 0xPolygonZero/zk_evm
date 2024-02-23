@@ -1,8 +1,12 @@
+use std::collections::HashMap;
+use std::hash::RandomState;
+
 use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
 
+use super::memory::MemorySegmentState;
 use super::util::{
     byte_packing_log, byte_unpacking_log, mem_read_with_log, mem_write_log,
     mem_write_partial_log_and_fill, push_no_write, push_with_write,
@@ -17,6 +21,7 @@ use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::generation::state::GenerationState;
+use crate::generation::State;
 use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
@@ -132,6 +137,8 @@ pub(crate) fn generate_ternary_arithmetic_op<F: Field>(
 pub(crate) fn generate_keccak_general<F: Field>(
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
+    is_interpreter: bool,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
 ) -> Result<(), ProgramError> {
     let [(addr, _), (len, log_in1)] = stack_pop_with_log_and_fill::<2, _>(state, &mut row)?;
     let len = u256_to_usize(len)?;
@@ -143,7 +150,9 @@ pub(crate) fn generate_keccak_general<F: Field>(
                 virt: base_address.virt.saturating_add(i),
                 ..base_address
             };
-            let val = state.memory.get(address);
+            let val = state
+                .memory
+                .get(address, is_interpreter, preinitialized_segments);
             val.low_u32() as u8
         })
         .collect_vec();
@@ -209,92 +218,134 @@ pub(crate) fn generate_pop<F: Field>(
 }
 
 pub(crate) fn generate_jump<F: Field>(
-    state: &mut GenerationState<F>,
+    state: &mut State<F>,
     mut row: CpuColumnsView<F>,
+    is_jumpdest_analysis: bool,
 ) -> Result<(), ProgramError> {
-    let [(dst, _)] = stack_pop_with_log_and_fill::<1, _>(state, &mut row)?;
+    let [(dst, _)] =
+        stack_pop_with_log_and_fill::<1, _>(state.get_mut_generation_state(), &mut row)?;
 
     let dst: u32 = dst
         .try_into()
         .map_err(|_| ProgramError::InvalidJumpDestination)?;
 
-    let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
-        NUM_GP_CHANNELS - 1,
-        MemoryAddress::new(state.registers.context, Segment::JumpdestBits, dst as usize),
-        state,
-        &mut row,
-    );
-
-    row.mem_channels[1].value[0] = F::ONE;
-
-    if state.registers.is_kernel {
-        // Don't actually do the read, just set the address, etc.
-        let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
-        channel.used = F::ZERO;
-        channel.value[0] = F::ONE;
-    } else {
-        if jumpdest_bit != U256::one() {
-            return Err(ProgramError::InvalidJumpDestination);
+    if is_jumpdest_analysis {
+        match state {
+            State::Generation(state) => {
+                panic!("Cannot carry out jumpdest analysis with a `GenerationState.")
+            }
+            State::Interpreter(interpreter) => {
+                if !interpreter.generation_state.registers.is_kernel {
+                    interpreter.add_jumpdest_offset(dst as usize);
+                }
+            }
         }
-        state.traces.push_memory(jumpdest_bit_log);
-    }
-
-    // Extra fields required by the constraints.
-    row.general.jumps_mut().should_jump = F::ONE;
-    row.general.jumps_mut().cond_sum_pinv = F::ONE;
-
-    let diff = row.stack_len - F::ONE;
-    if let Some(inv) = diff.try_inverse() {
-        row.general.stack_mut().stack_inv = inv;
-        row.general.stack_mut().stack_inv_aux = F::ONE;
     } else {
-        row.general.stack_mut().stack_inv = F::ZERO;
-        row.general.stack_mut().stack_inv_aux = F::ZERO;
-    }
+        let gen_state = state.get_mut_generation_state();
+        // Even though we might be in the interpreter, `JumpdestBits` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
+        let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
+            NUM_GP_CHANNELS - 1,
+            MemoryAddress::new(
+                gen_state.registers.context,
+                Segment::JumpdestBits,
+                dst as usize,
+            ),
+            gen_state,
+            &mut row,
+            false,
+            &HashMap::default(),
+        );
 
-    state.traces.push_cpu(row);
-    state.jump_to(dst as usize)?;
+        row.mem_channels[1].value[0] = F::ONE;
+
+        if gen_state.registers.is_kernel {
+            // Don't actually do the read, just set the address, etc.
+            let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
+            channel.used = F::ZERO;
+            channel.value[0] = F::ONE;
+        } else {
+            if jumpdest_bit != U256::one() {
+                return Err(ProgramError::InvalidJumpDestination);
+            }
+            gen_state.traces.push_memory(jumpdest_bit_log);
+        }
+
+        // Extra fields required by the constraints.
+        row.general.jumps_mut().should_jump = F::ONE;
+        row.general.jumps_mut().cond_sum_pinv = F::ONE;
+
+        let diff = row.stack_len - F::ONE;
+        if let Some(inv) = diff.try_inverse() {
+            row.general.stack_mut().stack_inv = inv;
+            row.general.stack_mut().stack_inv_aux = F::ONE;
+        } else {
+            row.general.stack_mut().stack_inv = F::ZERO;
+            row.general.stack_mut().stack_inv_aux = F::ZERO;
+        }
+
+        gen_state.traces.push_cpu(row);
+    }
+    state.get_mut_generation_state().jump_to(dst as usize)?;
     Ok(())
 }
 
 pub(crate) fn generate_jumpi<F: Field>(
-    state: &mut GenerationState<F>,
+    state: &mut State<F>,
     mut row: CpuColumnsView<F>,
+    is_jumpdest_analysis: bool,
 ) -> Result<(), ProgramError> {
-    let [(dst, _), (cond, log_cond)] = stack_pop_with_log_and_fill::<2, _>(state, &mut row)?;
+    let [(dst, _), (cond, log_cond)] =
+        stack_pop_with_log_and_fill::<2, _>(state.get_mut_generation_state(), &mut row)?;
 
     let should_jump = !cond.is_zero();
     if should_jump {
-        row.general.jumps_mut().should_jump = F::ONE;
-        let cond_sum_u64 = cond
-            .0
-            .into_iter()
-            .map(|limb| ((limb as u32) as u64) + (limb >> 32))
-            .sum();
-        let cond_sum = F::from_canonical_u64(cond_sum_u64);
-        row.general.jumps_mut().cond_sum_pinv = cond_sum.inverse();
-
         let dst: u32 = dst
             .try_into()
             .map_err(|_| ProgramError::InvalidJumpiDestination)?;
-        state.jump_to(dst as usize)?;
+        let is_kernel = state.get_registers().is_kernel;
+        if is_jumpdest_analysis && !is_kernel {
+            match state {
+                State::Generation(state) => {
+                    panic!("Cannot carry out jumpdest analysis with a `GenerationState`.")
+                }
+                State::Interpreter(interpreter) => interpreter.add_jumpdest_offset(dst as usize),
+            }
+        } else {
+            row.general.jumps_mut().should_jump = F::ONE;
+            let cond_sum_u64 = cond
+                .0
+                .into_iter()
+                .map(|limb| ((limb as u32) as u64) + (limb >> 32))
+                .sum();
+            let cond_sum = F::from_canonical_u64(cond_sum_u64);
+            row.general.jumps_mut().cond_sum_pinv = cond_sum.inverse();
+        }
+        state.get_mut_generation_state().jump_to(dst as usize)?;
     } else {
         row.general.jumps_mut().should_jump = F::ZERO;
         row.general.jumps_mut().cond_sum_pinv = F::ZERO;
-        state.registers.program_counter += 1;
+        state.incr_pc(1);
     }
 
+    let gen_state = state.get_mut_generation_state();
+    // Even though we might be in the interpreter, `JumpdestBits` is not part of the
+    // preinitialized segments, so we don't need to carry out the additional checks
+    // when get the value from memory.
     let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
         NUM_GP_CHANNELS - 1,
         MemoryAddress::new(
-            state.registers.context,
+            gen_state.registers.context,
             Segment::JumpdestBits,
             dst.low_u32() as usize,
         ),
-        state,
+        gen_state,
         &mut row,
+        false,
+        &HashMap::default(),
     );
-    if !should_jump || state.registers.is_kernel {
+    if !should_jump || gen_state.registers.is_kernel {
         // Don't actually do the read, just set the address, etc.
         let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
         channel.used = F::ZERO;
@@ -303,7 +354,7 @@ pub(crate) fn generate_jumpi<F: Field>(
         if jumpdest_bit != U256::one() {
             return Err(ProgramError::InvalidJumpiDestination);
         }
-        state.traces.push_memory(jumpdest_bit_log);
+        gen_state.traces.push_memory(jumpdest_bit_log);
     }
 
     let diff = row.stack_len - F::TWO;
@@ -315,8 +366,8 @@ pub(crate) fn generate_jumpi<F: Field>(
         row.general.stack_mut().stack_inv_aux = F::ZERO;
     }
 
-    state.traces.push_memory(log_cond);
-    state.traces.push_cpu(row);
+    gen_state.traces.push_memory(log_cond);
+    gen_state.traces.push_cpu(row);
     Ok(())
 }
 
@@ -397,7 +448,16 @@ pub(crate) fn generate_set_context<F: Field>(
         );
         (sp_to_save, op)
     } else {
-        mem_read_with_log(GeneralPurpose(2), new_sp_addr, state)
+        // Even though we might be in the interpreter, `Stack` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
+        mem_read_with_log(
+            GeneralPurpose(2),
+            new_sp_addr,
+            state,
+            false,
+            &HashMap::default(),
+        )
     };
 
     // If the new stack isn't empty, read stack_top from memory.
@@ -416,8 +476,17 @@ pub(crate) fn generate_set_context<F: Field>(
         }
 
         let new_top_addr = MemoryAddress::new(new_ctx, Segment::Stack, new_sp - 1);
-        let (new_top, log_read_new_top) =
-            mem_read_gp_with_log_and_fill(2, new_top_addr, state, &mut row);
+        // Even though we might be in the interpreter, `Stack` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
+        let (new_top, log_read_new_top) = mem_read_gp_with_log_and_fill(
+            2,
+            new_top_addr,
+            state,
+            &mut row,
+            false,
+            &HashMap::default(),
+        );
         state.registers.stack_top = new_top;
         state.traces.push_memory(log_read_new_top);
     } else {
@@ -454,10 +523,18 @@ pub(crate) fn generate_push<F: Field>(
         .map(|i| {
             state
                 .memory
-                .get(MemoryAddress {
-                    virt: base_address.virt + i,
-                    ..base_address
-                })
+                .get(
+                    MemoryAddress {
+                        virt: base_address.virt + i,
+                        ..base_address
+                    },
+                    // Even though we might be in the interpreter, `Code` is not part of
+                    // the preinitialized segments, so we don't need to carry
+                    // out the additional checks when get the value from
+                    // memory.
+                    false,
+                    &HashMap::default(),
+                )
                 .low_u32() as u8
         })
         .collect_vec();
@@ -532,7 +609,10 @@ pub(crate) fn generate_dup<F: Field>(
 
         (stack_top, op)
     } else {
-        mem_read_gp_with_log_and_fill(2, other_addr, state, &mut row)
+        // Even though we might be in the interpreter, `Stack` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
+        mem_read_gp_with_log_and_fill(2, other_addr, state, &mut row, false, &HashMap::default())
     };
     push_no_write(state, val);
 
@@ -554,7 +634,11 @@ pub(crate) fn generate_swap<F: Field>(
     let other_addr = MemoryAddress::new(state.registers.context, Segment::Stack, other_addr_lo);
 
     let [(in0, _)] = stack_pop_with_log_and_fill::<1, _>(state, &mut row)?;
-    let (in1, log_in1) = mem_read_gp_with_log_and_fill(1, other_addr, state, &mut row);
+    // Even though we might be in the interpreter, `Stack` is not part of the
+    // preinitialized segments, so we don't need to carry out the additional checks
+    // when get the value from memory.
+    let (in1, log_in1) =
+        mem_read_gp_with_log_and_fill(1, other_addr, state, &mut row, false, &HashMap::default());
     let log_out0 = mem_write_gp_log_and_fill(2, other_addr, state, &mut row, in0);
     push_no_write(state, in1);
 
@@ -617,7 +701,17 @@ fn append_shift<F: Field>(
     const LOOKUP_CHANNEL: usize = 2;
     let lookup_addr = MemoryAddress::new(0, Segment::ShiftTable, input0.low_u32() as usize);
     if input0.bits() <= 32 {
-        let (_, read) = mem_read_gp_with_log_and_fill(LOOKUP_CHANNEL, lookup_addr, state, &mut row);
+        // Even though we might be in the interpreter, `ShiftTable` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
+        let (_, read) = mem_read_gp_with_log_and_fill(
+            LOOKUP_CHANNEL,
+            lookup_addr,
+            state,
+            &mut row,
+            false,
+            &HashMap::default(),
+        );
         state.traces.push_memory(read);
     } else {
         // The shift constraints still expect the address to be set, even though no read
@@ -706,7 +800,10 @@ pub(crate) fn generate_syscall<F: Field>(
                 virt: base_address.virt + i,
                 ..base_address
             };
-            let val = state.memory.get(address);
+            // Even though we might be in the interpreter, `Code` is not part of the
+            // preinitialized segments, so we don't need to carry out the additional checks
+            // when get the value from memory.
+            let val = state.memory.get(address, false, &HashMap::default());
             val.low_u32() as u8
         })
         .collect_vec();
@@ -809,11 +906,19 @@ pub(crate) fn generate_exit_kernel<F: Field>(
 pub(crate) fn generate_mload_general<F: Field>(
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
+    is_interpreter: bool,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
 ) -> Result<(), ProgramError> {
     let [(addr, _)] = stack_pop_with_log_and_fill::<1, _>(state, &mut row)?;
 
-    let (val, log_read) =
-        mem_read_gp_with_log_and_fill(1, MemoryAddress::new_bundle(addr)?, state, &mut row);
+    let (val, log_read) = mem_read_gp_with_log_and_fill(
+        1,
+        MemoryAddress::new_bundle(addr)?,
+        state,
+        &mut row,
+        is_interpreter,
+        preinitialized_segments,
+    );
     push_no_write(state, val);
 
     // Because MLOAD_GENERAL performs 1 pop and 1 push, it does not make use of the
@@ -837,6 +942,8 @@ pub(crate) fn generate_mload_general<F: Field>(
 pub(crate) fn generate_mload_32bytes<F: Field>(
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
+    is_interpreter: bool,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
 ) -> Result<(), ProgramError> {
     let [(addr, _), (len, log_in1)] = stack_pop_with_log_and_fill::<2, _>(state, &mut row)?;
     let len = u256_to_usize(len)?;
@@ -857,7 +964,9 @@ pub(crate) fn generate_mload_32bytes<F: Field>(
                 virt: base_address.virt + i,
                 ..base_address
             };
-            let val = state.memory.get(address);
+            let val = state
+                .memory
+                .get(address, is_interpreter, preinitialized_segments);
             val.low_u32() as u8
         })
         .collect_vec();
@@ -923,6 +1032,7 @@ pub(crate) fn generate_exception<F: Field>(
     exc_code: u8,
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
+    is_generation: bool,
 ) -> Result<(), ProgramError> {
     if TryInto::<u32>::try_into(state.registers.gas_used).is_err() {
         return Err(ProgramError::GasLimitError);
@@ -935,7 +1045,7 @@ pub(crate) fn generate_exception<F: Field>(
         row.general.stack_mut().stack_inv_aux = F::ONE;
     }
 
-    fill_stack_fields(state, &mut row)?;
+    fill_stack_fields(state, &mut row, is_generation)?;
 
     row.general.exception_mut().exc_code_bits = [
         F::from_bool(exc_code & 1 != 0),
@@ -954,7 +1064,10 @@ pub(crate) fn generate_exception<F: Field>(
                 virt: base_address.virt + i,
                 ..base_address
             };
-            let val = state.memory.get(address);
+            // Even though we might be in the interpreter, `Code` is not part of the
+            // preinitialized segments, so we don't need to carry out the additional checks
+            // when get the value from memory.
+            let val = state.memory.get(address, false, &HashMap::default());
             val.low_u32() as u8
         })
         .collect_vec();
@@ -981,7 +1094,10 @@ pub(crate) fn generate_exception<F: Field>(
     // Get the opcode so we can provide it to the range_check operation.
     let code_context = state.registers.code_context();
     let address = MemoryAddress::new(code_context, Segment::Code, state.registers.program_counter);
-    let opcode = state.memory.get(address);
+    // Even though we might be in the interpreter, `Code` is not part of the
+    // preinitialized segments, so we don't need to carry out the additional checks
+    // when get the value from memory.
+    let opcode = state.memory.get(address, false, &HashMap::default());
 
     // `ArithmeticStark` range checks `mem_channels[0]`, which contains
     // the top of the stack, `mem_channels[1]`, which contains the new PC,

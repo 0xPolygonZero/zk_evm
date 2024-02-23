@@ -73,6 +73,9 @@ global main:
     // stack: expected_hash, hash
     %assert_eq
 
+    // Initialize accessed addresses and storage keys lists
+    %init_access_lists
+
     // Initialize the RLP DATA pointer to its initial position (ctx == virt == 0, segment = RLP)
     PUSH @SEGMENT_RLP_RAW
     %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)

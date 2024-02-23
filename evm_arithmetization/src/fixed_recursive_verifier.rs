@@ -1386,7 +1386,6 @@ where
         config: &StarkConfig,
         generation_inputs: GenerationInputs,
         max_cpu_len: usize,
-
         segment_index: usize,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,

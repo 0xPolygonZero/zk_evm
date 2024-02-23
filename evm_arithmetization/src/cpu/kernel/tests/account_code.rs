@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -156,7 +157,7 @@ fn test_extcodesize() -> Result<()> {
     let code = random_code();
     let account = test_account(&code);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;
@@ -188,7 +189,7 @@ fn test_extcodecopy() -> Result<()> {
     let code = random_code();
     let account = test_account(&code);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;
@@ -197,6 +198,12 @@ fn test_extcodecopy() -> Result<()> {
     interpreter.generation_state.memory.contexts[context].segments
         [Segment::ContextMetadata.unscale()]
     .set(GasLimit.unscale(), U256::from(1000000000000u64));
+
+    // Pre-initialize the accessed addresses list.
+    let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
+    interpreter.generation_state.registers.program_counter = init_accessed_addresses;
+    interpreter.push(0xdeadbeefu32.into());
+    interpreter.run(None)?;
 
     let extcodecopy = KERNEL.global_labels["sys_extcodecopy"];
 
@@ -325,7 +332,13 @@ fn sstore() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+
+    // Pre-initialize the accessed addresses list.
+    let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
+    interpreter.generation_state.registers.program_counter = init_accessed_addresses;
+    interpreter.push(0xdeadbeefu32.into());
+    interpreter.run(None)?;
 
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;
@@ -415,7 +428,13 @@ fn sload() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+
+    // Pre-initialize the accessed addresses list.
+    let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
+    interpreter.generation_state.registers.program_counter = init_accessed_addresses;
+    interpreter.push(0xdeadbeefu32.into());
+    interpreter.run(None)?;
 
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;

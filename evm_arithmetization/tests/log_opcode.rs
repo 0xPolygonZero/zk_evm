@@ -5,12 +5,15 @@ use std::time::Duration;
 use bytes::Bytes;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
 };
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
+use evm_arithmetization::proof::{
+    BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots,
+};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};

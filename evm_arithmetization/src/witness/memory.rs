@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::hash::RandomState;
+
 use ethereum_types::U256;
 use serde::{Deserialize, Serialize};
 
@@ -218,10 +221,26 @@ impl MemoryState {
         );
         Some(val)
     }
-    pub(crate) fn get(&self, address: MemoryAddress) -> U256 {
+
+    pub(crate) fn get(
+        &self,
+        address: MemoryAddress,
+        is_interpreter: bool,
+        preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    ) -> U256 {
         match self.get_option(address) {
             Some(val) => val,
-            None => 0.into(),
+            None => {
+                let segment = Segment::all()[address.segment];
+                let offset = address.virt;
+                if preinitialized_segments.contains_key(&segment)
+                    && offset < preinitialized_segments.get(&segment).unwrap().content.len()
+                {
+                    preinitialized_segments.get(&segment).unwrap().content[offset].unwrap()
+                } else {
+                    0.into()
+                }
+            }
         }
     }
 
@@ -252,7 +271,11 @@ impl MemoryState {
 
     // These fields are already scaled by their respective segment.
     pub(crate) fn read_global_metadata(&self, field: GlobalMetadata) -> U256 {
-        self.get(MemoryAddress::new_bundle(U256::from(field as usize)).unwrap())
+        self.get(
+            MemoryAddress::new_bundle(U256::from(field as usize)).unwrap(),
+            false,
+            &HashMap::default(),
+        )
     }
 }
 

@@ -5,13 +5,11 @@ use std::fmt::{self, Display};
 
 use ethereum_types::H256;
 
-use super::common::{
-    get_key_piece_from_node_pulling_from_key_for_branches, get_segment_from_node_and_key_piece,
-    NodePath, PathSegment,
-};
+use super::common::get_key_piece_from_node_pulling_from_key_for_branches;
 use crate::{
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
+    utils::{get_segment_from_node_and_key_piece, TriePath, TrieSegment},
 };
 
 /// Params controlling how much information is reported in the query output.
@@ -44,6 +42,7 @@ impl Default for DebugQueryParams {
 }
 
 #[derive(Debug, Default)]
+/// A wrapper for `DebugQueryParams`.
 pub struct DebugQueryParamsBuilder {
     params: DebugQueryParams,
 }
@@ -67,6 +66,7 @@ impl DebugQueryParamsBuilder {
         self
     }
 
+    /// Builds a new debug query for a given key.
     pub fn build<K: Into<Nibbles>>(self, k: K) -> DebugQuery {
         DebugQuery {
             k: k.into(),
@@ -153,9 +153,13 @@ fn count_non_empty_branch_children_from_mask(mask: u16) -> usize {
 }
 
 #[derive(Clone, Debug)]
+/// The result of a debug query contains information
+/// of the path used for searching for a key in the trie.
 pub struct DebugQueryOutput {
     k: Nibbles,
-    node_path: NodePath,
+
+    /// The nodes hit during the query.
+    pub node_path: TriePath,
     extra_node_info: Vec<Option<ExtraNodeSegmentInfo>>,
     node_found: bool,
     params: DebugQueryParams,
@@ -195,7 +199,7 @@ impl DebugQueryOutput {
     fn new(k: Nibbles, params: DebugQueryParams) -> Self {
         Self {
             k,
-            node_path: NodePath::default(),
+            node_path: TriePath::default(),
             extra_node_info: Vec::default(),
             node_found: false,
             params,
@@ -215,7 +219,7 @@ impl DebugQueryOutput {
     // TODO: Make the output easier to read...
     fn fmt_node_based_on_debug_params(
         f: &mut fmt::Formatter<'_>,
-        seg: &PathSegment,
+        seg: &TrieSegment,
         extra_seg_info: &Option<ExtraNodeSegmentInfo>,
         params: &DebugQueryParams,
     ) -> fmt::Result {

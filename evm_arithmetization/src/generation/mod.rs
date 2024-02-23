@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Error};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
@@ -22,6 +22,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::assembler::Kernel;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+use crate::cpu::kernel::interpreter::{self, Interpreter, InterpreterMemOpKind};
 use crate::generation::state::GenerationState;
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
@@ -31,7 +32,7 @@ use crate::proof::{
 use crate::prover::{check_abort_signal, get_mem_after_value_from_row};
 use crate::util::{h2u, u256_to_u8, u256_to_usize};
 use crate::witness::errors::{ProgramError, ProverInputError};
-use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryState};
+use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind, MemoryState};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::Traces;
 use crate::witness::transition::{final_exception, transition};
@@ -43,6 +44,7 @@ pub(crate) mod state;
 mod trie_extractor;
 
 use self::mpt::{load_all_mpts, TrieRootPtrs};
+use self::state::GenerationStateCheckpoint;
 use crate::witness::util::{mem_write_log, mem_write_log_timestamp_zero, stack_peek};
 
 pub const NUM_EXTRA_CYCLES_AFTER: usize = 78;
@@ -297,7 +299,7 @@ pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         "simulate CPU",
         simulate_cpu(&mut state, max_cpu_len)
     );
-    let final_registers = if let Ok(res) = cpu_res {
+    let (final_registers, mem_after) = if let Ok(res) = cpu_res {
         res
     } else {
         // Retrieve previous PC (before jumping to KernelPanic), to see if we reached
@@ -347,7 +349,7 @@ pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         }
 
         cpu_res?;
-        RegistersState::default()
+        (RegistersState::default(), None)
     };
 
     log::info!(
@@ -403,62 +405,280 @@ pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     Ok((tables, public_values, final_values))
 }
 
-fn simulate_cpu<F: Field>(
-    state: &mut GenerationState<F>,
-    max_cpu_len: usize,
-) -> anyhow::Result<RegistersState> {
+/// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
+/// a `GenerationState`.
+pub(crate) enum State<'a, F: Field> {
+    Generation(&'a mut GenerationState<F>),
+    Interpreter(&'a mut Interpreter<F>),
+}
+
+impl<'a, F: Field> State<'a, F> {
+    /// Returns a `State`'s `Checkpoint`.
+    pub(crate) fn checkpoint(&mut self) -> GenerationStateCheckpoint {
+        match self {
+            Self::Generation(state) => state.checkpoint(),
+            Self::Interpreter(interpreter) => interpreter.checkpoint(),
+        }
+    }
+
+    /// Increments the `gas_used` register by a value `n`.
+    pub(crate) fn incr_gas(&mut self, n: u64) {
+        match self {
+            Self::Generation(state) => state.registers.gas_used += n,
+            Self::Interpreter(interpreter) => interpreter.generation_state.registers.gas_used += n,
+        }
+    }
+
+    /// Increments the `program_counter` register by a value `n`.
+    pub(crate) fn incr_pc(&mut self, n: usize) {
+        match self {
+            Self::Generation(state) => state.registers.program_counter += n,
+            Self::Interpreter(interpreter) => {
+                interpreter.generation_state.registers.program_counter += n
+            }
+        }
+    }
+
+    /// Returns a `State`'s registers.
+    pub(crate) fn get_registers(&self) -> RegistersState {
+        match self {
+            Self::Generation(state) => state.registers,
+            Self::Interpreter(interpreter) => interpreter.generation_state.registers,
+        }
+    }
+
+    /// Returns a `State`'s mutable registers.
+    pub(crate) fn get_mut_registers(&mut self) -> &mut RegistersState {
+        match self {
+            Self::Generation(state) => &mut state.registers,
+            Self::Interpreter(interpreter) => &mut interpreter.generation_state.registers,
+        }
+    }
+
+    /// Returns the value stored at address `address` in a `State`.
+    pub(crate) fn get_from_memory(&mut self, address: MemoryAddress) -> U256 {
+        match self {
+            Self::Generation(state) => state.memory.get(address, false, &HashMap::default()),
+            Self::Interpreter(interpreter) => interpreter.generation_state.memory.get(
+                address,
+                true,
+                &interpreter.preinitialized_segments,
+            ),
+        }
+    }
+
+    /// Returns a mutable `GenerationState` from a `State`.
+    pub(crate) fn get_mut_generation_state(&mut self) -> &mut GenerationState<F> {
+        match self {
+            Self::Generation(state) => state,
+            Self::Interpreter(interpreter) => &mut interpreter.generation_state,
+        }
+    }
+
+    /// Returns true if a `State` is a `GenerationState` and false otherwise.
+    pub(crate) fn is_generation_state(&mut self) -> bool {
+        match self {
+            Self::Generation(state) => true,
+            Self::Interpreter(interpreter) => false,
+        }
+    }
+
+    /// Increments the clock of an `Interpreter`'s clock.
+    pub(crate) fn incr_interpreter_clock(&mut self) {
+        match self {
+            Self::Generation(state) => {}
+            Self::Interpreter(interpreter) => interpreter.clock += 1,
+        }
+    }
+
+    /// Returns the value of a `State`'s clock.
+    pub(crate) fn get_clock(&mut self) -> usize {
+        match self {
+            Self::Generation(state) => state.traces.clock(),
+            Self::Interpreter(interpreter) => interpreter.clock,
+        }
+    }
+
+    /// Rolls back a `State`.
+    pub(crate) fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
+        match self {
+            Self::Generation(state) => state.rollback(checkpoint),
+            Self::Interpreter(interpreter) => interpreter.generation_state.rollback(checkpoint),
+        }
+    }
+
+    /// Returns a `State`'s stack.
+    pub(crate) fn get_stack(&mut self) -> Vec<U256> {
+        match self {
+            Self::Generation(state) => state.stack(),
+            Self::Interpreter(interpreter) => interpreter.stack(),
+        }
+    }
+
+    fn get_context(&mut self) -> usize {
+        match self {
+            Self::Generation(state) => state.registers.context,
+            Self::Interpreter(interpreter) => interpreter.context(),
+        }
+    }
+
+    fn get_halt_context(&mut self) -> Option<usize> {
+        match self {
+            Self::Generation(state) => None,
+            Self::Interpreter(interpreter) => interpreter.halt_context,
+        }
+    }
+
+    /// Returns the content of a the `KernelGeneral` segment of a `State`.
+    pub(crate) fn mem_get_kernel_content(&self) -> Vec<Option<U256>> {
+        match self {
+            Self::Generation(state) => state.memory.contexts[0].segments
+                [Segment::KernelGeneral.unscale()]
+            .content
+            .clone(),
+            Self::Interpreter(interpreter) => interpreter.generation_state.memory.contexts[0]
+                .segments[Segment::KernelGeneral.unscale()]
+            .content
+            .clone(),
+        }
+    }
+
+    /// Applies a `State`'s operations since a checkpoint.
+    pub(crate) fn apply_ops(&mut self, checkpoint: GenerationStateCheckpoint) {
+        match self {
+            Self::Generation(state) => state
+                .memory
+                .apply_ops(state.traces.mem_ops_since(checkpoint.traces)),
+            Self::Interpreter(interpreter) => {
+                // An interpreter `checkpoint()` clears all operations before the checkpoint.
+                interpreter.apply_memops();
+            }
+        }
+    }
+}
+
+fn update_interpreter_final_registers<F: Field>(
+    any_state: &mut State<F>,
+    final_registers: RegistersState,
+) {
+    match any_state {
+        State::Generation(state) => {}
+        State::Interpreter(interpreter) => {
+            let registers_after = [
+                final_registers.program_counter.into(),
+                (final_registers.is_kernel as usize).into(),
+                final_registers.stack_len.into(),
+                final_registers.stack_top,
+                final_registers.context.into(),
+                final_registers.gas_used.into(),
+            ];
+
+            let length = registers_after.len();
+            let registers_after_fields = (0..length)
+                .map(|i| {
+                    (
+                        MemoryAddress::new(0, Segment::RegistersStates, length + i),
+                        registers_after[i],
+                    )
+                })
+                .collect::<Vec<_>>();
+            interpreter.set_memory_multi_addresses(&registers_after_fields);
+        }
+    }
+}
+
+/// Simulates a CPU. It only generates the traces if the `State` is a
+/// `GenerationState`. Otherwise, it simply simulates all ooperations.
+pub(crate) fn run_cpu<F: Field>(
+    any_state: &mut State<F>,
+    is_generation: bool,
+    max_cpu_len: Option<usize>,
+) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
+    let (is_generation, halt_offsets) = match any_state {
+        State::Generation(state) => (true, vec![KERNEL.global_labels["halt_final"]]),
+        State::Interpreter(interpreter) => (false, interpreter.halt_offsets.clone()),
+    };
+
     let halt_pc = KERNEL.global_labels["halt"];
     let halt_final_pc = KERNEL.global_labels["halt_final"];
     let mut final_registers = RegistersState::default();
+    let mut final_mem = any_state.get_mut_generation_state().memory.clone();
     let mut running = true;
+
     loop {
         // If we've reached the kernel's halt routine, and our trace length is a power
         // of 2, stop.
-        let pc = state.registers.program_counter;
-        let halt = state.registers.is_kernel && pc == halt_pc;
-        // If the maximum trace length (minus some cycles for running `exc_stop`) is
-        // reached, or if we reached the halt routine, raise the stop exception.
-        if running && (halt || state.traces.clock() == max_cpu_len - NUM_EXTRA_CYCLES_AFTER) {
+        let registers = any_state.get_registers();
+        let pc = registers.program_counter;
+
+        let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
+        if running
+            && (registers.is_kernel && pc == KERNEL.global_labels["halt"]
+                || (max_cpu_len.is_some()
+                    && any_state.get_clock() == max_cpu_len.unwrap() - NUM_EXTRA_CYCLES_AFTER))
+        {
             running = false;
-            final_registers = state.registers;
+            final_registers = registers;
+
             // If `stack_len` is 0, `stack_top` still contains a residual value.
             if final_registers.stack_len == 0 {
                 final_registers.stack_top = 0.into();
             }
-            final_exception(state)?;
+            // If we are in the interpreter, we need to set the final register values.
+            update_interpreter_final_registers(any_state, final_registers);
+            final_exception(any_state, is_generation)?;
         }
-        let halt_final = pc == halt_final_pc;
-        if halt_final {
-            log::info!("CPU halted after {} cycles", state.traces.clock());
-            log::info!(
-                "halt label at {}, halt_final label at {}",
-                halt_pc,
-                halt_final_pc
-            );
 
-            // Padding
-            let mut row = CpuColumnsView::<F>::default();
-            row.clock = F::from_canonical_usize(state.traces.clock());
-            row.context = F::from_canonical_usize(state.registers.context);
-            row.program_counter = F::from_canonical_usize(pc);
-            row.is_kernel_mode = F::ONE;
-            row.gas = F::from_canonical_u64(state.registers.gas_used);
-            row.stack_len = F::from_canonical_usize(state.registers.stack_len);
-
-            loop {
-                state.traces.push_cpu(row);
-                row.clock += F::ONE;
-                if (state.traces.clock() - 1).is_power_of_two() {
-                    break;
+        let opt_halt_context = any_state.get_halt_context();
+        if registers.is_kernel && halt_final {
+            if let Some(halt_context) = opt_halt_context {
+                if any_state.get_context() == halt_context {
+                    // Only happens during jumpdest analysis, we don't care about the output.
+                    return Ok((final_registers, Some(final_mem)));
                 }
+            } else {
+                let final_mem = match any_state {
+                    State::Generation(state) => None,
+                    State::Interpreter(interpreter) => {
+                        Some(interpreter.generation_state.memory.clone())
+                    }
+                };
+                return Ok((final_registers, final_mem));
             }
-
-            log::info!("CPU trace padded to {} cycles", state.traces.clock() - 1);
-
-            return Ok(final_registers);
         }
 
-        transition(state)?;
+        transition(any_state)?;
+        any_state.incr_interpreter_clock();
     }
-    Ok(final_registers)
+}
+
+fn simulate_cpu<F: Field>(
+    state: &mut GenerationState<F>,
+    max_cpu_len: usize,
+) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
+    let (final_registers, mem_after) =
+        run_cpu(&mut State::Generation(state), true, Some(max_cpu_len))?;
+
+    let pc = state.registers.program_counter;
+    // Padding
+    let mut row = CpuColumnsView::<F>::default();
+    row.clock = F::from_canonical_usize(state.traces.clock());
+    row.context = F::from_canonical_usize(state.registers.context);
+    row.program_counter = F::from_canonical_usize(pc);
+    row.is_kernel_mode = F::ONE;
+    row.gas = F::from_canonical_u64(state.registers.gas_used);
+    row.stack_len = F::from_canonical_usize(state.registers.stack_len);
+
+    loop {
+        // If our trace length is a power of 2, stop.
+        state.traces.push_cpu(row);
+        row.clock += F::ONE;
+        if (state.traces.clock() - 1).is_power_of_two() {
+            break;
+        }
+    }
+
+    log::info!("CPU trace padded to {} cycles", state.traces.clock() - 1);
+
+    Ok((final_registers, mem_after))
 }
