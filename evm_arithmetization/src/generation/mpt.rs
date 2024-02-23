@@ -347,6 +347,8 @@ pub(crate) fn load_all_mpts(
 }
 
 pub mod transaction_testing {
+    use ethereum_types::H160;
+
     use super::*;
 
     #[derive(RlpEncodable, RlpDecodable, Debug, Clone, PartialEq, Eq)]
@@ -420,6 +422,25 @@ pub mod transaction_testing {
         pub value: U256,
         pub data: Bytes,
         pub access_list: Vec<AccessListItemRlp>,
+        pub y_parity: U256,
+        pub r: U256,
+        pub s: U256,
+    }
+
+    #[derive(RlpEncodable, RlpDecodable, Debug, Clone, PartialEq, Eq)]
+    pub struct BlobTransactionRlp {
+        pub chain_id: u64,
+        pub nonce: U256,
+        pub max_priority_fee_per_gas: U256,
+        pub max_fee_per_gas: U256,
+        pub gas: U256,
+        // As per EIP-4844, blob transactions cannot have the form of a create transaction.
+        pub to: H160,
+        pub value: U256,
+        pub data: Bytes,
+        pub access_list: Vec<AccessListItemRlp>,
+        pub max_fee_per_blob_gas: U256,
+        pub blob_versioned_hashes: Vec<H256>,
         pub y_parity: U256,
         pub r: U256,
         pub s: U256,

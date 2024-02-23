@@ -113,6 +113,7 @@ codecopy_within_bounds:
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     POP
 wcopy_within_bounds:
+    // TODO: rework address creation to have less stack manipulation overhead
     // stack: segment, src_ctx, kexit_info, dest_offset, offset, size
     GET_CONTEXT
     %stack (context, segment, src_ctx, kexit_info, dest_offset, offset, size) ->
@@ -218,6 +219,71 @@ sys_extcodecopy_empty:
 extcodecopy_contd:
     // stack: code_size, ctx, kexit_info, dest_offset, offset, size
     %codecopy_after_checks(@SEGMENT_CODE)
+
+// Same as %wcopy but with special handling in case of overlapping ranges.
+global sys_mcopy:
+    // stack: kexit_info, dest_offset, offset, size
+    %wcopy_charge_gas
+
+    %stack (kexit_info, dest_offset, offset, size) -> (dest_offset, size, kexit_info, dest_offset, offset, size)
+    %add_or_fault
+    // stack: expanded_num_bytes, kexit_info, dest_offset, offset, size, kexit_info
+    DUP1 %ensure_reasonable_offset
+    %update_mem_bytes
+
+    // stack: kexit_info, dest_offset, offset, size
+    DUP3 DUP3 EQ
+    // stack: dest_offset = offset, kexit_info, dest_offset, offset, size
+    %jumpi(mcopy_empty) // If SRC == DST, just pop the stack and exit the kernel
+
+    // stack: kexit_info, dest_offset, offset, size
+    GET_CONTEXT
+    PUSH @SEGMENT_MAIN_MEMORY
+    DUP6 DUP6 ADD
+    // stack: offset + size, segment, context, kexit_info, dest_offset, offset, size
+    DUP5 LT
+    // stack: dest_offset < offset + size, segment, context, kexit_info, dest_offset, offset, size
+    DUP6 DUP6 GT
+    // stack: dest_offset > offset, dest_offset < offset + size, segment, context, kexit_info, dest_offset, offset, size
+    MUL // AND
+    // stack: (dest_offset > offset) && (dest_offset < offset + size), segment, context, kexit_info, dest_offset, offset, size
+
+    // If both conditions are satisfied, that means we will get an overlap, in which case we need to process the copy
+    // in two chunks to prevent overwriting memory data before reading it.
+    %jumpi(mcopy_with_overlap)
+
+    // stack: segment, context, kexit_info, dest_offset, offset, size
+    %jump(wcopy_within_bounds)
+
+mcopy_with_overlap:
+    // We do have an overlap between the SRC and DST ranges. We will first copy the overlapping segment
+    // (i.e. end of the copy portion), then copy the remaining (i.e. beginning) portion. 
+
+    // stack: segment, context, kexit_info, dest_offset, offset, size
+    DUP5 DUP5 SUB
+    // stack: remaining_size = dest_offset - offset, segment, context, kexit_info, dest_offset, offset, size
+    DUP1 DUP8
+    SUB // overlapping_size = size - remaining_size
+    // stack: overlapping_size, remaining_size, segment, context, kexit_info, dest_offset, offset, size
+
+    // Shift the initial offsets to copy the overlapping segment first.
+    DUP2 DUP8 ADD
+    // stack: offset_first_copy, overlapping_size, remaining_size, segment, context, kexit_info, dest_offset, offset, size
+    DUP3 DUP8 ADD
+    // stack: dest_offset_first_copy, offset_first_copy, overlapping_size, remaining_size, segment, context, kexit_info, dest_offset, offset, size
+
+    %stack (dest_offset_first_copy, offset_first_copy, overlapping_size, remaining_size, segment, context, kexit_info, dest_offset, offset, size) ->
+        (context, segment, offset_first_copy, segment, dest_offset_first_copy, context, overlapping_size, wcopy_within_bounds, segment, context, kexit_info, dest_offset, offset, remaining_size)
+    %build_address // SRC
+    SWAP3
+    %build_address // DST
+    // stack: DST, SRC, overlapping_size, wcopy_within_bounds, segment, context, kexit_info, dest_offset, offset, remaining_size
+    %jump(memcpy_bytes)
+
+mcopy_empty:
+    // kexit_info, dest_offset, offset, size
+    %stack (kexit_info, dest_offset, offset, size) -> (kexit_info)
+    EXIT_KERNEL
 
 
 // The internal logic is similar to wcopy, but handles range overflow differently.

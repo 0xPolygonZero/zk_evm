@@ -306,10 +306,22 @@ impl<'a, F: Field> Interpreter<'a, F> {
             (GlobalMetadata::BlockChainId, metadata.block_chain_id),
             (GlobalMetadata::BlockBaseFee, metadata.block_base_fee),
             (
+                GlobalMetadata::BlockBlobBaseFee,
+                metadata.block_blob_base_fee,
+            ),
+            (
                 GlobalMetadata::BlockCurrentHash,
                 h2u(inputs.block_hashes.cur_hash),
             ),
             (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+            (
+                GlobalMetadata::BlockBlobGasUsed,
+                metadata.block_blob_gas_used,
+            ),
+            (
+                GlobalMetadata::BlockExcessBlobGas,
+                metadata.block_excess_blob_gas,
+            ),
             (GlobalMetadata::BlockGasUsedBefore, inputs.gas_used_before),
             (GlobalMetadata::BlockGasUsedAfter, inputs.gas_used_after),
             (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
@@ -841,7 +853,8 @@ impl<'a, F: Field> Interpreter<'a, F> {
             0x46 => self.run_syscall(opcode, 0, true),  // "CHAINID",
             0x47 => self.run_syscall(opcode, 0, true),  // SELFABALANCE,
             0x48 => self.run_syscall(opcode, 0, true),  // "BASEFEE",
-            0x49 => self.run_prover_input(),            // "PROVER_INPUT",
+            0x49 => self.run_syscall(opcode, 1, false), // "BLOBHASH",
+            0x4a => self.run_syscall(opcode, 0, true),  // "BLOBBASEFEE",
             0x50 => self.run_pop(),                     // "POP",
             0x51 => self.run_syscall(opcode, 1, false), // "MLOAD",
             0x52 => self.run_syscall(opcode, 2, false), // "MSTORE",
@@ -854,6 +867,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
             0x59 => self.run_syscall(opcode, 0, true),  // "MSIZE",
             0x5a => self.run_syscall(opcode, 0, true),  // "GAS",
             0x5b => self.run_jumpdest(),                // "JUMPDEST",
+            0x5e => self.run_syscall(opcode, 3, false), // "MCOPY",
             x if (0x5f..0x80).contains(&x) => self.run_push(x - 0x5f), // "PUSH"
             x if (0x80..0x90).contains(&x) => self.run_dup(x - 0x7f), // "DUP"
             x if (0x90..0xa0).contains(&x) => self.run_swap(x - 0x8f), // "SWAP"
@@ -872,19 +886,20 @@ impl<'a, F: Field> Interpreter<'a, F> {
                 Err(ProgramError::KernelPanic)
             } // "PANIC",
             x if (0xc0..0xe0).contains(&x) => self.run_mstore_32bytes(x - 0xc0 + 1), /* "MSTORE_32BYTES", */
-            0xf0 => self.run_syscall(opcode, 3, false),                              // "CREATE",
-            0xf1 => self.run_syscall(opcode, 7, false),                              // "CALL",
-            0xf2 => self.run_syscall(opcode, 7, false),                              // "CALLCODE",
-            0xf3 => self.run_syscall(opcode, 2, false),                              // "RETURN",
+            0xee => self.run_prover_input(), // "PROVER_INPUT",
+            0xf0 => self.run_syscall(opcode, 3, false), // "CREATE",
+            0xf1 => self.run_syscall(opcode, 7, false), // "CALL",
+            0xf2 => self.run_syscall(opcode, 7, false), // "CALLCODE",
+            0xf3 => self.run_syscall(opcode, 2, false), // "RETURN",
             0xf4 => self.run_syscall(opcode, 6, false), // "DELEGATECALL",
             0xf5 => self.run_syscall(opcode, 4, false), // "CREATE2",
-            0xf6 => self.run_get_context(),             // "GET_CONTEXT",
-            0xf7 => self.run_set_context(),             // "SET_CONTEXT",
-            0xf8 => self.run_mload_32bytes(),           // "MLOAD_32BYTES",
-            0xf9 => self.run_exit_kernel(),             // "EXIT_KERNEL",
+            0xf6 => self.run_get_context(),  // "GET_CONTEXT",
+            0xf7 => self.run_set_context(),  // "SET_CONTEXT",
+            0xf8 => self.run_mload_32bytes(), // "MLOAD_32BYTES",
+            0xf9 => self.run_exit_kernel(),  // "EXIT_KERNEL",
             0xfa => self.run_syscall(opcode, 6, false), // "STATICCALL",
-            0xfb => self.run_mload_general(),           // "MLOAD_GENERAL",
-            0xfc => self.run_mstore_general(),          // "MSTORE_GENERAL",
+            0xfb => self.run_mload_general(), // "MLOAD_GENERAL",
+            0xfc => self.run_mstore_general(), // "MSTORE_GENERAL",
             0xfd => self.run_syscall(opcode, 2, false), // "REVERT",
             0xfe => {
                 log::warn!(
@@ -1250,6 +1265,10 @@ impl<'a, F: Field> Interpreter<'a, F> {
         Ok(())
     }
 
+    fn run_blobbasefee(&mut self) -> anyhow::Result<(), ProgramError> {
+        self.push(self.get_global_metadata_field(GlobalMetadata::BlockBlobBaseFee))
+    }
+
     fn run_pc(&mut self) -> anyhow::Result<(), ProgramError> {
         self.push(
             (self
@@ -1263,6 +1282,33 @@ impl<'a, F: Field> Interpreter<'a, F> {
 
     fn run_jumpdest(&mut self) -> anyhow::Result<(), ProgramError> {
         assert!(!self.is_kernel(), "JUMPDEST is not needed in kernel code");
+        Ok(())
+    }
+
+    fn run_mcopy(&mut self) -> anyhow::Result<(), ProgramError> {
+        let dest_offset = self.pop()?.as_usize();
+        let offset = self.pop()?.as_usize();
+        let size = self.pop()?.as_usize();
+
+        let intermediary_memory: Vec<U256> = (0..size)
+            .map(|i| {
+                self.generation_state.memory.mload_general(
+                    self.context(),
+                    Segment::MainMemory,
+                    offset + i,
+                )
+            })
+            .collect();
+
+        for i in 0..size {
+            self.generation_state.memory.mstore_general(
+                self.context(),
+                Segment::MainMemory,
+                dest_offset + i,
+                intermediary_memory[i],
+            );
+        }
+
         Ok(())
     }
 
@@ -1571,7 +1617,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x45 => "GASLIMIT",
         0x46 => "CHAINID",
         0x48 => "BASEFEE",
-        0x49 => "PROVER_INPUT",
+        0x4a => "BLOBBASEFEE",
         0x50 => "POP",
         0x51 => "MLOAD",
         0x52 => "MSTORE",
@@ -1584,6 +1630,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x59 => "MSIZE",
         0x5a => "GAS",
         0x5b => "JUMPDEST",
+        0x5e => "MCOPY",
         0x5f => "PUSH0",
         0x60 => "PUSH1",
         0x61 => "PUSH2",
@@ -1687,6 +1734,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0xdd => "MSTORE_32BYTES_30",
         0xde => "MSTORE_32BYTES_31",
         0xdf => "MSTORE_32BYTES_32",
+        0xee => "PROVER_INPUT",
         0xf0 => "CREATE",
         0xf1 => "CALL",
         0xf2 => "CALLCODE",

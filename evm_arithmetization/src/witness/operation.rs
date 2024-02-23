@@ -34,7 +34,8 @@ use crate::{arithmetic, logic};
 pub(crate) enum Operation {
     Iszero,
     Not,
-    Syscall(u8, usize, bool), // (syscall number, minimum stack length, increases stack length)
+    /// (syscall number, minimum stack length, increases stack length)
+    Syscall(u8, usize, bool),
     Eq,
     BinaryLogic(logic::Op),
     BinaryArithmetic(arithmetic::BinaryOperator),
@@ -166,7 +167,7 @@ pub(crate) fn generate_prover_input<F: Field>(
     let pc = state.registers.program_counter;
     let input_fn = &KERNEL.prover_inputs[&pc];
     let input = state.prover_input(input_fn)?;
-    let opcode = 0x49.into();
+    let opcode = 0xee.into();
     // `ArithmeticStark` range checks `mem_channels[0]`, which contains
     // the top of the stack, `mem_channels[1]`, `mem_channels[2]` and
     // next_row's `mem_channels[0]` which contains the next top of the stack.
@@ -401,7 +402,7 @@ pub(crate) fn generate_set_context<F: Field>(
     };
 
     // If the new stack isn't empty, read stack_top from memory.
-    let new_sp = u256_to_usize(new_sp)?;
+    let new_sp = new_sp.as_usize();
     if new_sp > 0 {
         // Set up columns to disable the channel if it *is* empty.
         let new_sp_field = F::from_canonical_usize(new_sp);

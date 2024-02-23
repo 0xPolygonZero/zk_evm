@@ -49,6 +49,9 @@ pub(crate) enum GlobalMetadata {
     BlockGasLimit,
     BlockChainId,
     BlockBaseFee,
+    BlockBlobBaseFee,
+    BlockBlobGasUsed,
+    BlockExcessBlobGas,
     BlockGasUsed,
     /// Before current transactions block values.
     BlockGasUsedBefore,
@@ -56,6 +59,8 @@ pub(crate) enum GlobalMetadata {
     BlockGasUsedAfter,
     /// Current block header hash
     BlockCurrentHash,
+    /// EIP-4788: hash tree root of the beacon chain parent block.
+    ParentBeaconBlockRoot,
 
     /// Gas to refund at the end of the transaction.
     RefundCounter,
@@ -92,15 +97,25 @@ pub(crate) enum GlobalMetadata {
     TxnNumberBefore,
     TxnNumberAfter,
 
+    /// Number of created contracts during the current transaction.
+    CreatedContractsLen,
+
     KernelHash,
     KernelLen,
 
     /// The length of the transient storage segment
     TransientStorageLen,
+
+    // Start of the blob versioned hashes in the RLP for type-3 txns.
+    BlobVersionedHashesRlpStart,
+    // Length of the blob versioned hashes in the RLP for type-3 txns.
+    BlobVersionedHashesRlpLen,
+    // Number of blob versioned hashes contained in the current type-3 transaction.
+    BlobVersionedHashesLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 48;
+    pub(crate) const COUNT: usize = 56;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -131,8 +146,12 @@ impl GlobalMetadata {
             Self::BlockChainId,
             Self::BlockBaseFee,
             Self::BlockGasUsed,
+            Self::BlockBlobBaseFee,
+            Self::BlockBlobGasUsed,
+            Self::BlockExcessBlobGas,
             Self::BlockGasUsedBefore,
             Self::BlockGasUsedAfter,
+            Self::ParentBeaconBlockRoot,
             Self::RefundCounter,
             Self::AccessedAddressesLen,
             Self::AccessedStorageKeysLen,
@@ -154,9 +173,13 @@ impl GlobalMetadata {
             Self::BlockCurrentHash,
             Self::TxnNumberBefore,
             Self::TxnNumberAfter,
+            Self::CreatedContractsLen,
             Self::KernelHash,
             Self::KernelLen,
             Self::TransientStorageLen,
+            Self::BlobVersionedHashesRlpStart,
+            Self::BlobVersionedHashesRlpLen,
+            Self::BlobVersionedHashesLen,
         ]
     }
 
@@ -184,10 +207,14 @@ impl GlobalMetadata {
             Self::BlockGasLimit => "GLOBAL_METADATA_BLOCK_GAS_LIMIT",
             Self::BlockChainId => "GLOBAL_METADATA_BLOCK_CHAIN_ID",
             Self::BlockBaseFee => "GLOBAL_METADATA_BLOCK_BASE_FEE",
+            Self::BlockBlobBaseFee => "GLOBAL_METADATA_BLOCK_BLOB_BASE_FEE",
+            Self::BlockBlobGasUsed => "GLOBAL_METADATA_BLOCK_BLOB_GAS_USED",
+            Self::BlockExcessBlobGas => "GLOBAL_METADATA_BLOCK_EXCESS_BLOB_GAS",
             Self::BlockGasUsed => "GLOBAL_METADATA_BLOCK_GAS_USED",
             Self::BlockGasUsedBefore => "GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE",
             Self::BlockGasUsedAfter => "GLOBAL_METADATA_BLOCK_GAS_USED_AFTER",
             Self::BlockCurrentHash => "GLOBAL_METADATA_BLOCK_CURRENT_HASH",
+            Self::ParentBeaconBlockRoot => "GLOBAL_METADATA_PARENT_BEACON_BLOCK_ROOT",
             Self::RefundCounter => "GLOBAL_METADATA_REFUND_COUNTER",
             Self::AccessedAddressesLen => "GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN",
             Self::AccessedStorageKeysLen => "GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN",
@@ -208,9 +235,13 @@ impl GlobalMetadata {
             Self::LogsPayloadLen => "GLOBAL_METADATA_LOGS_PAYLOAD_LEN",
             Self::TxnNumberBefore => "GLOBAL_METADATA_TXN_NUMBER_BEFORE",
             Self::TxnNumberAfter => "GLOBAL_METADATA_TXN_NUMBER_AFTER",
+            Self::CreatedContractsLen => "GLOBAL_METADATA_CREATED_CONTRACTS_LEN",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
             Self::TransientStorageLen => "GLOBAL_METADATA_TRANSIENT_STORAGE_LEN",
+            Self::BlobVersionedHashesRlpStart => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START",
+            Self::BlobVersionedHashesRlpLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN",
+            Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",
         }
     }
 }

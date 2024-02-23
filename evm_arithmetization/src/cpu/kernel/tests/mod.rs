@@ -3,6 +3,7 @@ mod add11;
 mod balance;
 mod bignum;
 mod blake2_f;
+mod blobhash;
 mod block_hash;
 mod bls381;
 mod bn254;
