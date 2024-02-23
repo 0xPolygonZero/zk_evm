@@ -206,7 +206,7 @@ fn test_revert() -> Result<()> {
     // We use a modified kernel with an extra file defining a label
     // where the `checkpoint` macro from file cpu/kernel/asm/journal/journal.asm
     // is expanded.
-    let kernel_files: [&str; 150] = array::from_fn(|i| {
+    let kernel_files: [&str; 152] = array::from_fn(|i| {
         if i < KERNEL_FILES.len() {
             KERNEL_FILES[i]
         } else {

@@ -7,9 +7,10 @@ use super::assembler::{assemble, Kernel};
 use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
-pub static KERNEL_FILES: [&str; 149] = [
+pub static KERNEL_FILES: [&str; 151] = [
     "global jumped_to_0: PANIC",
     "global jumped_to_1: PANIC",
+    include_str!("asm/beacon_roots.asm"),
     include_str!("asm/bignum/add.asm"),
     include_str!("asm/bignum/addmul.asm"),
     include_str!("asm/bignum/cmp.asm"),
@@ -152,6 +153,7 @@ pub static KERNEL_FILES: [&str; 149] = [
     include_str!("asm/transactions/type_0.asm"),
     include_str!("asm/transactions/type_1.asm"),
     include_str!("asm/transactions/type_2.asm"),
+    include_str!("asm/transactions/type_3.asm"),
     include_str!("asm/util/assertions.asm"),
     include_str!("asm/util/basic_macros.asm"),
     include_str!("asm/util/keccak.asm"),
