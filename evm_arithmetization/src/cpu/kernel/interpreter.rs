@@ -125,7 +125,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 
             interpreter.run();
 
-            log::debug!("jdt = {:?}", interpreter.jumpdest_table);
+            log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);
 
             interpreter
                 .generation_state
@@ -655,7 +655,7 @@ impl<F: Field> Interpreter<F> {
         KERNEL.offset_label(self.generation_state.registers.program_counter)
     }
 
-    fn get_jumpdest_bit(&self, offset: usize) -> U256 {
+    pub(crate) fn get_jumpdest_bit(&self, offset: usize) -> U256 {
         if self.generation_state.memory.contexts[self.context()].segments
             [Segment::JumpdestBits.unscale()]
         .content

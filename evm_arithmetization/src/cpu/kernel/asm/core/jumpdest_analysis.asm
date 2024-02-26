@@ -277,13 +277,16 @@ global write_table_if_jumpdest:
     // pos 0102030405060708091011121314151617181920212223242526272829303132
     PUSH 0x8080808080808080808080808080808080808080808080808080808080808080
     AND
-    %jump_neq_const(0x8080808080808080808080808080808080808080808080808080808080808080, return_pop_opcode)
+    // If we received a proof it MUST be valid or we abort immediately. This
+    // is especially important for non-jumpdest proofs. Otherwise a malicious
+    // prover might mark a valid jumpdest as invalid by providing an invalid proof
+    // that makes verify_non_jumpdest return prematurely.
+    %assert_eq_const(0x8080808080808080808080808080808080808080808080808080808080808080)
     POP
     %add_const(32)
 
     // check the remaining path
     %jump(verify_path_and_write_jumpdest_table)
-return_pop_opcode:
     POP
 return:
     // stack: proof_prefix_addr, ctx, jumpdest, retdest
@@ -340,5 +343,31 @@ check_proof:
 %macro jumpdest_analysis
     %stack (ctx, code_len) -> (ctx, code_len, %%after)
     %jump(jumpdest_analysis)
+%%after:
+%endmacro
+
+// Non-deterministically find the closest opcode to addr
+// and call write_table_if_jumpdest so that `@SEGMENT_JUMPDEST_BITS`
+// will contain a 0 if and only if addr is not a jumpdest
+// stack: addr, retdest
+// stack: (empty)
+global verify_non_jumpdest:
+    // stack: addr, retdest
+    GET_CONTEXT
+    SWAP1
+    // stack: addr, ctx
+    PROVER_INPUT(jumpdest_table::non_jumpdest_proof)
+    // stack: proof, addr, ctx,
+    // Check that proof <= addr as otherwise it allows
+    // a malicious prover to leave `@SEGMENT_JUMPDEST_BITS` as 0
+    // at position addr while it shouldn't.
+    DUP2 DUP2
+    %assert_le
+    %write_table_if_jumpdest
+    JUMP
+
+%macro verify_non_jumpdest
+    %stack (addr) -> (addr, %%after)
+    %jump(verify_non_jumpdest)
 %%after:
 %endmacro
