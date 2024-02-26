@@ -13,7 +13,7 @@ keywords.workspace = true
 ethereum-types = { workspace = true }
 log = { workspace = true }
 paste = "1.0.14"
-plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "710225c9e0ac5822b2965ce74951cf000bbb8a2c" }
+plonky2 = { workspace = true }
 serde = { workspace = true }
 
 # Local dependencies

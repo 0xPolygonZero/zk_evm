@@ -1,6 +1,7 @@
 //! Utilities and types for working with Ethereum partial tries.
 //!
-//! While there are other Ethereum trie libraries (such as [eth_trie](https://docs.rs/eth_trie/0.1.0/eth_trie), these libraries are not a good fit if:
+//! While there are other Ethereum trie libraries (such as [eth_trie](https://docs.rs/eth_trie/0.1.0/eth_trie)),
+//! these libraries are not a good fit if:
 //! - You only need a portion of an existing larger trie.
 //! - You need this partial trie to produce the same hash as the full trie.
 //!
@@ -11,13 +12,17 @@
 //! hash of the node it replaces.
 
 #![allow(incomplete_features)]
+#![deny(rustdoc::broken_intra_doc_links)]
+#![deny(missing_debug_implementations)]
+#![deny(missing_docs)]
 
 pub mod nibbles;
 pub mod partial_trie;
+pub mod special_query;
 mod trie_hashing;
 pub mod trie_ops;
 pub mod trie_subsets;
-mod utils;
+pub mod utils;
 
 #[cfg(feature = "trie_debug")]
 pub mod debug_tools;

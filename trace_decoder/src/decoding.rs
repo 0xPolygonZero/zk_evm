@@ -20,8 +20,7 @@ use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites, TxnMetaState},
     types::{
         HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, OtherBlockData, TrieRootHash,
-        TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED, EMPTY_TRIE_HASH,
-        ZERO_STORAGE_SLOT_VAL_RLPED,
+        TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, update_val_if_some},
 };
@@ -361,20 +360,35 @@ impl ProcessedBlockTrace {
         withdrawals: Vec<(Address, U256)>,
         dummies_already_added: bool,
     ) -> TraceParsingResult<()> {
+        let withdrawals_with_hashed_addrs_iter = withdrawals
+            .iter()
+            .map(|(addr, v)| (*addr, hash(addr.as_bytes()), *v));
+
         match dummies_already_added {
             // If we have no actual dummy proofs, then we create one and append it to the
             // end of the block.
             false => {
-                // Guaranteed to have a real txn.
-                let txn_idx_of_dummy_entry =
-                    txn_ir.last().unwrap().txn_number_before.low_u64() as usize + 1;
+                // TODO: Decide if we want this allocation...
+                // To avoid double hashing the addrs, but I don't know if the extra `Vec`
+                // allocation is worth it.
+                let withdrawals_with_hashed_addrs: Vec<_> =
+                    withdrawals_with_hashed_addrs_iter.collect();
 
-                // Dummy state will be the state after the final txn.
-                let mut withdrawal_dummy =
-                    create_dummy_gen_input(other_data, extra_data, final_trie_state);
+                // Dummy state will be the state after the final txn. Also need to include the
+                // account nodes that were accessed by the withdrawals.
+                let withdrawal_addrs = withdrawals_with_hashed_addrs
+                    .iter()
+                    .cloned()
+                    .map(|(_, h_addr, _)| h_addr);
+                let mut withdrawal_dummy = create_dummy_gen_input_with_state_addrs_accessed(
+                    other_data,
+                    extra_data,
+                    final_trie_state,
+                    withdrawal_addrs,
+                )?;
 
                 Self::update_trie_state_from_withdrawals(
-                    &withdrawals,
+                    withdrawals_with_hashed_addrs,
                     &mut final_trie_state.state,
                 )?;
 
@@ -387,7 +401,7 @@ impl ProcessedBlockTrace {
             }
             true => {
                 Self::update_trie_state_from_withdrawals(
-                    &withdrawals,
+                    withdrawals_with_hashed_addrs_iter,
                     &mut final_trie_state.state,
                 )?;
 
@@ -404,22 +418,21 @@ impl ProcessedBlockTrace {
     /// Withdrawals update balances in the account trie, so we need to update
     /// our local trie state.
     fn update_trie_state_from_withdrawals<'a>(
-        withdrawals: impl IntoIterator<Item = &'a (Address, U256)> + 'a,
+        withdrawals: impl IntoIterator<Item = (Address, HashedAccountAddr, U256)> + 'a,
         state: &mut HashedPartialTrie,
     ) -> TraceParsingResult<()> {
-        for (addr, amt) in withdrawals {
-            let h_addr = hash(addr.as_bytes());
+        for (addr, h_addr, amt) in withdrawals {
             let h_addr_nibs = Nibbles::from_h256_be(h_addr);
 
             let acc_bytes =
                 state
                     .get(h_addr_nibs)
                     .ok_or(TraceParsingError::MissingWithdrawalAccount(
-                        *addr, h_addr, *amt,
+                        addr, h_addr, amt,
                     ))?;
             let mut acc_data = account_from_rlped_bytes(acc_bytes)?;
 
-            acc_data.balance += *amt;
+            acc_data.balance += amt;
 
             state.insert(h_addr_nibs, rlp::encode(&acc_data).to_vec());
         }
@@ -486,12 +499,37 @@ fn create_dummy_gen_input(
     extra_data: &ExtraBlockData,
     final_tries: &PartialTrieState,
 ) -> TxnProofGenIR {
-    let tries = create_dummy_proof_trie_inputs(final_tries);
+    let sub_tries = create_dummy_proof_trie_inputs(
+        final_tries,
+        create_fully_hashed_out_sub_partial_trie(&final_tries.state),
+    );
+    create_dummy_gen_input_common(other_data, extra_data, sub_tries)
+}
 
+fn create_dummy_gen_input_with_state_addrs_accessed(
+    other_data: &OtherBlockData,
+    extra_data: &ExtraBlockData,
+    final_tries: &PartialTrieState,
+    account_addrs_accessed: impl Iterator<Item = HashedAccountAddr>,
+) -> TraceParsingResult<TxnProofGenIR> {
+    let sub_tries = create_dummy_proof_trie_inputs(
+        final_tries,
+        create_minimal_state_partial_trie(&final_tries.state, account_addrs_accessed)?,
+    );
+    Ok(create_dummy_gen_input_common(
+        other_data, extra_data, sub_tries,
+    ))
+}
+
+fn create_dummy_gen_input_common(
+    other_data: &OtherBlockData,
+    extra_data: &ExtraBlockData,
+    sub_tries: TrieInputs,
+) -> GenerationInputs {
     let trie_roots_after = TrieRoots {
-        state_root: tries.state_trie.hash(),
-        transactions_root: tries.transactions_trie.hash(),
-        receipts_root: tries.receipts_trie.hash(),
+        state_root: sub_tries.state_trie.hash(),
+        transactions_root: sub_tries.transactions_trie.hash(),
+        receipts_root: sub_tries.receipts_trie.hash(),
     };
 
     // Sanity checks
@@ -506,7 +544,7 @@ fn create_dummy_gen_input(
 
     GenerationInputs {
         signed_txn: None,
-        tries,
+        tries: sub_tries,
         trie_roots_after,
         checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
         block_metadata: other_data.b_data.b_meta.clone(),
@@ -519,17 +557,11 @@ fn create_dummy_gen_input(
     }
 }
 
-impl TxnMetaState {
-    fn txn_bytes(&self) -> Vec<u8> {
-        match self.txn_bytes.as_ref() {
-            Some(v) => v.clone(),
-            None => Vec::default(),
-        }
-    }
-}
-
-fn create_dummy_proof_trie_inputs(final_trie_state: &PartialTrieState) -> TrieInputs {
-    let partial_sub_storage_tries: Vec<_> = final_trie_state
+fn create_dummy_proof_trie_inputs(
+    final_tries_at_end_of_block: &PartialTrieState,
+    state_trie: HashedPartialTrie,
+) -> TrieInputs {
+    let partial_sub_storage_tries: Vec<_> = final_tries_at_end_of_block
         .storage
         .iter()
         .map(|(hashed_acc_addr, s_trie)| {
@@ -541,9 +573,13 @@ fn create_dummy_proof_trie_inputs(final_trie_state: &PartialTrieState) -> TrieIn
         .collect();
 
     TrieInputs {
-        state_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.state),
-        transactions_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.txn),
-        receipts_trie: create_fully_hashed_out_sub_partial_trie(&final_trie_state.receipt),
+        state_trie,
+        transactions_trie: create_fully_hashed_out_sub_partial_trie(
+            &final_tries_at_end_of_block.txn,
+        ),
+        receipts_trie: create_fully_hashed_out_sub_partial_trie(
+            &final_tries_at_end_of_block.receipt,
+        ),
         storage_tries: partial_sub_storage_tries,
     }
 }
@@ -604,4 +640,13 @@ fn create_trie_subset_wrapped(
 fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {
     rlp::decode(bytes)
         .map_err(|err| TraceParsingError::AccountDecode(hex::encode(bytes), err.to_string()))
+}
+
+impl TxnMetaState {
+    fn txn_bytes(&self) -> Vec<u8> {
+        match self.txn_bytes.as_ref() {
+            Some(v) => v.clone(),
+            None => Vec::default(),
+        }
+    }
 }
