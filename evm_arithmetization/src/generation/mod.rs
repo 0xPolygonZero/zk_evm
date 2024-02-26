@@ -20,7 +20,7 @@ use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::{self, Interpreter, InterpreterMemOpKind};
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::GenerationState;
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
@@ -365,8 +365,12 @@ impl<'a, F: Field> State<'a, F> {
     /// Returns the value stored at address `address` in a `State`.
     pub(crate) fn get_from_memory(&mut self, address: MemoryAddress) -> U256 {
         match self {
-            Self::Generation(state) => state.memory.get(address, false, &HashMap::default()),
-            Self::Interpreter(interpreter) => interpreter.generation_state.memory.get(
+            Self::Generation(state) => {
+                state
+                    .memory
+                    .get_with_init(address, false, &HashMap::default())
+            }
+            Self::Interpreter(interpreter) => interpreter.generation_state.memory.get_with_init(
                 address,
                 true,
                 &interpreter.preinitialized_segments,
@@ -465,13 +469,10 @@ impl<'a, F: Field> State<'a, F> {
 }
 
 /// Simulates a CPU. It only generates the traces if the `State` is a
-/// `GenerationState`. Otherwise, it simply simulates all ooperations.
-pub(crate) fn run_cpu<F: Field>(
-    any_state: &mut State<F>,
-    is_generation: bool,
-) -> anyhow::Result<()> {
+/// `GenerationState`. Otherwise, it simply simulates all operations.
+pub(crate) fn run_cpu<F: Field>(any_state: &mut State<F>) -> anyhow::Result<()> {
     let halt_offsets = match any_state {
-        State::Generation(state) => vec![KERNEL.global_labels["halt"]],
+        State::Generation(_state) => vec![KERNEL.global_labels["halt"]],
         State::Interpreter(interpreter) => interpreter.halt_offsets.clone(),
     };
 
@@ -489,9 +490,8 @@ pub(crate) fn run_cpu<F: Field>(
                     return Ok(());
                 }
             } else {
-                if is_generation {
-                    log::info!("CPU halted after {} cycles", any_state.get_clock());
-                }
+                log::info!("CPU halted after {} cycles", any_state.get_clock());
+
                 return Ok(());
             }
         }
@@ -499,12 +499,10 @@ pub(crate) fn run_cpu<F: Field>(
         transition(any_state)?;
         any_state.incr_interpreter_clock();
     }
-
-    Ok(())
 }
 
 fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
-    run_cpu(&mut State::Generation(state), true)?;
+    run_cpu(&mut State::Generation(state))?;
 
     let pc = state.registers.program_counter;
     // Padding

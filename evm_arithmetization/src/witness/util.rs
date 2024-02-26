@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::RandomState;
 
 use ethereum_types::U256;
 use plonky2::field::types::Field;
@@ -44,7 +43,7 @@ pub(crate) fn stack_peek<F: Field>(
         return Ok(state.registers.stack_top);
     }
 
-    Ok(state.memory.get(
+    Ok(state.memory.get_with_init(
         MemoryAddress::new(
             state.registers.context,
             Segment::Stack,
@@ -61,10 +60,10 @@ pub(crate) fn current_context_peek<F: Field>(
     segment: Segment,
     virt: usize,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> U256 {
     let context = state.registers.context;
-    state.memory.get(
+    state.memory.get_with_init(
         MemoryAddress::new(context, segment, virt),
         is_interpreter,
         preinitialized_segments,
@@ -122,11 +121,11 @@ pub(crate) fn mem_read_with_log<F: Field>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (U256, MemoryOp) {
     let val = state
         .memory
-        .get(address, is_interpreter, preinitialized_segments);
+        .get_with_init(address, is_interpreter, preinitialized_segments);
     let op = MemoryOp::new(
         channel,
         state.traces.clock(),
@@ -157,7 +156,7 @@ pub(crate) fn mem_read_code_with_log_and_fill<F: Field>(
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (u8, MemoryOp) {
     let (val, op) = mem_read_with_log(
         MemoryChannel::Code,
@@ -179,7 +178,7 @@ pub(crate) fn mem_read_gp_with_log_and_fill<F: Field>(
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (U256, MemoryOp) {
     let (val, op) = mem_read_with_log(
         MemoryChannel::GeneralPurpose(n),

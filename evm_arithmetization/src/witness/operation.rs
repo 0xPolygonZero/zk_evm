@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::RandomState;
 
 use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
@@ -138,7 +137,7 @@ pub(crate) fn generate_keccak_general<F: Field>(
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> Result<(), ProgramError> {
     let [(addr, _), (len, log_in1)] = stack_pop_with_log_and_fill::<2, _>(state, &mut row)?;
     let len = u256_to_usize(len)?;
@@ -152,7 +151,7 @@ pub(crate) fn generate_keccak_general<F: Field>(
             };
             let val = state
                 .memory
-                .get(address, is_interpreter, preinitialized_segments);
+                .get_with_init(address, is_interpreter, preinitialized_segments);
             val.low_u32() as u8
         })
         .collect_vec();
@@ -231,7 +230,7 @@ pub(crate) fn generate_jump<F: Field>(
 
     if is_jumpdest_analysis {
         match state {
-            State::Generation(state) => {
+            State::Generation(_state) => {
                 panic!("Cannot carry out jumpdest analysis with a `GenerationState.")
             }
             State::Interpreter(interpreter) => {
@@ -304,13 +303,18 @@ pub(crate) fn generate_jumpi<F: Field>(
         let dst: u32 = dst
             .try_into()
             .map_err(|_| ProgramError::InvalidJumpiDestination)?;
-        let is_kernel = state.get_registers().is_kernel;
-        if is_jumpdest_analysis && !is_kernel {
+
+        if is_jumpdest_analysis {
             match state {
-                State::Generation(state) => {
+                State::Generation(_state) => {
                     panic!("Cannot carry out jumpdest analysis with a `GenerationState`.")
                 }
-                State::Interpreter(interpreter) => interpreter.add_jumpdest_offset(dst as usize),
+                State::Interpreter(interpreter) => {
+                    let is_kernel = interpreter.generation_state.registers.is_kernel;
+                    if !is_kernel {
+                        interpreter.add_jumpdest_offset(dst as usize)
+                    }
+                }
             }
         } else {
             row.general.jumps_mut().should_jump = F::ONE;
@@ -523,7 +527,7 @@ pub(crate) fn generate_push<F: Field>(
         .map(|i| {
             state
                 .memory
-                .get(
+                .get_with_init(
                     MemoryAddress {
                         virt: base_address.virt + i,
                         ..base_address
@@ -803,7 +807,9 @@ pub(crate) fn generate_syscall<F: Field>(
             // Even though we might be in the interpreter, `Code` is not part of the
             // preinitialized segments, so we don't need to carry out the additional checks
             // when get the value from memory.
-            let val = state.memory.get(address, false, &HashMap::default());
+            let val = state
+                .memory
+                .get_with_init(address, false, &HashMap::default());
             val.low_u32() as u8
         })
         .collect_vec();
@@ -907,7 +913,7 @@ pub(crate) fn generate_mload_general<F: Field>(
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> Result<(), ProgramError> {
     let [(addr, _)] = stack_pop_with_log_and_fill::<1, _>(state, &mut row)?;
 
@@ -943,7 +949,7 @@ pub(crate) fn generate_mload_32bytes<F: Field>(
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> Result<(), ProgramError> {
     let [(addr, _), (len, log_in1)] = stack_pop_with_log_and_fill::<2, _>(state, &mut row)?;
     let len = u256_to_usize(len)?;
@@ -966,7 +972,7 @@ pub(crate) fn generate_mload_32bytes<F: Field>(
             };
             let val = state
                 .memory
-                .get(address, is_interpreter, preinitialized_segments);
+                .get_with_init(address, is_interpreter, preinitialized_segments);
             val.low_u32() as u8
         })
         .collect_vec();
@@ -1067,7 +1073,9 @@ pub(crate) fn generate_exception<F: Field>(
             // Even though we might be in the interpreter, `Code` is not part of the
             // preinitialized segments, so we don't need to carry out the additional checks
             // when get the value from memory.
-            let val = state.memory.get(address, false, &HashMap::default());
+            let val = state
+                .memory
+                .get_with_init(address, false, &HashMap::default());
             val.low_u32() as u8
         })
         .collect_vec();
@@ -1094,7 +1102,9 @@ pub(crate) fn generate_exception<F: Field>(
     // Even though we might be in the interpreter, `Code` is not part of the
     // preinitialized segments, so we don't need to carry out the additional checks
     // when get the value from memory.
-    let opcode = state.memory.get(address, false, &HashMap::default());
+    let opcode = state
+        .memory
+        .get_with_init(address, false, &HashMap::default());
 
     // `ArithmeticStark` range checks `mem_channels[0]`, which contains
     // the top of the stack, `mem_channels[1]`, which contains the new PC,

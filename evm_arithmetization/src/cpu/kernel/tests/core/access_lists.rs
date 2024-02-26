@@ -28,7 +28,7 @@ fn test_init_access_lists() -> Result<()> {
 
     let acc_addr_list: Vec<U256> = (0..2)
         .map(|i| {
-            interpreter.generation_state.memory.get(
+            interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new(0, Segment::AccessedAddresses, i),
                 false,
                 &HashMap::default(),
@@ -42,7 +42,7 @@ fn test_init_access_lists() -> Result<()> {
 
     let acc_storage_keys: Vec<U256> = (0..4)
         .map(|i| {
-            interpreter.generation_state.memory.get(
+            interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new(0, Segment::AccessedStorageKeys, i),
                 false,
                 &HashMap::default(),
@@ -113,7 +113,7 @@ fn test_insert_address() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[U256::one()]);
     assert_eq!(
-        interpreter.generation_state.memory.get(
+        interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
             false,
             &HashMap::default(),
@@ -168,7 +168,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
         interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::zero());
         assert_eq!(
-            interpreter.generation_state.memory.get(
+            interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
                 false,
                 &HashMap::default(),
@@ -185,7 +185,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[U256::one()]);
     assert_eq!(
-        interpreter.generation_state.memory.get(
+        interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
             false,
             &HashMap::default(),
@@ -193,7 +193,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
         U256::from(offset + 2 * (n + 2))
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(
+        interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new(0, AccessedAddresses, 2 * (n + 1)),
             false,
             &HashMap::default(),
@@ -257,7 +257,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         assert_eq!(interpreter.pop().unwrap(), U256::zero());
         assert_eq!(interpreter.pop().unwrap(), value);
         assert_eq!(
-            interpreter.generation_state.memory.get(
+            interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
                 false,
                 &HashMap::default(),
@@ -279,7 +279,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         &[storage_key_not_in_list.2, U256::one()]
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(
+        interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
             false,
             &HashMap::default()
@@ -287,7 +287,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         U256::from(offset + 4 * (n + 2))
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(
+        interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new(0, AccessedStorageKeys, 4 * (n + 1)),
             false,
             &HashMap::default(),
@@ -295,7 +295,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         U256::from(storage_key_not_in_list.0 .0.as_slice())
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(
+        interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new(0, AccessedStorageKeys, 4 * (n + 1) + 1),
             false,
             &HashMap::default()
@@ -303,7 +303,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         storage_key_not_in_list.1
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(
+        interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new(0, AccessedStorageKeys, 4 * (n + 1) + 2),
             false,
             &HashMap::default()

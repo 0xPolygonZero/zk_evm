@@ -9,7 +9,6 @@ use super::util::fill_channel_with_value;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::kernel::interpreter::InterpreterMemOpKind;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MAX_USER_STACK_SIZE,
     MIGHT_OVERFLOW, STACK_BEHAVIORS,
@@ -266,7 +265,7 @@ fn perform_op<F: Field>(
     row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     let (op, is_interpreter, preinitialized_segments, is_jumpdest_analysis) = match any_state {
-        State::Generation(state) => (op, false, HashMap::default(), false),
+        State::Generation(_state) => (op, false, HashMap::default(), false),
         State::Interpreter(interpreter) => {
             // Jumpdest analysis is performed natively by the interpreter and not
             // using the non-deterministic Kernel assembly code.
@@ -353,7 +352,7 @@ fn perform_op<F: Field>(
         Operation::MstoreGeneral => generate_mstore_general(state, row)?,
     };
     match any_state {
-        State::Generation(state) => {}
+        State::Generation(_state) => {}
         State::Interpreter(interpreter) => {
             interpreter.clear_traces();
             interpreter.opcode_count[opcode as usize] += 1;
@@ -566,9 +565,10 @@ fn handle_error<F: Field>(any_state: &mut State<F>, err: ProgramError) -> anyhow
         ),
     };
     let (row, _) = base_row(state);
-    generate_exception(exc_code, state, row, is_generation);
+    generate_exception(exc_code, state, row, is_generation)
+        .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
     match any_state {
-        State::Generation(state) => {}
+        State::Generation(_state) => {}
         // If we are in the interpreter, we do not need all the traces. We only need the memory
         // traces of the current operation.
         State::Interpreter(interpreter) => interpreter.clear_traces(),

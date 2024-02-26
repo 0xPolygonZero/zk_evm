@@ -266,7 +266,13 @@ pub(crate) fn get_trie_helper<N: PartialTrie>(
     read_value: fn(&MemoryState, &MemoryValues) -> Result<Vec<u8>, ProgramError>,
     prefix: Nibbles,
 ) -> Result<Node<N>, ProgramError> {
-    let load = |offset| memory.contexts[0].segments[Segment::TrieData as usize].content[offset];
+    let load = |offset| {
+        memory.get(MemoryAddress {
+            context: 0,
+            segment: Segment::TrieData.unscale(),
+            virt: offset,
+        })
+    };
     let load_slice_from = |init_offset| {
         &memory.contexts[0].segments[Segment::TrieData.unscale()].content[init_offset..]
     };
