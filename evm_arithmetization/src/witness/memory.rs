@@ -193,13 +193,9 @@ impl MemoryState {
         }
 
         let segments = Segment::all();
-        let segment = segments.get(address.segment);
-        if segment.is_none() {
-            return None;
-        }
-        let segment = *segment.expect("The segment exists, or we would have returned before.");
+        let segment = segments.get(address.segment)?;
 
-        if let Some(constant) = Segment::constant(&segment, address.virt) {
+        if let Some(constant) = Segment::constant(segment, address.virt) {
             return Some(constant);
         }
 

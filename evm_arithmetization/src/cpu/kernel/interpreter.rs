@@ -335,10 +335,9 @@ impl<F: Field> Interpreter<F> {
                         if !self
                             .preinitialized_segments
                             .contains_key(&Segment::all()[address.segment])
+                            && !value.is_zero()
                         {
-                            if !value.is_zero() {
-                                return Err(anyhow!("The initial value {:?} at address {:?} should be zero, because it is not preinitialized.", value, address));
-                            }
+                            return Err(anyhow!("The initial value {:?} at address {:?} should be zero, because it is not preinitialized.", value, address));
                         }
                         self.generation_state.memory.set(address, value);
                     }
