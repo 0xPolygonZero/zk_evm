@@ -30,7 +30,8 @@ use std::{fmt::Display, ops::Deref};
 
 use ethereum_types::H256;
 
-use super::common::{get_key_piece_from_node, get_segment_from_node_and_key_piece, NodePath};
+use super::common::get_key_piece_from_node;
+use crate::utils::{get_segment_from_node_and_key_piece, TriePath};
 use crate::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
@@ -38,7 +39,10 @@ use crate::{
 };
 
 #[derive(Debug, Eq, PartialEq)]
+/// The difference between two Tries, represented as the highest
+/// point of a structural divergence.
 pub struct TrieDiff {
+    /// The highest point of structural divergence.
     pub latest_diff_res: Option<DiffPoint>,
     // TODO: Later add a second pass for finding diffs from the bottom up (`earliest_diff_res`).
 }
@@ -77,10 +81,15 @@ impl DiffDetectionState {
 /// A point (node) between the two tries where the children differ.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct DiffPoint {
+    /// The depth of the point in both tries.
     pub depth: usize,
-    pub path: NodePath,
+    /// The path of the point in both tries.
+    pub path: TriePath,
+    /// The node key in both tries.
     pub key: Nibbles,
+    /// The node info in the first trie.
     pub a_info: NodeInfo,
+    /// The node info in the second trie.
     pub b_info: NodeInfo,
 }
 
@@ -89,7 +98,7 @@ impl DiffPoint {
         child_a: &HashedPartialTrie,
         child_b: &HashedPartialTrie,
         parent_k: Nibbles,
-        path: NodePath,
+        path: TriePath,
     ) -> Self {
         let a_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_a));
         let b_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_b));
@@ -214,7 +223,7 @@ impl DepthNodeDiffState {
         parent_k: &Nibbles,
         child_a: &HashedPartialTrie,
         child_b: &HashedPartialTrie,
-        path: NodePath,
+        path: TriePath,
     ) {
         if field
             .as_ref()
@@ -234,7 +243,7 @@ struct DepthDiffPerCallState<'a> {
     curr_depth: usize,
 
     // Horribly inefficient, but these are debug tools, so I think we get a pass.
-    curr_path: NodePath,
+    curr_path: TriePath,
 }
 
 impl<'a> DepthDiffPerCallState<'a> {
@@ -251,7 +260,7 @@ impl<'a> DepthDiffPerCallState<'a> {
             b,
             curr_key,
             curr_depth,
-            curr_path: NodePath::default(),
+            curr_path: TriePath::default(),
         }
     }
 
@@ -403,7 +412,7 @@ fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_diff_between_tries, DiffPoint, NodeInfo, NodePath};
+    use super::{create_diff_between_tries, DiffPoint, NodeInfo, TriePath};
     use crate::{
         nibbles::Nibbles,
         partial_trie::{HashedPartialTrie, PartialTrie},
@@ -439,7 +448,7 @@ mod tests {
 
         let expected = DiffPoint {
             depth: 0,
-            path: NodePath(vec![]),
+            path: TriePath(vec![]),
             key: Nibbles::default(),
             a_info: expected_a,
             b_info: expected_b,

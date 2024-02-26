@@ -1,10 +1,10 @@
-# Proof protocol decoder
+# Trace decoder
 
 A flexible protocol that clients (eg. full nodes) can use to easily generate block proofs for different chains.
 
 ## Specification
 
-Temporary [high-level overview and comparison](docs/usage_seq_diagrams.md) to what the old Edge setup used to look like. The specification itself is in the repo [here](trace_decoder/src/trace_protocol.rs).
+Temporary [high-level overview](docs/usage_seq_diagrams.md). The specification itself is in the repo [here](trace_decoder/src/trace_protocol.rs).
 
 Because processing the incoming proof protocol payload is not a resource bottleneck, the design is not worrying too much about performance. Instead, the core focus is flexibility in clients creating their own implementation, where the protocol supports multiple ways to provide different pieces of data. For example, there are multiple different formats available to provide the trie pre-images in, and the implementor can choose whichever is closest to its own internal data structures. 
 

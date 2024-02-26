@@ -54,6 +54,7 @@ pub trait PartialTrie:
     + TrieNodeIntern
     + Sized
 {
+    /// Creates a new partial trie from a node.
     fn new(n: Node<Self>) -> Self;
 
     /// Inserts a node into the trie.
@@ -111,6 +112,7 @@ pub trait PartialTrie:
 /// Part of the trait that is not really part of the public interface but
 /// implementor of other node types still need to implement.
 pub trait TrieNodeIntern {
+    /// Returns the hash of the rlp encoding of self.
     fn hash_intern(&self) -> EncodedNode;
 }
 
@@ -134,17 +136,26 @@ where
     Hash(H256),
     /// A branch node, which consists of 16 children and an optional value.
     Branch {
+        /// A slice containing the 16 children of this branch node.
         children: [WrappedNode<T>; 16],
+        /// The payload of this node.
         value: Vec<u8>,
     },
     /// An extension node, which consists of a list of nibbles and a single
     /// child.
     Extension {
+        /// The path of this extension.
         nibbles: Nibbles,
+        /// The child of this extension node.
         child: WrappedNode<T>,
     },
     /// A leaf node, which consists of a list of nibbles and a value.
-    Leaf { nibbles: Nibbles, value: Vec<u8> },
+    Leaf {
+        /// The path of this leaf node.
+        nibbles: Nibbles,
+        /// The payload of this node
+        value: Vec<u8>,
+    },
 }
 
 impl<N: PartialTrie> Eq for Node<N> {}

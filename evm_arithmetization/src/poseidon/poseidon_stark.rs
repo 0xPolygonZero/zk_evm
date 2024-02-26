@@ -238,8 +238,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         }
 
         // Partial rounds.
-        <F as Poseidon>::partial_first_constant_layer_packed(&mut state);
-        state = <F as Poseidon>::mds_partial_layer_packed_init(&state);
+        <F as Poseidon>::partial_first_constant_layer_packed_field(&mut state);
+        state = <F as Poseidon>::mds_partial_layer_init_packed_field(&state);
         for r in 0..(N_PARTIAL_ROUNDS - 1) {
             let sbox_in = lv.partial_sbox[reg_partial_sbox(r)];
             yield_constr.constraint(state[0] - sbox_in);
