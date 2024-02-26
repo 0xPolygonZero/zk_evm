@@ -233,7 +233,8 @@ impl MemoryState {
                     && preinitialized_segments.contains_key(&segment)
                     && offset < preinitialized_segments.get(&segment).unwrap().content.len()
                 {
-                    preinitialized_segments.get(&segment).unwrap().content[offset].unwrap()
+                    preinitialized_segments.get(&segment).unwrap().content[offset]
+                        .expect("We checked that the offset is not out of bounds.")
                 } else {
                     0.into()
                 }

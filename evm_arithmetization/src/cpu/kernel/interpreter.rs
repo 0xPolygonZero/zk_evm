@@ -531,18 +531,6 @@ impl<F: Field> Interpreter<F> {
         self.set_memory_segment_bytes(Segment::RlpRaw, rlp)
     }
 
-    /// Clears all traces of the interpreter's `GenerationState` except for
-    /// memory_ops, which are necessary to apply operations.
-    pub(crate) fn clear_traces(&mut self) {
-        self.generation_state.traces.arithmetic_ops = vec![];
-        self.generation_state.traces.arithmetic_ops = vec![];
-        self.generation_state.traces.byte_packing_ops = vec![];
-        self.generation_state.traces.cpu = vec![];
-        self.generation_state.traces.logic_ops = vec![];
-        self.generation_state.traces.keccak_inputs = vec![];
-        self.generation_state.traces.keccak_sponge_ops = vec![];
-    }
-
     pub(crate) fn set_code(&mut self, context: usize, code: Vec<u8>) {
         assert_ne!(context, 0, "Can't modify kernel code.");
         while self.generation_state.memory.contexts.len() <= context {

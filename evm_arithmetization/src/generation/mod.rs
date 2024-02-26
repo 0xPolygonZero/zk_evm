@@ -516,7 +516,7 @@ fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> 
 
     loop {
         // If our trace length is a power of 2, stop.
-        state.traces.push_cpu(row);
+        state.traces.push_cpu(true, row);
         row.clock += F::ONE;
         if state.traces.clock().is_power_of_two() {
             break;
