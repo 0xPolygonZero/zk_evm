@@ -363,16 +363,31 @@ impl Nibbles {
     /// Appends `Nibbles` to the front.
     ///
     /// # Panics
-    /// Panics if appending the `Nibble` causes an overflow (total nibbles >
+    /// Panics if appending the `Nibbles` causes an overflow (total nibbles >
     /// 64).
     pub fn push_nibbles_front(&mut self, n: &Self) {
         let new_count = self.count + n.count;
-        assert!(new_count <= 64);
+        self.nibbles_append_safety_asserts(new_count);
 
         let shift_amt = 4 * self.count;
 
         self.count = new_count;
         self.packed |= n.packed << shift_amt;
+    }
+
+    /// Appends `Nibbles` to the back.
+    ///
+    /// # Panics
+    /// Panics if appending the `Nibbles` causes an overflow (total nibbles >
+    /// 64).
+    pub fn push_nibbles_back(&mut self, n: &Self) {
+        let new_count = self.count + n.count;
+        self.nibbles_append_safety_asserts(new_count);
+
+        let shift_amt = 4 * n.count;
+
+        self.count = new_count;
+        self.packed = (self.packed << shift_amt) | n.packed;
     }
 
     /// Gets the nibbles at the range specified, where `0` is the next nibble.
@@ -765,6 +780,10 @@ impl Nibbles {
         assert!(n < 16);
     }
 
+    fn nibbles_append_safety_asserts(&self, new_count: usize) {
+        assert!(new_count <= 64);
+    }
+
     // TODO: REMOVE BEFORE NEXT CRATE VERSION! THIS IS A TEMP HACK!
     /// Converts to u256 returning an error if not possible.
     pub fn try_into_u256(&self) -> Result<U256, String> {
@@ -786,6 +805,9 @@ mod tests {
 
     use super::{Nibble, Nibbles, ToNibbles};
     use crate::nibbles::FromHexPrefixError;
+
+    const LONG_ZERO_NIBS_STR_LEN_63: &str =
+        "0x000000000000000000000000000000000000000000000000000000000000000";
 
     #[test]
     fn get_nibble_works() {
@@ -896,6 +918,69 @@ mod tests {
 
         assert_eq!(nib, expected_orig_after_pop);
         assert_eq!(res, expected_resulting_nibbles);
+    }
+
+    #[test]
+    fn push_nibble_front_works() {
+        test_and_assert_nib_push_func(Nibbles::default(), 0x1, |n| n.push_nibble_front(0x1));
+        test_and_assert_nib_push_func(0x1, 0x21, |n| n.push_nibble_front(0x2));
+        test_and_assert_nib_push_func(
+            Nibbles::from_str(LONG_ZERO_NIBS_STR_LEN_63).unwrap(),
+            Nibbles::from_str("0x1000000000000000000000000000000000000000000000000000000000000000")
+                .unwrap(),
+            |n| n.push_nibble_front(0x1),
+        );
+    }
+
+    #[test]
+    fn push_nibble_back_works() {
+        test_and_assert_nib_push_func(Nibbles::default(), 0x1, |n| n.push_nibble_back(0x1));
+        test_and_assert_nib_push_func(0x1, 0x12, |n| n.push_nibble_back(0x2));
+        test_and_assert_nib_push_func(
+            Nibbles::from_str(LONG_ZERO_NIBS_STR_LEN_63).unwrap(),
+            Nibbles::from_str("0x0000000000000000000000000000000000000000000000000000000000000001")
+                .unwrap(),
+            |n| n.push_nibble_back(0x1),
+        );
+    }
+
+    #[test]
+    fn push_nibbles_front_works() {
+        test_and_assert_nib_push_func(Nibbles::default(), 0x1234, |n| {
+            n.push_nibbles_front(&0x1234.into())
+        });
+        test_and_assert_nib_push_func(0x1234, 0x5671234, |n| n.push_nibbles_front(&0x567.into()));
+        test_and_assert_nib_push_func(
+            Nibbles::from_str(LONG_ZERO_NIBS_STR_LEN_63).unwrap(),
+            Nibbles::from_str("0x1000000000000000000000000000000000000000000000000000000000000000")
+                .unwrap(),
+            |n| n.push_nibbles_front(&0x1.into()),
+        );
+    }
+
+    #[test]
+    fn push_nibbles_back_works() {
+        test_and_assert_nib_push_func(Nibbles::default(), 0x1234, |n| {
+            n.push_nibbles_back(&0x1234.into())
+        });
+        test_and_assert_nib_push_func(0x1234, 0x1234567, |n| n.push_nibbles_back(&0x567.into()));
+        test_and_assert_nib_push_func(
+            Nibbles::from_str(LONG_ZERO_NIBS_STR_LEN_63).unwrap(),
+            Nibbles::from_str("0x0000000000000000000000000000000000000000000000000000000000000001")
+                .unwrap(),
+            |n| n.push_nibbles_back(&0x1.into()),
+        );
+    }
+
+    fn test_and_assert_nib_push_func<F: Fn(&mut Nibbles), S: Into<Nibbles>, E: Into<Nibbles>>(
+        starting_nibs: S,
+        expected: E,
+        f: F,
+    ) {
+        let mut nibs = starting_nibs.into();
+        (f)(&mut nibs);
+
+        assert_eq!(nibs, expected.into());
     }
 
     #[test]
@@ -1179,7 +1264,7 @@ mod tests {
     fn nibbles_from_h256_works() {
         assert_eq!(
             format!("{:x}", Nibbles::from_h256_be(H256::from_low_u64_be(0))),
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
         );
         assert_eq!(
             format!("{:x}", Nibbles::from_h256_be(H256::from_low_u64_be(2048))),
