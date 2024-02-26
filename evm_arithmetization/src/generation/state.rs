@@ -144,7 +144,7 @@ impl<F: Field> GenerationState<F> {
         let returndata_offset = ContextMetadata::ReturndataSize.unscale();
         let returndata_size_addr =
             MemoryAddress::new(ctx, Segment::ContextMetadata, returndata_offset);
-        let returndata_size = u256_to_usize(self.memory.get(
+        let returndata_size = u256_to_usize(self.memory.get_with_init(
             returndata_size_addr,
             false,
             &HashMap::default(),

@@ -9,7 +9,6 @@ use super::util::fill_channel_with_value;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::kernel::interpreter::InterpreterMemOpKind;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MAX_USER_STACK_SIZE,
     MIGHT_OVERFLOW, STACK_BEHAVIORS,
@@ -265,8 +264,8 @@ fn perform_op<F: Field>(
     opcode: u8,
     row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
-    let (op, is_interpreter, preinitialized_segments, is_jumpdest_analysis) = match any_state {
-        State::Generation(state) => (op, false, HashMap::default(), false),
+    let (op, is_generation, preinitialized_segments, is_jumpdest_analysis) = match any_state {
+        State::Generation(_state) => (op, true, HashMap::default(), false),
         State::Interpreter(interpreter) => {
             // Jumpdest analysis is performed natively by the interpreter and not
             // using the non-deterministic Kernel assembly code.
@@ -291,7 +290,7 @@ fn perform_op<F: Field>(
             };
             (
                 op,
-                true,
+                false,
                 interpreter.preinitialized_segments.clone(),
                 interpreter.is_jumpdest_analysis,
             )
@@ -314,47 +313,59 @@ fn perform_op<F: Field>(
 
     let state = any_state.get_mut_generation_state();
     match op {
-        Operation::Push(n) => generate_push(n, state, row)?,
-        Operation::Dup(n) => generate_dup(n, state, row)?,
-        Operation::Swap(n) => generate_swap(n, state, row)?,
-        Operation::Iszero => generate_iszero(state, row)?,
-        Operation::Not => generate_not(state, row)?,
-        Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shl) => generate_shl(state, row)?,
-        Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shr) => generate_shr(state, row)?,
-        Operation::Syscall(opcode, stack_values_read, stack_len_increased) => {
-            generate_syscall(opcode, stack_values_read, stack_len_increased, state, row)?
+        Operation::Push(n) => generate_push(n, state, row, is_generation)?,
+        Operation::Dup(n) => generate_dup(n, state, row, is_generation)?,
+        Operation::Swap(n) => generate_swap(n, state, row, is_generation)?,
+        Operation::Iszero => generate_iszero(state, row, is_generation)?,
+        Operation::Not => generate_not(state, row, is_generation)?,
+        Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shl) => {
+            generate_shl(state, row, is_generation)?
         }
-        Operation::Eq => generate_eq(state, row)?,
+        Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shr) => {
+            generate_shr(state, row, is_generation)?
+        }
+        Operation::Syscall(opcode, stack_values_read, stack_len_increased) => generate_syscall(
+            opcode,
+            stack_values_read,
+            stack_len_increased,
+            state,
+            row,
+            is_generation,
+        )?,
+        Operation::Eq => generate_eq(state, row, is_generation)?,
         Operation::BinaryLogic(binary_logic_op) => {
-            generate_binary_logic_op(binary_logic_op, state, row)?
+            generate_binary_logic_op(binary_logic_op, state, row, is_generation)?
         }
-        Operation::BinaryArithmetic(op) => generate_binary_arithmetic_op(op, state, row)?,
-        Operation::TernaryArithmetic(op) => generate_ternary_arithmetic_op(op, state, row)?,
+        Operation::BinaryArithmetic(op) => {
+            generate_binary_arithmetic_op(op, state, row, is_generation)?
+        }
+        Operation::TernaryArithmetic(op) => {
+            generate_ternary_arithmetic_op(op, state, row, is_generation)?
+        }
         Operation::KeccakGeneral => {
-            generate_keccak_general(state, row, is_interpreter, &preinitialized_segments)?
+            generate_keccak_general(state, row, is_generation, &preinitialized_segments)?
         }
-        Operation::ProverInput => generate_prover_input(state, row)?,
-        Operation::Pop => generate_pop(state, row)?,
-        Operation::Jump => generate_jump(any_state, row, is_jumpdest_analysis)?,
-        Operation::Jumpi => generate_jumpi(any_state, row, is_jumpdest_analysis)?,
-        Operation::Pc => generate_pc(state, row)?,
-        Operation::Jumpdest => generate_jumpdest(state, row)?,
-        Operation::GetContext => generate_get_context(state, row)?,
-        Operation::SetContext => generate_set_context(state, row)?,
+        Operation::ProverInput => generate_prover_input(state, row, is_generation)?,
+        Operation::Pop => generate_pop(state, row, is_generation)?,
+        Operation::Jump => generate_jump(any_state, row, is_generation, is_jumpdest_analysis)?,
+        Operation::Jumpi => generate_jumpi(any_state, row, is_generation, is_jumpdest_analysis)?,
+        Operation::Pc => generate_pc(state, row, is_generation)?,
+        Operation::Jumpdest => generate_jumpdest(state, row, is_generation)?,
+        Operation::GetContext => generate_get_context(state, row, is_generation)?,
+        Operation::SetContext => generate_set_context(state, row, is_generation)?,
         Operation::Mload32Bytes => {
-            generate_mload_32bytes(state, row, is_interpreter, &preinitialized_segments)?
+            generate_mload_32bytes(state, row, is_generation, &preinitialized_segments)?
         }
-        Operation::Mstore32Bytes(n) => generate_mstore_32bytes(n, state, row)?,
-        Operation::ExitKernel => generate_exit_kernel(state, row)?,
+        Operation::Mstore32Bytes(n) => generate_mstore_32bytes(n, state, row, is_generation)?,
+        Operation::ExitKernel => generate_exit_kernel(state, row, is_generation)?,
         Operation::MloadGeneral => {
-            generate_mload_general(state, row, is_interpreter, &preinitialized_segments)?
+            generate_mload_general(state, row, is_generation, &preinitialized_segments)?
         }
-        Operation::MstoreGeneral => generate_mstore_general(state, row)?,
+        Operation::MstoreGeneral => generate_mstore_general(state, row, is_generation)?,
     };
     match any_state {
-        State::Generation(state) => {}
+        State::Generation(_state) => {}
         State::Interpreter(interpreter) => {
-            interpreter.clear_traces();
             interpreter.opcode_count[opcode as usize] += 1;
         }
     }
@@ -552,12 +563,7 @@ pub(crate) fn final_exception<F: Field>(
     let gen_state = state.get_mut_generation_state();
 
     let (row, _) = base_row(gen_state);
-    if is_generation {
-        println!(
-            "entering exception with registers {:?}",
-            gen_state.registers
-        );
-    }
+
     generate_exception(exc_code, gen_state, row, is_generation)
         .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
 
@@ -589,13 +595,8 @@ fn handle_error<F: Field>(any_state: &mut State<F>, err: ProgramError) -> anyhow
         ),
     };
     let (row, _) = base_row(state);
-    generate_exception(exc_code, state, row, is_generation);
-    match any_state {
-        State::Generation(state) => {}
-        // If we are in the interpreter, we do not need all the traces. We only need the memory
-        // traces of the current operation.
-        State::Interpreter(interpreter) => interpreter.clear_traces(),
-    }
+    generate_exception(exc_code, state, row, is_generation)
+        .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
     any_state.apply_ops(checkpoint);
 
     Ok(())

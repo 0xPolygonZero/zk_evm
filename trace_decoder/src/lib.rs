@@ -5,7 +5,7 @@
 #![allow(unused)]
 #![allow(private_interfaces)]
 
-mod compact;
+pub mod compact;
 pub mod decoding;
 mod deserializers;
 pub mod processed_block_trace;

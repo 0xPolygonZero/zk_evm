@@ -22,7 +22,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::assembler::Kernel;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::{self, Interpreter, InterpreterMemOpKind};
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::GenerationState;
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
@@ -459,8 +459,12 @@ impl<'a, F: Field> State<'a, F> {
     /// Returns the value stored at address `address` in a `State`.
     pub(crate) fn get_from_memory(&mut self, address: MemoryAddress) -> U256 {
         match self {
-            Self::Generation(state) => state.memory.get(address, false, &HashMap::default()),
-            Self::Interpreter(interpreter) => interpreter.generation_state.memory.get(
+            Self::Generation(state) => {
+                state
+                    .memory
+                    .get_with_init(address, false, &HashMap::default())
+            }
+            Self::Interpreter(interpreter) => interpreter.generation_state.memory.get_with_init(
                 address,
                 true,
                 &interpreter.preinitialized_segments,
@@ -589,14 +593,13 @@ fn update_interpreter_final_registers<F: Field>(
 }
 
 /// Simulates a CPU. It only generates the traces if the `State` is a
-/// `GenerationState`. Otherwise, it simply simulates all ooperations.
+/// `GenerationState`. Otherwise, it simply simulates all operations.
 pub(crate) fn run_cpu<F: Field>(
     any_state: &mut State<F>,
-    is_generation: bool,
     max_cpu_len: Option<usize>,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
     let (is_generation, halt_offsets) = match any_state {
-        State::Generation(state) => (true, vec![KERNEL.global_labels["halt_final"]]),
+        State::Generation(_state) => (true, vec![KERNEL.global_labels["halt_final"]]),
         State::Interpreter(interpreter) => (false, interpreter.halt_offsets.clone()),
     };
 
@@ -644,6 +647,7 @@ pub(crate) fn run_cpu<F: Field>(
                         Some(interpreter.generation_state.memory.clone())
                     }
                 };
+                log::info!("CPU halted after {} cycles", any_state.get_clock());
                 return Ok((final_registers, final_mem));
             }
         }
@@ -657,8 +661,7 @@ fn simulate_cpu<F: Field>(
     state: &mut GenerationState<F>,
     max_cpu_len: usize,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
-    let (final_registers, mem_after) =
-        run_cpu(&mut State::Generation(state), true, Some(max_cpu_len))?;
+    let (final_registers, mem_after) = run_cpu(&mut State::Generation(state), Some(max_cpu_len))?;
 
     let pc = state.registers.program_counter;
     // Padding
@@ -672,7 +675,7 @@ fn simulate_cpu<F: Field>(
 
     loop {
         // If our trace length is a power of 2, stop.
-        state.traces.push_cpu(row);
+        state.traces.push_cpu(true, row);
         row.clock += F::ONE;
         if (state.traces.clock() - 1).is_power_of_two() {
             break;

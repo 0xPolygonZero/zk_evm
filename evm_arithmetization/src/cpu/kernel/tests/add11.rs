@@ -167,7 +167,7 @@ fn test_add11_yml() {
 
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs_and_kernel(0, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs);
 
     let route_txn_label = KERNEL.global_labels["init"];
     // Switch context and initialize memory with the data we need for the tests.
@@ -311,7 +311,7 @@ fn test_add11_yml_with_exception() {
 
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs_and_kernel(0, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs);
 
     let route_txn_label = KERNEL.global_labels["init"];
     // Switch context and initialize memory with the data we need for the tests.

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::RandomState;
 
 use ethereum_types::U256;
 use plonky2::field::types::Field;
@@ -44,7 +43,7 @@ pub(crate) fn stack_peek<F: Field>(
         return Ok(state.registers.stack_top);
     }
 
-    Ok(state.memory.get(
+    Ok(state.memory.get_with_init(
         MemoryAddress::new(
             state.registers.context,
             Segment::Stack,
@@ -61,10 +60,10 @@ pub(crate) fn current_context_peek<F: Field>(
     segment: Segment,
     virt: usize,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> U256 {
     let context = state.registers.context;
-    state.memory.get(
+    state.memory.get_with_init(
         MemoryAddress::new(context, segment, virt),
         is_interpreter,
         preinitialized_segments,
@@ -122,11 +121,11 @@ pub(crate) fn mem_read_with_log<F: Field>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (U256, MemoryOp) {
     let val = state
         .memory
-        .get(address, is_interpreter, preinitialized_segments);
+        .get_with_init(address, is_interpreter, preinitialized_segments);
     let op = MemoryOp::new(
         channel,
         state.traces.clock(),
@@ -166,7 +165,7 @@ pub(crate) fn mem_read_code_with_log_and_fill<F: Field>(
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (u8, MemoryOp) {
     let (val, op) = mem_read_with_log(
         MemoryChannel::Code,
@@ -188,7 +187,7 @@ pub(crate) fn mem_read_gp_with_log_and_fill<F: Field>(
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
     is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState, RandomState>,
+    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (U256, MemoryOp) {
     let (val, op) = mem_read_with_log(
         MemoryChannel::GeneralPurpose(n),
@@ -300,6 +299,7 @@ pub(crate) fn stack_pop_with_log_and_fill<const N: usize, F: Field>(
 
 fn xor_into_sponge<F: Field>(
     state: &mut GenerationState<F>,
+    is_generation: bool,
     sponge_state: &mut [u8; KECCAK_WIDTH_BYTES],
     block: &[u8; KECCAK_RATE_BYTES],
 ) {
@@ -307,9 +307,10 @@ fn xor_into_sponge<F: Field>(
         let range = i..KECCAK_RATE_BYTES.min(i + 32);
         let lhs = U256::from_little_endian(&sponge_state[range.clone()]);
         let rhs = U256::from_little_endian(&block[range]);
-        state
-            .traces
-            .push_logic(logic::Operation::new(logic::Op::Xor, lhs, rhs));
+        state.traces.push_logic(
+            is_generation,
+            logic::Operation::new(logic::Op::Xor, lhs, rhs),
+        );
     }
     for i in 0..KECCAK_RATE_BYTES {
         sponge_state[i] ^= block[i];
@@ -318,6 +319,7 @@ fn xor_into_sponge<F: Field>(
 
 pub(crate) fn keccak_sponge_log<F: Field>(
     state: &mut GenerationState<F>,
+    is_generation: bool,
     base_address: MemoryAddress,
     input: Vec<u8>,
 ) {
@@ -337,10 +339,15 @@ pub(crate) fn keccak_sponge_log<F: Field>(
             ));
             address.increment();
         }
-        xor_into_sponge(state, &mut sponge_state, block.try_into().unwrap());
+        xor_into_sponge(
+            state,
+            is_generation,
+            &mut sponge_state,
+            block.try_into().unwrap(),
+        );
         state
             .traces
-            .push_keccak_bytes(sponge_state, (clock - 1) * NUM_CHANNELS + 1);
+            .push_keccak_bytes(is_generation, sponge_state, (clock - 1) * NUM_CHANNELS + 1);
         keccakf_u8s(&mut sponge_state);
     }
 
@@ -364,10 +371,10 @@ pub(crate) fn keccak_sponge_log<F: Field>(
         final_block[input_blocks.remainder().len()] = 1;
         final_block[KECCAK_RATE_BYTES - 1] = 0b10000000;
     }
-    xor_into_sponge(state, &mut sponge_state, &final_block);
+    xor_into_sponge(state, is_generation, &mut sponge_state, &final_block);
     state
         .traces
-        .push_keccak_bytes(sponge_state, (clock - 1) * NUM_CHANNELS + 1);
+        .push_keccak_bytes(is_generation, sponge_state, (clock - 1) * NUM_CHANNELS + 1);
 
     state.traces.push_keccak_sponge(KeccakSpongeOp {
         base_address,
@@ -378,6 +385,7 @@ pub(crate) fn keccak_sponge_log<F: Field>(
 
 pub(crate) fn byte_packing_log<F: Field>(
     state: &mut GenerationState<F>,
+    is_generation: bool,
     base_address: MemoryAddress,
     bytes: Vec<u8>,
 ) {
@@ -395,16 +403,20 @@ pub(crate) fn byte_packing_log<F: Field>(
         address.increment();
     }
 
-    state.traces.push_byte_packing(BytePackingOp {
-        is_read: true,
-        base_address,
-        timestamp: (clock - 1) * NUM_CHANNELS + 1,
-        bytes,
-    });
+    state.traces.push_byte_packing(
+        is_generation,
+        BytePackingOp {
+            is_read: true,
+            base_address,
+            timestamp: (clock - 1) * NUM_CHANNELS + 1,
+            bytes,
+        },
+    );
 }
 
 pub(crate) fn byte_unpacking_log<F: Field>(
     state: &mut GenerationState<F>,
+    is_generation: bool,
     base_address: MemoryAddress,
     val: U256,
     len: usize,
@@ -428,10 +440,13 @@ pub(crate) fn byte_unpacking_log<F: Field>(
         address.increment();
     }
 
-    state.traces.push_byte_packing(BytePackingOp {
-        is_read: false,
-        base_address,
-        timestamp: (clock - 1) * NUM_CHANNELS + 1,
-        bytes,
-    });
+    state.traces.push_byte_packing(
+        is_generation,
+        BytePackingOp {
+            is_read: false,
+            base_address,
+            timestamp: (clock - 1) * NUM_CHANNELS + 1,
+            bytes,
+        },
+    );
 }

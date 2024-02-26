@@ -144,12 +144,70 @@ fn test_packed_verification() -> Result<()> {
         interpreter.set_code(CONTEXT, code.clone());
         interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
 
-        interpreter.run(None)?;
+        assert!(interpreter.run(None).is_err());
 
         assert!(interpreter.get_jumpdest_bits(CONTEXT).is_empty());
 
         code[i] -= 1;
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_verify_non_jumpdest() -> Result<()> {
+    // By default the interpreter will skip jumpdest analysis asm and compute
+    // the jumpdest table bits natively. We avoid that starting 1 line after
+    // performing the missing first PROVER_INPUT "by hand"
+    let verify_non_jumpdest = KERNEL.global_labels["verify_non_jumpdest"];
+    const CONTEXT: usize = 3; // arbitrary
+
+    let add = get_opcode("ADD");
+    let push2 = get_push_opcode(2);
+    let jumpdest = get_opcode("JUMPDEST");
+
+    #[rustfmt::skip]
+    let mut code: Vec<u8> = vec![
+        add,
+        jumpdest,
+        push2,
+        jumpdest, // part of PUSH2
+        jumpdest, // part of PUSH2
+        jumpdest,
+        add,
+        jumpdest,
+    ];
+    code.extend(
+        (0..32)
+            .rev()
+            .map(get_push_opcode)
+            .chain(std::iter::once(jumpdest)),
+    );
+    let code_len = code.len();
+
+    // If we add 1 to each opcode the jumpdest at position 32 is never a valid
+    // jumpdest
+    for i in 8..code_len - 1 {
+        code[i] += 1;
+        let mut interpreter: Interpreter<F> = Interpreter::new(verify_non_jumpdest, vec![]);
+        interpreter.generation_state.registers.context = CONTEXT;
+
+        interpreter.set_code(CONTEXT, code.clone());
+        code[i] -= 1;
+
+        // We check that all non jumpdests are indeed non jumpdests
+        for (j, &opcode) in code
+            .iter()
+            .enumerate()
+            .filter(|&(j, _)| j != 1 && j != 5 && j != 7)
+        {
+            interpreter.generation_state.registers.program_counter = verify_non_jumpdest;
+            interpreter.push(0xDEADBEEFu32.into());
+            interpreter.push(j.into());
+            interpreter.run(None)?;
+            assert!(interpreter.stack().is_empty());
+            assert_eq!(interpreter.get_jumpdest_bit(j), U256::zero());
+        }
+    }
     Ok(())
 }
