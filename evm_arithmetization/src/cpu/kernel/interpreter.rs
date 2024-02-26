@@ -195,6 +195,7 @@ pub(crate) fn generate_segment<F: Field>(
         interpreter.generation_state.registers = registers_before;
         interpreter.generation_state.registers.program_counter = init_label;
         interpreter.generation_state.registers.is_kernel = true;
+        interpreter.clock = 1;
 
         let (updated_registers_after, opt_after_mem_values) = interpreter.run(Some(max_cpu_len))?;
         registers_after = updated_registers_after;

@@ -267,33 +267,12 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     }
 
     // Test for storage key not in list.
-    let initial_stack = vec![
-        retaddr,
-        storage_key_not_in_list.2,
-        storage_key_not_in_list.1,
-        U256::from(storage_key_not_in_list.0 .0.as_slice()),
-    ];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new(insert_accessed_storage_keys, initial_stack);
-    for i in 0..n {
-        let addr = U256::from(storage_keys[i].0 .0.as_slice());
-        interpreter
-            .generation_state
-            .memory
-            .set(MemoryAddress::new(0, AccessedStorageKeys, 3 * i), addr);
-        interpreter.generation_state.memory.set(
-            MemoryAddress::new(0, AccessedStorageKeys, 3 * i + 1),
-            storage_keys[i].1,
-        );
-        interpreter.generation_state.memory.set(
-            MemoryAddress::new(0, AccessedStorageKeys, 3 * i + 2),
-            storage_keys[i].2,
-        );
-    }
-    interpreter.generation_state.memory.set(
-        MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
-        U256::from(3 * n),
-    );
+    interpreter.push(retaddr);
+    interpreter.push(storage_key_not_in_list.2);
+    interpreter.push(storage_key_not_in_list.1);
+    interpreter.push(U256::from(storage_key_not_in_list.0 .0.as_slice()));
+    interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
+
     interpreter.run(None)?;
     assert_eq!(
         interpreter.stack(),
@@ -311,7 +290,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         interpreter.generation_state.memory.get(
             MemoryAddress::new(0, AccessedStorageKeys, 4 * (n + 1)),
             false,
-            &HashMap::default(),
+            &HashMap::default()
         ),
         U256::from(storage_key_not_in_list.0 .0.as_slice())
     );

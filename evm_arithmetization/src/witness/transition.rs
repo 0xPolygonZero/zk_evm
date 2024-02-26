@@ -552,6 +552,12 @@ pub(crate) fn final_exception<F: Field>(
     let gen_state = state.get_mut_generation_state();
 
     let (row, _) = base_row(gen_state);
+    if is_generation {
+        println!(
+            "entering exception with registers {:?}",
+            gen_state.registers
+        );
+    }
     generate_exception(exc_code, gen_state, row, is_generation)
         .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
 
