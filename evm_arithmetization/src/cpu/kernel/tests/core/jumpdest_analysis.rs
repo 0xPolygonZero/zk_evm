@@ -189,8 +189,7 @@ fn test_verify_non_jumpdest() -> Result<()> {
     // jumpdest
     for i in 8..code_len - 1 {
         code[i] += 1;
-        let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_kernel(verify_non_jumpdest, vec![]);
+        let mut interpreter: Interpreter<F> = Interpreter::new(verify_non_jumpdest, vec![]);
         interpreter.generation_state.registers.context = CONTEXT;
 
         interpreter.set_code(CONTEXT, code.clone());
