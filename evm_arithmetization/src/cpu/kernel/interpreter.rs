@@ -1520,7 +1520,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
     pub(crate) fn initialize_rlp_segment(&mut self) {
         self.generation_state
             .memory
-            .set(MemoryAddress::new(0, Segment::RlpRaw, 1), 0x80.into())
+            .set(MemoryAddress::new(0, Segment::RlpRaw, 0), 0x80.into())
     }
 }
 

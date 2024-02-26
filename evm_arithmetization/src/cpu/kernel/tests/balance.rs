@@ -12,7 +12,6 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
 use crate::generation::mpt::AccountRlp;
-use crate::memory::segments::Segment;
 use crate::Node;
 
 // Test account with a given code hash.
@@ -61,9 +60,6 @@ fn prepare_interpreter<F: Field>(
     trie_data.push(account.code_hash.into_uint());
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
-    // Initialize the trie data length in the RlpRaw segment.
-    interpreter.generation_state.memory.contexts[0].segments[Segment::RlpRaw.unscale()].content
-        [0] = trie_data_len;
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");

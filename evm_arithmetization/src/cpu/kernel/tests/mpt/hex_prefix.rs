@@ -81,10 +81,10 @@ fn hex_prefix_odd_terminated_tiny() -> Result<()> {
     assert_eq!(
         interpreter.get_rlp_memory(),
         vec![
-            // The two first values of the RLP segment are trie_data_len (here 0), and the
-            // hardcoded 0x80 for an empty node.
-            0,
+            // The two first values of the RLP segment are the hardcoded 0x80 for an empty
+            // node, and 0 (i.e. unset).
             0x80,
+            0,
             // No length prefix; this tiny string is its own RLP encoding.
             (2 + 1) * 16 + 0xA,
         ]
