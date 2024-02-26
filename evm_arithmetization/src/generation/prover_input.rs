@@ -9,6 +9,7 @@ use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
+use smt_trie::code::hash_bytecode_u256;
 
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -57,6 +58,7 @@ impl<F: RichField> GenerationState<F> {
             "num_bits" => self.run_num_bits(),
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
+            "poseidon_code" => self.run_poseidon_code(),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
         }
     }
@@ -156,11 +158,23 @@ impl<F: RichField> GenerationState<F> {
             .contract_code
             .get(&codehash)
             .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
+        let code_len = code.len();
+
         for &byte in code {
             self.memory.set(address, byte.into());
             address.increment();
         }
-        Ok(code.len().into())
+
+        // Padding
+        self.memory.set(address, 1.into());
+        let mut len = code_len + 1;
+        len = 56 * ((len + 55) / 56);
+        let last_byte_addr = MemoryAddress::new(context, Segment::Code, len - 1);
+        let mut last_byte = u256_to_usize(self.memory.get(last_byte_addr))?;
+        last_byte |= 0x80;
+        self.memory.set(last_byte_addr, last_byte.into());
+
+        Ok(len.into())
     }
 
     // Bignum modular multiplication.
@@ -375,6 +389,21 @@ impl<F: RichField> GenerationState<F> {
             }
         }
         Ok((Segment::AccessedStorageKeys as usize).into())
+    }
+
+    fn run_poseidon_code(&mut self) -> Result<U256, ProgramError> {
+        let addr = stack_peek(self, 0)?;
+        let len = stack_peek(self, 1)?.as_usize();
+        let addr = MemoryAddress::new_bundle(addr)?;
+        let code = (0..len)
+            .map(|i| {
+                let mut a = addr;
+                a.virt += i;
+                self.memory.get(a).as_usize() as u8
+            })
+            .collect_vec();
+
+        Ok(hash_bytecode_u256(code))
     }
 }
 
