@@ -125,6 +125,9 @@ fn test_state_trie(trie_inputs: TrieInputs) -> Result<()> {
     interpreter
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
+    let trie_data_len = interpreter.get_trie_data().len().into();
+    // Initialize the start of the RlpRaw segment.
+    interpreter.initialize_default_rlp_memory(trie_data_len);
     interpreter.run()?;
 
     assert_eq!(

@@ -13,6 +13,7 @@ use crate::cpu::kernel::tests::mpt::{
 };
 use crate::generation::mpt::AccountRlp;
 use crate::generation::TrieInputs;
+use crate::memory::segments::Segment;
 use crate::Node;
 
 #[test]
@@ -198,6 +199,8 @@ fn test_state_trie(
     trie_data.push(account.code_hash.into_uint());
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
+    // Initialize the start of the RlpRaw segment.
+    interpreter.initialize_default_rlp_memory(trie_data_len);
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");

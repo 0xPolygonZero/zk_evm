@@ -513,7 +513,10 @@ fn test_mpt_insert_receipt() -> Result<()> {
     // Set memory.
     interpreter.generation_state.registers.program_counter = mpt_insert;
     interpreter.set_memory_segment(Segment::TrieData, cur_trie_data.clone());
-    interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, cur_trie_data.len().into());
+    let trie_data_len = cur_trie_data.len().into();
+    interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
+    // Initialize the start of the RlpRaw segment.
+    interpreter.initialize_default_rlp_memory(trie_data_len);
     interpreter.run()?;
 
     // Finally, check that the hashes correspond.

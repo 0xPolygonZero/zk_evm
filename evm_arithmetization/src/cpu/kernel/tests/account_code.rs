@@ -108,6 +108,8 @@ fn prepare_interpreter<F: Field>(
     trie_data.push(account.code_hash.into_uint());
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
+    // Initialize the start of the RlpRaw segment.
+    interpreter.initialize_default_rlp_memory(trie_data_len);
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
@@ -437,6 +439,9 @@ fn sload() -> Result<()> {
 
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;
+    // Initialize the start of the RlpRaw segment.
+    let trie_data_len = interpreter.get_trie_data().len().into();
+    interpreter.initialize_default_rlp_memory(trie_data_len);
     interpreter.run()?;
 
     // The first two elements in the stack are `success` and `leftover_gas`,

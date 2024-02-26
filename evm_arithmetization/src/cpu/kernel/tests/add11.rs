@@ -163,6 +163,9 @@ fn test_add11_yml() {
     // Switch context and initialize memory with the data we need for the tests.
     interpreter.generation_state.registers.program_counter = route_txn_label;
     interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
+    let trie_data_len = interpreter.get_trie_data().len().into();
+    // Initialize the start of the RlpRaw segment.
+    interpreter.initialize_default_rlp_memory(trie_data_len);
     interpreter.set_is_kernel(true);
     interpreter.run().expect("Proving add11 failed.");
 }
@@ -307,6 +310,9 @@ fn test_add11_yml_with_exception() {
     // Switch context and initialize memory with the data we need for the tests.
     interpreter.generation_state.registers.program_counter = route_txn_label;
     interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
+    let trie_data_len = interpreter.get_trie_data().len().into();
+    // Initialize the start of the RlpRaw segment.
+    interpreter.initialize_default_rlp_memory(trie_data_len);
     interpreter.set_is_kernel(true);
     interpreter
         .run()
