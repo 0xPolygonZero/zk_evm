@@ -32,8 +32,8 @@ pub(crate) fn test_account_1() -> AccountRlp {
     AccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
-        storage_root: H256::from_uint(&U256::from(3333)),
-        code_hash: H256::from_uint(&U256::from(4444)),
+        code_length: U256::from(3333),
+        code_hash: U256::from(4444),
     }
 }
 
@@ -45,8 +45,8 @@ pub(crate) fn test_account_2() -> AccountRlp {
     AccountRlp {
         nonce: U256::from(5555),
         balance: U256::from(6666),
-        storage_root: H256::from_uint(&U256::from(7777)),
-        code_hash: H256::from_uint(&U256::from(8888)),
+        code_length: U256::from(7777),
+        code_hash: U256::from(8888),
     }
 }
 

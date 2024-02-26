@@ -1,6 +1,7 @@
 use anyhow::bail;
 use log::log_enabled;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use super::memory::{MemoryOp, MemoryOpKind};
 use super::util::fill_channel_with_value;
@@ -22,7 +23,10 @@ use crate::witness::state::RegistersState;
 use crate::witness::util::mem_read_code_with_log_and_fill;
 use crate::{arithmetic, logic};
 
-fn read_code_memory<F: Field>(state: &mut GenerationState<F>, row: &mut CpuColumnsView<F>) -> u8 {
+fn read_code_memory<F: RichField>(
+    state: &mut GenerationState<F>,
+    row: &mut CpuColumnsView<F>,
+) -> u8 {
     let code_context = state.registers.code_context();
     row.code_context = F::from_canonical_usize(code_context);
 
@@ -82,6 +86,7 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
         (0x1d, _) => Ok(Operation::Syscall(opcode, 2, false)), // SAR
         (0x20, _) => Ok(Operation::Syscall(opcode, 2, false)), // KECCAK256
         (0x21, true) => Ok(Operation::KeccakGeneral),
+        (0x22, true) => Ok(Operation::Poseidon),
         (0x30, _) => Ok(Operation::Syscall(opcode, 0, true)), // ADDRESS
         (0x31, _) => Ok(Operation::Syscall(opcode, 1, false)), // BALANCE
         (0x32, _) => Ok(Operation::Syscall(opcode, 0, true)), // ORIGIN
@@ -174,6 +179,7 @@ fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>) {
         Operation::BinaryArithmetic(_) => &mut flags.binary_op,
         Operation::TernaryArithmetic(_) => &mut flags.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => &mut flags.jumpdest_keccak_general,
+        Operation::Poseidon => &mut flags.poseidon,
         Operation::ProverInput | Operation::Push(1..) => &mut flags.push_prover_input,
         Operation::Jump | Operation::Jumpi => &mut flags.jumps,
         Operation::Pc | Operation::Push(0) => &mut flags.pc_push0,
@@ -206,6 +212,7 @@ const fn get_op_special_length(op: Operation) -> Option<usize> {
         Operation::BinaryArithmetic(_) => STACK_BEHAVIORS.binary_op,
         Operation::TernaryArithmetic(_) => STACK_BEHAVIORS.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => STACK_BEHAVIORS.jumpdest_keccak_general,
+        Operation::Poseidon => STACK_BEHAVIORS.poseidon,
         Operation::Jump => JUMP_OP,
         Operation::Jumpi => JUMPI_OP,
         Operation::GetContext | Operation::SetContext => None,
@@ -245,6 +252,7 @@ const fn might_overflow_op(op: Operation) -> bool {
         Operation::BinaryArithmetic(_) => MIGHT_OVERFLOW.binary_op,
         Operation::TernaryArithmetic(_) => MIGHT_OVERFLOW.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => MIGHT_OVERFLOW.jumpdest_keccak_general,
+        Operation::Poseidon => MIGHT_OVERFLOW.poseidon,
         Operation::Jump | Operation::Jumpi => MIGHT_OVERFLOW.jumps,
         Operation::Pc | Operation::Push(0) => MIGHT_OVERFLOW.pc_push0,
         Operation::GetContext | Operation::SetContext => MIGHT_OVERFLOW.context_op,
@@ -254,7 +262,7 @@ const fn might_overflow_op(op: Operation) -> bool {
     }
 }
 
-fn perform_op<F: Field>(
+fn perform_op<F: RichField>(
     state: &mut GenerationState<F>,
     op: Operation,
     row: CpuColumnsView<F>,
@@ -277,6 +285,7 @@ fn perform_op<F: Field>(
         Operation::BinaryArithmetic(op) => generate_binary_arithmetic_op(op, state, row)?,
         Operation::TernaryArithmetic(op) => generate_ternary_arithmetic_op(op, state, row)?,
         Operation::KeccakGeneral => generate_keccak_general(state, row)?,
+        Operation::Poseidon => generate_poseidon(state, row)?,
         Operation::ProverInput => generate_prover_input(state, row)?,
         Operation::Pop => generate_pop(state, row)?,
         Operation::Jump => generate_jump(state, row)?,
@@ -325,7 +334,7 @@ fn perform_op<F: Field>(
 /// but is otherwise blank. It fulfills the constraints that are common to
 /// successful operations and the exception operation. It also returns the
 /// opcode.
-fn base_row<F: Field>(state: &mut GenerationState<F>) -> (CpuColumnsView<F>, u8) {
+fn base_row<F: RichField>(state: &mut GenerationState<F>) -> (CpuColumnsView<F>, u8) {
     let mut row: CpuColumnsView<F> = CpuColumnsView::default();
     row.clock = F::from_canonical_usize(state.traces.clock());
     row.context = F::from_canonical_usize(state.registers.context);
@@ -339,7 +348,7 @@ fn base_row<F: Field>(state: &mut GenerationState<F>) -> (CpuColumnsView<F>, u8)
     (row, opcode)
 }
 
-pub(crate) fn fill_stack_fields<F: Field>(
+pub(crate) fn fill_stack_fields<F: RichField>(
     state: &mut GenerationState<F>,
     row: &mut CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -389,7 +398,7 @@ pub(crate) fn fill_stack_fields<F: Field>(
     Ok(())
 }
 
-fn try_perform_instruction<F: Field>(
+fn try_perform_instruction<F: RichField>(
     state: &mut GenerationState<F>,
 ) -> Result<Operation, ProgramError> {
     let (mut row, opcode) = base_row(state);
@@ -423,7 +432,7 @@ fn try_perform_instruction<F: Field>(
     perform_op(state, op, row)
 }
 
-fn log_kernel_instruction<F: Field>(state: &GenerationState<F>, op: Operation) {
+fn log_kernel_instruction<F: RichField>(state: &GenerationState<F>, op: Operation) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     if !log_enabled!(log::Level::Debug) {
         return;
@@ -452,7 +461,10 @@ fn log_kernel_instruction<F: Field>(state: &GenerationState<F>, op: Operation) {
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
 
-fn handle_error<F: Field>(state: &mut GenerationState<F>, err: ProgramError) -> anyhow::Result<()> {
+fn handle_error<F: RichField>(
+    state: &mut GenerationState<F>,
+    err: ProgramError,
+) -> anyhow::Result<()> {
     let exc_code: u8 = match err {
         ProgramError::OutOfGas => 0,
         ProgramError::InvalidOpcode => 1,
@@ -475,7 +487,7 @@ fn handle_error<F: Field>(state: &mut GenerationState<F>, err: ProgramError) -> 
     Ok(())
 }
 
-pub(crate) fn transition<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
+pub(crate) fn transition<F: RichField>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
     let checkpoint = state.checkpoint();
     let result = try_perform_instruction(state);
 
