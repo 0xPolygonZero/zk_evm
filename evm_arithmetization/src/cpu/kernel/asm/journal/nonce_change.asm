@@ -12,4 +12,3 @@ global revert_nonce_change:
     %key_nonce %smt_insert_state
     // stack: retdest
     JUMP
-

@@ -1,7 +1,7 @@
-// struct CodeChange { address, prev_codehash }
+// struct CodeChange { address, prev_codehash, prev_code_length }
 
 %macro journal_add_code_change
-    %journal_add_2(@JOURNAL_ENTRY_CODE_CHANGE)
+    %journal_add_3(@JOURNAL_ENTRY_CODE_CHANGE)
 %endmacro
 
 global revert_code_change:
