@@ -8,6 +8,7 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1_rlp, test_account_2_rlp};
 use crate::generation::TrieInputs;
+use crate::memory::segments::Segment;
 use crate::Node;
 
 // TODO: Test with short leaf. Might need to be a storage trie.
@@ -126,8 +127,9 @@ fn test_state_trie(trie_inputs: TrieInputs) -> Result<()> {
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
     let trie_data_len = interpreter.get_trie_data().len().into();
-    // Initialize the start of the RlpRaw segment.
-    interpreter.initialize_default_rlp_memory(trie_data_len);
+    // Initialize the trie data length in the RlpRaw segment.
+    interpreter.generation_state.memory.contexts[0].segments[Segment::RlpRaw.unscale()].content
+        [0] = trie_data_len;
     interpreter.run()?;
 
     assert_eq!(

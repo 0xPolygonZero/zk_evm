@@ -643,11 +643,6 @@ impl<'a, F: Field> Interpreter<'a, F> {
         self.set_memory_segment_bytes(Segment::RlpRaw, rlp)
     }
 
-    pub(crate) fn initialize_default_rlp_memory(&mut self, trie_data_len: U256) {
-        self.generation_state.memory.contexts[0].segments[Segment::RlpRaw.unscale()].content =
-            vec![trie_data_len, U256::from(0x80)]; // rlp_size, rlp_empty_node
-    }
-
     pub(crate) fn set_code(&mut self, context: usize, code: Vec<u8>) {
         assert_ne!(context, 0, "Can't modify kernel code.");
         while self.generation_state.memory.contexts.len() <= context {
@@ -1523,10 +1518,9 @@ impl<'a, F: Field> Interpreter<'a, F> {
 
     /// Writes the encoding of 0 at @ENCODED_EMPTY_NODE_ADDR.
     pub(crate) fn initialize_rlp_segment(&mut self) {
-        self.generation_state.memory.set(
-            MemoryAddress::new(0, Segment::RlpRaw, 0xFFFFFFFF),
-            128.into(),
-        )
+        self.generation_state
+            .memory
+            .set(MemoryAddress::new(0, Segment::RlpRaw, 1), 0x80.into())
     }
 }
 

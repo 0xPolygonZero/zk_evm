@@ -13,6 +13,7 @@ use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
+use crate::memory::segments::Segment;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use crate::GenerationInputs;
 
@@ -164,8 +165,9 @@ fn test_add11_yml() {
     interpreter.generation_state.registers.program_counter = route_txn_label;
     interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
     let trie_data_len = interpreter.get_trie_data().len().into();
-    // Initialize the start of the RlpRaw segment.
-    interpreter.initialize_default_rlp_memory(trie_data_len);
+    // Initialize the trie data length in the RlpRaw segment.
+    interpreter.generation_state.memory.contexts[0].segments[Segment::RlpRaw.unscale()].content
+        [0] = trie_data_len;
     interpreter.set_is_kernel(true);
     interpreter.run().expect("Proving add11 failed.");
 }
@@ -311,8 +313,9 @@ fn test_add11_yml_with_exception() {
     interpreter.generation_state.registers.program_counter = route_txn_label;
     interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
     let trie_data_len = interpreter.get_trie_data().len().into();
-    // Initialize the start of the RlpRaw segment.
-    interpreter.initialize_default_rlp_memory(trie_data_len);
+    // Initialize the trie data length in the RlpRaw segment.
+    interpreter.generation_state.memory.contexts[0].segments[Segment::RlpRaw.unscale()].content
+        [0] = trie_data_len;
     interpreter.set_is_kernel(true);
     interpreter
         .run()

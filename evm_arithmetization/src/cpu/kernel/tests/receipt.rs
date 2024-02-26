@@ -200,7 +200,7 @@ fn test_receipt_encoding() -> Result<()> {
     interpreter.run()?;
     let rlp_pos = interpreter.pop().expect("The stack should not be empty");
 
-    let rlp_read: Vec<u8> = interpreter.get_rlp_memory();
+    let rlp_read: &[u8] = &interpreter.get_rlp_memory()[2..]; // skip trie_data_len and empty_node
 
     assert_eq!(rlp_pos.as_usize(), expected_rlp.len());
     for i in 0..rlp_read.len() {
@@ -515,8 +515,9 @@ fn test_mpt_insert_receipt() -> Result<()> {
     interpreter.set_memory_segment(Segment::TrieData, cur_trie_data.clone());
     let trie_data_len = cur_trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
-    // Initialize the start of the RlpRaw segment.
-    interpreter.initialize_default_rlp_memory(trie_data_len);
+    // Initialize the trie data length in the RlpRaw segment.
+    interpreter.generation_state.memory.contexts[0].segments[Segment::RlpRaw.unscale()].content
+        [0] = trie_data_len;
     interpreter.run()?;
 
     // Finally, check that the hashes correspond.
