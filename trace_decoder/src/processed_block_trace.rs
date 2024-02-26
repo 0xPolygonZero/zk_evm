@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::iter::once;
 
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -67,19 +67,6 @@ impl BlockTrace {
             print_value_and_hash_nodes_of_storage_trie(h_addr, s_trie);
         }
 
-        let resolve_code_hash_fn = |c_hash: &_| {
-            let resolve_code_hash_fn_ref = &p_meta.resolve_code_hash_fn;
-            let extra_code_hash_mappings_ref = &pre_image_data.extra_code_hash_mappings;
-
-            match extra_code_hash_mappings_ref {
-                Some(m) => m
-                    .get(c_hash)
-                    .cloned()
-                    .unwrap_or_else(|| (resolve_code_hash_fn_ref)(c_hash)),
-                None => (resolve_code_hash_fn_ref)(c_hash),
-            }
-        };
-
         let all_accounts_in_pre_image: Vec<_> = pre_image_data
             .tries
             .state
@@ -94,10 +81,15 @@ impl BlockTrace {
             })
             .collect();
 
+        let mut code_hash_resolver = CodeHashResolving {
+            client_code_hash_resolve_f: &p_meta.resolve_code_hash_fn,
+            extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
+        };
+
         let txn_info = self
             .txn_info
             .into_iter()
-            .map(|t| t.into_processed_txn_info(&all_accounts_in_pre_image, &resolve_code_hash_fn))
+            .map(|t| t.into_processed_txn_info(&all_accounts_in_pre_image, &mut code_hash_resolver))
             .collect::<Vec<_>>();
 
         ProcessedBlockTrace {
@@ -206,11 +198,36 @@ pub(crate) struct ProcessedTxnInfo {
     pub(crate) meta: TxnMetaState,
 }
 
+struct CodeHashResolving<F> {
+    /// If we have not seen this code hash before, use the resolve function that
+    /// the client passes down to us. This will likely be an rpc call/cache
+    /// check.
+    client_code_hash_resolve_f: F,
+
+    /// Code hash mappings that we have constructed from parsing the block
+    /// trace. If there are any txns that create contracts, then they will also
+    /// get added here as we process the deltas.
+    extra_code_hash_mappings: HashMap<CodeHash, Vec<u8>>,
+}
+
+impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
+    fn resolve(&mut self, c_hash: &CodeHash) -> Vec<u8> {
+        match self.extra_code_hash_mappings.get(c_hash) {
+            Some(code) => code.clone(),
+            None => (self.client_code_hash_resolve_f)(c_hash),
+        }
+    }
+
+    fn insert_code(&mut self, c_hash: H256, code: Vec<u8>) {
+        self.extra_code_hash_mappings.insert(c_hash, code);
+    }
+}
+
 impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
-        code_hash_resolve_f: &F,
+        code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
@@ -271,11 +288,13 @@ impl TxnInfo {
                     ContractCodeUsage::Read(c_hash) => {
                         contract_code_accessed
                             .entry(c_hash)
-                            .or_insert_with(|| code_hash_resolve_f(&c_hash));
+                            .or_insert_with(|| code_hash_resolver.resolve(&c_hash));
                     }
                     ContractCodeUsage::Write(c_bytes) => {
                         let c_hash = hash(&c_bytes);
-                        contract_code_accessed.insert(c_hash, c_bytes.0);
+
+                        contract_code_accessed.insert(c_hash, c_bytes.0.clone());
+                        code_hash_resolver.insert_code(c_hash, c_bytes.0);
                     }
                 }
             }
