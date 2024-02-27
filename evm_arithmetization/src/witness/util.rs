@@ -43,15 +43,11 @@ pub(crate) fn stack_peek<F: Field>(
         return Ok(state.registers.stack_top);
     }
 
-    Ok(state.memory.get_with_init(
-        MemoryAddress::new(
-            state.registers.context,
-            Segment::Stack,
-            state.registers.stack_len - 1 - i,
-        ),
-        false,
-        &HashMap::default(),
-    ))
+    Ok(state.memory.get_with_init(MemoryAddress::new(
+        state.registers.context,
+        Segment::Stack,
+        state.registers.stack_len - 1 - i,
+    )))
 }
 
 /// Peek at kernel at specified segment and address
@@ -59,15 +55,11 @@ pub(crate) fn current_context_peek<F: Field>(
     state: &GenerationState<F>,
     segment: Segment,
     virt: usize,
-    is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> U256 {
     let context = state.registers.context;
-    state.memory.get_with_init(
-        MemoryAddress::new(context, segment, virt),
-        is_interpreter,
-        preinitialized_segments,
-    )
+    state
+        .memory
+        .get_with_init(MemoryAddress::new(context, segment, virt))
 }
 
 pub(crate) fn fill_channel_with_value<F: Field>(row: &mut CpuColumnsView<F>, n: usize, val: U256) {
@@ -120,12 +112,8 @@ pub(crate) fn mem_read_with_log<F: Field>(
     channel: MemoryChannel,
     address: MemoryAddress,
     state: &GenerationState<F>,
-    is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (U256, MemoryOp) {
-    let val = state
-        .memory
-        .get_with_init(address, is_interpreter, preinitialized_segments);
+    let val = state.memory.get_with_init(address);
     let op = MemoryOp::new(
         channel,
         state.traces.clock(),
@@ -155,16 +143,8 @@ pub(crate) fn mem_read_code_with_log_and_fill<F: Field>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
-    is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (u8, MemoryOp) {
-    let (val, op) = mem_read_with_log(
-        MemoryChannel::Code,
-        address,
-        state,
-        is_interpreter,
-        preinitialized_segments,
-    );
+    let (val, op) = mem_read_with_log(MemoryChannel::Code, address, state);
 
     let val_u8 = to_byte_checked(val);
     row.opcode_bits = to_bits_le(val_u8);
@@ -177,16 +157,8 @@ pub(crate) fn mem_read_gp_with_log_and_fill<F: Field>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
-    is_interpreter: bool,
-    preinitialized_segments: &HashMap<Segment, MemorySegmentState>,
 ) -> (U256, MemoryOp) {
-    let (val, op) = mem_read_with_log(
-        MemoryChannel::GeneralPurpose(n),
-        address,
-        state,
-        is_interpreter,
-        preinitialized_segments,
-    );
+    let (val, op) = mem_read_with_log(MemoryChannel::GeneralPurpose(n), address, state);
     let val_limbs: [u64; 4] = val.0;
 
     let channel = &mut row.mem_channels[n];
@@ -275,7 +247,7 @@ pub(crate) fn stack_pop_with_log_and_fill<const N: usize, F: Field>(
                 state.registers.stack_len - 1 - i,
             );
 
-            mem_read_gp_with_log_and_fill(i, address, state, row, false, &HashMap::default())
+            mem_read_gp_with_log_and_fill(i, address, state, row)
         }
     });
 

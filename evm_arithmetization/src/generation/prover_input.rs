@@ -9,6 +9,7 @@ use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
+use super::state::State;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
@@ -122,9 +123,7 @@ impl<F: Field> GenerationState<F> {
         let ptr = stack_peek(self, 11 - n).map(u256_to_usize)??;
 
         let f: [U256; 12] = match field {
-            Bn254Base => std::array::from_fn(|i| {
-                current_context_peek(self, BnPairing, ptr + i, false, &HashMap::default())
-            }),
+            Bn254Base => std::array::from_fn(|i| current_context_peek(self, BnPairing, ptr + i)),
             _ => todo!(),
         };
         Ok(field.field_extension_inverse(n, f))
@@ -434,26 +433,21 @@ impl<F: Field> GenerationState<F> {
         let code_len = self.get_code_len(context)?;
         let code = (0..code_len)
             .map(|i| {
-                u256_to_u8(self.memory.get_with_init(
-                    MemoryAddress::new(context, Segment::Code, i),
-                    false,
-                    &HashMap::default(),
-                ))
+                u256_to_u8(
+                    self.memory
+                        .get_with_init(MemoryAddress::new(context, Segment::Code, i)),
+                )
             })
             .collect::<Result<Vec<u8>, _>>()?;
         Ok(code)
     }
 
     fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
-        let code_len = u256_to_usize(self.memory.get_with_init(
-            MemoryAddress::new(
-                context,
-                Segment::ContextMetadata,
-                ContextMetadata::CodeSize.unscale(),
-            ),
-            false,
-            &HashMap::default(),
-        ))?;
+        let code_len = u256_to_usize(self.memory.get_with_init(MemoryAddress::new(
+            context,
+            Segment::ContextMetadata,
+            ContextMetadata::CodeSize.unscale(),
+        )))?;
         Ok(code_len)
     }
 
@@ -488,11 +482,11 @@ impl<F: Field> GenerationState<F> {
     }
 
     fn get_global_metadata(&self, data: GlobalMetadata) -> U256 {
-        self.memory.get_with_init(
-            MemoryAddress::new(0, Segment::GlobalMetadata, data.unscale()),
-            false,
-            &HashMap::default(),
-        )
+        self.memory.get_with_init(MemoryAddress::new(
+            0,
+            Segment::GlobalMetadata,
+            data.unscale(),
+        ))
     }
 
     pub(crate) fn get_storage_keys_access_list(&self) -> Result<AccList, ProgramError> {
@@ -500,15 +494,11 @@ impl<F: Field> GenerationState<F> {
         // virtual address in the segment. In order to get the length we need
         // to substract Segment::AccessedStorageKeys as usize
         let acc_storage_len = u256_to_usize(
-            self.memory.get_with_init(
-                MemoryAddress::new(
-                    0,
-                    Segment::GlobalMetadata,
-                    GlobalMetadata::AccessedStorageKeysLen.unscale(),
-                ),
-                false,
-                &HashMap::default(),
-            ) - Segment::AccessedStorageKeys as usize,
+            self.memory.get_with_init(MemoryAddress::new(
+                0,
+                Segment::GlobalMetadata,
+                GlobalMetadata::AccessedStorageKeysLen.unscale(),
+            )) - Segment::AccessedStorageKeys as usize,
         )?;
         AccList::from_mem_and_segment(
             &self.memory.contexts[0].segments[Segment::AccessedStorageKeys.unscale()].content
