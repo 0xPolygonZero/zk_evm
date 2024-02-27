@@ -41,17 +41,21 @@ pub fn generate_txn_proof(
     gen_inputs: TxnProofGenIR,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {
-    let (intern, p_vals) = p_state
+    let output_data = p_state
         .state
-        .prove_root(
+        .prove_segment(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
             gen_inputs,
+            1 << 32,
+            0,
             &mut TimingTree::default(),
             abort_signal,
         )
         .map_err(|err| err.to_string())?;
 
+    let p_vals = output_data.public_values;
+    let intern = output_data.proof_with_pis;
     Ok(GeneratedTxnProof { p_vals, intern })
 }
 
@@ -65,7 +69,7 @@ pub fn generate_agg_proof(
 ) -> ProofGenResult<GeneratedAggProof> {
     let (intern, p_vals) = p_state
         .state
-        .prove_aggregation(
+        .prove_segment_aggregation(
             lhs_child.is_agg(),
             lhs_child.intern(),
             lhs_child.public_values(),
@@ -76,6 +80,36 @@ pub fn generate_agg_proof(
         .map_err(|err| err.to_string())?;
 
     Ok(GeneratedAggProof { p_vals, intern })
+}
+
+/// Generates a transaction aggregation proof from two child proofs.
+///
+/// Note that the child proofs may be either transaction or aggregation proofs.
+pub fn generate_transaction_agg_proof(
+    p_state: &ProverState,
+    prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
+    curr_block_agg_proof: &GeneratedAggProof,
+) -> ProofGenResult<GeneratedBlockProof> {
+    let b_height = curr_block_agg_proof
+        .p_vals
+        .block_metadata
+        .block_number
+        .low_u64();
+    let parent_intern = prev_opt_parent_b_proof.map(|p| &p.intern);
+
+    let (b_proof_intern, _) = p_state
+        .state
+        .prove_block(
+            parent_intern,
+            &curr_block_agg_proof.intern,
+            curr_block_agg_proof.p_vals.clone(),
+        )
+        .map_err(|err| err.to_string())?;
+
+    Ok(GeneratedBlockProof {
+        b_height,
+        intern: b_proof_intern,
+    })
 }
 
 /// Generates a block proof.
