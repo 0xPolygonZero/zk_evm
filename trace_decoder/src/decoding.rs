@@ -102,6 +102,9 @@ impl ProcessedBlockTrace {
             gas_used_after: U256::zero(),
         };
 
+        // A copy of the initial extra_data possibly needed during padding.
+        let extra_data_for_dummies = extra_data.clone();
+
         let mut txn_gen_inputs = self
             .txn_info
             .into_iter()
@@ -156,6 +159,7 @@ impl ProcessedBlockTrace {
             &mut txn_gen_inputs,
             &other_data,
             &extra_data,
+            &extra_data_for_dummies,
             &initial_tries_for_dummies,
             &curr_block_tries,
             !self.withdrawals.is_empty(),
@@ -303,7 +307,8 @@ impl ProcessedBlockTrace {
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<TxnProofGenIR>,
         other_data: &OtherBlockData,
-        extra_data: &ExtraBlockData,
+        final_extra_data: &ExtraBlockData,
+        initial_extra_data: &ExtraBlockData,
         initial_tries: &PartialTrieState,
         final_tries: &PartialTrieState,
         has_withdrawals: bool,
@@ -311,10 +316,11 @@ impl ProcessedBlockTrace {
         match gen_inputs.len() {
             0 => {
                 debug_assert!(initial_tries.state == final_tries.state);
+                debug_assert!(initial_extra_data == final_extra_data);
                 // We need to pad with two dummy entries.
                 gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
                     other_data,
-                    extra_data,
+                    final_extra_data,
                     initial_tries,
                 ));
 
@@ -330,11 +336,12 @@ impl ProcessedBlockTrace {
                 match has_withdrawals {
                     false => {
                         let dummy_txn =
-                            create_dummy_gen_input(other_data, extra_data, initial_tries);
+                            create_dummy_gen_input(other_data, initial_extra_data, initial_tries);
                         gen_inputs.insert(0, dummy_txn)
                     }
                     true => {
-                        let dummy_txn = create_dummy_gen_input(other_data, extra_data, final_tries);
+                        let dummy_txn =
+                            create_dummy_gen_input(other_data, final_extra_data, final_tries);
                         gen_inputs.push(dummy_txn)
                     }
                 };
