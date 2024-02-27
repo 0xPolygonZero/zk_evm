@@ -11,7 +11,7 @@
 %endmacro
 
 %macro initialize_rlp_segment
-    PUSH @ENCODED_EMPTY_NODE_POS
+    PUSH @ENCODED_EMPTY_NODE_ADDR
     PUSH 0x80
     MSTORE_GENERAL
 %endmacro

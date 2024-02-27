@@ -627,6 +627,18 @@ impl<'a, F: Field> Interpreter<'a, F> {
             memory.into_iter().map(U256::from).collect();
     }
 
+    pub(crate) fn extend_memory_segment(&mut self, segment: Segment, memory: &[U256]) {
+        self.generation_state.memory.contexts[0].segments[segment.unscale()]
+            .content
+            .extend(memory);
+    }
+
+    pub(crate) fn extend_memory_segment_bytes(&mut self, segment: Segment, memory: Vec<u8>) {
+        self.generation_state.memory.contexts[0].segments[segment.unscale()]
+            .content
+            .extend(memory.into_iter().map(U256::from).collect::<Vec<_>>());
+    }
+
     pub(crate) fn set_rlp_memory(&mut self, rlp: Vec<u8>) {
         self.set_memory_segment_bytes(Segment::RlpRaw, rlp)
     }
@@ -1504,12 +1516,11 @@ impl<'a, F: Field> Interpreter<'a, F> {
         self.generation_state.registers.context = context;
     }
 
-    /// Writes the encoding of 0 to position @ENCODED_EMPTY_NODE_POS.
+    /// Writes the encoding of 0 at @ENCODED_EMPTY_NODE_ADDR.
     pub(crate) fn initialize_rlp_segment(&mut self) {
-        self.generation_state.memory.set(
-            MemoryAddress::new(0, Segment::RlpRaw, 0xFFFFFFFF),
-            128.into(),
-        )
+        self.generation_state
+            .memory
+            .set(MemoryAddress::new(0, Segment::RlpRaw, 0), 0x80.into())
     }
 }
 

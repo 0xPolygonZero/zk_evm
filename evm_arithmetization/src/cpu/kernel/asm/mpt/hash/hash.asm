@@ -119,7 +119,7 @@ encode_node:
 global encode_node_empty:
     // stack: node_type, node_payload_ptr, encode_value, cur_len, retdest
     %pop3
-    %stack (cur_len, retdest) -> (retdest, @ENCODED_EMPTY_NODE_POS, 1, cur_len)
+    %stack (cur_len, retdest) -> (retdest, @ENCODED_EMPTY_NODE_ADDR, 1, cur_len)
     JUMP
 
 global encode_node_branch:

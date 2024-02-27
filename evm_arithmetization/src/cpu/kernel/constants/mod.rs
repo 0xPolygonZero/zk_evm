@@ -89,22 +89,30 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c
 }
 
-const MISC_CONSTANTS: [(&str, [u8; 32]); 3] = [
+const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     // Base for limbs used in bignum arithmetic.
     (
         "BIGNUM_LIMB_BASE",
         hex!("0000000000000000000000000000000100000000000000000000000000000000"),
     ),
-    // Position in SEGMENT_RLP_RAW where the empty node encoding is stored. It is
-    // equal to u32::MAX + @SEGMENT_RLP_RAW so that all rlp pointers are much smaller than that.
+    // Address where the empty node encoding is stored.
+    // It is at the offset 0 within SEGMENT_RLP_RAW.
+    // *Note*: Changing this will break some tests.
     (
-        "ENCODED_EMPTY_NODE_POS",
-        hex!("0000000000000000000000000000000000000000000000000000000CFFFFFFFF"),
+        "ENCODED_EMPTY_NODE_ADDR",
+        hex!("0000000000000000000000000000000000000000000000000000000c00000000"),
     ),
     // 0x10000 = 2^16 bytes, much larger than any RLP blob the EVM could possibly create.
     (
         "MAX_RLP_BLOB_SIZE",
         hex!("0000000000000000000000000000000000000000000000000000000000010000"),
+    ),
+    // Address where the txn RLP encoding starts.
+    // It is the offset 1 within SEGMENT_RLP_RAW.
+    // *Note*: Changing this will break some tests.
+    (
+        "INITIAL_TXN_RLP_ADDR",
+        hex!("0000000000000000000000000000000000000000000000000000000c00000001"),
     ),
 ];
 
