@@ -18,7 +18,11 @@ fn test_encode_rlp_scalar_small() -> Result<()> {
 
     interpreter.run()?;
     let expected_stack = vec![pos + U256::from(1)]; // pos' = pos + rlp_len = 2 + 1
-    let expected_rlp = vec![0, 0, 42];
+
+    // The two first values of the RLP segment are the hardcoded 0x80 for an empty
+    // node, and 0 (i.e. unset).
+    let expected_rlp = vec![0x80, 0, 42];
+
     assert_eq!(interpreter.stack(), expected_stack);
     assert_eq!(interpreter.get_rlp_memory(), expected_rlp);
 
@@ -37,7 +41,11 @@ fn test_encode_rlp_scalar_medium() -> Result<()> {
 
     interpreter.run()?;
     let expected_stack = vec![pos + U256::from(4)]; // pos' = pos + rlp_len = 2 + 4
-    let expected_rlp = vec![0, 0, 0x80 + 3, 0x01, 0x23, 0x45];
+
+    // The two first values of the RLP segment are the hardcoded 0x80 for an empty
+    // node, and 0 (i.e. unset).
+    let expected_rlp = vec![0x80, 0, 0x80 + 3, 0x01, 0x23, 0x45];
+
     assert_eq!(interpreter.stack(), expected_stack);
     assert_eq!(interpreter.get_rlp_memory(), expected_rlp);
 

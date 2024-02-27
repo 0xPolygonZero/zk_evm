@@ -18,14 +18,14 @@ read_txn_from_memory:
     // Type 0 (legacy) transactions have no such prefix, but their RLP will have a
     // first byte >= 0xc0, so there is no overlap.
 
-    PUSH @SEGMENT_RLP_RAW // ctx == virt == 0
+    PUSH @INITIAL_TXN_RLP_ADDR
     MLOAD_GENERAL
     %eq_const(1)
     // stack: first_byte == 1, retdest
     %jumpi(process_type_1_txn)
     // stack: retdest
 
-    PUSH @SEGMENT_RLP_RAW // ctx == virt == 0
+    PUSH @INITIAL_TXN_RLP_ADDR
     MLOAD_GENERAL
     %eq_const(2)
     // stack: first_byte == 2, retdest
@@ -47,15 +47,14 @@ global update_txn_trie:
     // stack: txn_rlp_len, value_ptr, txn_counter, num_nibbles, ret_dest
     DUP2 %increment
     // stack: rlp_start=value_ptr+1, txn_rlp_len, value_ptr, txn_counter, num_nibbles, retdest
-    
 
     // and now copy txn_rlp to the new block
     %stack (rlp_start, txn_rlp_len, value_ptr, txn_counter, num_nibbles) -> (
-        @SEGMENT_RLP_RAW, // src addr. ctx == virt == 0
-        rlp_start, @SEGMENT_TRIE_DATA, // swapped dest addr, ctx == 0
+        @SEGMENT_TRIE_DATA, rlp_start, // dest addr, ctx == 0
+        @INITIAL_TXN_RLP_ADDR, // src addr
         txn_rlp_len, // mcpy len
         txn_rlp_len, rlp_start, txn_counter, num_nibbles, value_ptr)
-    SWAP2 %build_kernel_address
+    %build_kernel_address
     // stack: DST, SRC, txn_rlp_len, txn_rlp_len, rlp_start, txn_counter, num_nibbles, value_ptr
     %memcpy_bytes
     ADD

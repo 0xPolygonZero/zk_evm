@@ -7,6 +7,7 @@ use NormalizedTxnField::*;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::cpu::kernel::interpreter::Interpreter;
+use crate::memory::segments::Segment;
 
 #[test]
 fn process_type_0_txn() -> Result<()> {
@@ -37,7 +38,7 @@ fn process_type_0_txn() -> Result<()> {
     // 4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318'))
     // signed_txn = unsigned_txn.as_signed_transaction(sk)
     // rlp.encode(signed_txn).hex()
-    interpreter.set_rlp_memory(hex!("f861050a8255f0940000000000000000000000000000000000000000648242421ca07c5c61ed975ebd286f6b027b8c504842e50a47d318e1e801719dd744fe93e6c6a01e7b5119b57dd54e175ff2f055c91f3ab1b53eba0b2c184f347cdff0e745aca2").to_vec());
+    interpreter.extend_memory_segment_bytes(Segment::RlpRaw, hex!("f861050a8255f0940000000000000000000000000000000000000000648242421ca07c5c61ed975ebd286f6b027b8c504842e50a47d318e1e801719dd744fe93e6c6a01e7b5119b57dd54e175ff2f055c91f3ab1b53eba0b2c184f347cdff0e745aca2").to_vec());
 
     interpreter.run()?;
 

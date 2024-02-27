@@ -195,10 +195,6 @@ impl MemoryState {
         let segments = Segment::all();
         let segment = segments.get(address.segment)?;
 
-        if let Some(constant) = Segment::constant(segment, address.virt) {
-            return Some(constant);
-        }
-
         let content = &self.contexts[address.context].segments[address.segment].content;
         if address.virt >= content.len() || content[address.virt].is_none() {
             return None;
@@ -245,14 +241,6 @@ impl MemoryState {
 
         let segment = Segment::all()[address.segment];
 
-        if let Some(constant) = Segment::constant(&segment, address.virt) {
-            assert!(
-                constant == val,
-                "Attempting to set constant {} to incorrect value",
-                address.virt
-            );
-            return;
-        }
         assert!(
             val.bits() <= segment.bit_range(),
             "Value {} exceeds {:?} range of {} bits",
