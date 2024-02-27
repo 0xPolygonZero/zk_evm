@@ -526,7 +526,7 @@ impl<F: Field> Interpreter<F> {
             .collect();
     }
 
-    pub(crate) fn extend_memory_segment(&mut self, segment: Segment, memory: &[U256]) {
+    pub(crate) fn extend_memory_segment(&mut self, segment: Segment, memory: &[Option<U256>]) {
         self.generation_state.memory.contexts[0].segments[segment.unscale()]
             .content
             .extend(memory);
@@ -535,7 +535,12 @@ impl<F: Field> Interpreter<F> {
     pub(crate) fn extend_memory_segment_bytes(&mut self, segment: Segment, memory: Vec<u8>) {
         self.generation_state.memory.contexts[0].segments[segment.unscale()]
             .content
-            .extend(memory.into_iter().map(U256::from).collect::<Vec<_>>());
+            .extend(
+                memory
+                    .into_iter()
+                    .map(|elt| Some(U256::from(elt)))
+                    .collect::<Vec<_>>(),
+            );
     }
 
     pub(crate) fn set_rlp_memory(&mut self, rlp: Vec<u8>) {
