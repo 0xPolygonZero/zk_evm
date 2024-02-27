@@ -6,29 +6,29 @@ use evm_arithmetization::{
 use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
-/// A block height's type.
+/// A type alias around `u64` for a block height.
 pub type BlockHeight = u64;
-/// A bloom filter's type.
+/// A type alias around `[U256; 8]` for a bloom filter.
 pub type Bloom = [U256; 8];
-/// A code hash's type.
+/// A type alias around `H256` for a code hash.
 pub type CodeHash = H256;
-/// The type of an account address's hash.
+/// A type alias for `H256` for an account address's hash.
 pub type HashedAccountAddr = H256;
-/// The type of a node address's hash.
+/// A type alias around `H256` for a node address's hash.
 pub type HashedNodeAddr = H256;
-/// The type of a storage address's hash.
+/// A type alias around `H256` for a storage address's hash.
 pub type HashedStorageAddr = H256;
-/// The type of a hashed storage address"s nibbles.
+/// A type alias around `Nibbles` for a hashed storage address's nibbles.
 pub type HashedStorageAddrNibbles = Nibbles;
-/// The type of a storage address.
+/// A type alias around `H256` for a storage address.
 pub type StorageAddr = H256;
-/// The type of a storage address's nibbles.
+/// A type alias around `H256` for a storage address's nibbles.
 pub type StorageAddrNibbles = H256;
-/// A storage value's type.
+/// A type alias around `U256` for a storage value.
 pub type StorageVal = U256;
-/// A trie root hash's type.
+/// A type alias around `H256` for a trie root hash.
 pub type TrieRootHash = H256;
-/// Type of a transaction's index within a block.
+/// A type alias around `usize` for a transaction's index within a block.
 pub type TxnIdx = usize;
 
 /// A function which turns a code hash into bytes.

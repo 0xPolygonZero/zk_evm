@@ -1,18 +1,19 @@
-//! This library is intended to genrate an Intermediary Representation (IR) of a
-//! block's transactions, given a [BlockTrace] and some additional
-//! data [OtherBlockData].
+//! This library generates an Intermediary Representation (IR) of
+//! a block's transactions, given a [BlockTrace] and some additional
+//! data represented by [OtherBlockData].
 //!
 //! A [BlockTrace] is defined as follows:
 //! ```ignore
 //! pub struct BlockTrace {
-//!     /// The trie pre-images (state and storage) in multiple possible formats.
+//!     /// The state and storage trie pre-images (i.e. the tries before
+//!     /// the execution of the current block) in multiple possible formats.
 //!     pub trie_pre_images: BlockTraceTriePreImages,
 //!     /// Traces and other info per transaction. The index of the transaction
 //!     /// within the block corresponds to the slot in this vec.
 //!     pub txn_info: Vec<TxnInfo>,
 //! }
 //! ```
-//! The trie preimages are the [HashedPartialTrie]s at the
+//! The trie preimages are the hashed partial tries at the
 //! start of the block. A [TxnInfo] contains all the transaction data
 //! necessary to generate an IR.
 //!
@@ -33,7 +34,7 @@
 //!
 //!      let other_data = self.other_data;
 //!      // The method calls [into_txn_proof_gen_ir] (see below) to
-//!      // generate an IR for eaach block transaction.
+//!      // generate an IR for each block transaction.
 //!      let txs = self.block_trace.into_txn_proof_gen_ir(
 //!          &ProcessingMeta::new(resolve_code_hash_fn),
 //!          other_data.clone(),
@@ -84,26 +85,25 @@
 //!
 //! It first preprocesses the [BlockTrace] to provide transaction,
 //! withdrawals and tries data that can be directly used to generate an IR.
-//! [into_processed_block_trace](BlockTrace::into_processed_block_trace) is the
-//! method that produces such a [ProcessedBlockTrace].
 //! For each transaction,
 //! [into_txn_proof_gen_ir](BlockTrace::into_txn_proof_gen_ir) extracts the
-//! necessary data from the [ProcessedTxnInfo] to
+//! necessary data from the processed transaction information to
 //! return the IR.
 //!
 //! The IR is used to generate root proofs, then aggregation proofs and finally
-//! block proofs. But an aggregation proof requires at least two entries. We
-//! ensure this by padding the vector of IRs thanks to additional dummy
-//!representations whenever necessary.
+//! block proofs. Because aggregation proofs require at least two entries, we
+//! pad the vector of IRs thanks to additional dummy payload intermediary
+//! representations whenever necessary.
 //!
-//! ### Withdrawals and Padding
+//! ### [Withdrawals](https://ethereum.org/staking/withdrawals) and Padding
 //!
-//! Withdrawals are all proven together in a dummy transaction. They must,
-//! however, be proven last. The padding is therefore carried out as follows:
-//! If there are no transactions in the block, we add two dummy transactions.
-//! The withdrawals -- if any -- are added to the second dummy transaction. If
-//! there is only one transaction in the block, we add one dummy transaction. If
-//! there are withdrawals, the dummy transaction is at the end. Otherwse, it is
+//! Withdrawals are all proven together in a dummy payload. A dummy payload
+//! corresponds to the IR of a proof with no transaction. They must, however, be
+//! proven last. The padding is therefore carried out as follows: If there are
+//! no transactions in the block, we add two dummy transactions. The withdrawals
+//! -- if any -- are added to the second dummy transaction. If there is only one
+//! transaction in the block, we add one dummy transaction. If
+//! there are withdrawals, the dummy transaction is at the end. Otherwise, it is
 //! added at the start. If there are two or more transactions:
 //! - if there are no withdrawals, no dummy transactions are added
 //! - if there are withdrawals, one dummy transaction is added at the end, with
@@ -125,9 +125,8 @@ pub mod compact;
 /// Defines the main functions used to generate the IR.
 pub mod decoding;
 mod deserializers;
-/// Defines functions that process a [BlockTrace](BlockTrace) and return a
-/// [ProcessedBlockTrace](ProcessedBlockTrace)so that it is easier to turn the
-/// block transactions into IRs.
+/// Defines functions that processes a [BlockTrace] so that it is easier to turn
+/// the block transactions into IRs.
 pub mod processed_block_trace;
 pub mod trace_protocol;
 /// Defines multiple types used in the other modules.
@@ -135,7 +134,5 @@ pub mod types;
 /// Defines useful functions necessary to the other modules.
 pub mod utils;
 
-use mpt_trie::partial_trie::HashedPartialTrie;
-use processed_block_trace::{ProcessedBlockTrace, ProcessedTxnInfo};
 use trace_protocol::{BlockTrace, TxnInfo};
 use types::OtherBlockData;
