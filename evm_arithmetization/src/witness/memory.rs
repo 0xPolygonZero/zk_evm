@@ -211,6 +211,11 @@ impl MemoryState {
         Some(val)
     }
 
+    /// Returns a memory value, or 0 if the memory is unset. If we have some
+    /// preinitialized segments (in interpreter mode), then the values might not
+    /// be stored in memory yet. If the value in memory is not set and the
+    /// address is part of the preinitialized segment, then we return the
+    /// preinitialized value instead.
     pub(crate) fn get_with_init(&self, address: MemoryAddress) -> U256 {
         match self.get(address) {
             Some(val) => val,

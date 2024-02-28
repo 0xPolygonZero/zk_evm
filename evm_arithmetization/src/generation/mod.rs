@@ -315,7 +315,7 @@ fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> 
     state.run_cpu()?;
 
     let pc = state.registers.program_counter;
-    // Padding
+    // Setting the values of padding rows.
     let mut row = CpuColumnsView::<F>::default();
     row.clock = F::from_canonical_usize(state.traces.clock());
     row.context = F::from_canonical_usize(state.registers.context);
@@ -325,8 +325,8 @@ fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> 
     row.stack_len = F::from_canonical_usize(state.registers.stack_len);
 
     loop {
-        // If our trace length is a power of 2, stop.
-        state.traces.push_cpu(true, row);
+        // Padding to a power of 2.
+        state.push_cpu(row);
         row.clock += F::ONE;
         if state.traces.clock().is_power_of_two() {
             break;

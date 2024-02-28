@@ -396,8 +396,6 @@ impl<F: Field> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
-        let _checkpoint = self.checkpoint();
-
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
         self.jumpdest_table = simulate_cpu_and_get_user_jumps("terminate_common", self);
@@ -632,18 +630,12 @@ impl<'a> AccList<'a> {
     }
 }
 
-fn get_val(value: Option<U256>) -> U256 {
-    match value {
-        Some(v) => v,
-        None => 0.into(),
-    }
-}
 impl<'a> Iterator for AccList<'a> {
     type Item = (usize, U256, U256);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(new_pos) =
-            u256_to_usize(get_val(self.access_list_mem[self.pos + self.node_size - 1]))
+            u256_to_usize(self.access_list_mem[self.pos + self.node_size - 1].unwrap_or_default())
         {
             let old_pos = self.pos;
             self.pos = new_pos - self.offset;
@@ -651,15 +643,15 @@ impl<'a> Iterator for AccList<'a> {
                 // addresses
                 Some((
                     old_pos,
-                    get_val(self.access_list_mem[self.pos]),
+                    self.access_list_mem[self.pos].unwrap_or_default(),
                     U256::zero(),
                 ))
             } else {
                 // storage_keys
                 Some((
                     old_pos,
-                    get_val(self.access_list_mem[self.pos]),
-                    get_val(self.access_list_mem[self.pos + 1]),
+                    self.access_list_mem[self.pos].unwrap_or_default(),
+                    self.access_list_mem[self.pos + 1].unwrap_or_default(),
                 ))
             }
         } else {

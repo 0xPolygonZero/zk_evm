@@ -10,6 +10,8 @@ use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 
+use crate::byte_packing::byte_packing_stark::BytePackingOp;
+use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -20,6 +22,8 @@ use crate::generation::state::{
     all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
 };
 use crate::generation::{state::State, GenerationInputs};
+use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
+use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
@@ -31,8 +35,7 @@ use crate::witness::state::RegistersState;
 use crate::witness::transition::{
     decode, fill_op_flag, get_op_special_length, log_kernel_instruction, Transition,
 };
-
-type F = GoldilocksField;
+use crate::{arithmetic, keccak, logic};
 
 /// Halt interpreter execution whenever a jump to this offset is done.
 const DEFAULT_HALT_OFFSET: usize = 0xdeadbeef;
@@ -746,10 +749,6 @@ impl<F: Field> State<F> for Interpreter<F> {
         }
     }
 
-    fn is_generation(&mut self) -> bool {
-        false
-    }
-
     fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
         self.generation_state
             .memory
@@ -790,19 +789,33 @@ impl<F: Field> State<F> for Interpreter<F> {
         self.clock += 1
     }
 
-    fn get_clock(&mut self) -> usize {
+    fn get_clock(&self) -> usize {
         self.clock
     }
+
+    fn push_cpu(&mut self, val: CpuColumnsView<F>) {}
+
+    fn push_logic(&mut self, op: logic::Operation) {}
+
+    fn push_arithmetic(&mut self, op: arithmetic::Operation) {}
+
+    fn push_byte_packing(&mut self, op: BytePackingOp) {}
+
+    fn push_keccak(&mut self, input: [u64; keccak::keccak_stark::NUM_INPUTS], clock: usize) {}
+
+    fn push_keccak_bytes(&mut self, input: [u8; KECCAK_WIDTH_BYTES], clock: usize) {}
+
+    fn push_keccak_sponge(&mut self, op: KeccakSpongeOp) {}
 
     fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
         self.generation_state.rollback(checkpoint)
     }
 
-    fn get_context(&mut self) -> usize {
+    fn get_context(&self) -> usize {
         self.context()
     }
 
-    fn get_halt_context(&mut self) -> Option<usize> {
+    fn get_halt_context(&self) -> Option<usize> {
         self.halt_context
     }
 
@@ -816,8 +829,8 @@ impl<F: Field> State<F> for Interpreter<F> {
         self.apply_memops();
     }
 
-    fn get_stack(&mut self) -> Vec<U256> {
-        self.stack().clone()
+    fn get_stack(&self) -> Vec<U256> {
+        self.stack()
     }
 
     fn get_halt_offsets(&self) -> Vec<usize> {

@@ -1,13 +1,16 @@
 use std::collections::HashMap;
+use std::mem::size_of;
 
 use anyhow::bail;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
+use itertools::Itertools;
 use keccak_hash::keccak;
 use log::log_enabled;
 use plonky2::field::types::Field;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
 use super::TrieInputs;
+use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::membus::NUM_GP_CHANNELS;
@@ -15,6 +18,8 @@ use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
+use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
+use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
@@ -31,54 +36,101 @@ use crate::witness::transition::{
 use crate::witness::util::{
     fill_channel_with_value, mem_read_gp_with_log_and_fill, stack_peek, stack_pop_with_log_and_fill,
 };
+use crate::{arithmetic, keccak, logic};
 
 /// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
 /// a `GenerationState`.
 pub(crate) trait State<F: Field> {
-    /// Returns a `State`'s `Checkpoint`.
+    /// Returns a `State`'s latest `Checkpoint`.
     fn checkpoint(&mut self) -> GenerationStateCheckpoint;
 
-    fn is_generation(&mut self) -> bool {
-        true
-    }
     /// Increments the `gas_used` register by a value `n`.
     fn incr_gas(&mut self, n: u64);
 
     /// Increments the `program_counter` register by a value `n`.
     fn incr_pc(&mut self, n: usize);
 
-    /// Returns a `State`'s registers.
+    /// Returns a `RegistersState`.
     fn get_registers(&self) -> RegistersState;
 
-    /// Returns a `State`'s mutable registers.
+    /// Returns a mutable reference to the `State`'s registers.
     fn get_mut_registers(&mut self) -> &mut RegistersState;
 
-    /// Returns the value stored at address `address` in a `State`.
+    /// Returns the value stored at address `address` in a `State`, or 0 if the
+    /// memory is unset at this position.
     fn get_from_memory(&mut self, address: MemoryAddress) -> U256;
 
-    /// Returns a mutable `GenerationState` from a `State`.
+    /// Returns a mutable reference to a `State`'s `GenerationState`.
     fn get_mut_generation_state(&mut self) -> &mut GenerationState<F>;
-
-    // /// Returns true if a `State` is a `GenerationState` and false otherwise.
-    // fn is_generation_state(&mut self) -> bool;
 
     /// Increments the clock of an `Interpreter`'s clock.
     fn incr_interpreter_clock(&mut self);
 
     /// Returns the value of a `State`'s clock.
-    fn get_clock(&mut self) -> usize;
+    fn get_clock(&self) -> usize;
 
     /// Rolls back a `State`.
     fn rollback(&mut self, checkpoint: GenerationStateCheckpoint);
 
     /// Returns a `State`'s stack.
-    fn get_stack(&mut self) -> Vec<U256>;
+    fn get_stack(&self) -> Vec<U256>;
 
     /// Returns the current context.
-    fn get_context(&mut self) -> usize;
+    fn get_context(&self) -> usize;
 
-    fn get_halt_context(&mut self) -> Option<usize> {
+    /// Returns the context in which the jumpdest analysis should end.
+    fn get_halt_context(&self) -> Option<usize> {
         None
+    }
+
+    fn push_cpu(&mut self, val: CpuColumnsView<F>) {
+        self.get_mut_generation_state().traces.cpu.push(val);
+    }
+
+    fn push_logic(&mut self, op: logic::Operation) {
+        self.get_mut_generation_state().traces.logic_ops.push(op);
+    }
+
+    fn push_arithmetic(&mut self, op: arithmetic::Operation) {
+        self.get_mut_generation_state()
+            .traces
+            .arithmetic_ops
+            .push(op);
+    }
+
+    fn push_memory(&mut self, op: MemoryOp) {
+        self.get_mut_generation_state().traces.memory_ops.push(op);
+    }
+
+    fn push_byte_packing(&mut self, op: BytePackingOp) {
+        self.get_mut_generation_state()
+            .traces
+            .byte_packing_ops
+            .push(op);
+    }
+
+    fn push_keccak(&mut self, input: [u64; keccak::keccak_stark::NUM_INPUTS], clock: usize) {
+        self.get_mut_generation_state()
+            .traces
+            .keccak_inputs
+            .push((input, clock));
+    }
+
+    fn push_keccak_bytes(&mut self, input: [u8; KECCAK_WIDTH_BYTES], clock: usize) {
+        let chunks = input
+            .chunks(size_of::<u64>())
+            .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
+            .collect_vec()
+            .try_into()
+            .unwrap();
+        self.push_keccak(chunks, clock);
+    }
+
+    fn push_keccak_sponge(&mut self, op: KeccakSpongeOp) {
+        self.get_mut_generation_state()
+            .traces
+            .keccak_sponge_ops
+            .push(op);
     }
 
     /// Returns the content of a the `KernelGeneral` segment of a `State`.
@@ -96,8 +148,8 @@ pub(crate) trait State<F: Field> {
 
     fn is_preinitialized_segment(&self, segment: usize) -> bool;
 
-    /// Simulates a CPU. It only generates the traces if the `State` is a
-    /// `GenerationState`. Otherwise, it simply simulates all ooperations.
+    /// Simulates the CPU. It only generates the traces if the `State` is a
+    /// `GenerationState`.
     fn run_cpu(&mut self) -> anyhow::Result<()>
     where
         Self: Transition<F>,
@@ -106,12 +158,12 @@ pub(crate) trait State<F: Field> {
         let halt_offsets = self.get_halt_offsets();
 
         loop {
-            // If we've reached the kernel's halt routine.
             let registers = self.get_registers();
             let pc = registers.program_counter;
 
             let halt = registers.is_kernel && halt_offsets.contains(&pc);
 
+            // If we've reached the kernel's halt routine, halt.
             if halt {
                 if let Some(halt_context) = self.get_halt_context() {
                     if registers.context == halt_context {
@@ -149,8 +201,7 @@ pub(crate) trait State<F: Field> {
         let checkpoint = self.checkpoint();
 
         let (row, _) = self.base_row();
-        let is_generation = self.is_generation();
-        generate_exception(exc_code, self, row, is_generation);
+        generate_exception(exc_code, self, row);
 
         self.apply_ops(checkpoint);
 
@@ -432,7 +483,7 @@ impl<F: Field> State<F> for GenerationState<F> {
     fn incr_interpreter_clock(&mut self) {}
 
     /// Returns the value of a `State`'s clock.
-    fn get_clock(&mut self) -> usize {
+    fn get_clock(&self) -> usize {
         self.traces.clock()
     }
 
@@ -442,11 +493,11 @@ impl<F: Field> State<F> for GenerationState<F> {
     }
 
     /// Returns a `State`'s stack.
-    fn get_stack(&mut self) -> Vec<U256> {
+    fn get_stack(&self) -> Vec<U256> {
         self.stack()
     }
 
-    fn get_context(&mut self) -> usize {
+    fn get_context(&self) -> usize {
         self.registers.context
     }
 
@@ -536,7 +587,7 @@ impl<F: Field> Transition<F> for GenerationState<F> {
                 MemoryOpKind::Read,
                 self.registers.stack_top,
             );
-            self.traces.push_memory(mem_op);
+            self.push_memory(mem_op);
         }
         self.registers.is_stack_top_read = false;
 

@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod bn {
-    use std::collections::HashMap;
 
     use anyhow::Result;
     use ethereum_types::U256;
