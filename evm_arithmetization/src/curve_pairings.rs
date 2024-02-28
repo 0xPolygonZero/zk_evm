@@ -5,7 +5,7 @@ use rand::distributions::Standard;
 use rand::prelude::Distribution;
 use rand::Rng;
 
-use crate::extension_tower::{FieldExt, Fp12, Fp2, Fp6, Stack, BLS381, BN254};
+use crate::extension_tower::{Adj, FieldExt, Fp12, Fp2, Fp6, Stack, BLS381, BN254};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct Curve<T>
@@ -137,6 +137,54 @@ where
         result
     }
 }
+
+/// The tangent and cord functions output sparse Fp12 elements.
+/// This map embeds the nonzero coefficients into an Fp12.
+pub(crate) const fn sparse_embed<F>(g000: F, g01: Fp2<F>, g11: Fp2<F>) -> Fp12<F>
+where
+    F: FieldExt,
+    Fp2<F>: Adj,
+{
+    let g0 = Fp6 {
+        t0: Fp2 {
+            re: g000,
+            im: F::ZERO,
+        },
+        t1: g01,
+        t2: Fp2::<F>::ZERO,
+    };
+
+    let g1 = Fp6 {
+        t0: Fp2::<F>::ZERO,
+        t1: g11,
+        t2: Fp2::<F>::ZERO,
+    };
+
+    Fp12 { z0: g0, z1: g1 }
+}
+
+/// The sloped line function for doubling a point.
+pub(crate) fn tangent<F>(p: Curve<F>, q: Curve<Fp2<F>>) -> Fp12<F>
+where
+    F: FieldExt,
+    Fp2<F>: Adj,
+{
+    let cx = -F::new(3) * p.x * p.x;
+    let cy = F::new(2) * p.y;
+    sparse_embed::<F>(p.y * p.y - F::new(9), q.x * cx, q.y * cy)
+}
+
+/// The sloped line function for adding two points.
+pub(crate) fn cord<F>(p1: Curve<F>, p2: Curve<F>, q: Curve<Fp2<F>>) -> Fp12<F>
+where
+    F: FieldExt,
+    Fp2<F>: Adj,
+{
+    let cx = p2.y - p1.y;
+    let cy = p1.x - p2.x;
+    sparse_embed::<F>(p1.y * p2.x - p2.y * p1.x, q.x * cx, q.y * cy)
+}
+
 pub mod bn254 {
     use super::*;
 
@@ -225,43 +273,8 @@ pub mod bn254 {
         acc
     }
 
-    /// The sloped line function for doubling a point.
-    pub(crate) fn tangent(p: Curve<BN254>, q: Curve<Fp2<BN254>>) -> Fp12<BN254> {
-        let cx = -BN254::new(3) * p.x * p.x;
-        let cy = BN254::new(2) * p.y;
-        sparse_embed(p.y * p.y - BN254::new(9), q.x * cx, q.y * cy)
-    }
-
-    /// The sloped line function for adding two points.
-    pub(crate) fn cord(p1: Curve<BN254>, p2: Curve<BN254>, q: Curve<Fp2<BN254>>) -> Fp12<BN254> {
-        let cx = p2.y - p1.y;
-        let cy = p1.x - p2.x;
-        sparse_embed(p1.y * p2.x - p2.y * p1.x, q.x * cx, q.y * cy)
-    }
-
-    /// The tangent and cord functions output sparse Fp12 elements.
-    /// This map embeds the nonzero coefficients into an Fp12.
-    pub(crate) const fn sparse_embed(g000: BN254, g01: Fp2<BN254>, g11: Fp2<BN254>) -> Fp12<BN254> {
-        let g0 = Fp6 {
-            t0: Fp2 {
-                re: g000,
-                im: BN254::ZERO,
-            },
-            t1: g01,
-            t2: Fp2::<BN254>::ZERO,
-        };
-
-        let g1 = Fp6 {
-            t0: Fp2::<BN254>::ZERO,
-            t1: g11,
-            t2: Fp2::<BN254>::ZERO,
-        };
-
-        Fp12 { z0: g0, z1: g1 }
-    }
-
     pub(crate) fn gen_fp12_sparse<R: Rng + ?Sized>(rng: &mut R) -> Fp12<BN254> {
-        sparse_embed(
+        sparse_embed::<BN254>(
             rng.gen::<BN254>(),
             rng.gen::<Fp2<BN254>>(),
             rng.gen::<Fp2<BN254>>(),
@@ -516,7 +529,7 @@ pub mod bn254 {
     ];
 }
 
-pub mod bls12 {
+pub mod bls381 {
     use super::*;
 
     /// The BLS curve consists of pairs
@@ -644,49 +657,6 @@ pub mod bls12 {
             }
         }
         acc
-    }
-
-    /// The sloped line function for doubling a point.
-    pub(crate) fn tangent(p: Curve<BLS381>, q: Curve<Fp2<BLS381>>) -> Fp12<BLS381> {
-        let cx = -BLS381::new(3) * p.x * p.x;
-        let cy = BLS381::new(2) * p.y;
-        sparse_embed(p.y * p.y - BLS381::new(9), q.x * cx, q.y * cy)
-    }
-
-    /// The sloped line function for adding two points.
-    pub(crate) fn cord(
-        p1: Curve<BLS381>,
-        p2: Curve<BLS381>,
-        q: Curve<Fp2<BLS381>>,
-    ) -> Fp12<BLS381> {
-        let cx = p2.y - p1.y;
-        let cy = p1.x - p2.x;
-        sparse_embed(p1.y * p2.x - p2.y * p1.x, q.x * cx, q.y * cy)
-    }
-
-    /// The tangent and cord functions output sparse Fp12 elements.
-    /// This map embeds the nonzero coefficients into an Fp12.
-    pub(crate) const fn sparse_embed(
-        g000: BLS381,
-        g01: Fp2<BLS381>,
-        g11: Fp2<BLS381>,
-    ) -> Fp12<BLS381> {
-        let g0 = Fp6 {
-            t0: Fp2 {
-                re: g000,
-                im: BLS381::ZERO,
-            },
-            t1: g01,
-            t2: Fp2::<BLS381>::ZERO,
-        };
-
-        let g1 = Fp6 {
-            t0: Fp2::<BLS381>::ZERO,
-            t1: g11,
-            t2: Fp2::<BLS381>::ZERO,
-        };
-
-        Fp12 { z0: g0, z1: g1 }
     }
 
     /// The output y of the miller loop is not an invariant,
@@ -881,40 +851,108 @@ pub mod bls12 {
 
 #[cfg(test)]
 mod tests {
+    use num::zero;
     use rand::rngs::OsRng;
 
     use super::*;
 
     #[test]
-    fn test_bls12_pairing() {
-        let x0 = -bls12::tate(Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR);
-        let x1 = bls12::tate(-Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR);
-        let x2 = bls12::tate(Curve::<BLS381>::GENERATOR, -Curve::<Fp2<BLS381>>::GENERATOR);
+    fn test_bls_pairing_simple() {
+        let x0 = bls381::tate(Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR);
 
-        println!(
-            "{:?}",
-            bls12::tate(-Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR)
-                * bls12::tate(Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR)
+        // x0^(-1)
+        let x1 = bls381::tate(-Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR);
+        let x2 = bls381::tate(Curve::<BLS381>::GENERATOR, -Curve::<Fp2<BLS381>>::GENERATOR);
+
+        assert_eq!(x0 * x1, Fp12::<BLS381>::UNIT);
+        assert_eq!(x0 * x2, Fp12::<BLS381>::UNIT);
+
+        assert_eq!(
+            bls381::tate(Curve::<BLS381>::unit(), Curve::<Fp2<BLS381>>::unit()),
+            Fp12::<BLS381>::ZERO
         );
-        // TODO: Fix test
-        // assert_eq!(x0, x1);
-        // assert_eq!(x1, x2);
     }
 
     #[test]
-    fn test_bn_pairing() {
-        let x0 = -bn254::tate(Curve::<BN254>::GENERATOR, Curve::<Fp2<BN254>>::GENERATOR);
+    fn test_bls_pairing_random() {
+        let mut rng = rand::thread_rng();
+        let mut acc = 0_i32;
+        let mut running_product = Fp12::<BLS381>::UNIT;
+        for _ in 0..5 {
+            let m = rng.gen_range(-8..8);
+            let n = rng.gen_range(-8..8);
+            if m * n == 0 {
+                continue;
+            }
+            acc -= m * n;
+
+            let p = Curve::<BLS381>::int(m);
+            let q = Curve::<Fp2<BLS381>>::int(n);
+            running_product = running_product * bls381::tate(p, q);
+        }
+
+        // Finally, multiply by the accumulated inverse and check this matches the
+        // expected value.
+        let p = Curve::<BLS381>::int(acc);
+        let q = Curve::<Fp2<BLS381>>::GENERATOR;
+        running_product = running_product * bls381::tate(p, q);
+
+        let expected = if acc == 0 {
+            Fp12::<BLS381>::ZERO
+        } else {
+            Fp12::<BLS381>::UNIT
+        };
+
+        assert_eq!(running_product, expected);
+    }
+
+    #[test]
+    fn test_bn_pairing_simple() {
+        let x0 = bn254::tate(Curve::<BN254>::GENERATOR, Curve::<Fp2<BN254>>::GENERATOR);
+
+        // x0^(-1)
         let x1 = bn254::tate(-Curve::<BN254>::GENERATOR, Curve::<Fp2<BN254>>::GENERATOR);
         let x2 = bn254::tate(Curve::<BN254>::GENERATOR, -Curve::<Fp2<BN254>>::GENERATOR);
 
-        println!(
-            "{:?}",
-            bn254::tate(-Curve::<BN254>::GENERATOR, Curve::<Fp2<BN254>>::GENERATOR)
-                * bn254::tate(Curve::<BN254>::GENERATOR, Curve::<Fp2<BN254>>::GENERATOR)
-        );
+        assert_eq!(x0 * x1, Fp12::<BN254>::UNIT);
+        assert_eq!(x0 * x2, Fp12::<BN254>::UNIT);
 
-        // TODO: Fix test
-        // assert_eq!(x0, x1);
-        // assert_eq!(x1, x2);
+        assert_eq!(
+            bn254::tate(Curve::<BN254>::unit(), Curve::<Fp2<BN254>>::unit()),
+            Fp12::<BN254>::ZERO
+        );
+    }
+
+    #[test]
+    fn test_bn_pairing_random() {
+        let mut rng = rand::thread_rng();
+        let mut acc = 0_i32;
+        let mut running_product = Fp12::<BN254>::UNIT;
+        for _ in 0..5 {
+            let m = rng.gen_range(-8..8);
+            let n = rng.gen_range(-8..8);
+            if m * n == 0 {
+                continue;
+            }
+            acc -= m * n;
+
+            let p = Curve::<BN254>::int(m);
+            let q = Curve::<Fp2<BN254>>::int(n);
+            running_product = running_product * bn254::tate(p, q);
+        }
+
+        // Finally, multiply by the accumulated inverse and check this matches the
+        // expected value.
+        let p = Curve::<BN254>::int(acc);
+        let q = Curve::<Fp2<BN254>>::GENERATOR;
+        running_product = running_product * bn254::tate(p, q);
+
+        let expected = if acc == 0 {
+            Fp12::<BN254>::ZERO
+        } else {
+            Fp12::<BN254>::UNIT
+        };
+
+        assert_eq!(running_product, expected);
     }
 }

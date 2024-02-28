@@ -429,13 +429,18 @@ impl<F: Field> GenerationState<F> {
         comm_hi.to_big_endian(&mut comm_bytes[32..48]);
         println!("COMM BYTES:{:?}", comm_bytes);
 
+        let mut proof_bytes = [0u8; 48];
+        proof_lo.to_big_endian(&mut proof_bytes[0..32]);
+        proof_hi.to_big_endian(&mut proof_bytes[32..48]);
+        println!("PROOF BYTES:{:?}", proof_bytes);
+
         if versioned_hash
             != VERSIONED_HASH_VERSION_KZG + U256::from_big_endian(&keccak(&comm_bytes).0[1..])
         {
             return Err(ProgramError::ProverInputError(InvalidInput));
         }
 
-        self.verify_kzg_proof(comm_lo, comm_hi, z, y, proof_lo, proof_hi)?;
+        self.verify_kzg_proof(comm_bytes, z, y, proof_bytes)?;
 
         Ok(U256::zero())
     }
@@ -443,12 +448,10 @@ impl<F: Field> GenerationState<F> {
     /// Verifies a KZG proof.
     fn verify_kzg_proof(
         &self,
-        comm_lo: U256,
-        comm_hi: U256,
+        comm_bytes: [u8; 48],
         z: U256,
         y: U256,
-        proof_lo: U256,
-        proof_hi: U256,
+        proof_bytes: [u8; 48],
     ) -> Result<(), ProgramError> {
         Ok(())
     }
