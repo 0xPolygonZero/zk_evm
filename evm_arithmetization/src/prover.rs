@@ -216,7 +216,7 @@ where
         )
     );
 
-    let (stark_proofs, (mem_before_cap, mem_after_cap)) = timed!(
+    let (stark_proofs, mem_before_cap, mem_after_cap) = timed!(
         timing,
         "compute all proofs given commitments",
         prove_with_commitments(
@@ -271,7 +271,7 @@ where
         let mut extra_values = HashMap::new();
         extra_values.insert(
             *Table::Memory,
-            get_memory_extra_looking_values(&public_values),
+            get_memory_extra_looking_values(public_values),
         );
         check_ctls(
             &trace_poly_values,
@@ -288,6 +288,12 @@ where
         public_values: public_values.clone(),
     })
 }
+
+type ProofWithMemCaps<F, C, H, const D: usize> = (
+    [StarkProofWithMetadata<F, C, D>; NUM_TABLES],
+    MerkleCap<F, H>,
+    MerkleCap<F, H>,
+);
 
 /// Generates a proof for each STARK.
 /// At this stage, we have computed the trace polynomials commitments for the
@@ -307,10 +313,7 @@ fn prove_with_commitments<F, C, const D: usize>(
     ctl_challenges: &GrandProductChallengeSet<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<(
-    [StarkProofWithMetadata<F, C, D>; NUM_TABLES],
-    (MerkleCap<F, C::Hasher>, MerkleCap<F, C::Hasher>),
-)>
+) -> Result<(ProofWithMemCaps<F, C, C::Hasher, D>)>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -472,7 +475,8 @@ where
             mem_before_proof,
             mem_after_proof,
         ],
-        (mem_before_cap, mem_after_cap),
+        mem_before_cap,
+        mem_after_cap,
     ))
 }
 
@@ -494,6 +498,9 @@ pub(crate) fn get_mem_after_value_from_row<F: RichField>(row: &[F]) -> (MemoryAd
     (mem_address, value)
 }
 
+type ProofSingleWithCap<F, C, H, const D: usize> =
+    (StarkProofWithMetadata<F, C, D>, MerkleCap<F, H>);
+
 /// Computes a proof for a single STARK table, including:
 /// - the initial state of the challenger,
 /// - all the requires Merkle caps,
@@ -510,7 +517,7 @@ pub(crate) fn prove_single_table<F, C, S, const D: usize>(
     is_mem_after: bool,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<(StarkProofWithMetadata<F, C, D>, MerkleCap<F, C::Hasher>)>
+) -> Result<ProofSingleWithCap<F, C, C::Hasher, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,

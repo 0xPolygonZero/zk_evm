@@ -266,17 +266,18 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
     state.traces.memory_ops.extend(ops);
 }
 
+type TablesWithPVsAndFinalMem<F> = (
+    [Vec<PolynomialValues<F>>; NUM_TABLES],
+    PublicValues,
+    Vec<Vec<F>>,
+);
 pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
     config: &StarkConfig,
     segment_data: SegmentData<F>,
     timing: &mut TimingTree,
-) -> anyhow::Result<(
-    [Vec<PolynomialValues<F>>; NUM_TABLES],
-    PublicValues,
-    Vec<Vec<F>>,
-)> {
+) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
     // Initialize the state with the state at the end of the
     // previous segment execution, if any.
 

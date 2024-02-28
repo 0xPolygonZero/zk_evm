@@ -161,16 +161,14 @@ pub(crate) fn generate_first_change_flags_and_rc<F: RichField>(
 
         row[RANGE_CHECK] = if idx == num_ops - 1 {
             F::ZERO
+        } else if context_first_change {
+            next_context - context - F::ONE
+        } else if segment_first_change {
+            next_segment - segment - F::ONE
+        } else if virtual_first_change {
+            next_virt - virt - F::ONE
         } else {
-            if context_first_change {
-                next_context - context - F::ONE
-            } else if segment_first_change {
-                next_segment - segment - F::ONE
-            } else if virtual_first_change {
-                next_virt - virt - F::ONE
-            } else {
-                next_timestamp - timestamp
-            }
+            next_timestamp - timestamp
         };
 
         assert!(
@@ -306,7 +304,6 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             address: padding_addr,
             timestamp: last_op.timestamp + 1,
             value: U256::zero(),
-            ..last_op
         };
         let num_ops = memory_ops.len();
         let num_ops_padded = num_ops.next_power_of_two();
