@@ -25,33 +25,45 @@ use crate::{
     utils::{hash, update_val_if_some},
 };
 
+/// Stores the result of parsing tries. Returns a [TraceParsingError] upon
+/// failure.
 pub type TraceParsingResult<T> = Result<T, TraceParsingError>;
 
+/// An error type for trie parsing.
 #[derive(Debug, Error)]
 pub enum TraceParsingError {
+    /// Failure to decode an Ethereum [Account].
     #[error("Failed to decode RLP bytes ({0}) as an Ethereum account due to the error: {1}")]
     AccountDecode(String, String),
 
+    /// Failure due to trying to access or delete a storage trie missing
+    /// from the base trie.
     #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0})")]
     MissingAccountStorageTrie(HashedAccountAddr),
 
+    /// Failure due to trying to access a non-existent key in the trie.
     #[error("Tried accessing a non-existent key ({1}) in the {0} trie (root hash: {2:x})")]
     NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
 
-    // TODO: Figure out how to make this error useful/meaningful... For now this is just a
-    // placeholder.
+    /// Failure due to missing keys when creating a subpartial trie.
     #[error("Missing keys when creating sub-partial tries (Trie type: {0})")]
     MissingKeysCreatingSubPartialTrie(TrieType),
 
+    /// Failure due to trying to withdraw from a missing account
     #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
     MissingWithdrawalAccount(Address, HashedAccountAddr, U256),
 }
 
+/// An enum to cover all Ethereum trie types (see https://ethereum.github.io/yellowpaper/paper.pdf for details).
 #[derive(Debug)]
 pub enum TrieType {
+    /// State trie.
     State,
+    /// Storage trie.
     Storage,
+    /// Receipt trie.
     Receipt,
+    /// Transaction trie.
     Txn,
 }
 
@@ -101,6 +113,9 @@ impl ProcessedBlockTrace {
             gas_used_before: U256::zero(),
             gas_used_after: U256::zero(),
         };
+
+        // A copy of the initial extra_data possibly needed during padding.
+        let extra_data_for_dummies = extra_data.clone();
 
         let mut txn_gen_inputs = self
             .txn_info
@@ -156,6 +171,7 @@ impl ProcessedBlockTrace {
             &mut txn_gen_inputs,
             &other_data,
             &extra_data,
+            &extra_data_for_dummies,
             &initial_tries_for_dummies,
             &curr_block_tries,
             !self.withdrawals.is_empty(),
@@ -303,7 +319,8 @@ impl ProcessedBlockTrace {
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<TxnProofGenIR>,
         other_data: &OtherBlockData,
-        extra_data: &ExtraBlockData,
+        final_extra_data: &ExtraBlockData,
+        initial_extra_data: &ExtraBlockData,
         initial_tries: &PartialTrieState,
         final_tries: &PartialTrieState,
         has_withdrawals: bool,
@@ -311,10 +328,11 @@ impl ProcessedBlockTrace {
         match gen_inputs.len() {
             0 => {
                 debug_assert!(initial_tries.state == final_tries.state);
+                debug_assert!(initial_extra_data == final_extra_data);
                 // We need to pad with two dummy entries.
                 gen_inputs.extend(create_dummy_txn_pair_for_empty_block(
                     other_data,
-                    extra_data,
+                    final_extra_data,
                     initial_tries,
                 ));
 
@@ -330,11 +348,12 @@ impl ProcessedBlockTrace {
                 match has_withdrawals {
                     false => {
                         let dummy_txn =
-                            create_dummy_gen_input(other_data, extra_data, initial_tries);
+                            create_dummy_gen_input(other_data, initial_extra_data, initial_tries);
                         gen_inputs.insert(0, dummy_txn)
                     }
                     true => {
-                        let dummy_txn = create_dummy_gen_input(other_data, extra_data, final_tries);
+                        let dummy_txn =
+                            create_dummy_gen_input(other_data, final_extra_data, final_tries);
                         gen_inputs.push(dummy_txn)
                     }
                 };

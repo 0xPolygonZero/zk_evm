@@ -6,19 +6,32 @@ use evm_arithmetization::{
 use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
+/// A type alias around `u64` for a block height.
 pub type BlockHeight = u64;
+/// A type alias around `[U256; 8]` for a bloom filter.
 pub type Bloom = [U256; 8];
+/// A type alias around `H256` for a code hash.
 pub type CodeHash = H256;
+/// A type alias for `H256` for an account address's hash.
 pub type HashedAccountAddr = H256;
+/// A type alias around `H256` for a node address's hash.
 pub type HashedNodeAddr = H256;
+/// A type alias around `H256` for a storage address's hash.
 pub type HashedStorageAddr = H256;
+/// A type alias around `Nibbles` for a hashed storage address's nibbles.
 pub type HashedStorageAddrNibbles = Nibbles;
+/// A type alias around `H256` for a storage address.
 pub type StorageAddr = H256;
+/// A type alias around `H256` for a storage address's nibbles.
 pub type StorageAddrNibbles = H256;
+/// A type alias around `U256` for a storage value.
 pub type StorageVal = U256;
+/// A type alias around `H256` for a trie root hash.
 pub type TrieRootHash = H256;
+/// A type alias around `usize` for a transaction's index within a block.
 pub type TxnIdx = usize;
 
+/// A function which turns a code hash into bytes.
 pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;
 
 // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
@@ -50,7 +63,9 @@ pub type TxnProofGenIR = GenerationInputs;
 /// Other data that is needed for proof gen.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OtherBlockData {
+    /// Data that is specific to the block.
     pub b_data: BlockLevelData,
+    /// State trie root hash at the checkpoint.
     pub checkpoint_state_trie_root: TrieRootHash,
 }
 
@@ -58,7 +73,10 @@ pub struct OtherBlockData {
 /// block.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockLevelData {
+    /// All block data excluding block hashes and withdrawals.
     pub b_meta: BlockMetadata,
+    /// Block hashes: the previous 256 block hashes and the current block hash.
     pub b_hashes: BlockHashes,
+    /// Block withdrawal addresses and values.
     pub withdrawals: Vec<(Address, U256)>,
 }

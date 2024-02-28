@@ -54,8 +54,8 @@ process_receipt_after_bloom:
     // Now we can write the receipt in MPT_TRIE_DATA.
     %get_trie_data_size
     // stack: receipt_ptr, payload_len, status, new_cum_gas, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
-    // Write transaction type if necessary. RLP_RAW contains, at index 0, the current transaction type.
-    PUSH @SEGMENT_RLP_RAW // ctx == virt == 0
+    // Write transaction type if necessary. The address INITIAL_TXN_RLP_ADDR contains the current transaction type.
+    PUSH @INITIAL_TXN_RLP_ADDR
     MLOAD_GENERAL
     // stack: first_txn_byte, receipt_ptr, payload_len, status, new_cum_gas, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     DUP1 %eq_const(1) %jumpi(receipt_nonzero_type)

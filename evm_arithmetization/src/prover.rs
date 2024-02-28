@@ -21,8 +21,6 @@ use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
-#[cfg(debug_assertions)]
-use starky::cross_table_lookup::debug_utils::check_ctls;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
 use starky::evaluation_frame::StarkEvaluationFrame;
 use starky::lookup::{get_grand_product_challenge_set, GrandProductChallengeSet, Lookup};
@@ -39,10 +37,6 @@ use crate::get_challenges::observe_public_values;
 use crate::mem_before;
 use crate::memory::segments::Segment;
 use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
-use crate::util::get_u256;
-#[cfg(debug_assertions)]
-use crate::verifier::debug_utils::get_memory_extra_looking_values;
-use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::state::RegistersState;
 
@@ -276,6 +270,10 @@ where
     // enabled.
     #[cfg(debug_assertions)]
     {
+        use starky::cross_table_lookup::debug_utils::check_ctls;
+
+        use crate::verifier::debug_utils::get_memory_extra_looking_values;
+
         let mut extra_values = HashMap::new();
         extra_values.insert(
             *Table::Memory,
