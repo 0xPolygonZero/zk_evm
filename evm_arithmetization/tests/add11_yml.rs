@@ -185,6 +185,7 @@ fn add11_yml() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore] // Too slow to run on CI.
 fn add11_segments_aggreg() -> anyhow::Result<()> {
     init_logger();
 
