@@ -10,6 +10,12 @@
     // stack: (empty)
 %endmacro
 
+%macro initialize_rlp_segment
+    PUSH @ENCODED_EMPTY_NODE_ADDR
+    PUSH 0x80
+    MSTORE_GENERAL
+%endmacro
+
 %macro alloc_rlp_block
     // stack: (empty)
     %mload_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)

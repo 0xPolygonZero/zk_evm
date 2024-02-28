@@ -88,12 +88,6 @@ where
         let mut res = vec![];
         for ctx in 0..memory_before.contexts.len() {
             for segment in 0..memory_before.contexts[ctx].segments.len() {
-                if ctx == 0 && segment == 13 {
-                    res.push((
-                        MemoryAddress::new(0, Segment::RlpRaw, 0xFFFFFFFF),
-                        0x80.into(),
-                    ))
-                }
                 for virt in 0..memory_before.contexts[ctx].segments[segment].content.len() {
                     if memory_before.contexts[ctx].segments[segment].content[virt].is_some() {
                         res.push((

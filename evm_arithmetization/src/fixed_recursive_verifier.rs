@@ -998,17 +998,6 @@ where
         // constant and the `ShiftTable`.
         let mut trace = vec![];
 
-        // Push constant.
-        let mut constant_row = vec![F::ZERO; crate::mem_before::columns::NUM_COLUMNS];
-        constant_row[crate::mem_before::columns::FILTER] = F::ONE;
-        constant_row[crate::mem_before::columns::ADDR_CONTEXT] = F::ZERO;
-        constant_row[crate::mem_before::columns::ADDR_SEGMENT] =
-            F::from_canonical_usize(Segment::RlpRaw.unscale());
-        constant_row[crate::mem_before::columns::ADDR_VIRTUAL] =
-            F::from_canonical_usize(0xFFFFFFFF);
-        constant_row[4] = F::from_canonical_usize(0x80);
-        trace.push(constant_row);
-
         // Push shift table.
         for i in 0..256 {
             let mut row = vec![F::ZERO; crate::mem_before::columns::NUM_COLUMNS];

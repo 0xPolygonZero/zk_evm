@@ -294,7 +294,6 @@ pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     apply_metadata_and_tries_memops(&mut state, &inputs, &registers_before, &registers_after);
 
-    println!("initial registers {:?}", state.registers);
     let cpu_res = timed!(
         timing,
         "simulate CPU",

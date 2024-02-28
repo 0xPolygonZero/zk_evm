@@ -80,6 +80,9 @@ global main:
     // skipping over the preinitialized empty node.
     PUSH @INITIAL_TXN_RLP_ADDR
     %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
+
+    // Encode constant nodes
+    %initialize_rlp_segment
    
     // Initialize the state, transaction and receipt trie root pointers.
     PROVER_INPUT(trie_ptr::state)
