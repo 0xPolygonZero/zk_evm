@@ -41,6 +41,8 @@ pub fn generate_txn_proof(
     gen_inputs: TxnProofGenIR,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {
+    // TODO: change the `max_cpu_len` and `segment_index` arguments once we can
+    // automatically determine them.
     let output_data = p_state
         .state
         .prove_segment(
