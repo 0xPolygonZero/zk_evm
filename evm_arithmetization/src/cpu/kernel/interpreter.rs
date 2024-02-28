@@ -152,7 +152,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 
             interpreter.run();
 
-            log::debug!("jdt = {:?}", interpreter.jumpdest_table);
+            log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);
 
             interpreter
                 .generation_state
@@ -625,6 +625,18 @@ impl<'a, F: Field> Interpreter<'a, F> {
     pub(crate) fn set_memory_segment_bytes(&mut self, segment: Segment, memory: Vec<u8>) {
         self.generation_state.memory.contexts[0].segments[segment.unscale()].content =
             memory.into_iter().map(U256::from).collect();
+    }
+
+    pub(crate) fn extend_memory_segment(&mut self, segment: Segment, memory: &[U256]) {
+        self.generation_state.memory.contexts[0].segments[segment.unscale()]
+            .content
+            .extend(memory);
+    }
+
+    pub(crate) fn extend_memory_segment_bytes(&mut self, segment: Segment, memory: Vec<u8>) {
+        self.generation_state.memory.contexts[0].segments[segment.unscale()]
+            .content
+            .extend(memory.into_iter().map(U256::from).collect::<Vec<_>>());
     }
 
     pub(crate) fn set_rlp_memory(&mut self, rlp: Vec<u8>) {
@@ -1176,7 +1188,7 @@ impl<'a, F: Field> Interpreter<'a, F> {
         self.push(syscall_info)
     }
 
-    fn get_jumpdest_bit(&self, offset: usize) -> U256 {
+    pub(crate) fn get_jumpdest_bit(&self, offset: usize) -> U256 {
         if self.generation_state.memory.contexts[self.context()].segments
             [Segment::JumpdestBits.unscale()]
         .content
@@ -1504,12 +1516,11 @@ impl<'a, F: Field> Interpreter<'a, F> {
         self.generation_state.registers.context = context;
     }
 
-    /// Writes the encoding of 0 to position @ENCODED_EMPTY_NODE_POS.
+    /// Writes the encoding of 0 at @ENCODED_EMPTY_NODE_ADDR.
     pub(crate) fn initialize_rlp_segment(&mut self) {
-        self.generation_state.memory.set(
-            MemoryAddress::new(0, Segment::RlpRaw, 0xFFFFFFFF),
-            128.into(),
-        )
+        self.generation_state
+            .memory
+            .set(MemoryAddress::new(0, Segment::RlpRaw, 0), 0x80.into())
     }
 }
 

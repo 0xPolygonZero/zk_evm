@@ -202,17 +202,4 @@ impl Segment {
             Segment::BlockHashes => 256,
         }
     }
-
-    pub(crate) fn constant(&self, virt: usize) -> Option<U256> {
-        match self {
-            Segment::RlpRaw => {
-                if virt == 0xFFFFFFFF {
-                    Some(U256::from(0x80))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
 }
