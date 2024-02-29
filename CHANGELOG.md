@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2024-03-01
+
 ### Changed
 - Add verification for invalid jumps. [#36](https://github.com/0xPolygonZero/zk_evm/pull/36)
 - Refactor accessed lists as sorted linked lists ([#30](https://github.com/0xPolygonZero/zk_evm/pull/30))
