@@ -139,7 +139,7 @@ fn test_add11_yml() {
         block_bloom: [0.into(); 8],
     };
 
-    let tries_inputs = GenerationInputs {
+    let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
         tries: tries_before,
@@ -157,13 +157,10 @@ fn test_add11_yml() {
     };
 
     let initial_stack = vec![];
+    let initial_offset = KERNEL.global_labels["main"];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
 
-    let route_txn_label = KERNEL.global_labels["main"];
-    // Switch context and initialize memory with the data we need for the tests.
-    interpreter.generation_state.registers.program_counter = route_txn_label;
-    interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
     interpreter.set_is_kernel(true);
     interpreter.run().expect("Proving add11 failed.");
 }
@@ -283,7 +280,7 @@ fn test_add11_yml_with_exception() {
         block_bloom: [0.into(); 8],
     };
 
-    let tries_inputs = GenerationInputs {
+    let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
         tries: tries_before,
@@ -301,13 +298,10 @@ fn test_add11_yml_with_exception() {
     };
 
     let initial_stack = vec![];
+    let initial_offset = KERNEL.global_labels["main"];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
 
-    let route_txn_label = KERNEL.global_labels["main"];
-    // Switch context and initialize memory with the data we need for the tests.
-    interpreter.generation_state.registers.program_counter = route_txn_label;
-    interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
     interpreter.set_is_kernel(true);
     interpreter
         .run()
