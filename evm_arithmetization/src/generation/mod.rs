@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Error};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
@@ -20,13 +20,14 @@ use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::GenerationState;
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
 use crate::proof::{BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots};
 use crate::util::{h2u, u256_to_u8, u256_to_usize};
-use crate::witness::memory::{MemoryAddress, MemoryChannel};
-use crate::witness::transition::transition;
+use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind};
+use crate::witness::state::RegistersState;
 
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -34,6 +35,7 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
+use self::state::{GenerationStateCheckpoint, State};
 use crate::witness::util::{mem_write_log, stack_peek};
 
 /// Inputs needed for trace generation.
@@ -310,38 +312,28 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 }
 
 fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
-    let halt_pc = KERNEL.global_labels["halt"];
+    state.run_cpu()?;
+
+    let pc = state.registers.program_counter;
+    // Setting the values of padding rows.
+    let mut row = CpuColumnsView::<F>::default();
+    row.clock = F::from_canonical_usize(state.traces.clock());
+    row.context = F::from_canonical_usize(state.registers.context);
+    row.program_counter = F::from_canonical_usize(pc);
+    row.is_kernel_mode = F::ONE;
+    row.gas = F::from_canonical_u64(state.registers.gas_used);
+    row.stack_len = F::from_canonical_usize(state.registers.stack_len);
 
     loop {
-        // If we've reached the kernel's halt routine, and our trace length is a power
-        // of 2, stop.
-        let pc = state.registers.program_counter;
-        let halt = state.registers.is_kernel && pc == halt_pc;
-        if halt {
-            log::info!("CPU halted after {} cycles", state.traces.clock());
-
-            // Padding
-            let mut row = CpuColumnsView::<F>::default();
-            row.clock = F::from_canonical_usize(state.traces.clock());
-            row.context = F::from_canonical_usize(state.registers.context);
-            row.program_counter = F::from_canonical_usize(pc);
-            row.is_kernel_mode = F::ONE;
-            row.gas = F::from_canonical_u64(state.registers.gas_used);
-            row.stack_len = F::from_canonical_usize(state.registers.stack_len);
-
-            loop {
-                state.traces.push_cpu(row);
-                row.clock += F::ONE;
-                if state.traces.clock().is_power_of_two() {
-                    break;
-                }
-            }
-
-            log::info!("CPU trace padded to {} cycles", state.traces.clock());
-
-            return Ok(());
+        // Padding to a power of 2.
+        state.push_cpu(row);
+        row.clock += F::ONE;
+        if state.traces.clock().is_power_of_two() {
+            break;
         }
-
-        transition(state)?;
     }
+
+    log::info!("CPU trace padded to {} cycles", state.traces.clock());
+
+    Ok(())
 }

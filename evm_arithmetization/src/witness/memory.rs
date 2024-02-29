@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ethereum_types::U256;
 
 use crate::cpu::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
@@ -32,7 +34,7 @@ impl MemoryChannel {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub(crate) struct MemoryAddress {
+pub struct MemoryAddress {
     pub(crate) context: usize,
     pub(crate) segment: usize,
     pub(crate) virt: usize,
@@ -161,11 +163,12 @@ impl MemoryOp {
 #[derive(Clone, Debug)]
 pub(crate) struct MemoryState {
     pub(crate) contexts: Vec<MemoryContextState>,
+    preinitialized_segments: HashMap<Segment, MemorySegmentState>,
 }
 
 impl MemoryState {
     pub(crate) fn new(kernel_code: &[u8]) -> Self {
-        let code_u256s = kernel_code.iter().map(|&x| x.into()).collect();
+        let code_u256s = kernel_code.iter().map(|&x| Some(x.into())).collect();
         let mut result = Self::default();
         result.contexts[0].segments[Segment::Code.unscale()].content = code_u256s;
         result
@@ -185,13 +188,18 @@ impl MemoryState {
         }
     }
 
-    pub(crate) fn get(&self, address: MemoryAddress) -> U256 {
+    pub(crate) fn get(&self, address: MemoryAddress) -> Option<U256> {
         if address.context >= self.contexts.len() {
-            return U256::zero();
+            return None;
         }
 
-        let segment = Segment::all()[address.segment];
+        let segments = Segment::all();
+        let segment = segments.get(address.segment)?;
 
+        let content = &self.contexts[address.context].segments[address.segment].content;
+        if address.virt >= content.len() || content[address.virt].is_none() {
+            return None;
+        }
         let val = self.contexts[address.context].segments[address.segment].get(address.virt);
         assert!(
             val.bits() <= segment.bit_range(),
@@ -200,7 +208,36 @@ impl MemoryState {
             segment,
             segment.bit_range()
         );
-        val
+        Some(val)
+    }
+
+    /// Returns a memory value, or 0 if the memory is unset. If we have some
+    /// preinitialized segments (in interpreter mode), then the values might not
+    /// be stored in memory yet. If the value in memory is not set and the
+    /// address is part of the preinitialized segment, then we return the
+    /// preinitialized value instead.
+    pub(crate) fn get_with_init(&self, address: MemoryAddress) -> U256 {
+        match self.get(address) {
+            Some(val) => val,
+            None => {
+                let segment = Segment::all()[address.segment];
+                let offset = address.virt;
+                if self.preinitialized_segments.contains_key(&segment)
+                    && offset
+                        < self
+                            .preinitialized_segments
+                            .get(&segment)
+                            .unwrap()
+                            .content
+                            .len()
+                {
+                    self.preinitialized_segments.get(&segment).unwrap().content[offset]
+                        .expect("We checked that the offset is not out of bounds.")
+                } else {
+                    0.into()
+                }
+            }
+        }
     }
 
     pub(crate) fn set(&mut self, address: MemoryAddress, val: U256) {
@@ -222,7 +259,34 @@ impl MemoryState {
 
     // These fields are already scaled by their respective segment.
     pub(crate) fn read_global_metadata(&self, field: GlobalMetadata) -> U256 {
-        self.get(MemoryAddress::new_bundle(U256::from(field as usize)).unwrap())
+        self.get_with_init(MemoryAddress::new_bundle(U256::from(field as usize)).unwrap())
+    }
+
+    /// Inserts a segment and its preinitialized values in
+    /// `preinitialized_segments`.
+    pub(crate) fn insert_preinitialized_segment(
+        &mut self,
+        segment: Segment,
+        values: MemorySegmentState,
+    ) {
+        self.preinitialized_segments.insert(segment, values);
+    }
+
+    /// Returns a boolean which indicates whether a segment (given as a usize)
+    /// is part of the `preinitialize_segments`.
+    pub(crate) fn is_preinitialized_segment(&self, segment: usize) -> bool {
+        if let Some(seg) = Segment::all().get(segment) {
+            self.preinitialized_segments.contains_key(seg)
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn get_preinitialized_segment(
+        &self,
+        segment: Segment,
+    ) -> Option<&MemorySegmentState> {
+        self.preinitialized_segments.get(&segment)
     }
 }
 
@@ -231,6 +295,7 @@ impl Default for MemoryState {
         Self {
             // We start with an initial context for the kernel.
             contexts: vec![MemoryContextState::default()],
+            preinitialized_segments: HashMap::default(),
         }
     }
 }
@@ -251,7 +316,7 @@ impl Default for MemoryContextState {
 
 #[derive(Clone, Default, Debug)]
 pub(crate) struct MemorySegmentState {
-    pub(crate) content: Vec<U256>,
+    pub(crate) content: Vec<Option<U256>>,
 }
 
 impl MemorySegmentState {
@@ -259,13 +324,21 @@ impl MemorySegmentState {
         self.content
             .get(virtual_addr)
             .copied()
-            .unwrap_or(U256::zero())
+            .unwrap_or_default()
+            .unwrap_or_default()
     }
 
     pub(crate) fn set(&mut self, virtual_addr: usize, value: U256) {
         if virtual_addr >= self.content.len() {
-            self.content.resize(virtual_addr + 1, U256::zero());
+            self.content.resize(virtual_addr + 1, None);
         }
-        self.content[virtual_addr] = value;
+        self.content[virtual_addr] = Some(value);
+    }
+
+    pub(crate) fn content(&self) -> Vec<U256> {
+        self.content
+            .iter()
+            .map(|&val| val.unwrap_or_default())
+            .collect()
     }
 }

@@ -9,10 +9,10 @@ use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
+use super::state::State;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
-use crate::cpu::kernel::opcodes::get_push_opcode;
 use crate::extension_tower::{FieldExt, Fp12, BLS381, BN254};
 use crate::generation::prover_input::EvmField::{
     Bls381Base, Bls381Scalar, Bn254Base, Bn254Scalar, Secp256k1Base, Secp256k1Scalar,
@@ -199,11 +199,11 @@ impl<F: Field> GenerationState<F> {
         m_start_loc: usize,
     ) -> (Vec<U256>, Vec<U256>) {
         let n = self.memory.contexts.len();
-        let a = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
+        let a = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content()
             [a_start_loc..a_start_loc + len];
-        let b = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
+        let b = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content()
             [b_start_loc..b_start_loc + len];
-        let m = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
+        let m = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content()
             [m_start_loc..m_start_loc + len];
 
         let a_biguint = mem_vec_to_biguint(a);
@@ -396,8 +396,6 @@ impl<F: Field> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
-        let checkpoint = self.checkpoint();
-
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
         self.jumpdest_table = simulate_cpu_and_get_user_jumps("terminate_common", self);
@@ -435,7 +433,7 @@ impl<F: Field> GenerationState<F> {
             .map(|i| {
                 u256_to_u8(
                     self.memory
-                        .get(MemoryAddress::new(context, Segment::Code, i)),
+                        .get_with_init(MemoryAddress::new(context, Segment::Code, i)),
                 )
             })
             .collect::<Result<Vec<u8>, _>>()?;
@@ -443,7 +441,7 @@ impl<F: Field> GenerationState<F> {
     }
 
     fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
-        let code_len = u256_to_usize(self.memory.get(MemoryAddress::new(
+        let code_len = u256_to_usize(self.memory.get_with_init(MemoryAddress::new(
             context,
             Segment::ContextMetadata,
             ContextMetadata::CodeSize.unscale(),
@@ -482,7 +480,7 @@ impl<F: Field> GenerationState<F> {
     }
 
     fn get_global_metadata(&self, data: GlobalMetadata) -> U256 {
-        self.memory.get(MemoryAddress::new(
+        self.memory.get_with_init(MemoryAddress::new(
             0,
             Segment::GlobalMetadata,
             data.unscale(),
@@ -494,7 +492,7 @@ impl<F: Field> GenerationState<F> {
         // virtual address in the segment. In order to get the length we need
         // to substract Segment::AccessedStorageKeys as usize
         let acc_storage_len = u256_to_usize(
-            self.memory.get(MemoryAddress::new(
+            self.memory.get_with_init(MemoryAddress::new(
                 0,
                 Segment::GlobalMetadata,
                 GlobalMetadata::AccessedStorageKeysLen.unscale(),
@@ -605,7 +603,7 @@ impl<'a> Iterator for CodeIterator<'a> {
 // `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
 // 1]` holds the address of the next node, where i = node_size * j.
 pub(crate) struct AccList<'a> {
-    access_list_mem: &'a [U256],
+    access_list_mem: &'a [Option<U256>],
     node_size: usize,
     offset: usize,
     pos: usize,
@@ -613,7 +611,7 @@ pub(crate) struct AccList<'a> {
 
 impl<'a> AccList<'a> {
     fn from_mem_and_segment(
-        access_list_mem: &'a [U256],
+        access_list_mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {
         if access_list_mem.is_empty() {
@@ -636,19 +634,24 @@ impl<'a> Iterator for AccList<'a> {
     type Item = (usize, U256, U256);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let addr = self.access_list_mem[self.pos];
-        if let Ok(new_pos) = u256_to_usize(self.access_list_mem[self.pos + self.node_size - 1]) {
+        if let Ok(new_pos) =
+            u256_to_usize(self.access_list_mem[self.pos + self.node_size - 1].unwrap_or_default())
+        {
             let old_pos = self.pos;
             self.pos = new_pos - self.offset;
             if self.node_size == 2 {
                 // addresses
-                Some((old_pos, self.access_list_mem[self.pos], U256::zero()))
+                Some((
+                    old_pos,
+                    self.access_list_mem[self.pos].unwrap_or_default(),
+                    U256::zero(),
+                ))
             } else {
                 // storage_keys
                 Some((
                     old_pos,
-                    self.access_list_mem[self.pos],
-                    self.access_list_mem[self.pos + 1],
+                    self.access_list_mem[self.pos].unwrap_or_default(),
+                    self.access_list_mem[self.pos + 1].unwrap_or_default(),
                 ))
             }
         } else {

@@ -175,7 +175,7 @@ fn test_state_trie(
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
 
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
@@ -186,16 +186,16 @@ fn test_state_trie(
     if trie_data.is_empty() {
         // In the assembly we skip over 0, knowing trie_data[0] = 0 by default.
         // Since we don't explicitly set it to 0, we need to do so here.
-        trie_data.push(0.into());
+        trie_data.push(Some(0.into()));
     }
     let value_ptr = trie_data.len();
-    trie_data.push(account.nonce);
-    trie_data.push(account.balance);
+    trie_data.push(Some(account.nonce));
+    trie_data.push(Some(account.balance));
     // In memory, storage_root gets interpreted as a pointer to a storage trie,
     // so we have to ensure the pointer is valid. It's easiest to set it to 0,
     // which works as an empty node, since trie_data[0] = 0 = MPT_TYPE_EMPTY.
-    trie_data.push(H256::zero().into_uint());
-    trie_data.push(account.code_hash.into_uint());
+    trie_data.push(Some(H256::zero().into_uint()));
+    trie_data.push(Some(account.code_hash.into_uint()));
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
     interpreter
