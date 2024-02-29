@@ -785,15 +785,13 @@ impl<F: Field> State<F> for Interpreter<F> {
         &mut self.generation_state
     }
 
-    fn incr_interpreter_clock(&mut self) {
-        self.clock += 1
-    }
-
     fn get_clock(&self) -> usize {
         self.clock
     }
 
-    fn push_cpu(&mut self, val: CpuColumnsView<F>) {}
+    fn push_cpu(&mut self, val: CpuColumnsView<F>) {
+        self.clock += 1;
+    }
 
     fn push_logic(&mut self, op: logic::Operation) {}
 

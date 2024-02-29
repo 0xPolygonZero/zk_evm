@@ -63,9 +63,6 @@ pub(crate) trait State<F: Field> {
     /// Returns a mutable reference to a `State`'s `GenerationState`.
     fn get_mut_generation_state(&mut self) -> &mut GenerationState<F>;
 
-    /// Increments the clock of an `Interpreter`'s clock.
-    fn incr_interpreter_clock(&mut self);
-
     /// Returns the value of a `State`'s clock.
     fn get_clock(&self) -> usize;
 
@@ -177,7 +174,6 @@ pub(crate) trait State<F: Field> {
             }
 
             self.transition()?;
-            self.incr_interpreter_clock();
         }
 
         Ok(())
@@ -478,9 +474,6 @@ impl<F: Field> State<F> for GenerationState<F> {
     fn get_mut_generation_state(&mut self) -> &mut GenerationState<F> {
         self
     }
-
-    /// Increments the clock of an `Interpreter`'s clock.
-    fn incr_interpreter_clock(&mut self) {}
 
     /// Returns the value of a `State`'s clock.
     fn get_clock(&self) -> usize {
