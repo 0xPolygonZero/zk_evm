@@ -364,3 +364,19 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 
     Ok(())
 }
+
+/// A utility module designed to test witness generation externally.
+pub mod testing {
+    use super::*;
+    use crate::cpu::kernel::interpreter::Interpreter;
+
+    /// Simulates the zkEVM CPU execution.
+    /// It does not generate any trace or proof of correct state transition.
+    pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
+        let initial_stack = vec![];
+        let initial_offset = KERNEL.global_labels["main"];
+        let mut interpreter: Interpreter<F> =
+            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
+        interpreter.run()
+    }
+}
