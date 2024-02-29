@@ -831,7 +831,7 @@ impl<F: Field> Interpreter<F> {
 }
 
 impl<F: Field> State<F> for Interpreter<F> {
-    //// Returns a `GenerationStateCheckpoint` to save the current registers and
+    /// Returns a `GenerationStateCheckpoint` to save the current registers and
     /// reset memory operations to the empty vector.
     fn checkpoint(&mut self) -> GenerationStateCheckpoint {
         self.generation_state.traces.memory_ops = vec![];

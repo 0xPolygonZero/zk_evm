@@ -330,6 +330,9 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
         }
 
         let new_top_addr = MemoryAddress::new(new_ctx, Segment::Stack, new_sp - 1);
+        // Even though we might be in the interpreter, `Stack` is not part of the
+        // preinitialized segments, so we don't need to carry out the additional checks
+        // when get the value from memory.
         let (new_top, log_read_new_top) =
             mem_read_gp_with_log_and_fill(2, new_top_addr, generation_state, &mut row);
         generation_state.registers.stack_top = new_top;
@@ -550,7 +553,6 @@ fn append_shift<F: Field, T: Transition<F>>(
         let (_, read) =
             mem_read_gp_with_log_and_fill(LOOKUP_CHANNEL, lookup_addr, generation_state, &mut row);
         Some(read)
-        // state.push_memory(read);
     } else {
         // The shift constraints still expect the address to be set, even though no read
         // will occur.

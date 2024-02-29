@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod bn {
-
     use anyhow::Result;
     use ethereum_types::U256;
     use plonky2::field::goldilocks_field::GoldilocksField as F;
