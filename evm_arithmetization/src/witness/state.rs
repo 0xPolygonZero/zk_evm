@@ -53,21 +53,6 @@ impl RegistersState {
             gas_used: 0,
         }
     }
-
-    /// Given the gas used, returns a `RegisterState` corresponding to the end
-    /// of a full transaction proof.
-    pub fn new_last_registers_with_gas(gas_used: u64) -> Self {
-        Self {
-            program_counter: KERNEL.global_labels["halt"],
-            is_kernel: true,
-            stack_len: 0,
-            stack_top: U256::zero(),
-            is_stack_top_read: false,
-            check_overflow: false,
-            context: 0,
-            gas_used,
-        }
-    }
 }
 
 impl Default for RegistersState {

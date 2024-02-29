@@ -1,20 +1,25 @@
 use std::collections::HashMap;
 
 use anyhow::bail;
+use ethereum_types::U256;
 use log::log_enabled;
 use plonky2::field::types::Field;
 
-use super::memory::{MemoryOp, MemoryOpKind};
-use super::util::fill_channel_with_value;
+use super::memory::{MemoryOp, MemoryOpKind, MemorySegmentState};
+use super::util::{
+    fill_channel_with_value, mem_read_gp_with_log_and_fill, push_no_write,
+    stack_pop_with_log_and_fill,
+};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MAX_USER_STACK_SIZE,
     MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::state::{GenerationState, GenerationStateCheckpoint};
-use crate::generation::State;
+use crate::extension_tower::BN_BASE;
+use crate::generation::state::{GenerationState, GenerationStateCheckpoint, State};
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
@@ -25,15 +30,22 @@ use crate::witness::state::RegistersState;
 use crate::witness::util::mem_read_code_with_log_and_fill;
 use crate::{arithmetic, logic};
 
-fn read_code_memory<F: Field>(state: &mut GenerationState<F>, row: &mut CpuColumnsView<F>) -> u8 {
-    let code_context = state.registers.code_context();
+pub(crate) fn read_code_memory<F: Field, T: Transition<F>>(
+    state: &mut T,
+    row: &mut CpuColumnsView<F>,
+) -> u8 {
+    let generation_state = state.get_mut_generation_state();
+    let code_context = generation_state.registers.code_context();
     row.code_context = F::from_canonical_usize(code_context);
 
-    let address = MemoryAddress::new(code_context, Segment::Code, state.registers.program_counter);
-    let (opcode, mem_log) =
-        mem_read_code_with_log_and_fill(address, state, row, false, &HashMap::default());
+    let address = MemoryAddress::new(
+        code_context,
+        Segment::Code,
+        generation_state.registers.program_counter,
+    );
+    let (opcode, mem_log) = mem_read_code_with_log_and_fill(address, generation_state, row);
 
-    state.traces.push_memory(mem_log);
+    state.push_memory(mem_log);
 
     opcode
 }
@@ -162,7 +174,7 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
     }
 }
 
-fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>) {
+pub(crate) fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>) {
     let flags = &mut row.op;
     *match op {
         Operation::Dup(_) | Operation::Swap(_) => &mut flags.dup_swap,
@@ -258,273 +270,7 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
     }
 }
 
-fn perform_op<F: Field>(
-    any_state: &mut State<F>,
-    op: Operation,
-    opcode: u8,
-    row: CpuColumnsView<F>,
-) -> Result<(), ProgramError> {
-    let (op, is_generation, preinitialized_segments, is_jumpdest_analysis) = match any_state {
-        State::Generation(_state) => (op, true, HashMap::default(), false),
-        State::Interpreter(interpreter) => {
-            // Jumpdest analysis is performed natively by the interpreter and not
-            // using the non-deterministic Kernel assembly code.
-            let op = if interpreter.is_kernel()
-                && interpreter.is_jumpdest_analysis
-                && interpreter.generation_state.registers.program_counter
-                    == KERNEL.global_labels["jumpdest_analysis"]
-            {
-                interpreter.generation_state.registers.program_counter =
-                    KERNEL.global_labels["jumpdest_analysis_end"];
-                interpreter
-                    .generation_state
-                    .set_jumpdest_bits(&interpreter.generation_state.get_current_code()?);
-                let opcode = interpreter
-                    .code()
-                    .get(interpreter.generation_state.registers.program_counter)
-                    .byte(0);
-
-                decode(interpreter.generation_state.registers, opcode)?
-            } else {
-                op
-            };
-            (
-                op,
-                false,
-                interpreter.preinitialized_segments.clone(),
-                interpreter.is_jumpdest_analysis,
-            )
-        }
-    };
-
-    #[cfg(debug_assertions)]
-    if !any_state.get_registers().is_kernel {
-        log::debug!(
-            "User instruction {:?}, stack = {:?}, ctx = {}",
-            op,
-            {
-                let mut stack = any_state.get_stack();
-                stack.reverse();
-                stack
-            },
-            any_state.get_registers().context
-        );
-    }
-
-    let state = any_state.get_mut_generation_state();
-    match op {
-        Operation::Push(n) => generate_push(n, state, row, is_generation)?,
-        Operation::Dup(n) => generate_dup(n, state, row, is_generation)?,
-        Operation::Swap(n) => generate_swap(n, state, row, is_generation)?,
-        Operation::Iszero => generate_iszero(state, row, is_generation)?,
-        Operation::Not => generate_not(state, row, is_generation)?,
-        Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shl) => {
-            generate_shl(state, row, is_generation)?
-        }
-        Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shr) => {
-            generate_shr(state, row, is_generation)?
-        }
-        Operation::Syscall(opcode, stack_values_read, stack_len_increased) => generate_syscall(
-            opcode,
-            stack_values_read,
-            stack_len_increased,
-            state,
-            row,
-            is_generation,
-        )?,
-        Operation::Eq => generate_eq(state, row, is_generation)?,
-        Operation::BinaryLogic(binary_logic_op) => {
-            generate_binary_logic_op(binary_logic_op, state, row, is_generation)?
-        }
-        Operation::BinaryArithmetic(op) => {
-            generate_binary_arithmetic_op(op, state, row, is_generation)?
-        }
-        Operation::TernaryArithmetic(op) => {
-            generate_ternary_arithmetic_op(op, state, row, is_generation)?
-        }
-        Operation::KeccakGeneral => {
-            generate_keccak_general(state, row, is_generation, &preinitialized_segments)?
-        }
-        Operation::ProverInput => generate_prover_input(state, row, is_generation)?,
-        Operation::Pop => generate_pop(state, row, is_generation)?,
-        Operation::Jump => generate_jump(any_state, row, is_generation, is_jumpdest_analysis)?,
-        Operation::Jumpi => generate_jumpi(any_state, row, is_generation, is_jumpdest_analysis)?,
-        Operation::Pc => generate_pc(state, row, is_generation)?,
-        Operation::Jumpdest => generate_jumpdest(state, row, is_generation)?,
-        Operation::GetContext => generate_get_context(state, row, is_generation)?,
-        Operation::SetContext => generate_set_context(state, row, is_generation)?,
-        Operation::Mload32Bytes => {
-            generate_mload_32bytes(state, row, is_generation, &preinitialized_segments)?
-        }
-        Operation::Mstore32Bytes(n) => generate_mstore_32bytes(n, state, row, is_generation)?,
-        Operation::ExitKernel => generate_exit_kernel(state, row, is_generation)?,
-        Operation::MloadGeneral => {
-            generate_mload_general(state, row, is_generation, &preinitialized_segments)?
-        }
-        Operation::MstoreGeneral => generate_mstore_general(state, row, is_generation)?,
-    };
-    match any_state {
-        State::Generation(_state) => {}
-        State::Interpreter(interpreter) => {
-            interpreter.opcode_count[opcode as usize] += 1;
-        }
-    }
-    Ok(())
-}
-
-fn perform_state_op<F: Field>(
-    any_state: &mut State<F>,
-    opcode: u8,
-    op: Operation,
-    row: CpuColumnsView<F>,
-) -> Result<Operation, ProgramError> {
-    perform_op(any_state, op, opcode, row)?;
-    any_state.incr_pc(match op {
-        Operation::Syscall(_, _, _) | Operation::ExitKernel => 0,
-        Operation::Push(n) => n as usize + 1,
-        Operation::Jump | Operation::Jumpi => 0,
-        _ => 1,
-    });
-
-    any_state.incr_gas(gas_to_charge(op));
-    let registers = any_state.get_registers();
-    let gas_limit_address = MemoryAddress::new(
-        registers.context,
-        Segment::ContextMetadata,
-        ContextMetadata::GasLimit.unscale(), // context offsets are already scaled
-    );
-
-    if !registers.is_kernel {
-        let gas_limit = TryInto::<u64>::try_into(any_state.get_from_memory(gas_limit_address));
-        match gas_limit {
-            Ok(limit) => {
-                if registers.gas_used > limit {
-                    return Err(ProgramError::OutOfGas);
-                }
-            }
-            Err(_) => return Err(ProgramError::IntegerTooLarge),
-        }
-    }
-
-    Ok(op)
-}
-
-/// Row that has the correct values for system registers and the code channel,
-/// but is otherwise blank. It fulfills the constraints that are common to
-/// successful operations and the exception operation. It also returns the
-/// opcode.
-fn base_row<F: Field>(state: &mut GenerationState<F>) -> (CpuColumnsView<F>, u8) {
-    let mut row: CpuColumnsView<F> = CpuColumnsView::default();
-    row.clock = F::from_canonical_usize(state.traces.clock());
-    row.context = F::from_canonical_usize(state.registers.context);
-    row.program_counter = F::from_canonical_usize(state.registers.program_counter);
-    row.is_kernel_mode = F::from_bool(state.registers.is_kernel);
-    row.gas = F::from_canonical_u64(state.registers.gas_used);
-    row.stack_len = F::from_canonical_usize(state.registers.stack_len);
-    fill_channel_with_value(&mut row, 0, state.registers.stack_top);
-
-    let opcode = read_code_memory(state, &mut row);
-    (row, opcode)
-}
-
-pub(crate) fn fill_stack_fields<F: Field>(
-    state: &mut GenerationState<F>,
-    row: &mut CpuColumnsView<F>,
-    is_generation: bool,
-) -> Result<(), ProgramError> {
-    if state.registers.is_stack_top_read && is_generation {
-        let channel = &mut row.mem_channels[0];
-        channel.used = F::ONE;
-        channel.is_read = F::ONE;
-        channel.addr_context = F::from_canonical_usize(state.registers.context);
-        channel.addr_segment = F::from_canonical_usize(Segment::Stack.unscale());
-        channel.addr_virtual = F::from_canonical_usize(state.registers.stack_len - 1);
-
-        let address = MemoryAddress::new(
-            state.registers.context,
-            Segment::Stack,
-            state.registers.stack_len - 1,
-        );
-
-        let mem_op = MemoryOp::new(
-            GeneralPurpose(0),
-            state.traces.clock(),
-            address,
-            MemoryOpKind::Read,
-            state.registers.stack_top,
-        );
-        state.traces.push_memory(mem_op);
-    }
-    state.registers.is_stack_top_read = false;
-
-    if state.registers.check_overflow && is_generation {
-        if state.registers.is_kernel {
-            row.general.stack_mut().stack_len_bounds_aux = F::ZERO;
-        } else {
-            let clock = state.traces.clock();
-            // the clock starts at 1, so the last row is at index clock - 2.
-            let last_row = &mut state.traces.cpu[clock - 2];
-            let disallowed_len = F::from_canonical_usize(MAX_USER_STACK_SIZE + 1);
-            let diff = row.stack_len - disallowed_len;
-            if let Some(inv) = diff.try_inverse() {
-                last_row.general.stack_mut().stack_len_bounds_aux = inv;
-            } else {
-                // This is a stack overflow that should have been caught earlier.
-                return Err(ProgramError::InterpreterError);
-            }
-        }
-    }
-    state.registers.check_overflow = false;
-
-    Ok(())
-}
-
-fn try_perform_instruction<F: Field>(any_state: &mut State<F>) -> Result<Operation, ProgramError> {
-    let is_generation = any_state.is_generation_state();
-    let registers = any_state.get_registers();
-
-    let state = any_state.get_mut_generation_state();
-    let (mut row, opcode) = base_row(state);
-
-    let op = decode(registers, opcode)?;
-
-    if registers.is_kernel {
-        log_kernel_instruction(state, op);
-    } else {
-        log::debug!("User instruction: {:?}", op);
-    }
-
-    if is_generation {
-        fill_op_flag(op, &mut row);
-    }
-
-    fill_stack_fields(state, &mut row, is_generation)?;
-
-    // Might write in general CPU columns when it shouldn't, but the correct values
-    // will overwrite these ones during the op generation.
-    if let Some(special_len) = get_op_special_length(op) {
-        let special_len_f = F::from_canonical_usize(special_len);
-        let diff = row.stack_len - special_len_f;
-        if let Some(inv) = diff.try_inverse()
-            && is_generation
-        {
-            row.general.stack_mut().stack_inv = inv;
-            row.general.stack_mut().stack_inv_aux = F::ONE;
-            state.registers.is_stack_top_read = true;
-        } else if !is_generation && (state.stack().len() != special_len) {
-            // If the `State` is an interpreter, we cannot rely on the row to carry out the
-            // check.
-            state.registers.is_stack_top_read = true;
-        }
-    } else if let Some(inv) = row.stack_len.try_inverse() {
-        row.general.stack_mut().stack_inv = inv;
-        row.general.stack_mut().stack_inv_aux = F::ONE;
-    }
-
-    perform_state_op(any_state, opcode, op, row)
-}
-
-fn log_kernel_instruction<F: Field>(state: &GenerationState<F>, op: Operation) {
+pub(crate) fn log_kernel_instruction<F: Field>(state: &mut GenerationState<F>, op: Operation) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     if !log_enabled!(log::Level::Debug) {
         return;
@@ -553,81 +299,257 @@ fn log_kernel_instruction<F: Field>(state: &GenerationState<F>, op: Operation) {
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
 
-pub(crate) fn final_exception<F: Field>(
-    state: &mut State<F>,
-    is_generation: bool,
-) -> anyhow::Result<()> {
-    let exc_code: u8 = 6;
-    let checkpoint = state.checkpoint();
+pub(crate) trait Transition<F: Field>: State<F>
+where
+    Self: Sized,
+{
+    /// When in jumpdest analysis, adds the offset `dst` to the jumpdest table.
+    /// Returns a boolean indicating whether we are running the jumpdest
+    /// analysis.
+    fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool;
 
-    let gen_state = state.get_mut_generation_state();
+    fn final_exception(&mut self) -> anyhow::Result<()> {
+        let exc_code: u8 = 6;
+        let checkpoint = self.checkpoint();
 
-    let (row, _) = base_row(gen_state);
+        let gen_state = self.get_mut_generation_state();
 
-    generate_exception(exc_code, gen_state, row, is_generation)
-        .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
+        let (row, _) = self.base_row();
 
-    state.apply_ops(checkpoint);
-    Ok(())
-}
+        generate_exception(exc_code, self, row)
+            .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
 
-fn handle_error<F: Field>(any_state: &mut State<F>, err: ProgramError) -> anyhow::Result<()> {
-    let exc_code: u8 = match err {
-        ProgramError::OutOfGas => 0,
-        ProgramError::InvalidOpcode => 1,
-        ProgramError::StackUnderflow => 2,
-        ProgramError::InvalidJumpDestination => 3,
-        ProgramError::InvalidJumpiDestination => 4,
-        ProgramError::StackOverflow => 5,
-        _ => bail!("TODO: figure out what to do with this..."),
-    };
-
-    let (checkpoint, is_generation, state): (
-        GenerationStateCheckpoint,
-        bool,
-        &mut GenerationState<_>,
-    ) = match any_state {
-        State::Generation(state) => (state.checkpoint(), true, state),
-        State::Interpreter(interpreter) => (
-            interpreter.checkpoint(),
-            false,
-            &mut interpreter.generation_state,
-        ),
-    };
-    let (row, _) = base_row(state);
-    generate_exception(exc_code, state, row, is_generation)
-        .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
-    any_state.apply_ops(checkpoint);
-
-    Ok(())
-}
-
-pub(crate) fn transition<F: Field>(any_state: &mut State<F>) -> anyhow::Result<()> {
-    let checkpoint = any_state.checkpoint();
-    let result = try_perform_instruction(any_state);
-
-    match result {
-        Ok(op) => {
-            any_state.apply_ops(checkpoint);
-
-            if might_overflow_op(op) {
-                any_state.get_mut_registers().check_overflow = true;
-            }
-            Ok(())
-        }
-        Err(e) => {
-            if any_state.get_registers().is_kernel {
-                let offset_name = KERNEL.offset_name(any_state.get_registers().program_counter);
-                bail!(
-                    "{:?} in kernel at pc={}, stack={:?}, memory={:?}",
-                    e,
-                    offset_name,
-                    any_state.get_stack(),
-                    any_state.mem_get_kernel_content(),
-                );
-            }
-            any_state.rollback(checkpoint);
-            handle_error(any_state, e)
-        }
+        self.apply_ops(checkpoint);
+        Ok(())
     }
+
+    /// Performs the next operation in the execution, and updates the gas used
+    /// and program counter.
+    fn perform_state_op(
+        &mut self,
+        opcode: u8,
+        op: Operation,
+        row: CpuColumnsView<F>,
+    ) -> Result<Operation, ProgramError>
+    where
+        Self: Sized,
+    {
+        self.perform_op(op, opcode, row)?;
+        self.incr_pc(match op {
+            Operation::Syscall(_, _, _) | Operation::ExitKernel => 0,
+            Operation::Push(n) => n as usize + 1,
+            Operation::Jump | Operation::Jumpi => 0,
+            _ => 1,
+        });
+
+        self.incr_gas(gas_to_charge(op));
+        let registers = self.get_registers();
+        let gas_limit_address = MemoryAddress::new(
+            registers.context,
+            Segment::ContextMetadata,
+            ContextMetadata::GasLimit.unscale(), // context offsets are already scaled
+        );
+
+        if !registers.is_kernel {
+            let gas_limit = TryInto::<u64>::try_into(self.get_from_memory(gas_limit_address));
+            match gas_limit {
+                Ok(limit) => {
+                    if registers.gas_used > limit {
+                        return Err(ProgramError::OutOfGas);
+                    }
+                }
+                Err(_) => return Err(ProgramError::IntegerTooLarge),
+            }
+        }
+
+        Ok(op)
+    }
+
+    fn generate_jump(&mut self, mut row: CpuColumnsView<F>) -> Result<(), ProgramError> {
+        let [(dst, _)] =
+            stack_pop_with_log_and_fill::<1, _>(self.get_mut_generation_state(), &mut row)?;
+
+        let dst: u32 = dst
+            .try_into()
+            .map_err(|_| ProgramError::InvalidJumpDestination)?;
+
+        if !self.generate_jumpdest_analysis(dst as usize) {
+            let gen_state = self.get_mut_generation_state();
+            let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
+                NUM_GP_CHANNELS - 1,
+                MemoryAddress::new(
+                    gen_state.registers.context,
+                    Segment::JumpdestBits,
+                    dst as usize,
+                ),
+                gen_state,
+                &mut row,
+            );
+
+            row.mem_channels[1].value[0] = F::ONE;
+
+            if gen_state.registers.is_kernel {
+                // Don't actually do the read, just set the address, etc.
+                let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
+                channel.used = F::ZERO;
+                channel.value[0] = F::ONE;
+            } else {
+                if jumpdest_bit != U256::one() {
+                    return Err(ProgramError::InvalidJumpDestination);
+                }
+                self.push_memory(jumpdest_bit_log);
+            }
+
+            // Extra fields required by the constraints.
+            row.general.jumps_mut().should_jump = F::ONE;
+            row.general.jumps_mut().cond_sum_pinv = F::ONE;
+
+            let diff = row.stack_len - F::ONE;
+            if let Some(inv) = diff.try_inverse() {
+                row.general.stack_mut().stack_inv = inv;
+                row.general.stack_mut().stack_inv_aux = F::ONE;
+            } else {
+                row.general.stack_mut().stack_inv = F::ZERO;
+                row.general.stack_mut().stack_inv_aux = F::ZERO;
+            }
+
+            self.push_cpu(row);
+        }
+        self.get_mut_generation_state().jump_to(dst as usize)?;
+        Ok(())
+    }
+
+    fn generate_jumpi(&mut self, mut row: CpuColumnsView<F>) -> Result<(), ProgramError> {
+        let [(dst, _), (cond, log_cond)] =
+            stack_pop_with_log_and_fill::<2, _>(self.get_mut_generation_state(), &mut row)?;
+
+        let should_jump = !cond.is_zero();
+        if should_jump {
+            let dst: u32 = dst
+                .try_into()
+                .map_err(|_| ProgramError::InvalidJumpiDestination)?;
+            let is_kernel = self.get_registers().is_kernel;
+            if !self.generate_jumpdest_analysis(dst as usize) {
+                row.general.jumps_mut().should_jump = F::ONE;
+                let cond_sum_u64 = cond
+                    .0
+                    .into_iter()
+                    .map(|limb| ((limb as u32) as u64) + (limb >> 32))
+                    .sum();
+                let cond_sum = F::from_canonical_u64(cond_sum_u64);
+                row.general.jumps_mut().cond_sum_pinv = cond_sum.inverse();
+            }
+            self.get_mut_generation_state().jump_to(dst as usize)?;
+        } else {
+            row.general.jumps_mut().should_jump = F::ZERO;
+            row.general.jumps_mut().cond_sum_pinv = F::ZERO;
+            self.incr_pc(1);
+        }
+
+        let gen_state = self.get_mut_generation_state();
+        let (jumpdest_bit, jumpdest_bit_log) = mem_read_gp_with_log_and_fill(
+            NUM_GP_CHANNELS - 1,
+            MemoryAddress::new(
+                gen_state.registers.context,
+                Segment::JumpdestBits,
+                dst.low_u32() as usize,
+            ),
+            gen_state,
+            &mut row,
+        );
+        if !should_jump || gen_state.registers.is_kernel {
+            // Don't actually do the read, just set the address, etc.
+            let channel = &mut row.mem_channels[NUM_GP_CHANNELS - 1];
+            channel.used = F::ZERO;
+            channel.value[0] = F::ONE;
+        } else {
+            if jumpdest_bit != U256::one() {
+                return Err(ProgramError::InvalidJumpiDestination);
+            }
+            self.push_memory(jumpdest_bit_log);
+        }
+
+        let diff = row.stack_len - F::TWO;
+        if let Some(inv) = diff.try_inverse() {
+            row.general.stack_mut().stack_inv = inv;
+            row.general.stack_mut().stack_inv_aux = F::ONE;
+        } else {
+            row.general.stack_mut().stack_inv = F::ZERO;
+            row.general.stack_mut().stack_inv_aux = F::ZERO;
+        }
+
+        self.push_memory(log_cond);
+        self.push_cpu(row);
+        Ok(())
+    }
+
+    /// Skips the following instructions for some specific labels
+    fn skip_if_necessary(&mut self, op: Operation) -> Result<Operation, ProgramError>;
+
+    fn perform_op(
+        &mut self,
+        op: Operation,
+        opcode: u8,
+        row: CpuColumnsView<F>,
+    ) -> Result<(), ProgramError>
+    where
+        Self: Sized,
+    {
+        let op = self.skip_if_necessary(op)?;
+
+        #[cfg(debug_assertions)]
+        if !self.get_registers().is_kernel {
+            log::debug!(
+                "User instruction {:?}, stack = {:?}, ctx = {}",
+                op,
+                {
+                    let mut stack = self.get_stack();
+                    stack.reverse();
+                    stack
+                },
+                self.get_registers().context
+            );
+        }
+
+        match op {
+            Operation::Push(n) => generate_push(n, self, row)?,
+            Operation::Dup(n) => generate_dup(n, self, row)?,
+            Operation::Swap(n) => generate_swap(n, self, row)?,
+            Operation::Iszero => generate_iszero(self, row)?,
+            Operation::Not => generate_not(self, row)?,
+            Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shl) => {
+                generate_shl(self, row)?
+            }
+            Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shr) => {
+                generate_shr(self, row)?
+            }
+            Operation::Syscall(opcode, stack_values_read, stack_len_increased) => {
+                generate_syscall(opcode, stack_values_read, stack_len_increased, self, row)?
+            }
+            Operation::Eq => generate_eq(self, row)?,
+            Operation::BinaryLogic(binary_logic_op) => {
+                generate_binary_logic_op(binary_logic_op, self, row)?
+            }
+            Operation::BinaryArithmetic(op) => generate_binary_arithmetic_op(op, self, row)?,
+            Operation::TernaryArithmetic(op) => generate_ternary_arithmetic_op(op, self, row)?,
+            Operation::KeccakGeneral => generate_keccak_general(self, row)?,
+            Operation::ProverInput => generate_prover_input(self, row)?,
+            Operation::Pop => generate_pop(self, row)?,
+            Operation::Jump => self.generate_jump(row)?,
+            Operation::Jumpi => self.generate_jumpi(row)?,
+            Operation::Pc => generate_pc(self, row)?,
+            Operation::Jumpdest => generate_jumpdest(self, row)?,
+            Operation::GetContext => generate_get_context(self, row)?,
+            Operation::SetContext => generate_set_context(self, row)?,
+            Operation::Mload32Bytes => generate_mload_32bytes(self, row)?,
+            Operation::Mstore32Bytes(n) => generate_mstore_32bytes(n, self, row)?,
+            Operation::ExitKernel => generate_exit_kernel(self, row)?,
+            Operation::MloadGeneral => generate_mload_general(self, row)?,
+            Operation::MstoreGeneral => generate_mstore_general(self, row)?,
+        };
+
+        Ok(())
+    }
+
+    fn fill_stack_fields(&mut self, row: &mut CpuColumnsView<F>) -> Result<(), ProgramError>;
 }

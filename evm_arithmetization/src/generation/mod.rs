@@ -23,7 +23,7 @@ use crate::cpu::kernel::assembler::Kernel;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::generation::state::GenerationState;
+use crate::generation::state::{GenerationState, State};
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
 use crate::proof::{
@@ -35,7 +35,6 @@ use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind, MemoryState};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::Traces;
-use crate::witness::transition::{final_exception, transition};
 
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -406,265 +405,14 @@ pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     Ok((tables, public_values, final_values))
 }
 
-/// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
-/// a `GenerationState`.
-pub(crate) enum State<'a, F: Field> {
-    Generation(&'a mut GenerationState<F>),
-    Interpreter(&'a mut Interpreter<F>),
-}
-
-impl<'a, F: Field> State<'a, F> {
-    /// Returns a `State`'s `Checkpoint`.
-    pub(crate) fn checkpoint(&mut self) -> GenerationStateCheckpoint {
-        match self {
-            Self::Generation(state) => state.checkpoint(),
-            Self::Interpreter(interpreter) => interpreter.checkpoint(),
-        }
-    }
-
-    /// Increments the `gas_used` register by a value `n`.
-    pub(crate) fn incr_gas(&mut self, n: u64) {
-        match self {
-            Self::Generation(state) => state.registers.gas_used += n,
-            Self::Interpreter(interpreter) => interpreter.generation_state.registers.gas_used += n,
-        }
-    }
-
-    /// Increments the `program_counter` register by a value `n`.
-    pub(crate) fn incr_pc(&mut self, n: usize) {
-        match self {
-            Self::Generation(state) => state.registers.program_counter += n,
-            Self::Interpreter(interpreter) => {
-                interpreter.generation_state.registers.program_counter += n
-            }
-        }
-    }
-
-    /// Returns a `State`'s registers.
-    pub(crate) fn get_registers(&self) -> RegistersState {
-        match self {
-            Self::Generation(state) => state.registers,
-            Self::Interpreter(interpreter) => interpreter.generation_state.registers,
-        }
-    }
-
-    /// Returns a `State`'s mutable registers.
-    pub(crate) fn get_mut_registers(&mut self) -> &mut RegistersState {
-        match self {
-            Self::Generation(state) => &mut state.registers,
-            Self::Interpreter(interpreter) => &mut interpreter.generation_state.registers,
-        }
-    }
-
-    /// Returns the value stored at address `address` in a `State`.
-    pub(crate) fn get_from_memory(&mut self, address: MemoryAddress) -> U256 {
-        match self {
-            Self::Generation(state) => {
-                state
-                    .memory
-                    .get_with_init(address, false, &HashMap::default())
-            }
-            Self::Interpreter(interpreter) => interpreter.generation_state.memory.get_with_init(
-                address,
-                true,
-                &interpreter.preinitialized_segments,
-            ),
-        }
-    }
-
-    /// Returns a mutable `GenerationState` from a `State`.
-    pub(crate) fn get_mut_generation_state(&mut self) -> &mut GenerationState<F> {
-        match self {
-            Self::Generation(state) => state,
-            Self::Interpreter(interpreter) => &mut interpreter.generation_state,
-        }
-    }
-
-    /// Returns true if a `State` is a `GenerationState` and false otherwise.
-    pub(crate) fn is_generation_state(&mut self) -> bool {
-        match self {
-            Self::Generation(state) => true,
-            Self::Interpreter(interpreter) => false,
-        }
-    }
-
-    /// Increments the clock of an `Interpreter`'s clock.
-    pub(crate) fn incr_interpreter_clock(&mut self) {
-        match self {
-            Self::Generation(state) => {}
-            Self::Interpreter(interpreter) => interpreter.clock += 1,
-        }
-    }
-
-    /// Returns the value of a `State`'s clock.
-    pub(crate) fn get_clock(&mut self) -> usize {
-        match self {
-            Self::Generation(state) => state.traces.clock(),
-            Self::Interpreter(interpreter) => interpreter.clock,
-        }
-    }
-
-    /// Rolls back a `State`.
-    pub(crate) fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
-        match self {
-            Self::Generation(state) => state.rollback(checkpoint),
-            Self::Interpreter(interpreter) => interpreter.generation_state.rollback(checkpoint),
-        }
-    }
-
-    /// Returns a `State`'s stack.
-    pub(crate) fn get_stack(&mut self) -> Vec<U256> {
-        match self {
-            Self::Generation(state) => state.stack(),
-            Self::Interpreter(interpreter) => interpreter.stack(),
-        }
-    }
-
-    fn get_context(&mut self) -> usize {
-        match self {
-            Self::Generation(state) => state.registers.context,
-            Self::Interpreter(interpreter) => interpreter.context(),
-        }
-    }
-
-    fn get_halt_context(&mut self) -> Option<usize> {
-        match self {
-            Self::Generation(state) => None,
-            Self::Interpreter(interpreter) => interpreter.halt_context,
-        }
-    }
-
-    /// Returns the content of a the `KernelGeneral` segment of a `State`.
-    pub(crate) fn mem_get_kernel_content(&self) -> Vec<Option<U256>> {
-        match self {
-            Self::Generation(state) => state.memory.contexts[0].segments
-                [Segment::KernelGeneral.unscale()]
-            .content
-            .clone(),
-            Self::Interpreter(interpreter) => interpreter.generation_state.memory.contexts[0]
-                .segments[Segment::KernelGeneral.unscale()]
-            .content
-            .clone(),
-        }
-    }
-
-    /// Applies a `State`'s operations since a checkpoint.
-    pub(crate) fn apply_ops(&mut self, checkpoint: GenerationStateCheckpoint) {
-        match self {
-            Self::Generation(state) => state
-                .memory
-                .apply_ops(state.traces.mem_ops_since(checkpoint.traces)),
-            Self::Interpreter(interpreter) => {
-                // An interpreter `checkpoint()` clears all operations before the checkpoint.
-                interpreter.apply_memops();
-            }
-        }
-    }
-}
-
-fn update_interpreter_final_registers<F: Field>(
-    any_state: &mut State<F>,
-    final_registers: RegistersState,
-) {
-    match any_state {
-        State::Generation(state) => {}
-        State::Interpreter(interpreter) => {
-            let registers_after = [
-                final_registers.program_counter.into(),
-                (final_registers.is_kernel as usize).into(),
-                final_registers.stack_len.into(),
-                final_registers.stack_top,
-                final_registers.context.into(),
-                final_registers.gas_used.into(),
-            ];
-
-            let length = registers_after.len();
-            let registers_after_fields = (0..length)
-                .map(|i| {
-                    (
-                        MemoryAddress::new(0, Segment::RegistersStates, length + i),
-                        registers_after[i],
-                    )
-                })
-                .collect::<Vec<_>>();
-            interpreter.set_memory_multi_addresses(&registers_after_fields);
-        }
-    }
-}
-
-/// Simulates a CPU. It only generates the traces if the `State` is a
-/// `GenerationState`. Otherwise, it simply simulates all operations.
-pub(crate) fn run_cpu<F: Field>(
-    any_state: &mut State<F>,
-    max_cpu_len: Option<usize>,
-) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
-    let (is_generation, halt_offsets) = match any_state {
-        State::Generation(_state) => (true, vec![KERNEL.global_labels["halt_final"]]),
-        State::Interpreter(interpreter) => (false, interpreter.halt_offsets.clone()),
-    };
-
-    let halt_pc = KERNEL.global_labels["halt"];
-    let halt_final_pc = KERNEL.global_labels["halt_final"];
-    let mut final_registers = RegistersState::default();
-    let mut final_mem = any_state.get_mut_generation_state().memory.clone();
-    let mut running = true;
-
-    loop {
-        // If we've reached the kernel's halt routine, and our trace length is a power
-        // of 2, stop.
-        let registers = any_state.get_registers();
-        let pc = registers.program_counter;
-
-        let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
-        if running
-            && (registers.is_kernel && pc == KERNEL.global_labels["halt"]
-                || (max_cpu_len.is_some()
-                    && any_state.get_clock() == max_cpu_len.unwrap() - NUM_EXTRA_CYCLES_AFTER))
-        {
-            running = false;
-            final_registers = registers;
-
-            // If `stack_len` is 0, `stack_top` still contains a residual value.
-            if final_registers.stack_len == 0 {
-                final_registers.stack_top = 0.into();
-            }
-            // If we are in the interpreter, we need to set the final register values.
-            update_interpreter_final_registers(any_state, final_registers);
-            final_exception(any_state, is_generation)?;
-        }
-
-        let opt_halt_context = any_state.get_halt_context();
-        if registers.is_kernel && halt_final {
-            if let Some(halt_context) = opt_halt_context {
-                if any_state.get_context() == halt_context {
-                    // Only happens during jumpdest analysis, we don't care about the output.
-                    return Ok((final_registers, Some(final_mem)));
-                }
-            } else {
-                let final_mem = match any_state {
-                    State::Generation(state) => None,
-                    State::Interpreter(interpreter) => {
-                        Some(interpreter.generation_state.memory.clone())
-                    }
-                };
-                log::info!("CPU halted after {} cycles", any_state.get_clock());
-                return Ok((final_registers, final_mem));
-            }
-        }
-
-        transition(any_state)?;
-        any_state.incr_interpreter_clock();
-    }
-}
-
 fn simulate_cpu<F: Field>(
     state: &mut GenerationState<F>,
     max_cpu_len: usize,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
-    let (final_registers, mem_after) = run_cpu(&mut State::Generation(state), Some(max_cpu_len))?;
+    let (final_registers, mem_after) = state.run_cpu(Some(max_cpu_len))?;
 
     let pc = state.registers.program_counter;
-    // Padding
+    // Setting the values of padding rows.
     let mut row = CpuColumnsView::<F>::default();
     row.clock = F::from_canonical_usize(state.traces.clock());
     row.context = F::from_canonical_usize(state.registers.context);
@@ -674,8 +422,8 @@ fn simulate_cpu<F: Field>(
     row.stack_len = F::from_canonical_usize(state.registers.stack_len);
 
     loop {
-        // If our trace length is a power of 2, stop.
-        state.traces.push_cpu(true, row);
+        // Padding to a power of 2.
+        state.push_cpu(row);
         row.clock += F::ONE;
         if (state.traces.clock() - 1).is_power_of_two() {
             break;

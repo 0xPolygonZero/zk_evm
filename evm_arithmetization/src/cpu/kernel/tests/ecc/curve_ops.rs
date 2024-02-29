@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod bn {
-    use std::collections::HashMap;
 
     use anyhow::Result;
     use ethereum_types::U256;
@@ -210,15 +209,11 @@ mod bn {
 
         let mut computed_table = Vec::new();
         for i in 0..32 {
-            computed_table.push(int.generation_state.memory.get_with_init(
-                MemoryAddress {
-                    context: 0,
-                    segment: Segment::BnTableQ.unscale(),
-                    virt: i,
-                },
-                false,
-                &HashMap::default(),
-            ));
+            computed_table.push(int.generation_state.memory.get_with_init(MemoryAddress {
+                context: 0,
+                segment: Segment::BnTableQ.unscale(),
+                virt: i,
+            }));
         }
 
         let table = u256ify([
