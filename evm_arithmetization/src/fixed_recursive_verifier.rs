@@ -92,9 +92,6 @@ where
     /// The segment aggregation circuit, which verifies that two segment proofs
     /// that can either be root or aggregation proofs.
     pub segment_aggregation: AggregationCircuitData<F, C, D>,
-    /// The transaction aggregation circuit, which verifies a transaction proof
-    /// and an optional previous transaction proof.
-    pub txn_aggregation: BlockCircuitData<F, C, D>,
     /// The block circuit, which verifies an aggregation root proof and an
     /// optional previous block proof.
     pub block: BlockCircuitData<F, C, D>,
@@ -362,8 +359,6 @@ where
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         self.segment_aggregation
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
-        self.txn_aggregation
-            .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         self.block
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         if !skip_tables {
@@ -404,8 +399,6 @@ where
             gate_serializer,
             generator_serializer,
         )?;
-        let txn_aggregation =
-            BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         let block =
             BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
 
@@ -439,7 +432,6 @@ where
         Ok(Self {
             root,
             segment_aggregation,
-            txn_aggregation,
             block,
             by_table,
         })
@@ -546,12 +538,12 @@ where
         ];
         let root = Self::create_segment_circuit(&by_table, stark_config);
         let segment_aggregation = Self::create_segmented_aggregation_circuit(&root);
-        let txn_aggregation = Self::create_transaction_circuit(&segment_aggregation, stark_config);
-        let block = Self::create_block_circuit(&txn_aggregation);
+        // let txn_aggregation = Self::create_transaction_circuit(&segment_aggregation,
+        // stark_config);
+        let block = Self::create_block_circuit(&segment_aggregation, stark_config);
         Self {
             root,
             segment_aggregation,
-            txn_aggregation,
             block,
             by_table,
         }
@@ -1052,7 +1044,10 @@ where
         builder.connect(x.registers_before.program_counter, main_label);
     }
 
-    fn create_block_circuit(agg: &BlockCircuitData<F, C, D>) -> BlockCircuitData<F, C, D> {
+    fn create_block_circuit(
+        agg: &AggregationCircuitData<F, C, D>,
+        stark_config: &StarkConfig,
+    ) -> BlockCircuitData<F, C, D> {
         // Here, we have two block proofs and we aggregate them together.
         // The block circuit is similar to the agg circuit; both verify two inner
         // proofs.
@@ -1110,6 +1105,25 @@ where
         // Make connections between block proofs, and check initial and final block
         // values.
         Self::connect_block_proof(&mut builder, has_parent_block, &parent_pv, &agg_pv);
+
+        // We check the registers before and after for the current aggregation.
+        RegistersDataTarget::connect(
+            &mut builder,
+            public_values.registers_after.clone(),
+            agg_pv.registers_after.clone(),
+        );
+
+        RegistersDataTarget::connect(
+            &mut builder,
+            public_values.registers_before.clone(),
+            agg_pv.registers_before.clone(),
+        );
+
+        // Check the initial and final register values.
+        Self::connect_initial_final_segment(&mut builder, &public_values);
+
+        // Check the initial `MemBefore` `MerklCap` value.
+        Self::check_init_merkle_cap(&mut builder, &agg_pv, stark_config);
 
         let cyclic_vk = builder.add_verifier_data_public_inputs();
         builder
@@ -1645,277 +1659,292 @@ where
         )
     }
 
-    /// Creates a final transaction proof, once all segments of a given
-    /// transaction have been combined into a single aggregation proof.
-    ///
-    /// Transaction proofs can either be generated as a standalone, or combined
-    /// with a previous transaction proof to assert validity of a range of
-    /// transactions.
-    ///
-    /// # Arguments
-    ///
-    /// - `opt_parent_txn_proof`: an optional parent transaction proof. Passing
-    ///   one will generate a proof of
-    /// validity for both the transaction range covered by the previous proof
-    /// and the current transaction.
-    /// - `agg_segment_proof`: the final aggregation proof containing all
-    ///   segments within the current transaction.
-    /// - `public_values`: the public values associated to the aggregation
-    ///   proof.
-    ///
-    /// # Outputs
-    ///
-    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
-    /// its [`PublicValues`]. Only the proof with public inputs is necessary
-    /// for a verifier to assert correctness of the computation.
-    pub fn prove_transaction_aggregation(
-        &self,
-        opt_parent_txn_proof: Option<&ProofWithPublicInputs<F, C, D>>,
-        agg_segment_proof: &ProofWithPublicInputs<F, C, D>,
-        public_values: PublicValues,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
-        let mut txn_inputs = PartialWitness::new();
+    // /// Creates a final transaction proof, once all segments of a given
+    // /// transaction have been combined into a single aggregation proof.
+    // ///
+    // /// Transaction proofs can either be generated as a standalone, or combined
+    // /// with a previous transaction proof to assert validity of a range of
+    // /// transactions.
+    // ///
+    // /// # Arguments
+    // ///
+    // /// - `opt_parent_txn_proof`: an optional parent transaction proof. Passing
+    // ///   one will generate a proof of
+    // /// validity for both the transaction range covered by the previous proof
+    // /// and the current transaction.
+    // /// - `agg_segment_proof`: the final aggregation proof containing all
+    // ///   segments within the current transaction.
+    // /// - `public_values`: the public values associated to the aggregation
+    // ///   proof.
+    // ///
+    // /// # Outputs
+    // ///
+    // /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
+    // /// its [`PublicValues`]. Only the proof with public inputs is necessary
+    // /// for a verifier to assert correctness of the computation.
+    // pub fn prove_transaction_aggregation(
+    //     &self,
+    //     opt_parent_txn_proof: Option<&ProofWithPublicInputs<F, C, D>>,
+    //     agg_segment_proof: &ProofWithPublicInputs<F, C, D>,
+    //     public_values: PublicValues,
+    // ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+    //     let mut txn_inputs = PartialWitness::new();
 
-        txn_inputs.set_bool_target(
-            self.txn_aggregation.has_parent_block,
-            opt_parent_txn_proof.is_some(),
-        );
-        if let Some(parent_txn_proof) = opt_parent_txn_proof {
-            txn_inputs.set_proof_with_pis_target(
-                &self.txn_aggregation.parent_block_proof,
-                parent_txn_proof,
-            );
-        } else {
-            // Initialize some public inputs for a correct connection between the first
-            // transaction and the current one.
-            let mut nonzero_pis = HashMap::new();
+    //     txn_inputs.set_bool_target(
+    //         self.txn_aggregation.has_parent_block,
+    //         opt_parent_txn_proof.is_some(),
+    //     );
+    //     if let Some(parent_txn_proof) = opt_parent_txn_proof {
+    //         txn_inputs.set_proof_with_pis_target(
+    //             &self.txn_aggregation.parent_block_proof,
+    //             parent_txn_proof,
+    //         );
+    //     } else {
+    //         // Initialize some public inputs for a correct connection between the
+    // first         // transaction and the current one.
+    //         let mut nonzero_pis = HashMap::new();
 
-            // Initialize checkpoint state trie.
-            let checkpoint_state_trie_keys =
-                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + 8;
-            for (key, &value) in checkpoint_state_trie_keys.zip_eq(&h256_limbs::<F>(
-                public_values.extra_block_data.checkpoint_state_trie_root,
-            )) {
-                nonzero_pis.insert(key, value);
-            }
+    //         // Initialize checkpoint state trie.
+    //         let checkpoint_state_trie_keys =
+    //             TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE +
+    // BlockHashesTarget::SIZE                 ..TrieRootsTarget::SIZE * 2
+    //                     + BlockMetadataTarget::SIZE
+    //                     + BlockHashesTarget::SIZE
+    //                     + 8;
+    //         for (key, &value) in
+    // checkpoint_state_trie_keys.zip_eq(&h256_limbs::<F>(
+    // public_values.extra_block_data.checkpoint_state_trie_root,         )) {
+    //             nonzero_pis.insert(key, value);
+    //         }
 
-            // Initialize the block metadata for a correct connection between the first
-            // transaction and the current one.
-            let block_metadata_keys = TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + 5;
-            for (key, value) in block_metadata_keys.zip_eq(
-                u256_limbs::<F>(U256::from_big_endian(
-                    &public_values.block_metadata.block_beneficiary.0,
-                ))[..5]
-                    .to_vec(),
-            ) {
-                nonzero_pis.insert(key, value);
-            }
-            let block_timestamp_key = TrieRootsTarget::SIZE * 2 + 5;
-            nonzero_pis.insert(
-                block_timestamp_key,
-                F::from_canonical_u64(public_values.block_metadata.block_timestamp.as_u64()),
-            );
-            let block_number_key = block_timestamp_key + 1;
-            nonzero_pis.insert(
-                block_number_key,
-                F::from_canonical_u64(public_values.block_metadata.block_number.as_u64()),
-            );
-            let block_difficulty_key = block_number_key + 1;
-            nonzero_pis.insert(
-                block_difficulty_key,
-                F::from_canonical_u64(public_values.block_metadata.block_difficulty.as_u64()),
-            );
-            let block_random_keys = block_difficulty_key + 1..block_difficulty_key + 9;
-            for (key, &value) in
-                block_random_keys.zip_eq(&h256_limbs(public_values.block_metadata.block_random))
-            {
-                nonzero_pis.insert(key, value);
-            }
-            let block_gaslimit_key = block_difficulty_key + 9;
-            nonzero_pis.insert(
-                block_gaslimit_key,
-                F::from_canonical_u64(public_values.block_metadata.block_gaslimit.as_u64()),
-            );
-            let block_chain_id_key = block_gaslimit_key + 1;
-            nonzero_pis.insert(
-                block_chain_id_key,
-                F::from_canonical_u64(public_values.block_metadata.block_chain_id.as_u64()),
-            );
-            let block_basefee_key_low = block_chain_id_key + 1;
-            nonzero_pis.insert(
-                block_basefee_key_low,
-                F::from_canonical_u64(public_values.block_metadata.block_base_fee.low_u32() as u64),
-            );
-            let block_basefee_key_hi = block_basefee_key_low + 1;
-            nonzero_pis.insert(
-                block_basefee_key_hi,
-                F::from_canonical_u64(
-                    (public_values.block_metadata.block_base_fee >> 32).low_u32() as u64,
-                ),
-            );
-            let block_gas_used_key = block_basefee_key_hi + 1;
-            nonzero_pis.insert(
-                block_gas_used_key,
-                F::from_canonical_u64(public_values.block_metadata.block_gas_used.as_u64()),
-            );
-            let init_block_bloom = block_gas_used_key + 1;
-            for i in 0..8 {
-                let block_bloom_keys = init_block_bloom + i * 8..init_block_bloom + (i + 1) * 8;
-                for (key, &value) in block_bloom_keys
-                    .zip_eq(&u256_limbs(public_values.block_metadata.block_bloom[i]))
-                {
-                    nonzero_pis.insert(key, value);
-                }
-            }
+    //         // Initialize the block metadata for a correct connection between the
+    // first         // transaction and the current one.
+    //         let block_metadata_keys = TrieRootsTarget::SIZE *
+    // 2..TrieRootsTarget::SIZE * 2 + 5;         for (key, value) in
+    // block_metadata_keys.zip_eq(
+    // u256_limbs::<F>(U256::from_big_endian(
+    // &public_values.block_metadata.block_beneficiary.0,             ))[..5]
+    //                 .to_vec(),
+    //         ) {
+    //             nonzero_pis.insert(key, value);
+    //         }
+    //         let block_timestamp_key = TrieRootsTarget::SIZE * 2 + 5;
+    //         nonzero_pis.insert(
+    //             block_timestamp_key,
+    //
+    // F::from_canonical_u64(public_values.block_metadata.block_timestamp.as_u64()),
+    //         );
+    //         let block_number_key = block_timestamp_key + 1;
+    //         nonzero_pis.insert(
+    //             block_number_key,
+    //
+    // F::from_canonical_u64(public_values.block_metadata.block_number.as_u64()),
+    //         );
+    //         let block_difficulty_key = block_number_key + 1;
+    //         nonzero_pis.insert(
+    //             block_difficulty_key,
+    //
+    // F::from_canonical_u64(public_values.block_metadata.block_difficulty.
+    // as_u64()),         );
+    //         let block_random_keys = block_difficulty_key +
+    // 1..block_difficulty_key + 9;         for (key, &value) in
+    //
+    // block_random_keys.zip_eq(&h256_limbs(public_values.block_metadata.
+    // block_random))         {
+    //             nonzero_pis.insert(key, value);
+    //         }
+    //         let block_gaslimit_key = block_difficulty_key + 9;
+    //         nonzero_pis.insert(
+    //             block_gaslimit_key,
+    //
+    // F::from_canonical_u64(public_values.block_metadata.block_gaslimit.as_u64()),
+    //         );
+    //         let block_chain_id_key = block_gaslimit_key + 1;
+    //         nonzero_pis.insert(
+    //             block_chain_id_key,
+    //
+    // F::from_canonical_u64(public_values.block_metadata.block_chain_id.as_u64()),
+    //         );
+    //         let block_basefee_key_low = block_chain_id_key + 1;
+    //         nonzero_pis.insert(
+    //             block_basefee_key_low,
+    //
+    // F::from_canonical_u64(public_values.block_metadata.block_base_fee.low_u32()
+    // as u64),         );
+    //         let block_basefee_key_hi = block_basefee_key_low + 1;
+    //         nonzero_pis.insert(
+    //             block_basefee_key_hi,
+    //             F::from_canonical_u64(
+    //                 (public_values.block_metadata.block_base_fee >> 32).low_u32()
+    // as u64,             ),
+    //         );
+    //         let block_gas_used_key = block_basefee_key_hi + 1;
+    //         nonzero_pis.insert(
+    //             block_gas_used_key,
+    //
+    // F::from_canonical_u64(public_values.block_metadata.block_gas_used.as_u64()),
+    //         );
+    //         let init_block_bloom = block_gas_used_key + 1;
+    //         for i in 0..8 {
+    //             let block_bloom_keys = init_block_bloom + i * 8..init_block_bloom
+    // + (i + 1) * 8;             for (key, &value) in block_bloom_keys
+    //
+    // .zip_eq(&u256_limbs(public_values.block_metadata.block_bloom[i]))
+    //             {
+    //                 nonzero_pis.insert(key, value);
+    //             }
+    //         }
 
-            // Initialize the block hashes. They are all the same within the same block.
-            let block_hashes_keys = TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    - 8;
+    //         // Initialize the block hashes. They are all the same within the same
+    // block.         let block_hashes_keys = TrieRootsTarget::SIZE * 2 +
+    // BlockMetadataTarget::SIZE             ..TrieRootsTarget::SIZE * 2 +
+    // BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
+    //                 - 8;
 
-            for i in 0..public_values.block_hashes.prev_hashes.len() {
-                let targets = h256_limbs::<F>(public_values.block_hashes.prev_hashes[i]);
-                for j in 0..8 {
-                    nonzero_pis.insert(block_hashes_keys.start + 8 * i + j, targets[j]);
-                }
-            }
-            let block_hashes_current_start =
-                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE - 8;
-            let cur_targets = h256_limbs::<F>(public_values.block_hashes.cur_hash);
-            for i in 0..8 {
-                nonzero_pis.insert(block_hashes_current_start + i, cur_targets[i]);
-            }
+    //         for i in 0..public_values.block_hashes.prev_hashes.len() {
+    //             let targets =
+    // h256_limbs::<F>(public_values.block_hashes.prev_hashes[i]);
+    // for j in 0..8 {
+    // nonzero_pis.insert(block_hashes_keys.start + 8 * i + j, targets[j]);
+    //             }
+    //         }
+    //         let block_hashes_current_start =
+    //             TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE +
+    // BlockHashesTarget::SIZE - 8;         let cur_targets =
+    // h256_limbs::<F>(public_values.block_hashes.cur_hash);         for i in
+    // 0..8 {             nonzero_pis.insert(block_hashes_current_start + i,
+    // cur_targets[i]);         }
 
-            // Initialize the first transaction roots before, and state root after.
-            // At the start of the block, the transaction and receipt roots are empty.
-            let state_trie_root_before_keys = 0..TrieRootsTarget::HASH_SIZE;
-            for (key, &value) in state_trie_root_before_keys
-                .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
-            {
-                nonzero_pis.insert(key, value);
-            }
+    //         // Initialize the first transaction roots before, and state root
+    // after.         // At the start of the block, the transaction and receipt
+    // roots are empty.         let state_trie_root_before_keys =
+    // 0..TrieRootsTarget::HASH_SIZE;         for (key, &value) in
+    // state_trie_root_before_keys
+    // .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
+    //         {
+    //             nonzero_pis.insert(key, value);
+    //         }
 
-            let initial_trie = HashedPartialTrie::from(Node::Empty).hash();
+    //         let initial_trie = HashedPartialTrie::from(Node::Empty).hash();
 
-            let txn_trie_root_before_keys =
-                TrieRootsTarget::HASH_SIZE..TrieRootsTarget::HASH_SIZE * 2;
-            for (key, &value) in txn_trie_root_before_keys
-                .clone()
-                .zip_eq(&h256_limbs::<F>(initial_trie))
-            {
-                nonzero_pis.insert(key, value);
-            }
-            let receipts_trie_root_before_keys =
-                TrieRootsTarget::HASH_SIZE * 2..TrieRootsTarget::HASH_SIZE * 3;
-            for (key, &value) in receipts_trie_root_before_keys
-                .clone()
-                .zip_eq(&h256_limbs::<F>(initial_trie))
-            {
-                nonzero_pis.insert(key, value);
-            }
-            let state_trie_root_after_keys =
-                TrieRootsTarget::SIZE..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE;
-            for (key, &value) in state_trie_root_after_keys
-                .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
-            {
-                nonzero_pis.insert(key, value);
-            }
+    //         let txn_trie_root_before_keys =
+    //             TrieRootsTarget::HASH_SIZE..TrieRootsTarget::HASH_SIZE * 2;
+    //         for (key, &value) in txn_trie_root_before_keys
+    //             .clone()
+    //             .zip_eq(&h256_limbs::<F>(initial_trie))
+    //         {
+    //             nonzero_pis.insert(key, value);
+    //         }
+    //         let receipts_trie_root_before_keys =
+    //             TrieRootsTarget::HASH_SIZE * 2..TrieRootsTarget::HASH_SIZE * 3;
+    //         for (key, &value) in receipts_trie_root_before_keys
+    //             .clone()
+    //             .zip_eq(&h256_limbs::<F>(initial_trie))
+    //         {
+    //             nonzero_pis.insert(key, value);
+    //         }
+    //         let state_trie_root_after_keys =
+    //             TrieRootsTarget::SIZE..TrieRootsTarget::SIZE +
+    // TrieRootsTarget::HASH_SIZE;         for (key, &value) in
+    // state_trie_root_after_keys
+    // .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
+    //         {
+    //             nonzero_pis.insert(key, value);
+    //         }
 
-            let txn_trie_root_after_keys = TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE
-                ..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE * 2;
-            for (key, &value) in txn_trie_root_after_keys
-                .clone()
-                .zip_eq(&h256_limbs::<F>(initial_trie))
-            {
-                nonzero_pis.insert(key, value);
-            }
-            let receipts_trie_root_after_keys = TrieRootsTarget::SIZE
-                + TrieRootsTarget::HASH_SIZE * 2
-                ..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE * 3;
-            for (key, &value) in receipts_trie_root_after_keys
-                .clone()
-                .zip_eq(&h256_limbs::<F>(initial_trie))
-            {
-                nonzero_pis.insert(key, value);
-            }
+    //         let txn_trie_root_after_keys = TrieRootsTarget::SIZE +
+    // TrieRootsTarget::HASH_SIZE             ..TrieRootsTarget::SIZE +
+    // TrieRootsTarget::HASH_SIZE * 2;         for (key, &value) in
+    // txn_trie_root_after_keys             .clone()
+    //             .zip_eq(&h256_limbs::<F>(initial_trie))
+    //         {
+    //             nonzero_pis.insert(key, value);
+    //         }
+    //         let receipts_trie_root_after_keys = TrieRootsTarget::SIZE
+    //             + TrieRootsTarget::HASH_SIZE * 2
+    //             ..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE * 3;
+    //         for (key, &value) in receipts_trie_root_after_keys
+    //             .clone()
+    //             .zip_eq(&h256_limbs::<F>(initial_trie))
+    //         {
+    //             nonzero_pis.insert(key, value);
+    //         }
 
-            txn_inputs.set_proof_with_pis_target(
-                &self.txn_aggregation.parent_block_proof,
-                &cyclic_base_proof(
-                    &self.txn_aggregation.circuit.common,
-                    &self.txn_aggregation.circuit.verifier_only,
-                    nonzero_pis,
-                ),
-            );
-        }
+    //         txn_inputs.set_proof_with_pis_target(
+    //             &self.txn_aggregation.parent_block_proof,
+    //             &cyclic_base_proof(
+    //                 &self.txn_aggregation.circuit.common,
+    //                 &self.txn_aggregation.circuit.verifier_only,
+    //                 nonzero_pis,
+    //             ),
+    //         );
+    //     }
 
-        txn_inputs
-            .set_proof_with_pis_target(&self.txn_aggregation.agg_root_proof, agg_segment_proof);
+    //     txn_inputs
+    //         .set_proof_with_pis_target(&self.txn_aggregation.agg_root_proof,
+    // agg_segment_proof);
 
-        txn_inputs.set_verifier_data_target(
-            &self.txn_aggregation.cyclic_vk,
-            &self.txn_aggregation.circuit.verifier_only,
-        );
+    //     txn_inputs.set_verifier_data_target(
+    //         &self.txn_aggregation.cyclic_vk,
+    //         &self.txn_aggregation.circuit.verifier_only,
+    //     );
 
-        // This is basically identical to this block public values, apart from the
-        // `trie_roots_before`, the `txn_number_before` and the
-        // `gas_used_before`, that may come from the previous proof, if any.
-        let txn_number_before_key =
-            TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE + 8;
-        let gas_used_before_key =
-            TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE + 10;
-        let txn_public_values = PublicValues {
-            trie_roots_before: opt_parent_txn_proof
-                .map(|p| TrieRoots::from_public_inputs(&p.public_inputs[0..TrieRootsTarget::SIZE]))
-                .unwrap_or(public_values.trie_roots_before),
-            extra_block_data: ExtraBlockData {
-                txn_number_before: opt_parent_txn_proof
-                    .map(|p| {
-                        p.public_inputs[txn_number_before_key]
-                            .to_canonical_u64()
-                            .into()
-                    })
-                    .unwrap_or(public_values.extra_block_data.txn_number_before),
-                gas_used_before: opt_parent_txn_proof
-                    .map(|p| {
-                        p.public_inputs[gas_used_before_key]
-                            .to_canonical_u64()
-                            .into()
-                    })
-                    .unwrap_or(public_values.extra_block_data.gas_used_before),
-                ..public_values.extra_block_data
-            },
-            ..public_values
-        };
+    //     // This is basically identical to this block public values, apart from
+    // the     // `trie_roots_before`, the `txn_number_before` and the
+    //     // `gas_used_before`, that may come from the previous proof, if any.
+    //     let txn_number_before_key =
+    //         TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE +
+    // BlockHashesTarget::SIZE + 8;     let gas_used_before_key =
+    //         TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE +
+    // BlockHashesTarget::SIZE + 10;     let txn_public_values = PublicValues {
+    //         trie_roots_before: opt_parent_txn_proof
+    //             .map(|p|
+    // TrieRoots::from_public_inputs(&p.public_inputs[0..TrieRootsTarget::SIZE]))
+    //             .unwrap_or(public_values.trie_roots_before),
+    //         extra_block_data: ExtraBlockData {
+    //             txn_number_before: opt_parent_txn_proof
+    //                 .map(|p| {
+    //                     p.public_inputs[txn_number_before_key]
+    //                         .to_canonical_u64()
+    //                         .into()
+    //                 })
+    //                 .unwrap_or(public_values.extra_block_data.txn_number_before),
+    //             gas_used_before: opt_parent_txn_proof
+    //                 .map(|p| {
+    //                     p.public_inputs[gas_used_before_key]
+    //                         .to_canonical_u64()
+    //                         .into()
+    //                 })
+    //                 .unwrap_or(public_values.extra_block_data.gas_used_before),
+    //             ..public_values.extra_block_data
+    //         },
+    //         ..public_values
+    //     };
 
-        set_public_value_targets(
-            &mut txn_inputs,
-            &self.txn_aggregation.public_values,
-            &txn_public_values,
-        )
-        .map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
+    //     set_public_value_targets(
+    //         &mut txn_inputs,
+    //         &self.txn_aggregation.public_values,
+    //         &txn_public_values,
+    //     )
+    //     .map_err(|_| {
+    //         anyhow::Error::msg("Invalid conversion when setting public values
+    // targets.")     })?;
 
-        let txn_proof = self.txn_aggregation.circuit.prove(txn_inputs)?;
-        Ok((txn_proof, txn_public_values))
-    }
+    //     let txn_proof = self.txn_aggregation.circuit.prove(txn_inputs)?;
+    //     Ok((txn_proof, txn_public_values))
+    // }
 
-    pub fn verify_txn_aggregation(
-        &self,
-        txn_proof: &ProofWithPublicInputs<F, C, D>,
-    ) -> anyhow::Result<()> {
-        self.txn_aggregation.circuit.verify(txn_proof.clone())?;
-        check_cyclic_proof_verifier_data(
-            txn_proof,
-            &self.txn_aggregation.circuit.verifier_only,
-            &self.txn_aggregation.circuit.common,
-        )
-    }
+    // pub fn verify_txn_aggregation(
+    //     &self,
+    //     txn_proof: &ProofWithPublicInputs<F, C, D>,
+    // ) -> anyhow::Result<()> {
+    //     self.txn_aggregation.circuit.verify(txn_proof.clone())?;
+    //     check_cyclic_proof_verifier_data(
+    //         txn_proof,
+    //         &self.txn_aggregation.circuit.verifier_only,
+    //         &self.txn_aggregation.circuit.common,
+    //     )
+    // }
 
     /// Create a final block proof, once all transactions of a given block have
     /// been combined into a single aggregation proof.

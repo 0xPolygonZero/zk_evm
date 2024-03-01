@@ -73,6 +73,7 @@ where
             withdrawal_prover_inputs,
             trie_root_ptrs,
             jumpdest_table,
+            next_txn_index,
         } = extra_segment_data.clone();
 
         state.bignum_modmul_result_limbs = bignum_modmul_result_limbs;
@@ -80,6 +81,7 @@ where
         state.withdrawal_prover_inputs = withdrawal_prover_inputs;
         state.trie_root_ptrs = trie_root_ptrs;
         state.jumpdest_table = jumpdest_table;
+        state.next_txn_index = next_txn_index;
         let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
         let mut shift_val = U256::one();
 

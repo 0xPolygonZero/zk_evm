@@ -326,6 +326,8 @@ pub struct GenerationState<F: Field> {
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
 
+    pub(crate) next_txn_index: usize,
+
     /// Prover inputs containing RLP data, in reverse order so that the next
     /// input can be obtained via `pop()`.
     pub(crate) rlp_prover_inputs: Vec<U256>,
@@ -365,8 +367,7 @@ impl<F: Field> GenerationState<F> {
         trie_roots_ptrs
     }
     pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
-        let rlp_prover_inputs =
-            all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().unwrap_or(&vec![]));
+        let rlp_prover_inputs = all_rlp_prover_inputs_reversed(inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let bignum_modmul_result_limbs = Vec::new();
 
@@ -375,6 +376,7 @@ impl<F: Field> GenerationState<F> {
             registers: Default::default(),
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
+            next_txn_index: 0,
             rlp_prover_inputs,
             withdrawal_prover_inputs,
             state_key_to_address: HashMap::new(),
@@ -462,6 +464,7 @@ impl<F: Field> GenerationState<F> {
             registers: self.registers,
             memory: self.memory.clone(),
             traces: Traces::default(),
+            next_txn_index: 0,
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),
             state_key_to_address: self.state_key_to_address.clone(),
             bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),

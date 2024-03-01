@@ -141,7 +141,7 @@ fn test_add11_yml() {
     };
 
     let inputs = GenerationInputs {
-        signed_txn: Some(txn.to_vec()),
+        signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after,
@@ -282,7 +282,7 @@ fn test_add11_yml_with_exception() {
     };
 
     let inputs = GenerationInputs {
-        signed_txn: Some(txn.to_vec()),
+        signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after,

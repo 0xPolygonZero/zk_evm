@@ -179,7 +179,11 @@ impl ProcessedBlockTrace {
                     txn_number_before: extra_data.txn_number_before,
                     gas_used_before: extra_data.gas_used_before,
                     gas_used_after: extra_data.gas_used_after,
-                    signed_txn: txn_info.meta.txn_bytes,
+                    signed_txns: if let Some(txn_bytes) = txn_info.meta.txn_bytes {
+                        vec![txn_bytes]
+                    } else {
+                        vec![]
+                    },
                     withdrawals: Vec::default(), /* Only ever set in a dummy txn at the end of
                                                   * the block (see `[add_withdrawals_to_txns]`
                                                   * for more info). */
@@ -686,7 +690,7 @@ fn create_dummy_gen_input_common(
     );
 
     GenerationInputs {
-        signed_txn: None,
+        signed_txns: vec![],
         tries: sub_tries,
         trie_roots_after,
         checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
