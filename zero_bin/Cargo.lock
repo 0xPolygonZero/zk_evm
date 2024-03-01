@@ -969,9 +969,9 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "evm_arithmetization"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d80801ec98b39dde6182d34f76f11abe050302f36d8847bfcd4456ecd990c9b"
+checksum = "ef2af65f5b147f04c94df5df5e21ff9d1632fd357511e183d5e04de059d6fa93"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1771,9 +1771,9 @@ dependencies = [
 
 [[package]]
 name = "mpt_trie"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cc408af26fe8f58787fb1be1a3bbfdd041bc36a15d4075fdadde07028469381"
+checksum = "bbf6d77f630021e46e127abfa047aebfba78bf207ed3dfd1c4f9e2370f9b60cd"
 dependencies = [
  "bytes",
  "enum-as-inner",
@@ -2303,9 +2303,9 @@ dependencies = [
 
 [[package]]
 name = "proof_gen"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24a304cfc3e741ebb7bc40258d0da52c0f2924b6817372d15f051e02673af3aa"
+checksum = "657003bc7dcee8b7c487807b8c9e6bf8aef8413f80501948a948b40c885ab7e7"
 dependencies = [
  "ethereum-types",
  "evm_arithmetization",
@@ -2910,9 +2910,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "starky"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2edb3b04ef3bb95f31805b9c88a9de39767089adadc1966ddc3c43348a11464a"
+checksum = "24e0a1eec739c7a67cb1c6f916c0b7bf2d281cf2edb35d3db5caa6989090133e"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3239,9 +3239,9 @@ checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 
 [[package]]
 name = "trace_decoder"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5719c4c8f671ee782b78df96e7832207a2486a4fa137b20a3885beaf3a4ad724"
+checksum = "f08487265f29176ad03c894b1c1cf8da5adf9d82fc151b3191eb7f55350b5c58"
 dependencies = [
  "bytes",
  "ciborium",
