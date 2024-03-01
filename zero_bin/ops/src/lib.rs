@@ -3,11 +3,9 @@ use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
-#[cfg(not(feature = "test_only"))]
-use proof_gen::{proof_gen::generate_agg_proof, proof_types::AggregatableProof};
 use proof_gen::{
-    proof_gen::generate_block_proof,
-    proof_types::{GeneratedAggProof, GeneratedBlockProof},
+    proof_gen::{generate_agg_proof, generate_block_proof},
+    proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
 };
 use serde::{Deserialize, Serialize};
 use trace_decoder::types::TxnProofGenIR;
@@ -47,7 +45,6 @@ impl Operation for TxProof {
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct AggProof;
 
-#[cfg(not(feature = "test_only"))]
 impl Monoid for AggProof {
     type Elem = AggregatableProof;
 
@@ -61,17 +58,6 @@ impl Monoid for AggProof {
         // Expect that empty blocks are padded.
         unimplemented!("empty agg proof")
     }
-}
-
-#[cfg(feature = "test_only")]
-impl Monoid for AggProof {
-    type Elem = ();
-
-    fn combine(&self, _a: Self::Elem, _b: Self::Elem) -> Result<Self::Elem> {
-        Ok(())
-    }
-
-    fn empty(&self) {}
 }
 
 #[derive(Deserialize, Serialize, RemoteExecute)]

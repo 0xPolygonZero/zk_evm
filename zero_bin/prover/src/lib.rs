@@ -1,6 +1,7 @@
 use anyhow::Result;
 use ethereum_types::U256;
-use ops::{AggProof, TxProof};
+use futures::stream::TryStreamExt;
+use ops::TxProof;
 use paladin::{
     directive::{Directive, IndexedStream},
     runtime::Runtime,
@@ -45,7 +46,7 @@ impl ProverInput {
 
         let agg_proof = IndexedStream::from(txs)
             .map(&TxProof)
-            .fold(&AggProof)
+            .fold(&ops::AggProof)
             .run(runtime)
             .await?;
 
@@ -84,8 +85,9 @@ impl ProverInput {
 
         IndexedStream::from(txs)
             .map(&TxProof)
-            .fold(&AggProof)
             .run(runtime)
+            .await?
+            .try_collect::<Vec<_>>()
             .await?;
 
         info!("Successfully generated witness for block {block_number}.");

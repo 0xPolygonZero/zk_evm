@@ -2323,6 +2323,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ethereum-types",
+ "futures",
  "ops",
  "paladin-core",
  "proof_gen",
