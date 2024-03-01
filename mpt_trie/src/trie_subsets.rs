@@ -288,7 +288,7 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
                 return Err(SubsetTrieError::UnexpectedKey(
                     *curr_nibbles,
                     format!("{:?}", trie),
-                ))
+                ));
             }
             true => {
                 trie.info.touched = true;
@@ -716,14 +716,14 @@ mod tests {
     }
 
     #[test]
-    fn sub_trie_for_non_existent_key_that_hits_branch_leaf_hashes_out_leaf() {
+    fn sub_trie_for_non_existent_key_that_hits_branch_leaf_does_not_hash_out_leaf() {
         common_setup();
 
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346]);
         let partial_trie = create_trie_subset(&trie, [0x1234567]).unwrap();
 
         // Note that `0x1234589` gets hashed at the branch slot at `0x12345`.
-        assert_nodes_are_hash_nodes(&partial_trie, [0x12345, 0x12346]);
+        assert_nodes_are_hash_nodes(&partial_trie, Vec::<Nibbles>::default());
     }
 
     #[test]
