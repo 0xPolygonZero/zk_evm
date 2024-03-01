@@ -6,14 +6,17 @@ use evm_arithmetization::{
 use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
+// TODO: Make these types in the doc comments point to the actual types...
 /// A type alias around `u64` for a block height.
 pub type BlockHeight = u64;
 /// A type alias around `[U256; 8]` for a bloom filter.
 pub type Bloom = [U256; 8];
 /// A type alias around `H256` for a code hash.
 pub type CodeHash = H256;
-/// A type alias for `H256` for an account address's hash.
+/// A type alias around `H256` for an account address's hash.
 pub type HashedAccountAddr = H256;
+/// A type alias around `Nibbles` for an account address's hash.
+pub type HashedAccountAddrNibbles = Nibbles;
 /// A type alias around `H256` for a node address's hash.
 pub type HashedNodeAddr = H256;
 /// A type alias around `H256` for a storage address's hash.

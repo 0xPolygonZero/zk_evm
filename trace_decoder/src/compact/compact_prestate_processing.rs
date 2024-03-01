@@ -20,11 +20,11 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use super::compact_to_partial_trie::{
-    convert_storage_trie_root_keyed_hashmap_to_account_addr_keyed,
-    create_partial_trie_from_compact_node, create_partial_trie_from_remaining_witness_elem,
-    CompactToPartialTrieExtractionOutput,
+    create_partial_trie_from_remaining_witness_elem, create_storage_partial_trie_from_compact_node,
+    CompactToPartialTrieExtractionOutput, StateTrieExtractionOutput, UnexpectedCompactNodeType,
 };
 use crate::{
+    decoding::TrieType,
     trace_protocol::TrieCompact,
     types::{CodeHash, HashedAccountAddr, TrieRootHash},
 };
@@ -84,6 +84,9 @@ pub enum CompactParsingError {
         "Expected a branch to have {0} preceding nodes but only had {1} (mask: {2}, nodes: {3:?})"
     )]
     MissingExpectedNodesPrecedingBranch(usize, usize, BranchMask, Vec<WitnessEntry>),
+
+    #[error("Found an unexpected compact node type ({0}) during processing compact into a `mpt_trie` {1} partial trie.")]
+    UnexpectedNodeForTrieType(UnexpectedCompactNodeType, TrieType),
 
     #[error("Expected the entry preceding {0} positions behind a {1} entry to be a node but instead found a {2}. (nodes: {3:?})")]
     PrecedingNonNodeEntryFoundWhenProcessingRule(usize, &'static str, String, Vec<WitnessEntry>),
@@ -250,7 +253,7 @@ impl From<TrieRootHash> for AccountNodeCode {
 pub(super) struct AccountNodeData {
     pub(super) nonce: Nonce,
     pub(super) balance: Balance,
-    pub(super) storage_root: Option<TrieRootHash>,
+    pub(super) storage_trie: Option<HashedPartialTrie>,
     pub(super) account_node_code: Option<AccountNodeCode>,
 }
 
@@ -258,13 +261,13 @@ impl AccountNodeData {
     fn new(
         nonce: Nonce,
         balance: Balance,
-        storage_root: Option<TrieRootHash>,
+        storage_trie: Option<HashedPartialTrie>,
         account_node_code: Option<AccountNodeCode>,
     ) -> Self {
         Self {
             nonce,
             balance,
-            storage_root,
+            storage_trie,
             account_node_code,
         }
     }
@@ -325,12 +328,8 @@ impl ParserState {
     fn parse(mut self) -> CompactParsingResult<WitnessOutput> {
         let mut entry_buf = Vec::new();
 
-        // TODO: Consider moving this into the `Self`...
-        let mut storage_tries = HashMap::new();
-
         loop {
-            let num_rules_applied =
-                self.apply_rules_to_witness_entries(&mut storage_tries, &mut entry_buf)?;
+            let num_rules_applied = self.apply_rules_to_witness_entries(&mut entry_buf)?;
 
             if num_rules_applied == 0 {
                 break;
@@ -339,20 +338,17 @@ impl ParserState {
 
         let res = match self.entries.len() {
             1 => create_partial_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
-            0 => Ok(CompactToPartialTrieExtractionOutput::default()), /* Case for when nothing */
-            // except the header is
-            // passed in.
+
+            // Case for when nothing except the header is passed in.
+            0 => Ok(StateTrieExtractionOutput::default()),
             _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
                 self.entries,
             )),
         }?;
 
-        let storage =
-            convert_storage_trie_root_keyed_hashmap_to_account_addr_keyed(&res.trie, storage_tries);
-
         let tries = PartialTriePreImages {
             state: res.trie,
-            storage,
+            storage: res.storage_tries,
         };
 
         // Replace with a none if there are no entries.
@@ -363,7 +359,6 @@ impl ParserState {
 
     fn apply_rules_to_witness_entries(
         &mut self,
-        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
         entry_buf: &mut Vec<WitnessEntry>,
     ) -> CompactParsingResult<usize> {
         let mut traverser = self.entries.create_collapsable_traverser();
@@ -371,8 +366,7 @@ impl ParserState {
         let mut tot_rules_applied = 0;
 
         while !traverser.at_end() {
-            let num_rules_applied =
-                Self::try_apply_rules_to_curr_entry(&mut traverser, storage_tries, entry_buf)?;
+            let num_rules_applied = Self::try_apply_rules_to_curr_entry(&mut traverser, entry_buf)?;
             tot_rules_applied += num_rules_applied;
 
             if num_rules_applied == 0 {
@@ -386,7 +380,6 @@ impl ParserState {
 
     fn try_apply_rules_to_curr_entry(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        storage_tries: &mut HashMap<TrieRootHash, HashedPartialTrie>,
         buf: &mut Vec<WitnessEntry>,
     ) -> CompactParsingResult<usize> {
         traverser.get_next_n_elems_into_buf(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE, buf);
@@ -429,23 +422,19 @@ impl ParserState {
                 )
             }
             WitnessEntry::Instruction(Instruction::AccountLeaf(k, n, b, has_code, has_storage)) => {
-                let (n_nodes_to_replace, account_node_code, s_root) = match (has_code, has_storage)
+                let (n_nodes_to_replace, account_node_code, s_trie) = match (has_code, has_storage)
                 {
                     (false, false) => Self::match_account_leaf_no_code_and_no_storage(),
-                    (false, true) => Self::match_account_leaf_no_code_but_has_storage(
-                        traverser,
-                        storage_tries,
-                        buf,
-                    ),
+                    (false, true) => {
+                        Self::match_account_leaf_no_code_but_has_storage(traverser, buf)
+                    }
                     (true, false) => {
                         Self::match_account_leaf_has_code_but_no_storage(traverser, buf)
                     }
-                    (true, true) => {
-                        Self::match_account_leaf_has_code_and_storage(traverser, storage_tries, buf)
-                    }
+                    (true, true) => Self::match_account_leaf_has_code_and_storage(traverser, buf),
                 }?;
 
-                let account_leaf_data = AccountNodeData::new(n, b, s_root, account_node_code);
+                let account_leaf_data = AccountNodeData::new(n, b, s_trie, account_node_code);
                 let leaf_node = WitnessEntry::Node(NodeEntry::Leaf(
                     k,
                     LeafNodeData::Account(account_leaf_data),
@@ -535,25 +524,20 @@ impl ParserState {
     }
 
     fn match_account_leaf_no_code_and_no_storage(
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         Ok((1, None, None))
     }
 
     fn match_account_leaf_no_code_but_has_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
         buf: &mut Vec<WitnessEntry>,
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         traverser.get_prev_n_elems_into_buf(1, buf);
 
         match buf[0].clone() {
-            WitnessEntry::Node(node) => Self::try_create_and_insert_partial_trie_from_node(
-                &node,
-                None,
-                storage_tries,
-                2,
-                traverser,
-            ),
+            WitnessEntry::Node(node) => {
+                Self::try_create_and_insert_partial_trie_from_node(&node, None, 2, traverser)
+            }
             _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
         }
     }
@@ -561,7 +545,7 @@ impl ParserState {
     fn match_account_leaf_has_code_but_no_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
         buf: &mut Vec<WitnessEntry>,
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         traverser.get_prev_n_elems_into_buf(1, buf);
 
         match buf[0].clone() {
@@ -577,9 +561,8 @@ impl ParserState {
 
     fn match_account_leaf_has_code_and_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
         buf: &mut Vec<WitnessEntry>,
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         traverser.get_prev_n_elems_into_buf(2, buf);
 
         match &buf[0..=1] {
@@ -587,7 +570,6 @@ impl ParserState {
                 Self::try_create_and_insert_partial_trie_from_node(
                     node,
                     Some(c_bytes.clone().into()),
-                    storage_tries,
                     3,
                     traverser,
                 )
@@ -596,7 +578,6 @@ impl ParserState {
                 Self::try_create_and_insert_partial_trie_from_node(
                     node,
                     Some((*c_hash).into()),
-                    storage_tries,
                     3,
                     traverser,
                 )
@@ -608,17 +589,13 @@ impl ParserState {
     fn try_create_and_insert_partial_trie_from_node(
         node: &NodeEntry,
         account_node_code: Option<AccountNodeCode>,
-        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
         n: usize,
         traverser: &mut CollapsableWitnessEntryTraverser,
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<TrieRootHash>)> {
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         match Self::try_get_storage_root_node(node) {
             Some(storage_root_node) => {
-                let s_trie_out = create_partial_trie_from_compact_node(storage_root_node)?;
-                let s_trie_hash = s_trie_out.trie.hash();
-                storage_tries.insert(s_trie_hash, s_trie_out.trie);
-
-                Ok((n, account_node_code, Some(s_trie_hash)))
+                let s_trie_out = create_storage_partial_trie_from_compact_node(storage_root_node)?;
+                Ok((n, account_node_code, Some(s_trie_out.trie)))
             }
             None => Self::invalid_witness_err(n, TraverserDirection::Backwards, traverser),
         }
