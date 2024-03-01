@@ -316,10 +316,7 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
             }
         }
         TrackedNodeIntern::Leaf => {
-            let (k, _) = trie.info.get_leaf_nibbles_and_value_expected();
-            if k == curr_nibbles {
-                trie.info.touched = true;
-            }
+            trie.info.touched = true;
         }
     }
 
