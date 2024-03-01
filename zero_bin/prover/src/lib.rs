@@ -74,7 +74,7 @@ impl ProverInput {
         _previous: Option<PlonkyProofIntern>,
     ) -> Result<GeneratedBlockProof> {
         let block_number = self.get_block_number();
-        info!("Testing witness generation for block {block_number}");
+        info!("Testing witness generation for block {block_number}.");
 
         let other_data = self.other_data;
         let txs = self.block_trace.into_txn_proof_gen_ir(
@@ -88,9 +88,9 @@ impl ProverInput {
             .run(runtime)
             .await?;
 
-        info!("Successfully generated witness for block {block_number}");
+        info!("Successfully generated witness for block {block_number}.");
 
-        // Dummy proof to match expected output type
+        // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
             b_height: block_number.as_u64(),
             intern: proof_gen::proof_gen::dummy_proof()?,
