@@ -229,7 +229,10 @@ pub(crate) trait State<F: Field> {
                         e,
                         offset_name,
                         self.get_stack(),
-                        self.mem_get_kernel_content(),
+                        self.mem_get_kernel_content()
+                            .iter()
+                            .map(|c| c.unwrap_or_default())
+                            .collect_vec(),
                     );
                 }
                 self.rollback(checkpoint);
