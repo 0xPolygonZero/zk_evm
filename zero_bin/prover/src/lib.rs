@@ -82,7 +82,7 @@ impl ProverInput {
             other_data.clone(),
         )?;
 
-        let _res = IndexedStream::from(txs)
+        IndexedStream::from(txs)
             .map(&TxProof)
             .fold(&AggProof)
             .run(runtime)
@@ -91,9 +91,9 @@ impl ProverInput {
         info!("Successfully generated witness for block {block_number}");
 
         // Dummy proof to match expected output type
-        return Ok(GeneratedBlockProof {
+        Ok(GeneratedBlockProof {
             b_height: block_number.as_u64(),
             intern: proof_gen::proof_gen::dummy_proof()?,
-        });
+        })
     }
 }
