@@ -1,14 +1,11 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use ethereum_types::U256;
-use ops::{AggProof, BlockProof, TxProof};
+use ops::{AggProof, TxProof};
 use paladin::{
-    directive::{Directive, IndexedStream, Literal},
+    directive::{Directive, IndexedStream},
     runtime::Runtime,
 };
-use proof_gen::{
-    proof_types::{AggregatableProof, GeneratedBlockProof},
-    types::PlonkyProofIntern,
-};
+use proof_gen::{proof_types::GeneratedBlockProof, types::PlonkyProofIntern};
 use serde::{Deserialize, Serialize};
 use trace_decoder::{
     processed_block_trace::ProcessingMeta,
@@ -31,6 +28,7 @@ impl ProverInput {
         self.other_data.b_data.b_meta.block_number
     }
 
+    #[cfg(not(feature = "test_only"))]
     pub async fn prove(
         self,
         runtime: &Runtime,
@@ -51,21 +49,51 @@ impl ProverInput {
             .run(runtime)
             .await?;
 
-        if let AggregatableProof::Agg(proof) = agg_proof {
+        if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
             let prev = previous.map(|p| GeneratedBlockProof {
                 b_height: block_number.as_u64() - 1,
                 intern: p,
             });
 
-            let block_proof = Literal(proof)
-                .map(&BlockProof { prev })
+            let block_proof = paladin::Literal(proof)
+                .map(&ops::BlockProof { prev })
                 .run(runtime)
                 .await?;
 
             info!("Successfully proved block {block_number}");
             Ok(block_proof.0)
         } else {
-            bail!("AggProof is is not GeneratedAggProof")
+            anyhow::bail!("AggProof is is not GeneratedAggProof")
         }
+    }
+
+    #[cfg(feature = "test_only")]
+    pub async fn prove(
+        self,
+        runtime: &Runtime,
+        _previous: Option<PlonkyProofIntern>,
+    ) -> Result<GeneratedBlockProof> {
+        let block_number = self.get_block_number();
+        info!("Testing witness generation for block {block_number}");
+
+        let other_data = self.other_data;
+        let txs = self.block_trace.into_txn_proof_gen_ir(
+            &ProcessingMeta::new(resolve_code_hash_fn),
+            other_data.clone(),
+        )?;
+
+        let _res = IndexedStream::from(txs)
+            .map(&TxProof)
+            .fold(&AggProof)
+            .run(runtime)
+            .await?;
+
+        info!("Successfully generated witness for block {block_number}");
+
+        // Dummy proof to match expected output type
+        return Ok(GeneratedBlockProof {
+            b_height: block_number.as_u64(),
+            intern: proof_gen::proof_gen::dummy_proof()?,
+        });
     }
 }

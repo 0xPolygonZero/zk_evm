@@ -19,3 +19,7 @@ anyhow = { workspace = true }
 
 # Local dependencies
 ops = { path = "../ops" }
+
+[features]
+default = ["test_only"]
+test_only = ["ops/test_only"]

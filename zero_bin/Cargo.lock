@@ -1924,6 +1924,7 @@ name = "ops"
 version = "0.1.0"
 dependencies = [
  "common",
+ "evm_arithmetization",
  "paladin-core",
  "proof_gen",
  "serde",

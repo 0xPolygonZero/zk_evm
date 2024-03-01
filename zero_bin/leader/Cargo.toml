@@ -28,3 +28,7 @@ ops = { path = "../ops" }
 prover = { path = "../prover" }
 rpc = { path = "../rpc" }
 common = { path = "../common" }
+
+[features]
+default = []
+test_only = ["ops/test_only", "prover/test_only"]
