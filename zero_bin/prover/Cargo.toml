@@ -16,6 +16,11 @@ tracing = { workspace = true }
 paladin-core = { workspace = true }
 ethereum-types = { workspace = true }
 anyhow = { workspace = true }
+futures = { workspace = true }
 
 # Local dependencies
 ops = { path = "../ops" }
+
+[features]
+default = ["test_only"]
+test_only = ["ops/test_only"]

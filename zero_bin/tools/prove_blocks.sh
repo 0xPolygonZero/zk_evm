@@ -24,7 +24,7 @@ TOT_BLOCKS=$(($2-$1+1))
 IGNORE_PREVIOUS_PROOFS=$4
 
 echo "Proving blocks ${1}..=${2}... (Total: ${TOT_BLOCKS})"
-mkdir -p proofs/
+mkdir -p $PROOF_OUTPUT_DIR
 
 for ((i=$1; i<=$2; i++))
 do

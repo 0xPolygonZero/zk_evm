@@ -21,7 +21,10 @@ clap = { workspace = true }
 ethereum-types = { workspace = true }
 evm_arithmetization = { workspace = true }
 thiserror = { workspace = true }
+futures = { workspace = true }
 
+hex = "0.4.3"
+hex-literal = "0.4.1"
 reqwest = { version = "0.11.22", default-features = false, features = [
   "json",
   "rustls-tls",
@@ -30,7 +33,4 @@ reqwest = { version = "0.11.22", default-features = false, features = [
 
 # Local dependencies
 common = { path = "../common" }
-futures = "0.3.29"
-hex = "0.4.3"
-hex-literal = "0.4.1"
 prover = { path = "../prover" }

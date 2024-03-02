@@ -1,4 +1,4 @@
-use common::prover_state::{p_manager, p_state};
+use common::prover_state::p_state;
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
@@ -15,16 +15,30 @@ registry!();
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct TxProof;
 
+#[cfg(not(feature = "test_only"))]
 impl Operation for TxProof {
     type Input = TxnProofGenIR;
-    type Output = AggregatableProof;
+    type Output = proof_gen::proof_types::AggregatableProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let proof = p_manager()
+        let proof = common::prover_state::p_manager()
             .generate_txn_proof(input)
             .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
 
         Ok(proof.into())
+    }
+}
+
+#[cfg(feature = "test_only")]
+impl Operation for TxProof {
+    type Input = TxnProofGenIR;
+    type Output = ();
+
+    fn execute(&self, input: Self::Input) -> Result<Self::Output> {
+        evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(input)
+            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
+
+        Ok(())
     }
 }
 
