@@ -9,8 +9,6 @@ global precompile_blake2_f:
     %checkpoint // Checkpoint
     %increment_call_depth
     // stack: (empty)
-    PUSH 0x100000000 // = 2^32 (is_kernel = true)
-    // stack: kexit_info
 
     PUSH blake2_f_contd
     // stack: blake2_f_contd, kexit_info
@@ -18,27 +16,40 @@ global precompile_blake2_f:
     // Load inputs from calldata memory into stack.
 
     %calldatasize
-    // stack: calldatasize, blake2_f_contd, kexit_info
+    // stack: calldatasize, blake2_f_contd
     DUP1
-    // stack: calldatasize, calldatasize, blake2_f_contd, kexit_info
+    // stack: calldatasize, calldatasize, blake2_f_contd
     %eq_const(213) ISZERO %jumpi(fault_exception)
-    // stack: calldatasize, blake2_f_contd, kexit_info
+    // stack: calldatasize, blake2_f_contd
     %decrement
-    // stack: flag_addr=212, blake2_f_contd, kexit_info
+    // stack: flag_addr=212, blake2_f_contd
     DUP1
-    // stack: flag_addr, flag_addr, blake2_f_contd, kexit_info
+    // stack: flag_addr, flag_addr, blake2_f_contd
     PUSH @SEGMENT_CALLDATA
     GET_CONTEXT
     %build_address
-    // stack: addr, flag_addr, blake2_f_contd, kexit_info
+    // stack: addr, flag_addr, blake2_f_contd
     MLOAD_GENERAL
-    // stack: flag, flag_addr, blake2_f_contd, kexit_info
+    // stack: flag, flag_addr, blake2_f_contd
     DUP1
-    // stack: flag, flag, flag_addr, blake2_f_contd, kexit_info
+    // stack: flag, flag, flag_addr, blake2_f_contd
     %gt_const(1) %jumpi(fault_exception) // Check flag < 2 (flag = 0 or flag = 1)
-    // stack: flag, flag_addr, blake2_f_contd, kexit_info
-    SWAP1
-    // stack: flag_addr, flag, blake2_f_contd, kexit_info
+
+    PUSH 0x100000000 // = 2^32 (is_kernel = true)
+    // stack: kexit_info, flag, flag_addr, blake2_f_contd
+
+    %stack () -> (@SEGMENT_CALLDATA, 4)
+    GET_CONTEXT
+    // stack: ctx, @SEGMENT_CALLDATA, 4, kexit_info, flag, flag_addr, blake2_f_contd
+    %build_address_no_offset
+    MLOAD_32BYTES
+    // stack: rounds, kexit_info, flag, flag_addr, blake2_f_contd
+    %charge_gas
+    // stack: kexit_info, flag, flag_addr, blake2_f_contd
+
+    %stack (kexit_info, flag, flag_addr, blake2_f_contd)
+        -> (flag_addr, flag, blake2_f_contd, kexit_info)
+
     %sub_const(8)
     // stack: t1_addr=flag_addr-8, flag, blake2_f_contd, kexit_info
 
@@ -106,12 +117,7 @@ global precompile_blake2_f:
     // stack: ctx, @SEGMENT_CALLDATA, 4, h_0..h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
     %build_address_no_offset
     MLOAD_32BYTES
-    // stack: rounds, h_0..h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-    
-    DUP1
-    // stack: rounds, rounds, h_0..h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
-    %charge_gas
-    
+
     // stack: rounds, h_0..h_7, m_0..m_15, t_0, t_1, flag, blake2_f_contd, kexit_info
     %jump(blake2_f)
 blake2_f_contd:
