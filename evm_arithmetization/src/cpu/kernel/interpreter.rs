@@ -781,6 +781,10 @@ impl<F: Field> State<F> for Interpreter<F> {
         self.generation_state.memory.get_with_init(address)
     }
 
+    fn get_generation_state(&self) -> &GenerationState<F> {
+        &self.generation_state
+    }
+
     fn get_mut_generation_state(&mut self) -> &mut GenerationState<F> {
         &mut self.generation_state
     }
@@ -789,21 +793,23 @@ impl<F: Field> State<F> for Interpreter<F> {
         self.clock
     }
 
-    fn push_cpu(&mut self, val: CpuColumnsView<F>) {
+    fn push_cpu(&mut self, _val: CpuColumnsView<F>) {
+        // We don't push anything, but increment the clock to match
+        // an actual proof generation.
         self.clock += 1;
     }
 
-    fn push_logic(&mut self, op: logic::Operation) {}
+    fn push_logic(&mut self, _op: logic::Operation) {}
 
-    fn push_arithmetic(&mut self, op: arithmetic::Operation) {}
+    fn push_arithmetic(&mut self, _op: arithmetic::Operation) {}
 
-    fn push_byte_packing(&mut self, op: BytePackingOp) {}
+    fn push_byte_packing(&mut self, _op: BytePackingOp) {}
 
-    fn push_keccak(&mut self, input: [u64; keccak::keccak_stark::NUM_INPUTS], clock: usize) {}
+    fn push_keccak(&mut self, _input: [u64; keccak::keccak_stark::NUM_INPUTS], _clock: usize) {}
 
-    fn push_keccak_bytes(&mut self, input: [u8; KECCAK_WIDTH_BYTES], clock: usize) {}
+    fn push_keccak_bytes(&mut self, _input: [u8; KECCAK_WIDTH_BYTES], _clock: usize) {}
 
-    fn push_keccak_sponge(&mut self, op: KeccakSpongeOp) {}
+    fn push_keccak_sponge(&mut self, _op: KeccakSpongeOp) {}
 
     fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
         self.generation_state.rollback(checkpoint)
@@ -845,13 +851,13 @@ impl<F: Field> State<F> for Interpreter<F> {
 
         self.fill_stack_fields(&mut row)?;
 
-        let generation_state = self.get_mut_generation_state();
         if registers.is_kernel {
-            log_kernel_instruction(generation_state, op);
+            log_kernel_instruction(self, op);
         } else {
             log::debug!("User instruction: {:?}", op);
         }
 
+        let generation_state = self.get_mut_generation_state();
         // Might write in general CPU columns when it shouldn't, but the correct values
         // will overwrite these ones during the op generation.
         if let Some(special_len) = get_op_special_length(op) {
