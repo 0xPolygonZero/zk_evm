@@ -30,6 +30,8 @@ use crate::witness::state::RegistersState;
 use crate::witness::util::mem_read_code_with_log_and_fill;
 use crate::{arithmetic, logic};
 
+pub(crate) const EXC_STOP_CODE: u8 = 6;
+
 pub(crate) fn read_code_memory<F: Field, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
@@ -309,14 +311,13 @@ where
     fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool;
 
     fn final_exception(&mut self) -> anyhow::Result<()> {
-        let exc_code: u8 = 6;
         let checkpoint = self.checkpoint();
 
         let gen_state = self.get_mut_generation_state();
 
         let (row, _) = self.base_row();
 
-        generate_exception(exc_code, self, row)
+        generate_exception(EXC_STOP_CODE, self, row)
             .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
 
         self.apply_ops(checkpoint);

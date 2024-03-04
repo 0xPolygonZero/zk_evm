@@ -178,7 +178,6 @@ impl<F: RichField, const D: usize> LogicStark<F, D> {
     ) -> Vec<PolynomialValues<F>> {
         // First, turn all provided operations into rows in `LogicStark`, and pad if
         // necessary.
-        let min_rows = min_rows.max(16);
         let trace_rows = timed!(
             timing,
             "generate trace rows",

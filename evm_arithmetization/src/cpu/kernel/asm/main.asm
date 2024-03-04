@@ -45,7 +45,7 @@ global init:
     // stack: stored_context, context, addr_registers
     %assert_eq
 
-    // Construct `exit_kernel`.
+    // Construct `kexit_info`.
     DUP1 MLOAD_GENERAL
     // stack: program_counter, addr_registers
     DUP2 %increment

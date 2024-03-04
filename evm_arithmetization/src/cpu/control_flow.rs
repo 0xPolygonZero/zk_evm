@@ -35,7 +35,7 @@ pub(crate) fn get_halt_pc<F: Field>() -> F {
     F::from_canonical_usize(halt_pc)
 }
 
-/// Returns `init`'s program counter. All proofs should start at that PC.
+/// Returns `init`'s program counter. All segments should start at that PC.
 pub(crate) fn get_start_pc<F: Field>() -> F {
     let start_pc = KERNEL.global_labels["init"];
 

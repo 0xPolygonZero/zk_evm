@@ -14,6 +14,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::memory::segments::Segment;
+use crate::witness::transition::EXC_STOP_CODE;
 
 // Copy the constant but make it `usize`.
 const BYTES_PER_OFFSET: usize = crate::cpu::kernel::assembler::BYTES_PER_OFFSET as usize;
@@ -42,9 +43,10 @@ pub(crate) fn eval_packed<P: PackedField>(
         .map(|(i, bit)| bit * P::Scalar::from_canonical_u64(1 << i))
         .sum();
 
-    // If exception but not final halting step, ensure we are not in kernel mode.
-    let six = P::Scalar::from_canonical_u8(6);
-    yield_constr.constraint(filter_exception * (exc_code - six) * lv.is_kernel_mode);
+    // All exceptions -- except `exc_stop`, which carries out the final checks of a
+    // segment execution -- have to be in user mode.
+    let exc_stop_code = P::Scalar::from_canonical_u8(EXC_STOP_CODE);
+    yield_constr.constraint(filter_exception * (exc_code - exc_stop_code) * lv.is_kernel_mode);
 
     // Ensure that all bits are either 0 or 1.
     for bit in exc_code_bits {
@@ -120,7 +122,7 @@ pub(crate) fn eval_packed<P: PackedField>(
     // Zero the rest of that register
     // output[1] is 0 for exceptions (except for the final halting step), but not
     // for syscalls.
-    yield_constr.constraint(filter_exception * (exc_code - six) * output[1]);
+    yield_constr.constraint(filter_exception * (exc_code - exc_stop_code) * output[1]);
     for &limb in &output[2..6] {
         yield_constr.constraint(total_filter * limb);
     }
@@ -155,9 +157,12 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
                 builder.mul_const_add_extension(F::from_canonical_u64(1 << i), bit, cumul)
             });
 
-    // If exception but not final halting step, ensure we are not in kernel mode.
-    let opcode_is_six = builder.add_const_extension(exc_code, F::NEG_ONE * F::from_canonical_u8(6));
-    let constr = builder.mul_many_extension([filter_exception, opcode_is_six, lv.is_kernel_mode]);
+    // All exceptions -- except `exc_stop`, which carries out the final checks of a
+    // segment execution -- have to be in user mode.
+    let opcode_is_exc_stop =
+        builder.add_const_extension(exc_code, F::NEG_ONE * F::from_canonical_u8(EXC_STOP_CODE));
+    let constr =
+        builder.mul_many_extension([filter_exception, opcode_is_exc_stop, lv.is_kernel_mode]);
 
     yield_constr.constraint(builder, constr);
     // Ensure that all bits are either 0 or 1.
@@ -309,7 +314,7 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     // Zero the rest of that register
     // output[1] is 0 for exceptions (except for the final halting step), but not
     // for syscalls.
-    let constr = builder.mul_many_extension([filter_exception, opcode_is_six, output[1]]);
+    let constr = builder.mul_many_extension([filter_exception, opcode_is_exc_stop, output[1]]);
     yield_constr.constraint(builder, constr);
     for &limb in &output[2..6] {
         let constr = builder.mul_extension(total_filter, limb);

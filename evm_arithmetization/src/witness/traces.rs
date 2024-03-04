@@ -33,7 +33,7 @@ pub(crate) struct TraceCheckpoint {
 }
 
 #[derive(Debug)]
-pub struct Traces<T: Copy> {
+pub(crate) struct Traces<T: Copy> {
     pub(crate) arithmetic_ops: Vec<arithmetic::Operation>,
     pub(crate) byte_packing_ops: Vec<BytePackingOp>,
     pub(crate) cpu: Vec<CpuColumnsView<T>>,
@@ -120,7 +120,7 @@ impl<T: Copy> Traces<T> {
     }
 
     pub fn clock(&self) -> usize {
-        self.cpu.len() + 1
+        self.cpu.len()
     }
 
     pub(crate) fn into_tables<const D: usize>(

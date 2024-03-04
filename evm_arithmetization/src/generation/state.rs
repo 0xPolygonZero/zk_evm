@@ -178,6 +178,10 @@ pub(crate) trait State<F: Field> {
                     || (max_cpu_len.is_some()
                         && self.get_clock() == max_cpu_len.unwrap() - NUM_EXTRA_CYCLES_AFTER))
             {
+                if pc != halt_pc {
+                    println!("{}", self.get_clock() + NUM_EXTRA_CYCLES_AFTER);
+                    assert!((self.get_clock() + NUM_EXTRA_CYCLES_AFTER).is_power_of_two());
+                }
                 running = false;
                 final_registers = registers;
 
@@ -276,7 +280,7 @@ pub(crate) trait State<F: Field> {
     fn base_row(&mut self) -> (CpuColumnsView<F>, u8) {
         let generation_state = self.get_mut_generation_state();
         let mut row: CpuColumnsView<F> = CpuColumnsView::default();
-        row.clock = F::from_canonical_usize(generation_state.traces.clock());
+        row.clock = F::from_canonical_usize(generation_state.traces.clock() + 1);
         row.context = F::from_canonical_usize(generation_state.registers.context);
         row.program_counter = F::from_canonical_usize(generation_state.registers.program_counter);
         row.is_kernel_mode = F::from_bool(generation_state.registers.is_kernel);
@@ -294,7 +298,7 @@ pub struct GenerationState<F: Field> {
     pub(crate) inputs: GenerationInputs,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
-    pub traces: Traces<F>,
+    pub(crate) traces: Traces<F>,
 
     /// Prover inputs containing RLP data, in reverse order so that the next
     /// input can be obtained via `pop()`.
@@ -618,7 +622,7 @@ impl<F: Field> Transition<F> for GenerationState<F> {
                 row.general.stack_mut().stack_len_bounds_aux = F::ZERO;
             } else {
                 let clock = self.traces.clock();
-                let last_row = &mut self.traces.cpu[clock - 2];
+                let last_row = &mut self.traces.cpu[clock - 1];
                 let disallowed_len = F::from_canonical_usize(MAX_USER_STACK_SIZE + 1);
                 let diff = row.stack_len - disallowed_len;
                 if let Some(inv) = diff.try_inverse() {
