@@ -69,16 +69,14 @@ global tload_current:
     // stack: found, pos, addr, val, slot, retdest
     %jumpi(tload_found)
     // The value is not in memory so we return 0
-    %pop4
-    PUSH 0
-    SWAP1
+    %stack (pos, addr, val, slot, retdest) -> (retdest, 0)
     JUMP
 tload_found:
     // stack: pos, addr, val, slot, retdest
     %stack (pos, addr, val, slot, retdest) -> (retdest, val)
     JUMP
 
-// Read a word from the current account's transient storage trie
+// Read a word from the current account's transient storage list
 //
 // Pre stack: kexit_info, slot
 // Post stack: value
@@ -140,9 +138,12 @@ global debug_journal:
     EXIT_KERNEL
 
 new_transient_storage_len:
-    // Store the new length.
-    %sub_const(@SEGMENT_TRANSIENT_STORAGE)
-    %increment
+    // Store the new (unscaled) length.
+    // stack: addr, original_value, slot, value, kexit_info
+    PUSH @SEGMENT_TRANSIENT_STORAGE
+    PUSH 1
+    SUB // 1 - seg
+    ADD // new_len = (addr - seg) + 1
     %mstore_global_metadata(@GLOBAL_METADATA_TRANSIENT_STORAGE_LEN)
     %jump(sys_tstore_charge_gas)
 

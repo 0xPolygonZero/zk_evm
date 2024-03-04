@@ -75,7 +75,7 @@ pub(crate) enum Segment {
     ContextCheckpoints = 32 << SEGMENT_SCALING_FACTOR,
     /// List of 256 previous block hashes.
     BlockHashes = 33 << SEGMENT_SCALING_FACTOR,
-    // The transient storage
+    // The transient storage of the current transaction.
     TransientStorage = 34 << SEGMENT_SCALING_FACTOR,
     /// List of contracts which have been created during the current
     /// transaction.

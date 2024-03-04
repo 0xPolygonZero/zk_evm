@@ -103,7 +103,7 @@ pub(crate) enum GlobalMetadata {
     KernelHash,
     KernelLen,
 
-    /// The length of the transient storage segment
+    /// The length of the transient storage segment.
     TransientStorageLen,
 
     // Start of the blob versioned hashes in the RLP for type-3 txns.
