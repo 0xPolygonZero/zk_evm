@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::mem::size_of;
 
-use anyhow::bail;
+use anyhow::{anyhow, bail};
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
@@ -200,7 +200,8 @@ pub(crate) trait State<F: Field> {
         let checkpoint = self.checkpoint();
 
         let (row, _) = self.base_row();
-        generate_exception(exc_code, self, row);
+        generate_exception(exc_code, self, row)
+            .map_err(|e| anyhow!("Exception handling failed with error: {:?}", e))?;
 
         self.apply_ops(checkpoint);
 
