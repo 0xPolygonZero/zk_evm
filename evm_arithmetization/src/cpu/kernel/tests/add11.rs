@@ -144,10 +144,7 @@ fn test_add11_yml() {
 
     let mut registers_after = RegistersState::default();
     registers_after.program_counter = KERNEL.global_labels["halt"];
-    // Address of the stack top in the stored registers. This value does not
-    // actually matter much: it is unconstrained because the stack is empty at
-    // the end of the execution. This simply corresponds to the actual stored value
-    // in that memory slot instead of the (here nonexistent) previous stack_top.
+
     let tries_inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
