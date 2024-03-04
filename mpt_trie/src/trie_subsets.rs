@@ -307,11 +307,17 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
             return mark_nodes_that_are_needed(&mut children[nib as usize], curr_nibbles);
         }
         TrackedNodeIntern::Extension(child) => {
-            let nibbles = trie.info.get_nibbles_expected();
-            let r = curr_nibbles.pop_nibbles_front(nibbles.count);
+            // If we hit an extension node, we always must include it unless we exhausted
+            // our key.
+            if curr_nibbles.is_empty() {
+                return Ok(());
+            }
 
-            if r.nibbles_are_identical_up_to_smallest_count(nibbles) {
-                trie.info.touched = true;
+            trie.info.touched = true;
+
+            let nibbles: &Nibbles = trie.info.get_nibbles_expected();
+            if curr_nibbles.nibbles_are_identical_up_to_smallest_count(nibbles) {
+                curr_nibbles.pop_nibbles_front(nibbles.count);
                 return mark_nodes_that_are_needed(child, curr_nibbles);
             }
         }
