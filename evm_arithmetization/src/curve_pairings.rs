@@ -667,35 +667,16 @@ pub mod bls381 {
         };
     }
 
-    /// The sloped line function for doubling a point.
-    pub(crate) fn tangent(p: CurveAff<BLS381>, q: CurveAff<Fp2<BLS381>>) -> Fp12<BLS381> {
-        let cx = -BLS381::new(3) * p.x * p.x;
-        let cy = BLS381::new(2) * p.y;
-        sparse_embed::<BLS381>(p.y * p.y - BLS381::new(9), q.x * cx, q.y * cy)
-    }
-
-    /// The sloped line function for adding two points.
-    pub(crate) fn chord(
-        p1: CurveAff<BLS381>,
-        p2: CurveAff<BLS381>,
-        q: CurveAff<Fp2<BLS381>>,
-    ) -> Fp12<BLS381> {
-        let cx = p2.y - p1.y;
-        let cy = p1.x - p2.x;
-        sparse_embed::<BLS381>(p1.y * p2.x - p2.y * p1.x, q.x * cx, q.y * cy)
-    }
-
-    // The tate pairing takes a point each from the curve and its twist and outputs
-    // an Fp12 element.
-    pub(crate) fn tate(p: CurveAff<BLS381>, q: CurveAff<Fp2<BLS381>>) -> Fp12<BLS381> {
+    // The optimal Ate pairing takes a point each from the curve and its twist and
+    // outputs an Fp12 element.
+    pub(crate) fn ate_optim(p: CurveAff<BLS381>, q: CurveAff<Fp2<BLS381>>) -> Fp12<BLS381> {
         let miller_output = miller_loop(p, q);
         final_exponent(miller_output)
     }
 
-    /// Standard code for miller loop, can be found on page 99 at this url:
-    /// <https://static1.squarespace.com/static/5fdbb09f31d71c1227082339/t/5ff394720493bd28278889c6/1609798774687/PairingsForBeginners.pdf#page=107>
-    /// where BLS_EXP is a hardcoding of the array of Booleans that the loop
-    /// traverses.
+    /// Miller loop for the optimal Ate pairing, which computes $f_{u,Q}(P)$
+    /// with the accumulator as a point on the twist, before exponentiating
+    /// by $(p^12 - 1)/r$ with $r$ the order of the multiplicative target group.
     pub(crate) fn miller_loop(p: CurveAff<BLS381>, q: CurveAff<Fp2<BLS381>>) -> Fp12<BLS381> {
         let mut r = CurveProj::<Fp2<BLS381>> {
             x: q.x,
@@ -942,17 +923,17 @@ mod tests {
 
     #[test]
     fn test_bls_pairing_simple() {
-        let x0 = bls381::tate(
+        let x0 = bls381::ate_optim(
             CurveAff::<BLS381>::GENERATOR,
             CurveAff::<Fp2<BLS381>>::GENERATOR,
         );
 
         // x0^(-1)
-        let x1 = bls381::tate(
+        let x1 = bls381::ate_optim(
             -CurveAff::<BLS381>::GENERATOR,
             CurveAff::<Fp2<BLS381>>::GENERATOR,
         );
-        let x2 = bls381::tate(
+        let x2 = bls381::ate_optim(
             CurveAff::<BLS381>::GENERATOR,
             -CurveAff::<Fp2<BLS381>>::GENERATOR,
         );
@@ -961,7 +942,7 @@ mod tests {
         assert_eq!(x0 * x2, Fp12::<BLS381>::UNIT);
 
         assert_eq!(
-            bls381::tate(CurveAff::<BLS381>::unit(), CurveAff::<Fp2<BLS381>>::unit()),
+            bls381::ate_optim(CurveAff::<BLS381>::unit(), CurveAff::<Fp2<BLS381>>::unit()),
             Fp12::<BLS381>::ZERO
         );
     }
@@ -981,14 +962,14 @@ mod tests {
 
             let p = CurveAff::<BLS381>::int(m);
             let q = CurveAff::<Fp2<BLS381>>::int(n);
-            running_product = running_product * bls381::tate(p, q);
+            running_product = running_product * bls381::ate_optim(p, q);
         }
 
         // Finally, multiply by the accumulated inverse and check this matches the
         // expected value.
         let p = CurveAff::<BLS381>::int(acc);
         let q = CurveAff::<Fp2<BLS381>>::GENERATOR;
-        running_product = running_product * bls381::tate(p, q);
+        running_product = running_product * bls381::ate_optim(p, q);
 
         let expected = if acc == 0 {
             Fp12::<BLS381>::ZERO
