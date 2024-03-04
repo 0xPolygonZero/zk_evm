@@ -260,13 +260,11 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::field::types::{Field, Sample};
+    use plonky2::field::types::Sample;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
-    use starky::constraint_consumer::ConstraintConsumer;
 
     use super::*;
-    use crate::arithmetic::columns::NUM_ARITH_COLUMNS;
 
     // TODO: Should be able to refactor this test to apply to all operations.
     #[test]

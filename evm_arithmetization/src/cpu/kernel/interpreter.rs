@@ -7,7 +7,6 @@ use std::collections::{BTreeSet, HashMap};
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
 use mpt_trie::partial_trie::PartialTrie;
-use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
@@ -1114,7 +1113,7 @@ mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField as F;
 
     use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-    use crate::cpu::kernel::interpreter::{run, Interpreter};
+    use crate::cpu::kernel::interpreter::Interpreter;
     use crate::memory::segments::Segment;
     use crate::witness::memory::MemoryAddress;
     use crate::witness::operation::CONTEXT_SCALING_FACTOR;

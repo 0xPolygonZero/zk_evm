@@ -1,6 +1,6 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
-use anyhow::{anyhow, Error};
+use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
@@ -20,14 +20,12 @@ use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::GenerationState;
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
 use crate::proof::{BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots};
-use crate::util::{h2u, u256_to_u8, u256_to_usize};
-use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind};
-use crate::witness::state::RegistersState;
+use crate::util::{h2u, u256_to_usize};
+use crate::witness::memory::{MemoryAddress, MemoryChannel};
 
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -35,8 +33,8 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
-use self::state::{GenerationStateCheckpoint, State};
-use crate::witness::util::{mem_write_log, stack_peek};
+use self::state::State;
+use crate::witness::util::mem_write_log;
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
