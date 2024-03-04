@@ -206,14 +206,9 @@ fn test_revert() -> Result<()> {
     // We use a modified kernel with an extra file defining a label
     // where the `checkpoint` macro from file cpu/kernel/asm/journal/journal.asm
     // is expanded.
-    let kernel_files: [&str; 152] = array::from_fn(|i| {
-        if i < KERNEL_FILES.len() {
-            KERNEL_FILES[i]
-        } else {
-            include_str!("checkpoint_label.asm")
-        }
-    });
-    let kernel = combined_kernel_from_files(kernel_files);
+    let mut kernel_files = KERNEL_FILES.to_vec();
+    kernel_files.push(include_str!("checkpoint_label.asm"));
+    let kernel = combined_kernel_from_files(&kernel_files);
 
     let sys_tstore = kernel.global_labels["sys_tstore"];
 

@@ -165,13 +165,13 @@ pub static KERNEL_FILES: [&str; 151] = [
 
 pub static KERNEL: Lazy<Kernel> = Lazy::new(combined_kernel);
 
-pub(crate) fn combined_kernel_from_files<const N: usize>(files: [&str; N]) -> Kernel {
+pub(crate) fn combined_kernel_from_files(files: &[&str]) -> Kernel {
     let parsed_files = files.iter().map(|f| parse(f)).collect_vec();
     assemble(parsed_files, evm_constants(), true)
 }
 
 pub(crate) fn combined_kernel() -> Kernel {
-    combined_kernel_from_files(KERNEL_FILES)
+    combined_kernel_from_files(&KERNEL_FILES)
 }
 
 #[cfg(test)]
