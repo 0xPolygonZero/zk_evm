@@ -144,7 +144,7 @@ pub(crate) fn generate_segment<F: Field>(
     max_cpu_len: usize,
     index: usize,
     inputs: &GenerationInputs,
-) -> anyhow::Result<(RegistersState, RegistersState, MemoryState)> {
+) -> anyhow::Result<Option<(RegistersState, RegistersState, MemoryState)>> {
     let init_label = KERNEL.global_labels["init"];
     let initial_registers = RegistersState::new_with_main_label();
     let mut interpreter =
@@ -159,6 +159,9 @@ pub(crate) fn generate_segment<F: Field>(
 
     for i in 0..index + 1 {
         // Write initial registers.
+        if registers_after.program_counter == KERNEL.global_labels["halt"] {
+            return Ok(None);
+        }
         let registers_before_field_values = [
             registers_after.program_counter.into(),
             (registers_after.is_kernel as usize).into(),
@@ -195,7 +198,7 @@ pub(crate) fn generate_segment<F: Field>(
             .expect("We are in the interpreter: the run should return a memory state");
     }
 
-    Ok((registers_before, registers_after, before_mem_values))
+    Ok(Some((registers_before, registers_after, before_mem_values)))
 }
 
 impl<F: Field> Interpreter<F> {
