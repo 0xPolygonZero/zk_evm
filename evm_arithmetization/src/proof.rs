@@ -375,7 +375,7 @@ impl RegistersData {
         let program_counter = pis[0].to_canonical_u64().into();
         let is_kernel = pis[1].to_canonical_u64().into();
         let stack_len = pis[2].to_canonical_u64().into();
-        let stack_top = get_u256(&pis[3..11]);
+        let stack_top = get_u256(&pis[3..11].try_into().unwrap());
         let context = pis[11].to_canonical_u64().into();
         let gas_used = pis[12].to_canonical_u64().into();
 

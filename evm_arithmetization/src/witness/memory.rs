@@ -126,9 +126,9 @@ impl MemoryOp {
         kind: MemoryOpKind,
         value: U256,
     ) -> Self {
-        // Since the clock starts at 1, the timestamps is:
-        // `timestamp = (clock - 1) * NUM_CHANNELS + 1 + channel`
-        let timestamp = (clock - 1) * NUM_CHANNELS + 1 + channel.index();
+        // Since the CPU clock starts at 1, and the `clock` value is the CPU length, the
+        // timestamps is: `timestamp = clock * NUM_CHANNELS + 1 + channel`
+        let timestamp = clock * NUM_CHANNELS + 1 + channel.index();
         MemoryOp {
             filter: true,
             timestamp,

@@ -329,7 +329,6 @@ where
             &ctl_data_per_table[Table::Arithmetic as usize],
             ctl_challenges,
             challenger,
-            false,
             timing,
             abort_signal.clone(),
         )?
@@ -345,7 +344,6 @@ where
             &ctl_data_per_table[Table::BytePacking as usize],
             ctl_challenges,
             challenger,
-            false,
             timing,
             abort_signal.clone(),
         )?
@@ -361,7 +359,6 @@ where
             &ctl_data_per_table[Table::Cpu as usize],
             ctl_challenges,
             challenger,
-            false,
             timing,
             abort_signal.clone(),
         )?
@@ -377,7 +374,6 @@ where
             &ctl_data_per_table[Table::Keccak as usize],
             ctl_challenges,
             challenger,
-            false,
             timing,
             abort_signal.clone(),
         )?
@@ -393,7 +389,6 @@ where
             &ctl_data_per_table[Table::KeccakSponge as usize],
             ctl_challenges,
             challenger,
-            false,
             timing,
             abort_signal.clone(),
         )?
@@ -409,7 +404,6 @@ where
             &ctl_data_per_table[Table::Logic as usize],
             ctl_challenges,
             challenger,
-            false,
             timing,
             abort_signal.clone(),
         )?
@@ -425,7 +419,6 @@ where
             &ctl_data_per_table[Table::Memory as usize],
             ctl_challenges,
             challenger,
-            false,
             timing,
             abort_signal.clone(),
         )?
@@ -441,7 +434,6 @@ where
             &ctl_data_per_table[Table::MemBefore as usize],
             ctl_challenges,
             challenger,
-            false,
             timing,
             abort_signal.clone(),
         )?
@@ -457,7 +449,6 @@ where
             &ctl_data_per_table[Table::MemAfter as usize],
             ctl_challenges,
             challenger,
-            true,
             timing,
             abort_signal,
         )?
@@ -514,7 +505,6 @@ pub(crate) fn prove_single_table<F, C, S, const D: usize>(
     ctl_data: &CtlData<F>,
     ctl_challenges: &GrandProductChallengeSet<F>,
     challenger: &mut Challenger<F, C::Hasher>,
-    is_mem_after: bool,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> Result<ProofSingleWithCap<F, C, C::Hasher, D>>

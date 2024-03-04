@@ -145,9 +145,8 @@ pub(crate) fn generate_segment<F: Field>(
 ) -> anyhow::Result<(RegistersState, RegistersState, MemoryState)> {
     let init_label = KERNEL.global_labels["init"];
     let initial_registers = RegistersState::new_with_main_label();
-    let interpreter_inputs = GenerationInputs { ..inputs.clone() };
     let mut interpreter =
-        Interpreter::<F>::new_with_generation_inputs(init_label, vec![], interpreter_inputs);
+        Interpreter::<F>::new_with_generation_inputs(init_label, vec![], inputs.clone());
 
     let (mut registers_before, mut registers_after, mut before_mem_values, mut after_mem_values) = (
         initial_registers,
@@ -186,7 +185,7 @@ pub(crate) fn generate_segment<F: Field>(
         interpreter.generation_state.registers = registers_before;
         interpreter.generation_state.registers.program_counter = init_label;
         interpreter.generation_state.registers.is_kernel = true;
-        interpreter.clock = 1;
+        interpreter.clock = 0;
 
         let (updated_registers_after, opt_after_mem_values) = interpreter.run(Some(max_cpu_len))?;
         registers_after = updated_registers_after;
@@ -221,7 +220,7 @@ impl<F: Field> Interpreter<F> {
             opcode_count: [0; 256],
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: false,
-            clock: 1,
+            clock: 0,
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -250,7 +249,7 @@ impl<F: Field> Interpreter<F> {
             opcode_count: [0; 256],
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: true,
-            clock: 1,
+            clock: 0,
         }
     }
 

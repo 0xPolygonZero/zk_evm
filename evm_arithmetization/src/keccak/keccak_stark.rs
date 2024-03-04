@@ -750,7 +750,6 @@ mod tests {
                 challenges: vec![ctl_z_data.challenge; config.num_challenges],
             },
             &mut Challenger::new(),
-            false,
             &mut timing,
             None,
         )?;

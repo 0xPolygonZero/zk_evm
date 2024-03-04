@@ -258,8 +258,7 @@ pub(crate) fn get_h256<F: RichField>(slice: &[F]) -> H256 {
     )
 }
 
-pub(crate) fn get_u256<F: RichField>(slice: &[F]) -> U256 {
-    assert!(slice.len() == 8);
+pub(crate) fn get_u256<F: RichField>(slice: &[F; 8]) -> U256 {
     U256(
         (0..4)
             .map(|i| {

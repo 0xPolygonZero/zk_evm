@@ -34,7 +34,7 @@ use crate::memory::VALUE_LIMBS;
 use crate::witness::memory::MemoryAddress;
 
 /// Creates the vector of `Columns` corresponding to:
-/// - the initilized address (context, segment, virt),
+/// - the initialized address (context, segment, virt),
 /// - the value in u32 limbs.
 pub(crate) fn ctl_data<F: Field>() -> Vec<Column<F>> {
     let mut res = Column::singles([ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL]).collect_vec();
@@ -43,7 +43,7 @@ pub(crate) fn ctl_data<F: Field>() -> Vec<Column<F>> {
 }
 
 /// Creates the vector of `Columns` corresponding to:
-/// - the initilized address (context, segment, virt),
+/// - the initialized address (context, segment, virt),
 /// - the value in u32 limbs.
 pub(crate) fn ctl_data_memory<F: Field>() -> Vec<Column<F>> {
     let mut res = vec![Column::constant(F::ZERO)]; // IS_READ

@@ -1,3 +1,8 @@
+//! In the context of continuations, we subdivide proofs into segments. To pass
+//! the necessary memory values from one segment to the next, we write those
+//! initial values at timestamp 0. For this reason, the clock has to be
+//! initialized to 1 at the start of a segment execution.
+
 use plonky2::field::extension::Extendable;
 use plonky2::field::packed::PackedField;
 use plonky2::hash::hash_types::RichField;

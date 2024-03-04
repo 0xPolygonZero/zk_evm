@@ -46,7 +46,9 @@ use self::mpt::{load_all_mpts, TrieRootPtrs};
 use self::state::GenerationStateCheckpoint;
 use crate::witness::util::{mem_write_log, mem_write_log_timestamp_zero, stack_peek};
 
-pub const NUM_EXTRA_CYCLES_AFTER: usize = 78;
+/// Number of cycles to go after the having reached the halting state. It is
+/// equal to the number of cycles in `exc_stop` + 1.
+pub const NUM_EXTRA_CYCLES_AFTER: usize = 79;
 /// Memory values used to initialize `MemBefore`.
 pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
 
@@ -114,12 +116,12 @@ pub struct TrieInputs {
     pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
-pub(crate) struct SegmentData<F: RichField> {
-    pub(crate) max_cpu_len: usize,
-    pub(crate) starting_state: GenerationState<F>,
-    pub(crate) memory_before: Vec<(MemoryAddress, U256)>,
-    pub(crate) registers_before: RegistersData,
-    pub(crate) registers_after: RegistersData,
+pub struct SegmentData<F: RichField> {
+    pub max_cpu_len: usize,
+    pub starting_state: GenerationState<F>,
+    pub memory_before: Vec<(MemoryAddress, U256)>,
+    pub registers_before: RegistersData,
+    pub registers_after: RegistersData,
 }
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
@@ -270,14 +272,14 @@ type TablesWithPVsAndFinalMem<F> = (
     PublicValues,
     Vec<Vec<F>>,
 );
-pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
+pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
     config: &StarkConfig,
     segment_data: SegmentData<F>,
     timing: &mut TimingTree,
 ) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
-    // Initialize the state with the state at the end of the
+    // Initialize the state with the one at the end of the
     // previous segment execution, if any.
 
     let SegmentData {
@@ -380,7 +382,7 @@ pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         gas_used_after,
     };
 
-    // `mem_before` and `mem_after` are intialized with an empty cap.
+    // `mem_before` and `mem_after` are initialized with an empty cap.
     // But they are set to the caps of `MemBefore` and `MemAfter`
     // respectively while proving.
     let public_values = PublicValues {
@@ -391,8 +393,8 @@ pub(crate) fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         extra_block_data,
         registers_before,
         registers_after,
-        mem_before: MemCap { mem_cap: vec![] },
-        mem_after: MemCap { mem_cap: vec![] },
+        mem_before: MemCap::default(),
+        mem_after: MemCap::default(),
     };
 
     let (tables, final_values) = timed!(
@@ -414,7 +416,7 @@ fn simulate_cpu<F: Field>(
     let pc = state.registers.program_counter;
     // Setting the values of padding rows.
     let mut row = CpuColumnsView::<F>::default();
-    row.clock = F::from_canonical_usize(state.traces.clock());
+    row.clock = F::from_canonical_usize(state.traces.clock() + 1);
     row.context = F::from_canonical_usize(state.registers.context);
     row.program_counter = F::from_canonical_usize(pc);
     row.is_kernel_mode = F::ONE;
@@ -425,12 +427,12 @@ fn simulate_cpu<F: Field>(
         // Padding to a power of 2.
         state.push_cpu(row);
         row.clock += F::ONE;
-        if (state.traces.clock() - 1).is_power_of_two() {
+        if state.traces.clock().is_power_of_two() {
             break;
         }
     }
 
-    log::info!("CPU trace padded to {} cycles", state.traces.clock() - 1);
+    log::info!("CPU trace padded to {} cycles", state.traces.clock());
 
     Ok((final_registers, mem_after))
 }

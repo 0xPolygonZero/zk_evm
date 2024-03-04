@@ -47,7 +47,7 @@ pub(crate) fn ctl_filter<F: Field>() -> Filter<F> {
 }
 
 /// Creates the vector of `Columns` corresponding to:
-/// - the initilized address (context, segment, virt),
+/// - the initialized address (context, segment, virt),
 /// - the value in u32 limbs.
 pub(crate) fn ctl_looking_mem<F: Field>() -> Vec<Column<F>> {
     let mut res = Column::singles([ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL]).collect_vec();

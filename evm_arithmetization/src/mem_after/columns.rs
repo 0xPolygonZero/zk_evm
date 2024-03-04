@@ -1,8 +1,7 @@
+//! Columns for the final memory, ordered by address.
+//! It contains (addr, value) pairs. Note that non-padding addresses must be
+//! unique.
 use crate::memory::VALUE_LIMBS;
-
-// Columns for the final memory, ordered by address.
-/// It contains (addr, value) pairs. Note that non-padding addresses must be
-/// unique.
 
 /// 1 if this is an actual final value, or 0 if it's a padding row.
 pub(crate) const FILTER: usize = 0;

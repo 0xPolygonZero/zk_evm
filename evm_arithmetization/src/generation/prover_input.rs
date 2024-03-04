@@ -454,7 +454,7 @@ impl<F: Field> GenerationState<F> {
         Ok(code_len)
     }
 
-    fn get_current_code_len(&mut self) -> Result<usize, ProgramError> {
+    fn get_current_code_len(&self) -> Result<usize, ProgramError> {
         self.get_code_len(self.registers.context)
     }
 

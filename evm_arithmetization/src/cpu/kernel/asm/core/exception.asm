@@ -171,14 +171,16 @@ global exc_stop:
     // Here, we need to check that the final registers have the correct value.
     // stack: trap_info
     PUSH @SEGMENT_REGISTERS_STATES
+    // The first 6 elements in `SEGMENT_REGISTERS_STATES` correspond to the the initial registers. 
+    // We need the final registers here.
     %add_const(6)
-    // Is the current stack_len is 2, then the stack was empty before the exception and there's no stack top.
+    // If the current `stack_len is 2`, then the stack was empty before the exception and there's no stack top.
     // stack: addr_registers, trap_info
     PUSH 3 
     %stack_length
     SUB
     // First, check the stack length.
-    // stack: stack_len-2 = stack_len_before_exc, addr_registers, trap_info
+    // stack: stack_len-3 = stack_len_before_exc, addr_registers, trap_info
     DUP2 %add_const(2)
     MLOAD_GENERAL
     // stack: stored_stack_length, stack_len_before_exc, addr_registers, trap_info
@@ -194,7 +196,7 @@ global exc_stop:
     // If the previous stack length is 0, we load the first value in the stack segment:
     // we do not need to constrain the value in that case, so this is just to avoid a jumpi.
     // Not having a jumpi provides a constant number of operations, which is better for segmentation.
-    // stack: (stack_len_before_exc - 1) * (0 < stack_len_before_exc), stack_len_before_exc, addr_registers, trap_info
+    // stack: (stack_len_before_exc - 1) * (stack_len_before_exc != 0), stack_len_before_exc, addr_registers, trap_info
     PUSH @SEGMENT_STACK
     GET_CONTEXT
     %build_address
@@ -243,6 +245,10 @@ global exc_stop:
     GET_CONTEXT
     %assert_eq
     // stack: (empty)
+    // The following two instructions are needed to not have failing constraints. 
+    // `ISZERO` pops and pushes, which means that there is no need to read the next top of the stack after it. 
+    // If we don't have it, there is there is a read of the top of the stack in padding rows, which have all channels disabled, 
+    // thus making the constraints fail. 
     PUSH 1
     ISZERO
 
