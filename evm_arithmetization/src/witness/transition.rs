@@ -260,13 +260,13 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
     }
 }
 
-pub(crate) fn log_kernel_instruction<F: Field>(state: &mut GenerationState<F>, op: Operation) {
+pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: Operation) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     if !log_enabled!(log::Level::Debug) {
         return;
     }
 
-    let pc = state.registers.program_counter;
+    let pc = state.get_registers().program_counter;
     let is_interesting_offset = KERNEL
         .offset_label(pc)
         .filter(|label| !label.starts_with("halt"))
@@ -279,11 +279,11 @@ pub(crate) fn log_kernel_instruction<F: Field>(state: &mut GenerationState<F>, o
     log::log!(
         level,
         "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
-        state.traces.clock(),
-        state.registers.context,
+        state.get_clock(),
+        state.get_context(),
         KERNEL.offset_name(pc),
         op,
-        state.stack(),
+        state.get_generation_state().stack(),
     );
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
