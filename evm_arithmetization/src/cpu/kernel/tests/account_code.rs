@@ -119,7 +119,7 @@ fn prepare_interpreter<F: Field>(
         .push(k.try_into_u256().unwrap())
         .expect("The stack should not overflow"); // key
 
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(
         interpreter.stack().len(),
         0,
@@ -135,7 +135,7 @@ fn prepare_interpreter<F: Field>(
     interpreter
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     assert_eq!(
         interpreter.stack().len(),
@@ -157,7 +157,7 @@ fn test_extcodesize() -> Result<()> {
     let code = random_code();
     let account = test_account(&code);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], 0);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;
@@ -177,7 +177,7 @@ fn test_extcodesize() -> Result<()> {
         .expect("The stack should not overflow");
     interpreter.generation_state.inputs.contract_code =
         HashMap::from([(keccak(&code), code.clone())]);
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     assert_eq!(interpreter.stack(), vec![code.len().into()]);
 
@@ -189,7 +189,7 @@ fn test_extcodecopy() -> Result<()> {
     let code = random_code();
     let account = test_account(&code);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], 0);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;
@@ -203,7 +203,7 @@ fn test_extcodecopy() -> Result<()> {
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
     interpreter.push(0xdeadbeefu32.into());
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     let extcodecopy = KERNEL.global_labels["sys_extcodecopy"];
 
@@ -246,7 +246,7 @@ fn test_extcodecopy() -> Result<()> {
         .expect("The stack should not overflow"); // kexit_info
     interpreter.generation_state.inputs.contract_code =
         HashMap::from([(keccak(&code), code.clone())]);
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     assert!(interpreter.stack().is_empty());
     // Check that the code was correctly copied to memory.
@@ -332,18 +332,18 @@ fn sstore() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, 0);
 
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
     interpreter.push(0xdeadbeefu32.into());
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;
 
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     // The first two elements in the stack are `success` and `leftover_gas`,
     // returned by the `sys_stop` opcode.
@@ -373,7 +373,7 @@ fn sstore() -> Result<()> {
     interpreter
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     assert_eq!(
         interpreter.stack().len(),
@@ -428,17 +428,17 @@ fn sload() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, 0);
 
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
     interpreter.push(0xdeadbeefu32.into());
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     // The first two elements in the stack are `success` and `leftover_gas`,
     // returned by the `sys_stop` opcode.
@@ -471,7 +471,7 @@ fn sload() -> Result<()> {
     interpreter
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow.");
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     assert_eq!(
         interpreter.stack().len(),

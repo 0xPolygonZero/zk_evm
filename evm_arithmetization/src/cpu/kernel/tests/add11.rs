@@ -167,14 +167,14 @@ fn test_add11_yml() {
 
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs, 0);
 
     let route_txn_label = KERNEL.global_labels["init"];
     // Switch context and initialize memory with the data we need for the tests.
     interpreter.generation_state.registers.program_counter = route_txn_label;
     interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
     interpreter.set_is_kernel(true);
-    interpreter.run(None).expect("Proving add11 failed.");
+    interpreter.run().expect("Proving add11 failed.");
 }
 
 #[test]
@@ -311,7 +311,7 @@ fn test_add11_yml_with_exception() {
 
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs, 0);
 
     let route_txn_label = KERNEL.global_labels["init"];
     // Switch context and initialize memory with the data we need for the tests.
@@ -319,6 +319,6 @@ fn test_add11_yml_with_exception() {
     interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
     interpreter.set_is_kernel(true);
     interpreter
-        .run(None)
+        .run()
         .expect("Proving add11 with exception failed.");
 }
