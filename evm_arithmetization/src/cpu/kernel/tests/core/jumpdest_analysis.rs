@@ -2,7 +2,6 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::Result;
 use ethereum_types::U256;
-use itertools::Itertools;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;

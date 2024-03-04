@@ -5,7 +5,6 @@ use anyhow::bail;
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
-use log::log_enabled;
 use plonky2::field::types::Field;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
@@ -13,7 +12,6 @@ use super::TrieInputs;
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::CpuColumnsView;
@@ -33,9 +31,7 @@ use crate::witness::transition::{
     decode, fill_op_flag, get_op_special_length, log_kernel_instruction, might_overflow_op,
     read_code_memory, Transition,
 };
-use crate::witness::util::{
-    fill_channel_with_value, mem_read_gp_with_log_and_fill, stack_peek, stack_pop_with_log_and_fill,
-};
+use crate::witness::util::{fill_channel_with_value, stack_peek};
 use crate::{arithmetic, keccak, logic};
 
 /// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
