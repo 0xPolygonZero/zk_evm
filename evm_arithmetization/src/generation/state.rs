@@ -171,6 +171,7 @@ pub(crate) trait State<F: Field> {
                         return Ok(());
                     }
                 } else {
+                    #[cfg(not(test))]
                     log::info!("CPU halted after {} cycles", self.get_clock());
                     return Ok(());
                 }
