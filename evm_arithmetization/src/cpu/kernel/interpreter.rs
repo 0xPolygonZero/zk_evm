@@ -141,12 +141,11 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 pub(crate) fn generate_segment<F: Field>(
     max_cpu_len: usize,
     index: usize,
-    inputs: &GenerationInputs,
+    inputs: GenerationInputs,
 ) -> anyhow::Result<(RegistersState, RegistersState, MemoryState)> {
     let init_label = KERNEL.global_labels["init"];
     let initial_registers = RegistersState::new_with_main_label();
-    let mut interpreter =
-        Interpreter::<F>::new_with_generation_inputs(init_label, vec![], inputs.clone());
+    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(init_label, vec![], inputs);
 
     let (mut registers_before, mut registers_after, mut before_mem_values, mut after_mem_values) = (
         initial_registers,
@@ -155,31 +154,30 @@ pub(crate) fn generate_segment<F: Field>(
         MemoryState::default(),
     );
 
-    for i in 0..index + 1 {
+    for i in 0..=index {
         // Write initial registers.
-        let registers_before_field_values = [
+        [
             registers_after.program_counter.into(),
             (registers_after.is_kernel as usize).into(),
             registers_after.stack_len.into(),
             registers_after.stack_top,
             registers_after.context.into(),
             registers_after.gas_used.into(),
-        ];
-        let registers_before_fields = (0..registers_before_field_values.len())
-            .map(|i| {
-                (
-                    MemoryAddress::new_u256s(
-                        0.into(),
-                        (Segment::RegistersStates.unscale()).into(),
-                        i.into(),
-                    )
-                    .unwrap(),
-                    registers_before_field_values[i],
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, reg_content)| {
+            let (addr, val) = (
+                MemoryAddress::new_u256s(
+                    0.into(),
+                    (Segment::RegistersStates.unscale()).into(),
+                    i.into(),
                 )
-            })
-            .collect::<Vec<_>>();
-
-        interpreter.set_memory_multi_addresses(&registers_before_fields);
+                .expect("All input values are known to be valid for MemoryAddress"),
+                *reg_content,
+            );
+            interpreter.generation_state.memory.set(addr, val);
+        });
 
         (registers_before, before_mem_values) = (registers_after, after_mem_values);
         interpreter.generation_state.registers = registers_before;
@@ -189,8 +187,10 @@ pub(crate) fn generate_segment<F: Field>(
 
         let (updated_registers_after, opt_after_mem_values) = interpreter.run(Some(max_cpu_len))?;
         registers_after = updated_registers_after;
-        after_mem_values = opt_after_mem_values
-            .expect("We are in the interpreter: the run should return a memory state");
+        after_mem_values = opt_after_mem_values.expect(
+            "We are in the interpreter: the run should return a memory
+        state",
+        );
     }
 
     Ok((registers_before, registers_after, before_mem_values))
