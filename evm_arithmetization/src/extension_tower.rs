@@ -1371,6 +1371,27 @@ where
             t2: self.t1,
         }
     }
+
+    pub fn mul_by_1(&self, c1: Fp2<T>) -> Fp6<T> {
+        let t = Fp6::<T> {
+            t0: self.t0 * c1,
+            t1: self.t1 * c1,
+            t2: self.t2 * c1,
+        };
+
+        t.sh()
+    }
+
+    pub fn mul_by_01(&self, c0: Fp2<T>, c1: Fp2<T>) -> Fp6<T> {
+        let a_a = self.t0 * c0;
+        let b_b = self.t1 * c1;
+
+        let t0 = (self.t2 * c1).mul_adj() + a_a;
+        let t1 = (c0 + c1) * (self.t0 + self.t1) - a_a - b_b;
+        let t2 = self.t2 * c0 + b_b;
+
+        Fp6::<T> { t0, t1, t2 }
+    }
 }
 
 impl<T> Fp6<T>
@@ -1637,6 +1658,20 @@ where
     T: FieldExt,
     Fp2<T>: Adj,
 {
+    pub fn mul_by_014(&self, c0: Fp2<T>, c1: Fp2<T>, c4: Fp2<T>) -> Fp12<T> {
+        let aa = self.z0.mul_by_01(c0, c1);
+        let bb = self.z1.mul_by_1(c4);
+        let o = c1 + c4;
+        let z1 = self.z1 + self.z0;
+        let z1 = z1.mul_by_01(c0, o);
+        let z1 = z1 - aa - bb;
+        let z0 = bb;
+        let z0 = z0.sh();
+        let z0 = z0 + aa;
+
+        Fp12::<T> { z0, z1 }
+    }
+
     /// The nth frobenius endomorphism of a p^q field is given by mapping
     ///     x to x^(p^n)
     /// which sends a + bz: Fp12 to

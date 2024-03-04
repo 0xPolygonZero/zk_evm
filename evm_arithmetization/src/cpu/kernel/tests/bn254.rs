@@ -6,9 +6,10 @@ use rand::Rng;
 use crate::cpu::kernel::interpreter::{
     run_interpreter_with_memory, Interpreter, InterpreterMemoryInitialization,
 };
+use crate::curve_pairings::CurveAff;
 use crate::curve_pairings::{
     bn254::{final_exponent, miller_loop},
-    gen_fp12_sparse, Curve, CyclicGroup,
+    gen_fp12_sparse, CyclicGroup,
 };
 use crate::extension_tower::{FieldExt, Fp12, Fp2, Fp6, Stack, BN254};
 use crate::memory::segments::Segment::BnPairing;
@@ -192,8 +193,8 @@ fn test_bn_miller() -> Result<()> {
     let out: usize = 106;
 
     let mut rng = rand::thread_rng();
-    let p: Curve<BN254> = rng.gen::<Curve<BN254>>();
-    let q: Curve<Fp2<BN254>> = rng.gen::<Curve<Fp2<BN254>>>();
+    let p: CurveAff<BN254> = rng.gen::<CurveAff<BN254>>();
+    let q: CurveAff<Fp2<BN254>> = rng.gen::<CurveAff<Fp2<BN254>>>();
 
     let mut input = p.to_stack();
     input.extend(q.to_stack());
@@ -227,13 +228,13 @@ fn test_bn_pairing() -> Result<()> {
         let n: i32 = rng.gen_range(-8..8);
         acc -= m * n;
 
-        let p: Curve<BN254> = Curve::<BN254>::int(m);
-        let q: Curve<Fp2<BN254>> = Curve::<Fp2<BN254>>::int(n);
+        let p: CurveAff<BN254> = CurveAff::<BN254>::int(m);
+        let q: CurveAff<Fp2<BN254>> = CurveAff::<Fp2<BN254>>::int(n);
         input.extend(p.to_stack());
         input.extend(q.to_stack());
     }
-    let p: Curve<BN254> = Curve::<BN254>::int(acc);
-    let q: Curve<Fp2<BN254>> = Curve::<Fp2<BN254>>::GENERATOR;
+    let p: CurveAff<BN254> = CurveAff::<BN254>::int(acc);
+    let q: CurveAff<Fp2<BN254>> = CurveAff::<Fp2<BN254>>::GENERATOR;
     input.extend(p.to_stack());
     input.extend(q.to_stack());
 

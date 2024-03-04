@@ -8,7 +8,7 @@ use rand::Rng;
 use crate::extension_tower::{Adj, FieldExt, Fp12, Fp2, Fp6, Stack, BLS381, BN254};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub(crate) struct Curve<T>
+pub(crate) struct CurveAff<T>
 where
     T: FieldExt,
 {
@@ -16,16 +16,16 @@ where
     pub y: T,
 }
 
-impl<T: FieldExt> Curve<T> {
+impl<T: FieldExt> CurveAff<T> {
     pub(crate) const fn unit() -> Self {
-        Curve {
+        CurveAff {
             x: T::ZERO,
             y: T::ZERO,
         }
     }
 }
 
-impl<T: FieldExt + Stack> Stack for Curve<T> {
+impl<T: FieldExt + Stack> Stack for CurveAff<T> {
     const SIZE: usize = 2 * T::SIZE;
 
     fn to_stack(&self) -> Vec<U256> {
@@ -35,47 +35,47 @@ impl<T: FieldExt + Stack> Stack for Curve<T> {
     }
 
     fn from_stack(stack: &[U256]) -> Self {
-        Curve {
+        CurveAff {
             x: T::from_stack(&stack[0..T::SIZE]),
             y: T::from_stack(&stack[T::SIZE..2 * T::SIZE]),
         }
     }
 }
 
-impl<T> Curve<T>
+impl<T> CurveAff<T>
 where
     T: FieldExt,
-    Curve<T>: CyclicGroup,
+    CurveAff<T>: CyclicGroup,
 {
     pub(crate) fn int(z: i32) -> Self {
-        Curve::<T>::GENERATOR * z
+        CurveAff::<T>::GENERATOR * z
     }
 }
 
-impl<T> Distribution<Curve<T>> for Standard
+impl<T> Distribution<CurveAff<T>> for Standard
 where
     T: FieldExt,
-    Curve<T>: CyclicGroup,
+    CurveAff<T>: CyclicGroup,
 {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Curve<T> {
-        Curve::<T>::GENERATOR * rng.gen::<i32>()
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> CurveAff<T> {
+        CurveAff::<T>::GENERATOR * rng.gen::<i32>()
     }
 }
 
 /// Standard addition formula for elliptic curves, restricted to the cases  
 /// <https://en.wikipedia.org/wiki/Elliptic_curve#Algebraic_interpretation>
-impl<T: FieldExt> Add for Curve<T> {
+impl<T: FieldExt> Add for CurveAff<T> {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        if self == Curve::<T>::unit() {
+        if self == CurveAff::<T>::unit() {
             return other;
         }
-        if other == Curve::<T>::unit() {
+        if other == CurveAff::<T>::unit() {
             return self;
         }
         if self == -other {
-            return Curve::<T>::unit();
+            return CurveAff::<T>::unit();
         }
         let m = if self == other {
             T::new(3) * self.x * self.x / (T::new(2) * self.y)
@@ -83,18 +83,18 @@ impl<T: FieldExt> Add for Curve<T> {
             (other.y - self.y) / (other.x - self.x)
         };
         let x = m * m - (self.x + other.x);
-        Curve {
+        CurveAff {
             x,
             y: m * (self.x - x) - self.y,
         }
     }
 }
 
-impl<T: FieldExt> Neg for Curve<T> {
-    type Output = Curve<T>;
+impl<T: FieldExt> Neg for CurveAff<T> {
+    type Output = CurveAff<T>;
 
     fn neg(self) -> Self {
-        Curve {
+        CurveAff {
             x: self.x,
             y: -self.y,
         }
@@ -105,26 +105,26 @@ pub trait CyclicGroup {
     const GENERATOR: Self;
 }
 
-impl<T> Mul<i32> for Curve<T>
+impl<T> Mul<i32> for CurveAff<T>
 where
     T: FieldExt,
-    Curve<T>: CyclicGroup,
+    CurveAff<T>: CyclicGroup,
 {
-    type Output = Curve<T>;
+    type Output = CurveAff<T>;
 
     fn mul(self, other: i32) -> Self {
         if other == 0 {
-            return Curve::<T>::unit();
+            return CurveAff::<T>::unit();
         }
-        if self == Curve::<T>::unit() {
-            return Curve::<T>::unit();
+        if self == CurveAff::<T>::unit() {
+            return CurveAff::<T>::unit();
         }
 
-        let mut x: Curve<T> = self;
+        let mut x: CurveAff<T> = self;
         if other.is_negative() {
             x = -x;
         }
-        let mut result = Curve::<T>::unit();
+        let mut result = CurveAff::<T>::unit();
 
         let mut exp = other.unsigned_abs() as usize;
         while exp > 0 {
@@ -135,6 +135,45 @@ where
             x = x + x;
         }
         result
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) struct CurveProj<T>
+where
+    T: FieldExt,
+{
+    pub x: T,
+    pub y: T,
+    pub z: T,
+}
+
+impl<T: FieldExt> CurveProj<T> {
+    pub(crate) const fn unit() -> Self {
+        CurveProj {
+            x: T::ZERO,
+            y: T::ZERO,
+            z: T::ZERO,
+        }
+    }
+}
+
+impl<T: FieldExt + Stack> Stack for CurveProj<T> {
+    const SIZE: usize = 3 * T::SIZE;
+
+    fn to_stack(&self) -> Vec<U256> {
+        let mut stack = self.x.to_stack();
+        stack.extend(self.y.to_stack());
+        stack.extend(self.z.to_stack());
+        stack
+    }
+
+    fn from_stack(stack: &[U256]) -> Self {
+        CurveProj {
+            x: T::from_stack(&stack[0..T::SIZE]),
+            y: T::from_stack(&stack[T::SIZE..2 * T::SIZE]),
+            z: T::from_stack(&stack[2 * T::SIZE..3 * T::SIZE]),
+        }
     }
 }
 
@@ -163,28 +202,6 @@ where
     Fp12 { z0: g0, z1: g1 }
 }
 
-/// The sloped line function for doubling a point.
-pub(crate) fn tangent<F>(p: Curve<F>, q: Curve<Fp2<F>>) -> Fp12<F>
-where
-    F: FieldExt,
-    Fp2<F>: Adj,
-{
-    let cx = -F::new(3) * p.x * p.x;
-    let cy = F::new(2) * p.y;
-    sparse_embed::<F>(p.y * p.y - F::new(9), q.x * cx, q.y * cy)
-}
-
-/// The sloped line function for adding two points.
-pub(crate) fn chord<F>(p1: Curve<F>, p2: Curve<F>, q: Curve<Fp2<F>>) -> Fp12<F>
-where
-    F: FieldExt,
-    Fp2<F>: Adj,
-{
-    let cx = p2.y - p1.y;
-    let cy = p1.x - p2.x;
-    sparse_embed::<F>(p1.y * p2.x - p2.y * p1.x, q.x * cx, q.y * cy)
-}
-
 /// Generates a sparse, random Fp12 element.
 pub(crate) fn gen_fp12_sparse<F, R: Rng + ?Sized>(rng: &mut R) -> Fp12<F>
 where
@@ -201,8 +218,8 @@ pub mod bn254 {
     /// The BN curve consists of pairs
     ///     (x, y): (BN254, BN254) | y^2 = x^3 + 3
     // with generator given by (1, 2)
-    impl CyclicGroup for Curve<BN254> {
-        const GENERATOR: Curve<BN254> = Curve {
+    impl CyclicGroup for CurveAff<BN254> {
+        const GENERATOR: CurveAff<BN254> = CurveAff {
             x: BN254 { val: U256::one() },
             y: BN254 {
                 val: U256([2, 0, 0, 0]),
@@ -213,8 +230,8 @@ pub mod bn254 {
     /// The twisted curve consists of pairs
     ///     (x, y): (Fp2<BN254>, Fp2<BN254>) | y^2 = x^3 + 3/(9 + i)
     /// with generator given as follows
-    impl CyclicGroup for Curve<Fp2<BN254>> {
-        const GENERATOR: Curve<Fp2<BN254>> = Curve {
+    impl CyclicGroup for CurveAff<Fp2<BN254>> {
+        const GENERATOR: CurveAff<Fp2<BN254>> = CurveAff {
             x: Fp2 {
                 re: BN254 {
                     val: U256([
@@ -254,9 +271,27 @@ pub mod bn254 {
         };
     }
 
+    /// The sloped line function for doubling a point.
+    pub(crate) fn tangent(p: CurveAff<BN254>, q: CurveAff<Fp2<BN254>>) -> Fp12<BN254> {
+        let cx = -BN254::new(3) * p.x * p.x;
+        let cy = BN254::new(2) * p.y;
+        sparse_embed::<BN254>(p.y * p.y - BN254::new(9), q.x * cx, q.y * cy)
+    }
+
+    /// The sloped line function for adding two points.
+    pub(crate) fn chord(
+        p1: CurveAff<BN254>,
+        p2: CurveAff<BN254>,
+        q: CurveAff<Fp2<BN254>>,
+    ) -> Fp12<BN254> {
+        let cx = p2.y - p1.y;
+        let cy = p1.x - p2.x;
+        sparse_embed::<BN254>(p1.y * p2.x - p2.y * p1.x, q.x * cx, q.y * cy)
+    }
+
     // The tate pairing takes a point each from the curve and its twist and outputs
     // an Fp12 element.
-    pub(crate) fn tate(p: Curve<BN254>, q: Curve<Fp2<BN254>>) -> Fp12<BN254> {
+    pub(crate) fn tate(p: CurveAff<BN254>, q: CurveAff<Fp2<BN254>>) -> Fp12<BN254> {
         let miller_output = miller_loop(p, q);
         final_exponent(miller_output)
     }
@@ -265,7 +300,7 @@ pub mod bn254 {
     /// <https://static1.squarespace.com/static/5fdbb09f31d71c1227082339/t/5ff394720493bd28278889c6/1609798774687/PairingsForBeginners.pdf#page=107>
     /// where BN_EXP is a hardcoding of the array of Booleans that the loop
     /// traverses.
-    pub(crate) fn miller_loop(p: Curve<BN254>, q: Curve<Fp2<BN254>>) -> Fp12<BN254> {
+    pub(crate) fn miller_loop(p: CurveAff<BN254>, q: CurveAff<Fp2<BN254>>) -> Fp12<BN254> {
         let mut r = p;
         let mut acc: Fp12<BN254> = Fp12::<BN254>::UNIT;
         let mut line: Fp12<BN254>;
@@ -539,8 +574,8 @@ pub mod bls381 {
     // with generator given by
     //      x = 3685416753713387016781088315183077757961620795782546409894578378688607592378376318836054947676345821548104185464507
     //      y = 1339506544944476473020471379941921221584933875938349620426543736416511423956333506472724655353366534992391756441569
-    impl CyclicGroup for Curve<BLS381> {
-        const GENERATOR: Curve<BLS381> = Curve {
+    impl CyclicGroup for CurveAff<BLS381> {
+        const GENERATOR: CurveAff<BLS381> = CurveAff {
             x: BLS381 {
                 val: U512([
                     0xfb3af00adb22c6bb,
@@ -575,8 +610,8 @@ pub mod bls381 {
     //          + 3059144344244213709971259814753781636986470325476647558659373206291635324768958432433509563104347017837885763365758 * i
     //      y = 1985150602287291935568054521177171638300868978215655730859378665066344726373823718423869104263333984641494340347905
     //          + 927553665492332455747201965776037880757740193453592970025027978793976877002675564980949289727957565575433344219582 * i
-    impl CyclicGroup for Curve<Fp2<BLS381>> {
-        const GENERATOR: Curve<Fp2<BLS381>> = Curve {
+    impl CyclicGroup for CurveAff<Fp2<BLS381>> {
+        const GENERATOR: CurveAff<Fp2<BLS381>> = CurveAff {
             x: Fp2 {
                 re: BLS381 {
                     val: U512([
@@ -632,9 +667,27 @@ pub mod bls381 {
         };
     }
 
+    /// The sloped line function for doubling a point.
+    pub(crate) fn tangent(p: CurveAff<BLS381>, q: CurveAff<Fp2<BLS381>>) -> Fp12<BLS381> {
+        let cx = -BLS381::new(3) * p.x * p.x;
+        let cy = BLS381::new(2) * p.y;
+        sparse_embed::<BLS381>(p.y * p.y - BLS381::new(9), q.x * cx, q.y * cy)
+    }
+
+    /// The sloped line function for adding two points.
+    pub(crate) fn chord(
+        p1: CurveAff<BLS381>,
+        p2: CurveAff<BLS381>,
+        q: CurveAff<Fp2<BLS381>>,
+    ) -> Fp12<BLS381> {
+        let cx = p2.y - p1.y;
+        let cy = p1.x - p2.x;
+        sparse_embed::<BLS381>(p1.y * p2.x - p2.y * p1.x, q.x * cx, q.y * cy)
+    }
+
     // The tate pairing takes a point each from the curve and its twist and outputs
     // an Fp12 element.
-    pub(crate) fn tate(p: Curve<BLS381>, q: Curve<Fp2<BLS381>>) -> Fp12<BLS381> {
+    pub(crate) fn tate(p: CurveAff<BLS381>, q: CurveAff<Fp2<BLS381>>) -> Fp12<BLS381> {
         let miller_output = miller_loop(p, q);
         final_exponent(miller_output)
     }
@@ -643,228 +696,242 @@ pub mod bls381 {
     /// <https://static1.squarespace.com/static/5fdbb09f31d71c1227082339/t/5ff394720493bd28278889c6/1609798774687/PairingsForBeginners.pdf#page=107>
     /// where BLS_EXP is a hardcoding of the array of Booleans that the loop
     /// traverses.
-    pub(crate) fn miller_loop(p: Curve<BLS381>, q: Curve<Fp2<BLS381>>) -> Fp12<BLS381> {
-        let mut r = p;
+    pub(crate) fn miller_loop(p: CurveAff<BLS381>, q: CurveAff<Fp2<BLS381>>) -> Fp12<BLS381> {
+        let mut r = CurveProj::<Fp2<BLS381>> {
+            x: q.x,
+            y: q.y,
+            z: Fp2::<BLS381>::UNIT,
+        };
         let mut acc: Fp12<BLS381> = Fp12::<BLS381>::UNIT;
         let mut line: Fp12<BLS381>;
 
-        for i in BLS_EXP {
-            line = tangent(r, q);
-            r = r + r;
-            acc = line * acc * acc;
-            if i {
-                line = chord(p, r, q);
-                r = r + p;
-                acc = line * acc;
+        let mut found_one = false;
+        for i in (0..64).rev().map(|b| (((X_GENERATOR >> 1) >> b) & 1) == 1) {
+            if !found_one {
+                found_one = i;
+                continue;
             }
+            let coeffs = doubling_step(&mut r);
+            acc = ell(acc, &coeffs, &p);
+
+            if i {
+                let coeffs = addition_step(&mut r, &q);
+                acc = ell(acc, &coeffs, &p);
+            }
+
+            acc = acc * acc;
         }
-        acc
+
+        let coeffs = doubling_step(&mut r);
+        acc = ell(acc, &coeffs, &p);
+
+        acc.conj() // X_GENERATOR is negative
+    }
+
+    fn ell(
+        f: Fp12<BLS381>,
+        coeffs: &(Fp2<BLS381>, Fp2<BLS381>, Fp2<BLS381>),
+        p: &CurveAff<BLS381>,
+    ) -> Fp12<BLS381> {
+        let mut c0 = coeffs.0;
+        let mut c1 = coeffs.1;
+
+        c0.re = c0.re * p.y;
+        c0.im = c0.im * p.y;
+
+        c1.re = c1.re * p.x;
+        c1.im = c1.im * p.x;
+
+        f.mul_by_014(coeffs.2, c1, c0)
+    }
+
+    fn doubling_step(r: &mut CurveProj<Fp2<BLS381>>) -> (Fp2<BLS381>, Fp2<BLS381>, Fp2<BLS381>) {
+        // Adaptation of Algorithm 26, https://eprint.iacr.org/2010/354.pdf
+        let tmp0 = r.x * r.x;
+        let tmp1 = r.y * r.y;
+        let tmp2 = tmp1 * tmp1;
+        let tmp3 = (tmp1 + r.x) * (tmp1 + r.x) - tmp0 - tmp2;
+        let tmp3 = tmp3 + tmp3;
+        let tmp4 = tmp0 + tmp0 + tmp0;
+        let tmp6 = r.x + tmp4;
+        let tmp5 = tmp4 * tmp4;
+        let z_sq = r.z * r.z;
+        r.x = tmp5 - tmp3 - tmp3;
+        r.z = (r.z + r.y) * (r.z + r.y) - tmp1 - z_sq;
+        r.y = (tmp3 - r.x) * tmp4;
+        let tmp2 = tmp2 + tmp2;
+        let tmp2 = tmp2 + tmp2;
+        let tmp2 = tmp2 + tmp2;
+        r.y = r.y - tmp2;
+        let tmp3 = tmp4 * z_sq;
+        let tmp3 = tmp3 + tmp3;
+        let tmp3 = -tmp3;
+        let tmp6 = tmp6 * tmp6 - tmp0 - tmp5;
+        let tmp1 = tmp1 + tmp1;
+        let tmp1 = tmp1 + tmp1;
+        let tmp6 = tmp6 - tmp1;
+        let tmp0 = r.z * z_sq;
+        let tmp0 = tmp0 + tmp0;
+
+        (tmp0, tmp3, tmp6)
+    }
+
+    fn addition_step(
+        r: &mut CurveProj<Fp2<BLS381>>,
+        q: &CurveAff<Fp2<BLS381>>,
+    ) -> (Fp2<BLS381>, Fp2<BLS381>, Fp2<BLS381>) {
+        // Adaptation of Algorithm 27, https://eprint.iacr.org/2010/354.pdf
+        let z_sq = r.z * r.z;
+        let y_sq = q.y * q.y;
+        let t0 = z_sq * q.x;
+        let t1 = ((q.y + r.z) * (q.y + r.z) - y_sq - z_sq) * z_sq;
+        let t2 = t0 - r.x;
+        let t3 = t2 * t2;
+        let t4 = t3 + t3;
+        let t4 = t4 + t4;
+        let t5 = t4 * t2;
+        let t6 = t1 - r.y - r.y;
+        let t9 = t6 * q.x;
+        let t7 = t4 * r.x;
+        r.x = t6 * t6 - t5 - t7 - t7;
+        r.z = (r.z + t2) * (r.z + t2) - z_sq - t3;
+        let t10 = q.y + r.z;
+        let t8 = (t7 - r.x) * t6;
+        let t0 = r.y * t5;
+        let t0 = t0 + t0;
+        r.y = t8 - t0;
+        let t10 = t10 * t10 - y_sq;
+        let zt_sq = r.z * r.z;
+        let t10 = t10 - zt_sq;
+        let t9 = t9 + t9 - t10;
+        let t10 = r.z + r.z;
+        let t6 = -t6;
+        let t1 = t6 + t6;
+
+        (t10, t1, t9)
     }
 
     /// The output y of the miller loop is not an invariant,
     /// but one gets an invariant by raising y to the power
     ///     (p^12 - 1)/N = (p^6 - 1)(p^2 + 1)(p^4 - p^2 + 1)/N
     /// where N is the cyclic group order of the curve.
-    /// To achieve this, we first exponentiate y by p^6 - 1 via
-    ///     y = y_6 / y
-    /// and then exponentiate the result by p^2 + 1 via
-    ///     y = y_2 * y
-    /// We then note that (p^4 - p^2 + 1)/N can be rewritten as
-    ///     (p^4 - p^2 + 1)/N = (a3)p^3 + (a2)p^2 + (a1)p + a0
-    /// where 0 < a0, a1, a2, a3 < p.
-    /// Then the final power is given by
-    ///     y = (y^a3)_3 * (y^a2)_2 * (y^a1)_1 * (y^a0).
     ///
-    /// The values a3, a2, a1, a0 taken here are:
-    ///     a3 = 0x396c8c005555e1568c00aaab0000aaaa
-    ///     a2 = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf38158e5c24aff488b27c92a7df51e7fe1ea8ffff5554aaab
-    ///     a1 = 0x26a48d1bb889d46dc49f25e1a737f5e29d586d584eacaaaa73ffffffffff5554
-    ///     a0 = 0x1a0111ea397fe69a2b688550f8cebd66f7a34148de09bf34665a045e22ec661f33813d5206aa1800aaaa0000aaaaaaac
-    /// with
-    ///     p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
-    ///     N = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
+    /// See section 5 of <https://eprint.iacr.org/2020/875.pdf>.
     pub(crate) fn final_exponent(f: Fp12<BLS381>) -> Fp12<BLS381> {
-        let mut y = f.frob(6) / f;
-        y = y.frob(2) * y;
-        let (y_a3, y_a2, y_a1, y_a0) = get_custom_powers(y);
-        y_a3.frob(3) * y_a2.frob(2) * y_a1.frob(1) * y_a0
+        let mut t0 = f.frob(6);
+        let mut t1 = f.inv();
+        let mut t2 = t0 * t1;
+        t1 = t2;
+        t2 = t2.frob(2);
+        t2 = t2 * t1;
+        t1 = cyclotomic_square(t2).conj();
+        let mut t3 = cyclotomic_exp(t2);
+        let mut t4 = cyclotomic_square(t3);
+        let mut t5 = t1 * t3;
+        t1 = cyclotomic_exp(t5);
+        t0 = cyclotomic_exp(t1);
+        let mut t6 = cyclotomic_exp(t0);
+        t6 = t6 * t4;
+        t4 = cyclotomic_exp(t6);
+        t5 = t5.conj();
+        t4 = t4 * t5;
+        t4 = t4 * t2;
+        t5 = t2.conj();
+        t1 = t1 * t2;
+        t1 = t1.frob(3);
+        t6 = t6 * t5;
+        t6 = t6.frob(1);
+        t3 = t3 * t0;
+        t3 = t3.frob(2);
+        t3 = t3 * t1;
+        t3 = t3 * t6;
+        t3 * t4
     }
 
-    /// We compute y^a3, y^a2, y^a1, y^a0.
-    ///
-    /// a3, a2, a1 and a0 are represented in *little endian* binary.
-    fn get_custom_powers(
-        f: Fp12<BLS381>,
-    ) -> (Fp12<BLS381>, Fp12<BLS381>, Fp12<BLS381>, Fp12<BLS381>) {
-        let mut y0: Fp12<BLS381> = Fp12::<BLS381>::UNIT;
-        let mut y1: Fp12<BLS381> = Fp12::<BLS381>::UNIT;
-        let mut y2: Fp12<BLS381> = Fp12::<BLS381>::UNIT;
-        let mut y3: Fp12<BLS381> = Fp12::<BLS381>::UNIT;
+    fn fp4_square(a: Fp2<BLS381>, b: Fp2<BLS381>) -> (Fp2<BLS381>, Fp2<BLS381>) {
+        let t0 = a * a;
+        let t1 = b * b;
+        let mut t2 = t1.mul_adj();
+        let c0 = t2 + t0;
+        t2 = a + b;
+        t2 = t2 * t2 - t0;
+        let c1 = t2 - t1;
 
-        // proceed via standard squaring algorithm for exponentiation
-
-        // compute y3 and the start of y0, y1 and y2
-        let mut sq: Fp12<BLS381> = f;
-        for i in 0..BLS_A3.len() {
-            if BLS_A0[i] {
-                y0 = y0 * sq;
-            }
-            if BLS_A1[i] {
-                y1 = y1 * sq;
-            }
-            if BLS_A2[i] {
-                y2 = y2 * sq;
-            }
-            if BLS_A3[i] {
-                y3 = y3 * sq;
-            }
-            sq = sq * sq;
-        }
-
-        // finish computing y1 and continue for y2 and y3
-        for i in BLS_A3.len()..BLS_A1.len() {
-            if BLS_A0[i] {
-                y0 = y0 * sq;
-            }
-            if BLS_A1[i] {
-                y1 = y1 * sq;
-            }
-            if BLS_A2[i] {
-                y2 = y2 * sq;
-            }
-            sq = sq * sq;
-        }
-
-        // finish computing y2 and y3
-        for (bit_a2, bit_a0) in BLS_A2.iter().zip(BLS_A0).skip(BLS_A1.len()) {
-            if *bit_a2 {
-                y2 = y2 * sq;
-            }
-            if bit_a0 {
-                y0 = y0 * sq;
-            }
-            sq = sq * sq;
-        }
-
-        // return y^a3 = y3, y^a2 = y2, y^a1 = y2, y^a0 = y0
-        (y3, y2, y1, y0)
+        (c0, c1)
     }
 
-    const BLS_EXP: [bool; 254] = [
-        true, true, false, false, true, true, true, true, true, false, true, true, false, true,
-        true, false, true, false, false, true, true, true, false, true, false, true, false, false,
-        true, true, false, false, true, false, true, false, false, true, true, false, false, true,
-        true, true, false, true, false, true, true, true, true, true, false, true, false, true,
-        false, false, true, false, false, false, false, false, true, true, false, false, true,
-        true, false, false, true, true, true, false, false, true, true, true, false, true, true,
-        false, false, false, false, false, false, false, true, false, false, false, false, false,
-        false, false, true, false, false, true, true, false, true, false, false, false, false,
-        true, true, true, false, true, true, false, false, false, false, false, false, false,
-        false, true, false, true, false, true, false, true, false, false, true, true, true, false,
-        true, true, true, true, false, true, true, false, true, false, false, true, false, false,
-        false, false, false, false, false, false, true, false, true, true, true, true, true, true,
-        true, true, true, true, true, true, true, true, true, false, false, true, false, true,
-        true, false, true, true, true, true, true, true, true, true, true, false, true, true, true,
-        true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-        true, true, true, true, true, true, true, true, true, true, true, true, true, true, false,
-        false, false, false, false, false, false, false, false, false, false, false, false, false,
-        false, false, false, false, false, false, false, false, false, false, false, false, false,
-        false, false, false, false, false,
-    ];
+    // Adaptation of Algorithm 5.5.4, Guide to Pairing-Based Cryptography
+    // Faster Squaring in the Cyclotomic Subgroup of Sixth Degree Extensions
+    // <https://eprint.iacr.org/2009/565.pdf>.
+    fn cyclotomic_square(f: Fp12<BLS381>) -> Fp12<BLS381> {
+        let mut z0 = f.z0.t0;
+        let mut z4 = f.z0.t1;
+        let mut z3 = f.z0.t2;
+        let mut z2 = f.z1.t0;
+        let mut z1 = f.z1.t1;
+        let mut z5 = f.z1.t2;
 
-    // The following constants are defined above get_custom_powers.
-    const BLS_A3: [bool; 126] = [
-        false, true, false, true, false, true, false, true, false, true, false, true, false, true,
-        false, true, false, false, false, false, false, false, false, false, false, false, false,
-        false, false, false, false, false, true, true, false, true, false, true, false, true,
-        false, true, false, true, false, true, false, true, false, false, false, false, false,
-        false, false, false, false, false, true, true, false, false, false, true, false, true,
-        true, false, true, false, true, false, true, false, false, false, false, true, true, true,
-        true, false, true, false, true, false, true, false, true, false, true, false, true, false,
-        true, false, false, false, false, false, false, false, false, false, false, false, true,
-        true, false, false, false, true, false, false, true, true, false, true, true, false, true,
-        false, false, true, true, true,
-    ];
-    const BLS_A2: [bool; 381] = [
-        true, true, false, true, false, true, false, true, false, true, false, true, false, true,
-        false, true, false, false, true, false, true, false, true, false, true, false, true, false,
-        true, false, true, false, true, true, true, true, true, true, true, true, true, true, true,
-        true, true, true, true, true, false, false, false, true, false, true, false, true, false,
-        true, true, true, true, false, false, false, false, true, true, true, true, true, true,
-        true, true, true, true, false, false, true, true, true, true, false, false, false, true,
-        false, true, false, true, true, true, true, true, false, true, true, true, true, true,
-        false, false, true, false, true, false, true, false, false, true, false, false, true,
-        false, false, true, true, true, true, true, false, false, true, false, false, true, true,
-        false, true, false, false, false, true, false, false, false, true, false, false, true,
-        false, true, true, true, true, true, true, true, true, false, true, false, true, false,
-        false, true, false, false, true, false, false, false, false, true, true, true, false, true,
-        false, false, true, true, true, false, false, false, true, true, false, true, false, true,
-        false, false, false, false, false, false, true, true, true, false, false, true, true, true,
-        true, true, true, false, true, false, true, false, false, true, false, false, false, true,
-        false, true, false, false, false, false, true, true, true, false, false, true, true, true,
-        true, false, false, true, false, false, false, false, true, true, true, false, true, false,
-        false, true, false, true, true, true, false, true, true, true, false, false, false, true,
-        false, false, true, true, false, true, true, true, false, true, false, true, true, false,
-        false, true, true, false, true, false, true, true, true, false, true, false, false, true,
-        false, true, true, false, false, false, false, true, false, false, true, true, false, true,
-        true, false, true, true, true, true, false, false, true, false, true, true, true, false,
-        true, true, false, false, false, true, true, false, true, false, false, true, false, false,
-        true, false, true, true, false, false, true, false, true, true, false, false, true, true,
-        true, true, true, true, true, true, true, true, false, true, false, false, true, true,
-        true, false, false, false, true, false, true, false, true, true, true, true, false, false,
-        false, true, false, false, false, true, false, false, false, false, false, false, false,
-        false, true, false, true, true,
-    ];
-    const BLS_A1: [bool; 254] = [
-        false, false, true, false, true, false, true, false, true, false, true, false, true, false,
-        true, false, true, true, true, true, true, true, true, true, true, true, true, true, true,
-        true, true, true, true, true, true, true, true, true, true, true, true, true, true, true,
-        true, true, true, true, true, true, true, true, true, true, true, true, true, true, false,
-        false, true, true, true, false, false, true, false, true, false, true, false, true, false,
-        true, false, true, false, true, false, true, false, false, true, true, false, true, false,
-        true, false, true, true, true, false, false, true, false, false, false, false, true, true,
-        false, true, false, true, false, true, true, false, true, true, false, false, false, false,
-        true, true, false, true, false, true, false, true, true, true, false, false, true, false,
-        true, false, false, false, true, true, true, true, false, true, false, true, true, true,
-        true, true, true, true, false, true, true, false, false, true, true, true, false, false,
-        true, false, true, true, false, false, false, false, true, true, true, true, false, true,
-        false, false, true, false, false, true, true, true, true, true, false, false, true, false,
-        false, true, false, false, false, true, true, true, false, true, true, false, true, true,
-        false, false, false, true, false, true, false, true, true, true, false, false, true, false,
-        false, false, true, false, false, false, true, true, true, false, true, true, true, false,
-        true, true, false, false, false, true, false, true, true, false, false, false, true, false,
-        false, true, false, false, true, false, true, false, true, true, false, false, true,
-    ];
-    const BLS_A0: [bool; 381] = [
-        false, false, true, true, false, true, false, true, false, true, false, true, false, true,
-        false, true, false, true, false, true, false, true, false, true, false, true, false, true,
-        false, true, false, true, false, false, false, false, false, false, false, false, false,
-        false, false, false, false, false, false, false, false, true, false, true, false, true,
-        false, true, false, true, false, true, false, true, false, true, false, false, false,
-        false, false, false, false, false, false, false, false, true, true, false, false, false,
-        false, true, false, true, false, true, false, true, false, true, true, false, false, false,
-        false, false, false, true, false, false, true, false, true, false, true, false, true, true,
-        true, true, false, false, true, false, false, false, false, false, false, true, true, true,
-        false, false, true, true, false, false, true, true, true, true, true, false, false, false,
-        false, true, true, false, false, true, true, false, false, false, true, true, false, true,
-        true, true, false, true, false, false, false, true, false, false, false, true, true, true,
-        true, false, true, false, false, false, true, false, false, false, false, false, false,
-        true, false, true, true, false, true, false, false, true, true, false, false, true, true,
-        false, false, false, true, false, true, true, false, false, true, true, true, true, true,
-        true, false, true, true, false, false, true, false, false, false, false, false, true, true,
-        true, true, false, true, true, false, false, false, true, false, false, true, false, true,
-        false, false, false, false, false, true, false, true, true, false, false, false, true,
-        false, true, true, true, true, false, true, true, true, true, false, true, true, false,
-        false, true, true, false, true, false, true, true, true, true, false, true, false, true,
-        true, true, false, false, true, true, false, false, false, true, true, true, true, true,
-        false, false, false, false, true, false, true, false, true, false, true, false, false,
-        false, false, true, false, false, false, true, false, true, true, false, true, true, false,
-        true, false, true, false, false, false, true, false, true, true, false, false, true, false,
-        true, true, false, false, true, true, true, true, true, true, true, true, true, true,
-        false, true, false, false, true, true, true, false, false, false, true, false, true, false,
-        true, true, true, true, false, false, false, true, false, false, false, true, false, false,
-        false, false, false, false, false, false, true, false, true, true,
-    ];
+        let (t0, t1) = fp4_square(z0, z1);
+
+        // For A
+        z0 = t0 - z0;
+        z0 = z0 + z0 + t0;
+
+        z1 = t1 + z1;
+        z1 = z1 + z1 + t1;
+
+        let (mut t0, t1) = fp4_square(z2, z3);
+        let (t2, t3) = fp4_square(z4, z5);
+
+        // For C
+        z4 = t0 - z4;
+        z4 = z4 + z4 + t0;
+
+        z5 = t1 + z5;
+        z5 = z5 + z5 + t1;
+
+        // For B
+        t0 = t3.mul_adj();
+        z2 = t0 + z2;
+        z2 = z2 + z2 + t0;
+
+        z3 = t2 - z3;
+        z3 = z3 + z3 + t2;
+
+        Fp12::<BLS381> {
+            z0: Fp6::<BLS381> {
+                t0: z0,
+                t1: z4,
+                t2: z3,
+            },
+            z1: Fp6::<BLS381> {
+                t0: z2,
+                t1: z1,
+                t2: z5,
+            },
+        }
+    }
+
+    fn cyclotomic_exp(f: Fp12<BLS381>) -> Fp12<BLS381> {
+        let mut tmp = Fp12::<BLS381>::UNIT;
+
+        let mut found_one = false;
+        for i in (0..64).rev().map(|b| ((X_GENERATOR >> b) & 1) == 1) {
+            if found_one {
+                tmp = cyclotomic_square(tmp)
+            } else {
+                found_one = i;
+            }
+
+            if i {
+                tmp = tmp * f;
+            }
+        }
+
+        tmp.conj()
+    }
+
+    const X_GENERATOR: u64 = 0xd201000000010000;
 }
 
 #[cfg(test)]
@@ -874,402 +941,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_bls_final_exponentiation() {
-        /// Corresponds to (p^12 - 1)/N, encoded as *little-endian*.
-        const FULL_EXPONENT: [bool; 4314] = [
-            false, false, false, false, true, false, false, false, true, false, true, false, true,
-            true, true, false, true, false, true, false, true, true, true, true, true, false, true,
-            true, true, false, true, false, true, false, true, false, true, true, false, true,
-            true, false, false, true, true, true, false, true, false, false, true, true, true,
-            true, false, true, false, false, false, false, false, false, true, true, false, false,
-            true, false, false, true, false, false, true, true, false, true, true, true, true,
-            true, true, true, false, true, false, false, false, true, false, true, true, false,
-            false, true, true, true, false, false, false, false, true, true, false, false, false,
-            true, true, false, false, false, false, true, true, false, false, true, true, true,
-            true, true, true, false, true, false, false, true, false, false, true, false, false,
-            true, false, false, false, true, false, false, true, false, true, true, true, true,
-            true, false, true, false, true, false, true, true, true, true, false, true, true, true,
-            true, true, false, false, false, true, false, false, true, true, true, true, false,
-            true, true, true, true, true, false, true, true, false, false, false, false, false,
-            false, false, true, false, false, false, true, false, false, false, false, false,
-            false, true, false, true, true, false, false, false, true, false, false, true, true,
-            false, false, false, false, true, false, false, true, false, false, false, true, false,
-            true, true, true, false, false, false, true, false, false, true, false, false, true,
-            false, false, false, false, true, true, true, true, true, false, true, false, false,
-            false, true, true, true, false, false, false, true, true, false, false, true, false,
-            true, true, false, false, false, false, false, false, false, false, true, true, true,
-            true, true, false, true, true, false, false, true, false, true, false, false, false,
-            false, true, false, true, false, false, true, true, false, true, false, false, false,
-            true, true, true, false, true, false, true, true, true, false, false, true, false,
-            true, true, true, true, true, false, false, false, false, false, false, false, false,
-            false, true, true, true, false, true, false, true, false, true, false, false, true,
-            true, false, false, true, false, true, false, true, true, true, false, false, false,
-            true, false, false, false, false, false, false, false, true, true, true, true, false,
-            true, false, false, false, false, true, true, false, true, true, false, false, true,
-            false, false, false, true, false, false, true, false, false, true, true, false, false,
-            false, true, false, false, false, true, false, false, true, false, false, false, true,
-            false, false, true, false, true, true, true, false, true, false, false, false, true,
-            true, true, false, false, false, true, false, false, false, true, true, true, true,
-            true, false, false, true, true, false, true, true, true, true, true, true, true, false,
-            false, true, true, false, true, true, true, false, true, false, true, true, false,
-            true, false, false, true, false, false, true, true, false, true, false, false, false,
-            false, true, false, false, false, true, true, false, true, true, true, true, false,
-            true, true, false, false, false, false, false, false, true, false, false, false, true,
-            true, true, true, true, true, true, false, false, true, true, true, true, false, true,
-            false, true, true, false, true, true, true, false, false, false, false, true, true,
-            false, true, false, false, false, false, true, false, false, true, false, true, true,
-            false, true, true, true, false, true, true, true, false, true, true, true, true, false,
-            false, true, false, false, true, false, false, true, true, true, true, true, true,
-            false, false, true, true, false, false, true, false, true, true, false, false, false,
-            false, false, false, true, true, false, false, false, false, true, false, false, true,
-            true, false, true, false, true, true, true, false, true, false, true, true, false,
-            false, true, false, true, true, false, false, false, false, true, true, true, true,
-            false, false, false, true, true, false, false, false, true, true, true, true, false,
-            true, true, false, true, true, false, true, false, false, true, true, true, false,
-            false, true, true, true, true, false, true, true, true, false, true, true, true, true,
-            false, true, true, true, true, true, true, false, false, false, false, true, false,
-            false, false, false, false, false, false, true, false, true, false, false, false, true,
-            true, false, false, true, false, false, true, true, true, false, false, true, false,
-            true, false, false, true, true, false, true, true, true, true, false, true, true, true,
-            false, true, false, true, false, true, false, true, true, false, false, false, false,
-            false, false, false, true, true, true, false, false, true, false, false, true, true,
-            true, true, true, true, true, false, true, true, false, false, true, false, true,
-            false, false, true, false, false, false, true, true, false, true, true, true, true,
-            true, true, false, false, true, true, true, false, false, true, false, true, false,
-            true, false, false, true, false, true, true, false, true, false, false, false, true,
-            false, false, false, true, true, false, true, false, false, true, false, true, true,
-            true, false, false, false, false, true, false, false, false, true, false, false, true,
-            false, false, true, true, true, false, false, false, true, true, true, true, true,
-            true, true, true, false, true, false, true, false, false, true, false, true, false,
-            true, true, true, false, false, true, false, true, false, true, false, true, false,
-            true, false, false, true, true, false, true, false, false, true, false, false, true,
-            false, false, true, false, true, true, false, false, true, false, false, false, true,
-            true, false, false, true, true, false, false, false, false, false, true, false, true,
-            false, false, false, true, true, false, true, false, false, true, true, false, false,
-            false, true, false, true, true, true, true, false, false, false, false, false, true,
-            false, true, false, true, false, true, true, true, true, true, false, true, false,
-            true, false, false, false, false, true, true, false, true, true, true, true, true,
-            false, false, true, true, true, true, false, true, false, false, false, true, true,
-            true, false, true, false, false, true, true, false, false, true, true, true, false,
-            false, true, false, true, false, true, false, true, true, true, true, true, false,
-            true, false, false, false, false, false, false, true, true, false, true, true, true,
-            true, true, true, false, false, true, true, true, true, false, false, true, true, true,
-            true, true, true, false, false, false, true, true, false, false, true, false, false,
-            true, false, true, true, false, false, false, false, true, true, true, true, true,
-            false, true, true, false, false, false, false, true, true, false, true, false, false,
-            true, true, true, true, false, true, false, true, true, true, true, true, true, true,
-            true, true, false, true, true, false, false, false, true, true, false, true, false,
-            false, true, false, false, true, false, false, false, true, true, false, true, true,
-            false, true, false, true, false, false, false, true, false, true, true, true, false,
-            true, true, true, false, true, false, false, false, false, false, false, true, false,
-            false, false, true, false, true, true, true, false, false, true, true, true, false,
-            true, true, false, true, false, true, false, false, false, true, false, false, false,
-            true, false, true, true, true, false, false, false, true, false, false, false, false,
-            true, true, true, false, true, false, false, false, true, false, false, true, true,
-            false, false, true, true, false, false, true, true, true, false, false, false, true,
-            true, false, true, true, false, false, false, true, false, true, true, true, true,
-            false, true, true, true, true, true, true, false, false, false, true, true, true, true,
-            false, true, true, true, false, true, false, true, true, false, false, false, true,
-            true, false, true, true, false, false, false, false, true, true, true, false, false,
-            true, true, false, true, false, true, true, true, false, true, false, false, false,
-            true, true, false, false, false, false, true, true, true, true, true, false, true,
-            true, true, true, true, false, false, true, true, false, true, true, true, false,
-            false, false, false, false, true, true, true, false, false, true, false, false, false,
-            false, true, true, false, true, false, false, false, false, false, true, false, false,
-            false, false, false, true, false, true, false, true, false, true, true, true, false,
-            false, true, false, false, true, false, false, false, false, true, true, true, true,
-            false, false, true, false, false, false, false, true, true, true, true, false, false,
-            true, false, true, false, true, true, true, true, true, true, false, true, true, true,
-            true, true, false, true, true, true, false, true, false, true, false, true, true,
-            false, false, false, false, false, false, false, false, true, false, false, true,
-            false, true, true, true, true, false, false, false, true, false, true, false, false,
-            true, false, true, true, false, true, false, true, false, false, false, true, true,
-            true, true, true, true, true, true, false, false, true, true, true, false, true, true,
-            false, true, false, true, true, true, false, false, true, true, false, false, true,
-            true, true, false, true, false, false, false, true, true, true, true, true, true,
-            false, false, true, true, true, false, true, true, false, true, true, false, true,
-            true, false, true, true, false, false, false, false, false, true, true, false, false,
-            true, false, false, true, false, true, false, true, true, false, false, true, false,
-            true, false, false, true, true, true, true, false, true, false, true, true, false,
-            false, true, true, false, false, false, false, false, true, true, true, false, false,
-            true, true, false, true, true, false, false, true, false, false, false, false, false,
-            false, true, true, false, true, true, true, true, false, true, true, true, false, true,
-            true, false, false, false, true, false, true, false, true, true, true, false, true,
-            true, true, false, false, true, false, false, false, true, true, false, false, false,
-            true, true, true, true, false, true, false, false, false, false, true, true, true,
-            true, false, true, true, true, true, true, false, false, false, true, false, true,
-            false, false, false, true, true, false, false, false, false, false, true, false, false,
-            false, false, false, false, false, false, false, true, false, false, false, false,
-            false, false, false, false, true, true, true, true, false, false, true, true, true,
-            true, true, true, false, false, true, false, true, false, true, true, false, false,
-            false, true, true, true, false, true, true, false, true, true, false, false, true,
-            true, true, true, true, true, true, false, true, true, false, false, true, false,
-            false, true, false, true, true, true, false, true, false, false, false, true, true,
-            false, true, false, false, false, false, false, true, true, false, true, true, false,
-            true, true, false, true, true, true, true, true, false, true, false, false, true,
-            false, false, false, false, true, false, false, false, true, false, false, true, false,
-            true, false, false, true, false, false, false, true, false, false, false, true, false,
-            true, false, false, false, true, true, true, false, false, false, true, true, true,
-            true, false, false, false, true, false, false, false, false, true, true, false, false,
-            true, false, true, false, false, true, true, true, false, true, true, false, false,
-            false, true, true, true, false, true, false, false, false, true, false, true, true,
-            false, false, false, false, false, true, true, false, false, true, false, false, true,
-            false, false, true, false, false, false, false, true, true, true, true, true, false,
-            true, false, true, true, true, false, true, true, false, true, false, true, true,
-            false, true, true, true, false, false, true, true, false, false, false, true, true,
-            false, true, true, true, false, false, false, true, false, false, false, false, false,
-            true, false, false, false, true, true, false, true, true, false, true, true, false,
-            false, false, true, true, false, true, false, false, true, false, true, false, true,
-            false, false, true, false, true, true, false, true, false, true, false, true, false,
-            true, false, true, false, true, true, true, false, true, true, false, true, true, true,
-            false, false, true, true, false, false, true, false, false, false, false, false, false,
-            false, false, false, false, true, false, false, true, false, false, true, true, false,
-            true, false, true, false, false, true, true, false, false, false, true, true, true,
-            true, false, true, true, true, true, true, false, false, false, false, false, false,
-            false, false, true, true, false, true, true, true, true, true, false, false, false,
-            false, true, true, false, true, true, true, true, true, false, true, false, true, true,
-            false, false, false, true, true, false, false, true, false, true, false, true, true,
-            false, true, false, true, false, true, true, false, false, true, true, true, false,
-            false, true, true, false, false, true, false, false, false, true, false, false, false,
-            false, false, false, false, false, false, false, true, false, false, true, false, true,
-            true, false, true, false, true, true, true, true, true, true, false, false, false,
-            false, true, false, true, false, false, false, false, true, false, true, true, false,
-            false, false, true, false, false, true, false, true, false, false, true, true, false,
-            true, false, true, false, false, false, true, false, true, true, false, false, true,
-            true, true, false, false, true, false, false, false, false, true, false, false, false,
-            true, true, false, false, true, false, true, true, true, false, true, false, true,
-            false, true, false, false, false, true, true, false, false, false, false, true, false,
-            true, true, true, true, false, true, false, false, false, false, true, true, true,
-            true, true, true, false, false, false, false, true, true, false, true, false, false,
-            false, false, false, false, false, false, true, true, false, true, true, false, false,
-            false, true, false, true, true, true, true, false, false, true, false, true, true,
-            false, false, true, true, false, false, true, false, false, true, true, true, false,
-            false, true, true, true, false, true, false, true, false, false, false, false, false,
-            false, false, true, true, false, false, true, false, true, true, false, false, true,
-            true, false, true, false, true, true, true, false, true, false, false, false, true,
-            true, false, false, true, false, true, true, false, true, false, true, true, false,
-            true, true, true, false, false, true, false, true, false, false, true, false, true,
-            false, true, true, false, true, true, true, false, false, true, true, false, true,
-            false, false, false, true, false, true, true, true, false, false, false, true, false,
-            false, false, false, false, true, false, false, false, false, true, true, true, false,
-            false, true, false, true, false, false, false, true, false, false, true, false, false,
-            true, true, true, false, false, false, true, false, true, true, false, false, false,
-            false, true, false, true, true, false, false, false, true, true, false, false, false,
-            true, false, false, false, false, false, true, false, true, true, false, true, false,
-            true, true, false, true, false, true, true, false, true, true, false, false, false,
-            false, true, false, true, true, true, true, false, false, true, false, false, true,
-            false, false, false, true, false, false, true, false, true, false, false, true, false,
-            false, false, false, false, false, false, true, true, false, true, true, false, true,
-            false, false, false, false, true, false, false, true, true, true, false, true, false,
-            false, false, true, true, false, false, true, false, true, true, true, false, false,
-            false, true, false, false, true, false, true, true, false, false, false, false, true,
-            true, false, false, true, true, true, true, false, true, false, false, true, true,
-            false, true, false, false, true, true, true, true, true, false, true, true, true,
-            false, true, true, false, false, false, false, true, false, false, false, true, false,
-            true, false, false, false, true, true, true, false, false, false, true, false, false,
-            true, true, true, true, true, true, true, false, true, true, false, false, false, true,
-            true, true, false, false, false, false, true, false, false, true, false, false, true,
-            false, false, false, true, true, true, true, true, false, false, true, true, false,
-            true, false, false, false, true, false, true, true, true, true, false, true, true,
-            true, true, true, true, true, false, true, false, false, true, true, false, false,
-            true, false, true, false, false, true, true, false, true, false, false, true, false,
-            true, false, false, true, false, false, false, false, false, true, false, false, false,
-            false, false, true, false, false, false, false, false, true, true, true, false, true,
-            true, false, false, true, true, true, false, false, true, false, true, true, false,
-            true, false, false, false, true, true, true, false, false, true, true, true, false,
-            true, true, true, false, false, false, false, false, false, true, false, false, true,
-            false, true, false, true, false, false, false, true, false, false, true, true, false,
-            true, true, true, false, true, false, false, true, false, true, true, true, false,
-            true, true, false, true, false, true, true, true, false, false, false, true, false,
-            true, true, false, false, true, false, true, false, false, false, false, false, false,
-            true, false, false, false, true, true, true, false, false, true, true, true, false,
-            true, false, false, false, false, true, false, true, true, false, false, true, false,
-            false, false, false, true, false, true, true, false, false, false, true, false, true,
-            true, true, true, false, false, false, false, true, false, false, true, true, true,
-            true, false, false, false, false, true, true, false, false, false, true, false, false,
-            false, true, false, true, false, false, true, false, false, true, true, true, true,
-            true, false, false, false, false, false, false, false, false, false, true, true, false,
-            false, true, false, true, false, true, true, false, false, false, true, false, false,
-            true, true, true, true, false, false, true, false, false, true, false, true, false,
-            false, false, false, true, true, true, true, false, true, false, true, true, false,
-            true, false, false, true, true, false, true, false, false, true, false, false, true,
-            false, false, false, false, true, false, false, true, false, false, false, true, false,
-            false, false, false, true, true, false, true, true, true, false, false, true, false,
-            false, true, true, true, true, true, true, true, false, true, true, false, false,
-            false, false, false, true, false, false, true, false, false, true, true, false, false,
-            false, false, false, true, false, false, false, false, false, true, false, false, true,
-            true, true, true, false, true, true, true, false, true, true, false, false, true,
-            false, false, true, false, false, true, true, true, true, true, true, false, true,
-            false, false, false, false, true, false, false, false, true, true, false, true, true,
-            true, true, true, true, true, true, true, true, true, true, false, true, true, true,
-            false, false, false, false, false, true, true, false, false, true, true, true, true,
-            true, false, false, false, false, false, false, false, true, true, false, true, false,
-            true, false, false, true, false, true, true, false, false, true, true, true, true,
-            false, true, false, false, false, false, true, true, true, false, true, false, true,
-            false, true, true, true, true, true, false, false, true, false, false, true, false,
-            false, false, true, true, true, true, false, false, true, false, false, true, false,
-            true, true, false, false, false, true, false, true, true, true, false, true, true,
-            false, false, false, false, true, true, false, false, true, false, false, true, false,
-            false, true, true, true, true, true, true, false, true, true, false, true, false,
-            false, false, true, true, false, false, false, false, false, true, false, true, true,
-            false, false, false, false, true, true, false, true, true, false, true, false, true,
-            false, true, true, true, false, false, true, true, true, false, false, false, true,
-            true, true, true, false, true, true, false, false, true, true, false, true, false,
-            true, true, false, false, true, false, true, false, false, true, false, true, true,
-            false, true, true, false, false, false, false, true, false, true, false, true, true,
-            false, false, true, false, true, true, true, false, true, true, false, false, true,
-            true, false, true, false, true, true, true, true, false, true, false, true, true,
-            false, false, true, false, false, true, true, true, true, true, false, false, true,
-            false, false, true, true, false, true, true, false, false, false, false, true, true,
-            true, false, false, true, true, false, false, true, false, false, true, false, true,
-            true, false, true, true, false, true, false, true, false, false, true, true, false,
-            true, true, false, true, false, true, false, true, true, false, false, false, false,
-            true, true, true, false, true, true, false, false, false, false, true, true, true,
-            false, true, true, false, false, true, true, false, false, true, false, false, false,
-            false, true, false, false, true, true, true, false, false, true, false, true, true,
-            true, false, true, true, false, false, false, false, true, true, false, true, false,
-            true, false, false, false, true, true, true, false, false, false, true, true, true,
-            true, false, true, false, false, true, false, false, false, true, false, false, true,
-            false, true, false, false, false, false, false, false, true, false, true, false, false,
-            true, true, false, false, true, false, false, true, true, false, false, false, false,
-            false, false, true, false, false, false, true, false, true, true, true, false, false,
-            false, false, true, true, false, true, false, true, true, false, false, false, false,
-            true, true, true, false, false, false, false, true, false, true, false, false, false,
-            false, false, true, false, true, true, true, true, true, true, false, false, true,
-            false, false, false, true, false, false, false, true, true, false, true, false, false,
-            true, false, false, true, false, true, false, true, false, true, true, false, false,
-            true, true, false, true, true, false, false, false, false, true, true, false, false,
-            false, true, true, false, false, true, false, false, false, true, true, true, false,
-            false, true, true, true, false, true, true, false, false, false, false, false, true,
-            false, true, true, true, true, false, false, false, false, false, false, false, false,
-            true, true, false, false, false, true, true, false, false, true, true, false, false,
-            true, false, true, false, true, true, true, false, true, true, false, false, true,
-            false, false, true, true, true, false, true, true, true, false, true, true, true, true,
-            false, false, true, true, true, true, true, true, false, false, true, false, false,
-            true, false, false, true, false, true, false, true, true, true, true, true, false,
-            true, true, false, false, true, true, false, false, false, true, false, true, false,
-            false, true, false, false, true, false, true, false, true, true, false, true, false,
-            true, false, false, false, true, false, true, true, false, false, true, false, true,
-            false, true, false, true, true, true, true, false, false, false, true, false, true,
-            true, false, false, false, true, true, true, false, false, true, false, true, true,
-            true, true, false, true, false, true, false, true, true, true, true, true, true, true,
-            false, true, true, false, false, false, false, false, true, false, false, false, false,
-            true, true, false, true, false, true, true, false, false, false, false, true, false,
-            true, true, false, true, false, true, false, false, false, false, false, false, true,
-            true, true, false, false, false, true, true, true, true, false, false, false, false,
-            true, true, true, true, false, false, false, false, false, true, false, true, true,
-            true, false, false, true, true, true, true, true, true, true, true, true, true, false,
-            false, false, false, false, true, false, true, true, true, false, true, true, true,
-            false, true, false, false, true, true, true, false, false, false, false, true, false,
-            false, true, true, false, false, true, true, true, false, true, false, true, true,
-            false, false, false, false, false, true, false, false, false, false, false, true, true,
-            false, false, true, true, false, false, true, false, true, true, false, false, true,
-            true, true, false, true, true, true, false, false, false, false, true, false, false,
-            true, true, true, false, false, true, false, true, true, true, false, false, false,
-            false, false, false, true, false, true, true, false, false, true, false, true, true,
-            true, false, true, true, true, true, true, true, true, false, false, true, true, true,
-            false, false, true, false, true, true, true, true, false, true, false, true, true,
-            true, true, true, true, true, true, true, false, true, true, false, true, false, true,
-            false, true, false, true, false, false, false, false, false, false, true, true, true,
-            false, false, true, false, true, false, true, true, false, true, true, false, true,
-            false, true, false, true, true, true, true, false, true, true, true, true, true, false,
-            false, false, true, true, false, false, true, true, false, false, false, true, false,
-            true, true, true, false, false, false, true, true, false, false, true, false, true,
-            true, false, false, false, false, false, true, true, false, false, false, false, true,
-            true, false, true, false, false, true, true, true, true, true, true, false, false,
-            true, false, true, false, true, true, false, false, true, true, false, true, false,
-            true, false, true, false, true, true, false, true, true, true, false, true, true, true,
-            false, true, true, false, false, true, true, true, false, false, false, false, false,
-            true, false, false, false, true, false, true, true, true, true, false, false, false,
-            false, true, false, false, true, false, true, true, true, false, false, false, false,
-            true, true, true, false, true, true, false, true, false, true, true, true, false, true,
-            true, true, true, false, true, false, false, false, true, false, true, false, false,
-            false, false, true, false, false, true, false, false, false, false, true, true, true,
-            true, false, true, false, false, false, true, false, false, true, false, true, false,
-            true, false, false, true, false, true, false, false, false, true, false, true, true,
-            false, false, false, true, true, true, true, true, true, true, false, false, true,
-            false, false, false, false, true, false, true, false, true, false, true, true, true,
-            false, true, true, true, false, false, false, true, true, false, true, true, false,
-            false, true, true, true, false, false, false, false, false, true, false, true, true,
-            true, true, true, false, false, false, false, false, true, false, true, false, false,
-            false, true, false, true, false, true, true, true, true, true, false, true, true, true,
-            true, true, true, false, false, true, true, false, true, true, true, true, false, true,
-            true, true, false, true, false, false, true, false, false, true, false, true, false,
-            true, true, true, true, false, false, true, false, false, true, true, false, false,
-            false, false, false, false, false, false, true, true, true, false, true, true, true,
-            true, false, false, true, false, false, false, true, false, true, false, true, false,
-            false, false, false, false, false, true, true, true, false, false, false, false, true,
-            false, true, false, true, true, false, true, false, false, true, false, false, true,
-            false, false, false, false, false, false, false, true, true, true, false, false, true,
-            false, true, false, true, true, false, true, true, true, true, false, true, true,
-            false, false, false, false, true, true, true, true, true, true, false, true, true,
-            false, true, true, false, true, false, false, true, false, false, false, false, false,
-            true, false, false, true, true, false, false, true, true, true, false, true, true,
-            true, false, true, false, true, true, false, true, true, false, true, true, true,
-            false, false, false, false, true, true, true, false, true, true, true, false, true,
-        ];
-
-        let mut rng = thread_rng();
-        for i in 0..5 {
-            let x = gen_fp12_sparse(&mut rng);
-            let y = bls381::final_exponent(x);
-
-            let mut y_acc = Fp12::<BLS381>::UNIT;
-            let mut sq = x;
-            for bit in FULL_EXPONENT {
-                if bit {
-                    y_acc = y_acc * sq;
-                }
-                sq = sq * sq;
-            }
-
-            assert_eq!(y, y_acc);
-        }
-    }
-
-    #[test]
     fn test_bls_pairing_simple() {
-        let x0 = bls381::tate(Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR);
+        let x0 = bls381::tate(
+            CurveAff::<BLS381>::GENERATOR,
+            CurveAff::<Fp2<BLS381>>::GENERATOR,
+        );
 
         // x0^(-1)
-        let x1 = bls381::tate(-Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR);
-        let x2 = bls381::tate(Curve::<BLS381>::GENERATOR, -Curve::<Fp2<BLS381>>::GENERATOR);
+        let x1 = bls381::tate(
+            -CurveAff::<BLS381>::GENERATOR,
+            CurveAff::<Fp2<BLS381>>::GENERATOR,
+        );
+        let x2 = bls381::tate(
+            CurveAff::<BLS381>::GENERATOR,
+            -CurveAff::<Fp2<BLS381>>::GENERATOR,
+        );
 
         assert_eq!(x0 * x1, Fp12::<BLS381>::UNIT);
         assert_eq!(x0 * x2, Fp12::<BLS381>::UNIT);
 
         assert_eq!(
-            bls381::tate(Curve::<BLS381>::unit(), Curve::<Fp2<BLS381>>::unit()),
+            bls381::tate(CurveAff::<BLS381>::unit(), CurveAff::<Fp2<BLS381>>::unit()),
             Fp12::<BLS381>::ZERO
-        );
-
-        println!(
-            "{:?}",
-            bls381::tate(
-                Curve::<BLS381>::GENERATOR * 2,
-                Curve::<Fp2<BLS381>>::GENERATOR * 2
-            )
-        );
-
-        println!(
-            "\n{:?}",
-            bls381::tate(
-                Curve::<BLS381>::GENERATOR * 4,
-                Curve::<Fp2<BLS381>>::GENERATOR
-            )
-        );
-
-        println!(
-            "\n{:?}",
-            bls381::tate(
-                Curve::<BLS381>::GENERATOR,
-                Curve::<Fp2<BLS381>>::GENERATOR * 4
-            )
-        );
-
-        println!(
-            "\n{:?}",
-            bls381::tate(Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR)
         );
     }
 
@@ -1286,15 +979,15 @@ mod tests {
             }
             acc -= m * n;
 
-            let p = Curve::<BLS381>::int(m);
-            let q = Curve::<Fp2<BLS381>>::int(n);
+            let p = CurveAff::<BLS381>::int(m);
+            let q = CurveAff::<Fp2<BLS381>>::int(n);
             running_product = running_product * bls381::tate(p, q);
         }
 
         // Finally, multiply by the accumulated inverse and check this matches the
         // expected value.
-        let p = Curve::<BLS381>::int(acc);
-        let q = Curve::<Fp2<BLS381>>::GENERATOR;
+        let p = CurveAff::<BLS381>::int(acc);
+        let q = CurveAff::<Fp2<BLS381>>::GENERATOR;
         running_product = running_product * bls381::tate(p, q);
 
         let expected = if acc == 0 {
@@ -1308,42 +1001,27 @@ mod tests {
 
     #[test]
     fn test_bn_pairing_simple() {
-        let x0 = bn254::tate(Curve::<BN254>::GENERATOR, Curve::<Fp2<BN254>>::GENERATOR);
+        let x0 = bn254::tate(
+            CurveAff::<BN254>::GENERATOR,
+            CurveAff::<Fp2<BN254>>::GENERATOR,
+        );
 
         // x0^(-1)
-        let x1 = bn254::tate(-Curve::<BN254>::GENERATOR, Curve::<Fp2<BN254>>::GENERATOR);
-        let x2 = bn254::tate(Curve::<BN254>::GENERATOR, -Curve::<Fp2<BN254>>::GENERATOR);
+        let x1 = bn254::tate(
+            -CurveAff::<BN254>::GENERATOR,
+            CurveAff::<Fp2<BN254>>::GENERATOR,
+        );
+        let x2 = bn254::tate(
+            CurveAff::<BN254>::GENERATOR,
+            -CurveAff::<Fp2<BN254>>::GENERATOR,
+        );
 
         assert_eq!(x0 * x1, Fp12::<BN254>::UNIT);
         assert_eq!(x0 * x2, Fp12::<BN254>::UNIT);
 
         assert_eq!(
-            bn254::tate(Curve::<BN254>::unit(), Curve::<Fp2<BN254>>::unit()),
+            bn254::tate(CurveAff::<BN254>::unit(), CurveAff::<Fp2<BN254>>::unit()),
             Fp12::<BN254>::ZERO
-        );
-
-        println!(
-            "{:?}",
-            bn254::tate(
-                Curve::<BN254>::GENERATOR * 2,
-                Curve::<Fp2<BN254>>::GENERATOR * 2
-            )
-        );
-
-        println!(
-            "{:?}",
-            bn254::tate(
-                Curve::<BN254>::GENERATOR * 4,
-                Curve::<Fp2<BN254>>::GENERATOR
-            )
-        );
-
-        println!(
-            "{:?}",
-            bn254::tate(
-                Curve::<BN254>::GENERATOR,
-                Curve::<Fp2<BN254>>::GENERATOR * 4
-            )
         );
     }
 
@@ -1360,15 +1038,15 @@ mod tests {
             }
             acc -= m * n;
 
-            let p = Curve::<BN254>::int(m);
-            let q = Curve::<Fp2<BN254>>::int(n);
+            let p = CurveAff::<BN254>::int(m);
+            let q = CurveAff::<Fp2<BN254>>::int(n);
             running_product = running_product * bn254::tate(p, q);
         }
 
         // Finally, multiply by the accumulated inverse and check this matches the
         // expected value.
-        let p = Curve::<BN254>::int(acc);
-        let q = Curve::<Fp2<BN254>>::GENERATOR;
+        let p = CurveAff::<BN254>::int(acc);
+        let q = CurveAff::<Fp2<BN254>>::GENERATOR;
         running_product = running_product * bn254::tate(p, q);
 
         let expected = if acc == 0 {
