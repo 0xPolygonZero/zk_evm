@@ -769,7 +769,7 @@ pub mod bls381 {
         true, true, true, true, true, true, true, true, true, true, true, true, true, true, false,
         false, false, false, false, false, false, false, false, false, false, false, false, false,
         false, false, false, false, false, false, false, false, false, false, false, false, false,
-        false, false, false, false, true,
+        false, false, false, false, false,
     ];
 
     // The following constants are defined above get_custom_powers.
@@ -1242,6 +1242,35 @@ mod tests {
             bls381::tate(Curve::<BLS381>::unit(), Curve::<Fp2<BLS381>>::unit()),
             Fp12::<BLS381>::ZERO
         );
+
+        println!(
+            "{:?}",
+            bls381::tate(
+                Curve::<BLS381>::GENERATOR * 2,
+                Curve::<Fp2<BLS381>>::GENERATOR * 2
+            )
+        );
+
+        println!(
+            "\n{:?}",
+            bls381::tate(
+                Curve::<BLS381>::GENERATOR * 4,
+                Curve::<Fp2<BLS381>>::GENERATOR
+            )
+        );
+
+        println!(
+            "\n{:?}",
+            bls381::tate(
+                Curve::<BLS381>::GENERATOR,
+                Curve::<Fp2<BLS381>>::GENERATOR * 4
+            )
+        );
+
+        println!(
+            "\n{:?}",
+            bls381::tate(Curve::<BLS381>::GENERATOR, Curve::<Fp2<BLS381>>::GENERATOR)
+        );
     }
 
     #[test]
@@ -1291,6 +1320,30 @@ mod tests {
         assert_eq!(
             bn254::tate(Curve::<BN254>::unit(), Curve::<Fp2<BN254>>::unit()),
             Fp12::<BN254>::ZERO
+        );
+
+        println!(
+            "{:?}",
+            bn254::tate(
+                Curve::<BN254>::GENERATOR * 2,
+                Curve::<Fp2<BN254>>::GENERATOR * 2
+            )
+        );
+
+        println!(
+            "{:?}",
+            bn254::tate(
+                Curve::<BN254>::GENERATOR * 4,
+                Curve::<Fp2<BN254>>::GENERATOR
+            )
+        );
+
+        println!(
+            "{:?}",
+            bn254::tate(
+                Curve::<BN254>::GENERATOR,
+                Curve::<Fp2<BN254>>::GENERATOR * 4
+            )
         );
     }
 
