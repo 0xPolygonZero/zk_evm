@@ -1,8 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use anyhow::Result;
 use ethereum_types::{Address, H160, U256};
-use hashbrown::hash_map::rayon::IntoParIter;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::{thread_rng, Rng};
 
@@ -12,7 +11,6 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata::{
 };
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::memory::segments::Segment::{self, AccessedAddresses, AccessedStorageKeys};
-use crate::memory::segments::SEGMENT_SCALING_FACTOR;
 use crate::witness::memory::MemoryAddress;
 
 #[test]
