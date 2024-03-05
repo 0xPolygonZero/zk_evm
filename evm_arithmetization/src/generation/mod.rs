@@ -129,7 +129,12 @@ impl GenerationInputs {
     pub(crate) fn trim(&self) -> Self {
         Self {
             tries: TrieInputs::default(),
-            signed_txn: Some(vec![]), // keeping a vec to indicate there was a transaction
+            signed_txn: if self.signed_txn.is_some() {
+                // keeping a vec to indicate there was a transaction
+                Some(vec![])
+            } else {
+                None
+            },
             withdrawals: vec![],
             ..self.clone()
         }
