@@ -76,12 +76,11 @@
 //!
 //! ### Transaction Aggregation proofs
 //!
-//! Once the prover has obtained a `GeneratedAggProof` corresponding to the
-//! entire set of segment proofs within one transaction proof, they can then
-//! wrap it into a `GeneratedBlockProof`. The prover can pass an optional
-//! previous transaction proof as argument to the
-//! `generate_transaction_agg_proof` method, to combine both statements into
-//! one.
+//! Given a `GeneratedAggProof` corresponding to the entire set of segment
+//! proofs within one transaction proof, the prover can wrap it into a
+//! `GeneratedBlockProof`. The prover can pass an optional previous transaction
+//! proof as argument to the `generate_transaction_agg_proof` method, to combine
+//! both statements into one.
 //!
 //! ```compile_fail
 //!  pub fn generate_transaction_agg_proof(

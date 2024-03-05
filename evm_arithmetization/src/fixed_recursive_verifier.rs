@@ -869,7 +869,7 @@ where
         agg: &AggregationCircuitData<F, C, D>,
         stark_config: &StarkConfig,
     ) -> BlockCircuitData<F, C, D> {
-        // Here, we create a circuit for the aggregation of two transactions.
+        // Create a circuit for the aggregation of two transactions.
         let expected_common_data = CommonCircuitData {
             fri_params: FriParams {
                 degree_bits: 14,
@@ -1698,7 +1698,7 @@ where
             }
 
             // Initialize the block metadata for a correct connection between the first
-            // transaction and the current one. Beneficiary.
+            // transaction and the current one.
             let block_metadata_keys = TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + 5;
             for (key, value) in block_metadata_keys.zip_eq(
                 u256_limbs::<F>(U256::from_big_endian(

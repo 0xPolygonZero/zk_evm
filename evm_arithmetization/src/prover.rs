@@ -86,17 +86,17 @@ where
 
     let actual_mem_before = {
         let mut res = vec![];
-        for ctx in 0..memory_before.contexts.len() {
-            for segment in 0..memory_before.contexts[ctx].segments.len() {
-                for virt in 0..memory_before.contexts[ctx].segments[segment].content.len() {
-                    if memory_before.contexts[ctx].segments[segment].content[virt].is_some() {
+        for (ctx_idx, ctx) in memory_before.contexts.iter().enumerate() {
+            for (segment_idx, segment) in ctx.segments.iter().enumerate() {
+                for (virt, value) in segment.content.iter().enumerate() {
+                    if let &Some(val) = value {
                         res.push((
                             MemoryAddress {
-                                context: ctx,
-                                segment,
+                                context: ctx_idx,
+                                segment: segment_idx,
                                 virt,
                             },
-                            memory_before.contexts[ctx].segments[segment].content[virt].unwrap(),
+                            val,
                         ));
                     }
                 }

@@ -44,7 +44,7 @@ mod trie_extractor;
 use self::mpt::{load_all_mpts, TrieRootPtrs};
 use crate::witness::util::{mem_write_log, mem_write_log_timestamp_zero};
 
-/// Number of cycles to go after the having reached the halting state. It is
+/// Number of cycles to go after having reached the halting state. It is
 /// equal to the number of cycles in `exc_stop` + 1.
 pub const NUM_EXTRA_CYCLES_AFTER: usize = 79;
 /// Memory values used to initialize `MemBefore`.
@@ -381,8 +381,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     };
 
     // `mem_before` and `mem_after` are initialized with an empty cap.
-    // But they are set to the caps of `MemBefore` and `MemAfter`
-    // respectively while proving.
+    // They will be set to the caps of `MemBefore` and `MemAfter`
+    // respectively, while proving.
     let public_values = PublicValues {
         trie_roots_before,
         trie_roots_after,

@@ -137,6 +137,9 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
     }
 }
 
+/// Given a segment index `i`, returns the initial and final registers, as well
+/// as the initial memory of segment `i`. These can then be passed to the prover
+/// for initialization.
 pub(crate) fn generate_segment<F: Field>(
     max_cpu_len: usize,
     index: usize,
