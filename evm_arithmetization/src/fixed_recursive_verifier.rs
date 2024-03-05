@@ -1000,13 +1000,13 @@ where
 
         // Push shift table.
         for i in 0..256 {
-            let mut row = vec![F::ZERO; crate::mem_before::columns::NUM_COLUMNS];
+            let mut row = vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS];
             let val = U256::from(1) << i;
-            row[crate::mem_before::columns::FILTER] = F::ONE;
-            row[crate::mem_before::columns::ADDR_CONTEXT] = F::ZERO;
-            row[crate::mem_before::columns::ADDR_SEGMENT] =
+            row[crate::memory_continuation::columns::FILTER] = F::ONE;
+            row[crate::memory_continuation::columns::ADDR_CONTEXT] = F::ZERO;
+            row[crate::memory_continuation::columns::ADDR_SEGMENT] =
                 F::from_canonical_usize(Segment::ShiftTable.unscale());
-            row[crate::mem_before::columns::ADDR_VIRTUAL] = F::from_canonical_usize(i);
+            row[crate::memory_continuation::columns::ADDR_VIRTUAL] = F::from_canonical_usize(i);
             for j in 0..crate::memory::VALUE_LIMBS {
                 row[j + 4] = F::from_canonical_u32((val >> (j * 32)).low_u32());
             }
@@ -1017,7 +1017,10 @@ where
         let num_rows = trace.len();
         let num_rows_padded = num_rows.next_power_of_two();
         for _ in num_rows..num_rows_padded {
-            trace.push(vec![F::ZERO; crate::mem_before::columns::NUM_COLUMNS]);
+            trace.push(vec![
+                F::ZERO;
+                crate::memory_continuation::columns::NUM_COLUMNS
+            ]);
         }
 
         let cols = transpose(&trace);

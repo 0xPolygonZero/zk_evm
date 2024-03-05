@@ -34,7 +34,6 @@ use crate::cpu::kernel::interpreter::generate_segment;
 use crate::generation::state::GenerationState;
 use crate::generation::{generate_traces, GenerationInputs, MemBeforeValues, SegmentData};
 use crate::get_challenges::observe_public_values;
-use crate::mem_before;
 use crate::memory::segments::Segment;
 use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
 use crate::witness::memory::MemoryAddress;

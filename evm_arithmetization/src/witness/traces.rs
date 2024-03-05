@@ -14,8 +14,9 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::generation::MemBeforeValues;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
+use crate::memory_continuation::memory_continuation_stark::mem_before_values_to_rows;
 use crate::witness::memory::MemoryOp;
-use crate::{arithmetic, keccak, keccak_sponge, logic, mem_before};
+use crate::{arithmetic, keccak, keccak_sponge, logic};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct TraceCheckpoint {
@@ -187,14 +188,14 @@ impl<T: Copy> Traces<T> {
             "generate mem_before trace",
             all_stark
                 .mem_before_stark
-                .generate_trace(mem_before_values, timing)
+                .generate_trace(mem_before_values_to_rows(mem_before_values), timing)
         );
         let mem_after_trace = timed!(
             timing,
             "generate mem_after trace",
             all_stark
                 .mem_after_stark
-                .generate_trace(&final_values, timing)
+                .generate_trace(final_values.clone(), timing)
         );
 
         (
