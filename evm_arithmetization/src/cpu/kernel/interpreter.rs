@@ -283,7 +283,7 @@ impl<F: Field> Interpreter<F> {
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs =
-            all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().clone().unwrap_or(&vec![]));
+            all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().unwrap_or(&vec![]));
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         self.generation_state.rlp_prover_inputs = rlp_prover_inputs;
         self.generation_state.withdrawal_prover_inputs = withdrawal_prover_inputs;
