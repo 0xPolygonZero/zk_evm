@@ -433,14 +433,14 @@ impl<F: Field> GenerationState<F> {
 
         const VERSIONED_HASH_VERSION_KZG: U256 = U256::one();
 
-        let mut comm_bytes = [0u8; 48];
+        let mut comm_bytes = [0u8; 64];
         comm_lo.to_big_endian(&mut comm_bytes[0..32]);
-        comm_hi.to_big_endian(&mut comm_bytes[32..48]);
+        comm_hi.to_big_endian(&mut comm_bytes[32..64]);
         println!("COMM BYTES:{:?}", comm_bytes);
 
-        let mut proof_bytes = [0u8; 48];
+        let mut proof_bytes = [0u8; 64];
         proof_lo.to_big_endian(&mut proof_bytes[0..32]);
-        proof_hi.to_big_endian(&mut proof_bytes[32..48]);
+        proof_hi.to_big_endian(&mut proof_bytes[32..64]);
         println!("PROOF BYTES:{:?}", proof_bytes);
 
         if versioned_hash
@@ -450,8 +450,10 @@ impl<F: Field> GenerationState<F> {
         }
 
         if self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes) {
+            println!("1");
             Ok(U256::one())
         } else {
+            println!("0");
             Ok(U256::zero())
         }
     }
@@ -459,17 +461,19 @@ impl<F: Field> GenerationState<F> {
     /// Verifies a KZG proof.
     fn verify_kzg_proof(
         &self,
-        comm_bytes: &[u8; 48],
+        comm_bytes: &[u8; 64],
         z: U256,
         y: U256,
-        proof_bytes: &[u8; 48],
+        proof_bytes: &[u8; 64],
     ) -> bool {
-        let comm = G1Affine::from_compressed(comm_bytes).unwrap_or(G1Affine::identity());
+        let comm = G1Affine::from_compressed(comm_bytes[0..48].try_into().unwrap())
+            .unwrap_or(G1Affine::identity());
         if bool::from(comm.is_identity()) {
             return false;
         }
 
-        let proof = G1Affine::from_compressed(comm_bytes).unwrap_or(G1Affine::identity());
+        let proof = G1Affine::from_compressed(comm_bytes[0..48].try_into().unwrap())
+            .unwrap_or(G1Affine::identity());
         if bool::from(proof.is_identity()) {
             return false;
         }

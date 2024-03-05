@@ -3,8 +3,10 @@ use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::Rng;
 
+use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::interpreter::{
-    run_interpreter_with_memory, InterpreterMemoryInitialization,
+    run_interpreter_with_memory, Interpreter, InterpreterMemoryInitialization,
 };
 use crate::extension_tower::{Fp2, Stack, BLS381};
 use crate::memory::segments::Segment::KernelGeneral;
