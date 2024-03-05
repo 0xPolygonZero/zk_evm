@@ -1,6 +1,6 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
-use anyhow::{anyhow, Error};
+use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
@@ -22,7 +22,6 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::assembler::Kernel;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::{GenerationState, State};
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
@@ -30,9 +29,9 @@ use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
 };
 use crate::prover::{check_abort_signal, get_mem_after_value_from_row};
-use crate::util::{h2u, u256_to_u8, u256_to_usize};
+use crate::util::{h2u, u256_to_usize};
 use crate::witness::errors::{ProgramError, ProverInputError};
-use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind, MemoryState};
+use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::Traces;
 
@@ -43,10 +42,9 @@ pub(crate) mod state;
 mod trie_extractor;
 
 use self::mpt::{load_all_mpts, TrieRootPtrs};
-use self::state::GenerationStateCheckpoint;
-use crate::witness::util::{mem_write_log, mem_write_log_timestamp_zero, stack_peek};
+use crate::witness::util::{mem_write_log, mem_write_log_timestamp_zero};
 
-/// Number of cycles to go after the having reached the halting state. It is
+/// Number of cycles to go after having reached the halting state. It is
 /// equal to the number of cycles in `exc_stop` + 1.
 pub const NUM_EXTRA_CYCLES_AFTER: usize = 79;
 /// Memory values used to initialize `MemBefore`.
@@ -383,8 +381,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     };
 
     // `mem_before` and `mem_after` are initialized with an empty cap.
-    // But they are set to the caps of `MemBefore` and `MemAfter`
-    // respectively while proving.
+    // They will be set to the caps of `MemBefore` and `MemAfter`
+    // respectively, while proving.
     let public_values = PublicValues {
         trie_roots_before,
         trie_roots_after,

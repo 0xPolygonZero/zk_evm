@@ -1,5 +1,3 @@
-use ethereum_types::U256;
-
 pub(crate) const SEGMENT_SCALING_FACTOR: usize = 32;
 
 /// This contains all the existing memory segments. The values in the enum are

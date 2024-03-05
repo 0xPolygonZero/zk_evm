@@ -357,7 +357,7 @@ impl ExtraBlockData {
 pub struct RegistersData {
     /// Program counter.
     pub program_counter: U256,
-    /// is_kernel: indicates whether we are in kernel mode.
+    /// Indicates whether we are in kernel mode.
     pub is_kernel: U256,
     /// Stack length.
     pub stack_len: U256,
@@ -1117,7 +1117,7 @@ impl ExtraBlockDataTarget {
 pub struct RegistersDataTarget {
     /// Program counter.
     pub program_counter: Target,
-    /// is_kernel: indicates whether we are in kernel mode.
+    /// Indicates whether we are in kernel mode.
     pub is_kernel: Target,
     /// Stack length.
     pub stack_len: Target,

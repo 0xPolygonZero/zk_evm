@@ -4,12 +4,18 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use evm_arithmetization::{AllStark, StarkConfig};
-use plonky2::util::timing::TimingTree;
+use plonky2::{
+    gates::noop::NoopGate,
+    iop::witness::PartialWitness,
+    plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
+    util::timing::TimingTree,
+};
 use trace_decoder::types::TxnProofGenIR;
 
 use crate::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
     prover_state::ProverState,
+    types::{Config, Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
 
 /// A type alias for `Result<T, ProofGenError>`.
@@ -40,10 +46,10 @@ pub fn generate_txn_proof(
     p_state: &ProverState,
     gen_inputs: TxnProofGenIR,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> ProofGenResult<GeneratedTxnProof> {
+) -> ProofGenResult<Option<GeneratedTxnProof>> {
     // TODO: change the `max_cpu_len_log` and `segment_index` arguments once we can
     // automatically determine them.
-    let output_data = p_state
+    if let Some(output_data) = p_state
         .state
         .prove_segment(
             &AllStark::default(),
@@ -54,11 +60,14 @@ pub fn generate_txn_proof(
             &mut TimingTree::default(),
             abort_signal,
         )
-        .map_err(|err| err.to_string())?;
-
-    let p_vals = output_data.public_values;
-    let intern = output_data.proof_with_pis;
-    Ok(GeneratedTxnProof { p_vals, intern })
+        .map_err(|err| err.to_string())?
+    {
+        let p_vals = output_data.public_values;
+        let intern = output_data.proof_with_pis;
+        Ok(Some(GeneratedTxnProof { p_vals, intern }))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Generates an aggregation proof from two child proofs.
@@ -143,4 +152,22 @@ pub fn generate_block_proof(
         b_height,
         intern: b_proof_intern,
     })
+}
+
+/// Generates a dummy proof for a dummy circuit doing nothing.
+/// This is useful for testing purposes only.
+pub fn dummy_proof() -> ProofGenResult<PlonkyProofIntern> {
+    let mut builder = CircuitBuilder::<Field, EXTENSION_DEGREE>::new(CircuitConfig::default());
+    builder.add_gate(NoopGate, vec![]);
+    let circuit_data = builder.build::<_>();
+
+    let inputs = PartialWitness::new();
+
+    plonky2::plonk::prover::prove::<Field, Config, EXTENSION_DEGREE>(
+        &circuit_data.prover_only,
+        &circuit_data.common,
+        inputs,
+        &mut TimingTree::default(),
+    )
+    .map_err(|e| ProofGenError(e.to_string()))
 }

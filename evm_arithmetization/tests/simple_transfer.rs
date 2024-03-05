@@ -163,7 +163,8 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         0,
         &mut timing,
         None,
-    )?;
+    )?
+    .expect("The initial registers should not be at the halt label.");
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)

@@ -335,15 +335,13 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticSta
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use ethereum_types::U256;
-    use plonky2::field::types::{Field, PrimeField64};
+    use plonky2::field::types::Field;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
     use starky::stark_testing::{test_stark_circuit_constraints, test_stark_low_degree};
 
-    use super::{columns, ArithmeticStark};
-    use crate::arithmetic::columns::OUTPUT_REGISTER;
+    use super::ArithmeticStark;
     use crate::arithmetic::*;
 
     #[test]

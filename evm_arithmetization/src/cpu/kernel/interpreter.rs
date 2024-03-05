@@ -7,7 +7,6 @@ use std::collections::{BTreeSet, HashMap};
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
 use mpt_trie::partial_trie::PartialTrie;
-use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
@@ -144,11 +143,14 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
     }
 }
 
+/// Given a segment index `i`, returns the initial and final registers, as well
+/// as the initial memory of segment `i`. These can then be passed to the prover
+/// for initialization.
 pub(crate) fn generate_segment<F: Field>(
     max_cpu_len_log: usize,
     index: usize,
     inputs: &GenerationInputs,
-) -> anyhow::Result<(RegistersState, RegistersState, MemoryState)> {
+) -> anyhow::Result<Option<(RegistersState, RegistersState, MemoryState)>> {
     let init_label = KERNEL.global_labels["init"];
     let initial_registers = RegistersState::new_with_main_label();
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
@@ -167,6 +169,9 @@ pub(crate) fn generate_segment<F: Field>(
 
     for i in 0..index + 1 {
         // Write initial registers.
+        if registers_after.program_counter == KERNEL.global_labels["halt"] {
+            return Ok(None);
+        }
         let registers_before_field_values = [
             registers_after.program_counter.into(),
             (registers_after.is_kernel as usize).into(),
@@ -203,7 +208,7 @@ pub(crate) fn generate_segment<F: Field>(
             .expect("We are in the interpreter: the run should return a memory state");
     }
 
-    Ok((registers_before, registers_after, before_mem_values))
+    Ok(Some((registers_before, registers_after, before_mem_values)))
 }
 
 impl<F: Field> Interpreter<F> {
@@ -887,6 +892,10 @@ impl<F: Field> State<F> for Interpreter<F> {
         self.generation_state.memory.get_with_init(address)
     }
 
+    fn get_generation_state(&self) -> &GenerationState<F> {
+        &self.generation_state
+    }
+
     fn get_mut_generation_state(&mut self) -> &mut GenerationState<F> {
         &mut self.generation_state
     }
@@ -895,21 +904,23 @@ impl<F: Field> State<F> for Interpreter<F> {
         self.clock
     }
 
-    fn push_cpu(&mut self, val: CpuColumnsView<F>) {
+    fn push_cpu(&mut self, _val: CpuColumnsView<F>) {
+        // We don't push anything, but increment the clock to match
+        // an actual proof generation.
         self.clock += 1;
     }
 
-    fn push_logic(&mut self, op: logic::Operation) {}
+    fn push_logic(&mut self, _op: logic::Operation) {}
 
-    fn push_arithmetic(&mut self, op: arithmetic::Operation) {}
+    fn push_arithmetic(&mut self, _op: arithmetic::Operation) {}
 
-    fn push_byte_packing(&mut self, op: BytePackingOp) {}
+    fn push_byte_packing(&mut self, _op: BytePackingOp) {}
 
-    fn push_keccak(&mut self, input: [u64; keccak::keccak_stark::NUM_INPUTS], clock: usize) {}
+    fn push_keccak(&mut self, _input: [u64; keccak::keccak_stark::NUM_INPUTS], _clock: usize) {}
 
-    fn push_keccak_bytes(&mut self, input: [u8; KECCAK_WIDTH_BYTES], clock: usize) {}
+    fn push_keccak_bytes(&mut self, _input: [u8; KECCAK_WIDTH_BYTES], _clock: usize) {}
 
-    fn push_keccak_sponge(&mut self, op: KeccakSpongeOp) {}
+    fn push_keccak_sponge(&mut self, _op: KeccakSpongeOp) {}
 
     fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
         self.generation_state.rollback(checkpoint)
@@ -979,13 +990,13 @@ impl<F: Field> State<F> for Interpreter<F> {
 
         self.fill_stack_fields(&mut row)?;
 
-        let generation_state = self.get_mut_generation_state();
         if registers.is_kernel {
-            log_kernel_instruction(generation_state, op);
+            log_kernel_instruction(self, op);
         } else {
             log::debug!("User instruction: {:?}", op);
         }
 
+        let generation_state = self.get_mut_generation_state();
         // Might write in general CPU columns when it shouldn't, but the correct values
         // will overwrite these ones during the op generation.
         if let Some(special_len) = get_op_special_length(op) {
@@ -1248,7 +1259,7 @@ mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField as F;
 
     use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-    use crate::cpu::kernel::interpreter::{run, Interpreter};
+    use crate::cpu::kernel::interpreter::Interpreter;
     use crate::memory::segments::Segment;
     use crate::witness::memory::MemoryAddress;
     use crate::witness::operation::CONTEXT_SCALING_FACTOR;
