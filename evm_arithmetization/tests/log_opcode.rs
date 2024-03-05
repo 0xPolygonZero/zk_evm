@@ -689,7 +689,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
 
-    let max_cpu_len = 1 << 13;
+    let max_cpu_len_log = 13;
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],

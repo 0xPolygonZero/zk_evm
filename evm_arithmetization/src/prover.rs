@@ -595,8 +595,8 @@ pub mod testing {
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["main"];
         let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
-        interpreter.run(None)?;
+            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs, None);
+        interpreter.run()?;
         Ok(())
     }
 }
