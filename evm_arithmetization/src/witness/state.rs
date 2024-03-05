@@ -29,7 +29,7 @@ pub struct RegistersState {
 }
 
 impl RegistersState {
-    /// Returns the KERNEK context in kernel mode, and the
+    /// Returns the KERNEL context in kernel mode, and the
     /// current context otherwise.
     pub(crate) const fn code_context(&self) -> usize {
         if self.is_kernel {

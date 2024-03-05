@@ -48,6 +48,36 @@ fn find_in_vec(mem_addr: MemoryAddress, mem_values: &Vec<(MemoryAddress, U256)>)
     }
     None
 }
+
+pub fn prove_all_segments<F, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    config: &StarkConfig,
+    inputs: GenerationInputs,
+    max_cpu_len: usize,
+    timing: &mut TimingTree,
+    abort_signal: Option<Arc<AtomicBool>>,
+) -> Result<Vec<AllProof<F, C, D>>>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    let mut segment_idx = 0;
+    let mut proofs = vec![];
+    while let Some(proof) = prove(
+        all_stark,
+        config,
+        inputs.clone(),
+        max_cpu_len,
+        segment_idx,
+        timing,
+        abort_signal.clone(),
+    )? {
+        segment_idx += 1;
+        proofs.push(proof);
+    }
+    Ok(proofs)
+}
+
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
@@ -57,95 +87,99 @@ pub fn prove<F, C, const D: usize>(
     segment_index: usize,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<AllProof<F, C, D>>
+) -> Result<Option<AllProof<F, C, D>>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
-    let (registers_before, registers_after, mut memory_before) =
-        generate_segment::<F>(max_cpu_len, segment_index, &inputs)?;
-    let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
-        .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
-    state.registers = RegistersState {
-        program_counter: state.registers.program_counter,
-        is_kernel: state.registers.is_kernel,
-        is_stack_top_read: false,
-        check_overflow: false,
-        ..registers_before
-    };
+    if let Some((registers_before, registers_after, mut memory_before)) =
+        generate_segment::<F>(max_cpu_len, segment_index, &inputs)?
+    {
+        let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
+            .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
+        state.registers = RegistersState {
+            program_counter: state.registers.program_counter,
+            is_kernel: state.registers.is_kernel,
+            is_stack_top_read: false,
+            check_overflow: false,
+            ..registers_before
+        };
 
-    let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
-    let mut shift_val = U256::one();
+        let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
+        let mut shift_val = U256::one();
 
-    for _ in 0..256 {
-        memory_before.set(shift_addr, shift_val);
-        shift_addr.increment();
-        shift_val <<= 1;
-    }
+        for _ in 0..256 {
+            memory_before.set(shift_addr, shift_val);
+            shift_addr.increment();
+            shift_val <<= 1;
+        }
 
-    let actual_mem_before = {
-        let mut res = vec![];
-        for ctx in 0..memory_before.contexts.len() {
-            for segment in 0..memory_before.contexts[ctx].segments.len() {
-                for virt in 0..memory_before.contexts[ctx].segments[segment].content.len() {
-                    if memory_before.contexts[ctx].segments[segment].content[virt].is_some() {
-                        res.push((
-                            MemoryAddress {
-                                context: ctx,
-                                segment,
-                                virt,
-                            },
-                            memory_before.contexts[ctx].segments[segment].content[virt].unwrap(),
-                        ));
+        let actual_mem_before = {
+            let mut res = vec![];
+            for (ctx_idx, ctx) in memory_before.contexts.iter().enumerate() {
+                for (segment_idx, segment) in ctx.segments.iter().enumerate() {
+                    for (virt, value) in segment.content.iter().enumerate() {
+                        if let &Some(val) = value {
+                            res.push((
+                                MemoryAddress {
+                                    context: ctx_idx,
+                                    segment: segment_idx,
+                                    virt,
+                                },
+                                val,
+                            ));
+                        }
                     }
                 }
             }
-        }
-        res
-    };
+            res
+        };
 
-    let registers_data_before = RegistersData {
-        program_counter: registers_before.program_counter.into(),
-        is_kernel: (registers_before.is_kernel as u64).into(),
-        stack_len: registers_before.stack_len.into(),
-        stack_top: registers_before.stack_top,
-        context: registers_before.context.into(),
-        gas_used: registers_before.gas_used.into(),
-    };
-    let registers_data_after = RegistersData {
-        program_counter: registers_after.program_counter.into(),
-        is_kernel: (registers_after.is_kernel as u64).into(),
-        stack_len: registers_after.stack_len.into(),
-        stack_top: registers_after.stack_top,
-        context: registers_after.context.into(),
-        gas_used: registers_after.gas_used.into(),
-    };
-    let segment_data = SegmentData {
-        max_cpu_len,
-        starting_state: state,
-        memory_before: actual_mem_before,
-        registers_before: registers_data_before,
-        registers_after: registers_data_after,
-    };
+        let registers_data_before = RegistersData {
+            program_counter: registers_before.program_counter.into(),
+            is_kernel: (registers_before.is_kernel as u64).into(),
+            stack_len: registers_before.stack_len.into(),
+            stack_top: registers_before.stack_top,
+            context: registers_before.context.into(),
+            gas_used: registers_before.gas_used.into(),
+        };
+        let registers_data_after = RegistersData {
+            program_counter: registers_after.program_counter.into(),
+            is_kernel: (registers_after.is_kernel as u64).into(),
+            stack_len: registers_after.stack_len.into(),
+            stack_top: registers_after.stack_top,
+            context: registers_after.context.into(),
+            gas_used: registers_after.gas_used.into(),
+        };
+        let segment_data = SegmentData {
+            max_cpu_len,
+            starting_state: state,
+            memory_before: actual_mem_before,
+            registers_before: registers_data_before,
+            registers_after: registers_data_after,
+        };
 
-    let (traces, mut public_values, final_values) = timed!(
-        timing,
-        "generate all traces",
-        generate_traces(all_stark, inputs, config, segment_data, timing)?
-    );
+        let (traces, mut public_values, final_values) = timed!(
+            timing,
+            "generate all traces",
+            generate_traces(all_stark, inputs, config, segment_data, timing)?
+        );
 
-    check_abort_signal(abort_signal.clone())?;
+        check_abort_signal(abort_signal.clone())?;
 
-    let proof = prove_with_traces(
-        all_stark,
-        config,
-        traces,
-        &mut public_values,
-        timing,
-        abort_signal,
-    )?;
-    Ok(proof)
+        let proof = prove_with_traces(
+            all_stark,
+            config,
+            traces,
+            &mut public_values,
+            timing,
+            abort_signal,
+        )?;
+        Ok(Some(proof))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Compute all STARK proofs.

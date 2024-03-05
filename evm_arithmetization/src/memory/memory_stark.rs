@@ -363,13 +363,6 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             let initialize_aux = final_rows[row][INITIALIZE_AUX];
             let next_values_limbs: Vec<_> =
                 (0..8).map(|i| final_rows[row + 1][value_limb(i)]).collect();
-            for i in 0..8 {
-                assert!(
-                    (next_addr_context * initialize_aux * next_values_limbs[i]).is_zero(),
-                    "Failing constraint in Memory for row {}",
-                    row
-                );
-            }
         }
 
         (

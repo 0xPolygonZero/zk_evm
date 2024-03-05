@@ -137,11 +137,14 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
     }
 }
 
+/// Given a segment index `i`, returns the initial and final registers, as well
+/// as the initial memory of segment `i`. These can then be passed to the prover
+/// for initialization.
 pub(crate) fn generate_segment<F: Field>(
     max_cpu_len: usize,
     index: usize,
     inputs: &GenerationInputs,
-) -> anyhow::Result<(RegistersState, RegistersState, MemoryState)> {
+) -> anyhow::Result<Option<(RegistersState, RegistersState, MemoryState)>> {
     let init_label = KERNEL.global_labels["init"];
     let initial_registers = RegistersState::new_with_main_label();
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs(init_label, vec![], inputs);
@@ -155,6 +158,9 @@ pub(crate) fn generate_segment<F: Field>(
 
     for i in 0..=index {
         // Write initial registers.
+        if registers_after.program_counter == KERNEL.global_labels["halt"] {
+            return Ok(None);
+        }
         [
             registers_after.program_counter.into(),
             (registers_after.is_kernel as usize).into(),
@@ -193,7 +199,7 @@ pub(crate) fn generate_segment<F: Field>(
         );
     }
 
-    Ok((registers_before, registers_after, before_mem_values))
+    Ok(Some((registers_before, registers_after, before_mem_values)))
 }
 
 impl<F: Field> Interpreter<F> {

@@ -170,10 +170,7 @@ global exc_stack_overflow_check_stack_length:
 global exc_stop:
     // Here, we need to check that the final registers have the correct value.
     // stack: trap_info
-    PUSH @SEGMENT_REGISTERS_STATES
-    // The first 6 elements in `SEGMENT_REGISTERS_STATES` correspond to the the initial registers. 
-    // We need the final registers here.
-    %add_const(6)
+    PUSH @FINAL_REGISTERS_ADDR
     // If the current `stack_len is 2`, then the stack was empty before the exception and there's no stack top.
     // stack: addr_registers, trap_info
     PUSH 3 

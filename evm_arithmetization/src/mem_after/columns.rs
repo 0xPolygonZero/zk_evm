@@ -5,7 +5,7 @@ use crate::memory::VALUE_LIMBS;
 
 /// 1 if this is an actual final value, or 0 if it's a padding row.
 pub(crate) const FILTER: usize = 0;
-/// The execution context of th address.
+/// The execution context of the address.
 pub(crate) const ADDR_CONTEXT: usize = FILTER + 1;
 /// The segment section of this address.
 pub(crate) const ADDR_SEGMENT: usize = ADDR_CONTEXT + 1;
