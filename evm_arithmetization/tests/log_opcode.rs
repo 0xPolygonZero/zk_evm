@@ -238,12 +238,12 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 20;
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         0,
         &mut timing,
         None,
@@ -473,12 +473,12 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 20;
     let root_proof_data_first = all_circuits.prove_segment(
         &all_stark,
         &config,
         inputs_first.clone(),
-        max_cpu_len,
+        max_cpu_len_log,
         0,
         &mut timing,
         None,
@@ -495,7 +495,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &config,
         inputs_first,
-        max_cpu_len,
+        max_cpu_len_log,
         1,
         &mut timing,
         None,
@@ -624,12 +624,12 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     };
 
     let mut timing = TimingTree::new("prove root second", log::Level::Info);
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 20;
     let root_proof_data_second = all_circuits.prove_segment(
         &all_stark,
         &config,
         inputs.clone(),
-        max_cpu_len,
+        max_cpu_len_log,
         0,
         &mut timing,
         None.clone(),
@@ -646,7 +646,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         1,
         &mut timing,
         None.clone(),
@@ -751,7 +751,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &config,
         inputs.clone(),
-        max_cpu_len,
+        max_cpu_len_log,
         0,
         &mut timing,
         None,
@@ -766,7 +766,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         1,
         &mut timing,
         None,

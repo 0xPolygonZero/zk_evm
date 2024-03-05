@@ -57,8 +57,8 @@ pub(crate) struct Interpreter<F: Field> {
     /// Holds the value of the clock: the clock counts the number of operations
     /// in the execution.
     pub(crate) clock: usize,
-    /// TODO
-    max_cpu_len: Option<usize>,
+    /// Maximal number of CPU cycles in one segment execution.
+    max_cpu_len_log: Option<usize>,
 }
 
 /// Structure storing the state of the interpreter's registers.
@@ -89,7 +89,7 @@ pub(crate) fn run_interpreter_with_memory<F: Field>(
     let label = KERNEL.global_labels[&memory_init.label];
     let mut stack = memory_init.stack;
     stack.reverse();
-    let mut interpreter = Interpreter::new(label, stack, 0);
+    let mut interpreter = Interpreter::new(label, stack, None);
     for (pointer, data) in memory_init.memory {
         for (i, term) in data.iter().enumerate() {
             interpreter.generation_state.memory.set(
@@ -106,7 +106,7 @@ pub(crate) fn run<F: Field>(
     initial_offset: usize,
     initial_stack: Vec<U256>,
 ) -> anyhow::Result<Interpreter<F>> {
-    let mut interpreter = Interpreter::new(initial_offset, initial_stack, 0);
+    let mut interpreter = Interpreter::new(initial_offset, initial_stack, None);
     interpreter.run()?;
     Ok(interpreter)
 }
@@ -122,8 +122,12 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
         None => {
             let halt_pc = KERNEL.global_labels[final_label];
             let initial_context = state.registers.context;
-            let mut interpreter =
-                Interpreter::new_with_state_and_halt_condition(state, halt_pc, initial_context, 0);
+            let mut interpreter = Interpreter::new_with_state_and_halt_condition(
+                state,
+                halt_pc,
+                initial_context,
+                None,
+            );
 
             log::debug!("Simulating CPU for jumpdest analysis.");
 
@@ -141,7 +145,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 }
 
 pub(crate) fn generate_segment<F: Field>(
-    max_cpu_len: usize,
+    max_cpu_len_log: usize,
     index: usize,
     inputs: &GenerationInputs,
 ) -> anyhow::Result<(RegistersState, RegistersState, MemoryState)> {
@@ -151,7 +155,7 @@ pub(crate) fn generate_segment<F: Field>(
         init_label,
         vec![],
         inputs.clone(),
-        max_cpu_len,
+        Some(max_cpu_len_log),
     );
 
     let (mut registers_before, mut registers_after, mut before_mem_values, mut after_mem_values) = (
@@ -209,14 +213,18 @@ impl<F: Field> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         inputs: GenerationInputs,
-        max_cpu_len: usize,
+        max_cpu_len_log: Option<usize>,
     ) -> Self {
-        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len);
+        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
         result.initialize_interpreter_state(inputs);
         result
     }
 
-    pub(crate) fn new(initial_offset: usize, initial_stack: Vec<U256>, max_cpu_len: usize) -> Self {
+    pub(crate) fn new(
+        initial_offset: usize,
+        initial_stack: Vec<U256>,
+        max_cpu_len_log: Option<usize>,
+    ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(GenerationInputs::default(), &KERNEL.code)
                 .expect("Default inputs are known-good"),
@@ -228,11 +236,7 @@ impl<F: Field> Interpreter<F> {
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: false,
             clock: 0,
-            max_cpu_len: if max_cpu_len > 0 {
-                Some(max_cpu_len)
-            } else {
-                None
-            },
+            max_cpu_len_log,
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -253,13 +257,8 @@ impl<F: Field> Interpreter<F> {
         state: &GenerationState<F>,
         halt_offset: usize,
         halt_context: usize,
-        max_cpu_len: usize,
+        max_cpu_len_log: Option<usize>,
     ) -> Self {
-        let max_cpu_len = if max_cpu_len > 0 {
-            Some(max_cpu_len)
-        } else {
-            None
-        };
         Self {
             generation_state: state.soft_clone(),
             halt_offsets: vec![halt_offset],
@@ -268,7 +267,7 @@ impl<F: Field> Interpreter<F> {
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: true,
             clock: 0,
-            max_cpu_len,
+            max_cpu_len_log,
         }
     }
 
@@ -454,7 +453,7 @@ impl<F: Field> Interpreter<F> {
     }
 
     pub(crate) fn run(&mut self) -> Result<(RegistersState, Option<MemoryState>), anyhow::Error> {
-        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len)?;
+        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log)?;
 
         #[cfg(debug_assertions)]
         {
@@ -1273,7 +1272,7 @@ mod tests {
             0x60, 0xff, 0x60, 0x0, 0x52, 0x60, 0, 0x51, 0x60, 0x1, 0x51, 0x60, 0x42, 0x60, 0x27,
             0x53,
         ];
-        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], 0);
+        let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
 
         interpreter.set_code(1, code.to_vec());
 

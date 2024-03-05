@@ -155,11 +155,12 @@ pub(crate) trait State<F: Field> {
     /// `GenerationState`.
     fn run_cpu(
         &mut self,
-        max_cpu_len: Option<usize>,
+        max_cpu_len_log: Option<usize>,
     ) -> anyhow::Result<(RegistersState, Option<MemoryState>)>
     where
         Self: Transition<F>,
     {
+        println!("max cpu len log {:?}", max_cpu_len_log);
         let halt_offsets = self.get_halt_offsets();
 
         let halt_pc = KERNEL.global_labels["halt"];
@@ -175,8 +176,9 @@ pub(crate) trait State<F: Field> {
             let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
             if running
                 && (registers.is_kernel && pc == halt_pc
-                    || (max_cpu_len.is_some()
-                        && self.get_clock() == max_cpu_len.unwrap() - NUM_EXTRA_CYCLES_AFTER))
+                    || (max_cpu_len_log.is_some()
+                        && self.get_clock()
+                            == (1 << max_cpu_len_log.unwrap()) - NUM_EXTRA_CYCLES_AFTER))
             {
                 if pc != halt_pc {
                     println!("{}", self.get_clock() + NUM_EXTRA_CYCLES_AFTER);

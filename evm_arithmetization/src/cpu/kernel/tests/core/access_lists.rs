@@ -21,7 +21,7 @@ fn test_init_access_lists() -> Result<()> {
 
     // Check the initial state of the access list in the kernel.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, 0);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     assert!(interpreter.stack().is_empty());
@@ -66,7 +66,7 @@ fn test_list_iterator() -> Result<()> {
     let init_label = KERNEL.global_labels["init_access_lists"];
 
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, 0);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     // test the list iterator
@@ -93,7 +93,7 @@ fn test_insert_address() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, 0);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     let insert_accessed_addresses = KERNEL.global_labels["insert_accessed_addresses"];
@@ -126,7 +126,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack, 0);
+    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack, None);
     interpreter.run()?;
 
     let insert_accessed_addresses = KERNEL.global_labels["insert_accessed_addresses"];
@@ -201,7 +201,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack, 0);
+    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack, None);
     interpreter.run()?;
 
     let insert_accessed_storage_keys = KERNEL.global_labels["insert_accessed_storage_keys"];
