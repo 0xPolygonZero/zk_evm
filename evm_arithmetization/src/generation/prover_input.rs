@@ -1,10 +1,10 @@
+use core::cmp::min;
 use core::mem::transmute;
-use std::cmp::min;
+use core::ops::Neg;
 use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
-use anyhow::{bail, Error};
-use bls12_381::{multi_miller_loop, pairing, G1Affine, G2Affine, Gt, Scalar};
+use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
 use keccak_hash::keccak;
@@ -18,7 +18,8 @@ use crate::cpu::kernel::constants::cancun_constants::{
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
-use crate::extension_tower::{FieldExt, Fp12, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
+use crate::curve_pairings::{bls381, CurveAff, CyclicGroup};
+use crate::extension_tower::{FieldExt, Fp12, Fp2, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
 use crate::generation::prover_input::EvmField::{
     Bls381Base, Bls381Scalar, Bn254Base, Bn254Scalar, Secp256k1Base, Secp256k1Scalar,
 };
@@ -435,13 +436,11 @@ impl<F: Field> GenerationState<F> {
 
         let mut comm_bytes = [0u8; 64];
         comm_lo.to_big_endian(&mut comm_bytes[0..32]);
-        comm_hi.to_big_endian(&mut comm_bytes[32..64]);
-        println!("COMM BYTES:{:?}", comm_bytes);
+        comm_hi.to_big_endian(&mut comm_bytes[32..64]); // only actually 16 bits
 
         let mut proof_bytes = [0u8; 64];
         proof_lo.to_big_endian(&mut proof_bytes[0..32]);
-        proof_hi.to_big_endian(&mut proof_bytes[32..64]);
-        println!("PROOF BYTES:{:?}", proof_bytes);
+        proof_hi.to_big_endian(&mut proof_bytes[32..64]); // only actually 16 bits
 
         if versioned_hash
             != VERSIONED_HASH_VERSION_KZG + U256::from_big_endian(&keccak(&comm_bytes).0[1..])
@@ -449,13 +448,7 @@ impl<F: Field> GenerationState<F> {
             return Ok(U256::zero()); // abort early
         }
 
-        if self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes) {
-            println!("1");
-            Ok(U256::one())
-        } else {
-            println!("0");
-            Ok(U256::zero())
-        }
+        Ok(self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes))
     }
 
     /// Verifies a KZG proof.
@@ -465,43 +458,48 @@ impl<F: Field> GenerationState<F> {
         z: U256,
         y: U256,
         proof_bytes: &[u8; 64],
-    ) -> bool {
-        let comm = G1Affine::from_compressed(comm_bytes[0..48].try_into().unwrap())
-            .unwrap_or(G1Affine::identity());
-        if bool::from(comm.is_identity()) {
-            return false;
-        }
+    ) -> U256 {
+        let comm = if let Ok(c) = bls381::from_bytes(comm_bytes) {
+            c
+        } else {
+            return U256::zero(); // abort early
+        };
 
-        let proof = G1Affine::from_compressed(comm_bytes[0..48].try_into().unwrap())
-            .unwrap_or(G1Affine::identity());
-        if bool::from(proof.is_identity()) {
-            return false;
-        }
+        let proof = if let Ok(p) = bls381::from_bytes(proof_bytes) {
+            p
+        } else {
+            return U256::zero(); // abort early
+        };
 
         let mut z_bytes = [0u8; 32];
-        z.to_little_endian(&mut z_bytes);
-        let z = Scalar::from_bytes(&z_bytes).unwrap_or(Scalar::zero());
-        let minus_z_g2 = G2Affine::generator() * z;
+        z.to_big_endian(&mut z_bytes);
+        let mut acc = CurveAff::<Fp2<BLS381>>::GENERATOR;
+        for byte in z_bytes {
+            acc = acc * byte as i32;
+        }
+        let minus_z_g2 = -acc;
 
         let mut y_bytes = [0u8; 32];
-        y.to_little_endian(&mut y_bytes);
-        let y = Scalar::from_bytes(&y_bytes).unwrap_or(Scalar::zero());
-        let minus_y_g1 = G1Affine::generator() * y;
-
-        let x_minus_z: G2Affine = (minus_z_g2).into();
-        let comm_minus_y = (comm + minus_y_g1).into();
-
-        if multi_miller_loop(&[
-            (&comm_minus_y, &(-G2Affine::generator()).into()),
-            (&proof, &x_minus_z.into()),
-        ])
-        .final_exponentiation()
-            != Gt::identity()
-        {
-            return false;
+        y.to_big_endian(&mut y_bytes);
+        let mut acc = CurveAff::<BLS381>::GENERATOR;
+        for byte in y_bytes {
+            acc = acc * byte as i32;
         }
+        let comm_minus_y = comm + (acc.neg());
 
-        true
+        let x_minus_z = minus_z_g2; // TODO
+
+        /// If this ends up being implemented in the Kernel directly, we should
+        /// really not have to go through the final exponentiation
+        /// twice.
+        if bls381::ate_optim(comm_minus_y, -CurveAff::<Fp2<BLS381>>::GENERATOR)
+            * bls381::ate_optim(proof, x_minus_z)
+            != Fp12::<BLS381>::UNIT
+        {
+            U256::zero()
+        } else {
+            U256::one()
+        }
     }
 }
 

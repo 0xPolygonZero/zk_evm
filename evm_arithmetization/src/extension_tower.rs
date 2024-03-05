@@ -1,6 +1,7 @@
 use core::fmt::Debug;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
+use anyhow::{anyhow, Result};
 use ethereum_types::{U256, U512};
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -201,6 +202,83 @@ impl BLS381 {
 
     fn lsh_512(self) -> BLS381 {
         self.lsh_256().lsh_256()
+    }
+
+    pub fn sqrt(&self) -> Result<Self> {
+        // We use Shank's method, as p = 3 (mod 4). This means
+        // we only need to exponentiate by (p+1)/4. This only
+        // works for elements that are actually quadratic residue,
+        // so we check that we got the correct result at the end.
+
+        const MODULUS_MINUS_ONE_DIV_FOUR: [bool; 379] = [
+            true, true, false, true, false, true, false, true, false, true, false, true, false,
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+            true, true, true, true, true, false, true, true, true, true, true, true, true, true,
+            false, false, true, true, true, false, true, true, true, true, true, true, true, true,
+            true, true, true, true, true, true, true, true, true, true, true, false, false, true,
+            false, true, false, true, false, false, false, true, true, false, true, false, true,
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+            true, true, false, true, false, true, false, true, false, true, true, true, true,
+            false, false, false, false, false, true, false, false, true, false, false, false, true,
+            true, false, true, true, true, true, false, false, false, false, true, true, false,
+            true, false, true, true, false, true, true, true, true, false, false, false, false,
+            false, true, false, true, false, true, false, false, true, false, true, true, false,
+            false, false, false, true, true, false, false, true, true, true, false, false, true,
+            true, false, true, true, true, true, true, true, false, true, false, true, false,
+            false, true, false, false, false, true, false, true, false, false, false, false, true,
+            true, true, false, false, true, true, true, true, false, false, true, false, false,
+            false, false, true, true, true, false, true, false, false, true, false, true, true,
+            true, false, true, true, true, false, false, false, true, false, false, true, true,
+            false, true, true, true, false, true, false, true, true, false, false, true, true,
+            false, true, false, true, true, true, false, true, false, false, true, false, true,
+            true, false, false, false, false, true, false, false, true, true, false, true, true,
+            false, true, true, true, true, false, false, true, false, true, true, true, false,
+            true, true, false, false, false, true, true, false, true, false, false, true, false,
+            false, true, false, true, true, false, false, true, false, true, true, false, false,
+            true, true, true, true, true, true, true, true, true, true, false, true, false, false,
+            true, true, true, false, false, false, true, false, true, false, true, true, true,
+            true, false, false, false, true, false, false, false, true, false, false, false, false,
+            false, false, false, false, true, false, true, true,
+        ];
+
+        let mut root = BLS381::UNIT;
+        let mut sq = *self;
+        for bit in MODULUS_MINUS_ONE_DIV_FOUR {
+            if bit {
+                root = root * sq;
+            }
+            sq = sq * sq;
+        }
+
+        // Check that the element is a quadratic residue.
+        if root * root != *self {
+            return Err(anyhow!(
+                "The element does not have a square root in this field."
+            ));
+        }
+
+        Ok(root)
+    }
+
+    /// Returns whether or not this element is strictly lexicographically
+    /// larger than its negation.
+    pub fn lexicographically_largest(&self) -> bool {
+        // This can be determined by checking to see if the element is
+        // larger than (p - 1) // 2.
+
+        const MODULUS_MINUS_ONE_DIV_TWO: U512 = U512([
+            0xdcff7fffffffd556,
+            0x0f55ffff58a9ffff,
+            0xb39869507b587b12,
+            0xb23ba5c279c2895f,
+            0x258dd3db21a5d66b,
+            0x0d0088f51cbff34d,
+            0x0000000000000000,
+            0x0000000000000000,
+        ]);
+
+        self.val > MODULUS_MINUS_ONE_DIV_TWO
     }
 }
 

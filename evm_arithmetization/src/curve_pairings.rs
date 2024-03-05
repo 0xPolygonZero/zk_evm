@@ -202,6 +202,20 @@ where
     Fp12 { z0: g0, z1: g1 }
 }
 
+pub(crate) fn check_curve_eq_aff<T>(p: CurveAff<T>, b_coeff: T) -> bool
+where
+    T: FieldExt,
+{
+    p.y * p.y == p.x * p.x * p.x + b_coeff
+}
+
+pub(crate) fn check_curve_eq_proj<T>(p: CurveProj<T>, b_coeff: T) -> bool
+where
+    T: FieldExt,
+{
+    p.y * p.y == p.x * p.x * p.x + b_coeff
+}
+
 /// Generates a sparse, random Fp12 element.
 pub(crate) fn gen_fp12_sparse<F, R: Rng + ?Sized>(rng: &mut R) -> Fp12<F>
 where
@@ -567,7 +581,23 @@ pub mod bn254 {
 }
 
 pub mod bls381 {
+    use anyhow::{anyhow, Result};
+
     use super::*;
+    use crate::extension_tower::BLS_BASE;
+
+    const B_G1: BLS381 = BLS381 {
+        val: U512([4, 0, 0, 0, 0, 0, 0, 0]),
+    };
+
+    const B_G2: Fp2<BLS381> = Fp2::<BLS381> {
+        re: BLS381 {
+            val: U512([4, 0, 0, 0, 0, 0, 0, 0]),
+        },
+        im: BLS381 {
+            val: U512([4, 0, 0, 0, 0, 0, 0, 0]),
+        },
+    };
 
     /// The BLS curve consists of pairs
     ///     (x, y): (BLS381, BLS381) | y^2 = x^3 + 4
@@ -665,6 +695,62 @@ pub mod bls381 {
                 },
             },
         };
+    }
+
+    pub(crate) fn from_bytes(bytes: &[u8; 64]) -> Result<CurveAff<BLS381>> {
+        if &bytes[48..] != &[0; 16] {
+            return Err(anyhow!("Compressed point should fit in 48 bytes."));
+        }
+
+        // Obtain the three flags from the start of the byte sequence
+        let compression_flag_set = ((bytes[0] >> 7) & 1) != 0;
+        let infinity_flag_set = ((bytes[0] >> 6) & 1) != 0;
+        let sort_flag_set = ((bytes[0] >> 5) & 1) != 0;
+
+        // Attempt to obtain the x-coordinate
+        let x = {
+            let mut tmp = [0; 48];
+            tmp.copy_from_slice(&bytes[0..48]);
+
+            // Mask away the flag bits
+            tmp[0] &= 0b0001_1111;
+
+            BLS381 {
+                val: U512::from_little_endian(&tmp),
+            }
+        };
+
+        if x.val > BLS_BASE {
+            return Err(anyhow!("X coordinate is larger than modulus."));
+        }
+
+        if infinity_flag_set {
+            if !(
+                compression_flag_set & // Compression flag should be set
+                (!sort_flag_set) & // Sort flag should not be set
+                x.val.is_zero()
+                // The x-coordinate should be zero
+            ) {
+                return Err(anyhow!("Byte flags are contradictory"));
+            }
+        }
+
+        // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
+        ((x * x * x) + B_G1).sqrt().and_then(|mut y| {
+            // Switch to the correct y-coordinate if necessary.
+
+            if y.lexicographically_largest() ^ sort_flag_set {
+                y = -y;
+            }
+
+            if infinity_flag_set | !compression_flag_set {
+                return Err(anyhow!("Byte flags are contradictory"));
+            }
+
+            return Ok(CurveAff::<BLS381> { x, y });
+        });
+
+        Err(anyhow!("This point is not on the curve."))
     }
 
     // The optimal Ate pairing takes a point each from the curve and its twist and
