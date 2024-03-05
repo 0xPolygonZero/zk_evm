@@ -124,6 +124,20 @@ pub struct SegmentData<F: RichField> {
     pub registers_after: RegistersData,
 }
 
+impl GenerationInputs {
+    /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
+    /// the fields that have already been processed during pre-initialization,
+    /// namely: the input tries, the signed transaction, and the withdrawals.
+    pub(crate) fn trim(&self) -> Self {
+        Self {
+            tries: TrieInputs::default(),
+            signed_txn: Some(vec![]), // keeping a vec to indicate there was a transaction
+            withdrawals: vec![],
+            ..self.clone()
+        }
+    }
+}
+
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
     state: &mut GenerationState<F>,
     inputs: &GenerationInputs,

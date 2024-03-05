@@ -65,7 +65,7 @@ where
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
     let (registers_before, registers_after, mut memory_before) =
         generate_segment::<F>(max_cpu_len, segment_index, &inputs)?;
-    let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
+    let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
     state.registers = RegistersState {
         program_counter: state.registers.program_counter,
@@ -132,7 +132,7 @@ where
     let (traces, mut public_values, final_values) = timed!(
         timing,
         "generate all traces",
-        generate_traces(all_stark, inputs.clone(), config, segment_data, timing)?
+        generate_traces(all_stark, inputs, config, segment_data, timing)?
     );
 
     check_abort_signal(abort_signal.clone())?;

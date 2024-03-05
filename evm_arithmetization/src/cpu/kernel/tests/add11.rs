@@ -145,7 +145,7 @@ fn test_add11_yml() {
     let mut registers_after = RegistersState::default();
     registers_after.program_counter = KERNEL.global_labels["halt"];
 
-    let tries_inputs = GenerationInputs {
+    let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
         tries: tries_before,
@@ -165,7 +165,7 @@ fn test_add11_yml() {
     let initial_stack = vec![];
     let initial_offset = KERNEL.global_labels["init"];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs);
 
     interpreter.set_is_kernel(true);
     interpreter.run(None).expect("Proving add11 failed.");
@@ -286,7 +286,7 @@ fn test_add11_yml_with_exception() {
         block_bloom: [0.into(); 8],
     };
 
-    let tries_inputs = GenerationInputs {
+    let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
         tries: tries_before,
@@ -306,7 +306,7 @@ fn test_add11_yml_with_exception() {
     let initial_stack = vec![];
     let initial_offset = KERNEL.global_labels["init"];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs);
 
     interpreter.set_is_kernel(true);
     interpreter
