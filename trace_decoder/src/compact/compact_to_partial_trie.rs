@@ -129,6 +129,7 @@ impl CompactToPartialTrieExtractionOutput for StateTrieExtractionOutput {
             },
         )
     }
+
     fn get_trie(&mut self) -> &mut HashedPartialTrie {
         &mut self.trie
     }
