@@ -176,7 +176,8 @@ pub(crate) fn generate_segment<F: Field>(
                 *reg_content,
             );
             interpreter.generation_state.memory.set(addr, val);
-        });
+        })
+        .collect::<Vec<_>>();
 
         (registers_before, before_mem_values) = (registers_after, after_mem_values);
         interpreter.generation_state.registers = registers_before;
