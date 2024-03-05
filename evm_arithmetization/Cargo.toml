@@ -13,6 +13,7 @@ keywords.workspace = true
 
 [dependencies]
 anyhow = "1.0.40"
+bls12_381 = "0.8.0"
 bytes = { workspace = true }
 env_logger = { workspace = true }
 ethereum-types = { workspace = true }

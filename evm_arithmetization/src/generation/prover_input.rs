@@ -4,6 +4,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
 use anyhow::{bail, Error};
+use bls12_381::{multi_miller_loop, pairing, G1Affine, G2Affine, Gt, Scalar};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
 use keccak_hash::keccak;
@@ -422,6 +423,14 @@ impl<F: Field> GenerationState<F> {
         let proof_lo = stack_peek(self, 5)?;
         let proof_hi = stack_peek(self, 6)?;
 
+        // Validate scalars
+        if z > BLS_SCALAR {
+            return Ok(U256::zero()); // abort early
+        }
+        if y > BLS_SCALAR {
+            return Ok(U256::zero()); // abort early
+        }
+
         const VERSIONED_HASH_VERSION_KZG: U256 = U256::one();
 
         let mut comm_bytes = [0u8; 48];
@@ -437,23 +446,58 @@ impl<F: Field> GenerationState<F> {
         if versioned_hash
             != VERSIONED_HASH_VERSION_KZG + U256::from_big_endian(&keccak(&comm_bytes).0[1..])
         {
-            return Err(ProgramError::ProverInputError(InvalidInput));
+            return Ok(U256::zero()); // abort early
         }
 
-        self.verify_kzg_proof(comm_bytes, z, y, proof_bytes)?;
-
-        Ok(U256::zero())
+        if self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes) {
+            Ok(U256::one())
+        } else {
+            Ok(U256::zero())
+        }
     }
 
     /// Verifies a KZG proof.
     fn verify_kzg_proof(
         &self,
-        comm_bytes: [u8; 48],
+        comm_bytes: &[u8; 48],
         z: U256,
         y: U256,
-        proof_bytes: [u8; 48],
-    ) -> Result<(), ProgramError> {
-        Ok(())
+        proof_bytes: &[u8; 48],
+    ) -> bool {
+        let comm = G1Affine::from_compressed(comm_bytes).unwrap_or(G1Affine::identity());
+        if bool::from(comm.is_identity()) {
+            return false;
+        }
+
+        let proof = G1Affine::from_compressed(comm_bytes).unwrap_or(G1Affine::identity());
+        if bool::from(proof.is_identity()) {
+            return false;
+        }
+
+        let mut z_bytes = [0u8; 32];
+        z.to_little_endian(&mut z_bytes);
+        let z = Scalar::from_bytes(&z_bytes).unwrap_or(Scalar::zero());
+        let minus_z_g2 = G2Affine::generator() * z;
+
+        let mut y_bytes = [0u8; 32];
+        y.to_little_endian(&mut y_bytes);
+        let y = Scalar::from_bytes(&y_bytes).unwrap_or(Scalar::zero());
+        let minus_y_g1 = G1Affine::generator() * y;
+
+        let x_minus_z: G2Affine = (minus_z_g2).into();
+        let comm_minus_y = (comm + minus_y_g1).into();
+
+        if multi_miller_loop(&[
+            (&comm_minus_y, &(-G2Affine::generator()).into()),
+            (&proof, &x_minus_z.into()),
+        ])
+        .final_exponentiation()
+            != Gt::identity()
+        {
+            return false;
+        }
+
+        true
     }
 }
 
