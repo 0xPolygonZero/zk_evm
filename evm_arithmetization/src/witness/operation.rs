@@ -5,7 +5,6 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
 
-use super::memory::MemorySegmentState;
 use super::transition::Transition;
 use super::util::{
     byte_packing_log, byte_unpacking_log, mem_read_with_log, mem_write_log,
@@ -16,12 +15,9 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::assembler::BYTES_PER_OFFSET;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
-use crate::generation::state::GenerationState;
-use crate::generation::state::State;
 use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;

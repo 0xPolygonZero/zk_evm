@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -10,7 +9,6 @@ use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
@@ -141,9 +139,6 @@ fn test_add11_yml() {
         block_gas_used: gas_used,
         block_bloom: [0.into(); 8],
     };
-
-    let mut registers_after = RegistersState::default();
-    registers_after.program_counter = KERNEL.global_labels["halt"];
 
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
