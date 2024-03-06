@@ -1,5 +1,11 @@
 /target
-/prover_state
+
+# Default extension for generated block proofs
 *.zkproof
-prover_state_*
-verifier_state_*
+
+# Folder containing all the locally generated circuit data
+circuits/
+
+# Folders containing logs from the utility scripts in tools/
+debug/
+proofs/
