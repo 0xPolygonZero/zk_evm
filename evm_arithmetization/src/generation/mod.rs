@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -292,7 +293,15 @@ fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> 
     Ok(())
 }
 
+/// Outputs the tries that have been obtained post transaction execution, as
+/// they are represented in the prover's memory.
+/// This will do nothing if the CPU execution failed outside of the final trie
+/// root checks.
 pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> anyhow::Result<()> {
+    if !log_enabled!(log::Level::Debug) {
+        return Ok(());
+    }
+
     // Retrieve previous PC (before jumping to KernelPanic), to see if we reached
     // `hash_final_tries`. We will output debugging information on the final
     // tries only if we got a root mismatch.
