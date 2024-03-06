@@ -56,6 +56,7 @@ impl<F: Field> GenerationState<F> {
             "num_bits" => self.run_num_bits(),
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
+            "ger" => self.run_global_exit_roots(),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
         }
     }
@@ -260,6 +261,13 @@ impl<F: Field> GenerationState<F> {
             "storage_remove" => self.run_next_storage_remove(),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
+    }
+
+    fn run_global_exit_roots(&mut self) -> Result<U256, ProgramError> {
+        dbg!(&self.ger_prover_inputs);
+        self.ger_prover_inputs
+            .pop()
+            .ok_or(ProgramError::ProverInputError(OutOfGerData))
     }
 
     /// Returns the next used jump address.

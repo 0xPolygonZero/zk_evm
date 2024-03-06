@@ -162,6 +162,7 @@ pub(crate) fn combined_kernel() -> Kernel {
         include_str!("asm/account_code.asm"),
         include_str!("asm/balance.asm"),
         include_str!("asm/bloom_filter.asm"),
+        include_str!("asm/global_exit_root.asm"),
     ];
 
     let parsed_files = files.iter().map(|f| parse(f)).collect_vec();

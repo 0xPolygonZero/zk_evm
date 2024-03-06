@@ -14,10 +14,7 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use crate::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage,
-    initial_state_and_storage_tries_with_beacon_roots, update_beacon_roots_account_storage,
-};
+use crate::testing_utils::{beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles, GLOBAL_EXIT_ROOT_ACCOUNT, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage};
 use crate::GenerationInputs;
 
 #[test]
@@ -56,7 +53,7 @@ fn test_add11_yml() {
     };
 
     let (mut state_trie_before, mut storage_tries) =
-        initial_state_and_storage_tries_with_beacon_roots();
+        preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
@@ -133,6 +130,10 @@ fn test_add11_yml() {
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
         );
+        expected_state_trie_after.insert(
+            ger_account_nibbles(),
+            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+        );
         expected_state_trie_after
     };
     let receipt_0 = LegacyReceiptRlp {
@@ -161,6 +162,7 @@ fn test_add11_yml() {
     let tries_inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code: contract_code.clone(),
@@ -225,7 +227,7 @@ fn test_add11_yml_with_exception() {
     };
 
     let (mut state_trie_before, mut storage_tries) =
-        initial_state_and_storage_tries_with_beacon_roots();
+        preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
@@ -294,6 +296,10 @@ fn test_add11_yml_with_exception() {
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
         );
+        expected_state_trie_after.insert(
+            ger_account_nibbles(),
+            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+        );
         expected_state_trie_after
     };
 
@@ -323,6 +329,7 @@ fn test_add11_yml_with_exception() {
     let tries_inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code: contract_code.clone(),

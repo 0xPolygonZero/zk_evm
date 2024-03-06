@@ -13,7 +13,7 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    initial_state_and_storage_tries_with_beacon_roots, update_beacon_roots_account_storage,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
     BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
 };
 use evm_arithmetization::verifier::verify_proof;
@@ -89,7 +89,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 
     // Initialize the state trie with three accounts.
     let (mut state_trie_before, mut storage_tries) =
-        initial_state_and_storage_tries_with_beacon_roots();
+        preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
@@ -238,6 +238,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
@@ -335,7 +336,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let gas_price = 10;
     let txn_value = 0xau64;
     let (mut state_trie_before, storage_tries) =
-        initial_state_and_storage_tries_with_beacon_roots();
+        preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
@@ -462,6 +463,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let inputs_first = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after: tries_after,
         contract_code,
@@ -599,6 +601,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: Some(txn_2.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after: trie_roots_after.clone(),
         contract_code,
@@ -669,6 +672,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: TrieInputs {
             state_trie: expected_state_trie_after,
             transactions_trie: Node::Empty.into(),

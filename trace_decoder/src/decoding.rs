@@ -135,6 +135,7 @@ impl ProcessedBlockTrace {
                     withdrawals: Vec::default(), /* Only ever set in a dummy txn at the end of
                                                   * the block (see `[add_withdrawals_to_txns]`
                                                   * for more info). */
+                    global_exit_roots: Vec::default(), // TODO
                     tries,
                     trie_roots_after,
                     checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
@@ -554,6 +555,7 @@ fn create_dummy_gen_input_common(
         gas_used_after: extra_data.gas_used_after,
         contract_code: HashMap::default(),
         withdrawals: vec![], // this is set after creating dummy payloads
+        global_exit_roots: vec![],
     }
 }
 

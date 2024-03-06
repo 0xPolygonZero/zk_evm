@@ -7,10 +7,7 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
-use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    initial_state_and_storage_tries_with_beacon_roots, update_beacon_roots_account_storage,
-};
+use evm_arithmetization::testing_utils::{beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles, GLOBAL_EXIT_ROOT_ACCOUNT, init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -77,7 +74,7 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     };
 
     let (mut state_trie_before, mut storage_tries) =
-        initial_state_and_storage_tries_with_beacon_roots();
+        preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
@@ -161,6 +158,11 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
         );
+        expected_state_trie_after.insert(
+            ger_account_nibbles(),
+            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+        );
+
         expected_state_trie_after
     };
 
@@ -189,6 +191,7 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
