@@ -169,11 +169,7 @@ impl GenerationInputs {
             txn_number_before: self.txn_number_before,
             gas_used_before: self.gas_used_before,
             gas_used_after: self.gas_used_after,
-            has_txn: if self.signed_txn.is_some() {
-                true
-            } else {
-                false
-            },
+            has_txn: self.signed_txn.is_some(),
             trie_roots_after: self.trie_roots_after.clone(),
             checkpoint_state_trie_root: self.checkpoint_state_trie_root,
             contract_code: self.contract_code.clone(),
