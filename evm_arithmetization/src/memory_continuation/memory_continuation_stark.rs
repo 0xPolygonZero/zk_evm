@@ -87,11 +87,12 @@ pub(crate) struct MemoryContinuationStark<F, const D: usize> {
 impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D> {
     pub(crate) fn generate_trace(
         &self,
-        final_values: Vec<Vec<F>>,
+        propagated_values: Vec<Vec<F>>,
         timing: &mut TimingTree,
     ) -> Vec<PolynomialValues<F>> {
-        // Set the trace to the `final_values` provided by `MemoryStark`.
-        let mut rows = final_values;
+        // Set the trace to the `propagated_values` provided either by `MemoryStark`
+        // (for final values) or the previous segment (for initial values).
+        let mut rows = propagated_values;
 
         let num_rows = rows.len();
         let num_rows_padded = max(16, num_rows.next_power_of_two());

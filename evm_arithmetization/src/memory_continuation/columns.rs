@@ -3,7 +3,7 @@
 //! unique.
 use crate::memory::VALUE_LIMBS;
 
-/// 1 if and actual value or 0 if it's a padding row.
+/// 1 if an actual value or 0 if it's a padding row.
 pub(crate) const FILTER: usize = 0;
 /// The execution context of the address.
 pub(crate) const ADDR_CONTEXT: usize = FILTER + 1;
