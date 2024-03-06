@@ -11,9 +11,8 @@ use mpt_trie::{
 };
 
 pub use crate::cpu::kernel::cancun_constants::*;
-use crate::cpu::kernel::constants::GLOBAL_EXIT_ROOT_STORAGE_POS;
-pub use crate::cpu::kernel::constants::{
-    GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
+pub use crate::cpu::kernel::constants::global_exit_root::{
+    GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_STORAGE_POS,
 };
 use crate::{generation::mpt::AccountRlp, util::h2u};
 
@@ -89,8 +88,8 @@ pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> A
     }
 }
 
-/// Returns an initial state trie containing nothing but the beacon roots
-/// contract, along with its storage trie.
+/// Returns an initial state trie containing the beacon roots and global exit
+/// roots contracts, along with their storage tries.
 pub fn preinitialized_state_and_storage_tries(
 ) -> (HashedPartialTrie, Vec<(H256, HashedPartialTrie)>) {
     let mut state_trie = HashedPartialTrie::from(Node::Empty);

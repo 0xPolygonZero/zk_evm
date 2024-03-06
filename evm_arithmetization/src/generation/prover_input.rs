@@ -264,7 +264,6 @@ impl<F: Field> GenerationState<F> {
     }
 
     fn run_global_exit_roots(&mut self) -> Result<U256, ProgramError> {
-        dbg!(&self.ger_prover_inputs);
         self.ger_prover_inputs
             .pop()
             .ok_or(ProgramError::ProverInputError(OutOfGerData))
