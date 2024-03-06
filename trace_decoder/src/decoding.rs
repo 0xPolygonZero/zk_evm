@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
-    iter::once,
+    iter::{empty, once},
 };
 
 use ethereum_types::{Address, H256, U256};
@@ -499,7 +499,7 @@ fn calculate_trie_input_hashes(t_inputs: &PartialTrieState) -> TrieRoots {
 // way to do it.
 fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedPartialTrie {
     // Impossible to actually fail with an empty iter.
-    create_trie_subset(trie, once(0_u64)).unwrap()
+    create_trie_subset(trie, empty::<Nibbles>()).unwrap()
 }
 
 fn create_dummy_txn_pair_for_empty_block(

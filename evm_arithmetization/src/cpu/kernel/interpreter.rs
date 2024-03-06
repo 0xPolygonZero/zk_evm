@@ -15,6 +15,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
+use crate::generation::debug_inputs;
 use crate::generation::mpt::load_all_mpts;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
@@ -146,6 +147,8 @@ impl<F: Field> Interpreter<F> {
         initial_stack: Vec<U256>,
         inputs: GenerationInputs,
     ) -> Self {
+        debug_inputs(&inputs);
+
         let mut result = Self::new(initial_offset, initial_stack);
         result.initialize_interpreter_state(inputs);
         result

@@ -204,12 +204,25 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
     state.traces.memory_ops.extend(ops);
 }
 
+pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
+    log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
+    log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
+    log::debug!(
+        "Input transactions_trie: {:?}",
+        &inputs.tries.transactions_trie
+    );
+    log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
+    log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
+    log::debug!("Input contract_code: {:?}", &inputs.contract_code);
+}
+
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
     config: &StarkConfig,
     timing: &mut TimingTree,
 ) -> anyhow::Result<([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues)> {
+    debug_inputs(&inputs);
     let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
