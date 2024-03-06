@@ -60,7 +60,7 @@ impl<F: Field> GenerationState<F> {
     }
 
     fn no_txn(&mut self) -> Result<U256, ProgramError> {
-        Ok(U256::from(self.inputs.signed_txn.is_none() as u8))
+        Ok(U256::from(!self.inputs.has_txn as u8))
     }
 
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
