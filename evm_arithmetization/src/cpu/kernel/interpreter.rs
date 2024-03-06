@@ -156,7 +156,7 @@ pub(crate) fn generate_segment<F: Field>(
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
         init_label,
         vec![],
-        inputs.clone(),
+        inputs,
         Some(max_cpu_len_log),
     );
 
@@ -167,34 +167,34 @@ pub(crate) fn generate_segment<F: Field>(
         MemoryState::default(),
     );
 
-    for i in 0..index + 1 {
+    for i in 0..=index {
         // Write initial registers.
         if registers_after.program_counter == KERNEL.global_labels["halt"] {
             return Ok(None);
         }
-        let registers_before_field_values = [
+        [
             registers_after.program_counter.into(),
             (registers_after.is_kernel as usize).into(),
             registers_after.stack_len.into(),
             registers_after.stack_top,
             registers_after.context.into(),
             registers_after.gas_used.into(),
-        ];
-        let registers_before_fields = (0..registers_before_field_values.len())
-            .map(|i| {
-                (
-                    MemoryAddress::new_u256s(
-                        0.into(),
-                        (Segment::RegistersStates.unscale()).into(),
-                        i.into(),
-                    )
-                    .unwrap(),
-                    registers_before_field_values[i],
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, reg_content)| {
+            let (addr, val) = (
+                MemoryAddress::new_u256s(
+                    0.into(),
+                    (Segment::RegistersStates.unscale()).into(),
+                    i.into(),
                 )
-            })
-            .collect::<Vec<_>>();
-
-        interpreter.set_memory_multi_addresses(&registers_before_fields);
+                .expect("All input values are known to be valid for MemoryAddress"),
+                *reg_content,
+            );
+            interpreter.generation_state.memory.set(addr, val);
+        })
+        .collect::<Vec<_>>();
 
         (registers_before, before_mem_values) = (registers_after, after_mem_values);
         interpreter.generation_state.registers = registers_before;
@@ -204,8 +204,10 @@ pub(crate) fn generate_segment<F: Field>(
 
         let (updated_registers_after, opt_after_mem_values) = interpreter.run()?;
         registers_after = updated_registers_after;
-        after_mem_values = opt_after_mem_values
-            .expect("We are in the interpreter: the run should return a memory state");
+        after_mem_values = opt_after_mem_values.expect(
+            "We are in the interpreter: the run should return a memory
+        state",
+        );
     }
 
     Ok(Some((registers_before, registers_after, before_mem_values)))
@@ -217,7 +219,7 @@ impl<F: Field> Interpreter<F> {
     pub(crate) fn new_with_generation_inputs(
         initial_offset: usize,
         initial_stack: Vec<U256>,
-        inputs: GenerationInputs,
+        inputs: &GenerationInputs,
         max_cpu_len_log: Option<usize>,
     ) -> Self {
         let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
@@ -231,7 +233,7 @@ impl<F: Field> Interpreter<F> {
         max_cpu_len_log: Option<usize>,
     ) -> Self {
         let mut interpreter = Self {
-            generation_state: GenerationState::new(GenerationInputs::default(), &KERNEL.code)
+            generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
                 .expect("Default inputs are known-good"),
             // `DEFAULT_HALT_OFFSET` is used as a halting point for the interpreter,
             // while the label `halt` is the halting label in the kernel.
@@ -277,7 +279,7 @@ impl<F: Field> Interpreter<F> {
     }
 
     /// Initializes the interpreter state given `GenerationInputs`.
-    pub(crate) fn initialize_interpreter_state(&mut self, inputs: GenerationInputs) {
+    pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs) {
         let kernel_hash = KERNEL.code_hash;
         let kernel_code_len = KERNEL.code.len();
         // Initialize registers.
@@ -290,8 +292,8 @@ impl<F: Field> Interpreter<F> {
 
         let tries = &inputs.tries;
 
-        // Set state's inputs.
-        self.generation_state.inputs = inputs.clone();
+        // Set state's inputs. We trim unnecessary components.
+        self.generation_state.inputs = inputs.trim();
 
         // Initialize the MPT's pointers.
         let (trie_root_ptrs, trie_data) =
@@ -307,7 +309,7 @@ impl<F: Field> Interpreter<F> {
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs =
-            all_rlp_prover_inputs_reversed(inputs.clone().signed_txn.as_ref().unwrap_or(&vec![]));
+            all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().unwrap_or(&vec![]));
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         self.generation_state.rlp_prover_inputs = rlp_prover_inputs;
         self.generation_state.withdrawal_prover_inputs = withdrawal_prover_inputs;

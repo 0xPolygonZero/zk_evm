@@ -8,7 +8,7 @@ use keccak_hash::keccak;
 use plonky2::field::types::Field;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
-use super::{TrieInputs, NUM_EXTRA_CYCLES_AFTER};
+use super::{GenerationInputsTrimmed, TrieInputs, NUM_EXTRA_CYCLES_AFTER};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
@@ -180,7 +180,6 @@ pub(crate) trait State<F: Field> {
                             == (1 << max_cpu_len_log.unwrap()) - NUM_EXTRA_CYCLES_AFTER))
             {
                 if pc != halt_pc {
-                    println!("{}", self.get_clock() + NUM_EXTRA_CYCLES_AFTER);
                     assert!((self.get_clock() + NUM_EXTRA_CYCLES_AFTER).is_power_of_two());
                 }
                 running = false;
@@ -301,7 +300,7 @@ pub(crate) trait State<F: Field> {
 
 #[derive(Debug)]
 pub struct GenerationState<F: Field> {
-    pub(crate) inputs: GenerationInputs,
+    pub(crate) inputs: GenerationInputsTrimmed,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
@@ -344,7 +343,7 @@ impl<F: Field> GenerationState<F> {
 
         trie_roots_ptrs
     }
-    pub(crate) fn new(inputs: GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
+    pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
         log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
         log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
         log::debug!(
@@ -356,12 +355,12 @@ impl<F: Field> GenerationState<F> {
         log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 
         let rlp_prover_inputs =
-            all_rlp_prover_inputs_reversed(inputs.clone().signed_txn.as_ref().unwrap_or(&vec![]));
+            all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().unwrap_or(&vec![]));
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let bignum_modmul_result_limbs = Vec::new();
 
         let mut state = Self {
-            inputs: inputs.clone(),
+            inputs: inputs.trim(),
             registers: Default::default(),
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
@@ -448,7 +447,7 @@ impl<F: Field> GenerationState<F> {
     /// Clones everything but the traces.
     pub(crate) fn soft_clone(&self) -> GenerationState<F> {
         Self {
-            inputs: self.inputs.clone(),
+            inputs: self.inputs.clone(), // inputs have already been trimmed here
             registers: self.registers,
             memory: self.memory.clone(),
             traces: Traces::default(),

@@ -96,7 +96,7 @@ where
     if let Some((registers_before, registers_after, mut memory_before)) =
         generate_segment::<F>(max_cpu_len_log, segment_index, &inputs)?
     {
-        let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
+        let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
             .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
         state.registers = RegistersState {
             program_counter: state.registers.program_counter,
@@ -163,7 +163,7 @@ where
         let (traces, mut public_values, final_values) = timed!(
             timing,
             "generate all traces",
-            generate_traces(all_stark, inputs.clone(), config, segment_data, timing)?
+            generate_traces(all_stark, inputs, config, segment_data, timing)?
         );
 
         check_abort_signal(abort_signal.clone())?;
@@ -595,7 +595,7 @@ pub mod testing {
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["main"];
         let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs, None);
+            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
         interpreter.run()?;
         Ok(())
     }
