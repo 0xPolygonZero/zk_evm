@@ -19,8 +19,8 @@ fn test_init_access_lists() -> Result<()> {
 
     // Check the initial state of the access list in the kernel.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
-    interpreter.run(None)?;
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
+    interpreter.run()?;
 
     assert!(interpreter.stack().is_empty());
 
@@ -64,8 +64,8 @@ fn test_list_iterator() -> Result<()> {
     let init_label = KERNEL.global_labels["init_access_lists"];
 
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
-    interpreter.run(None)?;
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
+    interpreter.run()?;
 
     // test the list iterator
     let mut list = interpreter
@@ -91,8 +91,8 @@ fn test_insert_address() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
-    interpreter.run(None)?;
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
+    interpreter.run()?;
 
     let insert_accessed_addresses = KERNEL.global_labels["insert_accessed_addresses"];
 
@@ -106,7 +106,7 @@ fn test_insert_address() -> Result<()> {
     interpreter.push(U256::from(address.0.as_slice()));
     interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
 
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(interpreter.stack(), &[U256::one()]);
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
@@ -124,8 +124,8 @@ fn test_insert_accessed_addresses() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack);
-    interpreter.run(None)?;
+    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack, None);
+    interpreter.run()?;
 
     let insert_accessed_addresses = KERNEL.global_labels["insert_accessed_addresses"];
 
@@ -149,7 +149,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
         interpreter.push(0xdeadbeefu32.into());
         interpreter.push(addr);
         interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
-        interpreter.run(None)?;
+        interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::one());
     }
 
@@ -159,7 +159,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
         interpreter.push(retaddr);
         interpreter.push(U256::from(addr_in_list.0.as_slice()));
         interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
-        interpreter.run(None)?;
+        interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::zero());
         assert_eq!(
             interpreter.generation_state.memory.get_with_init(
@@ -174,7 +174,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
     interpreter.push(U256::from(addr_not_in_list.0.as_slice()));
     interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
 
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(interpreter.stack(), &[U256::one()]);
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
@@ -199,8 +199,8 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack);
-    interpreter.run(None)?;
+    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack, None);
+    interpreter.run()?;
 
     let insert_accessed_storage_keys = KERNEL.global_labels["insert_accessed_storage_keys"];
 
@@ -229,7 +229,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         interpreter.push(key);
         interpreter.push(addr);
         interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
-        interpreter.run(None)?;
+        interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::one());
         assert_eq!(interpreter.pop().unwrap(), value);
     }
@@ -242,7 +242,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
         interpreter.push(key);
         interpreter.push(U256::from(addr.0.as_slice()));
         interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
-        interpreter.run(None)?;
+        interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::zero());
         assert_eq!(interpreter.pop().unwrap(), value);
         assert_eq!(
@@ -260,7 +260,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     interpreter.push(U256::from(storage_key_not_in_list.0 .0.as_slice()));
     interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
 
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(
         interpreter.stack(),
         &[storage_key_not_in_list.2, U256::one()]

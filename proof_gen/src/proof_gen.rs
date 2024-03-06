@@ -47,7 +47,7 @@ pub fn generate_txn_proof(
     gen_inputs: TxnProofGenIR,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<Option<GeneratedTxnProof>> {
-    // TODO: change the `max_cpu_len` and `segment_index` arguments once we can
+    // TODO: change the `max_cpu_len_log` and `segment_index` arguments once we can
     // automatically determine them.
     if let Some(output_data) = p_state
         .state
@@ -55,7 +55,7 @@ pub fn generate_txn_proof(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
             gen_inputs,
-            1 << 32,
+            32,
             0,
             &mut TimingTree::default(),
             abort_signal,

@@ -83,7 +83,7 @@ pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     inputs: GenerationInputs,
-    max_cpu_len: usize,
+    max_cpu_len_log: usize,
     segment_index: usize,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -94,7 +94,7 @@ where
 {
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
     if let Some((registers_before, registers_after, mut memory_before)) =
-        generate_segment::<F>(max_cpu_len, segment_index, &inputs)?
+        generate_segment::<F>(max_cpu_len_log, segment_index, &inputs)?
     {
         let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
             .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
@@ -153,7 +153,7 @@ where
             gas_used: registers_after.gas_used.into(),
         };
         let segment_data = SegmentData {
-            max_cpu_len,
+            max_cpu_len_log,
             starting_state: state,
             memory_before: actual_mem_before,
             registers_before: registers_data_before,
@@ -595,8 +595,8 @@ pub mod testing {
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["main"];
         let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs);
-        interpreter.run(None)?;
+            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
+        interpreter.run()?;
         Ok(())
     }
 }

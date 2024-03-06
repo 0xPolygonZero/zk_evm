@@ -26,11 +26,11 @@ fn test_log_0() -> Result<()> {
         U256::from_big_endian(&address.to_fixed_bytes()),
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack, None);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, 0.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsDataLen, 0.into());
 
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     // The address is encoded in 1+20 bytes. There are no topics or data, so each is
     // encoded in 1 byte. This leads to a payload of 23.
@@ -70,13 +70,13 @@ fn test_log_2() -> Result<()> {
         U256::from_big_endian(&address.to_fixed_bytes()),
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack, None);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, 2.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsDataLen, 5.into());
 
     interpreter.set_memory_segment(Segment::MainMemory, memory);
 
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(
         interpreter.get_memory_segment(Segment::Logs),
         [0.into(), 0.into(), 5.into(),]
@@ -134,13 +134,13 @@ fn test_log_4() -> Result<()> {
         U256::from_big_endian(&address.to_fixed_bytes()),
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack, None);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, 2.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsDataLen, 5.into());
 
     interpreter.set_memory_segment(Segment::MainMemory, memory);
 
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(
         interpreter.get_memory_segment(Segment::Logs),
         [0.into(), 0.into(), 5.into(),]
@@ -197,10 +197,10 @@ fn test_log_5() -> Result<()> {
         U256::from_big_endian(&address.to_fixed_bytes()),
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack, None);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, 0.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsDataLen, 0.into());
 
-    assert!(interpreter.run(None).is_err());
+    assert!(interpreter.run().is_err());
     Ok(())
 }

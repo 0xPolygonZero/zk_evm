@@ -16,9 +16,9 @@ fn test_mstore_unpacking() -> Result<()> {
     let addr = (Segment::TxnData as u64).into();
     let initial_stack = vec![retdest, len, value, addr];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(mstore_unpacking, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(mstore_unpacking, initial_stack, None);
 
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(interpreter.stack(), vec![addr + U256::from(4)]);
     assert_eq!(
         &interpreter.get_txn_data(),

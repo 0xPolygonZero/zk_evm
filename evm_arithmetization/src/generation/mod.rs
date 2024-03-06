@@ -153,7 +153,7 @@ pub struct TrieInputs {
 }
 
 pub struct SegmentData<F: RichField> {
-    pub max_cpu_len: usize,
+    pub max_cpu_len_log: usize,
     pub starting_state: GenerationState<F>,
     pub memory_before: Vec<(MemoryAddress, U256)>,
     pub registers_before: RegistersData,
@@ -338,7 +338,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     // previous segment execution, if any.
 
     let SegmentData {
-        max_cpu_len,
+        max_cpu_len_log,
         starting_state: mut state,
         memory_before,
         registers_before,
@@ -354,7 +354,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let cpu_res = timed!(
         timing,
         "simulate CPU",
-        simulate_cpu(&mut state, max_cpu_len)
+        simulate_cpu(&mut state, max_cpu_len_log)
     );
     let (final_registers, mem_after) = if let Ok(res) = cpu_res {
         res
@@ -464,9 +464,9 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
 fn simulate_cpu<F: Field>(
     state: &mut GenerationState<F>,
-    max_cpu_len: usize,
+    max_cpu_len_log: usize,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
-    let (final_registers, mem_after) = state.run_cpu(Some(max_cpu_len))?;
+    let (final_registers, mem_after) = state.run_cpu(Some(max_cpu_len_log))?;
 
     let pc = state.registers.program_counter;
     // Setting the values of padding rows.

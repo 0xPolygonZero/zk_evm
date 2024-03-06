@@ -120,14 +120,14 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         assert_eq!(all_circuits, all_circuits_from_bytes);
     }
 
-    let max_cpu_len = 1 << 9;
+    let max_cpu_len_log = 9;
     let mut timing = TimingTree::new("prove", log::Level::Info);
 
     let segment_proofs_data = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;
