@@ -8,7 +8,7 @@ use keccak_hash::keccak;
 use plonky2::field::types::Field;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
-use super::{GenerationInputsTrimmed, TrieInputs, NUM_EXTRA_CYCLES_AFTER};
+use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
@@ -300,7 +300,7 @@ pub(crate) trait State<F: Field> {
 
 #[derive(Debug)]
 pub struct GenerationState<F: Field> {
-    pub(crate) inputs: GenerationInputsTrimmed,
+    pub(crate) inputs: TrimmedGenerationInputs,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,

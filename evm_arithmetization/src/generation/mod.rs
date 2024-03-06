@@ -94,7 +94,7 @@ pub struct GenerationInputs {
 /// A lighter version of [`GenerationInputs`], which have been trimmed
 /// post pre-initialization processing.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub(crate) struct GenerationInputsTrimmed {
+pub(crate) struct TrimmedGenerationInputs {
     /// The index of the transaction being proven within its block.
     pub(crate) txn_number_before: U256,
     /// The cumulative gas used through the execution of all transactions prior
@@ -164,8 +164,8 @@ impl GenerationInputs {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
-    pub(crate) fn trim(&self) -> GenerationInputsTrimmed {
-        GenerationInputsTrimmed {
+    pub(crate) fn trim(&self) -> TrimmedGenerationInputs {
+        TrimmedGenerationInputs {
             txn_number_before: self.txn_number_before,
             gas_used_before: self.gas_used_before,
             gas_used_after: self.gas_used_after,
