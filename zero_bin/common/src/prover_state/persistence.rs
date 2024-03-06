@@ -16,8 +16,9 @@ use super::{
     Config, RecursiveCircuitsForTableSize, SIZE,
 };
 
-const PROVER_STATE_FILE_PREFIX: &str = "./prover_state";
-const VERIFIER_STATE_FILE_PREFIX: &str = "./verifier_state";
+const CIRCUITS_FOLDER: &str = "./circuits";
+const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
+const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
 
 fn get_serializers() -> (
     DefaultGateSerializer,
@@ -70,6 +71,15 @@ pub(crate) trait DiskResource {
         p: &Self::PathConstrutor,
         r: &Self::Resource,
     ) -> Result<(), DiskResourceError<Self::Error>> {
+        // Create the base folder if non-existent.
+        if std::fs::metadata(CIRCUITS_FOLDER).is_err() {
+            std::fs::create_dir(CIRCUITS_FOLDER).map_err(|_| {
+                DiskResourceError::IoError::<Self::Error>(std::io::Error::other(
+                    "Could not create circuits folder",
+                ))
+            })?;
+        }
+
         Ok(OpenOptions::new()
             .write(true)
             .create(true)
@@ -92,7 +102,8 @@ impl DiskResource for BaseProverResource {
 
     fn path(p: &Self::PathConstrutor) -> String {
         format!(
-            "{}_base_{}",
+            "{}/{}_base_{}",
+            CIRCUITS_FOLDER,
             PROVER_STATE_FILE_PREFIX,
             p.get_configuration_digest()
         )
@@ -126,7 +137,8 @@ impl DiskResource for MonolithicProverResource {
 
     fn path(p: &Self::PathConstrutor) -> String {
         format!(
-            "{}_monolithic_{}",
+            "{}/{}_monolithic_{}",
+            CIRCUITS_FOLDER,
             PROVER_STATE_FILE_PREFIX,
             p.get_configuration_digest()
         )
@@ -159,7 +171,8 @@ impl DiskResource for RecursiveCircuitResource {
 
     fn path((circuit_type, size): &Self::PathConstrutor) -> String {
         format!(
-            "{}_{}_{}",
+            "{}/{}_{}_{}",
+            CIRCUITS_FOLDER,
             PROVER_STATE_FILE_PREFIX,
             circuit_type.as_short_str(),
             size
@@ -201,7 +214,8 @@ impl DiskResource for VerifierResource {
 
     fn path(p: &Self::PathConstrutor) -> String {
         format!(
-            "{}_{}",
+            "{}/{}_{}",
+            CIRCUITS_FOLDER,
             VERIFIER_STATE_FILE_PREFIX,
             p.get_configuration_digest()
         )
