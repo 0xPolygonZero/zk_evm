@@ -56,7 +56,7 @@ pub(crate) struct Interpreter<F: Field> {
     /// Holds the value of the clock: the clock counts the number of operations
     /// in the execution.
     pub(crate) clock: usize,
-    /// Maximal number of CPU cycles in one segment execution.
+    /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
 }
 
