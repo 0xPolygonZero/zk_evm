@@ -8,7 +8,7 @@ export RUST_BACKTRACE=1
 export RUST_LOG=plonky2=info,evm_arithmetization=trace
 
 # Speciying smallest ranges, as we won't need them anyway.
-export ARTITHMETIC_CIRCUIT_SIZE="16..17"
+export ARITHMETIC_CIRCUIT_SIZE="16..17"
 export BYTE_PACKING_CIRCUIT_SIZE="9..10"
 export CPU_CIRCUIT_SIZE="12..13"
 export KECCAK_CIRCUIT_SIZE="14..15"
@@ -23,7 +23,7 @@ OUT_LOG_PATH="${OUTPUT_DIR}/b${1}.log"
 echo "Testing block ${1}..."
 mkdir -p $OUTPUT_DIR
 
-cargo r --release --features test_only --bin leader -- --runtime in-memory jerigon --rpc-url "$2" --block-number "$1" --proof-output-path $OUT_DUMMY_PROOF_PATH > $OUT_LOG_PATH 2>&1
+cargo r --release --features test_only --bin leader -- --runtime in-memory jerigon --rpc-url "$2" --block-number "$1" --checkpoint-block-number "$(($1-1))" --proof-output-path $OUT_DUMMY_PROOF_PATH > $OUT_LOG_PATH 2>&1
 retVal=$?
 if [ $retVal -ne 0 ]; then
     # Some error occured.
