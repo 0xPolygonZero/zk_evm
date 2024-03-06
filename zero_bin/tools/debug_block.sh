@@ -23,7 +23,7 @@ OUT_LOG_PATH="${OUTPUT_DIR}/b${1}.log"
 echo "Testing block ${1}..."
 mkdir -p $OUTPUT_DIR
 
-cargo r --release --features test_only --bin leader -- --runtime in-memory jerigon --rpc-url "$2" --block-number "$1" --proof-output-path $OUT_DUMMY_PROOF_PATH > $OUT_LOG_PATH 2>&1
+cargo r --release --features test_only --bin leader -- --runtime in-memory jerigon --rpc-url "$2" --block-number "$1" --checkpoint-block-number "$(($1-1))" --proof-output-path $OUT_DUMMY_PROOF_PATH > $OUT_LOG_PATH 2>&1
 retVal=$?
 if [ $retVal -ne 0 ]; then
     # Some error occured.
