@@ -91,6 +91,44 @@ pub struct GenerationInputs {
     pub block_hashes: BlockHashes,
 }
 
+/// A lighter version of [`GenerationInputs`], which have been trimmed
+/// post pre-initialization processing.
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub(crate) struct GenerationInputsTrimmed {
+    /// The index of the transaction being proven within its block.
+    pub(crate) txn_number_before: U256,
+    /// The cumulative gas used through the execution of all transactions prior
+    /// the current one.
+    pub(crate) gas_used_before: U256,
+    /// The cumulative gas used after the execution of the current transaction.
+    /// The exact gas used by the current transaction is `gas_used_after` -
+    /// `gas_used_before`.
+    pub(crate) gas_used_after: U256,
+
+    /// Indicates whether there is an actual transaction or a dummy payload.
+    pub(crate) has_txn: bool,
+
+    /// Expected trie roots after the transactions are executed.
+    pub(crate) trie_roots_after: TrieRoots,
+
+    /// State trie root of the checkpoint block.
+    /// This could always be the genesis block of the chain, but it allows a
+    /// prover to continue proving blocks from certain checkpoint heights
+    /// without requiring proofs for blocks past this checkpoint.
+    pub(crate) checkpoint_state_trie_root: H256,
+
+    /// Mapping between smart contract code hashes and the contract byte code.
+    /// All account smart contracts that are invoked will have an entry present.
+    pub(crate) contract_code: HashMap<H256, Vec<u8>>,
+
+    /// Information contained in the block header.
+    pub(crate) block_metadata: BlockMetadata,
+
+    /// The hash of the current block, and a list of the 256 previous block
+    /// hashes.
+    pub(crate) block_hashes: BlockHashes,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
@@ -126,17 +164,21 @@ impl GenerationInputs {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
-    pub(crate) fn trim(&self) -> Self {
-        Self {
-            tries: TrieInputs::default(),
-            signed_txn: if self.signed_txn.is_some() {
-                // keeping a vec to indicate there was a transaction
-                Some(vec![])
+    pub(crate) fn trim(&self) -> GenerationInputsTrimmed {
+        GenerationInputsTrimmed {
+            txn_number_before: self.txn_number_before,
+            gas_used_before: self.gas_used_before,
+            gas_used_after: self.gas_used_after,
+            has_txn: if self.signed_txn.is_some() {
+                true
             } else {
-                None
+                false
             },
-            withdrawals: vec![],
-            ..self.clone()
+            trie_roots_after: self.trie_roots_after.clone(),
+            checkpoint_state_trie_root: self.checkpoint_state_trie_root,
+            contract_code: self.contract_code.clone(),
+            block_metadata: self.block_metadata.clone(),
+            block_hashes: self.block_hashes.clone(),
         }
     }
 }
