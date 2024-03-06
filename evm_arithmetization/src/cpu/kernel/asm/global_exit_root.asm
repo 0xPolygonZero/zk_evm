@@ -10,7 +10,7 @@ global set_global_exit_roots:
     PROVER_INPUT(ger)
     // stack: num_ger, retdest
     PUSH 0
-global ger_loop:
+ger_loop:
     // stack: i, num_ger, retdest
     DUP2 DUP2 EQ %jumpi(ger_loop_end)
     PROVER_INPUT(ger)
@@ -31,7 +31,7 @@ global ger_loop:
     KECCAK_GENERAL
     // stack: slot, timestamp, i, num_ger, retdest
 
-global write_timestamp_to_storage:
+write_timestamp_to_storage:
     // stack: slot, timestamp, i, num_ger, retdest
     // First we write the value to MPT data, and get a pointer to it.
     %get_trie_data_size
@@ -50,7 +50,7 @@ global write_timestamp_to_storage:
     // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
     %jump(mpt_insert)
 
-global after_timestamp_storage_insert:
+after_timestamp_storage_insert:
     // stack: new_storage_root_ptr, i, num_ger, retdest
     %get_account_data(@ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2)
     // stack: account_ptr, new_storage_root_ptr
@@ -66,4 +66,3 @@ global after_timestamp_storage_insert:
 ger_loop_end:
     // stack: i, num_ger, retdest
     %pop2 JUMP
-
