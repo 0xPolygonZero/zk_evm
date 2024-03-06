@@ -46,25 +46,28 @@ pub fn generate_txn_proof(
     p_state: &ProverState,
     gen_inputs: TxnProofGenIR,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> ProofGenResult<GeneratedTxnProof> {
-    // TODO: change the `max_cpu_len` and `segment_index` arguments once we can
+) -> ProofGenResult<Option<GeneratedTxnProof>> {
+    // TODO: change the `max_cpu_len_log` and `segment_index` arguments once we can
     // automatically determine them.
-    let output_data = p_state
+    if let Some(output_data) = p_state
         .state
         .prove_segment(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
             gen_inputs,
-            1 << 32,
+            32,
             0,
             &mut TimingTree::default(),
             abort_signal,
         )
-        .map_err(|err| err.to_string())?;
-
-    let p_vals = output_data.public_values;
-    let intern = output_data.proof_with_pis;
-    Ok(GeneratedTxnProof { p_vals, intern })
+        .map_err(|err| err.to_string())?
+    {
+        let p_vals = output_data.public_values;
+        let intern = output_data.proof_with_pis;
+        Ok(Some(GeneratedTxnProof { p_vals, intern }))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Generates an aggregation proof from two child proofs.

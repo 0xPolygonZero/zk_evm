@@ -47,7 +47,7 @@ fn test_jumpdest_analysis() -> Result<()> {
             .chain(std::iter::once(true)),
     );
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(jumpdest_analysis, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(jumpdest_analysis, vec![], None);
     let code_len = code.len();
 
     interpreter.set_code(CONTEXT, code);
@@ -88,7 +88,7 @@ fn test_jumpdest_analysis() -> Result<()> {
         .pop();
     interpreter.push(41.into());
 
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(interpreter.stack(), vec![]);
 
     assert_eq!(jumpdest_bits, interpreter.get_jumpdest_bits(CONTEXT));
@@ -126,11 +126,11 @@ fn test_packed_verification() -> Result<()> {
         U256::one(),
     ];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new(write_table_if_jumpdest, initial_stack.clone());
+        Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
     interpreter.set_code(CONTEXT, code.clone());
     interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
 
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     assert_eq!(jumpdest_bits, interpreter.get_jumpdest_bits(CONTEXT));
 
@@ -139,11 +139,11 @@ fn test_packed_verification() -> Result<()> {
     for i in 1..=32 {
         code[i] += 1;
         let mut interpreter: Interpreter<F> =
-            Interpreter::new(write_table_if_jumpdest, initial_stack.clone());
+            Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
         interpreter.set_code(CONTEXT, code.clone());
         interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
 
-        assert!(interpreter.run(None).is_err());
+        assert!(interpreter.run().is_err());
 
         assert!(interpreter.get_jumpdest_bits(CONTEXT).is_empty());
 
@@ -188,7 +188,7 @@ fn test_verify_non_jumpdest() -> Result<()> {
     // jumpdest
     for i in 8..code_len - 1 {
         code[i] += 1;
-        let mut interpreter: Interpreter<F> = Interpreter::new(verify_non_jumpdest, vec![]);
+        let mut interpreter: Interpreter<F> = Interpreter::new(verify_non_jumpdest, vec![], None);
         interpreter.generation_state.registers.context = CONTEXT;
 
         interpreter.set_code(CONTEXT, code.clone());
@@ -203,7 +203,7 @@ fn test_verify_non_jumpdest() -> Result<()> {
             interpreter.generation_state.registers.program_counter = verify_non_jumpdest;
             interpreter.push(0xDEADBEEFu32.into());
             interpreter.push(j.into());
-            interpreter.run(None)?;
+            interpreter.run()?;
             assert!(interpreter.stack().is_empty());
             assert_eq!(interpreter.get_jumpdest_bit(j), U256::zero());
         }

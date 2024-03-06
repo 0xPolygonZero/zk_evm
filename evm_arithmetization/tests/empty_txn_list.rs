@@ -120,71 +120,109 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         assert_eq!(all_circuits, all_circuits_from_bytes);
     }
 
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 9;
     let mut timing = TimingTree::new("prove", log::Level::Info);
 
-    let root_proof_data = all_circuits.prove_segment(
-        &all_stark,
-        &config,
-        inputs.clone(),
-        max_cpu_len,
-        0,
-        &mut timing,
-        None,
-    )?;
-
-    let ProverOutputData {
-        proof_with_pis: root_proof,
-        public_values,
-    } = root_proof_data;
-    timing.filter(Duration::from_millis(100)).print();
-    all_circuits.verify_root(root_proof.clone())?;
-
-    let final_root_proof_data = all_circuits.prove_segment(
+    let segment_proofs_data = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
-        1,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;
-    let ProverOutputData {
-        proof_with_pis: final_root_proof,
-        public_values: final_public_values,
-        ..
-    } = final_root_proof_data;
-    all_circuits.verify_root(final_root_proof.clone())?;
 
-    let first_mem_before = public_values.mem_before.mem_cap.clone();
-    let first_mem_after = public_values.mem_after.mem_cap.clone();
-    let final_mem_before = final_public_values.mem_before.mem_cap.clone();
-    let final_mem_after = final_public_values.mem_after.mem_cap.clone();
+    assert_eq!(segment_proofs_data.len(), 3);
+    for proof_data in segment_proofs_data {
+        let ProverOutputData {
+            proof_with_pis: proof,
+            ..
+        } = proof_data;
+        all_circuits.verify_root(proof.clone())?;
+    }
+
+    let first_mem_before = segment_proofs_data[0]
+        .public_values
+        .mem_before
+        .mem_cap
+        .clone();
+    let first_mem_after = segment_proofs_data[0]
+        .public_values
+        .mem_after
+        .mem_cap
+        .clone();
+    let second_mem_before = segment_proofs_data[1]
+        .public_values
+        .mem_before
+        .mem_cap
+        .clone();
+    let second_mem_after = segment_proofs_data[1]
+        .public_values
+        .mem_after
+        .mem_cap
+        .clone();
+    let third_mem_before = segment_proofs_data[2]
+        .public_values
+        .mem_before
+        .mem_cap
+        .clone();
+    let third_mem_after = segment_proofs_data[2]
+        .public_values
+        .mem_after
+        .mem_cap
+        .clone();
 
     // Test retrieved public values from the proof public inputs.
     let retrieved_public_values = PublicValues::from_public_inputs(
-        &root_proof.public_inputs,
+        &segment_proofs_data[0].proof_with_pis.public_inputs,
         first_mem_before.len(),
         first_mem_after.len(),
     );
-    assert_eq!(retrieved_public_values, public_values);
+    assert_eq!(
+        retrieved_public_values,
+        segment_proofs_data[0].public_values
+    );
 
     let retrieved_public_values = PublicValues::from_public_inputs(
-        &final_root_proof.public_inputs,
-        final_mem_before.len(),
-        final_mem_after.len(),
+        &segment_proofs_data[1].proof_with_pis.public_inputs,
+        second_mem_before.len(),
+        second_mem_after.len(),
     );
-    assert_eq!(retrieved_public_values, final_public_values);
+    assert_eq!(
+        retrieved_public_values,
+        segment_proofs_data[1].public_values
+    );
+
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &segment_proofs_data[2].proof_with_pis.public_inputs,
+        third_mem_before.len(),
+        third_mem_after.len(),
+    );
+    assert_eq!(
+        retrieved_public_values,
+        segment_proofs_data[2].public_values
+    );
 
     // We can duplicate the proofs here because the state hasn't mutated.
     let (segmented_agg_proof, segmented_agg_public_values) = all_circuits
         .prove_segment_aggregation(
             false,
-            &root_proof,
-            public_values.clone(),
+            &segment_proofs_data[0].proof_with_pis,
+            segment_proofs_data[0].public_values.clone(),
             false,
-            &final_root_proof,
-            final_public_values,
+            &segment_proofs_data[1].proof_with_pis,
+            segment_proofs_data[1].public_values.clone(),
+        )?;
+    all_circuits.verify_segment_aggregation(&segmented_agg_proof)?;
+
+    let (segmented_agg_proof, segmented_agg_public_values) = all_circuits
+        .prove_segment_aggregation(
+            true,
+            &segmented_agg_proof,
+            segmented_agg_public_values,
+            false,
+            &segment_proofs_data[2].proof_with_pis,
+            segment_proofs_data[2].public_values.clone(),
         )?;
     all_circuits.verify_segment_aggregation(&segmented_agg_proof)?;
 

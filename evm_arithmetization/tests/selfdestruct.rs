@@ -138,16 +138,17 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     };
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 20;
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         0,
         &mut timing,
         None,
-    )?;
+    )?
+    .expect("The initial registers should not be at the halt label.");
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)

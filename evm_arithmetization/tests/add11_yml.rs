@@ -171,17 +171,18 @@ fn add11_yml() -> anyhow::Result<()> {
     let inputs = get_generation_inputs();
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 20;
     let segment_idx = 0;
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         segment_idx,
         &mut timing,
         None,
-    )?;
+    )?
+    .expect("The initial registers should not be at the halt label.");
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)
@@ -218,87 +219,34 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 14;
-    let first_segment_idx = 0;
-    let second_segment_idx = 1;
-    let third_segment_idx = 2;
-    let fourth_segment_idx = 3;
+    let max_cpu_len_log = 14;
 
-    let first_proof_data = all_circuits.prove_segment(
+    let all_segment_proofs = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
-        inputs.clone(),
-        max_cpu_len,
-        first_segment_idx,
+        inputs,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;
 
-    let ProverOutputData {
-        proof_with_pis: first_proof,
-        public_values: first_pv,
-    } = first_proof_data;
+    for segment_proof in all_segment_proofs {
+        let ProverOutputData {
+            proof_with_pis: proof,
+            ..
+        } = segment_proof;
+        all_circuits.verify_root(proof.clone())?;
+    }
 
-    all_circuits.verify_root(first_proof.clone())?;
-
-    let second_proof_data = all_circuits.prove_segment(
-        &all_stark,
-        &config,
-        inputs.clone(),
-        max_cpu_len,
-        second_segment_idx,
-        &mut timing,
-        None,
-    )?;
-
-    let ProverOutputData {
-        proof_with_pis: second_proof,
-        public_values: second_pv,
-    } = second_proof_data;
-
-    all_circuits.verify_root(second_proof.clone())?;
-
-    let third_proof_data = all_circuits.prove_segment(
-        &all_stark,
-        &config,
-        inputs.clone(),
-        max_cpu_len,
-        third_segment_idx,
-        &mut timing,
-        None,
-    )?;
-
-    let ProverOutputData {
-        proof_with_pis: third_proof,
-        public_values: third_pv,
-    } = third_proof_data;
-
-    all_circuits.verify_root(third_proof.clone())?;
-
-    let fourth_proof_data = all_circuits.prove_segment(
-        &all_stark,
-        &config,
-        inputs.clone(),
-        max_cpu_len,
-        fourth_segment_idx,
-        &mut timing,
-        None,
-    )?;
-
-    let ProverOutputData {
-        proof_with_pis: fourth_proof,
-        public_values: fourth_pv,
-    } = fourth_proof_data;
-
-    all_circuits.verify_root(fourth_proof.clone())?;
+    assert_eq!(all_segment_proofs.len(), 3);
 
     let (first_aggreg_proof, first_aggreg_pv) = all_circuits.prove_segment_aggregation(
         false,
-        &first_proof,
-        first_pv,
+        &all_segment_proofs[0].proof_with_pis,
+        all_segment_proofs[0].public_values.clone(),
         false,
-        &second_proof,
-        second_pv,
+        &all_segment_proofs[1].proof_with_pis,
+        all_segment_proofs[1].public_values.clone(),
     )?;
     all_circuits.verify_segment_aggregation(&first_aggreg_proof)?;
 
@@ -307,23 +255,13 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
         &first_aggreg_proof,
         first_aggreg_pv,
         false,
-        &third_proof,
-        third_pv.clone(),
+        &all_segment_proofs[2].proof_with_pis,
+        all_segment_proofs[2].public_values.clone(),
     )?;
     all_circuits.verify_segment_aggregation(&second_aggreg_proof)?;
 
-    let (third_aggreg_proof, third_aggreg_pv) = all_circuits.prove_segment_aggregation(
-        true,
-        &second_aggreg_proof,
-        second_aggreg_pv,
-        false,
-        &fourth_proof,
-        fourth_pv,
-    )?;
-    all_circuits.verify_segment_aggregation(&third_aggreg_proof)?;
-
     let (txn_aggreg_proof, _) =
-        all_circuits.prove_transaction_aggregation(None, &third_aggreg_proof, third_aggreg_pv)?;
+        all_circuits.prove_transaction_aggregation(None, &second_aggreg_proof, second_aggreg_pv)?;
     all_circuits.verify_txn_aggregation(&txn_aggreg_proof)
 }
 

@@ -238,16 +238,17 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 20;
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         0,
         &mut timing,
         None,
-    )?;
+    )?
+    .expect("The initial registers should not be at the halt label.");
     timing.filter(Duration::from_millis(100)).print();
 
     // Assert that the proof leads to the correct state and receipt roots.
@@ -473,44 +474,25 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
-    let max_cpu_len = 1 << 20;
-    let root_proof_data_first = all_circuits.prove_segment(
-        &all_stark,
-        &config,
-        inputs_first.clone(),
-        max_cpu_len,
-        0,
-        &mut timing,
-        None,
-    )?;
+    let max_cpu_len_log = 15;
 
-    let ProverOutputData {
-        proof_with_pis: root_proof_first,
-        public_values: public_values_first,
-    } = root_proof_data_first;
-
-    timing.filter(Duration::from_millis(100)).print();
-    all_circuits.verify_root(root_proof_first.clone())?;
-    let final_root_proof_data_first = all_circuits.prove_segment(
+    let segment_proofs_data_first = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs_first,
-        max_cpu_len,
-        1,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;
 
-    let ProverOutputData {
-        proof_with_pis: final_root_proof_first,
-        public_values: final_public_values_first,
-        ..
-    } = final_root_proof_data_first;
+    assert_eq!(segment_proofs_data_first.len(), 2);
 
-    all_circuits.verify_root(final_root_proof_first.clone())?;
     // The gas used and transaction number are fed to the next transaction, so the
     // two proofs can be correctly aggregated.
-    let gas_used_second = public_values_first.extra_block_data.gas_used_after;
+    let gas_used_second = segment_proofs_data_first[0]
+        .public_values
+        .extra_block_data
+        .gas_used_after;
 
     // Prove second transaction. In this second transaction, the code with logs is
     // executed.
@@ -624,60 +606,46 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     };
 
     let mut timing = TimingTree::new("prove root second", log::Level::Info);
-    let max_cpu_len = 1 << 20;
-    let root_proof_data_second = all_circuits.prove_segment(
-        &all_stark,
-        &config,
-        inputs.clone(),
-        max_cpu_len,
-        0,
-        &mut timing,
-        None.clone(),
-    )?;
-    let ProverOutputData {
-        proof_with_pis: root_proof_second,
-        public_values: public_values_second,
-    } = root_proof_data_second;
-    timing.filter(Duration::from_millis(100)).print();
-
-    all_circuits.verify_root(root_proof_second.clone())?;
-
-    let final_root_proof_data_second = all_circuits.prove_segment(
+    let segment_proofs_data_second = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
-        1,
+        max_cpu_len_log,
         &mut timing,
-        None.clone(),
+        None,
     )?;
-    let ProverOutputData {
-        proof_with_pis: final_root_proof_second,
-        public_values: final_public_values_second,
-    } = final_root_proof_data_second;
-    all_circuits.verify_root(final_root_proof_second.clone())?;
+
+    assert_eq!(segment_proofs_data_second.len(), 2);
+    for proof_data in segment_proofs_data_second {
+        let ProverOutputData {
+            proof_with_pis: proof,
+            ..
+        } = proof_data;
+        all_circuits.verify_root(proof.clone())?;
+    }
 
     let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
         .prove_segment_aggregation(
             false,
-            &root_proof_first,
-            public_values_first,
+            &segment_proofs_data_first[0].proof_with_pis,
+            segment_proofs_data_first[0].public_values.clone(),
             false,
-            &final_root_proof_first,
-            final_public_values_first,
+            &segment_proofs_data_first[1].proof_with_pis,
+            segment_proofs_data_first[1].public_values.clone(),
         )?;
     all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
 
     let (segment_agg_proof_second, updated_agg_public_values_second) = all_circuits
         .prove_segment_aggregation(
             false,
-            &root_proof_second,
-            public_values_second,
+            &segment_proofs_data_second[0].proof_with_pis,
+            segment_proofs_data_second[0].public_values.clone(),
             false,
-            &final_root_proof_second,
-            final_public_values_second,
+            &segment_proofs_data_second[1].proof_with_pis,
+            segment_proofs_data_second[1].public_values.clone(),
         )?;
     all_circuits.verify_segment_aggregation(&segment_agg_proof_second)?;
+
     let (txn_proof_first, txn_pv_first) = all_circuits.prove_transaction_aggregation(
         None,
         &segment_agg_proof_first,
@@ -721,6 +689,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
 
+    let max_cpu_len_log = 13;
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
@@ -747,45 +716,31 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         },
     };
 
-    let root_proof_data = all_circuits.prove_segment(
-        &all_stark,
-        &config,
-        inputs.clone(),
-        max_cpu_len,
-        0,
-        &mut timing,
-        None,
-    )?;
-    let ProverOutputData {
-        proof_with_pis: root_proof,
-        public_values,
-    } = root_proof_data;
-    all_circuits.verify_root(root_proof.clone())?;
-
-    let final_root_proof_data = all_circuits.prove_segment(
+    let segment_proofs_data = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
-        1,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;
-    let ProverOutputData {
-        proof_with_pis: final_root_proof,
-        public_values: final_public_values,
-        ..
-    } = final_root_proof_data;
-    all_circuits.verify_root(final_root_proof.clone())?;
 
-    // We can just duplicate the initial proof as the state didn't change.
+    assert_eq!(segment_proofs_data.len(), 2);
+    for proof_data in segment_proofs_data {
+        let ProverOutputData {
+            proof_with_pis: proof,
+            ..
+        } = proof_data;
+        all_circuits.verify_root(proof.clone())?;
+    }
+
     let (segment_agg_proof, updated_agg_public_values) = all_circuits.prove_segment_aggregation(
         false,
-        &root_proof,
-        public_values.clone(),
+        &segment_proofs_data[0].proof_with_pis,
+        segment_proofs_data[0].public_values.clone(),
         false,
-        &final_root_proof,
-        final_public_values,
+        &segment_proofs_data[1].proof_with_pis,
+        segment_proofs_data[1].public_values.clone(),
     )?;
     all_circuits.verify_segment_aggregation(&segment_agg_proof)?;
 

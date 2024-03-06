@@ -112,7 +112,7 @@ fn test_state_trie(trie_inputs: TrieInputs) -> Result<()> {
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
 
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
@@ -125,7 +125,7 @@ fn test_state_trie(trie_inputs: TrieInputs) -> Result<()> {
     interpreter
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     assert_eq!(
         interpreter.stack().len(),

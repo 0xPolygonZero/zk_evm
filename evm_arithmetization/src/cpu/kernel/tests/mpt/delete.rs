@@ -100,7 +100,7 @@ fn test_state_trie(
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
 
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
@@ -132,7 +132,7 @@ fn test_state_trie(
     interpreter
         .push(k.try_into_u256().unwrap())
         .expect("The stack should not overflow"); // key
-    interpreter.run(None)?;
+    interpreter.run()?;
     assert_eq!(
         interpreter.stack().len(),
         0,
@@ -155,7 +155,7 @@ fn test_state_trie(
     interpreter
         .push(state_trie_ptr)
         .expect("The stack should not overflow");
-    interpreter.run(None)?;
+    interpreter.run()?;
     let state_trie_ptr = interpreter.pop().expect("The stack should not be empty");
     interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_trie_ptr);
 
@@ -167,7 +167,7 @@ fn test_state_trie(
     interpreter
         .push(1.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     let state_trie_hash =
         H256::from_uint(&interpreter.pop().expect("The stack should not be empty"));
