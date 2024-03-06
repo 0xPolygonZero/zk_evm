@@ -171,13 +171,13 @@ fn add11_yml() -> anyhow::Result<()> {
     let inputs = get_generation_inputs();
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 20;
     let segment_idx = 0;
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         segment_idx,
         &mut timing,
         None,
@@ -219,13 +219,13 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 14;
+    let max_cpu_len_log = 14;
 
     let all_segment_proofs = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;

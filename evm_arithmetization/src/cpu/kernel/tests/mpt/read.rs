@@ -21,7 +21,7 @@ fn mpt_read() -> Result<()> {
     let mpt_read = KERNEL.global_labels["mpt_read"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
@@ -39,7 +39,7 @@ fn mpt_read() -> Result<()> {
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
         .expect("The stack should not overflow");
-    interpreter.run(None)?;
+    interpreter.run()?;
 
     assert_eq!(interpreter.stack().len(), 1);
     let result_ptr = interpreter.stack()[0].as_usize();
