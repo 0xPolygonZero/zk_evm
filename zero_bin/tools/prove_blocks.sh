@@ -9,7 +9,7 @@
 export RUST_BACKTRACE=1
 export RUST_LOG=plonky2=trace,evm_arithmetization=trace
 
-export ARTITHMETIC_CIRCUIT_SIZE="16..23"
+export ARITHMETIC_CIRCUIT_SIZE="16..23"
 export BYTE_PACKING_CIRCUIT_SIZE="9..21"
 export CPU_CIRCUIT_SIZE="12..25"
 export KECCAK_CIRCUIT_SIZE="14..20"
