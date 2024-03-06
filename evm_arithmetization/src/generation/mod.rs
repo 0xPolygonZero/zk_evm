@@ -298,7 +298,12 @@ pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> an
     // tries only if we got a root mismatch.
     let previous_pc = state.get_registers().program_counter;
 
-    if KERNEL.offset_name(previous_pc).contains("hash_final_tries") {
+    let label = KERNEL.offset_name(previous_pc);
+
+    if label.contains("check_state_trie")
+        || label.contains("check_txn_trie")
+        || label.contains("check_receipt_trie")
+    {
         let state_trie_ptr = u256_to_usize(
             state
                 .memory
