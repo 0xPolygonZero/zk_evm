@@ -51,14 +51,18 @@ pub struct BlockTrace {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockTraceTriePreImages {
+    /// The trie pre-image with separate state/storage tries.
     Separate(SeparateTriePreImages),
+    /// The trie pre-image with combined state/storage tries.
     Combined(CombinedPreImages),
 }
 
 /// State/Storage trie pre-images that are separate.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SeparateTriePreImages {
+    /// State trie.
     pub state: SeparateTriePreImage,
+    /// Storage trie.
     pub storage: SeparateStorageTriesPreImage,
 }
 
@@ -66,7 +70,10 @@ pub struct SeparateTriePreImages {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SeparateTriePreImage {
+    /// Storage or state trie in a bulkier format, that can be processed faster.
     Uncompressed(TrieUncompressed),
+    /// Storage or state trie format that can be processed as is, as it
+    /// corresponds to the internal format.
     Direct(TrieDirect),
 }
 
@@ -74,6 +81,7 @@ pub enum SeparateTriePreImage {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CombinedPreImages {
+    /// Compact combined state and storage tries.
     pub compact: TrieCompact,
 }
 
@@ -94,6 +102,7 @@ pub struct TrieCompact(#[serde_as(as = "FromInto<ByteString>")] pub Vec<u8>);
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TrieDirect(pub HashedPartialTrie);
 
+/// A trie pre-image where state and storage are separate.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SeparateStorageTriesPreImage {
@@ -121,6 +130,7 @@ pub struct TxnInfo {
     pub meta: TxnMeta,
 }
 
+/// Structure holding metadata for one transaction.
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TxnMeta {

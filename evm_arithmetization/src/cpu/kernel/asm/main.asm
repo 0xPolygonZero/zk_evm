@@ -15,8 +15,9 @@ global main:
     // Initialize accessed addresses and storage keys lists
     %init_access_lists
 
-    // Initialize the RLP DATA pointer to its initial position (ctx == virt == 0, segment = RLP)
-    PUSH @SEGMENT_RLP_RAW
+    // Initialize the RLP DATA pointer to its initial position, 
+    // skipping over the preinitialized empty node.
+    PUSH @INITIAL_TXN_RLP_ADDR
     %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
 
     // Encode constant nodes

@@ -23,7 +23,7 @@ thiserror = "1.0.49"
 plonky2 = "0.2.0"
 plonky2_maybe_rayon = "0.2.0"
 plonky2_util = "0.2.0"
-starky = "0.2.0"
+starky = "0.2.1"
 
 
 [workspace.package]

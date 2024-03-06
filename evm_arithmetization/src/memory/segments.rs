@@ -1,5 +1,3 @@
-use ethereum_types::U256;
-
 pub(crate) const SEGMENT_SCALING_FACTOR: usize = 32;
 
 /// This contains all the existing memory segments. The values in the enum are
@@ -211,19 +209,6 @@ impl Segment {
             Segment::BlockHashes => 256,
             Segment::CreatedContracts => 256,
             Segment::TxnBlobVersionedHashes => 256,
-        }
-    }
-
-    pub(crate) fn constant(&self, virt: usize) -> Option<U256> {
-        match self {
-            Segment::RlpRaw => {
-                if virt == 0xFFFFFFFF {
-                    Some(U256::from(0x80))
-                } else {
-                    None
-                }
-            }
-            _ => None,
         }
     }
 }

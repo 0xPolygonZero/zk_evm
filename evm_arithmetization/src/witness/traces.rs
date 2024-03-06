@@ -1,6 +1,3 @@
-use core::mem::size_of;
-
-use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::hash::hash_types::RichField;
@@ -13,7 +10,6 @@ use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::arithmetic::{BinaryOperator, Operation};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
-use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::witness::memory::MemoryOp;
 use crate::{arithmetic, keccak, keccak_sponge, logic};
@@ -114,48 +110,6 @@ impl<T: Copy> Traces<T> {
 
     pub(crate) fn mem_ops_since(&self, checkpoint: TraceCheckpoint) -> &[MemoryOp] {
         &self.memory_ops[checkpoint.memory_len..]
-    }
-
-    pub(crate) fn push_cpu(&mut self, val: CpuColumnsView<T>) {
-        self.cpu.push(val);
-    }
-
-    pub(crate) fn push_logic(&mut self, op: logic::Operation) {
-        self.logic_ops.push(op);
-    }
-
-    pub(crate) fn push_arithmetic(&mut self, op: arithmetic::Operation) {
-        self.arithmetic_ops.push(op);
-    }
-
-    pub(crate) fn push_memory(&mut self, op: MemoryOp) {
-        self.memory_ops.push(op);
-    }
-
-    pub(crate) fn push_byte_packing(&mut self, op: BytePackingOp) {
-        self.byte_packing_ops.push(op);
-    }
-
-    pub(crate) fn push_keccak(
-        &mut self,
-        input: [u64; keccak::keccak_stark::NUM_INPUTS],
-        clock: usize,
-    ) {
-        self.keccak_inputs.push((input, clock));
-    }
-
-    pub(crate) fn push_keccak_bytes(&mut self, input: [u8; KECCAK_WIDTH_BYTES], clock: usize) {
-        let chunks = input
-            .chunks(size_of::<u64>())
-            .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
-            .collect_vec()
-            .try_into()
-            .unwrap();
-        self.push_keccak(chunks, clock);
-    }
-
-    pub(crate) fn push_keccak_sponge(&mut self, op: KeccakSpongeOp) {
-        self.keccak_sponge_ops.push(op);
     }
 
     pub(crate) fn clock(&self) -> usize {

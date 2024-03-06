@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
@@ -24,9 +24,8 @@ use crate::generation::state::GenerationState;
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
 use crate::proof::{BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots};
-use crate::util::{h2u, u256_to_u8, u256_to_usize};
+use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel};
-use crate::witness::transition::transition;
 
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -34,7 +33,8 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
-use crate::witness::util::{mem_write_log, stack_peek};
+use self::state::State;
+use crate::witness::util::mem_write_log;
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -219,12 +219,25 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
     state.traces.memory_ops.extend(ops);
 }
 
+pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
+    log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
+    log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
+    log::debug!(
+        "Input transactions_trie: {:?}",
+        &inputs.tries.transactions_trie
+    );
+    log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
+    log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
+    log::debug!("Input contract_code: {:?}", &inputs.contract_code);
+}
+
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
     config: &StarkConfig,
     timing: &mut TimingTree,
 ) -> anyhow::Result<([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues)> {
+    debug_inputs(&inputs);
     let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
@@ -326,38 +339,28 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 }
 
 fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
-    let halt_pc = KERNEL.global_labels["halt"];
+    state.run_cpu()?;
+
+    let pc = state.registers.program_counter;
+    // Setting the values of padding rows.
+    let mut row = CpuColumnsView::<F>::default();
+    row.clock = F::from_canonical_usize(state.traces.clock());
+    row.context = F::from_canonical_usize(state.registers.context);
+    row.program_counter = F::from_canonical_usize(pc);
+    row.is_kernel_mode = F::ONE;
+    row.gas = F::from_canonical_u64(state.registers.gas_used);
+    row.stack_len = F::from_canonical_usize(state.registers.stack_len);
 
     loop {
-        // If we've reached the kernel's halt routine, and our trace length is a power
-        // of 2, stop.
-        let pc = state.registers.program_counter;
-        let halt = state.registers.is_kernel && pc == halt_pc;
-        if halt {
-            log::info!("CPU halted after {} cycles", state.traces.clock());
-
-            // Padding
-            let mut row = CpuColumnsView::<F>::default();
-            row.clock = F::from_canonical_usize(state.traces.clock());
-            row.context = F::from_canonical_usize(state.registers.context);
-            row.program_counter = F::from_canonical_usize(pc);
-            row.is_kernel_mode = F::ONE;
-            row.gas = F::from_canonical_u64(state.registers.gas_used);
-            row.stack_len = F::from_canonical_usize(state.registers.stack_len);
-
-            loop {
-                state.traces.push_cpu(row);
-                row.clock += F::ONE;
-                if state.traces.clock().is_power_of_two() {
-                    break;
-                }
-            }
-
-            log::info!("CPU trace padded to {} cycles", state.traces.clock());
-
-            return Ok(());
+        // Padding to a power of 2.
+        state.push_cpu(row);
+        row.clock += F::ONE;
+        if state.traces.clock().is_power_of_two() {
+            break;
         }
-
-        transition(state)?;
     }
+
+    log::info!("CPU trace padded to {} cycles", state.traces.clock());
+
+    Ok(())
 }
