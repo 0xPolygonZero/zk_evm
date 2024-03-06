@@ -14,7 +14,11 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use crate::testing_utils::{beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles, GLOBAL_EXIT_ROOT_ACCOUNT, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage};
+use crate::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use crate::GenerationInputs;
 
 #[test]
@@ -52,8 +56,7 @@ fn test_add11_yml() {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) =
-        preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
@@ -226,8 +229,7 @@ fn test_add11_yml_with_exception() {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) =
-        preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,

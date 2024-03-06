@@ -5,7 +5,11 @@ use std::time::Duration;
 use ethereum_types::{BigEndianHash, H256};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
-use evm_arithmetization::testing_utils::{beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, ger_account_nibbles, GLOBAL_EXIT_ROOT_ACCOUNT};
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;

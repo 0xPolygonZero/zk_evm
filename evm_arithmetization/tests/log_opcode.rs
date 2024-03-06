@@ -88,8 +88,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     // Initialize the state trie with three accounts.
-    let (mut state_trie_before, mut storage_tries) =
-        preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
@@ -335,8 +334,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     // `to_account`.
     let gas_price = 10;
     let txn_value = 0xau64;
-    let (mut state_trie_before, storage_tries) =
-        preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,

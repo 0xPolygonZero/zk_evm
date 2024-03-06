@@ -8,7 +8,11 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
-use evm_arithmetization::testing_utils::{beacon_roots_account_nibbles, beacon_roots_contract_from_storage, eth_to_wei, ger_account_nibbles, GLOBAL_EXIT_ROOT_ACCOUNT, init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage};
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, eth_to_wei,
+    ger_account_nibbles, init_logger, preinitialized_state_and_storage_tries,
+    update_beacon_roots_account_storage, GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -65,8 +69,7 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, storage_tries) =
-        preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
 
     state_trie_before.insert(
@@ -117,7 +120,6 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -136,14 +138,8 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
             beneficiary_nibbles,
             rlp::encode(&beneficiary_account_after).to_vec(),
         );
-        state_trie_after.insert(
-            sender_nibbles,
-            rlp::encode(&sender_account_after).to_vec(),
-        );
-        state_trie_after.insert(
-            to_nibbles,
-            rlp::encode(&to_account_after).to_vec(),
-        );
+        state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
+        state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
 
         state_trie_after.insert(
             beacon_roots_account_nibbles(),

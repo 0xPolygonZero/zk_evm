@@ -214,13 +214,15 @@ pub(crate) fn all_withdrawals_prover_inputs_reversed(withdrawals: &[(Address, U2
     withdrawal_prover_inputs
 }
 
-/// Global exit roots prover input array is of the form `[N, root1, timestamp1, ..., rootN, timestampN]`.
-/// Returns the reversed array.
+/// Global exit roots prover input array is of the form `[N, root1, timestamp1,
+/// ..., rootN, timestampN]`. Returns the reversed array.
 pub(crate) fn all_ger_prover_inputs_reversed(global_exit_roots: &[(U256, H256)]) -> Vec<U256> {
     let mut ger_prover_inputs = vec![global_exit_roots.len().into()];
-    ger_prover_inputs.extend(global_exit_roots
-        .iter()
-        .flat_map(|ger| [ger.0, ger.1.into_uint()]));
+    ger_prover_inputs.extend(
+        global_exit_roots
+            .iter()
+            .flat_map(|ger| [ger.0, ger.1.into_uint()]),
+    );
     ger_prover_inputs.reverse();
     ger_prover_inputs
 }

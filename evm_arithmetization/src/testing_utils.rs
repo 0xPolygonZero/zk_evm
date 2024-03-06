@@ -11,9 +11,11 @@ use mpt_trie::{
 };
 
 pub use crate::cpu::kernel::cancun_constants::*;
-use crate::{generation::mpt::AccountRlp, util::h2u};
-pub use crate::cpu::kernel::constants::{GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED};
 use crate::cpu::kernel::constants::GLOBAL_EXIT_ROOT_STORAGE_POS;
+pub use crate::cpu::kernel::constants::{
+    GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
+};
+use crate::{generation::mpt::AccountRlp, util::h2u};
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -101,14 +103,12 @@ pub fn preinitialized_state_and_storage_tries(
         rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
     );
 
-    let storage_tries = vec![(
-        H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
-        Node::Empty.into(),
-    ),
-                             (
-                                 H256(GLOBAL_EXIT_ROOT_ADDRESS_HASHED),
-                                 Node::Empty.into(),
-                             )
+    let storage_tries = vec![
+        (
+            H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
+            Node::Empty.into(),
+        ),
+        (H256(GLOBAL_EXIT_ROOT_ADDRESS_HASHED), Node::Empty.into()),
     ];
 
     (state_trie, storage_tries)
