@@ -1,49 +1,65 @@
-name: ci
+name: Continuous Integration
 
 on:
   push:
     branches:
       - main
   pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+    branches:
+      - "**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  test:
+    name: Run tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - name: Checkout sources
+        uses: actions/checkout@v4
 
-      - name: Remove Pre-installed Rust
-        run: |
-          rustup toolchain remove stable
-          rm -f /home/runner/.cargo/bin/rust-analyzer
-          rm -f /home/runner/.cargo/bin/rustfmt
-          rm -f /home/runner/.cargo/bin/cargo-fmt
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
 
-      - name: Install Rust Nightly
-        run: |
-          rustup update nightly
-          rustup default nightly
-          rustup component add rustfmt --toolchain nightly
-          rustup component add clippy --toolchain nightly
-
-      - name: Get Rust Version
-        run: rustc --version > rust-version.txt
-
-      - name: Cache Cargo Registry and Build Outputs
-        uses: actions/cache@v2
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-rust-${{ hashFiles('rust-version.txt', '**/Cargo.lock') }}
+            cache-on-failure: true
+
+      - name: Test
+        run: cargo test
+
+  lints:
+    name: Formatting and Clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+            components: rustfmt, clippy
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Run cargo fmt
+        run: cargo fmt --all --check
 
       - name: Run cargo clippy
-        run: cargo +nightly clippy -- -D warnings
-
-      - name: Run cargo fmt --check
-        run: cargo +nightly fmt --all -- --check
-
-      - name: Run cargo test
-        run: cargo test
+        run: cargo clippy --all-targets -- -D warnings
