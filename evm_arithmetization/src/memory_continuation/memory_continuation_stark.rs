@@ -1,8 +1,8 @@
-//! `MemBeforeStark` is used to store the memory values at timestamp 0.
-//! It is checked against `MemoryStark` through a CTL.
+//! `ContinuationMemoryStark` is used to store the initial or the final values
+//! in memory. It is checked against `MemoryStark` through a CTL.
 //! This is used to ensure a continuation of the memory when proving
 //! multiple segments of a single full transaction proof.
-//! As such, `MemoryBeforeStark` doesn't have any constraints.
+//! As such, `ContinuationMemoryStark` doesn't have any constraints.
 use std::borrow::Borrow;
 use std::cmp::max;
 use std::iter::{self, once, repeat};
@@ -25,21 +25,26 @@ use starky::evaluation_frame::{StarkEvaluationFrame, StarkFrame};
 use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
+use super::columns::{value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, FILTER, NUM_COLUMNS};
 use crate::all_stark::EvmStarkFrame;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::keccak_util::keccakf_u32s;
 use crate::generation::MemBeforeValues;
-use crate::mem_before::columns::*;
 use crate::memory::VALUE_LIMBS;
 use crate::witness::memory::MemoryAddress;
 
 /// Creates the vector of `Columns` corresponding to:
-/// - the initialized address (context, segment, virt),
+/// - the propagated address (context, segment, virt),
 /// - the value in u32 limbs.
 pub(crate) fn ctl_data<F: Field>() -> Vec<Column<F>> {
     let mut res = Column::singles([ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL]).collect_vec();
     res.extend(Column::singles((0..8).map(value_limb)));
     res
+}
+
+/// CTL filter for memory operations.
+pub(crate) fn ctl_filter<F: Field>() -> Filter<F> {
+    Filter::new_simple(Column::single(FILTER))
 }
 
 /// Creates the vector of `Columns` corresponding to:
@@ -53,27 +58,13 @@ pub(crate) fn ctl_data_memory<F: Field>() -> Vec<Column<F>> {
     res
 }
 
-/// CTL filter for memory operations.
-pub(crate) fn ctl_filter<F: Field>() -> Filter<F> {
-    Filter::new_simple(Column::single(FILTER))
-}
-
-/// Structure representing the `MemBefore` STARK.
-#[derive(Copy, Clone, Default)]
-pub(crate) struct MemBeforeStark<F, const D: usize> {
-    f: PhantomData<F>,
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> MemBeforeStark<F, D> {
-    pub(crate) fn generate_trace(
-        &self,
-        mem_before_values: &MemBeforeValues,
-        timing: &mut TimingTree,
-    ) -> Vec<PolynomialValues<F>> {
-        let mut rows: Vec<_> = vec![];
-
-        // Add all `mem_before_values`.
-        rows.extend(mem_before_values.iter().map(|mem_data| {
+/// Convert `mem_before_values` to a vector of memory trace rows
+pub(crate) fn mem_before_values_to_rows<F: Field>(
+    mem_before_values: &MemBeforeValues,
+) -> Vec<Vec<F>> {
+    mem_before_values
+        .iter()
+        .map(|mem_data| {
             let mut row = vec![F::ZERO; NUM_COLUMNS];
             row[FILTER] = F::ONE;
             row[ADDR_CONTEXT] = F::from_canonical_usize(mem_data.0.context);
@@ -83,7 +74,25 @@ impl<F: RichField + Extendable<D>, const D: usize> MemBeforeStark<F, D> {
                 row[j + 4] = F::from_canonical_u32((mem_data.1 >> (j * 32)).low_u32());
             }
             row
-        }));
+        })
+        .collect()
+}
+
+/// Structure representing the `ContinuationMemory` STARK.
+#[derive(Copy, Clone, Default)]
+pub(crate) struct MemoryContinuationStark<F, const D: usize> {
+    f: PhantomData<F>,
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D> {
+    pub(crate) fn generate_trace(
+        &self,
+        propagated_values: Vec<Vec<F>>,
+        timing: &mut TimingTree,
+    ) -> Vec<PolynomialValues<F>> {
+        // Set the trace to the `propagated_values` provided either by `MemoryStark`
+        // (for final values) or the previous segment (for initial values).
+        let mut rows = propagated_values;
 
         let num_rows = rows.len();
         let num_rows_padded = max(16, num_rows.next_power_of_two());
@@ -99,7 +108,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemBeforeStark<F, D> {
     }
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemBeforeStark<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryContinuationStark<F, D> {
     type EvaluationFrame<FE, P, const D2: usize> = EvmStarkFrame<P, FE, NUM_COLUMNS>
     where
         FE: FieldExtension<D2, BaseField = F>,
@@ -162,8 +171,8 @@ mod tests {
 
     use crate::keccak_sponge::columns::KeccakSpongeColumnsView;
     use crate::keccak_sponge::keccak_sponge_stark::{KeccakSpongeOp, KeccakSpongeStark};
-    use crate::mem_before::mem_before_stark::MemBeforeStark;
     use crate::memory::segments::Segment;
+    use crate::memory_continuation::memory_continuation_stark::MemoryContinuationStark;
     use crate::witness::memory::MemoryAddress;
 
     #[test]
@@ -171,7 +180,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = MemBeforeStark<F, D>;
+        type S = MemoryContinuationStark<F, D>;
 
         let stark = S::default();
         test_stark_low_degree(stark)
@@ -182,7 +191,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type S = MemBeforeStark<F, D>;
+        type S = MemoryContinuationStark<F, D>;
 
         let stark = S::default();
         test_stark_circuit_constraints::<F, C, S, D>(stark)

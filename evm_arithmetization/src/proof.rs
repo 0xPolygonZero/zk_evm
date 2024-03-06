@@ -25,8 +25,6 @@ use starky::proof::{MultiProof, StarkProofChallenges};
 use crate::all_stark::NUM_TABLES;
 use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::MemBeforeValues;
-use crate::mem_before;
-use crate::mem_before::mem_before_stark::MemBeforeStark;
 use crate::util::{get_h160, get_h256, get_u256, h2u};
 use crate::witness::memory::MemoryAddress;
 use crate::witness::state::RegistersState;
