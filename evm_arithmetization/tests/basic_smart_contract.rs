@@ -110,7 +110,7 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
     contract_code.insert(keccak(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
-    let expected_state_trie_after: HashedPartialTrie = {
+    let expected_state_trie_after = {
         let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
@@ -151,8 +151,7 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
         );
 
         state_trie_after
-    }
-    .into();
+    };
 
     let receipt_0 = LegacyReceiptRlp {
         status: true,

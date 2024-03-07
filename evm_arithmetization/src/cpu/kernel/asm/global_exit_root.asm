@@ -55,7 +55,9 @@ after_read:
     // stack: current_value_ptr, storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
     %mload_trie_data %jumpi(do_nothing)
     // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
-    %jump(mpt_insertnum_nibblesafter_timestamp_storage_insert:
+    %jump(mpt_insert)
+
+after_timestamp_storage_insert:
     // stack: new_storage_root_ptr, i, num_ger, retdest
     %get_account_data(@ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2)
     // stack: account_ptr, new_storage_root_ptr
