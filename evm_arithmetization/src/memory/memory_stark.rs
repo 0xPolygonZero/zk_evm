@@ -222,8 +222,8 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
                 // CONTEXT_FIRST_CHANGE and SEGMENT_FIRST_CHANGE should be 0 at the last row, so
                 // the index should never be out of bounds.
                 if i < trace_col_vecs[ADDR_VIRTUAL].len() - 1 {
-                    let x_fo = trace_col_vecs[ADDR_VIRTUAL][i + 1].to_canonical_u64() as usize;
-                    trace_col_vecs[FREQUENCIES][x_fo] += F::ONE;
+                    let x_val = trace_col_vecs[ADDR_VIRTUAL][i + 1].to_canonical_u64() as usize;
+                    trace_col_vecs[FREQUENCIES][x_val] += F::ONE;
                 } else {
                     trace_col_vecs[FREQUENCIES][0] += F::ONE;
                 }
@@ -319,13 +319,13 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         timing: &mut TimingTree,
     ) -> (Vec<PolynomialValues<F>>, Vec<Vec<F>>) {
         // First, push `mem_before` operations.
-        for i in 0..mem_before_values.len() {
+        for &(address, value) in mem_before_values {
             memory_ops.push(MemoryOp {
                 filter: true,
                 timestamp: 0,
-                address: mem_before_values[i].0,
+                address,
                 kind: crate::witness::memory::MemoryOpKind::Write,
-                value: mem_before_values[i].1,
+                value,
             });
         }
         // Generate most of the trace in row-major form.
@@ -336,19 +336,20 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         );
         // Extract final values for `MemoryAfterStark`.
         let mut final_values = Vec::<Vec<_>>::new();
-        for i in 0..trace_rows.len() {
-            let row = trace_rows[i];
-            if row[CONTEXT_FIRST_CHANGE] + row[SEGMENT_FIRST_CHANGE] + row[VIRTUAL_FIRST_CHANGE]
-                == F::ONE
-                && row[FILTER].is_one()
-            {
-                let mut addr_val = vec![F::ONE];
-                addr_val.extend(&row[ADDR_CONTEXT..CONTEXT_FIRST_CHANGE]);
-                final_values.push(addr_val);
-            }
-        }
-
-        let trace_row_vecs: Vec<_> = trace_rows.into_iter().map(|row| row.to_vec()).collect();
+        let trace_row_vecs: Vec<_> = trace_rows
+            .into_iter()
+            .map(|row| {
+                if row[CONTEXT_FIRST_CHANGE] + row[SEGMENT_FIRST_CHANGE] + row[VIRTUAL_FIRST_CHANGE]
+                    == F::ONE
+                    && row[FILTER].is_one()
+                {
+                    let mut addr_val = vec![F::ONE];
+                    addr_val.extend(&row[ADDR_CONTEXT..CONTEXT_FIRST_CHANGE]);
+                    final_values.push(addr_val);
+                }
+                row.to_vec()
+            })
+            .collect();
 
         // Transpose to column-major form.
         let mut trace_col_vecs = transpose(&trace_row_vecs);
@@ -444,12 +445,15 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
 
         // Second set of ordering constraints: no change before the column corresponding
         // to the nonzero first_change flag.
-        yield_constr.constraint(segment_first_change * (next_addr_context - addr_context));
-        yield_constr.constraint(virtual_first_change * (next_addr_context - addr_context));
-        yield_constr.constraint(virtual_first_change * (next_addr_segment - addr_segment));
-        yield_constr.constraint(address_unchanged * (next_addr_context - addr_context));
-        yield_constr.constraint(address_unchanged * (next_addr_segment - addr_segment));
-        yield_constr.constraint(address_unchanged * (next_addr_virtual - addr_virtual));
+        yield_constr
+            .constraint_transition(segment_first_change * (next_addr_context - addr_context));
+        yield_constr
+            .constraint_transition(virtual_first_change * (next_addr_context - addr_context));
+        yield_constr
+            .constraint_transition(virtual_first_change * (next_addr_segment - addr_segment));
+        yield_constr.constraint_transition(address_unchanged * (next_addr_context - addr_context));
+        yield_constr.constraint_transition(address_unchanged * (next_addr_segment - addr_segment));
+        yield_constr.constraint_transition(address_unchanged * (next_addr_virtual - addr_virtual));
 
         // Third set of ordering constraints: range-check difference in the column that
         // should be increasing.
@@ -579,19 +583,19 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
         // to the nonzero first_change flag.
         let segment_first_change_check =
             builder.mul_extension(segment_first_change, addr_context_diff);
-        yield_constr.constraint(builder, segment_first_change_check);
+        yield_constr.constraint_transition(builder, segment_first_change_check);
         let virtual_first_change_check_1 =
             builder.mul_extension(virtual_first_change, addr_context_diff);
-        yield_constr.constraint(builder, virtual_first_change_check_1);
+        yield_constr.constraint_transition(builder, virtual_first_change_check_1);
         let virtual_first_change_check_2 =
             builder.mul_extension(virtual_first_change, addr_segment_diff);
-        yield_constr.constraint(builder, virtual_first_change_check_2);
+        yield_constr.constraint_transition(builder, virtual_first_change_check_2);
         let address_unchanged_check_1 = builder.mul_extension(address_unchanged, addr_context_diff);
-        yield_constr.constraint(builder, address_unchanged_check_1);
+        yield_constr.constraint_transition(builder, address_unchanged_check_1);
         let address_unchanged_check_2 = builder.mul_extension(address_unchanged, addr_segment_diff);
-        yield_constr.constraint(builder, address_unchanged_check_2);
+        yield_constr.constraint_transition(builder, address_unchanged_check_2);
         let address_unchanged_check_3 = builder.mul_extension(address_unchanged, addr_virtual_diff);
-        yield_constr.constraint(builder, address_unchanged_check_3);
+        yield_constr.constraint_transition(builder, address_unchanged_check_3);
 
         // Third set of ordering constraints: range-check difference in the column that
         // should be increasing.

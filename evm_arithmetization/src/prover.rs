@@ -39,44 +39,6 @@ use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
 use crate::witness::memory::MemoryAddress;
 use crate::witness::state::RegistersState;
 
-fn find_in_vec(mem_addr: MemoryAddress, mem_values: &Vec<(MemoryAddress, U256)>) -> Option<U256> {
-    for &(addr, val) in mem_values {
-        if addr == mem_addr {
-            return Some(val);
-        }
-    }
-    None
-}
-
-pub fn prove_all_segments<F, C, const D: usize>(
-    all_stark: &AllStark<F, D>,
-    config: &StarkConfig,
-    inputs: GenerationInputs,
-    max_cpu_len: usize,
-    timing: &mut TimingTree,
-    abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<Vec<AllProof<F, C, D>>>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
-    let mut segment_idx = 0;
-    let mut proofs = vec![];
-    while let Some(proof) = prove(
-        all_stark,
-        config,
-        inputs.clone(),
-        max_cpu_len,
-        segment_idx,
-        timing,
-        abort_signal.clone(),
-    )? {
-        segment_idx += 1;
-        proofs.push(proof);
-    }
-    Ok(proofs)
-}
-
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
@@ -610,5 +572,34 @@ pub mod testing {
             Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
         interpreter.run()?;
         Ok(())
+    }
+
+    pub fn prove_all_segments<F, C, const D: usize>(
+        all_stark: &AllStark<F, D>,
+        config: &StarkConfig,
+        inputs: GenerationInputs,
+        max_cpu_len: usize,
+        timing: &mut TimingTree,
+        abort_signal: Option<Arc<AtomicBool>>,
+    ) -> Result<Vec<AllProof<F, C, D>>>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+    {
+        let mut segment_idx = 0;
+        let mut proofs = vec![];
+        while let Some(proof) = prove(
+            all_stark,
+            config,
+            inputs.clone(),
+            max_cpu_len,
+            segment_idx,
+            timing,
+            abort_signal.clone(),
+        )? {
+            segment_idx += 1;
+            proofs.push(proof);
+        }
+        Ok(proofs)
     }
 }

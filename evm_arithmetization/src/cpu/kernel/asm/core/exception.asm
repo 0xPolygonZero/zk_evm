@@ -20,7 +20,8 @@ global exception_jumptable:
     // exception 5: stack overflow
     JUMPTABLE exc_stack_overflow
 
-    // exception 6: stopping for segmented proofs.
+    // exception 6: end of segmented proof.
+    // This reuses the exceptions logic but is part of any valid segment execution.
     JUMPTABLE exc_stop
 
     // exceptions 7: unused
@@ -171,9 +172,9 @@ global exc_stop:
     // Here, we need to check that the final registers have the correct value.
     // stack: trap_info
     PUSH @FINAL_REGISTERS_ADDR
-    // If the current `stack_len is 2`, then the stack was empty before the exception and there's no stack top.
     // stack: addr_registers, trap_info
     PUSH 3 
+    // If the current `stack_len` is 3, then the stack was empty before the exception and there's no stack top.
     %stack_length
     SUB
     // First, check the stack length.
@@ -192,7 +193,7 @@ global exc_stop:
     MUL
     // If the previous stack length is 0, we load the first value in the stack segment:
     // we do not need to constrain the value in that case, so this is just to avoid a jumpi.
-    // Not having a jumpi provides a constant number of operations, which is better for segmentation.
+    // Not having a `jumpi` provides a constant number of operations, which is better for segmentation.
     // stack: (stack_len_before_exc - 1) * (stack_len_before_exc != 0), stack_len_before_exc, addr_registers, trap_info
     PUSH @SEGMENT_STACK
     GET_CONTEXT
@@ -209,7 +210,7 @@ global exc_stop:
 
     // Check the program counter.
     // stack: addr_registers, trap_info
-    DUP2 PUSH 0xFFFFFFFF AND
+    DUP2 %as_u32
     // stack: program_counter, addr_registers, trap_info
     DUP2
     MLOAD_GENERAL
@@ -219,7 +220,7 @@ global exc_stop:
     // Check is_kernel_mode.
     // stack: addr_registers, trap_info
     DUP2 %shr_const(32)
-    PUSH 0xFFFFFFFF AND
+    %as_u32
     // stack: is_kernel_mode, addr_registers, trap_info
     DUP2 %increment
     MLOAD_GENERAL
@@ -228,7 +229,7 @@ global exc_stop:
     // Check the gas used.
     // stack: addr_registers, trap_info
     SWAP1 %shr_const(192)
-    PUSH 0xFFFFFFFF AND
+    %as_u32
     // stack: gas_used, addr_registers
     DUP2 %add_const(5)
     MLOAD_GENERAL
@@ -245,7 +246,7 @@ global exc_stop:
     // stack: (empty)
     // The following two instructions are needed to not have failing constraints. 
     // `ISZERO` pops and pushes, which means that there is no need to read the next top of the stack after it. 
-    // If we don't have it, there is there is a read of the top of the stack in padding rows, which have all channels disabled, 
+    // If we don't have it, there is a read of the top of the stack in padding rows, which have all channels disabled, 
     // thus making the constraints fail. 
     PUSH 1
     ISZERO

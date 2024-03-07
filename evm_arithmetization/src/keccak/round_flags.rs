@@ -73,14 +73,14 @@ pub(crate) fn eval_round_flags_recursively<F: RichField + Extendable<D>, const D
     }
 
     // Initially, the first step flag should be 1 while the others should be 0.
-    let lcoal_any_flag =
+    let local_any_flag =
         builder.add_many_extension((0..NUM_ROUNDS).map(|i| local_values[reg_step(i)]));
     // Initially, the first step flag should be 1 while the others should be 0.
     let step_0_minus_1 = builder.sub_extension(local_values[reg_step(0)], one);
-    let step_0_minus_1 = builder.mul_extension(lcoal_any_flag, step_0_minus_1);
+    let step_0_minus_1 = builder.mul_extension(local_any_flag, step_0_minus_1);
     yield_constr.constraint_first_row(builder, step_0_minus_1);
     for i in 1..NUM_ROUNDS {
-        let constr = builder.mul_extension(lcoal_any_flag, local_values[reg_step(i)]);
+        let constr = builder.mul_extension(local_any_flag, local_values[reg_step(i)]);
         yield_constr.constraint_first_row(builder, constr);
     }
 

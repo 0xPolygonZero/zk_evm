@@ -80,13 +80,8 @@ impl PublicValues {
     /// Extracts public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
-    /// `len_before` and `len_after` are the lengths of the `MemBefore`
-    /// and `MemAfter` caps respectively.
-    pub fn from_public_inputs<F: RichField>(
-        pis: &[F],
-        len_before: usize,
-        len_after: usize,
-    ) -> Self {
+    /// `len_mem_cap` is the length of the `MemBefore` and `MemAfter` caps.
+    pub fn from_public_inputs<F: RichField>(pis: &[F], len_mem_cap: usize) -> Self {
         assert!(
             pis.len()
                 > TrieRootsTarget::SIZE * 2
@@ -149,8 +144,8 @@ impl PublicValues {
                     + BlockHashesTarget::SIZE
                     + ExtraBlockDataTarget::SIZE
                     + RegistersDataTarget::SIZE * 2
-                    + len_before * NUM_HASH_OUT_ELTS],
-            len_before,
+                    + len_mem_cap * NUM_HASH_OUT_ELTS],
+            len_mem_cap,
         );
         let mem_after = MemCap::from_public_inputs(
             &pis[TrieRootsTarget::SIZE * 2
@@ -158,15 +153,14 @@ impl PublicValues {
                 + BlockHashesTarget::SIZE
                 + ExtraBlockDataTarget::SIZE
                 + RegistersDataTarget::SIZE * 2
-                + len_before * NUM_HASH_OUT_ELTS
+                + len_mem_cap * NUM_HASH_OUT_ELTS
                 ..TrieRootsTarget::SIZE * 2
                     + BlockMetadataTarget::SIZE
                     + BlockHashesTarget::SIZE
                     + ExtraBlockDataTarget::SIZE
                     + RegistersDataTarget::SIZE * 2
-                    + len_before * NUM_HASH_OUT_ELTS
-                    + len_after * NUM_HASH_OUT_ELTS],
-            len_after,
+                    + 2 * len_mem_cap * NUM_HASH_OUT_ELTS],
+            len_mem_cap,
         );
         // There are 3 elements per address, + 1 U256 for the memory value.
         Self {
@@ -613,7 +607,7 @@ impl PublicValuesTarget {
     /// Extracts public value `Target`s from the given public input `Target`s.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
-    pub(crate) fn from_public_inputs(pis: &[Target], len_before: usize, len_after: usize) -> Self {
+    pub(crate) fn from_public_inputs(pis: &[Target], len_mem_cap: usize) -> Self {
         assert!(
             pis.len()
                 > TrieRootsTarget::SIZE * 2
@@ -680,8 +674,8 @@ impl PublicValuesTarget {
                         + BlockHashesTarget::SIZE
                         + ExtraBlockDataTarget::SIZE
                         + RegistersDataTarget::SIZE * 2
-                        + len_before * NUM_HASH_OUT_ELTS],
-                len_before,
+                        + len_mem_cap * NUM_HASH_OUT_ELTS],
+                len_mem_cap,
             ),
             mem_after: MemCapTarget::from_public_inputs(
                 &pis[TrieRootsTarget::SIZE * 2
@@ -689,15 +683,14 @@ impl PublicValuesTarget {
                     + BlockHashesTarget::SIZE
                     + ExtraBlockDataTarget::SIZE
                     + RegistersDataTarget::SIZE * 2
-                    + len_before * NUM_HASH_OUT_ELTS
+                    + len_mem_cap * NUM_HASH_OUT_ELTS
                     ..TrieRootsTarget::SIZE * 2
                         + BlockMetadataTarget::SIZE
                         + BlockHashesTarget::SIZE
                         + ExtraBlockDataTarget::SIZE
                         + RegistersDataTarget::SIZE * 2
-                        + len_before * NUM_HASH_OUT_ELTS
-                        + len_after * NUM_HASH_OUT_ELTS],
-                len_after,
+                        + 2 * len_mem_cap * NUM_HASH_OUT_ELTS],
+                len_mem_cap,
             ),
         }
     }

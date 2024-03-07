@@ -41,7 +41,7 @@ impl RegistersState {
 
     /// Returns a `RegisterState` corresponding to the start
     /// of a full transaction proof.
-    pub fn new_with_main_label() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             program_counter: KERNEL.global_labels["main"],
             is_kernel: true,

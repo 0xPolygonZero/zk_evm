@@ -279,14 +279,16 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     } else {
         log::Level::Trace
     };
-    log::log!(
+    state.log_log(
         level,
-        "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
-        state.get_clock(),
-        state.get_context(),
-        KERNEL.offset_name(pc),
-        op,
-        state.get_generation_state().stack(),
+        format!(
+            "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
+            state.get_clock(),
+            state.get_context(),
+            KERNEL.offset_name(pc),
+            op,
+            state.get_generation_state().stack(),
+        ),
     );
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
@@ -309,7 +311,7 @@ where
         let (row, _) = self.base_row();
 
         generate_exception(EXC_STOP_CODE, self, row)
-            .map_err(|_| anyhow::Error::msg("error handling errored..."))?;
+            .map_err(|e| anyhow::anyhow!("Exception handling failed with error {:?}", e))?;
 
         self.apply_ops(checkpoint);
         Ok(())
@@ -491,7 +493,7 @@ where
 
         #[cfg(debug_assertions)]
         if !self.get_registers().is_kernel {
-            log::debug!(
+            self.log_debug(format!(
                 "User instruction {:?}, stack = {:?}, ctx = {}",
                 op,
                 {
@@ -500,7 +502,7 @@ where
                     stack
                 },
                 self.get_registers().context
-            );
+            ));
         }
 
         match op {

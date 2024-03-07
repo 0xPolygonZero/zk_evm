@@ -146,19 +146,9 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         .mem_before
         .mem_cap
         .clone();
-    let first_mem_after = segment_proofs_data[0]
-        .public_values
-        .mem_after
-        .mem_cap
-        .clone();
     let second_mem_before = segment_proofs_data[1]
         .public_values
         .mem_before
-        .mem_cap
-        .clone();
-    let second_mem_after = segment_proofs_data[1]
-        .public_values
-        .mem_after
         .mem_cap
         .clone();
     let third_mem_before = segment_proofs_data[2]
@@ -166,17 +156,11 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         .mem_before
         .mem_cap
         .clone();
-    let third_mem_after = segment_proofs_data[2]
-        .public_values
-        .mem_after
-        .mem_cap
-        .clone();
 
     // Test retrieved public values from the proof public inputs.
     let retrieved_public_values = PublicValues::from_public_inputs(
         &segment_proofs_data[0].proof_with_pis.public_inputs,
         first_mem_before.len(),
-        first_mem_after.len(),
     );
     assert_eq!(
         retrieved_public_values,
@@ -186,7 +170,6 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let retrieved_public_values = PublicValues::from_public_inputs(
         &segment_proofs_data[1].proof_with_pis.public_inputs,
         second_mem_before.len(),
-        second_mem_after.len(),
     );
     assert_eq!(
         retrieved_public_values,
@@ -196,7 +179,6 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let retrieved_public_values = PublicValues::from_public_inputs(
         &segment_proofs_data[2].proof_with_pis.public_inputs,
         third_mem_before.len(),
-        third_mem_after.len(),
     );
     assert_eq!(
         retrieved_public_values,
@@ -230,7 +212,6 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let retrieved_public_values = PublicValues::from_public_inputs(
         &segmented_agg_proof.public_inputs,
         segmented_agg_public_values.mem_before.mem_cap.len(),
-        segmented_agg_public_values.mem_before.mem_cap.len(),
     );
     assert_eq!(retrieved_public_values, segmented_agg_public_values);
 
@@ -245,7 +226,6 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let retrieved_public_values = PublicValues::from_public_inputs(
         &txn_proof.public_inputs,
         txn_public_values.mem_before.mem_cap.len(),
-        txn_public_values.mem_before.mem_cap.len(),
     );
     assert_eq!(retrieved_public_values, txn_public_values);
 
@@ -256,7 +236,6 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     // Test retrieved public values from the proof public inputs.
     let retrieved_public_values = PublicValues::from_public_inputs(
         &block_proof.public_inputs,
-        block_public_values.mem_before.mem_cap.len(),
         block_public_values.mem_before.mem_cap.len(),
     );
     assert_eq!(retrieved_public_values, block_public_values);

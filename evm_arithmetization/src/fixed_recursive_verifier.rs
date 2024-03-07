@@ -256,24 +256,17 @@ impl<const D: usize> AggregationChildTarget<D> {
         })
     }
 
-    // `len_before` and `len_after` are the lengths of the Merkle
-    // caps for `MemBefore` and `MemAfter` respectively.
+    // `len_mem_cap` us the length of the Merkle
+    // caps for `MemBefore` and `MemAfter`.
     fn public_values<F: RichField + Extendable<D>>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        len_before: usize,
-        len_after: usize,
+        len_mem_cap: usize,
     ) -> PublicValuesTarget {
-        let agg_pv = PublicValuesTarget::from_public_inputs(
-            &self.agg_proof.public_inputs,
-            len_before,
-            len_after,
-        );
-        let evm_pv = PublicValuesTarget::from_public_inputs(
-            &self.evm_proof.public_inputs,
-            len_before,
-            len_after,
-        );
+        let agg_pv =
+            PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs, len_mem_cap);
+        let evm_pv =
+            PublicValuesTarget::from_public_inputs(&self.evm_proof.public_inputs, len_mem_cap);
         PublicValuesTarget::select(builder, self.is_agg, agg_pv, evm_pv)
     }
 }
@@ -603,8 +596,7 @@ where
                 .cap_height;
         let mut builder = CircuitBuilder::new(CircuitConfig::standard_recursion_config());
 
-        let public_values =
-            add_virtual_public_values(&mut builder, cap_length_before, cap_length_after);
+        let public_values = add_virtual_public_values(&mut builder, cap_length_before);
 
         let recursive_proofs =
             core::array::from_fn(|i| builder.add_virtual_proof_with_pis(inner_common_data[i]));
@@ -753,20 +745,16 @@ where
             .wires_cap
             .0
             .len();
-        let cap_after_len = root.proof_with_pis[*Table::MemAfter]
-            .proof
-            .wires_cap
-            .0
-            .len();
+
         let mut builder = CircuitBuilder::<F, D>::new(root.circuit.common.config.clone());
-        let public_values = add_virtual_public_values(&mut builder, cap_before_len, cap_after_len);
+        let public_values = add_virtual_public_values(&mut builder, cap_before_len);
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         let parent_segment = Self::add_agg_child(&mut builder, root);
         let segment = Self::add_agg_child(&mut builder, root);
 
-        let parent_pv = parent_segment.public_values(&mut builder, cap_before_len, cap_after_len);
-        let segment_pv = segment.public_values(&mut builder, cap_before_len, cap_after_len);
+        let parent_pv = parent_segment.public_values(&mut builder, cap_before_len);
+        let segment_pv = segment.public_values(&mut builder, cap_before_len);
 
         // All the block metadata is the same for both segments. It is also the case for
         // extra_block_data.
@@ -881,22 +869,15 @@ where
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
 
         let len_before = agg.public_values.mem_before.mem_cap.0.len();
-        let len_after = agg.public_values.mem_after.mem_cap.0.len();
-        let public_values = add_virtual_public_values(&mut builder, len_before, len_after);
+        let public_values = add_virtual_public_values(&mut builder, len_before);
         let has_parent_block = builder.add_virtual_bool_target_safe();
         let parent_txn_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
         let agg_root_proof = builder.add_virtual_proof_with_pis(&agg.circuit.common);
 
-        let parent_pv = PublicValuesTarget::from_public_inputs(
-            &parent_txn_proof.public_inputs,
-            len_before,
-            len_after,
-        );
-        let agg_pv = PublicValuesTarget::from_public_inputs(
-            &agg_root_proof.public_inputs,
-            len_before,
-            len_after,
-        );
+        let parent_pv =
+            PublicValuesTarget::from_public_inputs(&parent_txn_proof.public_inputs, len_before);
+        let agg_pv =
+            PublicValuesTarget::from_public_inputs(&agg_root_proof.public_inputs, len_before);
 
         // Connect all block hash values
         BlockHashesTarget::connect(
@@ -1085,8 +1066,7 @@ where
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let len_before = agg.public_values.mem_before.mem_cap.0.len();
-        let len_after = agg.public_values.mem_after.mem_cap.0.len();
-        let public_values = add_virtual_public_values(&mut builder, len_before, len_after);
+        let public_values = add_virtual_public_values(&mut builder, len_before);
         let has_parent_block = builder.add_virtual_bool_target_safe();
         let parent_block_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
         let agg_root_proof = builder.add_virtual_proof_with_pis(&agg.circuit.common);
@@ -1094,18 +1074,10 @@ where
         // Connect block hashes
         Self::connect_block_hashes(&mut builder, &parent_block_proof, &agg_root_proof);
 
-        // We don't need `mem_before` and `mem_after` in blocks,
-        // so we set the associated lengths to 0.
-        let parent_pv = PublicValuesTarget::from_public_inputs(
-            &parent_block_proof.public_inputs,
-            len_before,
-            len_after,
-        );
-        let agg_pv = PublicValuesTarget::from_public_inputs(
-            &agg_root_proof.public_inputs,
-            len_before,
-            len_after,
-        );
+        let parent_pv =
+            PublicValuesTarget::from_public_inputs(&parent_block_proof.public_inputs, len_before);
+        let agg_pv =
+            PublicValuesTarget::from_public_inputs(&agg_root_proof.public_inputs, len_before);
 
         // Connect block `trie_roots_before` with parent_pv `trie_roots_before`.
         TrieRootsTarget::connect(
@@ -1229,8 +1201,8 @@ where
     ) {
         // We don't need `mem_before` and `mem_after` in blocks, so we set
         // the associated lengths to 0.
-        let lhs_public_values = PublicValuesTarget::from_public_inputs(&lhs.public_inputs, 0, 0);
-        let rhs_public_values = PublicValuesTarget::from_public_inputs(&rhs.public_inputs, 0, 0);
+        let lhs_public_values = PublicValuesTarget::from_public_inputs(&lhs.public_inputs, 0);
+        let rhs_public_values = PublicValuesTarget::from_public_inputs(&rhs.public_inputs, 0);
         for i in 0..255 {
             for j in 0..8 {
                 builder.connect(

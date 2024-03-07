@@ -116,7 +116,7 @@ impl<T: Copy> Traces<T> {
         &self.memory_ops[checkpoint.memory_len..]
     }
 
-    pub fn clock(&self) -> usize {
+    pub(crate) fn clock(&self) -> usize {
         self.cpu.len()
     }
 

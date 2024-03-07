@@ -599,8 +599,7 @@ fn add_data_write<F: RichField + Extendable<D>, const D: usize>(
 
 pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
-    len_before: usize,
-    len_after: usize,
+    len_mem_cap: usize,
 ) -> PublicValuesTarget {
     let trie_roots_before = add_virtual_trie_roots(builder);
     let trie_roots_after = add_virtual_trie_roots(builder);
@@ -611,10 +610,10 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
     let registers_after = add_virtual_registers_data(builder);
 
     let mem_before = MemCapTarget {
-        mem_cap: MerkleCapTarget(builder.add_virtual_hashes_public_input(len_before)),
+        mem_cap: MerkleCapTarget(builder.add_virtual_hashes_public_input(len_mem_cap)),
     };
     let mem_after = MemCapTarget {
-        mem_cap: MerkleCapTarget(builder.add_virtual_hashes_public_input(len_after)),
+        mem_cap: MerkleCapTarget(builder.add_virtual_hashes_public_input(len_mem_cap)),
     };
 
     PublicValuesTarget {

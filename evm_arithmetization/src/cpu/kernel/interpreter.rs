@@ -6,6 +6,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
+use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
 
@@ -153,9 +154,10 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 }
 
-/// Given a segment index `i`, returns the initial and final registers, as well
-/// as the initial memory of segment `i`. These can then be passed to the prover
-/// for initialization.
+/// Given a segment `index`, returns the initial and final registers, as well
+/// as the initial memory of segment `index`, and returns `None` if the
+/// execution stops at segment `index`. These can then be passed to the
+/// prover for initialization.
 pub(crate) fn generate_segment<F: Field>(
     max_cpu_len_log: usize,
     index: usize,
@@ -169,7 +171,7 @@ pub(crate) fn generate_segment<F: Field>(
     )>,
 > {
     let init_label = KERNEL.global_labels["init"];
-    let initial_registers = RegistersState::new_with_main_label();
+    let initial_registers = RegistersState::new();
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
         init_label,
         vec![],
@@ -323,7 +325,7 @@ impl<F: Field> Interpreter<F> {
         let kernel_hash = KERNEL.code_hash;
         let kernel_code_len = KERNEL.code.len();
         // Initialize registers.
-        let registers_before = RegistersState::new_with_main_label();
+        let registers_before = RegistersState::new();
         self.generation_state.registers = RegistersState {
             program_counter: self.generation_state.registers.program_counter,
             is_kernel: self.generation_state.registers.is_kernel,
@@ -1035,7 +1037,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         if registers.is_kernel {
             log_kernel_instruction(self, op);
         } else {
-            log::debug!("User instruction: {:?}", op);
+            self.log_debug(format!("User instruction: {:?}", op));
         }
 
         let generation_state = self.get_mut_generation_state();
@@ -1055,6 +1057,16 @@ impl<F: Field> State<F> for Interpreter<F> {
         }
 
         self.perform_state_op(opcode, op, row)
+    }
+
+    fn log_debug(&self, msg: String) {
+        log::debug!("{}", msg);
+    }
+
+    fn log_info(&self, msg: String) {}
+
+    fn log_log(&self, level: Level, msg: String) {
+        log::log!(level, "{}", msg);
     }
 }
 
