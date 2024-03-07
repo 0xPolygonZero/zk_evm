@@ -331,7 +331,6 @@ pub mod cancun_constants {
         balance: U256::zero(),
         // Storage root for this account at genesis.
         storage_root: H256(hex!(
-            // "f58e5f1eae7ce386de44266ff0286a88dafe7e4269c1ffa97f79dbbcf4f59e5c"
             "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
         )),
         code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),

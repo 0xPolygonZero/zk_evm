@@ -57,7 +57,6 @@ fn test_global_exit_root() -> anyhow::Result<()> {
             update_ger_account_storage(&mut ger_account_storage, root, timestamp);
         }
         let ger_account = ger_contract_from_storage(&ger_account_storage);
-        dbg!(ger_account_storage);
 
         trie.insert(
             beacon_roots_account_nibbles(),

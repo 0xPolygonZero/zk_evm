@@ -48,9 +48,14 @@ write_timestamp_to_storage:
     PUSH 64 // storage_key has 64 nibbles
     %get_storage_trie(@ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2)
     // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
-    %jump(mpt_insert)
-
-after_timestamp_storage_insert:
+    %stack (storage_root_ptr, num_nibbles, storage_key) -> (storage_root_ptr, num_nibbles, storage_key, after_read, storage_root_ptr, num_nibbles, storage_key)
+    %jump(mpt_read)
+after_read:
+    // If the current value is non-zero, do nothing.
+    // stack: current_value_ptr, storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
+    %mload_trie_data %jumpi(do_nothing)
+    // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
+    %jump(mpt_insertnum_nibblesafter_timestamp_storage_insert:
     // stack: new_storage_root_ptr, i, num_ger, retdest
     %get_account_data(@ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2)
     // stack: account_ptr, new_storage_root_ptr
@@ -66,3 +71,9 @@ after_timestamp_storage_insert:
 ger_loop_end:
     // stack: i, num_ger, retdest
     %pop2 JUMP
+
+do_nothing:
+    // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert, i, num_ger, retdest
+    %pop7
+    // stack: retdest
+    JUMP

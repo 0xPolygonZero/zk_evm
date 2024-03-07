@@ -132,7 +132,6 @@ pub fn update_ger_account_storage(
     arr[0..32].copy_from_slice(&root.0);
     U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
     let slot = keccak(arr);
-    dbg!(arr, slot);
     insert_storage(storage_trie, slot.into_uint(), timestamp);
 }
 
