@@ -316,7 +316,7 @@ pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> an
     }
 
     // Retrieve previous PC (before jumping to KernelPanic), to see if we reached
-    // `hash_final_tries`. We will output debugging information on the final
+    // `perform_final_checks`. We will output debugging information on the final
     // tries only if we got a root mismatch.
     let previous_pc = state.get_registers().program_counter;
 
