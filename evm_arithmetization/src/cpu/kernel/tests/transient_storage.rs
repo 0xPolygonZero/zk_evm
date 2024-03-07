@@ -9,10 +9,12 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::{combined_kernel_from_files, KERNEL, KERNEL_FILES};
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::Interpreter;
+use crate::cpu::kernel::interpreter::{self, Interpreter};
+use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryAddress;
+use crate::GenerationInputs;
 
 #[test]
 fn test_tstore() -> Result<()> {
@@ -26,7 +28,7 @@ fn test_tstore() -> Result<()> {
         kexit_info,
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(sys_tstore, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(sys_tstore, initial_stack);
     let gas_limit_address = MemoryAddress {
         context: 0,
         segment: Segment::ContextMetadata.unscale(),
@@ -51,15 +53,23 @@ fn test_tstore() -> Result<()> {
     let stored_slot = MemoryAddress::new(0, Segment::TransientStorage, 1);
     let stored_val = MemoryAddress::new(0, Segment::TransientStorage, 2);
     assert_eq!(
-        interpreter.generation_state.memory.get(stored_addr),
+        interpreter
+            .generation_state
+            .memory
+            .get(stored_addr)
+            .unwrap(),
         3.into(),
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(stored_slot),
+        interpreter
+            .generation_state
+            .memory
+            .get(stored_slot)
+            .unwrap(),
         2.into(),
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(stored_val),
+        interpreter.generation_state.memory.get(stored_val).unwrap(),
         1.into(),
     );
 
@@ -78,7 +88,7 @@ fn test_tstore_tload() -> Result<()> {
         kexit_info,
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(sys_tstore, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(sys_tstore, initial_stack);
     let gas_limit_address = MemoryAddress {
         context: 0,
         segment: Segment::ContextMetadata.unscale(),
@@ -140,7 +150,7 @@ fn test_many_tstore_many_tload() -> Result<()> {
         kexit_info,
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
     let gas_limit_address = MemoryAddress {
         context: 0,
         segment: Segment::ContextMetadata.unscale(),
@@ -211,9 +221,9 @@ fn test_revert() -> Result<()> {
     let kernel = combined_kernel_from_files(&kernel_files);
 
     let sys_tstore = kernel.global_labels["sys_tstore"];
-
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new(&kernel.code, sys_tstore, vec![], &kernel.prover_inputs);
+    let mut interpreter = Interpreter::<F>::new(sys_tstore, vec![]);
+    interpreter.generation_state =
+        GenerationState::<F>::new(GenerationInputs::default(), &kernel.code).unwrap();
 
     let gas_limit_address = MemoryAddress {
         context: 0,
