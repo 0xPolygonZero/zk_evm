@@ -178,9 +178,6 @@ pub(crate) trait State<F: Field> {
                         && self.get_clock()
                             == (1 << max_cpu_len_log.unwrap()) - NUM_EXTRA_CYCLES_AFTER))
             {
-                if pc != halt_pc {
-                    assert!((self.get_clock() + NUM_EXTRA_CYCLES_AFTER).is_power_of_two());
-                }
                 running = false;
                 final_registers = registers;
 

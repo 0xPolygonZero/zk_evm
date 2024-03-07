@@ -30,7 +30,7 @@ use starky::stark::Stark;
 
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::interpreter::generate_segment;
+use crate::cpu::kernel::interpreter::{generate_segment, ExtraSegmentData};
 use crate::generation::state::GenerationState;
 use crate::generation::{generate_traces, GenerationInputs, MemBeforeValues, SegmentData};
 use crate::get_challenges::observe_public_values;
@@ -92,7 +92,7 @@ where
     C: GenericConfig<D, F = F>,
 {
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
-    if let Some((registers_before, registers_after, mut memory_before)) =
+    if let Some((registers_before, registers_after, mut memory_before, extra_segment_data)) =
         generate_segment::<F>(max_cpu_len_log, segment_index, &inputs)?
     {
         let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
@@ -105,6 +105,19 @@ where
             ..registers_before
         };
 
+        let ExtraSegmentData {
+            bignum_modmul_result_limbs,
+            rlp_prover_inputs,
+            withdrawal_prover_inputs,
+            trie_root_ptrs,
+            jumpdest_table,
+        } = extra_segment_data.clone();
+
+        state.bignum_modmul_result_limbs = bignum_modmul_result_limbs;
+        state.rlp_prover_inputs = rlp_prover_inputs;
+        state.withdrawal_prover_inputs = withdrawal_prover_inputs;
+        state.trie_root_ptrs = trie_root_ptrs;
+        state.jumpdest_table = jumpdest_table;
         let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
         let mut shift_val = U256::one();
 

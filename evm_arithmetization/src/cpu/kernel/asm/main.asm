@@ -41,7 +41,7 @@ global init:
     GET_CONTEXT
     // stack: context, addr_registers
     DUP2 %add_const(4)
-    MLOAD_GENERAL
+    MLOAD_GENERAL %shl_const(64)
     // stack: stored_context, context, addr_registers
     %assert_eq
 

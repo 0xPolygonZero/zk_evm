@@ -238,6 +238,7 @@ global exc_stop:
     // stack: addr_registers
     %add_const(4)
     MLOAD_GENERAL
+    %shl_const(64)
     // stack: stored_context
     GET_CONTEXT
     %assert_eq

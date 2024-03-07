@@ -23,7 +23,7 @@ pub struct AccountRlp {
     pub code_hash: H256,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TrieRootPtrs {
     pub state_root_ptr: usize,
     pub txn_root_ptr: usize,

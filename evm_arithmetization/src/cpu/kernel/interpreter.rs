@@ -15,7 +15,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
-use crate::generation::mpt::load_all_mpts;
+use crate::generation::mpt::{load_all_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
@@ -29,7 +29,7 @@ use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
     MemoryAddress, MemoryContextState, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
 };
-use crate::witness::operation::Operation;
+use crate::witness::operation::{Operation, CONTEXT_SCALING_FACTOR};
 use crate::witness::state::RegistersState;
 use crate::witness::transition::{
     decode, fill_op_flag, get_op_special_length, log_kernel_instruction, Transition,
@@ -143,6 +143,16 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
     }
 }
 
+/// State data required to initialize the state passed to the prover.
+#[derive(Default, Debug, Clone)]
+pub(crate) struct ExtraSegmentData {
+    pub(crate) bignum_modmul_result_limbs: Vec<U256>,
+    pub(crate) rlp_prover_inputs: Vec<U256>,
+    pub(crate) withdrawal_prover_inputs: Vec<U256>,
+    pub(crate) trie_root_ptrs: TrieRootPtrs,
+    pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+}
+
 /// Given a segment index `i`, returns the initial and final registers, as well
 /// as the initial memory of segment `i`. These can then be passed to the prover
 /// for initialization.
@@ -150,7 +160,14 @@ pub(crate) fn generate_segment<F: Field>(
     max_cpu_len_log: usize,
     index: usize,
     inputs: &GenerationInputs,
-) -> anyhow::Result<Option<(RegistersState, RegistersState, MemoryState)>> {
+) -> anyhow::Result<
+    Option<(
+        RegistersState,
+        RegistersState,
+        MemoryState,
+        ExtraSegmentData,
+    )>,
+> {
     let init_label = KERNEL.global_labels["init"];
     let initial_registers = RegistersState::new_with_main_label();
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
@@ -167,7 +184,25 @@ pub(crate) fn generate_segment<F: Field>(
         MemoryState::default(),
     );
 
+    let mut extra_data = ExtraSegmentData::default();
+
     for i in 0..=index {
+        if i == index {
+            extra_data = ExtraSegmentData {
+                bignum_modmul_result_limbs: interpreter
+                    .generation_state
+                    .bignum_modmul_result_limbs
+                    .clone(),
+                rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+                withdrawal_prover_inputs: interpreter
+                    .generation_state
+                    .withdrawal_prover_inputs
+                    .clone(),
+                trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+                jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            };
+        }
+
         // Write initial registers.
         if registers_after.program_counter == KERNEL.global_labels["halt"] {
             return Ok(None);
@@ -210,7 +245,12 @@ pub(crate) fn generate_segment<F: Field>(
         );
     }
 
-    Ok(Some((registers_before, registers_after, before_mem_values)))
+    Ok(Some((
+        registers_before,
+        registers_after,
+        before_mem_values,
+        extra_data,
+    )))
 }
 
 impl<F: Field> Interpreter<F> {

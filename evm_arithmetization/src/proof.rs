@@ -27,7 +27,6 @@ use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::MemBeforeValues;
 use crate::util::{get_h160, get_h256, get_u256, h2u};
 use crate::witness::memory::MemoryAddress;
-use crate::witness::state::RegistersState;
 
 /// A STARK proof for each table, plus some metadata used to create recursive
 /// wrapper proofs.
