@@ -32,12 +32,13 @@ search_transient_storage_loop:
     MLOAD_GENERAL
     // stack: loaded_addr, i, len, addr, key, retdest
     DUP4
-    // stack: addr, loaded_addr, i, len, addr, retdest
+    // stack: addr, loaded_addr, i, len, addr, key, retdest
     EQ
     // stack: addr == loaded_addr, i, len, addr, key, retdest
     DUP2
     %increment
     MLOAD_GENERAL
+    // stack: loaded_key, addr == loaded_addr, i, len, addr, key, retdest
     DUP6
     EQ
     MUL // AND
