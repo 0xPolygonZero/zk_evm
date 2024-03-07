@@ -132,6 +132,8 @@ global invalid_jump_jumpi_destination_common:
     %shr_const(32)
     %jumpi(fault_exception) // This keeps one copy of jump_dest on the stack, but that's fine.
     // jump_dest is a valid address; check if it points to a `JUMP_DEST`.
+    DUP1
+    %verify_non_jumpdest
     %mload_current(@SEGMENT_JUMPDEST_BITS)
     // stack: is_valid_jumpdest
     %jumpi(panic) // Trap should never have been entered.

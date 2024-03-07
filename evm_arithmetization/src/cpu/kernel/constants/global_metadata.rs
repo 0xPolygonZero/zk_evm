@@ -18,9 +18,9 @@ pub(crate) enum GlobalMetadata {
     /// The size of the `TrieData` segment, in bytes. In other words, the next
     /// address available for appending additional trie data.
     TrieDataSize,
-    /// The size of the `TrieData` segment, in bytes, represented as a whole
+    /// The size of the `RLP` segment, in bytes, represented as a whole
     /// address. In other words, the next address available for appending
-    /// additional trie data.
+    /// additional RLP data.
     RlpDataSize,
     /// A pointer to the root of the state trie within the `TrieData` buffer.
     StateTrieRoot,

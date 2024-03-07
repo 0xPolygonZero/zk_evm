@@ -48,8 +48,7 @@ fn test_process_receipt() -> Result<()> {
         leftover_gas,
         success,
     ];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(process_receipt, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(process_receipt, initial_stack);
     interpreter.set_memory_segment(
         Segment::LogsData,
         vec![
@@ -131,8 +130,7 @@ fn test_receipt_encoding() -> Result<()> {
     let expected_rlp = rlp::encode(&rlp::encode(&receipt_1));
 
     let initial_stack: Vec<U256> = vec![retdest, 0.into(), 0.into(), 0.into()];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(encode_receipt, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(encode_receipt, initial_stack);
 
     // Write data to memory.
     let expected_bloom_bytes = vec![
@@ -200,7 +198,7 @@ fn test_receipt_encoding() -> Result<()> {
     interpreter.run()?;
     let rlp_pos = interpreter.pop().expect("The stack should not be empty");
 
-    let rlp_read: Vec<u8> = interpreter.get_rlp_memory();
+    let rlp_read: &[u8] = &interpreter.get_rlp_memory()[1..]; // skip empty_node
 
     assert_eq!(rlp_pos.as_usize(), expected_rlp.len());
     for i in 0..rlp_read.len() {
@@ -252,7 +250,7 @@ fn test_receipt_bloom_filter() -> Result<()> {
     // Set logs memory and initialize TxnBloom and BlockBloom segments.
     let initial_stack: Vec<U256> = vec![retdest];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(logs_bloom, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_bloom, initial_stack);
     let mut logs = vec![
         0.into(), // unused
         addr,
@@ -414,7 +412,7 @@ fn test_mpt_insert_receipt() -> Result<()> {
     receipt.push(num_logs.into()); // num_logs
     receipt.extend(logs_0.clone());
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
     initialize_mpts(&mut interpreter, &trie_inputs);
 
     // If TrieData is empty, we need to push 0 because the first value is always 0.
@@ -513,7 +511,8 @@ fn test_mpt_insert_receipt() -> Result<()> {
     // Set memory.
     interpreter.generation_state.registers.program_counter = mpt_insert;
     interpreter.set_memory_segment(Segment::TrieData, cur_trie_data.clone());
-    interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, cur_trie_data.len().into());
+    let trie_data_len = cur_trie_data.len().into();
+    interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
     interpreter.run()?;
 
     // Finally, check that the hashes correspond.
@@ -569,7 +568,7 @@ fn test_bloom_two_logs() -> Result<()> {
         ]
         .into(),
     ];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(logs_bloom, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_bloom, initial_stack);
     interpreter.set_memory_segment(Segment::TxnBloom, vec![0.into(); 256]); // Initialize transaction Bloom filter.
     interpreter.set_memory_segment(Segment::LogsData, logs);
     interpreter.set_memory_segment(Segment::Logs, vec![0.into(), 4.into()]);

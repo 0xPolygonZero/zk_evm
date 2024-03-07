@@ -14,8 +14,6 @@ use plonky2::plonk::config::GenericConfig;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
-#[cfg(debug_assertions)]
-use starky::cross_table_lookup::debug_utils::check_ctls;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
 use starky::lookup::GrandProductChallengeSet;
 use starky::proof::{MultiProof, StarkProofWithMetadata};
@@ -27,8 +25,6 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::{generate_traces, GenerationInputs};
 use crate::get_challenges::observe_public_values;
 use crate::proof::{AllProof, PublicValues};
-#[cfg(debug_assertions)]
-use crate::verifier::debug_utils::get_memory_extra_looking_values;
 
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
@@ -149,6 +145,10 @@ where
     // enabled.
     #[cfg(debug_assertions)]
     {
+        use starky::cross_table_lookup::debug_utils::check_ctls;
+
+        use crate::verifier::debug_utils::get_memory_extra_looking_values;
+
         let mut extra_values = HashMap::new();
         extra_values.insert(
             *Table::Memory,
@@ -363,4 +363,20 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// A utility module designed to test witness generation externally.
+pub mod testing {
+    use super::*;
+    use crate::cpu::kernel::interpreter::Interpreter;
+
+    /// Simulates the zkEVM CPU execution.
+    /// It does not generate any trace or proof of correct state transition.
+    pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
+        let initial_stack = vec![];
+        let initial_offset = KERNEL.global_labels["main"];
+        let mut interpreter: Interpreter<F> =
+            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
+        interpreter.run()
+    }
 }

@@ -448,7 +448,6 @@ mod tests {
     use rand_chacha::ChaCha8Rng;
 
     use super::*;
-    use crate::arithmetic::columns::NUM_ARITH_COLUMNS;
 
     type F = GoldilocksField;
 
