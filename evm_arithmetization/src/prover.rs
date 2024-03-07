@@ -602,4 +602,18 @@ pub mod testing {
         }
         Ok(proofs)
     }
+
+    pub fn prove_all_segments_interpreter<F>(
+        inputs: GenerationInputs,
+        max_cpu_len_log: usize,
+    ) -> anyhow::Result<()>
+    where
+        F: Field,
+    {
+        let mut index = 0;
+        while generate_segment::<F>(max_cpu_len_log, index, &inputs)?.is_some() {
+            index += 1;
+        }
+        Ok(())
+    }
 }

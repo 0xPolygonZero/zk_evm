@@ -181,7 +181,7 @@ pub(crate) trait State<F: Field> {
         let mut final_registers = RegistersState::default();
         let mut final_mem = self.get_mut_generation_state().memory.clone();
         let mut running = true;
-
+        let mut final_clock = 0;
         loop {
             let registers = self.get_registers();
             let pc = registers.program_counter;
@@ -197,6 +197,7 @@ pub(crate) trait State<F: Field> {
                 }
                 // If we are in the interpreter, we need to set the final register values.
                 self.update_interpreter_final_registers(final_registers);
+                final_clock = self.get_clock();
                 self.final_exception()?;
             }
 
@@ -208,6 +209,7 @@ pub(crate) trait State<F: Field> {
                         return Ok((final_registers, Some(final_mem)));
                     }
                 } else {
+                    assert_eq!(self.get_clock() - final_clock, NUM_EXTRA_CYCLES_AFTER - 1);
                     let final_mem = self.get_full_memory();
                     #[cfg(not(test))]
                     self.log_info(format!("CPU halted after {} cycles", self.get_clock()));

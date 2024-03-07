@@ -11,7 +11,6 @@ use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
 use crate::generation::state::{GenerationState, State};
-use crate::generation::NUM_EXTRA_CYCLES_AFTER;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
