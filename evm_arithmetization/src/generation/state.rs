@@ -159,7 +159,6 @@ pub(crate) trait State<F: Field> {
     where
         Self: Transition<F>,
     {
-        println!("max cpu len log {:?}", max_cpu_len_log);
         let halt_offsets = self.get_halt_offsets();
 
         let halt_pc = KERNEL.global_labels["halt"];
