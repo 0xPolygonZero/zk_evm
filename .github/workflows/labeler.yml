@@ -10,3 +10,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/labeler@v5
+      with:
+        # Allow to remove labels that are no longer relevant when new changes are pushed.
+        sync-labels: true
