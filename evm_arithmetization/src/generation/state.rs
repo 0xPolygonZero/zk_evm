@@ -209,7 +209,9 @@ pub(crate) trait State<F: Field> {
                         return Ok((final_registers, Some(final_mem)));
                     }
                 } else {
-                    assert_eq!(self.get_clock() - final_clock, NUM_EXTRA_CYCLES_AFTER - 1);
+                    if !running {
+                        assert_eq!(self.get_clock() - final_clock, NUM_EXTRA_CYCLES_AFTER - 1);
+                    }
                     let final_mem = self.get_full_memory();
                     #[cfg(not(test))]
                     self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
