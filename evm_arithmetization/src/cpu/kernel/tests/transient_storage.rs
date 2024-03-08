@@ -2,11 +2,15 @@ use std::array;
 
 use anyhow::Result;
 use ethereum_types::{Address, U256};
+use once_cell::sync::Lazy;
 use pest::error::Error;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::{thread_rng, Rng};
 
-use crate::cpu::kernel::aggregator::{combined_kernel_from_files, KERNEL, KERNEL_FILES};
+use crate::cpu::kernel::aggregator::{
+    combined_kernel_from_files, KERNEL_FILES, NUMBER_KERNEL_FILES,
+};
+use crate::cpu::kernel::assembler::Kernel;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::{self, Interpreter};
@@ -18,7 +22,7 @@ use crate::GenerationInputs;
 
 #[test]
 fn test_tstore() -> Result<()> {
-    let sys_tstore = KERNEL.global_labels["sys_tstore"];
+    let sys_tstore = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tstore"];
 
     let kexit_info = U256::from(0xdeadbeefu32) + (U256::from(u64::from(true)) << 32);
 
@@ -78,7 +82,7 @@ fn test_tstore() -> Result<()> {
 
 #[test]
 fn test_tstore_tload() -> Result<()> {
-    let sys_tstore = KERNEL.global_labels["sys_tstore"];
+    let sys_tstore = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tstore"];
 
     let kexit_info = U256::from(0xdeadbeefu32) + (U256::from(u64::from(true)) << 32);
 
@@ -109,7 +113,7 @@ fn test_tstore_tload() -> Result<()> {
 
     assert_eq!(interpreter.generation_state.registers.gas_used, 100);
 
-    let sys_tload = KERNEL.global_labels["sys_tload"];
+    let sys_tload = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tload"];
     let kexit_info = U256::from(0xdeadbeefu32)
         + (U256::from(u64::from(true)) << 32)
         + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
@@ -169,7 +173,7 @@ fn test_many_tstore_many_tload() -> Result<()> {
         .set(gas_limit_address, (10 * 200).into());
     interpreter.generation_state.memory.set(addr_addr, 3.into());
 
-    let sys_tstore = KERNEL.global_labels["sys_tstore"];
+    let sys_tstore = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tstore"];
 
     for i in (0..10) {
         interpreter.generation_state.registers.program_counter = sys_tstore;
@@ -190,7 +194,7 @@ fn test_many_tstore_many_tload() -> Result<()> {
         );
     }
 
-    let sys_tload = KERNEL.global_labels["sys_tload"];
+    let sys_tload = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tload"];
 
     for i in (0..10) {
         interpreter.generation_state.registers.program_counter = sys_tload;
@@ -219,14 +223,21 @@ fn test_revert() -> Result<()> {
     // We use a modified kernel with an extra file defining a label
     // where the `checkpoint` macro from file cpu/kernel/asm/journal/journal.asm
     // is expanded.
-    let mut kernel_files = KERNEL_FILES.to_vec();
-    kernel_files.push(include_str!("checkpoint_label.asm"));
-    let kernel = combined_kernel_from_files(&kernel_files);
+    const NUMBER_FILES: usize = NUMBER_KERNEL_FILES + 1;
+    static KERNEL: Lazy<Kernel> = Lazy::new(|| {
+        combined_kernel_from_files(std::array::from_fn::<_, NUMBER_FILES, _>(|i| {
+            if i < NUMBER_KERNEL_FILES {
+                KERNEL_FILES[i]
+            } else {
+                include_str!("checkpoint_label.asm")
+            }
+        }))
+    });
 
-    let sys_tstore = kernel.global_labels["sys_tstore"];
+    let sys_tstore = KERNEL.global_labels["sys_tstore"];
     let mut interpreter = Interpreter::<F>::new(sys_tstore, vec![]);
     interpreter.generation_state =
-        GenerationState::<F>::new(GenerationInputs::default(), &kernel.code).unwrap();
+        GenerationState::<F>::new(GenerationInputs::default(), &KERNEL.code).unwrap();
 
     let gas_limit_address = MemoryAddress {
         context: 0,
@@ -268,7 +279,7 @@ fn test_revert() -> Result<()> {
     let gas_before_checkpoint = interpreter.generation_state.registers.gas_used;
 
     // We will revert to the point where `val` was 9
-    let checkpoint = kernel.global_labels["checkpoint"];
+    let checkpoint = KERNEL.global_labels["checkpoint"];
     interpreter.generation_state.registers.program_counter = checkpoint;
     interpreter.generation_state.registers.is_kernel = true;
     interpreter.push(0xdeadbeefu32.into());
@@ -310,7 +321,7 @@ fn test_revert() -> Result<()> {
     assert!(interpreter.run().is_err());
 
     // Now we should load the value before the revert
-    let sys_tload = kernel.global_labels["sys_tload"];
+    let sys_tload = KERNEL.global_labels["sys_tload"];
     interpreter.generation_state.registers.program_counter = sys_tload;
     interpreter.generation_state.registers.gas_used = 0;
     let kexit_info = U256::from(0xdeadbeefu32) + (U256::from(u64::from(true)) << 32);

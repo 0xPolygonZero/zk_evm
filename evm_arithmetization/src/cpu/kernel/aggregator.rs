@@ -7,7 +7,9 @@ use super::assembler::{assemble, Kernel};
 use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
-pub static KERNEL_FILES: [&str; 151] = [
+pub const NUMBER_KERNEL_FILES: usize = 151;
+
+pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     "global jumped_to_0: PANIC",
     "global jumped_to_1: PANIC",
     include_str!("asm/beacon_roots.asm"),
@@ -165,13 +167,13 @@ pub static KERNEL_FILES: [&str; 151] = [
 
 pub static KERNEL: Lazy<Kernel> = Lazy::new(combined_kernel);
 
-pub(crate) fn combined_kernel_from_files(files: &[&str]) -> Kernel {
+pub(crate) fn combined_kernel_from_files<const N: usize>(files: [&str; N]) -> Kernel {
     let parsed_files = files.iter().map(|f| parse(f)).collect_vec();
     assemble(parsed_files, evm_constants(), true)
 }
 
 pub(crate) fn combined_kernel() -> Kernel {
-    combined_kernel_from_files(&KERNEL_FILES)
+    combined_kernel_from_files(KERNEL_FILES)
 }
 
 #[cfg(test)]
