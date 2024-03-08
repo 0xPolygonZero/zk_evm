@@ -41,15 +41,15 @@ pub enum TraceParsingError {
     AccountDecode(String, String),
 
     /// Failure due to trying to access or delete a storage trie missing
-    #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
     /// from the base trie.
+    #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
     MissingAccountStorageTrie(HashedAccountAddr),
 
     /// Failure due to trying to access a non-existent key in the trie.
     #[error("Tried accessing a non-existent key ({1:x}) in the {0} trie (root hash: {2:x})")]
     NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
 
-    /// Failure due to missing keys when creating a subpartial trie.
+    /// Failure due to missing keys when creating a sub-partial trie.
     // TODO: Figure out how to make this error useful/meaningful... For now this is just a
     // placeholder.
     #[error("Missing keys when creating sub-partial tries (Trie type: {0})")]
@@ -312,15 +312,18 @@ impl ProcessedBlockTrace {
                 TraceParsingError::MissingAccountStorageTrie(*hashed_acc_addr),
             )?;
 
-            for (slot, val) in storage_writes.iter().map(|(k, v)| (k, v)) {
+            for (slot, val) in storage_writes
+                .iter()
+                .map(|(k, v)| (Nibbles::from_h256_be(hash(&k.bytes_be())), v))
+            {
                 // If we are writing a zero, then we actually need to perform a delete.
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
-                    false => storage_trie.insert(*slot, val.clone()),
+                    false => storage_trie.insert(slot, val.clone()),
                     true => {
                         if let Some(remaining_slot_key) =
                             Self::delete_node_and_report_remaining_key_if_branch_collapsed(
                                 storage_trie,
-                                slot,
+                                &slot,
                             )
                         {
                             out.additional_storage_trie_paths_to_not_hash
