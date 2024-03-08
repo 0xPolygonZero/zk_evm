@@ -15,7 +15,7 @@ use mpt_trie::{
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
     trie_subsets::create_trie_subset,
-    utils::{TriePath, TrieSegment},
+    utils::{IntoTrieKey, TriePath, TrieSegment},
 };
 use thiserror::Error;
 
@@ -317,14 +317,16 @@ impl ProcessedBlockTrace {
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
                     false => storage_trie.insert(*slot, val.clone()),
                     true => {
-                        if Self::delete_node_and_report_if_it_resulted_in_branch_collapse(
-                            storage_trie,
-                            slot,
-                        ) {
+                        if let Some(remaining_slot_key) =
+                            Self::delete_node_and_report_remaining_key_if_branch_collapsed(
+                                storage_trie,
+                                slot,
+                            )
+                        {
                             out.additional_storage_trie_paths_to_not_hash
                                 .entry(*hashed_acc_addr)
                                 .or_default()
-                                .push(*slot);
+                                .push(remaining_slot_key);
                         }
                     }
                 };
@@ -362,14 +364,18 @@ impl ProcessedBlockTrace {
                 .storage
                 .remove(hashed_addr)
                 .ok_or(TraceParsingError::MissingAccountStorageTrie(*hashed_addr))?;
+
             // TODO: Once the mechanism for resolving code hashes settles, we probably want
             // to also delete the code hash mapping here as well...
 
-            if Self::delete_node_and_report_if_it_resulted_in_branch_collapse(
-                &mut trie_state.state,
-                &k,
-            ) {
-                out.additional_state_trie_paths_to_not_hash.push(k);
+            if let Some(remaining_account_key) =
+                Self::delete_node_and_report_remaining_key_if_branch_collapsed(
+                    &mut trie_state.state,
+                    &k,
+                )
+            {
+                out.additional_state_trie_paths_to_not_hash
+                    .push(remaining_account_key);
             }
         }
 
@@ -377,16 +383,16 @@ impl ProcessedBlockTrace {
     }
 
     fn get_trie_trace(trie: &HashedPartialTrie, k: &Nibbles) -> TriePath {
-        path_for_query(trie, *k).collect()
+        path_for_query(trie, *k, true).collect()
     }
 
     /// If a branch collapse occurred after a delete, then we must ensure that
     /// the other single child that remains also is not hashed when passed into
-    /// plonky2.
-    fn delete_node_and_report_if_it_resulted_in_branch_collapse(
+    /// plonky2. Returns the key to the remaining child if a collapse occured.
+    fn delete_node_and_report_remaining_key_if_branch_collapsed(
         trie: &mut HashedPartialTrie,
         delete_k: &Nibbles,
-    ) -> bool {
+    ) -> Option<Nibbles> {
         let old_trace = Self::get_trie_trace(trie, delete_k);
         trie.delete(*delete_k);
         let new_trace = Self::get_trie_trace(trie, delete_k);
@@ -395,37 +401,32 @@ impl ProcessedBlockTrace {
     }
 
     /// Comparing the path of the deleted key before and after the deletion,
-    /// determine if the deletion resulted in a branch collapsing into an
-    /// extension node.
+    /// determine if the deletion resulted in a branch collapsing into a leaf or
+    /// extension node, and return the path to the remaining child if this
+    /// occurred.
     fn node_deletion_resulted_in_a_branch_collapse(
         old_path: &TriePath,
         new_path: &TriePath,
-    ) -> bool {
+    ) -> Option<Nibbles> {
         // Collapse requires at least 2 nodes.
         if old_path.0.len() < 2 {
-            return false;
+            return None;
         }
 
-        // Node we need to check is the last node in the new path.
-        let seg_idx = new_path.0.len() - 1;
-        let old_seg_at_idx = &old_path.0[seg_idx];
+        // If a collapse occurred, then this means that the node above the leaf has
+        // changed type. However, there are only two possibilities:
+        // Note that this function assumes that the delete always succeeds (which the
+        //
+        // If the node path length decreased after the delete, then a collapse occurred.
+        // As an aside, note that while it's true that the branch could have collapsed
+        // into an extension node with multiple nodes below it, the query logic will
+        // always stop at most one node after the keys diverge, which guarantees that
+        // the new trie path will always be shorter if a collapse occurred.
+        let branch_collapse_occurred = old_path.0.len() > new_path.0.len();
 
-        // The last node needs to be a branch in order for a collapse to occur.
-        if !matches!(old_seg_at_idx, TrieSegment::Branch(_)) {
-            return false;
-        }
-
-        let new_seg_at_idx = &new_path.0[seg_idx];
-
-        if old_seg_at_idx.node_type() == new_seg_at_idx.node_type() {
-            return false;
-        }
-
-        // Additional sanity check as this should be the only valid node type after a
+        // Now we need to determine the key of the only remaining node after the
         // collapse.
-        assert!(matches!(new_seg_at_idx, TrieSegment::Leaf(_)));
-
-        true
+        branch_collapse_occurred.then(|| new_path.iter().into_key())
     }
 
     /// Pads a generated IR vec with additional "dummy" entries if needed.
