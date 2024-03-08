@@ -45,7 +45,7 @@ global hash_initial_tries:
     // stack: trie_data_full_len
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
-    // If txn_idx == 0, update the beacon_root.
+    // If txn_idx == 0, update the beacon_root and exit roots.
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
     ISZERO
     %jumpi(set_beacon_root)

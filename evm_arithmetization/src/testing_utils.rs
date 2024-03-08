@@ -2,7 +2,7 @@
 //! unit and integration tests.
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{H256, U256};
+use ethereum_types::{BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::{
@@ -11,6 +11,9 @@ use mpt_trie::{
 };
 
 pub use crate::cpu::kernel::cancun_constants::*;
+pub use crate::cpu::kernel::constants::global_exit_root::{
+    GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_STORAGE_POS,
+};
 use crate::{generation::mpt::AccountRlp, util::h2u};
 
 pub const EMPTY_NODE_HASH: H256 = H256(hex!(
@@ -85,26 +88,27 @@ pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> A
     }
 }
 
-/// Returns an initial state trie containing nothing but the beacon roots
-/// contract, along with its storage trie.
-pub fn initial_state_and_storage_tries_with_beacon_roots(
+/// Returns an initial state trie containing the beacon roots and global exit
+/// roots contracts, along with their storage tries.
+pub fn preinitialized_state_and_storage_tries(
 ) -> (HashedPartialTrie, Vec<(H256, HashedPartialTrie)>) {
-    let state_trie = Node::Leaf {
-        nibbles: Nibbles::from_bytes_be(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED).unwrap(),
-        value: rlp::encode(&AccountRlp {
-            nonce: 0.into(),
-            balance: 0.into(),
-            storage_root: EMPTY_NODE_HASH,
-            code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
-        })
-        .to_vec(),
-    }
-    .into();
+    let mut state_trie = HashedPartialTrie::from(Node::Empty);
+    state_trie.insert(
+        beacon_roots_account_nibbles(),
+        rlp::encode(&BEACON_ROOTS_ACCOUNT).to_vec(),
+    );
+    state_trie.insert(
+        ger_account_nibbles(),
+        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+    );
 
-    let storage_tries = vec![(
-        H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
-        Node::Empty.into(),
-    )];
+    let storage_tries = vec![
+        (
+            H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
+            Node::Empty.into(),
+        ),
+        (H256(GLOBAL_EXIT_ROOT_ADDRESS_HASHED), Node::Empty.into()),
+    ];
 
     (state_trie, storage_tries)
 }
@@ -112,6 +116,30 @@ pub fn initial_state_and_storage_tries_with_beacon_roots(
 /// Returns the `Nibbles` corresponding to the beacon roots contract account.
 pub fn beacon_roots_account_nibbles() -> Nibbles {
     Nibbles::from_bytes_be(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED).unwrap()
+}
+
+/// Returns the `Nibbles` corresponding to the beacon roots contract account.
+pub fn ger_account_nibbles() -> Nibbles {
+    Nibbles::from_bytes_be(&GLOBAL_EXIT_ROOT_ADDRESS_HASHED).unwrap()
+}
+
+pub fn update_ger_account_storage(
+    storage_trie: &mut HashedPartialTrie,
+    root: H256,
+    timestamp: U256,
+) {
+    let mut arr = [0; 64];
+    arr[0..32].copy_from_slice(&root.0);
+    U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
+    let slot = keccak(arr);
+    insert_storage(storage_trie, slot.into_uint(), timestamp);
+}
+
+pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
+    AccountRlp {
+        storage_root: storage_trie.hash(),
+        ..GLOBAL_EXIT_ROOT_ACCOUNT
+    }
 }
 
 /// Converts an amount in `ETH` to `wei` units.

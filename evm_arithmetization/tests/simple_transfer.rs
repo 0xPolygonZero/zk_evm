@@ -8,8 +8,9 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, eth_to_wei, init_logger,
-    initial_state_and_storage_tries_with_beacon_roots, update_beacon_roots_account_storage,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, eth_to_wei,
+    ger_account_nibbles, init_logger, preinitialized_state_and_storage_tries,
+    update_beacon_roots_account_storage, GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
@@ -51,8 +52,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     };
     let to_account_before = AccountRlp::default();
 
-    let (mut state_trie_before, storage_tries) =
-        initial_state_and_storage_tries_with_beacon_roots();
+    let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
 
@@ -85,6 +85,8 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     contract_code.insert(keccak(vec![]), vec![]);
 
     let expected_state_trie_after: HashedPartialTrie = {
+        let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
+
         let txdata_gas = 2 * 16;
         let gas_used = 21_000 + txdata_gas;
 
@@ -106,28 +108,19 @@ fn test_simple_transfer() -> anyhow::Result<()> {
             ..to_account_before
         };
 
-        let mut children = core::array::from_fn(|_| Node::Empty.into());
-        children[sender_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: sender_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&sender_account_after).to_vec(),
-        }
-        .into();
-        children[to_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: to_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&to_account_after).to_vec(),
-        }
-        .into();
-        children[beacon_roots_account_nibbles().get_nibble(0) as usize] = Node::Leaf {
-            nibbles: beacon_roots_account_nibbles().truncate_n_nibbles_front(1),
-            value: rlp::encode(&beacon_roots_account).to_vec(),
-        }
-        .into();
+        state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
+        state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
 
-        Node::Branch {
-            children,
-            value: vec![],
-        }
-        .into()
+        state_trie_after.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&beacon_roots_account).to_vec(),
+        );
+        state_trie_after.insert(
+            ger_account_nibbles(),
+            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+        );
+
+        state_trie_after
     };
 
     let receipt_0 = LegacyReceiptRlp {
@@ -155,6 +148,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,

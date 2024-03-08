@@ -2,20 +2,20 @@
 /// <https://eips.ethereum.org/EIPS/eip-4788#pseudocode>
 
 global set_beacon_root:
-    PUSH start_txn
+    PUSH set_global_exit_roots
     %timestamp
-    // stack: timestamp, start_txns
+    // stack: timestamp, retdest
     PUSH @HISTORY_BUFFER_LENGTH
     DUP2
-    // stack: timestamp, 8191, timestamp, start_txns
+    // stack: timestamp, 8191, timestamp, retdest
     MOD
-    // stack: timestamp_idx, timestamp, start_txns
+    // stack: timestamp_idx, timestamp, retdest
     PUSH write_beacon_roots_to_storage
     %parent_beacon_block_root
-    // stack: calldata, write_beacon_roots_to_storage, timestamp_idx, timestamp, start_txns
+    // stack: calldata, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
     DUP3
     %add_const(@HISTORY_BUFFER_LENGTH)
-    // stack: root_idx, calldata, write_beacon_roots_to_storage, timestamp_idx, timestamp, start_txns
+    // stack: root_idx, calldata, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
 
 write_beacon_roots_to_storage:
     // stack: slot, value, retdest

@@ -6,9 +6,9 @@ use ethereum_types::{BigEndianHash, H256};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    initial_state_and_storage_tries_with_beacon_roots, update_beacon_roots_account_storage,
-    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -41,12 +41,13 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let (state_trie, storage_tries) = initial_state_and_storage_tries_with_beacon_roots();
+    let (state_trie, storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
     let state_trie_after: HashedPartialTrie = {
+        let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
@@ -55,11 +56,16 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        Node::Leaf {
-            nibbles: beacon_roots_account_nibbles(),
-            value: rlp::encode(&beacon_roots_account).to_vec(),
-        }
-        .into()
+        state_trie_after.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&beacon_roots_account).to_vec(),
+        );
+        state_trie_after.insert(
+            ger_account_nibbles(),
+            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+        );
+
+        state_trie_after
     };
 
     let mut contract_code = HashMap::new();
@@ -76,6 +82,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let inputs1 = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: TrieInputs {
             state_trie: state_trie.clone(),
             transactions_trie: transactions_trie.clone(),
@@ -152,6 +159,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let inputs2 = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: TrieInputs {
             state_trie: state_trie_after,
             transactions_trie,
