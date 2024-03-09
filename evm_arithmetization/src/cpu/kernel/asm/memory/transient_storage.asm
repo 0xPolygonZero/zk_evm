@@ -33,16 +33,20 @@ search_transient_storage_loop:
     // stack: loaded_addr, i, len, addr, key, retdest
     DUP4
     // stack: addr, loaded_addr, i, len, addr, key, retdest
-    EQ
-    // stack: addr == loaded_addr, i, len, addr, key, retdest
-    DUP2
+    SUB // functions as NEQ
+    // stack: addr != loaded_addr, i, len, addr, key, retdest
+    %jumpi(increment_and_loop)
+
+    // Addresses match, but we need to check for keys as well
+    DUP1
     %increment
     MLOAD_GENERAL
-    // stack: loaded_key, addr == loaded_addr, i, len, addr, key, retdest
-    DUP6
+    // stack: loaded_key, i, len, addr, key, retdest
+    DUP5
+    // stack: key, loaded_key, i, len, addr, key, retdest
     EQ
-    MUL // AND
     %jumpi(search_transient_storage_found)
+increment_and_loop:
     // stack: i, len, addr, key, retdest
     %increment
     %jump(search_transient_storage_loop)

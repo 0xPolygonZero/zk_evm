@@ -1,20 +1,18 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use ethereum_types::{H160, H256, U256};
-use evm_arithmetization::generation::mpt::AccountRlp;
+use ethereum_types::{H256, U256};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
+    ger_contract_from_storage, init_logger, preinitialized_state_and_storage_tries,
+    update_beacon_roots_account_storage, update_ger_account_storage,
 };
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
-use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
@@ -25,9 +23,9 @@ type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
 
-/// Execute 0 txns and 1 withdrawal.
+/// Add a new Global Exit Root to the state trie.
 #[test]
-fn test_withdrawals() -> anyhow::Result<()> {
+fn test_global_exit_root() -> anyhow::Result<()> {
     init_logger();
 
     let all_stark = AllStark::<F, D>::default();
@@ -37,14 +35,14 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
     let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    let mut ger_account_storage = storage_tries[1].1.clone();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
 
-    // Just one withdrawal.
-    let withdrawals = vec![(H160(random()), U256(random()))];
+    let global_exit_roots = vec![(U256(random()), H256(random()))];
 
     let state_trie_after = {
         let mut trie = HashedPartialTrie::from(Node::Empty);
@@ -55,22 +53,16 @@ fn test_withdrawals() -> anyhow::Result<()> {
         );
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+        for &(timestamp, root) in &global_exit_roots {
+            update_ger_account_storage(&mut ger_account_storage, root, timestamp);
+        }
+        let ger_account = ger_contract_from_storage(&ger_account_storage);
 
-        let addr_state_key = keccak(withdrawals[0].0);
-        let addr_nibbles = Nibbles::from_bytes_be(addr_state_key.as_bytes()).unwrap();
-        let account = AccountRlp {
-            balance: withdrawals[0].1,
-            ..AccountRlp::default()
-        };
-        trie.insert(addr_nibbles, rlp::encode(&account).to_vec());
         trie.insert(
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
         );
-        trie.insert(
-            ger_account_nibbles(),
-            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        );
+        trie.insert(ger_account_nibbles(), rlp::encode(&ger_account).to_vec());
 
         trie
     };
@@ -83,8 +75,8 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
     let inputs = GenerationInputs {
         signed_txn: None,
-        withdrawals,
-        global_exit_roots: vec![],
+        withdrawals: vec![],
+        global_exit_roots,
         tries: TrieInputs {
             state_trie: state_trie_before,
             transactions_trie,
