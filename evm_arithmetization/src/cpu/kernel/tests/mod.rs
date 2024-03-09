@@ -19,6 +19,7 @@ mod receipt;
 mod rlp;
 mod signed_syscalls;
 mod transaction_parsing;
+mod transient_storage;
 
 use std::str::FromStr;
 

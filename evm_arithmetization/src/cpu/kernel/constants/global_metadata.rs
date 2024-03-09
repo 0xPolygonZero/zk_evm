@@ -103,6 +103,9 @@ pub(crate) enum GlobalMetadata {
     KernelHash,
     KernelLen,
 
+    /// The length of the transient storage segment.
+    TransientStorageLen,
+
     // Start of the blob versioned hashes in the RLP for type-3 txns.
     BlobVersionedHashesRlpStart,
     // Length of the blob versioned hashes in the RLP for type-3 txns.
@@ -112,7 +115,7 @@ pub(crate) enum GlobalMetadata {
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 55;
+    pub(crate) const COUNT: usize = 56;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -173,6 +176,7 @@ impl GlobalMetadata {
             Self::CreatedContractsLen,
             Self::KernelHash,
             Self::KernelLen,
+            Self::TransientStorageLen,
             Self::BlobVersionedHashesRlpStart,
             Self::BlobVersionedHashesRlpLen,
             Self::BlobVersionedHashesLen,
@@ -234,6 +238,7 @@ impl GlobalMetadata {
             Self::CreatedContractsLen => "GLOBAL_METADATA_CREATED_CONTRACTS_LEN",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
+            Self::TransientStorageLen => "GLOBAL_METADATA_TRANSIENT_STORAGE_LEN",
             Self::BlobVersionedHashesRlpStart => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START",
             Self::BlobVersionedHashesRlpLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN",
             Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",

@@ -393,9 +393,9 @@ gas_cost_for_opcode:
     BYTES 0  // 0x59, MSIZE
     BYTES 0  // 0x5a, GAS
     BYTES @GAS_JUMPDEST  // 0x5b, JUMPDEST
-    %rep 3  // 0x5c-0x5e, invalid
-        BYTES 0
-    %endrep
+    BYTES 0  // 0x5c, TLOAD
+    BYTES 0  // 0x5d, TSTORE
+    BYTES 0  // 0x5e, invalid
 
     BYTES @GAS_BASE // 0x5f, PUSH0
     %rep 32 // 0x60-0x7f, PUSH1-PUSH32

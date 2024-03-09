@@ -76,6 +76,8 @@ pub fn get_opcode(mnemonic: &str) -> u8 {
         "MSIZE" => 0x59,
         "GAS" => 0x5a,
         "JUMPDEST" => 0x5b,
+        "TLOAD" => 0x5c,
+        "TSTORE" => 0x5d,
         "MCOPY" => 0x5e,
         "DUP1" => 0x80,
         "DUP2" => 0x81,
