@@ -157,7 +157,7 @@ fn combine_cycles<T: Eq + Hash + Clone>(mut perm: Vec<Vec<usize>>, lst_a: &[T]) 
                 if cycl.contains(term) {
                     if joinedperm.is_empty() {
                         // This is the first cycle we have found including an element of positions.
-                        joinedperm = cycl.clone();
+                        joinedperm.clone_from(&cycl);
                         pos = cycl.iter().position(|x| x == term).unwrap();
                     } else {
                         // Need to merge 2 cycles. If A_i = A_j then the permutations
