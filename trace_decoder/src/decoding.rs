@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
-    iter::{empty, once},
+    iter::{self, empty, once},
 };
 
 use ethereum_types::{Address, H256, U256};
@@ -9,18 +9,22 @@ use evm_arithmetization::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::{ExtraBlockData, TrieRoots},
 };
+use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
-    trie_subsets::create_trie_subset,
+    special_query::path_for_query,
+    trie_subsets::{create_trie_subset, SubsetTrieError},
+    utils::{IntoTrieKey, TriePath, TrieSegment},
 };
 use thiserror::Error;
 
 use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites, TxnMetaState},
     types::{
-        HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, OtherBlockData, TrieRootHash,
-        TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED,
+        HashedAccountAddr, HashedNodeAddr, HashedStorageAddr, HashedStorageAddrNibbles,
+        OtherBlockData, TriePathIter, TrieRootHash, TxnIdx, TxnProofGenIR,
+        EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, update_val_if_some},
 };
@@ -38,16 +42,16 @@ pub enum TraceParsingError {
 
     /// Failure due to trying to access or delete a storage trie missing
     /// from the base trie.
-    #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0})")]
+    #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
     MissingAccountStorageTrie(HashedAccountAddr),
 
     /// Failure due to trying to access a non-existent key in the trie.
-    #[error("Tried accessing a non-existent key ({1}) in the {0} trie (root hash: {2:x})")]
+    #[error("Tried accessing a non-existent key ({1:x}) in the {0} trie (root hash: {2:x})")]
     NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
 
-    /// Failure due to missing keys when creating a subpartial trie.
-    #[error("Missing keys when creating sub-partial tries (Trie type: {0})")]
-    MissingKeysCreatingSubPartialTrie(TrieType),
+    /// Failure due to missing keys when creating a sub-partial trie.
+    #[error("Missing key {0:x} when creating sub-partial tries (Trie type: {1})")]
+    MissingKeysCreatingSubPartialTrie(Nibbles, TrieType),
 
     /// Failure due to trying to withdraw from a missing account
     #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
@@ -80,12 +84,21 @@ impl Display for TrieType {
 
 /// The current state of all tries as we process txn deltas. These are mutated
 /// after every txn we process in the trace.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct PartialTrieState {
     state: HashedPartialTrie,
     storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
     txn: HashedPartialTrie,
     receipt: HashedPartialTrie,
+}
+
+/// Additional information discovered during delta application.
+#[derive(Debug, Default)]
+struct TrieDeltaApplicationOutput {
+    // During delta application, if a delete occurs, we may have to make sure additional nodes
+    // that are not accessed by the txn remain unhashed.
+    additional_state_trie_paths_to_not_hash: Vec<Nibbles>,
+    additional_storage_trie_paths_to_not_hash: HashMap<H256, Vec<Nibbles>>,
 }
 
 impl ProcessedBlockTrace {
@@ -122,23 +135,43 @@ impl ProcessedBlockTrace {
             .into_iter()
             .enumerate()
             .map(|(txn_idx, txn_info)| {
-                let tries = Self::create_minimal_partial_tries_needed_by_txn(
-                    &mut curr_block_tries,
-                    &txn_info.nodes_used_by_txn,
-                    txn_idx,
-                    &other_data.b_data.b_meta.block_beneficiary,
-                )?;
+                trace!("Generating proof IR for txn {}...", txn_idx);
 
+                Self::init_any_needed_empty_storage_tries(
+                    &mut curr_block_tries.storage,
+                    txn_info
+                        .nodes_used_by_txn
+                        .storage_accesses
+                        .iter()
+                        .map(|(k, _)| k),
+                    &txn_info
+                        .nodes_used_by_txn
+                        .state_accounts_with_no_accesses_but_storage_tries,
+                );
                 // For each non-dummy txn, we increment `txn_number_after` by 1, and
                 // update `gas_used_after` accordingly.
                 extra_data.txn_number_after += U256::one();
                 extra_data.gas_used_after += txn_info.meta.gas_used.into();
 
-                Self::apply_deltas_to_trie_state(
+                // Because we need to run delta application before creating the minimal
+                // sub-tries (we need to detect if deletes collapsed any branches), we need to
+                // do this clone every iteration.
+                let tries_at_start_of_txn = curr_block_tries.clone();
+
+                Self::update_txn_and_receipt_tries(&mut curr_block_tries, &txn_info.meta, txn_idx);
+
+                let delta_out = Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
-                    txn_info.nodes_used_by_txn,
+                    &txn_info.nodes_used_by_txn,
                     &txn_info.meta,
+                )?;
+
+                let tries = Self::create_minimal_partial_tries_needed_by_txn(
+                    &tries_at_start_of_txn,
+                    &txn_info.nodes_used_by_txn,
                     txn_idx,
+                    delta_out,
+                    &other_data.b_data.b_meta.block_beneficiary,
                 )?;
 
                 let trie_roots_after = calculate_trie_input_hashes(&curr_block_tries);
@@ -191,15 +224,55 @@ impl ProcessedBlockTrace {
         Ok(txn_gen_inputs)
     }
 
+    fn update_txn_and_receipt_tries(
+        trie_state: &mut PartialTrieState,
+        meta: &TxnMetaState,
+        txn_idx: TxnIdx,
+    ) {
+        let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
+        trie_state.txn.insert(txn_k, meta.txn_bytes());
+
+        trie_state
+            .receipt
+            .insert(txn_k, meta.receipt_node_bytes.as_ref());
+    }
+
+    /// If the account does not have a storage trie or does but is not
+    /// accessed by any txns, then we still need to manually create an entry for
+    /// them.
+    fn init_any_needed_empty_storage_tries<'a>(
+        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
+        accounts_with_storage: impl Iterator<Item = &'a HashedStorageAddr>,
+        state_accounts_with_no_accesses_but_storage_tries: &'a HashMap<
+            HashedAccountAddr,
+            TrieRootHash,
+        >,
+    ) {
+        for h_addr in accounts_with_storage {
+            if !storage_tries.contains_key(h_addr) {
+                let trie = state_accounts_with_no_accesses_but_storage_tries
+                    .get(h_addr)
+                    .map(|s_root| HashedPartialTrie::new(Node::Hash(*s_root)))
+                    .unwrap_or_default();
+
+                storage_tries.insert(*h_addr, trie);
+            };
+        }
+    }
+
     fn create_minimal_partial_tries_needed_by_txn(
-        curr_block_tries: &mut PartialTrieState,
+        curr_block_tries: &PartialTrieState,
         nodes_used_by_txn: &NodesUsedByTxn,
         txn_idx: TxnIdx,
+        delta_application_out: TrieDeltaApplicationOutput,
         _coin_base_addr: &Address,
     ) -> TraceParsingResult<TrieInputs> {
         let state_trie = create_minimal_state_partial_trie(
             &curr_block_tries.state,
             nodes_used_by_txn.state_accesses.iter().cloned(),
+            delta_application_out
+                .additional_state_trie_paths_to_not_hash
+                .into_iter(),
         )?;
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
@@ -210,17 +283,11 @@ impl ProcessedBlockTrace {
         let receipts_trie =
             create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
 
-        // TODO: Refactor so we can remove this vec alloc...
-        let storage_access_vec = nodes_used_by_txn
-            .storage_accesses
-            .iter()
-            .map(|(k, v)| (H256::from_slice(&k.bytes_be()), v.clone()))
-            .collect::<Vec<_>>();
-
         let storage_tries = create_minimal_storage_partial_tries(
-            &mut curr_block_tries.storage,
+            &curr_block_tries.storage,
             &nodes_used_by_txn.state_accounts_with_no_accesses_but_storage_tries,
-            storage_access_vec.iter(),
+            nodes_used_by_txn.storage_accesses.iter(),
+            &delta_application_out.additional_storage_trie_paths_to_not_hash,
         )?;
 
         Ok(TrieInputs {
@@ -233,34 +300,42 @@ impl ProcessedBlockTrace {
 
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
-        deltas: NodesUsedByTxn,
+        deltas: &NodesUsedByTxn,
         meta: &TxnMetaState,
-        txn_idx: TxnIdx,
-    ) -> TraceParsingResult<()> {
-        for (hashed_acc_addr, storage_writes) in deltas.storage_writes {
-            let storage_trie = trie_state
-                .storage
-                .get_mut(&H256::from_slice(&hashed_acc_addr.bytes_be()))
-                .ok_or(TraceParsingError::MissingAccountStorageTrie(
-                    H256::from_slice(&hashed_acc_addr.bytes_be()),
-                ))?;
+    ) -> TraceParsingResult<TrieDeltaApplicationOutput> {
+        let mut out = TrieDeltaApplicationOutput::default();
+
+        for (hashed_acc_addr, storage_writes) in deltas.storage_writes.iter() {
+            let mut storage_trie = trie_state.storage.get_mut(hashed_acc_addr).ok_or(
+                TraceParsingError::MissingAccountStorageTrie(*hashed_acc_addr),
+            )?;
 
             for (slot, val) in storage_writes
-                .into_iter()
+                .iter()
                 .map(|(k, v)| (Nibbles::from_h256_be(hash(&k.bytes_be())), v))
             {
                 // If we are writing a zero, then we actually need to perform a delete.
-                match val == ZERO_STORAGE_SLOT_VAL_RLPED {
-                    false => storage_trie.insert(slot, val),
+                match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
+                    false => storage_trie.insert(slot, val.clone()),
                     true => {
-                        storage_trie.delete(slot);
+                        if let Some(remaining_slot_key) =
+                            Self::delete_node_and_report_remaining_key_if_branch_collapsed(
+                                storage_trie,
+                                &slot,
+                            )
+                        {
+                            out.additional_storage_trie_paths_to_not_hash
+                                .entry(*hashed_acc_addr)
+                                .or_default()
+                                .push(remaining_slot_key);
+                        }
                     }
                 };
             }
         }
 
-        for (hashed_acc_addr, s_trie_writes) in deltas.state_writes {
-            let val_k = Nibbles::from_h256_be(hashed_acc_addr);
+        for (hashed_acc_addr, s_trie_writes) in deltas.state_writes.iter() {
+            let val_k = Nibbles::from_h256_be(*hashed_acc_addr);
 
             // If the account was created, then it will not exist in the trie.
             let val_bytes = trie_state
@@ -272,7 +347,7 @@ impl ProcessedBlockTrace {
 
             s_trie_writes.apply_writes_to_state_node(
                 &mut account,
-                &hashed_acc_addr,
+                hashed_acc_addr,
                 &trie_state.storage,
             )?;
 
@@ -283,27 +358,72 @@ impl ProcessedBlockTrace {
         }
 
         // Remove any accounts that self-destructed.
-        for hashed_addr in deltas.self_destructed_accounts {
-            let k = Nibbles::from_h256_be(hashed_addr);
+        for hashed_addr in deltas.self_destructed_accounts.iter() {
+            let k = Nibbles::from_h256_be(*hashed_addr);
 
             trie_state
                 .storage
-                .remove(&hashed_addr)
-                .ok_or(TraceParsingError::MissingAccountStorageTrie(hashed_addr))?;
+                .remove(hashed_addr)
+                .ok_or(TraceParsingError::MissingAccountStorageTrie(*hashed_addr))?;
+
             // TODO: Once the mechanism for resolving code hashes settles, we probably want
             // to also delete the code hash mapping here as well...
 
-            trie_state.state.delete(k);
+            if let Some(remaining_account_key) =
+                Self::delete_node_and_report_remaining_key_if_branch_collapsed(
+                    &mut trie_state.state,
+                    &k,
+                )
+            {
+                out.additional_state_trie_paths_to_not_hash
+                    .push(remaining_account_key);
+            }
         }
 
-        let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
-        trie_state.txn.insert(txn_k, meta.txn_bytes());
+        Ok(out)
+    }
 
-        trie_state
-            .receipt
-            .insert(txn_k, meta.receipt_node_bytes.as_ref());
+    fn get_trie_trace(trie: &HashedPartialTrie, k: &Nibbles) -> TriePath {
+        path_for_query(trie, *k, true).collect()
+    }
 
-        Ok(())
+    /// If a branch collapse occurred after a delete, then we must ensure that
+    /// the other single child that remains also is not hashed when passed into
+    /// plonky2. Returns the key to the remaining child if a collapse occured.
+    fn delete_node_and_report_remaining_key_if_branch_collapsed(
+        trie: &mut HashedPartialTrie,
+        delete_k: &Nibbles,
+    ) -> Option<Nibbles> {
+        let old_trace = Self::get_trie_trace(trie, delete_k);
+        trie.delete(*delete_k);
+        let new_trace = Self::get_trie_trace(trie, delete_k);
+
+        Self::node_deletion_resulted_in_a_branch_collapse(&old_trace, &new_trace)
+    }
+
+    /// Comparing the path of the deleted key before and after the deletion,
+    /// determine if the deletion resulted in a branch collapsing into a leaf or
+    /// extension node, and return the path to the remaining child if this
+    /// occurred.
+    fn node_deletion_resulted_in_a_branch_collapse(
+        old_path: &TriePath,
+        new_path: &TriePath,
+    ) -> Option<Nibbles> {
+        // Collapse requires at least 2 nodes.
+        if old_path.0.len() < 2 {
+            return None;
+        }
+
+        // If the node path length decreased after the delete, then a collapse occurred.
+        // As an aside, note that while it's true that the branch could have collapsed
+        // into an extension node with multiple nodes below it, the query logic will
+        // always stop at most one node after the keys diverge, which guarantees that
+        // the new trie path will always be shorter if a collapse occurred.
+        let branch_collapse_occurred = old_path.0.len() > new_path.0.len();
+
+        // Now we need to determine the key of the only remaining node after the
+        // collapse.
+        branch_collapse_occurred.then(|| new_path.iter().into_key())
     }
 
     /// Pads a generated IR vec with additional "dummy" entries if needed.
@@ -533,7 +653,11 @@ fn create_dummy_gen_input_with_state_addrs_accessed(
 ) -> TraceParsingResult<TxnProofGenIR> {
     let sub_tries = create_dummy_proof_trie_inputs(
         final_tries,
-        create_minimal_state_partial_trie(&final_tries.state, account_addrs_accessed)?,
+        create_minimal_state_partial_trie(
+            &final_tries.state,
+            account_addrs_accessed,
+            iter::empty(),
+        )?,
     );
     Ok(create_dummy_gen_input_common(
         other_data, extra_data, sub_tries,
@@ -606,10 +730,14 @@ fn create_dummy_proof_trie_inputs(
 fn create_minimal_state_partial_trie(
     state_trie: &HashedPartialTrie,
     state_accesses: impl Iterator<Item = HashedNodeAddr>,
+    additional_state_trie_paths_to_not_hash: impl Iterator<Item = Nibbles>,
 ) -> TraceParsingResult<HashedPartialTrie> {
     create_trie_subset_wrapped(
         state_trie,
-        state_accesses.into_iter().map(Nibbles::from_h256_be),
+        state_accesses
+            .into_iter()
+            .map(Nibbles::from_h256_be)
+            .chain(additional_state_trie_paths_to_not_hash),
         TrieType::State,
     )
 }
@@ -617,28 +745,27 @@ fn create_minimal_state_partial_trie(
 // TODO!!!: We really need to be appending the empty storage tries to the base
 // trie somewhere else! This is a big hack!
 fn create_minimal_storage_partial_tries<'a>(
-    storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
+    storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
     state_accounts_with_no_accesses_but_storage_tries: &HashMap<HashedAccountAddr, TrieRootHash>,
     accesses_per_account: impl Iterator<Item = &'a (HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
+    additional_storage_trie_paths_to_not_hash: &HashMap<HashedAccountAddr, Vec<Nibbles>>,
 ) -> TraceParsingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {
     accesses_per_account
         .map(|(h_addr, mem_accesses)| {
-            // TODO: Clean up...
-            let base_storage_trie = match storage_tries.get(&H256(h_addr.0)) {
-                Some(s_trie) => s_trie,
-                None => {
-                    let trie = state_accounts_with_no_accesses_but_storage_tries
-                        .get(h_addr)
-                        .map(|s_root| HashedPartialTrie::new(Node::Hash(*s_root)))
-                        .unwrap_or_default();
-                    storage_tries.insert(*h_addr, trie); // TODO: Really change this...
-                    storage_tries.get(h_addr).unwrap()
-                }
-            };
+            // Guaranteed to exist due to calling `init_any_needed_empty_storage_tries`
+            // earlier on.
+            let base_storage_trie = &storage_tries[h_addr];
+
+            let storage_slots_to_not_hash = mem_accesses.iter().cloned().chain(
+                additional_storage_trie_paths_to_not_hash
+                    .get(h_addr)
+                    .into_iter()
+                    .flat_map(|slots| slots.iter().cloned()),
+            );
 
             let partial_storage_trie = create_trie_subset_wrapped(
                 base_storage_trie,
-                mem_accesses.iter().cloned(),
+                storage_slots_to_not_hash,
                 TrieType::Storage,
             )?;
 
@@ -652,8 +779,13 @@ fn create_trie_subset_wrapped(
     accesses: impl Iterator<Item = Nibbles>,
     trie_type: TrieType,
 ) -> TraceParsingResult<HashedPartialTrie> {
-    create_trie_subset(trie, accesses)
-        .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(trie_type))
+    create_trie_subset(trie, accesses).map_err(|trie_err| {
+        let key = match trie_err {
+            SubsetTrieError::UnexpectedKey(key, _) => key,
+        };
+
+        TraceParsingError::MissingKeysCreatingSubPartialTrie(key, trie_type)
+    })
 }
 
 fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {
