@@ -49,7 +49,6 @@ pub(crate) enum GlobalMetadata {
     BlockGasLimit,
     BlockChainId,
     BlockBaseFee,
-    BlockBlobBaseFee,
     BlockBlobGasUsed,
     BlockExcessBlobGas,
     BlockGasUsed,
@@ -115,7 +114,7 @@ pub(crate) enum GlobalMetadata {
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 56;
+    pub(crate) const COUNT: usize = 55;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -146,7 +145,6 @@ impl GlobalMetadata {
             Self::BlockChainId,
             Self::BlockBaseFee,
             Self::BlockGasUsed,
-            Self::BlockBlobBaseFee,
             Self::BlockBlobGasUsed,
             Self::BlockExcessBlobGas,
             Self::BlockGasUsedBefore,
@@ -207,7 +205,6 @@ impl GlobalMetadata {
             Self::BlockGasLimit => "GLOBAL_METADATA_BLOCK_GAS_LIMIT",
             Self::BlockChainId => "GLOBAL_METADATA_BLOCK_CHAIN_ID",
             Self::BlockBaseFee => "GLOBAL_METADATA_BLOCK_BASE_FEE",
-            Self::BlockBlobBaseFee => "GLOBAL_METADATA_BLOCK_BLOB_BASE_FEE",
             Self::BlockBlobGasUsed => "GLOBAL_METADATA_BLOCK_BLOB_GAS_USED",
             Self::BlockExcessBlobGas => "GLOBAL_METADATA_BLOCK_EXCESS_BLOB_GAS",
             Self::BlockGasUsed => "GLOBAL_METADATA_BLOCK_GAS_USED",

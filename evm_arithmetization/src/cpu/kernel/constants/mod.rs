@@ -316,9 +316,14 @@ const MAX_NONCE: (&str, u64) = ("MAX_NONCE", 0xffffffffffffffff);
 const CALL_STACK_LIMIT: (&str, u64) = ("CALL_STACK_LIMIT", 1024);
 
 /// Cancun-related constants
-/// See <https://eips.ethereum.org/EIPS/eip-4788#deployment>.
+/// See <https://eips.ethereum.org/EIPS/eip-4788> and
+/// <https://eips.ethereum.org/EIPS/eip-4844>.
 pub mod cancun_constants {
     use super::*;
+
+    pub const BLOB_BASE_FEE_UPDATE_FRACTION: U256 = U256([0x32f0ed, 0, 0, 0]);
+
+    pub const MIN_BLOB_BASE_FEE: U256 = U256::one();
 
     pub const BEACON_ROOTS_ADDRESS: (&str, [u8; 20]) = (
         "BEACON_ROOTS_ADDRESS",
