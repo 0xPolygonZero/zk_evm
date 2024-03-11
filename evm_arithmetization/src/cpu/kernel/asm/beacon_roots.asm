@@ -1,5 +1,7 @@
 /// EIP-4788: Beacon block root in the EVM
 /// <https://eips.ethereum.org/EIPS/eip-4788#pseudocode>
+///
+/// *NOTE*: This will panic if one of the provided timestamps is zero.
 
 global set_beacon_root:
     PUSH set_global_exit_roots
