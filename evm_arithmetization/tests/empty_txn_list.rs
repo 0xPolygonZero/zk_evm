@@ -35,6 +35,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
 
     let block_metadata = BlockMetadata {
         block_number: 1.into(),
+        block_timestamp: 1.into(),
         parent_beacon_block_root: H256(hex!(
             "44e2566c06c03b132e0ede3e90af477ebca74393b89dd6cb29f9c79cbcb6e963"
         )),

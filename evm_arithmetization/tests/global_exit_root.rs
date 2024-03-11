@@ -31,7 +31,10 @@ fn test_global_exit_root() -> anyhow::Result<()> {
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
 
-    let block_metadata = BlockMetadata::default();
+    let block_metadata = BlockMetadata {
+        block_timestamp: 1.into(),
+        ..BlockMetadata::default()
+    };
 
     let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
@@ -48,7 +51,7 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         let mut trie = HashedPartialTrie::from(Node::Empty);
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
-            0.into(),
+            block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
         );
         let beacon_roots_account =
