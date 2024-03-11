@@ -385,6 +385,6 @@ pub mod testing {
             output_debug_tries(interpreter.get_generation_state())?;
         }
 
-        Ok(())
+        result
     }
 }
