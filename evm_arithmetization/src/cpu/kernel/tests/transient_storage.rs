@@ -110,7 +110,6 @@ fn test_tstore_tload() -> Result<()> {
     interpreter.generation_state.memory.set(addr_addr, 3.into());
 
     interpreter.run()?;
-    println!("MEjor aca");
 
     assert_eq!(interpreter.generation_state.registers.gas_used, 100);
 
@@ -124,7 +123,6 @@ fn test_tstore_tload() -> Result<()> {
     interpreter.push(kexit_info);
 
     interpreter.run()?;
-    println!("2");
 
     assert_eq!(interpreter.generation_state.registers.gas_used, 200);
 
