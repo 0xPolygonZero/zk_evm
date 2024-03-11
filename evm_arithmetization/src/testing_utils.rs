@@ -40,8 +40,12 @@ fn insert_storage(trie: &mut HashedPartialTrie, slot: U256, value: U256) {
     slot.to_big_endian(&mut bytes);
     let key = keccak(bytes);
     let nibbles = Nibbles::from_bytes_be(key.as_bytes()).unwrap();
-    let r = rlp::encode(&value);
-    trie.insert(nibbles, r.freeze().to_vec());
+    if value.is_zero() {
+        trie.delete(nibbles);
+    } else {
+        let r = rlp::encode(&value);
+        trie.insert(nibbles, r.freeze().to_vec());
+    }
 }
 
 /// Creates a storage trie for an account, given a list of `(slot, value)`
@@ -81,10 +85,8 @@ pub fn update_beacon_roots_account_storage(
 /// Returns the beacon roots contract account from its provided storage trie.
 pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {
     AccountRlp {
-        nonce: 0.into(),
-        balance: 0.into(),
         storage_root: storage_trie.hash(),
-        code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
+        ..BEACON_ROOTS_ACCOUNT
     }
 }
 
