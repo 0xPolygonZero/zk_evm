@@ -98,7 +98,7 @@ struct PartialTrieState {
 #[derive(Debug, Default)]
 struct TrieDeltaApplicationOutput {
     // During delta application, if a delete occurs, we may have to make sure additional nodes
-    // remain unhashed that are not accessed by the txn.
+    // that are not accessed by the txn remain unhashed.
     additional_state_trie_paths_to_not_hash: Vec<Nibbles>,
     additional_storage_trie_paths_to_not_hash: HashMap<H256, Vec<Nibbles>>,
 }
