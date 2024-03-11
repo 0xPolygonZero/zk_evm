@@ -1956,9 +1956,9 @@ dependencies = [
 
 [[package]]
 name = "paladin-core"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c10eebceee2898070e490a57ada2bd3810c236a6d80aadccab4d70ef27c7aa34"
+checksum = "5af1955eaab1506a43d046628c218b7b3915539554838feb85ed31f54aace2f2"
 dependencies = [
  "anyhow",
  "async-trait",
