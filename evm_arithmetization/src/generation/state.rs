@@ -175,8 +175,6 @@ pub(crate) trait State<F: Field> {
 
             self.transition()?;
         }
-
-        Ok(())
     }
 
     fn handle_error(&mut self, err: ProgramError) -> anyhow::Result<()>

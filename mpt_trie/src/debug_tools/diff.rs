@@ -306,7 +306,7 @@ fn find_latest_diff_point_between_tries_rec(
 
     // Note that differences in a node's `value` will be picked up by a hash
     // mismatch.
-    if (a_type, a_key_piece) == (b_type, b_key_piece) {
+    if (a_type, a_key_piece) != (b_type, b_key_piece) {
         depth_state.try_update_longest_divergence_key_node(state);
         DiffDetectionState::NodeTypesDiffer
     } else {
