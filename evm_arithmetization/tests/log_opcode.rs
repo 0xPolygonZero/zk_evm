@@ -148,7 +148,6 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         block_gaslimit: 0xffffffffu32.into(),
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
-        block_blob_base_fee: 0x2.into(),
         ..Default::default()
     };
 
@@ -366,7 +365,6 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
         block_gas_used: (22570 + 21000).into(),
-        block_blob_base_fee: 0x2.into(),
         block_bloom: [
             0.into(),
             0.into(),

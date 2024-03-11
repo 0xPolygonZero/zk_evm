@@ -87,7 +87,6 @@ fn test_add11_yml() {
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
         block_gas_used: gas_used,
-        block_blob_base_fee: 0x2.into(),
         ..Default::default()
     };
 
@@ -257,7 +256,6 @@ fn test_add11_yml_with_exception() {
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
         block_gas_used: txn_gas_limit.into(),
-        block_blob_base_fee: 0x2.into(),
         ..Default::default()
     };
 

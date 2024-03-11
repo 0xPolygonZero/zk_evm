@@ -77,7 +77,6 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
         block_gas_used: 21032.into(),
-        block_blob_base_fee: 0x2.into(),
         ..Default::default()
     };
 

@@ -108,7 +108,6 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
         block_gaslimit: 0xff112233u32.into(),
         block_gas_used: gas_used.into(),
         block_base_fee: 0xa.into(),
-        block_blob_base_fee: 0x2.into(),
         ..Default::default()
     };
 

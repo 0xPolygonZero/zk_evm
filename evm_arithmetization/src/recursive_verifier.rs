@@ -377,8 +377,8 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
     ];
 
     // This contains the `block_beneficiary`, `block_random`, `block_base_fee`,
-    // `block_blob_base_fee`, `block_blob_gas_used`, `block_excess_blob_gas`,
-    // `parent_beacon_block_root` as well as `cur_hash`.
+    // `block_blob_gas_used`, `block_excess_blob_gas`, `parent_beacon_block_root`
+    // as well as `cur_hash`.
     let block_fields_arrays: [(GlobalMetadata, &[Target]); 7] = [
         (
             GlobalMetadata::BlockBeneficiary,
@@ -608,7 +608,6 @@ pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: 
     let block_chain_id = builder.add_virtual_public_input();
     let block_base_fee = builder.add_virtual_public_input_arr();
     let block_gas_used = builder.add_virtual_public_input();
-    let block_blob_base_fee = builder.add_virtual_public_input_arr();
     let block_blob_gas_used = builder.add_virtual_public_input_arr();
     let block_excess_blob_gas = builder.add_virtual_public_input_arr();
     let parent_beacon_block_root = builder.add_virtual_public_input_arr();
@@ -623,7 +622,6 @@ pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: 
         block_chain_id,
         block_base_fee,
         block_gas_used,
-        block_blob_base_fee,
         block_blob_gas_used,
         block_excess_blob_gas,
         parent_beacon_block_root,
