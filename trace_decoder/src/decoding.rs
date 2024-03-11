@@ -14,7 +14,7 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
-    trie_subsets::create_trie_subset,
+    trie_subsets::{create_trie_subset, SubsetTrieError},
     utils::{IntoTrieKey, TriePath, TrieSegment},
 };
 use thiserror::Error;
@@ -50,10 +50,8 @@ pub enum TraceParsingError {
     NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
 
     /// Failure due to missing keys when creating a sub-partial trie.
-    // TODO: Figure out how to make this error useful/meaningful... For now this is just a
-    // placeholder.
-    #[error("Missing keys when creating sub-partial tries (Trie type: {0})")]
-    MissingKeysCreatingSubPartialTrie(TrieType),
+    #[error("Missing key {0:x} when creating sub-partial tries (Trie type: {1})")]
+    MissingKeysCreatingSubPartialTrie(Nibbles, TrieType),
 
     /// Failure due to trying to withdraw from a missing account
     #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
@@ -416,10 +414,6 @@ impl ProcessedBlockTrace {
             return None;
         }
 
-        // If a collapse occurred, then this means that the node above the leaf has
-        // changed type. However, there are only two possibilities:
-        // Note that this function assumes that the delete always succeeds (which the
-        //
         // If the node path length decreased after the delete, then a collapse occurred.
         // As an aside, note that while it's true that the branch could have collapsed
         // into an extension node with multiple nodes below it, the query logic will
@@ -785,8 +779,13 @@ fn create_trie_subset_wrapped(
     accesses: impl Iterator<Item = Nibbles>,
     trie_type: TrieType,
 ) -> TraceParsingResult<HashedPartialTrie> {
-    create_trie_subset(trie, accesses)
-        .map_err(|_| TraceParsingError::MissingKeysCreatingSubPartialTrie(trie_type))
+    create_trie_subset(trie, accesses).map_err(|trie_err| {
+        let key = match trie_err {
+            SubsetTrieError::UnexpectedKey(key, _) => key,
+        };
+
+        TraceParsingError::MissingKeysCreatingSubPartialTrie(key, trie_type)
+    })
 }
 
 fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {

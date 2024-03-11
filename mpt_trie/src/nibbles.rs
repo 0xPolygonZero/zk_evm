@@ -26,9 +26,9 @@ pub type Nibble = u8;
 /// Used for the internal representation of a sequence of nibbles.
 pub type NibblesIntern = U512;
 
-const NIBBLES_APPEND_ASSERT_ERR_MSG: &str =
-    "Attempted to append nibbles together that produced nibbles longer than 64 nibbles!";
-const NIBBLE_APPEND_ASSERT_ERR_MSG: &str =
+const MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG: &str =
+    "Attempted to create a nibbles sequence longer than 64!";
+const SINGLE_NIBBLE_APPEND_ASSERT_ERR_MSG: &str =
     "Attempted to append a single nibble that was greater than 15!";
 
 /// Because there are two different ways to convert to `Nibbles`, we don't want
@@ -781,12 +781,20 @@ impl Nibbles {
     }
 
     fn nibble_append_safety_asserts(&self, n: Nibble) {
-        assert!(self.count < 64, "{}", NIBBLES_APPEND_ASSERT_ERR_MSG);
-        assert!(n < 16, "{}", NIBBLE_APPEND_ASSERT_ERR_MSG);
+        assert!(
+            self.count < 64,
+            "{}",
+            MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG
+        );
+        assert!(n < 16, "{}", SINGLE_NIBBLE_APPEND_ASSERT_ERR_MSG);
     }
 
     fn nibbles_append_safety_asserts(&self, new_count: usize) {
-        assert!(new_count <= 64, "{}", NIBBLES_APPEND_ASSERT_ERR_MSG);
+        assert!(
+            new_count <= 64,
+            "{}",
+            MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG
+        );
     }
 
     // TODO: REMOVE BEFORE NEXT CRATE VERSION! THIS IS A TEMP HACK!
