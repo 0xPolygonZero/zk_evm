@@ -1,4 +1,5 @@
 use core::mem::transmute;
+use std::cmp::min;
 use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
@@ -9,6 +10,9 @@ use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
+use crate::cpu::kernel::constants::cancun_constants::{
+    BLOB_BASE_FEE_UPDATE_FRACTION, MIN_BLOB_BASE_FEE,
+};
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
@@ -48,6 +52,7 @@ impl<F: Field> GenerationState<F> {
             "sf" => self.run_sf(input_fn),
             "ffe" => self.run_ffe(input_fn),
             "rlp" => self.run_rlp(),
+            "blobbasefee" => self.run_blobbasefee(),
             "current_hash" => self.run_current_hash(),
             "account_code" => self.run_account_code(),
             "bignum_modmul" => self.run_bignum_modmul(),
@@ -134,6 +139,15 @@ impl<F: Field> GenerationState<F> {
         self.rlp_prover_inputs
             .pop()
             .ok_or(ProgramError::ProverInputError(OutOfRlpData))
+    }
+
+    fn run_blobbasefee(&mut self) -> Result<U256, ProgramError> {
+        let excess_blob_gas = self.inputs.block_metadata.block_excess_blob_gas;
+        Ok(fake_exponential(
+            MIN_BLOB_BASE_FEE,
+            excess_blob_gas,
+            BLOB_BASE_FEE_UPDATE_FRACTION,
+        ))
     }
 
     fn run_current_hash(&mut self) -> Result<U256, ProgramError> {
@@ -828,4 +842,18 @@ fn modexp(x: U256, e: U256, n: U256) -> Result<U256, ProgramError> {
     }
 
     Ok(product)
+}
+
+/// See EIP-4844: <https://eips.ethereum.org/EIPS/eip-4844#helpers>.
+fn fake_exponential(factor: U256, numerator: U256, denominator: U256) -> U256 {
+    let mut i = 1;
+    let mut output = U256::zero();
+    let mut numerator_accum = factor * denominator;
+    while !numerator_accum.is_zero() {
+        output += numerator_accum;
+        numerator_accum *= numerator; // (denominator * i)
+        i += 1;
+    }
+
+    output // denominator
 }

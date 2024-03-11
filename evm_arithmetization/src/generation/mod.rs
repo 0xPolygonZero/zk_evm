@@ -131,10 +131,6 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         ),
         (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
         (
-            GlobalMetadata::BlockBlobBaseFee,
-            metadata.block_blob_base_fee,
-        ),
-        (
             GlobalMetadata::BlockBlobGasUsed,
             metadata.block_blob_gas_used,
         ),

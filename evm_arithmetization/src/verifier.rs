@@ -195,10 +195,6 @@ where
             public_values.block_metadata.block_gas_used,
         ),
         (
-            GlobalMetadata::BlockBlobBaseFee,
-            public_values.block_metadata.block_blob_base_fee,
-        ),
-        (
             GlobalMetadata::BlockBlobGasUsed,
             public_values.block_metadata.block_blob_gas_used,
         ),
@@ -350,10 +346,6 @@ pub(crate) mod debug_utils {
             (
                 GlobalMetadata::BlockGasUsed,
                 public_values.block_metadata.block_gas_used,
-            ),
-            (
-                GlobalMetadata::BlockBlobBaseFee,
-                public_values.block_metadata.block_blob_base_fee,
             ),
             (
                 GlobalMetadata::BlockBlobGasUsed,
