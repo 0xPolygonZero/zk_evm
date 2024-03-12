@@ -5,6 +5,7 @@
 # 2 --> Rpc endpoint:port (eg. http://35.246.1.96:8545)
 
 export RUST_BACKTRACE=1
+export RUST_MIN_STACK=8388608
 export RUST_LOG=mpt_trie=info,trace_decoder=info,plonky2=info,evm_arithmetization=trace
 
 # Speciying smallest ranges, as we won't need them anyway.
