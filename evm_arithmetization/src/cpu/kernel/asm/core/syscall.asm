@@ -90,7 +90,7 @@ global syscall_jumptable:
     JUMPTABLE panic // jumpdest is implemented natively
     JUMPTABLE sys_tload
     JUMPTABLE sys_tstore
-    JUMPTABLE panic // 0x5e is an invalid opcode
+    JUMPTABLE sys_mcopy
     JUMPTABLE panic // 0x5f is an invalid opcode
 
     // 0x60-0x6f
