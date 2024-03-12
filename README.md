@@ -28,7 +28,7 @@ be found in the [docs](./docs/) section, including:
 * [zkEVM specifications](./docs/arithmetization/zkevm.pdf), detailing the underlying EVM proving statement
 
 ## Branches
-The default branch for the repo is the `develop` branch which is not stable but under active development. Most PRs should target `develop`. If you need a stable branch then `main` is what you're after.
+The default branch for the repo is the `develop` branch which is not stable but under active development. Most PRs should target `develop`. If you need a stable branch then a tagged version of `main` is what you're after.
 It should be assumed that `develop` will break and should only be used for development. 
 
 ## Building
