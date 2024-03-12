@@ -216,7 +216,7 @@ impl TrieSegment {
     }
 
     /// Extracts the key piece used by the segment (if applicable).
-    pub fn get_key_piece_from_seg_if_present(&self) -> Option<Nibbles> {
+    pub(crate) fn get_key_piece_from_seg_if_present(&self) -> Option<Nibbles> {
         match self {
             TrieSegment::Empty | TrieSegment::Hash => None,
             TrieSegment::Branch(nib) => Some(Nibbles::from_nibble(*nib)),
@@ -230,7 +230,7 @@ impl TrieSegment {
 /// This function is intended to be used during a trie query as we are
 /// traversing down a trie. Depending on the current node, we pop off nibbles
 /// and use these to create `TrieSegment`s.
-pub fn get_segment_from_node_and_key_piece<T: PartialTrie>(
+pub(crate) fn get_segment_from_node_and_key_piece<T: PartialTrie>(
     n: &Node<T>,
     k_piece: &Nibbles,
 ) -> TrieSegment {

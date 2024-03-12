@@ -5,11 +5,9 @@ use itertools::Itertools;
 use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::packed::PackedField;
-use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::util::transpose;
 
 use crate::witness::errors::ProgramError;
 

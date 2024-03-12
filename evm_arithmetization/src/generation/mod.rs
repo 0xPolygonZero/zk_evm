@@ -1,7 +1,8 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
-use anyhow::{anyhow, Error};
+use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -20,14 +21,12 @@ use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::GenerationState;
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
 use crate::proof::{BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots};
-use crate::util::{h2u, u256_to_u8, u256_to_usize};
-use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind};
-use crate::witness::state::RegistersState;
+use crate::util::{h2u, u256_to_usize};
+use crate::witness::memory::{MemoryAddress, MemoryChannel};
 
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -35,8 +34,8 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
-use self::state::{GenerationStateCheckpoint, State};
-use crate::witness::util::{mem_write_log, stack_peek};
+use self::state::State;
+use crate::witness::util::mem_write_log;
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -205,12 +204,25 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
     state.traces.memory_ops.extend(ops);
 }
 
+pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
+    log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
+    log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
+    log::debug!(
+        "Input transactions_trie: {:?}",
+        &inputs.tries.transactions_trie
+    );
+    log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
+    log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
+    log::debug!("Input contract_code: {:?}", &inputs.contract_code);
+}
+
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
     config: &StarkConfig,
     timing: &mut TimingTree,
 ) -> anyhow::Result<([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues)> {
+    debug_inputs(&inputs);
     let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
@@ -218,51 +230,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     let cpu_res = timed!(timing, "simulate CPU", simulate_cpu(&mut state));
     if cpu_res.is_err() {
-        // Retrieve previous PC (before jumping to KernelPanic), to see if we reached
-        // `hash_final_tries`. We will output debugging information on the final
-        // tries only if we got a root mismatch.
-        let previous_pc = state
-            .traces
-            .cpu
-            .last()
-            .expect("We should have CPU rows")
-            .program_counter
-            .to_canonical_u64() as usize;
-
-        if KERNEL.offset_name(previous_pc).contains("hash_final_tries") {
-            let state_trie_ptr = u256_to_usize(
-                state
-                    .memory
-                    .read_global_metadata(GlobalMetadata::StateTrieRoot),
-            )
-            .map_err(|_| anyhow!("State trie pointer is too large to fit in a usize."))?;
-            log::debug!(
-                "Computed state trie: {:?}",
-                get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
-            );
-
-            let txn_trie_ptr = u256_to_usize(
-                state
-                    .memory
-                    .read_global_metadata(GlobalMetadata::TransactionTrieRoot),
-            )
-            .map_err(|_| anyhow!("Transactions trie pointer is too large to fit in a usize."))?;
-            log::debug!(
-                "Computed transactions trie: {:?}",
-                get_txn_trie::<HashedPartialTrie>(&state.memory, txn_trie_ptr)
-            );
-
-            let receipt_trie_ptr = u256_to_usize(
-                state
-                    .memory
-                    .read_global_metadata(GlobalMetadata::ReceiptTrieRoot),
-            )
-            .map_err(|_| anyhow!("Receipts trie pointer is too large to fit in a usize."))?;
-            log::debug!(
-                "Computed receipts trie: {:?}",
-                get_receipt_trie::<HashedPartialTrie>(&state.memory, receipt_trie_ptr)
-            );
-        }
+        output_debug_tries(&state);
 
         cpu_res?;
     }
@@ -334,6 +302,63 @@ fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> 
     }
 
     log::info!("CPU trace padded to {} cycles", state.traces.clock());
+
+    Ok(())
+}
+
+/// Outputs the tries that have been obtained post transaction execution, as
+/// they are represented in the prover's memory.
+/// This will do nothing if the CPU execution failed outside of the final trie
+/// root checks.
+pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> anyhow::Result<()> {
+    if !log_enabled!(log::Level::Debug) {
+        return Ok(());
+    }
+
+    // Retrieve previous PC (before jumping to KernelPanic), to see if we reached
+    // `perform_final_checks`. We will output debugging information on the final
+    // tries only if we got a root mismatch.
+    let previous_pc = state.get_registers().program_counter;
+
+    let label = KERNEL.offset_name(previous_pc);
+
+    if label.contains("check_state_trie")
+        || label.contains("check_txn_trie")
+        || label.contains("check_receipt_trie")
+    {
+        let state_trie_ptr = u256_to_usize(
+            state
+                .memory
+                .read_global_metadata(GlobalMetadata::StateTrieRoot),
+        )
+        .map_err(|_| anyhow!("State trie pointer is too large to fit in a usize."))?;
+        log::debug!(
+            "Computed state trie: {:?}",
+            get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
+        );
+
+        let txn_trie_ptr = u256_to_usize(
+            state
+                .memory
+                .read_global_metadata(GlobalMetadata::TransactionTrieRoot),
+        )
+        .map_err(|_| anyhow!("Transactions trie pointer is too large to fit in a usize."))?;
+        log::debug!(
+            "Computed transactions trie: {:?}",
+            get_txn_trie::<HashedPartialTrie>(&state.memory, txn_trie_ptr)
+        );
+
+        let receipt_trie_ptr = u256_to_usize(
+            state
+                .memory
+                .read_global_metadata(GlobalMetadata::ReceiptTrieRoot),
+        )
+        .map_err(|_| anyhow!("Receipts trie pointer is too large to fit in a usize."))?;
+        log::debug!(
+            "Computed receipts trie: {:?}",
+            get_receipt_trie::<HashedPartialTrie>(&state.memory, receipt_trie_ptr)
+        );
+    }
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 use ethereum_types::U256;
 use plonky2::field::types::Field;
 
-use super::memory::{MemorySegmentState, DUMMY_MEMOP};
+use super::memory::DUMMY_MEMOP;
 use super::transition::Transition;
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;

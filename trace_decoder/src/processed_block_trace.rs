@@ -17,8 +17,9 @@ use crate::trace_protocol::{
     TrieUncompressed, TxnInfo,
 };
 use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-    OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
+    HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH,
+    EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,
@@ -251,7 +252,7 @@ impl TxnInfo {
             let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
 
             nodes_used_by_txn.storage_accesses.push((
-                Nibbles::from_h256_be(hashed_addr),
+                hashed_addr,
                 storage_access_keys
                     .map(|k| Nibbles::from_h256_be(hash(&k.0)))
                     .collect(),
@@ -284,7 +285,7 @@ impl TxnInfo {
 
             nodes_used_by_txn
                 .storage_writes
-                .push((Nibbles::from_h256_be(hashed_addr), storage_writes_vec));
+                .push((hashed_addr, storage_writes_vec));
 
             nodes_used_by_txn.state_accesses.push(hashed_addr);
 
@@ -325,9 +326,7 @@ impl TxnInfo {
             .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
 
         let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
-            .filter(|&(addr, _data)| {
-                !accounts_with_storage_accesses.contains(&Nibbles::from_h256_be(*addr))
-            })
+            .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(addr))
             .map(|(addr, data)| (*addr, data.storage_root));
 
         nodes_used_by_txn
@@ -380,8 +379,8 @@ pub(crate) struct NodesUsedByTxn {
     pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(Nibbles, StorageAccess)>,
-    pub(crate) storage_writes: Vec<(Nibbles, StorageWrite)>,
+    pub(crate) storage_accesses: Vec<(HashedAccountAddr, StorageAccess)>,
+    pub(crate) storage_writes: Vec<(HashedAccountAddr, StorageWrite)>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries:
         HashMap<HashedAccountAddr, TrieRootHash>,
     pub(crate) self_destructed_accounts: Vec<HashedAccountAddr>,
