@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Clean up logging output upon Kernel failure ([#74](https://github.com/0xPolygonZero/zk_evm/pull/74))
+- Fixed trie hash collision issue when constructing storage tries [#75](https://github.com/0xPolygonZero/zk_evm/pull/75)
 
 ## [0.1.1] - 2024-03-01
 
