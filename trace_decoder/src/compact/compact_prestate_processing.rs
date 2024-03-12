@@ -299,6 +299,17 @@ struct ParserState {
 }
 
 impl ParserState {
+    // fn create_and_extract_header_smt(
+    //     witness_bytes_raw: Vec<u8>,
+    // ) -> CompactParsingResult<(Header, Self)> {
+    //     let witness_bytes = WitnessBytes::<CompactCursorFast>::new(witness_bytes_raw);
+    //     let (header, entries) = witness_bytes.process_into_instructions_and_header_smt()?;
+
+    //     let p_state = Self { entries };
+
+    //     Ok((header, p_state))
+    // }
+
     fn create_and_extract_header(
         witness_bytes_raw: Vec<u8>,
     ) -> CompactParsingResult<(Header, Self)> {
@@ -312,6 +323,18 @@ impl ParserState {
 
     // TODO: Move behind a feature flag...
     fn create_and_extract_header_debug(
+        witness_bytes_raw: Vec<u8>,
+    ) -> CompactParsingResult<(Header, Self)> {
+        let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
+        let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
+
+        let p_state = Self { entries };
+
+        Ok((header, p_state))
+    }
+
+    // TODO: Move behind a feature flag...
+    fn create_and_extract_header_debug_smt(
         witness_bytes_raw: Vec<u8>,
     ) -> CompactParsingResult<(Header, Self)> {
         let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
@@ -1265,12 +1288,34 @@ pub(crate) fn process_compact_prestate_debug(
     process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
 }
 
+pub(crate) fn process_compact_prestate_debug_smt(
+    state: TrieCompact,
+) -> CompactParsingResult<ProcessedCompactOutput> {
+    process_compact_prestate_common_smt(state, ParserState::create_and_extract_header_debug_smt)
+}
+
 fn process_compact_prestate_common(
     state: TrieCompact,
     create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     let (header, parser) = create_and_extract_header_f(state.0)?;
     let witness_out = parser.parse()?;
+
+    let out = ProcessedCompactOutput {
+        header,
+        witness_out,
+    };
+
+    Ok(out)
+}
+
+fn process_compact_prestate_common_smt(
+    state: TrieCompact,
+    create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
+) -> CompactParsingResult<ProcessedCompactOutput> {
+    let (header, parser) = create_and_extract_header_f(state.0)?;
+    let witness_out = parser.parse()?;
+    println!("Parsing witness bytes to instructions...");
 
     let out = ProcessedCompactOutput {
         header,
@@ -1432,7 +1477,7 @@ mod tests {
         compact_prestate_processing::ParserState,
         complex_test_payloads::{
             TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
-            TEST_PAYLOAD_6,
+            TEST_PAYLOAD_6, TEST_PAYLOAD_7
         },
     };
 
@@ -1530,5 +1575,11 @@ mod tests {
     fn complex_payload_6() {
         init();
         TEST_PAYLOAD_6.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_7() {
+        init();
+        TEST_PAYLOAD_7.parse_and_check_hash_matches_with_debug_smt();
     }
 }
