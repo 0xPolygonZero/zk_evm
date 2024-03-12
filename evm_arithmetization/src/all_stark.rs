@@ -12,8 +12,8 @@ use starky::stark::Stark;
 use crate::arithmetic::arithmetic_stark;
 use crate::arithmetic::arithmetic_stark::ArithmeticStark;
 use crate::byte_packing::byte_packing_stark::{self, BytePackingStark};
-use crate::cpu::cpu_stark;
 use crate::cpu::cpu_stark::CpuStark;
+use crate::cpu::cpu_stark::{self, ctl_context_pruning_looked};
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::keccak::keccak_stark;
 use crate::keccak::keccak_stark::KeccakStark;
@@ -21,8 +21,8 @@ use crate::keccak_sponge::columns::KECCAK_RATE_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeStark;
 use crate::logic::LogicStark;
-use crate::memory::memory_stark;
 use crate::memory::memory_stark::MemoryStark;
+use crate::memory::memory_stark::{self, ctl_context_pruning_looking};
 use crate::memory_continuation::memory_continuation_stark::{self, MemoryContinuationStark};
 use crate::{logic, memory_continuation};
 
@@ -134,6 +134,7 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
         ctl_memory(),
         ctl_mem_before(),
         ctl_mem_after(),
+        ctl_context_pruning(),
     ]
 }
 
@@ -141,7 +142,11 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
 /// module.
 fn ctl_arithmetic<F: Field>() -> CrossTableLookup<F> {
     CrossTableLookup::new(
-        vec![cpu_stark::ctl_arithmetic_base_rows()],
+        vec![
+            cpu_stark::ctl_arithmetic_base_rows(),
+            cpu_stark::ctl_arithmetic_context_pruning(),
+            cpu_stark::ctl_arithmetic_dummy(),
+        ],
         arithmetic_stark::ctl_arithmetic_rows(),
     )
 }
@@ -325,6 +330,14 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
         Some(memory_stark::ctl_filter()),
     );
     CrossTableLookup::new(all_lookers, memory_looked)
+}
+
+/// `CrossTableLookup` for `Cpu` to propagate pruned contexts to `Memory`.
+fn ctl_context_pruning<F: Field>() -> CrossTableLookup<F> {
+    CrossTableLookup::new(
+        vec![ctl_context_pruning_looking()],
+        ctl_context_pruning_looked(),
+    )
 }
 
 /// `CrossTableLookup` for `MemBefore` table to connect it with the `Memory`

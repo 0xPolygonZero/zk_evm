@@ -23,7 +23,7 @@ use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
-use crate::witness::memory::{MemoryAddress, MemoryOp, MemoryState};
+use crate::witness::memory::{MemoryAddress, MemoryContextState, MemoryOp, MemoryState};
 use crate::witness::memory::{MemoryOpKind, MemorySegmentState};
 use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
@@ -212,7 +212,14 @@ pub(crate) trait State<F: Field> {
                     if !running {
                         assert_eq!(self.get_clock() - final_clock, NUM_EXTRA_CYCLES_AFTER - 1);
                     }
-                    let final_mem = self.get_full_memory();
+                    let final_mem = if let Some(mut mem) = self.get_full_memory() {
+                        for &ctx in &self.get_generation_state().pruned_contexts {
+                            mem.contexts[ctx] = MemoryContextState::default();
+                        }
+                        Some(mem)
+                    } else {
+                        None
+                    };
                     #[cfg(not(test))]
                     self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
                     return Ok((final_registers, final_mem));
@@ -326,6 +333,9 @@ pub struct GenerationState<F: Field> {
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
 
+    /// Stale contexts you can prune from memory.
+    pub(crate) pruned_contexts: Vec<usize>,
+
     /// Prover inputs containing RLP data, in reverse order so that the next
     /// input can be obtained via `pop()`.
     pub(crate) rlp_prover_inputs: Vec<U256>,
@@ -375,6 +385,7 @@ impl<F: Field> GenerationState<F> {
             registers: Default::default(),
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
+            pruned_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
             state_key_to_address: HashMap::new(),
@@ -462,6 +473,7 @@ impl<F: Field> GenerationState<F> {
             registers: self.registers,
             memory: self.memory.clone(),
             traces: Traces::default(),
+            pruned_contexts: Vec::new(),
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),
             state_key_to_address: self.state_key_to_address.clone(),
             bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),

@@ -124,6 +124,7 @@ impl<T: Copy> Traces<T> {
         self,
         all_stark: &AllStark<T, D>,
         mem_before_values: &MemBeforeValues,
+        pruned_contexts: Vec<usize>,
         mut trace_lengths: TraceCheckpoint,
         config: &StarkConfig,
         timing: &mut TimingTree,
@@ -180,9 +181,12 @@ impl<T: Copy> Traces<T> {
         let (memory_trace, final_values, unpadded_memory_length) = timed!(
             timing,
             "generate memory trace",
-            all_stark
-                .memory_stark
-                .generate_trace(memory_ops, mem_before_values, timing)
+            all_stark.memory_stark.generate_trace(
+                memory_ops,
+                mem_before_values,
+                pruned_contexts,
+                timing
+            )
         );
         trace_lengths.memory_len = unpadded_memory_length;
 

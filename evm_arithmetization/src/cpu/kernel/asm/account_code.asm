@@ -70,6 +70,10 @@ global sys_extcodesize:
     SWAP1
     // stack: address, kexit_info
     %extcodesize
+    // stack: code_size, codesize_ctx, kexit_info
+    SWAP1
+    // stack: codesize_ctx, code_size, kexit_info
+    %prune_context
     // stack: code_size, kexit_info
     SWAP1
     EXIT_KERNEL
@@ -77,9 +81,7 @@ global sys_extcodesize:
 global extcodesize:
     // stack: address, retdest
     %next_context_id
-    // stack: codesize_ctx, address, retdest
-    SWAP1
-    // stack: address, codesize_ctx, retdest
+    %stack(codesize_ctx, address, retdest) -> (address, codesize_ctx, retdest, codesize_ctx)
     %jump(load_code)
 
 // Loads the code at `address` into memory, in the code segment of the given context, starting at offset 0.

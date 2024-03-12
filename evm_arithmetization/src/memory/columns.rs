@@ -42,8 +42,25 @@ pub(crate) const VIRTUAL_FIRST_CHANGE: usize = SEGMENT_FIRST_CHANGE + 1;
 // Contains `next_segment * addr_changed * next_is_read`.
 pub(crate) const INITIALIZE_AUX: usize = VIRTUAL_FIRST_CHANGE + 1;
 
+// Contains the list of pruned contexts. Each pruned context must appear exactly
+// once; unused rows are set to zero.
+pub(crate) const PRUNED_CONTEXTS: usize = INITIALIZE_AUX + 1;
+
+// Inverse of `PRUNED_CONTEXTS`.Used to ascertain it's nonzero.
+pub(crate) const PRUNED_CONTEXTS_INV: usize = PRUNED_CONTEXTS + 1;
+
+// Used for the context pruning lookup.
+pub(crate) const PRUNED_CONTEXTS_FREQUENCIES: usize = PRUNED_CONTEXTS_INV + 1;
+
+// Flag indicating whether the row should be pruned, i.e. whether its
+// `ADDR_CONTEXT` is in `PRUNED_CONTEXTS`.
+pub(crate) const IS_PRUNED: usize = PRUNED_CONTEXTS_FREQUENCIES + 1;
+
+// Filter for the `MemAfter` CTL.
+pub(crate) const MEM_AFTER_FILTER: usize = IS_PRUNED + 1;
+
 // We use a range check to enforce the ordering.
-pub(crate) const RANGE_CHECK: usize = INITIALIZE_AUX + 1;
+pub(crate) const RANGE_CHECK: usize = MEM_AFTER_FILTER + 1;
 /// The counter column (used for the range check) starts from 0 and increments.
 pub(crate) const COUNTER: usize = RANGE_CHECK + 1;
 /// The frequencies column used in logUp.
