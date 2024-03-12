@@ -62,7 +62,18 @@ delete_root_idx_slot:
     PUSH 64 // storage_key has 64 nibbles
     %get_storage_trie(@BEACON_ROOTS_ADDRESS)
     // stack: storage_root_ptr, 64, storage_key, after_root_idx_slot_delete, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
+
+    // If the slot is empty (i.e. ptr defaulting to 0), skip the deletion.
     DUP1 ISZERO %jumpi(skip_empty_slot)
+
+    // stack: storage_root_ptr, 64, storage_key, after_root_idx_slot_delete, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
+    %stack (storage_root_ptr, nibbles, storage_key) -> (storage_root_ptr, nibbles, storage_key, checkpoint_delete_root_idx, storage_root_ptr, nibbles, storage_key)
+    %jump(mpt_read)
+checkpoint_delete_root_idx:
+    // stack: value_ptr, storage_root_ptr, 64, storage_key, after_root_idx_slot_delete, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
+    // If the the storage key is not found (i.e. ptr defaulting to 0), skip the deletion.
+    ISZERO %jumpi(skip_empty_slot)
+
     // stack: storage_root_ptr, 64, storage_key, after_root_idx_slot_delete, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
     %jump(mpt_delete)
 
