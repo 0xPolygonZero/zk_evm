@@ -21,7 +21,7 @@ use thiserror::Error;
 
 use super::compact_to_partial_trie::{
     create_partial_trie_from_remaining_witness_elem, create_storage_partial_trie_from_compact_node,
-    CompactToPartialTrieExtractionOutput, StateTrieExtractionOutput, UnexpectedCompactNodeType,
+    StateTrieExtractionOutput, UnexpectedCompactNodeType,
 };
 use crate::{
     decoding::TrieType,
@@ -85,7 +85,7 @@ pub enum CompactParsingError {
     )]
     MissingExpectedNodesPrecedingBranch(usize, usize, BranchMask, Vec<WitnessEntry>),
 
-    #[error("Found an unexpected compact node type ({0}) during processing compact into a `mpt_trie` {1} partial trie.")]
+    #[error("Found an unexpected compact node type ({0:?}) during processing compact into a `mpt_trie` {1} partial trie.")]
     UnexpectedNodeForTrieType(UnexpectedCompactNodeType, TrieType),
 
     #[error("Expected the entry preceding {0} positions behind a {1} entry to be a node but instead found a {2}. (nodes: {3:?})")]

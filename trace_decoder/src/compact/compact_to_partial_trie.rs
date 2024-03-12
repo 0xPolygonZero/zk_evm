@@ -1,3 +1,6 @@
+//! Logic to convert the decoded compact into a `mpt_trie`
+//! [`HashedPartialTrie`]. This is the final stage in the decoding process.
+
 use std::{
     collections::HashMap,
     fmt::{self, Display},
@@ -23,7 +26,15 @@ use crate::{
     utils::{h_addr_nibs_to_h256, hash},
 };
 
-pub trait CompactToPartialTrieExtractionOutput {
+/// A trait to represent building either a state or storage trie from compact
+/// output.
+///
+/// Because building state & storage tries from compact shares a huge amount of
+/// common code, it makes sense to use a trait and allow each trie type to use
+/// slightly different logic for processing code and leaf nodes.
+trait CompactToPartialTrieExtractionOutput {
+    /// Traverses down each child in the branch and adds the branch's [`Nibble`]
+    /// to our current key.
     fn process_branch(
         &mut self,
         curr_key: Nibbles,
@@ -41,19 +52,25 @@ pub trait CompactToPartialTrieExtractionOutput {
         Ok(())
     }
 
+    /// Adds the code to the `code_hash` --> `code_bytes` lookup. Only
+    /// applicable to state tries.
     fn process_code(&mut self, c_bytes: Vec<u8>) -> CompactParsingResult<()>;
 
+    // Nothing to do for empty nodes.
     fn process_empty(&self) -> CompactParsingResult<()> {
-        // Nothing to do.
         Ok(())
     }
 
+    /// Insert a hash node with our key that we constructed so far from
+    /// traversing down the trie.
     fn process_hash(&mut self, curr_key: Nibbles, hash: TrieRootHash) -> CompactParsingResult<()> {
-        self.get_trie().insert(curr_key, hash);
+        self.trie().insert(curr_key, hash);
 
         Ok(())
     }
 
+    /// Insert a value node with our key that we constructed so far from
+    /// traversing down the trie.
     fn process_leaf(
         &mut self,
         curr_key: Nibbles,
@@ -61,6 +78,7 @@ pub trait CompactToPartialTrieExtractionOutput {
         leaf_node_data: &LeafNodeData,
     ) -> CompactParsingResult<()>;
 
+    /// Appends the extension's key to our current key.
     fn process_extension(
         &mut self,
         curr_key: Nibbles,
@@ -73,7 +91,9 @@ pub trait CompactToPartialTrieExtractionOutput {
         Ok(())
     }
 
-    fn get_trie(&mut self) -> &mut HashedPartialTrie;
+    /// Since we need to access the current trie for both concrete types, we
+    /// need a common method to access the trie.
+    fn trie(&mut self) -> &mut HashedPartialTrie;
 }
 
 #[derive(Debug)]
@@ -82,15 +102,7 @@ pub(super) enum UnexpectedCompactNodeType {
     Code,
 }
 
-impl Display for UnexpectedCompactNodeType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UnexpectedCompactNodeType::AccountLeaf => write!(f, "AccountLeaf"),
-            UnexpectedCompactNodeType::Code => write!(f, "Code"),
-        }
-    }
-}
-
+/// Output from constructing a state trie from compact.
 #[derive(Debug, Default)]
 pub(super) struct StateTrieExtractionOutput {
     pub(super) trie: HashedPartialTrie,
@@ -118,22 +130,21 @@ impl CompactToPartialTrieExtractionOutput for StateTrieExtractionOutput {
             leaf_key,
             leaf_node_data,
             |acc_data, full_k| {
-                Ok(
-                    convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(
-                        acc_data,
-                        full_k,
-                        &mut self.code,
-                        &mut self.storage_tries,
-                    ),
-                )
+                Ok(process_account_node(
+                    acc_data,
+                    full_k,
+                    &mut self.code,
+                    &mut self.storage_tries,
+                ))
             },
         )
     }
-
-    fn get_trie(&mut self) -> &mut HashedPartialTrie {
+    fn trie(&mut self) -> &mut HashedPartialTrie {
         &mut self.trie
     }
 }
+
+/// Output from constructing a storage trie from compact.
 #[derive(Debug, Default)]
 pub(super) struct StorageTrieExtractionOutput {
     pub(super) trie: HashedPartialTrie,
@@ -153,6 +164,8 @@ impl CompactToPartialTrieExtractionOutput for StorageTrieExtractionOutput {
         leaf_key: &Nibbles,
         leaf_node_data: &LeafNodeData,
     ) -> CompactParsingResult<()> {
+        /// If we encounter an `AccountLeaf` when processing a storage trie,
+        /// then something is wrong.
         process_leaf_common(
             &mut self.trie,
             curr_key,
@@ -167,7 +180,7 @@ impl CompactToPartialTrieExtractionOutput for StorageTrieExtractionOutput {
         )
     }
 
-    fn get_trie(&mut self) -> &mut HashedPartialTrie {
+    fn trie(&mut self) -> &mut HashedPartialTrie {
         &mut self.trie
     }
 }
@@ -206,9 +219,10 @@ pub(super) fn create_storage_partial_trie_from_compact_node(
     create_partial_trie_from_compact_node(node)
 }
 
-fn create_partial_trie_from_compact_node<T: CompactToPartialTrieExtractionOutput + Default>(
-    node: NodeEntry,
-) -> CompactParsingResult<T> {
+fn create_partial_trie_from_compact_node<T>(node: NodeEntry) -> CompactParsingResult<T>
+where
+    T: CompactToPartialTrieExtractionOutput + Default,
+{
     let mut output = T::default();
     create_partial_trie_from_compact_node_rec(Nibbles::default(), &node, &mut output)?;
 
@@ -217,13 +231,14 @@ fn create_partial_trie_from_compact_node<T: CompactToPartialTrieExtractionOutput
 
 // TODO: Consider putting in some asserts that invalid nodes are not appearing
 // in the wrong trie type (eg. account )
-pub(super) fn create_partial_trie_from_compact_node_rec<
-    T: CompactToPartialTrieExtractionOutput + ?Sized,
->(
+fn create_partial_trie_from_compact_node_rec<T>(
     curr_key: Nibbles,
     curr_node: &NodeEntry,
     output: &mut T,
-) -> CompactParsingResult<()> {
+) -> CompactParsingResult<()>
+where
+    T: CompactToPartialTrieExtractionOutput + ?Sized,
+{
     trace!("Processing node {} into `PartialTrie` node...", curr_node);
 
     match curr_node {
@@ -236,7 +251,7 @@ pub(super) fn create_partial_trie_from_compact_node_rec<
     }
 }
 
-fn convert_account_node_data_to_rlp_bytes_and_add_any_code_to_lookup(
+fn process_account_node(
     acc_data: &AccountNodeData,
     h_addr_nibs: &HashedAccountAddrNibbles,
     c_hash_to_code: &mut HashMap<CodeHash, Vec<u8>>,
