@@ -2,6 +2,8 @@
 /// Global exit roots (GER) are of the form `(timestamp, root)` and are loaded from prover inputs.
 /// The timestamp is written to the storage of address `ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2` in the slot `keccak256(abi.encodePacked(root, GLOBAL_EXIT_ROOT_STORAGE_POS))`.
 /// See https://github.com/0xPolygonHermez/cdk-erigon/blob/zkevm/zk/utils/global_exit_root.go for reference.
+///
+/// *NOTE*: This will panic if one of the provided timestamps is zero.
 
 global set_global_exit_roots:
     // stack: (empty)
