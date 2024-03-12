@@ -6,29 +6,32 @@ use evm_arithmetization::{
 use mpt_trie::{nibbles::Nibbles, partial_trie::HashedPartialTrie};
 use serde::{Deserialize, Serialize};
 
-/// A type alias around `u64` for a block height.
+// TODO: Make these types in the doc comments point to the actual types...
+/// A type alias for `u64` of a block height.
 pub type BlockHeight = u64;
-/// A type alias around `[U256; 8]` for a bloom filter.
+/// A type alias for `[U256; 8]` of a bloom filter.
 pub type Bloom = [U256; 8];
-/// A type alias around `H256` for a code hash.
+/// A type alias for `H256` of a code hash.
 pub type CodeHash = H256;
-/// A type alias for `H256` for an account address's hash.
+/// A type alias for `H256` of an account address's hash.
 pub type HashedAccountAddr = H256;
-/// A type alias around `H256` for a node address's hash.
+/// A type alias for `Nibbles` of an account address's hash.
+pub type HashedAccountAddrNibbles = Nibbles;
+/// A type alias for `H256` of a node address's hash.
 pub type HashedNodeAddr = H256;
-/// A type alias around `H256` for a storage address's hash.
+/// A type alias for `H256` of a storage address's hash.
 pub type HashedStorageAddr = H256;
-/// A type alias around `Nibbles` for a hashed storage address's nibbles.
+/// A type alias for `Nibbles` of a hashed storage address's nibbles.
 pub type HashedStorageAddrNibbles = Nibbles;
-/// A type alias around `H256` for a storage address.
+/// A type alias for `H256` of a storage address.
 pub type StorageAddr = H256;
-/// A type alias around `H256` for a storage address's nibbles.
+/// A type alias for `H256` of a storage address's nibbles.
 pub type StorageAddrNibbles = H256;
-/// A type alias around `U256` for a storage value.
+/// A type alias for `U256` of a storage value.
 pub type StorageVal = U256;
-/// A type alias around `H256` for a trie root hash.
+/// A type alias for `H256` of a trie root hash.
 pub type TrieRootHash = H256;
-/// A type alias around `usize` for a transaction's index within a block.
+/// A type alias for `usize` of a transaction's index within a block.
 pub type TxnIdx = usize;
 
 pub(crate) type TriePathIter = mpt_trie::special_query::TriePathIter<HashedPartialTrie>;
