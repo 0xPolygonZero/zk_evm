@@ -21,6 +21,7 @@ A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`plo
   - [Verifier Usage](#verifier-usage)
   - [RPC Usage](#rpc-usage)
   - [Docker](#docker)
+  - [Development Branches](#development-branches)
   - [License](#license)
     - [Contribution](#contribution)
 
@@ -327,6 +328,46 @@ cargo r --release --bin rpc fetch --rpc-url <RPC_URL> --block-number 16 > ./outp
 ## Docker
 
 Docker images are provided for both the [leader](leader.Dockerfile) and [worker](worker.Dockerfile) binaries.
+
+## Development Branches
+
+There are three branches that are used for development:
+
+- `main` --> Always points to the latest production release
+- `develop` --> All PRs should be merged into this branch
+- `testing` --> For testing against the latest changes. Should always point to the `develop` branch for the `zk_evm` deps
+
+## Testing Blocks
+
+For testing proof generation for blocks, the `testing` branch should be used.
+
+If you want to generate a full block proof, you can use `tools/prove_blocks.sh`:
+
+```sh
+./prove_blocks.sh <BLOCK_START> <BLOCK_END> <FULL_NODE_ENDPOINT>
+```
+
+Which may look like this:
+
+```sh
+./prove_blocks.sh 17 18 http://127.0.0.1:8545
+```
+
+Which will attempt to generate blocks `17` & `18` consecutively.
+
+However, proving blocks is very resource intensive in both CPU and memory. You can also only generate the witness for a block instead to significantly reduce the CPU and memory requirements:
+
+```sh
+./debug_block.sh <BLOCK_NUMBER> <FULL_NODE_ENDPOINT>
+```
+
+Filled in:
+
+```sh
+./debug_block.sh 18299898 http://34.89.57.138:8545
+```
+
+Finally, note that both of these testing scripts force proof generation to be sequential by allowing only one worker. Because of this, this is not a realistic representation of performance but makes the debugging logs much easier to follow.
 
 ## License
 
