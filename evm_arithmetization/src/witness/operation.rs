@@ -19,6 +19,8 @@ use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
+use crate::memory::NUM_CHANNELS;
+use crate::poseidon::columns::POSEIDON_SPONGE_RATE;
 use crate::poseidon::poseidon_stark::PoseidonOp;
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
@@ -43,6 +45,7 @@ pub(crate) enum Operation {
     TernaryArithmetic(arithmetic::TernaryOperator),
     KeccakGeneral,
     Poseidon,
+    PoseidonGeneral,
     ProverInput,
     Pop,
     Jump,
@@ -186,6 +189,74 @@ pub(crate) fn generate_poseidon<F: RichField>(
 
     state.traces.push_memory(log_in1);
     state.traces.push_memory(log_in2);
+    state.traces.push_cpu(row);
+    Ok(())
+}
+
+pub(crate) fn generate_poseidon_general<F: RichField>(
+    state: &mut GenerationState<F>,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    row.op.poseidon_general = F::ONE;
+    let [(context, _), (segment, log_in1), (base_virt, log_in2), (len, log_in3)] =
+        stack_pop_with_log_and_fill::<4, _>(state, &mut row)?;
+    let len = u256_to_usize(len)?;
+
+    let base_address = MemoryAddress::new_u256s(context, segment, base_virt)?;
+    let input = (0..len)
+        .map(|i| {
+            let address = MemoryAddress {
+                virt: base_address.virt.saturating_add(i),
+                ..base_address
+            };
+            let val = state.memory.get(address);
+            state.traces.push_memory(MemoryOp::new(
+                MemoryChannel::Code,
+                state.traces.clock(),
+                address,
+                MemoryOpKind::Read,
+                val.0[0].into(),
+            ));
+
+            val.0[0] as u32
+        })
+        .collect_vec();
+    log::debug!("Poseidon hashing {:?}", input);
+
+    let mut padded_input = input.clone();
+    if padded_input.len() % POSEIDON_SPONGE_RATE == POSEIDON_SPONGE_RATE - 1 {
+        padded_input.push(1);
+    } else {
+        padded_input.push(1);
+        while (padded_input.len() + 1) % plonky2::hash::poseidon::SPONGE_RATE != 0 {
+            padded_input.push(0);
+        }
+        padded_input.push(1);
+    }
+
+    let poseidon_op = PoseidonGeneralOp {
+        base_address,
+        timestamp: state.traces.clock() * NUM_CHANNELS,
+        input: padded_input.clone(),
+        len: input.len(),
+    };
+    state.traces.push_poseidon_elts(poseidon_op);
+
+    let padded_input = padded_input
+        .iter()
+        .map(|&elt| F::from_canonical_u32(elt))
+        .collect::<Vec<F>>();
+    let hash: [u64; 4] = F::poseidon(padded_input)
+        .iter()
+        .map(|&elt| elt.to_canonical_u64())
+        .collect::<Vec<u64>>()
+        .try_into()
+        .unwrap();
+    push_no_write(state, U256(hash));
+
+    state.traces.push_memory(log_in1);
+    state.traces.push_memory(log_in2);
+    state.traces.push_memory(log_in3);
     state.traces.push_cpu(row);
     Ok(())
 }

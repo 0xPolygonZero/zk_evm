@@ -87,6 +87,7 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
         (0x20, _) => Ok(Operation::Syscall(opcode, 2, false)), // KECCAK256
         (0x21, true) => Ok(Operation::KeccakGeneral),
         (0x22, true) => Ok(Operation::Poseidon),
+        (0x23, true) => Ok(Operation::PoseidonGeneral),
         (0x30, _) => Ok(Operation::Syscall(opcode, 0, true)), // ADDRESS
         (0x31, _) => Ok(Operation::Syscall(opcode, 1, false)), // BALANCE
         (0x32, _) => Ok(Operation::Syscall(opcode, 0, true)), // ORIGIN
@@ -180,6 +181,7 @@ fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>) {
         Operation::TernaryArithmetic(_) => &mut flags.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => &mut flags.jumpdest_keccak_general,
         Operation::Poseidon => &mut flags.poseidon,
+        Operation::PoseidonGeneral => &mut flags.poseidon_general,
         Operation::ProverInput | Operation::Push(1..) => &mut flags.push_prover_input,
         Operation::Jump | Operation::Jumpi => &mut flags.jumps,
         Operation::Pc | Operation::Push(0) => &mut flags.pc_push0,
@@ -213,6 +215,7 @@ const fn get_op_special_length(op: Operation) -> Option<usize> {
         Operation::TernaryArithmetic(_) => STACK_BEHAVIORS.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => STACK_BEHAVIORS.jumpdest_keccak_general,
         Operation::Poseidon => STACK_BEHAVIORS.poseidon,
+        Operation::PoseidonGeneral => STACK_BEHAVIORS.poseidon_general,
         Operation::Jump => JUMP_OP,
         Operation::Jumpi => JUMPI_OP,
         Operation::GetContext | Operation::SetContext => None,
@@ -253,6 +256,7 @@ const fn might_overflow_op(op: Operation) -> bool {
         Operation::TernaryArithmetic(_) => MIGHT_OVERFLOW.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => MIGHT_OVERFLOW.jumpdest_keccak_general,
         Operation::Poseidon => MIGHT_OVERFLOW.poseidon,
+        Operation::PoseidonGeneral => MIGHT_OVERFLOW.poseidon_general,
         Operation::Jump | Operation::Jumpi => MIGHT_OVERFLOW.jumps,
         Operation::Pc | Operation::Push(0) => MIGHT_OVERFLOW.pc_push0,
         Operation::GetContext | Operation::SetContext => MIGHT_OVERFLOW.context_op,
@@ -286,6 +290,7 @@ fn perform_op<F: RichField>(
         Operation::TernaryArithmetic(op) => generate_ternary_arithmetic_op(op, state, row)?,
         Operation::KeccakGeneral => generate_keccak_general(state, row)?,
         Operation::Poseidon => generate_poseidon(state, row)?,
+        Operation::PoseidonGeneral => generate_poseidon_general(state, row)?,
         Operation::ProverInput => generate_prover_input(state, row)?,
         Operation::Pop => generate_pop(state, row)?,
         Operation::Jump => generate_jump(state, row)?,
