@@ -201,11 +201,10 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
     row.op.poseidon_general = F::ONE;
-    let [(context, _), (segment, log_in1), (base_virt, log_in2), (len, log_in3)] =
-        stack_pop_with_log_and_fill::<4, _>(state, &mut row)?;
+    let [(addr, _), (len, log_in1)] = stack_pop_with_log_and_fill::<2, _>(state, &mut row)?;
     let len = u256_to_usize(len)?;
 
-    let base_address = MemoryAddress::new_u256s(context, segment, base_virt)?;
+    let base_address = MemoryAddress::new_bundle(addr)?;
     let input = (0..len)
         .map(|i| {
             let address = MemoryAddress {
@@ -258,8 +257,6 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
     push_no_write(state, U256(hash));
 
     state.traces.push_memory(log_in1);
-    state.traces.push_memory(log_in2);
-    state.traces.push_memory(log_in3);
     state.traces.push_cpu(row);
     Ok(())
 }
