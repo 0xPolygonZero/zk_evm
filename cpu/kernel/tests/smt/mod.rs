@@ -1,2 +1,0 @@
-mod hash;
-mod insert;

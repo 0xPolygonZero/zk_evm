@@ -21,7 +21,7 @@ use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::memory::NUM_CHANNELS;
 use crate::poseidon::columns::POSEIDON_SPONGE_RATE;
-use crate::poseidon::poseidon_stark::PoseidonOp;
+use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonStackOp};
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
 use crate::witness::errors::ProgramError;
@@ -29,7 +29,7 @@ use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKin
 use crate::witness::operation::MemoryChannel::GeneralPurpose;
 use crate::witness::transition::fill_stack_fields;
 use crate::witness::util::{
-    keccak_sponge_log, mem_read_gp_with_log_and_fill, mem_write_gp_log_and_fill,
+    compute_poseidon, keccak_sponge_log, mem_read_gp_with_log_and_fill, mem_write_gp_log_and_fill,
     stack_pop_with_log_and_fill,
 };
 use crate::{arithmetic, logic};
@@ -185,7 +185,10 @@ pub(crate) fn generate_poseidon<F: RichField>(
     log::debug!("Poseidon hashing {:?} -> {}", arr, hash);
     push_no_write(state, hash);
 
-    state.traces.poseidon_ops.push(PoseidonOp(arr));
+    state
+        .traces
+        .poseidon_ops
+        .push(PoseidonOp::PoseidonStackOp(PoseidonStackOp(arr)));
 
     state.traces.push_memory(log_in1);
     state.traces.push_memory(log_in2);
@@ -234,19 +237,19 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
         padded_input.push(1);
     }
 
-    let poseidon_op = PoseidonGeneralOp {
+    let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
         base_address,
         timestamp: state.traces.clock() * NUM_CHANNELS,
         input: padded_input.clone(),
         len: input.len(),
-    };
-    state.traces.push_poseidon_elts(poseidon_op);
+    });
+    state.traces.poseidon_ops.push(poseidon_op);
 
     let padded_input = padded_input
         .iter()
         .map(|&elt| F::from_canonical_u32(elt))
         .collect::<Vec<F>>();
-    let hash: [u64; 4] = F::poseidon(padded_input)
+    let hash: [u64; 4] = compute_poseidon(padded_input)
         .iter()
         .map(|&elt| elt.to_canonical_u64())
         .collect::<Vec<u64>>()
