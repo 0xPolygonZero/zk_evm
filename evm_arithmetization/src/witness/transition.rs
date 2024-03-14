@@ -20,6 +20,8 @@ use crate::witness::state::RegistersState;
 use crate::witness::util::mem_read_code_with_log_and_fill;
 use crate::{arithmetic, logic};
 
+pub(crate) const EXC_STOP_CODE: u8 = 6;
+
 pub(crate) fn read_code_memory<F: Field, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
@@ -276,24 +278,43 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     } else {
         log::Level::Trace
     };
-    log::log!(
+    state.log_log(
         level,
-        "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
-        state.get_clock(),
-        state.get_context(),
-        KERNEL.offset_name(pc),
-        op,
-        state.get_generation_state().stack(),
+        format!(
+            "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
+            state.get_clock(),
+            state.get_context(),
+            KERNEL.offset_name(pc),
+            op,
+            state.get_generation_state().stack(),
+        ),
     );
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
 
-pub(crate) trait Transition<F: Field>: State<F> {
+pub(crate) trait Transition<F: Field>: State<F>
+where
+    Self: Sized,
+{
     /// When in jumpdest analysis, adds the offset `dst` to the jumpdest table.
     /// Returns a boolean indicating whether we are running the jumpdest
     /// analysis.
     fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool;
+
+    fn final_exception(&mut self) -> anyhow::Result<()> {
+        let checkpoint = self.checkpoint();
+
+        let gen_state = self.get_mut_generation_state();
+
+        let (row, _) = self.base_row();
+
+        generate_exception(EXC_STOP_CODE, self, row)
+            .map_err(|e| anyhow::anyhow!("Exception handling failed with error {:?}", e))?;
+
+        self.apply_ops(checkpoint);
+        Ok(())
+    }
 
     /// Performs the next operation in the execution, and updates the gas used
     /// and program counter.
@@ -471,7 +492,7 @@ pub(crate) trait Transition<F: Field>: State<F> {
 
         #[cfg(debug_assertions)]
         if !self.get_registers().is_kernel {
-            log::debug!(
+            self.log_debug(format!(
                 "User instruction {:?}, stack = {:?}, ctx = {}",
                 op,
                 {
@@ -480,7 +501,7 @@ pub(crate) trait Transition<F: Field>: State<F> {
                     stack
                 },
                 self.get_registers().context
-            );
+            ));
         }
 
         match op {

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ethereum_types::U256;
 use plonky2::field::types::Field;
 
@@ -144,6 +146,15 @@ pub(crate) fn mem_write_log<F: Field>(
         MemoryOpKind::Write,
         val,
     )
+}
+
+pub(crate) fn mem_write_log_timestamp_zero<F: Field>(
+    address: MemoryAddress,
+    state: &GenerationState<F>,
+    val: U256,
+) -> MemoryOp {
+    // `Code` corresponds to channel number 0.
+    MemoryOp::new(MemoryChannel::Code, 0, address, MemoryOpKind::Write, val)
 }
 
 pub(crate) fn mem_read_code_with_log_and_fill<F: Field>(
@@ -305,7 +316,7 @@ pub(crate) fn keccak_sponge_log<F: Field, T: Transition<F>>(
             address.increment();
         }
         xor_into_sponge::<F, _>(state, &mut sponge_state, block.try_into().unwrap());
-        state.push_keccak_bytes(sponge_state, clock * NUM_CHANNELS);
+        state.push_keccak_bytes(sponge_state, clock * NUM_CHANNELS + 1);
         keccakf_u8s(&mut sponge_state);
     }
 
@@ -330,11 +341,11 @@ pub(crate) fn keccak_sponge_log<F: Field, T: Transition<F>>(
         final_block[KECCAK_RATE_BYTES - 1] = 0b10000000;
     }
     xor_into_sponge::<F, _>(state, &mut sponge_state, &final_block);
-    state.push_keccak_bytes(sponge_state, clock * NUM_CHANNELS);
+    state.push_keccak_bytes(sponge_state, clock * NUM_CHANNELS + 1);
 
     state.push_keccak_sponge(KeccakSpongeOp {
         base_address,
-        timestamp: clock * NUM_CHANNELS,
+        timestamp: clock * NUM_CHANNELS + 1,
         input,
     });
 }
@@ -361,7 +372,7 @@ pub(crate) fn byte_packing_log<F: Field, T: Transition<F>>(
     state.push_byte_packing(BytePackingOp {
         is_read: true,
         base_address,
-        timestamp: clock * NUM_CHANNELS,
+        timestamp: clock * NUM_CHANNELS + 1,
         bytes,
     });
 }
@@ -394,7 +405,7 @@ pub(crate) fn byte_unpacking_log<F: Field, T: Transition<F>>(
     state.push_byte_packing(BytePackingOp {
         is_read: false,
         base_address,
-        timestamp: clock * NUM_CHANNELS,
+        timestamp: clock * NUM_CHANNELS + 1,
         bytes,
     });
 }

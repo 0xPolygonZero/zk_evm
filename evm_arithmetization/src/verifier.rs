@@ -42,6 +42,8 @@ where
         keccak_sponge_stark,
         logic_stark,
         memory_stark,
+        mem_before_stark,
+        mem_after_stark,
         cross_table_lookups,
     } = all_stark;
 
@@ -109,6 +111,22 @@ where
         &stark_proofs[Table::Memory as usize].proof,
         &stark_challenges[Table::Memory as usize],
         Some(&ctl_vars_per_table[Table::Memory as usize]),
+        &[],
+        config,
+    )?;
+    verify_stark_proof_with_challenges(
+        mem_before_stark,
+        &stark_proofs[Table::MemBefore as usize].proof,
+        &stark_challenges[Table::MemBefore as usize],
+        Some(&ctl_vars_per_table[Table::MemBefore as usize]),
+        &[],
+        config,
+    )?;
+    verify_stark_proof_with_challenges(
+        mem_after_stark,
+        &stark_proofs[Table::MemAfter as usize].proof,
+        &stark_challenges[Table::MemAfter as usize],
+        Some(&ctl_vars_per_table[Table::MemAfter as usize]),
         &[],
         config,
     )?;
@@ -256,6 +274,36 @@ where
         sum = add_data_write(challenge, block_hashes_segment, sum, index, val);
     }
 
+    let registers_segment = F::from_canonical_usize(Segment::RegistersStates.unscale());
+    let registers_before = [
+        public_values.registers_before.program_counter,
+        public_values.registers_before.is_kernel,
+        public_values.registers_before.stack_len,
+        public_values.registers_before.stack_top,
+        public_values.registers_before.context,
+        public_values.registers_before.gas_used,
+    ];
+    for i in 0..registers_before.len() {
+        sum = add_data_write(challenge, registers_segment, sum, i, registers_before[i]);
+    }
+    let registers_after = [
+        public_values.registers_after.program_counter,
+        public_values.registers_after.is_kernel,
+        public_values.registers_after.stack_len,
+        public_values.registers_after.stack_top,
+        public_values.registers_after.context,
+        public_values.registers_after.gas_used,
+    ];
+    for i in 0..registers_before.len() {
+        sum = add_data_write(
+            challenge,
+            registers_segment,
+            sum,
+            registers_before.len() + i,
+            registers_after[i],
+        );
+    }
+
     sum
 }
 
@@ -278,7 +326,7 @@ where
     for j in 0..VALUE_LIMBS {
         row[j + 4] = F::from_canonical_u32((val >> (j * 32)).low_u32());
     }
-    row[12] = F::ONE; // timestamp
+    row[12] = F::TWO; // timestamp
     running_sum + challenge.combine(row.iter()).inverse()
 }
 
@@ -400,6 +448,39 @@ pub(crate) mod debug_utils {
             extra_looking_rows.push(add_extra_looking_row(block_hashes_segment, index, val));
         }
 
+        // Add registers writes.
+        let registers_segment = F::from_canonical_usize(Segment::RegistersStates.unscale());
+        let registers_before = [
+            public_values.registers_before.program_counter,
+            public_values.registers_before.is_kernel,
+            public_values.registers_before.stack_len,
+            public_values.registers_before.stack_top,
+            public_values.registers_before.context,
+            public_values.registers_before.gas_used,
+        ];
+        for i in 0..registers_before.len() {
+            extra_looking_rows.push(add_extra_looking_row(
+                registers_segment,
+                i,
+                registers_before[i],
+            ));
+        }
+        let registers_after = [
+            public_values.registers_after.program_counter,
+            public_values.registers_after.is_kernel,
+            public_values.registers_after.stack_len,
+            public_values.registers_after.stack_top,
+            public_values.registers_after.context,
+            public_values.registers_after.gas_used,
+        ];
+        for i in 0..registers_before.len() {
+            extra_looking_rows.push(add_extra_looking_row(
+                registers_segment,
+                registers_before.len() + i,
+                registers_after[i],
+            ));
+        }
+
         extra_looking_rows
     }
 
@@ -416,7 +497,7 @@ pub(crate) mod debug_utils {
         for j in 0..VALUE_LIMBS {
             row[j + 4] = F::from_canonical_u32((val >> (j * 32)).low_u32());
         }
-        row[12] = F::ONE; // timestamp
+        row[12] = F::TWO; // timestamp
         row
     }
 }

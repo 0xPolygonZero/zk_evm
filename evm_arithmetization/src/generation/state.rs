@@ -5,10 +5,11 @@ use anyhow::{anyhow, bail};
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
+use log::Level;
 use plonky2::field::types::Field;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
-use super::TrieInputs;
+use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
@@ -28,8 +29,7 @@ use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::{TraceCheckpoint, Traces};
 use crate::witness::transition::{
-    decode, fill_op_flag, get_op_special_length, log_kernel_instruction, might_overflow_op,
-    read_code_memory, Transition,
+    decode, fill_op_flag, get_op_special_length, might_overflow_op, read_code_memory, Transition,
 };
 use crate::witness::util::{fill_channel_with_value, stack_peek};
 use crate::{arithmetic, keccak, logic};
@@ -73,6 +73,21 @@ pub(crate) trait State<F: Field> {
 
     /// Returns the current context.
     fn get_context(&self) -> usize;
+
+    /// Checks whether we have reached the maximal cpu length.
+    fn at_end_segment(&self, opt_max_cpu_len_log: Option<usize>) -> bool {
+        if let Some(max_cpu_len_log) = opt_max_cpu_len_log {
+            self.get_clock() == (1 << max_cpu_len_log) - NUM_EXTRA_CYCLES_AFTER
+        } else {
+            false
+        }
+    }
+
+    /// Checks whether we have reached the `halt` label in kernel mode.
+    fn at_halt(&self) -> bool {
+        let registers = self.get_registers();
+        registers.is_kernel && registers.program_counter == KERNEL.global_labels["halt"]
+    }
 
     /// Returns the context in which the jumpdest analysis should end.
     fn get_halt_context(&self) -> Option<usize> {
@@ -144,32 +159,63 @@ pub(crate) trait State<F: Field> {
 
     fn is_preinitialized_segment(&self, segment: usize) -> bool;
 
+    fn update_interpreter_final_registers(&mut self, final_registers: RegistersState) {}
+
+    fn get_full_memory(&self) -> Option<MemoryState> {
+        None
+    }
+
     /// Simulates the CPU. It only generates the traces if the `State` is a
     /// `GenerationState`.
-    fn run_cpu(&mut self) -> anyhow::Result<()>
+    fn run_cpu(
+        &mut self,
+        max_cpu_len_log: Option<usize>,
+    ) -> anyhow::Result<(RegistersState, Option<MemoryState>)>
     where
         Self: Transition<F>,
-        Self: Sized,
     {
         let halt_offsets = self.get_halt_offsets();
 
+        let halt_pc = KERNEL.global_labels["halt"];
+        let halt_final_pc = KERNEL.global_labels["halt_final"];
+        let mut final_registers = RegistersState::default();
+        let mut final_mem = self.get_mut_generation_state().memory.clone();
+        let mut running = true;
+        let mut final_clock = 0;
         loop {
             let registers = self.get_registers();
             let pc = registers.program_counter;
 
-            let halt = registers.is_kernel && halt_offsets.contains(&pc);
+            let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
+            if running && (self.at_halt() || self.at_end_segment(max_cpu_len_log)) {
+                running = false;
+                final_registers = registers;
 
-            // If we've reached the kernel's halt routine, halt.
-            if halt {
-                if let Some(halt_context) = self.get_halt_context() {
-                    if registers.context == halt_context {
-                        // Only happens during jumpdest analysis.
-                        return Ok(());
+                // If `stack_len` is 0, `stack_top` still contains a residual value.
+                if final_registers.stack_len == 0 {
+                    final_registers.stack_top = 0.into();
+                }
+                // If we are in the interpreter, we need to set the final register values.
+                self.update_interpreter_final_registers(final_registers);
+                final_clock = self.get_clock();
+                self.final_exception()?;
+            }
+
+            let opt_halt_context = self.get_halt_context();
+            if registers.is_kernel && halt_final {
+                if let Some(halt_context) = opt_halt_context {
+                    if self.get_context() == halt_context {
+                        // Only happens during jumpdest analysis, we don't care about the output.
+                        return Ok((final_registers, Some(final_mem)));
                     }
                 } else {
+                    if !running {
+                        assert_eq!(self.get_clock() - final_clock, NUM_EXTRA_CYCLES_AFTER - 1);
+                    }
+                    let final_mem = self.get_full_memory();
                     #[cfg(not(test))]
-                    log::info!("CPU halted after {} cycles", self.get_clock());
-                    return Ok(());
+                    self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
+                    return Ok((final_registers, final_mem));
                 }
             }
 
@@ -249,7 +295,7 @@ pub(crate) trait State<F: Field> {
     fn base_row(&mut self) -> (CpuColumnsView<F>, u8) {
         let generation_state = self.get_mut_generation_state();
         let mut row: CpuColumnsView<F> = CpuColumnsView::default();
-        row.clock = F::from_canonical_usize(generation_state.traces.clock());
+        row.clock = F::from_canonical_usize(generation_state.traces.clock() + 1);
         row.context = F::from_canonical_usize(generation_state.registers.context);
         row.program_counter = F::from_canonical_usize(generation_state.registers.program_counter);
         row.is_kernel_mode = F::from_bool(generation_state.registers.is_kernel);
@@ -260,11 +306,22 @@ pub(crate) trait State<F: Field> {
         let opcode = read_code_memory(generation_state, &mut row);
         (row, opcode)
     }
+
+    /// Logs `msg` in `debug` mode, in the interpreter.
+    fn log_debug(&self, msg: String) {}
+
+    /// Logs `msg` in `info` mode, in the interpreter.
+    fn log_info(&self, msg: String) {
+        log::info!("{}", msg);
+    }
+
+    /// Logs `msg` at `level`, during witness generation.
+    fn log_log(&self, level: Level, msg: String) {}
 }
 
 #[derive(Debug)]
-pub(crate) struct GenerationState<F: Field> {
-    pub(crate) inputs: GenerationInputs,
+pub struct GenerationState<F: Field> {
+    pub(crate) inputs: TrimmedGenerationInputs,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
@@ -307,14 +364,14 @@ impl<F: Field> GenerationState<F> {
 
         trie_roots_ptrs
     }
-    pub(crate) fn new(inputs: GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
+    pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
         let rlp_prover_inputs =
-            all_rlp_prover_inputs_reversed(inputs.clone().signed_txn.as_ref().unwrap_or(&vec![]));
+            all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().unwrap_or(&vec![]));
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let bignum_modmul_result_limbs = Vec::new();
 
         let mut state = Self {
-            inputs: inputs.clone(),
+            inputs: inputs.trim(),
             registers: Default::default(),
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
@@ -401,7 +458,7 @@ impl<F: Field> GenerationState<F> {
     /// Clones everything but the traces.
     pub(crate) fn soft_clone(&self) -> GenerationState<F> {
         Self {
-            inputs: self.inputs.clone(),
+            inputs: self.inputs.clone(), // inputs have already been trimmed here
             registers: self.registers,
             memory: self.memory.clone(),
             traces: Traces::default(),
@@ -493,7 +550,7 @@ impl<F: Field> State<F> for GenerationState<F> {
     }
 
     fn get_halt_offsets(&self) -> Vec<usize> {
-        vec![KERNEL.global_labels["halt"]]
+        vec![KERNEL.global_labels["halt_final"]]
     }
 
     fn try_perform_instruction(&mut self) -> Result<Operation, ProgramError> {
@@ -502,11 +559,6 @@ impl<F: Field> State<F> for GenerationState<F> {
 
         let op = decode(registers, opcode)?;
 
-        if registers.is_kernel {
-            log_kernel_instruction(self, op);
-        } else {
-            log::debug!("User instruction: {:?}", op);
-        }
         fill_op_flag(op, &mut row);
 
         self.fill_stack_fields(&mut row)?;

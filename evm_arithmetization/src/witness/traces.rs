@@ -6,11 +6,15 @@ use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 use starky::util::trace_rows_to_poly_values;
 
+use super::memory::MemoryAddress;
+use super::state::RegistersState;
 use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::arithmetic::{BinaryOperator, Operation};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
+use crate::generation::MemBeforeValues;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
+use crate::memory_continuation::memory_continuation_stark::mem_before_values_to_rows;
 use crate::witness::memory::MemoryOp;
 use crate::{arithmetic, keccak, keccak_sponge, logic};
 
@@ -119,9 +123,10 @@ impl<T: Copy> Traces<T> {
     pub(crate) fn into_tables<const D: usize>(
         self,
         all_stark: &AllStark<T, D>,
+        mem_before_values: &MemBeforeValues,
         config: &StarkConfig,
         timing: &mut TimingTree,
-    ) -> [Vec<PolynomialValues<T>>; NUM_TABLES]
+    ) -> ([Vec<PolynomialValues<T>>; NUM_TABLES], Vec<Vec<T>>)
     where
         T: RichField + Extendable<D>,
     {
@@ -171,21 +176,42 @@ impl<T: Copy> Traces<T> {
                 .logic_stark
                 .generate_trace(logic_ops, cap_elements, timing)
         );
-        let memory_trace = timed!(
+        let (memory_trace, final_values) = timed!(
             timing,
             "generate memory trace",
-            all_stark.memory_stark.generate_trace(memory_ops, timing)
+            all_stark
+                .memory_stark
+                .generate_trace(memory_ops, mem_before_values, timing)
+        );
+        let mem_before_trace = timed!(
+            timing,
+            "generate mem_before trace",
+            all_stark
+                .mem_before_stark
+                .generate_trace(mem_before_values_to_rows(mem_before_values), timing)
+        );
+        let mem_after_trace = timed!(
+            timing,
+            "generate mem_after trace",
+            all_stark
+                .mem_after_stark
+                .generate_trace(final_values.clone(), timing)
         );
 
-        [
-            arithmetic_trace,
-            byte_packing_trace,
-            cpu_trace,
-            keccak_trace,
-            keccak_sponge_trace,
-            logic_trace,
-            memory_trace,
-        ]
+        (
+            [
+                arithmetic_trace,
+                byte_packing_trace,
+                cpu_trace,
+                keccak_trace,
+                keccak_sponge_trace,
+                logic_trace,
+                memory_trace,
+                mem_before_trace,
+                mem_after_trace,
+            ],
+            final_values,
+        )
     }
 }
 

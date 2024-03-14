@@ -20,13 +20,21 @@ use GlobalMetadata::{
 use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::assembler::Kernel;
+use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::generation::state::GenerationState;
+use crate::generation::state::{GenerationState, State};
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
 use crate::memory::segments::Segment;
-use crate::proof::{BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots};
+use crate::proof::{
+    BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
+};
+use crate::prover::{check_abort_signal, get_mem_after_value_from_row};
 use crate::util::{h2u, u256_to_usize};
-use crate::witness::memory::{MemoryAddress, MemoryChannel};
+use crate::witness::errors::{ProgramError, ProverInputError};
+use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
+use crate::witness::state::RegistersState;
+use crate::witness::traces::Traces;
 
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -34,8 +42,14 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
-use self::state::State;
-use crate::witness::util::mem_write_log;
+use self::mpt::{load_all_mpts, TrieRootPtrs};
+use crate::witness::util::{mem_write_log, mem_write_log_timestamp_zero};
+
+/// Number of cycles to go after having reached the halting state. It is
+/// equal to the number of cycles in `exc_stop` + 1.
+pub const NUM_EXTRA_CYCLES_AFTER: usize = 81;
+/// Memory values used to initialize `MemBefore`.
+pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -78,6 +92,44 @@ pub struct GenerationInputs {
     pub block_hashes: BlockHashes,
 }
 
+/// A lighter version of [`GenerationInputs`], which have been trimmed
+/// post pre-initialization processing.
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub(crate) struct TrimmedGenerationInputs {
+    /// The index of the transaction being proven within its block.
+    pub(crate) txn_number_before: U256,
+    /// The cumulative gas used through the execution of all transactions prior
+    /// the current one.
+    pub(crate) gas_used_before: U256,
+    /// The cumulative gas used after the execution of the current transaction.
+    /// The exact gas used by the current transaction is `gas_used_after` -
+    /// `gas_used_before`.
+    pub(crate) gas_used_after: U256,
+
+    /// Indicates whether there is an actual transaction or a dummy payload.
+    pub(crate) has_txn: bool,
+
+    /// Expected trie roots after the transactions are executed.
+    pub(crate) trie_roots_after: TrieRoots,
+
+    /// State trie root of the checkpoint block.
+    /// This could always be the genesis block of the chain, but it allows a
+    /// prover to continue proving blocks from certain checkpoint heights
+    /// without requiring proofs for blocks past this checkpoint.
+    pub(crate) checkpoint_state_trie_root: H256,
+
+    /// Mapping between smart contract code hashes and the contract byte code.
+    /// All account smart contracts that are invoked will have an entry present.
+    pub(crate) contract_code: HashMap<H256, Vec<u8>>,
+
+    /// Information contained in the block header.
+    pub(crate) block_metadata: BlockMetadata,
+
+    /// The hash of the current block, and a list of the 256 previous block
+    /// hashes.
+    pub(crate) block_hashes: BlockHashes,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
@@ -101,9 +153,38 @@ pub struct TrieInputs {
     pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
+pub struct SegmentData<F: RichField> {
+    pub max_cpu_len_log: usize,
+    pub starting_state: GenerationState<F>,
+    pub memory_before: Vec<(MemoryAddress, U256)>,
+    pub registers_before: RegistersData,
+    pub registers_after: RegistersData,
+}
+
+impl GenerationInputs {
+    /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
+    /// the fields that have already been processed during pre-initialization,
+    /// namely: the input tries, the signed transaction, and the withdrawals.
+    pub(crate) fn trim(&self) -> TrimmedGenerationInputs {
+        TrimmedGenerationInputs {
+            txn_number_before: self.txn_number_before,
+            gas_used_before: self.gas_used_before,
+            gas_used_after: self.gas_used_after,
+            has_txn: self.signed_txn.is_some(),
+            trie_roots_after: self.trie_roots_after.clone(),
+            checkpoint_state_trie_root: self.checkpoint_state_trie_root,
+            contract_code: self.contract_code.clone(),
+            block_metadata: self.block_metadata.clone(),
+            block_hashes: self.block_hashes.clone(),
+        }
+    }
+}
+
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
     state: &mut GenerationState<F>,
     inputs: &GenerationInputs,
+    registers_before: &RegistersData,
+    registers_after: &RegistersData,
 ) {
     let metadata = &inputs.block_metadata;
     let tries = &inputs.tries;
@@ -200,6 +281,44 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
             .collect::<Vec<_>>(),
     );
 
+    // Write initial registers.
+    let registers_before = [
+        registers_before.program_counter,
+        registers_before.is_kernel,
+        registers_before.stack_len,
+        registers_before.stack_top,
+        registers_before.context,
+        registers_before.gas_used,
+    ];
+    ops.extend((0..registers_before.len()).map(|i| {
+        mem_write_log(
+            channel,
+            MemoryAddress::new(0, Segment::RegistersStates, i),
+            state,
+            registers_before[i],
+        )
+    }));
+
+    let length = registers_before.len();
+
+    // Write final registers.
+    let registers_after = [
+        registers_after.program_counter,
+        registers_after.is_kernel,
+        registers_after.stack_len,
+        registers_after.stack_top,
+        registers_after.context,
+        registers_after.gas_used,
+    ];
+    ops.extend((0..registers_before.len()).map(|i| {
+        mem_write_log(
+            channel,
+            MemoryAddress::new(0, Segment::RegistersStates, length + i),
+            state,
+            registers_after[i],
+        )
+    }));
+
     state.memory.apply_ops(&ops);
     state.traces.memory_ops.extend(ops);
 }
@@ -216,24 +335,50 @@ pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }
 
+type TablesWithPVsAndFinalMem<F> = (
+    [Vec<PolynomialValues<F>>; NUM_TABLES],
+    PublicValues,
+    Vec<Vec<F>>,
+);
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
     config: &StarkConfig,
+    segment_data: SegmentData<F>,
     timing: &mut TimingTree,
-) -> anyhow::Result<([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues)> {
+) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
     debug_inputs(&inputs);
-    let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
-        .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
-    apply_metadata_and_tries_memops(&mut state, &inputs);
+    // Initialize the state with the one at the end of the
+    // previous segment execution, if any.
 
-    let cpu_res = timed!(timing, "simulate CPU", simulate_cpu(&mut state));
-    if cpu_res.is_err() {
+    let SegmentData {
+        max_cpu_len_log,
+        starting_state: mut state,
+        memory_before,
+        registers_before,
+        registers_after,
+    } = segment_data;
+
+    for &(address, val) in &memory_before {
+        state.memory.set(address, val);
+    }
+
+    apply_metadata_and_tries_memops(&mut state, &inputs, &registers_before, &registers_after);
+
+    let cpu_res = timed!(
+        timing,
+        "simulate CPU",
+        simulate_cpu(&mut state, max_cpu_len_log)
+    );
+    let (final_registers, mem_after) = if let Ok(res) = cpu_res {
+        res
+    } else {
         output_debug_tries(&state);
 
         cpu_res?;
-    }
+        (RegistersState::default(), None)
+    };
 
     log::info!(
         "Trace lengths (before padding): {:?}",
@@ -263,29 +408,41 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         gas_used_after,
     };
 
+    // `mem_before` and `mem_after` are initialized with an empty cap.
+    // They will be set to the caps of `MemBefore` and `MemAfter`
+    // respectively, while proving.
     let public_values = PublicValues {
         trie_roots_before,
         trie_roots_after,
         block_metadata: inputs.block_metadata,
         block_hashes: inputs.block_hashes,
         extra_block_data,
+        registers_before,
+        registers_after,
+        mem_before: MemCap::default(),
+        mem_after: MemCap::default(),
     };
 
-    let tables = timed!(
+    let (tables, final_values) = timed!(
         timing,
         "convert trace data to tables",
-        state.traces.into_tables(all_stark, config, timing)
+        state
+            .traces
+            .into_tables(all_stark, &memory_before, config, timing)
     );
-    Ok((tables, public_values))
+    Ok((tables, public_values, final_values))
 }
 
-fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
-    state.run_cpu()?;
+fn simulate_cpu<F: Field>(
+    state: &mut GenerationState<F>,
+    max_cpu_len_log: usize,
+) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
+    let (final_registers, mem_after) = state.run_cpu(Some(max_cpu_len_log))?;
 
     let pc = state.registers.program_counter;
     // Setting the values of padding rows.
     let mut row = CpuColumnsView::<F>::default();
-    row.clock = F::from_canonical_usize(state.traces.clock());
+    row.clock = F::from_canonical_usize(state.traces.clock() + 1);
     row.context = F::from_canonical_usize(state.registers.context);
     row.program_counter = F::from_canonical_usize(pc);
     row.is_kernel_mode = F::ONE;
@@ -303,7 +460,7 @@ fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> 
 
     log::info!("CPU trace padded to {} cycles", state.traces.clock());
 
-    Ok(())
+    Ok((final_registers, mem_after))
 }
 
 /// Outputs the tries that have been obtained post transaction execution, as

@@ -11,8 +11,10 @@ pub(crate) const FILTER: usize = 0;
 /// memory channels, and `i` is the index of the memory channel at which the
 /// memory operation is performed.
 pub(crate) const TIMESTAMP: usize = FILTER + 1;
+/// Contains the inverse of `TIMESTAMP`. Used to check if `TIMESTAMP = 0`.
+pub(crate) const TIMESTAMP_INV: usize = TIMESTAMP + 1;
 /// 1 if this is a read operation, 0 if it is a write one.
-pub(crate) const IS_READ: usize = TIMESTAMP + 1;
+pub(crate) const IS_READ: usize = TIMESTAMP_INV + 1;
 /// The execution context of this address.
 pub(crate) const ADDR_CONTEXT: usize = IS_READ + 1;
 /// The segment section of this address.

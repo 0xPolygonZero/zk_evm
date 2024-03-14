@@ -12,7 +12,10 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
-use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
+use crate::memory::segments::Segment;
+use crate::proof::{BlockHashes, BlockMetadata, MemCap, TrieRoots};
+use crate::util::h2u;
+use crate::witness::state::RegistersState;
 use crate::GenerationInputs;
 
 #[test]
@@ -155,9 +158,9 @@ fn test_add11_yml() {
     };
 
     let initial_stack = vec![];
-    let initial_offset = KERNEL.global_labels["main"];
+    let initial_offset = KERNEL.global_labels["init"];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
 
     interpreter.set_is_kernel(true);
     interpreter.run().expect("Proving add11 failed.");
@@ -296,9 +299,9 @@ fn test_add11_yml_with_exception() {
     };
 
     let initial_stack = vec![];
-    let initial_offset = KERNEL.global_labels["main"];
+    let initial_offset = KERNEL.global_labels["init"];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
 
     interpreter.set_is_kernel(true);
     interpreter
