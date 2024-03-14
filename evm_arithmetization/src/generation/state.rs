@@ -365,16 +365,6 @@ impl<F: Field> GenerationState<F> {
         trie_roots_ptrs
     }
     pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
-        log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
-        log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
-        log::debug!(
-            "Input transactions_trie: {:?}",
-            &inputs.tries.transactions_trie
-        );
-        log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
-        log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
-        log::debug!("Input contract_code: {:?}", &inputs.contract_code);
-
         let rlp_prover_inputs =
             all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().unwrap_or(&vec![]));
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);

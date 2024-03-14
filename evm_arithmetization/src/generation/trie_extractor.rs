@@ -159,22 +159,31 @@ pub(crate) fn read_logs(
     (0..num_logs)
         .map(|_| {
             let address = u256_to_h160(slice[offset].unwrap_or_default())?;
-            let num_topics = u256_to_usize(slice[offset + 1].unwrap_or_default())?;
+            offset += 1;
+
+            let num_topics = u256_to_usize(slice[offset].unwrap_or_default())?;
+            offset += 1;
 
             let topics = (0..num_topics)
-                .map(|i| H256::from_uint(&slice[offset + 2 + i].unwrap_or_default()))
+                .map(|i| H256::from_uint(&slice[offset + i].unwrap_or_default()))
                 .collect();
+            offset += num_topics;
 
-            let data_len = u256_to_usize(slice[offset + 2 + num_topics].unwrap_or_default())?;
+            let data_len = u256_to_usize(slice[offset].unwrap_or_default())?;
+            offset += 1;
+
+            let data = slice[offset..offset + data_len]
+                .iter()
+                .map(|&x| u256_to_u8(x.unwrap_or_default()))
+                .collect::<Result<_, _>>()?;
+            offset += data_len + 1; // We need to skip one extra element before looping.
+
             let log = LogRlp {
                 address,
                 topics,
-                data: slice[offset + 2 + num_topics + 1..offset + 2 + num_topics + 1 + data_len]
-                    .iter()
-                    .map(|&x| u256_to_u8(x.unwrap_or_default()))
-                    .collect::<Result<_, _>>()?,
+                data,
             };
-            offset += 2 + num_topics + 1 + data_len;
+
             Ok(log)
         })
         .collect()
