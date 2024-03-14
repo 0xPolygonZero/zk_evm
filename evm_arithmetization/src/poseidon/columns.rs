@@ -14,6 +14,32 @@ pub(crate) const POSEIDON_DIGEST: usize = 4;
 #[repr(C)]
 #[derive(Eq, PartialEq, Debug)]
 pub(crate) struct PoseidonColumnsView<T: Copy> {
+    // The base address at which we will read the input block.
+    pub context: T,
+    pub segment: T,
+    pub virt: T,
+
+    /// The timestamp at which Poseidon is called.
+    pub timestamp: T,
+
+    /// The length of the original input.
+    pub len: T,
+
+    /// The number of elements that have already been absorbed prior
+    /// to this block.
+    pub already_absorbed_elements: T,
+
+    /// If this row represents a final block row, the `i`th entry should be 1 if
+    /// the final chunk of input has length `i` (in other words if `len -
+    /// already_absorbed == i`), otherwise 0.
+    ///
+    /// If this row represents a full input block, this should contain all 0s.
+    pub is_final_input_len: [T; POSEIDON_SPONGE_RATE],
+
+    /// 1 if this row represents a full input block, i.e. one in which each
+    /// element is an input element, not a padding element; 0 otherwise.
+    pub is_full_input_block: T,
+
     /// Registers to hold permutation inputs.
     pub input: [T; POSEIDON_SPONGE_WIDTH],
 
