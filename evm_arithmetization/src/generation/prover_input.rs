@@ -492,6 +492,7 @@ impl<F: Field> GenerationState<F> {
         // TODO: If this ends up being implemented in the Kernel directly, we should
         // really not have to go through the final exponentiation
         // twice.
+        // TODO: use trusted setup point here instead
         if bls381::ate_optim(comm_minus_y, -CurveAff::<Fp2<BLS381>>::GENERATOR)
             * bls381::ate_optim(proof, x_minus_z)
             != Fp12::<BLS381>::UNIT
