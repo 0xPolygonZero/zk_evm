@@ -122,14 +122,21 @@ load_code_padded_ctd:
 // TODO: This could certainly be optimized, or implemented directly in the Poseidon Stark.
 global poseidon_hash_code:
     // stack: padded_code_size, codehash, ctx, retdest
-    %stack (padded_code_size, codehash, ctx) -> (0, 0, padded_code_size, ctx, codehash)
+    %stack (padded_code_size, codehash, ctx) -> (ctx, padded_code_size, codehash, 0, 0, padded_code_size, ctx, codehash)
+global debug_antes_poseidon:
+    POSEIDON_GENERAL
+global debug_despues_de_eso:
+    %assert_eq
 poseidon_hash_code_loop:
     // stack: i, capacity, padded_code_size, ctx, codehash, retdest
     DUP3 DUP2 EQ %jumpi(poseidon_hash_code_after)
     %stack (i, capacity, code_size, ctx) -> (i, ctx, i, capacity, code_size, ctx)
     ADD MLOAD_GENERAL
+global debug_first_byte:
     %stack (b, i, capacity, code_size, ctx) -> (1, i, ctx, b, i, capacity, code_size, ctx)
-    ADD ADD MLOAD_GENERAL %shl_const(8) ADD
+    ADD ADD MLOAD_GENERAL
+global debug_segundo_byte:
+    %shl_const(8) ADD
     %stack (b, i, capacity, code_size, ctx) -> (2, i, ctx, b, i, capacity, code_size, ctx)
     ADD ADD MLOAD_GENERAL %shl_const(16) ADD
     %stack (b, i, capacity, code_size, ctx) -> (3, i, ctx, b, i, capacity, code_size, ctx)
@@ -255,6 +262,9 @@ poseidon_hash_code_loop:
 
 global poseidon_hash_code_after:
     // stack: i, capacity, padded_code_size, ctx, codehash, retdest
+    DUP1 %decrement DUP5 ADD MLOAD_GENERAL
+global debug_ultimo_byte:
+    POP
     %stack (i, capacity, padded_code_size, ctx, codehash) -> (capacity, codehash, padded_code_size, ctx)
     %assert_eq
     // stack: padded_code_size, ctx, retdest
