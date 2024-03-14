@@ -489,15 +489,19 @@ impl<F: Field> GenerationState<F> {
 
         let x_minus_z = minus_z_g2; // TODO
 
-        /// If this ends up being implemented in the Kernel directly, we should
-        /// really not have to go through the final exponentiation
-        /// twice.
+        // TODO: If this ends up being implemented in the Kernel directly, we should
+        // really not have to go through the final exponentiation
+        // twice.
         if bls381::ate_optim(comm_minus_y, -CurveAff::<Fp2<BLS381>>::GENERATOR)
             * bls381::ate_optim(proof, x_minus_z)
             != Fp12::<BLS381>::UNIT
         {
             U256::zero()
         } else {
+            // TODO: The specs mention returning
+            // `Bytes(U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes32() +
+            // U256(BLS_MODULUS).to_be_bytes32())` which would be larger than an
+            // EVM word. What should we return here?
             U256::one()
         }
     }

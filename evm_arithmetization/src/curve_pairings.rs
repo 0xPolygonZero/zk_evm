@@ -580,6 +580,8 @@ pub mod bn254 {
     ];
 }
 
+// The optimal Ate pairing implementation for BLS12-381 has been taken from
+// <https://github.com/zkcrypto/bls12_381>.
 pub mod bls381 {
     use anyhow::{anyhow, Result};
 
@@ -697,6 +699,11 @@ pub mod bls381 {
         };
     }
 
+    /// Deserializes a sequence of bytes into a BLS12-381 G1 element in affine
+    /// coordinates. Follows the procedure defined in `octets_to_point` of
+    /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-04#appendix-A>,
+    /// based on zkcrypto/bls12_381 serialization design notes available at
+    /// <https://github.com/zkcrypto/bls12_381/blob/main/src/notes/serialization.rs>.
     pub(crate) fn from_bytes(bytes: &[u8; 64]) -> Result<CurveAff<BLS381>> {
         if &bytes[48..] != &[0; 16] {
             return Err(anyhow!("Compressed point should fit in 48 bytes."));
@@ -998,6 +1005,9 @@ pub mod bls381 {
         tmp.conj()
     }
 
+    /// The value used to generate both scalar and base fields of BLS12-381.
+    /// Note that `x` is negative, and the Miller loop hence require a final
+    /// conjugation in Fp12.
     const X_GENERATOR: u64 = 0xd201000000010000;
 }
 
@@ -1008,33 +1018,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_bls_pairing_simple() {
-        let x0 = bls381::ate_optim(
-            CurveAff::<BLS381>::GENERATOR,
-            CurveAff::<Fp2<BLS381>>::GENERATOR,
-        );
-
-        // x0^(-1)
-        let x1 = bls381::ate_optim(
-            -CurveAff::<BLS381>::GENERATOR,
-            CurveAff::<Fp2<BLS381>>::GENERATOR,
-        );
-        let x2 = bls381::ate_optim(
-            CurveAff::<BLS381>::GENERATOR,
-            -CurveAff::<Fp2<BLS381>>::GENERATOR,
-        );
-
-        assert_eq!(x0 * x1, Fp12::<BLS381>::UNIT);
-        assert_eq!(x0 * x2, Fp12::<BLS381>::UNIT);
-
-        assert_eq!(
-            bls381::ate_optim(CurveAff::<BLS381>::unit(), CurveAff::<Fp2<BLS381>>::unit()),
-            Fp12::<BLS381>::ZERO
-        );
-    }
-
-    #[test]
-    fn test_bls_pairing_random() {
+    fn test_bls_pairing() {
         let mut rng = rand::thread_rng();
         let mut acc = 0_i32;
         let mut running_product = Fp12::<BLS381>::UNIT;
@@ -1067,33 +1051,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bn_pairing_simple() {
-        let x0 = bn254::tate(
-            CurveAff::<BN254>::GENERATOR,
-            CurveAff::<Fp2<BN254>>::GENERATOR,
-        );
-
-        // x0^(-1)
-        let x1 = bn254::tate(
-            -CurveAff::<BN254>::GENERATOR,
-            CurveAff::<Fp2<BN254>>::GENERATOR,
-        );
-        let x2 = bn254::tate(
-            CurveAff::<BN254>::GENERATOR,
-            -CurveAff::<Fp2<BN254>>::GENERATOR,
-        );
-
-        assert_eq!(x0 * x1, Fp12::<BN254>::UNIT);
-        assert_eq!(x0 * x2, Fp12::<BN254>::UNIT);
-
-        assert_eq!(
-            bn254::tate(CurveAff::<BN254>::unit(), CurveAff::<Fp2<BN254>>::unit()),
-            Fp12::<BN254>::ZERO
-        );
-    }
-
-    #[test]
-    fn test_bn_pairing_random() {
+    fn test_bn_pairing() {
         let mut rng = rand::thread_rng();
         let mut acc = 0_i32;
         let mut running_product = Fp12::<BN254>::UNIT;

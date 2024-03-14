@@ -187,6 +187,9 @@ impl Sub for BLS381 {
     }
 }
 
+// The square root implementation for BLS12-381 as well as the
+// `lexicographically_largest` method have been taken from
+// <https://github.com/zkcrypto/bls12_381>.
 impl BLS381 {
     fn lsh_128(self) -> BLS381 {
         let b128: U512 = U512([0, 0, 1, 0, 0, 0, 0, 0]);
@@ -205,7 +208,7 @@ impl BLS381 {
     }
 
     pub fn sqrt(&self) -> Result<Self> {
-        // We use Shank's method, as p = 3 (mod 4). This means
+        // Uses Shank's method, as p = 3 (mod 4). This means
         // we only need to exponentiate by (p+1)/4. This only
         // works for elements that are actually quadratic residue,
         // so we check that we got the correct result at the end.
@@ -264,8 +267,8 @@ impl BLS381 {
     /// Returns whether or not this element is strictly lexicographically
     /// larger than its negation.
     pub fn lexicographically_largest(&self) -> bool {
-        // This can be determined by checking to see if the element is
-        // larger than (p - 1) // 2.
+        // This can be determined by checking if the element is larger than
+        // (p - 1) / 2.
 
         const MODULUS_MINUS_ONE_DIV_TWO: U512 = U512([
             0xdcff7fffffffd556,
