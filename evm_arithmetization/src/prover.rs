@@ -68,6 +68,7 @@ where
         };
 
         let ExtraSegmentData {
+            trimmed_inputs,
             bignum_modmul_result_limbs,
             rlp_prover_inputs,
             withdrawal_prover_inputs,
@@ -75,6 +76,7 @@ where
             jumpdest_table,
         } = extra_segment_data.clone();
 
+        state.inputs = trimmed_inputs;
         state.bignum_modmul_result_limbs = bignum_modmul_result_limbs;
         state.rlp_prover_inputs = rlp_prover_inputs;
         state.withdrawal_prover_inputs = withdrawal_prover_inputs;
