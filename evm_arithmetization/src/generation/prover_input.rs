@@ -13,7 +13,8 @@ use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::cpu::kernel::constants::cancun_constants::{
-    BLOB_BASE_FEE_UPDATE_FRACTION, MIN_BLOB_BASE_FEE, POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
+    BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BLOB_BASE_FEE,
+    POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -476,13 +477,13 @@ impl<F: Field> GenerationState<F> {
         y: U256,
         proof_bytes: &[u8; 64],
     ) -> U256 {
-        let comm = if let Ok(c) = bls381::from_bytes(comm_bytes) {
+        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes) {
             c
         } else {
             return U256::zero(); // abort early
         };
 
-        let proof = if let Ok(p) = bls381::from_bytes(proof_bytes) {
+        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes) {
             p
         } else {
             return U256::zero(); // abort early
@@ -504,12 +505,29 @@ impl<F: Field> GenerationState<F> {
         }
         let comm_minus_y = comm + (acc.neg());
 
-        let x_minus_z = minus_z_g2; // TODO
+        let x = CurveAff::<Fp2<BLS381>> {
+            x: Fp2::<BLS381> {
+                re: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[0]),
+                },
+                im: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[1]),
+                },
+            },
+            y: Fp2::<BLS381> {
+                re: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[2]),
+                },
+                im: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[3]),
+                },
+            },
+        };
+        let x_minus_z = x + minus_z_g2;
 
         // TODO: If this ends up being implemented in the Kernel directly, we should
         // really not have to go through the final exponentiation
         // twice.
-        // TODO: use trusted setup point here instead
         if bls381::ate_optim(comm_minus_y, -CurveAff::<Fp2<BLS381>>::GENERATOR)
             * bls381::ate_optim(proof, x_minus_z)
             != Fp12::<BLS381>::UNIT

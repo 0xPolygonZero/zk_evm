@@ -592,15 +592,6 @@ pub mod bls381 {
         val: U512([4, 0, 0, 0, 0, 0, 0, 0]),
     };
 
-    const B_G2: Fp2<BLS381> = Fp2::<BLS381> {
-        re: BLS381 {
-            val: U512([4, 0, 0, 0, 0, 0, 0, 0]),
-        },
-        im: BLS381 {
-            val: U512([4, 0, 0, 0, 0, 0, 0, 0]),
-        },
-    };
-
     /// The BLS curve consists of pairs
     ///     (x, y): (BLS381, BLS381) | y^2 = x^3 + 4
     // with generator given by
@@ -636,7 +627,7 @@ pub mod bls381 {
     }
 
     /// The twisted curve consists of pairs
-    ///     (x, y): (Fp2<BLS381>, Fp2<BLS381>) | y^2 = x^3 + 4/(i + 1)
+    ///     (x, y): (Fp2<BLS381>, Fp2<BLS381>) | y^2 = x^3 + 4*(i + 1)
     /// with generator given by
     //      x = 352701069587466618187139116011060144890029952792775240219908644239793785735715026873347600343865175952761926303160
     //          + 3059144344244213709971259814753781636986470325476647558659373206291635324768958432433509563104347017837885763365758 * i
@@ -704,7 +695,7 @@ pub mod bls381 {
     /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-04#appendix-A>,
     /// based on zkcrypto/bls12_381 serialization design notes available at
     /// <https://github.com/zkcrypto/bls12_381/blob/main/src/notes/serialization.rs>.
-    pub(crate) fn from_bytes(bytes: &[u8; 64]) -> Result<CurveAff<BLS381>> {
+    pub(crate) fn g1_from_bytes(bytes: &[u8; 64]) -> Result<CurveAff<BLS381>> {
         if &bytes[48..] != &[0; 16] {
             return Err(anyhow!("Compressed point should fit in 48 bytes."));
         }
