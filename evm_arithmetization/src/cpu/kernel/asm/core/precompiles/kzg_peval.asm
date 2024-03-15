@@ -63,17 +63,24 @@ global precompile_kzg_peval:
 global verify_kzg_proof:
     // stack: versioned_hash, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
     PROVER_INPUT(kzg_point_eval)
-    // stack: result, versioned_hash, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
-    %stack (result, versioned_hash, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info) ->
-        (result, kexit_info)
+    PROVER_INPUT(kzg_point_eval_2)
+    // stack: res_lo, res_hi, versioned_hash, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
+    %stack (res_lo, res_hi, versioned_hash, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info) ->
+        (res_lo, res_hi, kexit_info)
 
     // Store the result to the parent's return data using `mstore_unpacking`.
-    %mstore_parent_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 32)
+    %mstore_parent_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 64)
     %mload_context_metadata(@CTX_METADATA_PARENT_CONTEXT)
-    %stack (parent_ctx, result) -> (parent_ctx, @SEGMENT_RETURNDATA, result, result)
+    // stack: parent_ctx, res_lo, res_hi, kexit_info
+    PUSH @SEGMENT_RETURNDATA
     %build_address_no_offset
+    // stack: addr, res_lo, res_hi, kexit_info
+    DUP1 %add_const(32)
+    %stack (addr_hi, addr_lo, res_lo, res_hi)
+        -> (addr_lo, res_lo, addr_hi, res_hi)
     MSTORE_32BYTES_32
-    // stack: result, kexit_info
+    MSTORE_32BYTES_32
+    // stack: kexit_info
 
     POP
     %leftover_gas

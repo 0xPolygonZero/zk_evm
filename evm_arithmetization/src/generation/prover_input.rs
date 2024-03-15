@@ -13,7 +13,7 @@ use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
 use crate::cpu::kernel::constants::cancun_constants::{
-    BLOB_BASE_FEE_UPDATE_FRACTION, MIN_BLOB_BASE_FEE,
+    BLOB_BASE_FEE_UPDATE_FRACTION, MIN_BLOB_BASE_FEE, POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -27,7 +27,7 @@ use crate::generation::prover_input::FieldOp::{Inverse, Sqrt};
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::memory::segments::Segment::BnPairing;
-use crate::util::{biguint_to_mem_vec, mem_vec_to_biguint, u256_to_u8, u256_to_usize};
+use crate::util::{biguint_to_mem_vec, h2u, mem_vec_to_biguint, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProverInputError::*;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::MemoryAddress;
@@ -65,6 +65,7 @@ impl<F: Field> GenerationState<F> {
             "access_lists" => self.run_access_lists(input_fn),
             "ger" => self.run_global_exit_roots(),
             "kzg_point_eval" => self.run_kzg_point_eval(),
+            "kzg_point_eval_2" => self.run_kzg_point_eval_2(),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
         }
     }
@@ -451,6 +452,22 @@ impl<F: Field> GenerationState<F> {
         Ok(self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes))
     }
 
+    /// POINT_EVALUATION_PRECOMPILE returns a 64-byte value. Because EVM words
+    /// only fit in 32 bytes, we read the previously pushed value and then
+    /// accordingly push the following word
+    fn run_kzg_point_eval_2(&mut self) -> Result<U256, ProgramError> {
+        let prev_value = stack_peek(self, 0)?;
+
+        if prev_value == U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1]) {
+            Ok(U256::from_big_endian(
+                &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
+            ))
+        } else {
+            assert!(prev_value == U256::zero());
+            Ok(U256::zero())
+        }
+    }
+
     /// Verifies a KZG proof.
     fn verify_kzg_proof(
         &self,
@@ -499,11 +516,7 @@ impl<F: Field> GenerationState<F> {
         {
             U256::zero()
         } else {
-            // TODO: The specs mention returning
-            // `Bytes(U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes32() +
-            // U256(BLS_MODULUS).to_be_bytes32())` which would be larger than an
-            // EVM word. What should we return here?
-            U256::one()
+            U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1])
         }
     }
 }

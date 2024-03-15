@@ -327,6 +327,13 @@ pub mod cancun_constants {
 
     pub const MIN_BLOB_BASE_FEE: U256 = U256::one();
 
+    pub const POINT_EVALUATION_PRECOMPILE_RETURN_VALUE: [[u8; 32]; 2] = [
+        // U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes()
+        hex!("0000000000000000000000000000000000000000000000000000000000001000"),
+        // BLS_MODULUS.to_bytes32()
+        hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"),
+    ];
+
     pub const BEACON_ROOTS_ADDRESS: (&str, [u8; 20]) = (
         "BEACON_ROOTS_ADDRESS",
         hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"),
