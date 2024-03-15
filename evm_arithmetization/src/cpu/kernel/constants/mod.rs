@@ -327,6 +327,8 @@ pub mod cancun_constants {
 
     pub const MIN_BLOB_BASE_FEE: U256 = U256::one();
 
+    pub const KZG_VERSIONED_HASH: u8 = 0x01;
+
     pub const POINT_EVALUATION_PRECOMPILE_RETURN_VALUE: [[u8; 32]; 2] = [
         // U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes()
         hex!("0000000000000000000000000000000000000000000000000000000000001000"),

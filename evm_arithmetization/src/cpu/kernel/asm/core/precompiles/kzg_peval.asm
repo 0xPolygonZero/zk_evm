@@ -16,58 +16,59 @@ global precompile_kzg_peval:
 
     // Load `versioned_hash | z | y | commitment | proof` from the call data using `MLOAD_32BYTES`.
     // Note that `z` and `y` are padded 32 byte big endian values, and `commitment` and `proof` are
-    // both 48 bytes values.
+    // both 48 bytes big-endian encoded values.
     // stack: kexit_info
     %stack () -> (@SEGMENT_CALLDATA, 176, 16)
     GET_CONTEXT
     // stack: ctx, @SEGMENT_CALLDATA, 176, 16, kexit_info
     %build_address
     MLOAD_32BYTES
-    // stack: proof_hi, kexit_info
+    // stack: proof_lo, kexit_info
     %stack () -> (@SEGMENT_CALLDATA, 144, 32)
     GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 144, 32, proof_hi, kexit_info
+    // stack: ctx, @SEGMENT_CALLDATA, 144, 32, proof_lo, kexit_info
     %build_address
     MLOAD_32BYTES
-    // stack: proof_lo, proof_hi, kexit_info
+    // stack: proof_hi, proof_lo, kexit_info
     %stack () -> (@SEGMENT_CALLDATA, 128, 16)
     GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 128, 16, proof_lo, proof_hi, kexit_info
+    // stack: ctx, @SEGMENT_CALLDATA, 128, 16, proof_hi, proof_lo, kexit_info
     %build_address
     MLOAD_32BYTES
-    // stack: comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: comm_lo, proof_hi, proof_lo, kexit_info
     %stack () -> (@SEGMENT_CALLDATA, 96, 32)
     GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 96, 32, comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: ctx, @SEGMENT_CALLDATA, 96, 32, comm_lo, proof_hi, proof_lo, kexit_info
     %build_address
     MLOAD_32BYTES
-    // stack: comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: comm_hi, comm_lo, proof_hi, proof_lo, kexit_info
     %stack () -> (@SEGMENT_CALLDATA, 64, 32)
     GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 64, 32, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: ctx, @SEGMENT_CALLDATA, 64, 32, comm_hi, comm_lo, proof_hi, proof_lo, kexit_info
     %build_address
     MLOAD_32BYTES
-    // stack: y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: y, comm_hi, comm_lo, proof_hi, proof_lo, kexit_info
     %stack () -> (@SEGMENT_CALLDATA, 32, 32)
     GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 32, 32, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: ctx, @SEGMENT_CALLDATA, 32, 32, y, comm_hi, comm_lo, proof_hi, proof_lo, kexit_info
     %build_address
     MLOAD_32BYTES
-    // stack: z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: z, y, comm_hi, comm_lo, proof_hi, proof_lo, kexit_info
     %stack () -> (@SEGMENT_CALLDATA, 32)
     GET_CONTEXT
-    // stack: ctx, @SEGMENT_CALLDATA, 32, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: ctx, @SEGMENT_CALLDATA, 32, z, y, comm_hi, comm_lo, proof_hi, proof_lo, kexit_info
     %build_address_no_offset
     MLOAD_32BYTES
 
 global verify_kzg_proof:
-    // stack: versioned_hash, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
+    // stack: versioned_hash, z, y, comm_hi, comm_lo, proof_hi, proof_lo, kexit_info
     PROVER_INPUT(kzg_point_eval)
     PROVER_INPUT(kzg_point_eval_2)
-    // stack: res_lo, res_hi, versioned_hash, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info
-    %stack (res_lo, res_hi, versioned_hash, z, y, comm_lo, comm_hi, proof_lo, proof_hi, kexit_info) ->
+    // stack: res_lo, res_hi, versioned_hash, z, y, comm_hi, comm_lo, proof_hi, proof_lo, kexit_info
+    %stack (res_lo, res_hi, versioned_hash, z, y, comm_hi, comm_lo, proof_hi, proof_lo, kexit_info) ->
         (res_lo, res_hi, kexit_info)
 
+global store_kzg_verification:
     // Store the result to the parent's return data using `mstore_unpacking`.
     %mstore_parent_context_metadata(@CTX_METADATA_RETURNDATA_SIZE, 64)
     %mload_context_metadata(@CTX_METADATA_PARENT_CONTEXT)

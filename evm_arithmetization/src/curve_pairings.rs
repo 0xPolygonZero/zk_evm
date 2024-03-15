@@ -695,11 +695,7 @@ pub mod bls381 {
     /// <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-04#appendix-A>,
     /// based on zkcrypto/bls12_381 serialization design notes available at
     /// <https://github.com/zkcrypto/bls12_381/blob/main/src/notes/serialization.rs>.
-    pub(crate) fn g1_from_bytes(bytes: &[u8; 64]) -> Result<CurveAff<BLS381>> {
-        if &bytes[48..] != &[0; 16] {
-            return Err(anyhow!("Compressed point should fit in 48 bytes."));
-        }
-
+    pub(crate) fn g1_from_bytes(bytes: &[u8; 48]) -> Result<CurveAff<BLS381>> {
         // Obtain the three flags from the start of the byte sequence
         let compression_flag_set = ((bytes[0] >> 7) & 1) != 0;
         let infinity_flag_set = ((bytes[0] >> 6) & 1) != 0;
@@ -714,7 +710,7 @@ pub mod bls381 {
             tmp[0] &= 0b0001_1111;
 
             BLS381 {
-                val: U512::from_little_endian(&tmp),
+                val: U512::from_big_endian(&tmp),
             }
         };
 
@@ -734,7 +730,7 @@ pub mod bls381 {
         }
 
         // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
-        ((x * x * x) + B_G1).sqrt().and_then(|mut y| {
+        if let Ok(mut y) = ((x * x * x) + B_G1).sqrt() {
             // Switch to the correct y-coordinate if necessary.
 
             if y.lexicographically_largest() ^ sort_flag_set {
@@ -745,10 +741,10 @@ pub mod bls381 {
                 return Err(anyhow!("Byte flags are contradictory"));
             }
 
-            return Ok(CurveAff::<BLS381> { x, y });
-        });
-
-        Err(anyhow!("This point is not on the curve."))
+            Ok(CurveAff::<BLS381> { x, y })
+        } else {
+            Err(anyhow!("This point is not on the curve."))
+        }
     }
 
     // The optimal Ate pairing takes a point each from the curve and its twist and

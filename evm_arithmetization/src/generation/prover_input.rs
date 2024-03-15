@@ -12,6 +12,7 @@ use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
+use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
     BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BLOB_BASE_FEE,
     POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
@@ -421,10 +422,10 @@ impl<F: Field> GenerationState<F> {
         let versioned_hash = stack_peek(self, 0)?;
         let z = stack_peek(self, 1)?;
         let y = stack_peek(self, 2)?;
-        let comm_lo = stack_peek(self, 3)?;
-        let comm_hi = stack_peek(self, 4)?;
-        let proof_lo = stack_peek(self, 5)?;
-        let proof_hi = stack_peek(self, 6)?;
+        let comm_hi = stack_peek(self, 3)?;
+        let comm_lo = stack_peek(self, 4)?;
+        let proof_hi = stack_peek(self, 5)?;
+        let proof_lo = stack_peek(self, 6)?;
 
         // Validate scalars
         if z > BLS_SCALAR {
@@ -434,19 +435,18 @@ impl<F: Field> GenerationState<F> {
             return Ok(U256::zero()); // abort early
         }
 
-        const VERSIONED_HASH_VERSION_KZG: U256 = U256::one();
-
         let mut comm_bytes = [0u8; 64];
-        comm_lo.to_big_endian(&mut comm_bytes[0..32]);
-        comm_hi.to_big_endian(&mut comm_bytes[32..64]); // only actually 16 bits
+        comm_hi.to_big_endian(&mut comm_bytes[0..32]);
+        comm_lo.to_big_endian(&mut comm_bytes[32..64]); // only actually 16 bits
 
         let mut proof_bytes = [0u8; 64];
-        proof_lo.to_big_endian(&mut proof_bytes[0..32]);
-        proof_hi.to_big_endian(&mut proof_bytes[32..64]); // only actually 16 bits
+        proof_hi.to_big_endian(&mut proof_bytes[0..32]);
+        proof_lo.to_big_endian(&mut proof_bytes[32..64]); // only actually 16 bits
 
-        if versioned_hash
-            != VERSIONED_HASH_VERSION_KZG + U256::from_big_endian(&keccak(&comm_bytes).0[1..])
-        {
+        let mut expected_versioned_hash = keccak(&comm_bytes[16..64]).0;
+        expected_versioned_hash[0] = KZG_VERSIONED_HASH;
+
+        if versioned_hash != U256::from_big_endian(&expected_versioned_hash) {
             return Ok(U256::zero()); // abort early
         }
 
@@ -460,11 +460,13 @@ impl<F: Field> GenerationState<F> {
         let prev_value = stack_peek(self, 0)?;
 
         if prev_value == U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1]) {
+            println!("PREV VALUE OK");
             Ok(U256::from_big_endian(
                 &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
             ))
         } else {
             assert!(prev_value == U256::zero());
+            println!("PREV VALUE NOT OK");
             Ok(U256::zero())
         }
     }
@@ -477,31 +479,34 @@ impl<F: Field> GenerationState<F> {
         y: U256,
         proof_bytes: &[u8; 64],
     ) -> U256 {
-        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes) {
+        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes[16..64].try_into().unwrap()) {
             c
         } else {
             return U256::zero(); // abort early
         };
 
-        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes) {
+        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes[16..64].try_into().unwrap()) {
             p
         } else {
             return U256::zero(); // abort early
         };
 
+        // TODO: use some WNAF method if performance becomes critical
         let mut z_bytes = [0u8; 32];
         z.to_big_endian(&mut z_bytes);
-        let mut acc = CurveAff::<Fp2<BLS381>>::GENERATOR;
+        let mut acc = CurveAff::<Fp2<BLS381>>::unit();
         for byte in z_bytes {
-            acc = acc * byte as i32;
+            acc = acc * 256 as i32;
+            acc = acc + (CurveAff::<Fp2<BLS381>>::GENERATOR * byte as i32);
         }
         let minus_z_g2 = -acc;
 
         let mut y_bytes = [0u8; 32];
         y.to_big_endian(&mut y_bytes);
-        let mut acc = CurveAff::<BLS381>::GENERATOR;
+        let mut acc = CurveAff::<BLS381>::unit();
         for byte in y_bytes {
-            acc = acc * byte as i32;
+            acc = acc * 256 as i32;
+            acc = acc + (CurveAff::<BLS381>::GENERATOR * byte as i32);
         }
         let comm_minus_y = comm + (acc.neg());
 
