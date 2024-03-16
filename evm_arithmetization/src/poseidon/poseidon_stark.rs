@@ -28,6 +28,11 @@ use super::columns::{
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::witness::memory::MemoryAddress;
 
+/// Maximum number of bytes that can be packed into a field element without
+/// performing a modular reduction.
+// TODO: this constant depends on the size of F, which is not bounded.
+pub const FELT_MAX_BYTES: usize = 7;
+
 pub fn ctl_looked_data<F: Field>() -> Vec<Column<F>> {
     let cols = POSEIDON_COL_MAP;
     let outputs: Vec<Column<F>> = Column::singles(cols.digest).collect();
@@ -97,12 +102,12 @@ pub fn ctl_looking_memory_filter<F: Field>(i: usize) -> Column<F> {
 
 #[derive(Clone, Debug)]
 pub enum PoseidonOp<F: RichField> {
-    PoseidonStackOp(PoseidonStackOp<F>),
+    PoseidonStackOp(PoseidonSimpleOp<F>),
     PoseidonGeneralOp(PoseidonGeneralOp),
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct PoseidonStackOp<F: RichField>(pub [F; POSEIDON_SPONGE_WIDTH]);
+pub struct PoseidonSimpleOp<F: RichField>(pub [F; POSEIDON_SPONGE_WIDTH]);
 
 #[derive(Clone, Debug)]
 pub struct PoseidonGeneralOp {
@@ -114,7 +119,7 @@ pub struct PoseidonGeneralOp {
 
     /// The input that was read. We assume that it was
     /// previously padded.
-    pub(crate) input: Vec<u32>,
+    pub(crate) input: Vec<u8>,
 
     /// Length of the input before paddding.
     pub(crate) len: usize,
@@ -140,8 +145,8 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             .map(|op| match op {
                 PoseidonOp::PoseidonStackOp(_) => 1,
                 PoseidonOp::PoseidonGeneralOp(op) => {
-                    debug_assert!(op.input.len() % POSEIDON_SPONGE_RATE == 0);
-                    op.input.len() / POSEIDON_SPONGE_RATE
+                    debug_assert!(op.input.len() % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE) == 0);
+                    op.input.len() / (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE)
                 }
             })
             .sum();
@@ -151,7 +156,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
 
         for op in operations {
             match op {
-                PoseidonOp::PoseidonStackOp(op) => rows.push(self.generate_row_for_stack_op(op)),
+                PoseidonOp::PoseidonStackOp(op) => rows.push(self.generate_row_for_simple_op(op)),
                 PoseidonOp::PoseidonGeneralOp(op) => {
                     rows.extend(self.generate_rows_for_general_op(op))
                 }
@@ -173,7 +178,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
         rows
     }
 
-    fn generate_row_for_stack_op(&self, op: PoseidonStackOp<F>) -> [F; NUM_COLUMNS] {
+    fn generate_row_for_simple_op(&self, op: PoseidonSimpleOp<F>) -> [F; NUM_COLUMNS] {
         let mut row = PoseidonColumnsView::default();
         Self::generate_perm(&mut row, op.0);
         row.not_padding = F::ONE;
@@ -181,16 +186,23 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
     }
 
     fn generate_rows_for_general_op(&self, op: PoseidonGeneralOp) -> Vec<[F; NUM_COLUMNS]> {
-        let mut input_blocks = op.input.chunks_exact(POSEIDON_SPONGE_RATE);
-        let mut rows = Vec::with_capacity(op.input.len() / POSEIDON_SPONGE_RATE);
+        let mut input_blocks = op.input.chunks_exact(FELT_MAX_BYTES * POSEIDON_SPONGE_RATE);
+        let mut rows = Vec::with_capacity(op.input.len() / (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE));
         let last_non_padding_elt = op.len % POSEIDON_SPONGE_RATE;
         let total_length = input_blocks.len();
         let mut already_absorbed_elements = 0;
         let mut state = [F::ZERO; POSEIDON_SPONGE_WIDTH];
-        for (counter, block) in input_blocks.by_ref().enumerate() {
-            for (s, &b) in state[0..POSEIDON_SPONGE_RATE].iter_mut().zip_eq(block) {
-                *s = F::from_canonical_u32(b);
-            }
+        for (counter, block) in input_blocks.enumerate() {
+            state[0..POSEIDON_SPONGE_RATE].copy_from_slice(
+                &block
+                    .chunks_exact(FELT_MAX_BYTES)
+                    .map(|bytes| {
+                        let mut bytes = [0u8; POSEIDON_SPONGE_RATE];
+                        bytes[..7].copy_from_slice(block);
+                        F::from_canonical_u64(u64::from_le_bytes(bytes))
+                    })
+                    .collect::<Vec<F>>(),
+            );
             let row = if counter == total_length - 1 {
                 let tmp_row =
                     self.generate_trace_final_row_for_perm(state, &op, already_absorbed_elements);
@@ -202,15 +214,34 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
                 already_absorbed_elements += POSEIDON_SPONGE_RATE;
                 tmp_row
             };
-            // Update state.
-            for i in 0..POSEIDON_DIGEST {
-                state[i] =
-                    row.digest[2 * i] + F::from_canonical_u64(1 << 32) * row.digest[2 * i + 1];
-            }
-            state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH].copy_from_slice(&row.output_partial);
 
             rows.push(row.into());
         }
+        // for (counter, block) in input_blocks.by_ref().enumerate() {
+        //     for (s, &b) in state[0..POSEIDON_SPONGE_RATE].iter_mut().zip_eq(block) {
+        //         *s = F::from_canonical_u8(b);
+        //     }
+        //     let row = if counter == total_length - 1 {
+        //         let tmp_row =
+        //             self.generate_trace_final_row_for_perm(state, &op,
+        // already_absorbed_elements);         already_absorbed_elements +=
+        // last_non_padding_elt;         tmp_row
+        //     } else {
+        //         let tmp_row =
+        //             self.generate_trace_row_for_perm(state, &op,
+        // already_absorbed_elements);         already_absorbed_elements +=
+        // POSEIDON_SPONGE_RATE;         tmp_row
+        //     };
+        //     // Update state.
+        //     for i in 0..POSEIDON_DIGEST {
+        //         state[i] =
+        //             row.digest[2 * i] + F::from_canonical_u64(1 << 32) * row.digest[2
+        // * i + 1];     }
+        //   state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH].copy_from_slice(&row.
+        // output_partial);
+
+        //     rows.push(row.into());
+        // }
         rows
     }
 
@@ -846,7 +877,9 @@ mod tests {
     use crate::poseidon::columns::{
         PoseidonColumnsView, POSEIDON_DIGEST, POSEIDON_SPONGE_RATE, POSEIDON_SPONGE_WIDTH,
     };
-    use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonStark};
+    use crate::poseidon::poseidon_stark::{
+        PoseidonGeneralOp, PoseidonOp, PoseidonStark, FELT_MAX_BYTES,
+    };
     use crate::prover::prove_single_table;
     use crate::witness::memory::MemoryAddress;
 
@@ -878,22 +911,16 @@ mod tests {
 
     #[test]
     fn poseidon_correctness_test() -> Result<()> {
-        let input: [F; POSEIDON_SPONGE_RATE] = (0..POSEIDON_SPONGE_RATE)
-            .map(|_| F::from_canonical_u32(rand::random()))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
+        let input: Vec<u8> = (0..POSEIDON_SPONGE_RATE * FELT_MAX_BYTES)
+            .map(|_| rand::random())
+            .collect();
         let int_inputs = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
             base_address: MemoryAddress::new(
                 0,
                 crate::memory::segments::Segment::AccessedAddresses,
                 0,
             ),
-            input: input
-                .iter()
-                .map(|&inp| inp.to_canonical_u64() as u32)
-                .collect::<Vec<u32>>(),
+            input: input.clone(),
             timestamp: 0,
             len: POSEIDON_SPONGE_RATE,
         });
@@ -916,7 +943,14 @@ mod tests {
             .collect();
         output.extend(&last_row.output_partial);
 
-        let mut state = input.to_vec();
+        let mut state: Vec<F> = input
+            .chunks(FELT_MAX_BYTES)
+            .map(|block| {
+                let mut bytes = [0u8; 8];
+                bytes[0..FELT_MAX_BYTES].copy_from_slice(block);
+                F::from_canonical_u64(u64::from_le_bytes(bytes))
+            })
+            .collect();
         state.extend(vec![F::ZERO; POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE]);
         let expected = <F as Poseidon>::poseidon(state.try_into().unwrap());
 
