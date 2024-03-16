@@ -1,36 +1,58 @@
 /// Functions to hash contract bytecode using Poseidon.
 /// See `hashContractBytecode()` in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt-utils.js for reference implementation.
 use ethereum_types::U256;
+use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
-use plonky2::hash::poseidon::Poseidon;
+use plonky2::hash::poseidon::{self, Poseidon};
 
 use crate::smt::{HashOut, F};
 use crate::utils::hashout2u;
 
 pub fn hash_contract_bytecode(mut code: Vec<u8>) -> HashOut {
-    code.push(0x01);
-    while code.len() % 56 != 0 {
-        code.push(0x00);
-    }
-    *code.last_mut().unwrap() |= 0x80;
+    poseidon_pad_byte_vec(&mut code);
 
-    let mut capacity = [F::ZERO; 4];
-    for i in 0..code.len() / 56 {
-        let mut block = [0u8; 56];
-        block.copy_from_slice(&code[i * 56..(i + 1) * 56]);
-        let mut arr = [F::ZERO; 12];
-        for j in 0..8 {
-            arr[j] = block[j * 7..(j + 1) * 7]
-                .iter()
-                .enumerate()
-                .fold(F::ZERO, |acc, (k, x)| {
-                    acc + (F::from_canonical_u64((*x as u64) << (k * 8)))
-                });
-        }
-        arr[8..12].copy_from_slice(&capacity);
-        capacity = F::poseidon(arr)[0..4].try_into().unwrap();
+    poseidon_hash_padded_byte_vec(code)
+}
+
+// TODO: Move this function to plonky2::hash::poseidon?
+pub fn poseidon_hash_padded_byte_vec(
+    bytes: Vec<u8>,
+) -> plonky2::hash::hash_types::HashOut<plonky2::field::goldilocks_field::GoldilocksField> {
+    let mut capacity = [F::ZERO; poseidon::SPONGE_CAPACITY];
+    let mut arr = [F::ZERO; poseidon::SPONGE_WIDTH];
+    for blocks in bytes.chunks_exact(poseidon::SPONGE_RATE * 7) {
+        arr[..poseidon::SPONGE_RATE].copy_from_slice(
+            &blocks
+                .chunks_exact(7)
+                .map(|block| {
+                    let mut bytes = [0u8; poseidon::SPONGE_RATE];
+                    bytes[..7].copy_from_slice(block);
+                    F::from_canonical_u64(u64::from_le_bytes(bytes))
+                })
+                .collect::<Vec<F>>(),
+        );
+        arr[poseidon::SPONGE_RATE..poseidon::SPONGE_WIDTH].copy_from_slice(&capacity);
+        capacity = F::poseidon(arr)[0..poseidon::SPONGE_CAPACITY]
+            .try_into()
+            .unwrap();
     }
+    log::debug!(
+        "paded code = {:?} hashed to = {:?}",
+        bytes,
+        hashout2u(HashOut { elements: capacity })
+    );
     HashOut { elements: capacity }
+}
+
+// TODO: Move this function to plonky2::hash::poseidon?
+pub fn poseidon_pad_byte_vec(bytes: &mut Vec<u8>) {
+    log::debug!("le unpadded code = {:?}", bytes);
+    bytes.push(0x01);
+    while bytes.len() % 56 != 0 {
+        bytes.push(0x00);
+    }
+    *bytes.last_mut().unwrap() |= 0x80;
+    log::debug!("le code = {:?}", bytes);
 }
 
 pub fn hash_bytecode_u256(code: Vec<u8>) -> U256 {

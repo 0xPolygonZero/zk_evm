@@ -3,6 +3,8 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
+use smt_trie::code::{poseidon_hash_padded_byte_vec, poseidon_pad_byte_vec};
+use smt_trie::utils::hashout2u;
 
 use super::util::{
     byte_packing_log, byte_unpacking_log, mem_read_with_log, mem_write_log,
@@ -21,7 +23,7 @@ use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::memory::NUM_CHANNELS;
 use crate::poseidon::columns::POSEIDON_SPONGE_RATE;
-use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonStackOp};
+use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonSimpleOp};
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
 use crate::witness::errors::ProgramError;
@@ -188,7 +190,7 @@ pub(crate) fn generate_poseidon<F: RichField>(
     state
         .traces
         .poseidon_ops
-        .push(PoseidonOp::PoseidonStackOp(PoseidonStackOp(arr)));
+        .push(PoseidonOp::PoseidonStackOp(PoseidonSimpleOp(arr)));
 
     state.traces.push_memory(log_in1);
     state.traces.push_memory(log_in2);
@@ -205,7 +207,7 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
     let len = u256_to_usize(len)?;
 
     let base_address = MemoryAddress::new_bundle(addr)?;
-    let input = (0..len)
+    let mut input = (0..len)
         .map(|i| {
             let address = MemoryAddress {
                 virt: base_address.virt.saturating_add(i),
@@ -220,41 +222,26 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
                 val.0[0].into(),
             ));
 
-            val.0[0] as u32
+            val.0[0] as u8
         })
         .collect_vec();
+    log::debug!("La codiga no rellenada = {:?}", input);
     log::debug!("Poseidon hashing {:?}", input);
 
-    let mut padded_input = input.clone();
-    if padded_input.len() % POSEIDON_SPONGE_RATE == POSEIDON_SPONGE_RATE - 1 {
-        padded_input.push(1);
-    } else {
-        padded_input.push(1);
-        while (padded_input.len() + 1) % plonky2::hash::poseidon::SPONGE_RATE != 0 {
-            padded_input.push(0);
-        }
-        padded_input.push(1);
-    }
+    // poseidon_pad_byte_vec(&mut input);
 
     let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
         base_address,
         timestamp: state.traces.clock() * NUM_CHANNELS,
-        input: padded_input.clone(),
+        input: input.clone(),
         len: input.len(),
     });
     state.traces.poseidon_ops.push(poseidon_op);
 
-    let padded_input = padded_input
-        .iter()
-        .map(|&elt| F::from_canonical_u32(elt))
-        .collect::<Vec<F>>();
-    let hash: [u64; 4] = compute_poseidon(padded_input)
-        .iter()
-        .map(|&elt| elt.to_canonical_u64())
-        .collect::<Vec<u64>>()
-        .try_into()
-        .unwrap();
-    push_no_write(state, U256(hash));
+    let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
+    log::debug!("La codiga = {:?}, la hash = {:?}", input, hash);
+
+    push_no_write(state, hash);
 
     state.traces.push_memory(log_in1);
     state.traces.push_cpu(row);
