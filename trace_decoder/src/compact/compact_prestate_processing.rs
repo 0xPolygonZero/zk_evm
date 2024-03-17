@@ -11,7 +11,7 @@ use std::{
 
 use enum_as_inner::EnumAsInner;
 use ethereum_types::{H256, U256};
-use log::trace;
+use log::{info, trace};
 use mpt_trie::{
     nibbles::{FromHexPrefixError, Nibbles},
     partial_trie::{HashedPartialTrie, PartialTrie},
@@ -43,6 +43,11 @@ type HasStorage = bool;
 type HashValue = H256;
 type RawValue = Vec<u8>;
 type RawCode = Vec<u8>;
+
+type NodeType = u8;
+type Address = Vec<u8>;
+type Storage = Vec<u8>;
+type Value = Vec<u8>;
 
 const MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE: usize = 3;
 const BRANCH_MAX_CHILDREN: usize = 16;
@@ -165,6 +170,7 @@ enum Opcode {
     Code = 0x04,
     AccountLeaf = 0x05,
     EmptyRoot = 0x06,
+    SMTLeaf = 0x07,
 }
 
 #[derive(Clone, Debug, EnumAsInner)]
@@ -192,6 +198,7 @@ enum Instruction {
     Code(RawCode),
     AccountLeaf(Nibbles, Nonce, Balance, HasCode, HasStorage),
     EmptyRoot,
+    SMTLeaf(NodeType, Address, Storage, Value),
 }
 
 impl Display for Instruction {
@@ -204,6 +211,7 @@ impl Display for Instruction {
             Instruction::Code(_) => write!(f, "Code"),
             Instruction::AccountLeaf(_, _, _, _, _) => write!(f, "AccountLeaf"),
             Instruction::EmptyRoot => write!(f, "EmptyRoot"),
+            Instruction::SMTLeaf(_, _, _, _) => write!(f, "SMTLeaf"),
         }
     }
 }
@@ -369,8 +377,9 @@ impl ParserState {
         witness_bytes_raw: Vec<u8>,
     ) -> CompactParsingResult<(Header, Self)> {
         let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
-        let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
-
+        println!("------------- before process");
+        let (header, entries) = witness_bytes.process_into_instructions_and_header_smt()?;
+        println!("------------- after process");
         let p_state = Self { entries };
 
         Ok((header, p_state))
@@ -379,6 +388,7 @@ impl ParserState {
     fn parse(mut self) -> CompactParsingResult<StateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
 
+        println!("----------------- parse");
         loop {
             let num_rules_applied = self.apply_rules_to_witness_entries(&mut entry_buf)?;
 
@@ -411,6 +421,7 @@ impl ParserState {
         while !traverser.at_end() {
             let num_rules_applied = Self::try_apply_rules_to_curr_entry(&mut traverser, entry_buf)?;
             tot_rules_applied += num_rules_applied;
+            println!("----------- tot_rules_applied {:?}", tot_rules_applied);
 
             if num_rules_applied == 0 {
                 // Unable to apply rule at current position, so advance the traverser.
@@ -481,8 +492,26 @@ impl ParserState {
             WitnessEntry::Instruction(Instruction::Branch(mask)) => {
                 Self::process_branch_instr(traverser, buf, mask)
             }
+            WitnessEntry::Instruction(Instruction::SMTLeaf(node_type, address, storage, value)) => {
+                Self::process_smt_leaf_instr(traverser, buf, node_type, address, storage, value)
+            }
             _ => Ok(0),
         }
+    }
+
+    fn process_smt_leaf_instr(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<WitnessEntry>,
+        node_type: u8,
+        address: Vec<u8>,
+        storage: Vec<u8>,
+        value: Vec<u8>,
+    ) -> CompactParsingResult<usize> {
+        println!(
+            "process_smt_leaf_instr -------------- {:?}, {:?}, {:?}, {:?}",
+            node_type, address, storage, value
+        );
+        Err(CompactParsingError::InvalidOpcode(0x07))
     }
 
     fn process_branch_instr(
@@ -708,6 +737,29 @@ impl<C: CompactCursor> WitnessBytes<C> {
         Ok((header, self.instrs))
     }
 
+    fn process_into_instructions_and_header_smt(
+        mut self,
+    ) -> CompactParsingResult<(Header, WitnessEntries)> {
+        let header = self.parse_header()?;
+
+        println!("----------- before loop");
+
+        loop {
+            if self.byte_cursor.at_eof() {
+                break;
+            }
+
+            self.process_operator_smt()?;
+        }
+
+        println!("----------- after loop");
+
+        println!("---------------- header {:?}", header);
+        println!("---------------- self.instrs {:?}", self.instrs);
+
+        Ok((header, self.instrs))
+    }
+
     // TODO: Look at removing code duplication...
     // TODO: Move behind a feature flag...
     // TODO: Fairly hacky...
@@ -755,11 +807,12 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
     fn process_operator(&mut self) -> CompactParsingResult<()> {
         let opcode_byte = self.byte_cursor.read_byte()?;
+        println!("------------ opcode byte: {}", opcode_byte);
 
-        let opcode =
+        let opcode: Opcode =
             Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOpcode(opcode_byte))?;
 
-        trace!("Processed \"{:?}\" opcode", opcode);
+        println!("Processed \"{:?}\" opcode", opcode);
 
         self.process_data_following_opcode(opcode)
     }
@@ -773,10 +826,37 @@ impl<C: CompactCursor> WitnessBytes<C> {
             Opcode::Code => self.process_code(),
             Opcode::AccountLeaf => self.process_account_leaf(),
             Opcode::EmptyRoot => self.process_empty_root(),
+            Opcode::SMTLeaf => self.process_smt_leaf(),
+        }
+    }
+
+    fn process_operator_smt(&mut self) -> CompactParsingResult<()> {
+        let opcode_byte = self.byte_cursor.read_byte()?;
+        println!("------------ opcode byte: {}", opcode_byte);
+
+        let opcode: Opcode =
+            Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOpcode(opcode_byte))?;
+
+        println!("Processed \"{:?}\" opcode", opcode);
+
+        self.process_data_following_opcode_smt(opcode)
+    }
+
+    fn process_data_following_opcode_smt(&mut self, opcode: Opcode) -> CompactParsingResult<()> {
+        match opcode {
+            Opcode::Leaf => self.process_leaf(),
+            Opcode::Extension => self.process_extension(),
+            Opcode::Branch => self.process_branch(),
+            Opcode::Hash => self.process_hash(),
+            Opcode::Code => self.process_code(),
+            Opcode::AccountLeaf => self.process_account_leaf(),
+            Opcode::EmptyRoot => self.process_empty_root(),
+            Opcode::SMTLeaf => self.process_smt_leaf(),
         }
     }
 
     fn process_leaf(&mut self) -> CompactParsingResult<()> {
+        println!("-------------- leaf");
         let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec("leaf key")?);
         let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec("leaf value")?;
 
@@ -785,6 +865,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_extension(&mut self) -> CompactParsingResult<()> {
+        println!("-------------- extension");
         let key = key_bytes_to_nibbles(
             &self
                 .byte_cursor
@@ -796,13 +877,16 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_branch(&mut self) -> CompactParsingResult<()> {
+        println!("-------------- branch");
         let mask = self.byte_cursor.read_t("mask")?;
+        println!("Processed \"{:?}\" mask", mask);
 
         self.push_entry(Instruction::Branch(mask));
         Ok(())
     }
 
     fn process_hash(&mut self) -> CompactParsingResult<()> {
+        println!("-------------- hash");
         let hash = self.byte_cursor.read_non_cbor_h256("hash")?;
 
         self.push_entry(Instruction::Hash(hash));
@@ -810,6 +894,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_code(&mut self) -> CompactParsingResult<()> {
+        println!("-------------- code");
         let code = self.byte_cursor.read_t("code")?;
 
         self.push_entry(Instruction::Code(code));
@@ -817,6 +902,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
+        println!("-------------- account leaf");
         let key = key_bytes_to_nibbles(
             &self
                 .byte_cursor
@@ -883,6 +969,19 @@ impl<C: CompactCursor> WitnessBytes<C> {
             .map_err(|_| CompactParsingError::MissingHeader)?;
 
         Ok(Header { version: h_byte })
+    }
+
+    fn process_smt_leaf(&mut self) -> CompactParsingResult<()> {
+        println!("-------------- smt leaf");
+        let node_type: u8 = self.byte_cursor.read_t("nodeType")?;
+        let address: Vec<u8> = self.byte_cursor.read_cbor_byte_array_to_vec("address")?;
+        let mut storage = Vec::new();
+        if node_type == 0x03 {
+            storage = self.byte_cursor.read_cbor_byte_array_to_vec("storage")?;
+        }
+        let value = self.byte_cursor.read_cbor_byte_array_to_vec("value")?;
+        self.push_entry(Instruction::SMTLeaf(node_type, address, storage, value));
+        Ok(())
     }
 }
 
@@ -1316,9 +1415,11 @@ fn process_compact_prestate_common_smt(
     state: MptTrieCompact,
     create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
+    println!("------- state: {:?}", state.0.len());
     let (header, parser) = create_and_extract_header_f(state.0)?;
-    let witness_out = parser.parse()?;
     println!("Parsing witness bytes to instructions...");
+    let witness_out = parser.parse()?;
+    println!("Done parsing witness bytes to instructions...");
 
     let out = ProcessedCompactOutput {
         header,
