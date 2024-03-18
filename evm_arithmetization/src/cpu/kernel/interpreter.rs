@@ -906,6 +906,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         GenerationStateCheckpoint {
             registers: self.generation_state.registers,
             traces: self.generation_state.traces.checkpoint(),
+            clock: self.get_clock(),
         }
     }
 
@@ -972,6 +973,7 @@ impl<F: Field> State<F> for Interpreter<F> {
     fn push_keccak_sponge(&mut self, _op: KeccakSpongeOp) {}
 
     fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
+        self.clock = checkpoint.clock;
         self.generation_state.rollback(checkpoint)
     }
 
