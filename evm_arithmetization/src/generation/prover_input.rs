@@ -60,6 +60,7 @@ impl<F: Field> GenerationState<F> {
     }
 
     fn run_end_of_txns(&mut self) -> Result<U256, ProgramError> {
+        self.jumpdest_table = None;
         let end = self.next_txn_index == self.inputs.txns_len;
         if end {
             Ok(U256::one())

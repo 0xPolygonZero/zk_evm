@@ -73,9 +73,6 @@ global main:
     // stack: expected_hash, hash
     %assert_eq
 
-    // Initialize accessed addresses and storage keys lists
-    %init_access_lists
-
     // Initialize the RLP DATA pointer to its initial position, 
     // skipping over the preinitialized empty node.
     PUSH @INITIAL_TXN_RLP_ADDR
@@ -125,6 +122,10 @@ global txn_loop:
     // If the prover has no more txns for us to process, halt.
     PROVER_INPUT(end_of_txns)
     %jumpi(execute_withdrawals)
+
+    // Initialize memory values.
+    %initialize_memory_pre_txn
+    
     // Call route_txn. When we return, we will process the txn receipt.
     PUSH txn_loop_after
     // stack: retdest, prev_gas_used, txn_counter, num_nibbles, next_txn_counter, next_num_nibbles, txn_nb
@@ -145,7 +146,6 @@ global txn_loop_after:
 global execute_withdrawals:
     // stack: cum_gas, txn_counter, num_nibbles, next_txn_counter, next_num_nibbles, txn_nb
     %stack (cum_gas, txn_counter, num_nibbles, next_txn_counter, next_num_nibbles) -> (cum_gas, txn_counter, num_nibbles)
-execute_withdrawals_post_stack_op:
     %withdrawals
 
 global perform_final_checks:
@@ -164,3 +164,20 @@ global check_receipt_trie:
     // We don't need the trie data length here.
     POP
     %jump(halt)
+
+%macro initialize_memory_pre_txn
+    // Initialize accessed addresses and storage keys lists
+    %init_access_lists
+
+    // Initialize metadata
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_IS_PRECOMPILE_FROM_EOA)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_LOGS_LEN)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_LOGS_DATA_LEN)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_LOGS_PAYLOAD_LEN)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_JOURNAL_LEN)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_JOURNAL_DATA_LEN)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_LARGEST_CONTEXT)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN)
+%endmacro
