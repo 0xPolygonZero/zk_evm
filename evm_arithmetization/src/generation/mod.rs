@@ -324,7 +324,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 }
 
 pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
-    log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
+    log::debug!("Input signed_txns: {:?}", &inputs.signed_txns);
     log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
     log::debug!(
         "Input transactions_trie: {:?}",

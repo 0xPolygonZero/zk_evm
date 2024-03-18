@@ -538,8 +538,6 @@ where
         ];
         let root = Self::create_segment_circuit(&by_table, stark_config);
         let segment_aggregation = Self::create_segmented_aggregation_circuit(&root);
-        // let txn_aggregation = Self::create_transaction_circuit(&segment_aggregation,
-        // stark_config);
         let block = Self::create_block_circuit(&segment_aggregation, stark_config);
         Self {
             root,

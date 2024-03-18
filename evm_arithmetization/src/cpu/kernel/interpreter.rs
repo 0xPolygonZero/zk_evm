@@ -5,8 +5,7 @@ use core::ops::Range;
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
-use ethereum_types::{BigEndianHash, H160, U256};
-use keccak_hash::H256;
+use ethereum_types::{BigEndianHash, H160, H256, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;

@@ -367,7 +367,7 @@ impl<F: Field> GenerationState<F> {
         trie_roots_ptrs
     }
     pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
-        let rlp_prover_inputs = all_rlp_prover_inputs_reversed(inputs.signed_txns);
+        let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let bignum_modmul_result_limbs = Vec::new();
 
