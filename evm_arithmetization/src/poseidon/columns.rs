@@ -22,7 +22,8 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
     /// The timestamp at which Poseidon is called.
     pub timestamp: T,
 
-    /// The length of the original input.
+    /// The length of the original input for `PoseidonGeneralOp``. 0 for
+    /// `PoseidonSimpleOp`.
     pub len: T,
 
     /// The number of elements that have already been absorbed prior

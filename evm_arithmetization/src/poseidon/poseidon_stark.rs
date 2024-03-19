@@ -146,7 +146,8 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
                 PoseidonOp::PoseidonStackOp(_) => 1,
                 PoseidonOp::PoseidonGeneralOp(op) => {
                     debug_assert!(op.input.len() % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE) == 0);
-                    op.input.len() / (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE)
+                    (op.input.len() + FELT_MAX_BYTES * POSEIDON_SPONGE_RATE - 1)
+                        / (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE)
                 }
             })
             .sum();
@@ -181,6 +182,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
     fn generate_row_for_simple_op(&self, op: PoseidonSimpleOp<F>) -> [F; NUM_COLUMNS] {
         let mut row = PoseidonColumnsView::default();
         Self::generate_perm(&mut row, op.0);
+        row.is_final_input_len[POSEIDON_SPONGE_RATE - 1] = F::ONE;
         row.not_padding = F::ONE;
         row.into()
     }
@@ -188,7 +190,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
     fn generate_rows_for_general_op(&self, op: PoseidonGeneralOp) -> Vec<[F; NUM_COLUMNS]> {
         let mut input_blocks = op.input.chunks_exact(FELT_MAX_BYTES * POSEIDON_SPONGE_RATE);
         let mut rows = Vec::with_capacity(op.input.len() / (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE));
-        let last_non_padding_elt = op.len % POSEIDON_SPONGE_RATE;
+        let last_non_padding_elt = op.len % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE);
         let total_length = input_blocks.len();
         let mut already_absorbed_elements = 0;
         let mut state = [F::ZERO; POSEIDON_SPONGE_WIDTH];
@@ -196,9 +198,9 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             state[0..POSEIDON_SPONGE_RATE].copy_from_slice(
                 &block
                     .chunks_exact(FELT_MAX_BYTES)
-                    .map(|bytes| {
+                    .map(|first_bytes| {
                         let mut bytes = [0u8; POSEIDON_SPONGE_RATE];
-                        bytes[..7].copy_from_slice(block);
+                        bytes[..7].copy_from_slice(first_bytes);
                         F::from_canonical_u64(u64::from_le_bytes(bytes))
                     })
                     .collect::<Vec<F>>(),
@@ -211,37 +213,13 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             } else {
                 let tmp_row =
                     self.generate_trace_row_for_perm(state, &op, already_absorbed_elements);
-                already_absorbed_elements += POSEIDON_SPONGE_RATE;
+                already_absorbed_elements += FELT_MAX_BYTES * POSEIDON_SPONGE_RATE;
                 tmp_row
             };
+            state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH].copy_from_slice(&row.output_partial);
 
             rows.push(row.into());
         }
-        // for (counter, block) in input_blocks.by_ref().enumerate() {
-        //     for (s, &b) in state[0..POSEIDON_SPONGE_RATE].iter_mut().zip_eq(block) {
-        //         *s = F::from_canonical_u8(b);
-        //     }
-        //     let row = if counter == total_length - 1 {
-        //         let tmp_row =
-        //             self.generate_trace_final_row_for_perm(state, &op,
-        // already_absorbed_elements);         already_absorbed_elements +=
-        // last_non_padding_elt;         tmp_row
-        //     } else {
-        //         let tmp_row =
-        //             self.generate_trace_row_for_perm(state, &op,
-        // already_absorbed_elements);         already_absorbed_elements +=
-        // POSEIDON_SPONGE_RATE;         tmp_row
-        //     };
-        //     // Update state.
-        //     for i in 0..POSEIDON_DIGEST {
-        //         state[i] =
-        //             row.digest[2 * i] + F::from_canonical_u64(1 << 32) * row.digest[2
-        // * i + 1];     }
-        //   state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH].copy_from_slice(&row.
-        // output_partial);
-
-        //     rows.push(row.into());
-        // }
         rows
     }
 
@@ -281,7 +259,9 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
         already_absorbed_elements: usize,
     ) -> PoseidonColumnsView<F> {
         let mut row = PoseidonColumnsView::default();
-        row.is_final_input_len[op.len % POSEIDON_SPONGE_RATE] = F::ONE;
+        // TODO: I think we're assumming op.len is a multiple FELT_MAX_BYTES *
+        // POSEIDONG_SPONGE_RATE
+        row.is_final_input_len[op.len % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE)] = F::ONE;
 
         Self::generate_commons(&mut row, input, op, already_absorbed_elements);
         row
@@ -363,6 +343,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             row.digest[2 * i] = F::from_canonical_u32(state_val as u32);
             row.digest[2 * i + 1] = hi_limb;
         }
+
         row.output_partial
             .copy_from_slice(&state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH]);
     }
@@ -432,10 +413,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         let already_absorbed_elements = lv.already_absorbed_elements;
         yield_constr.constraint_first_row(already_absorbed_elements);
 
-        // TODO: Enable this constraint
-        // for i in POSEIDON_SPONGE_RATE..POSEIDON_SPONGE_WIDTH {
-        //     yield_constr.constraint_first_row(lv.input[i]);
-        // }
+        for i in POSEIDON_SPONGE_RATE..POSEIDON_SPONGE_WIDTH {
+            // If the operation has len > 0 the capacity must be 0
+            yield_constr.constraint_first_row(lv.len * lv.input[i]);
+        }
 
         // If this is a final row and there is an upcoming operation, then
         // we make the previous checks for next row's `already_absorbed_elements`
@@ -443,7 +424,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         yield_constr.constraint_transition(is_final_block * nv.already_absorbed_elements);
 
         for i in POSEIDON_SPONGE_RATE..POSEIDON_SPONGE_WIDTH {
-            yield_constr.constraint_transition(is_final_block * nv.input[i]);
+            // If the operation has len > 0 and this is a final block, the capacity
+            // must be 0
+            yield_constr.constraint_transition(nv.len * is_final_block * nv.input[i]);
         }
 
         // If this is a full-input block, the next row's address,
@@ -459,7 +442,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         yield_constr.constraint_transition(
             is_full_input_block
                 * (already_absorbed_elements
-                    + P::from(FE::from_canonical_usize(POSEIDON_SPONGE_RATE))
+                    + P::from(FE::from_canonical_usize(
+                        FELT_MAX_BYTES * POSEIDON_SPONGE_RATE,
+                    ))
                     - nv.already_absorbed_elements),
         );
 
@@ -471,19 +456,27 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
             );
         }
 
-        // A dummy row is always followed by another dummy row, so the prover can't put
-        // dummy rows "in between" to avoid the above checks.
+        // A dummy row is always followed by another dummy row, so the prover
+        // can't put dummy rows "in between" to avoid the above checks.
         let is_dummy = P::ONES - is_full_input_block - is_final_block;
         let next_is_final_block: P = nv.is_final_input_len.iter().copied().sum();
         yield_constr
             .constraint_transition(is_dummy * (nv.is_full_input_block + next_is_final_block));
 
-        // If this is a final block, is_final_input_len implies `len - already_absorbed
-        // == i`.
+        // If len > 0 and this is a final block, is_final_input_len implies `len
+        // - already_absorbed == i`.
         let offset = lv.len - already_absorbed_elements;
         for (i, &is_final_len) in lv.is_final_input_len.iter().enumerate() {
-            let entry_match = offset - P::from(FE::from_canonical_usize(i));
-            yield_constr.constraint(is_final_len * entry_match);
+            let entry_match = offset
+                - P::from(FE::from_canonical_usize(
+                    FELT_MAX_BYTES * POSEIDON_SPONGE_RATE - i,
+                ));
+            // if lv.len * is_final_len * entry_match != P::ZEROS {
+            //     log::debug!("lv.is_final_input_len = {:?}", lv);
+            //     log::debug!("nv = {:?}", nv);
+            //     panic!("jajaj");
+            // }
+            yield_constr.constraint(lv.len * is_final_len * entry_match);
         }
 
         // Compute the input layer. We assume that, when necessary,
