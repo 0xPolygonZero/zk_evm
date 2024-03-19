@@ -100,7 +100,7 @@ impl DiskResource for BaseProverResource {
     type Error = IoError;
     type PathConstrutor = CircuitConfig;
 
-    fn path(p: &Self::PathConstrutor) -> String {
+    fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_base_{}",
             CIRCUITS_FOLDER,
@@ -135,7 +135,7 @@ impl DiskResource for MonolithicProverResource {
     type Error = IoError;
     type PathConstrutor = CircuitConfig;
 
-    fn path(p: &Self::PathConstrutor) -> String {
+    fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_monolithic_{}",
             CIRCUITS_FOLDER,
@@ -169,7 +169,7 @@ impl DiskResource for RecursiveCircuitResource {
     type Error = IoError;
     type PathConstrutor = (Circuit, usize);
 
-    fn path((circuit_type, size): &Self::PathConstrutor) -> String {
+    fn path((circuit_type, size): &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_{}_{}",
             CIRCUITS_FOLDER,
@@ -212,7 +212,7 @@ impl DiskResource for VerifierResource {
     type Error = IoError;
     type PathConstrutor = CircuitConfig;
 
-    fn path(p: &Self::PathConstrutor) -> String {
+    fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_{}",
             CIRCUITS_FOLDER,
