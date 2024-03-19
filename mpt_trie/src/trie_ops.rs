@@ -770,13 +770,14 @@ fn create_node_if_ins_val_not_hash<N, F: FnOnce(Vec<u8>) -> WrappedNode<N>>(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, iter::once};
 
     use log::debug;
 
     use super::ValOrHash;
     use crate::{
-        partial_trie::{Node, PartialTrie, StandardTrie},
+        nibbles::Nibbles,
+        partial_trie::{HashedPartialTrie, Node, PartialTrie, StandardTrie},
         testing_utils::{
             common_setup, entry, entry_with_value,
             generate_n_hash_nodes_entries_for_empty_slots_in_trie,
@@ -875,6 +876,27 @@ mod tests {
 
         let trie = StandardTrie::from_iter(entries);
         assert_eq!(trie.get(0x1234), Some([100].as_slice()));
+    }
+
+    #[test]
+    fn cloning_a_trie_creates_two_separate_tries() {
+        common_setup();
+
+        assert_cloning_works_for_tries::<StandardTrie>();
+        assert_cloning_works_for_tries::<HashedPartialTrie>();
+    }
+
+    fn assert_cloning_works_for_tries<T>()
+    where
+        T: FromIterator<(Nibbles, Vec<u8>)> + PartialTrie,
+    {
+        let trie = T::from_iter(once(entry(0x1234)));
+        let mut cloned_trie = trie.clone();
+
+        cloned_trie.extend(once(entry(0x5678)));
+
+        assert_ne!(trie, cloned_trie);
+        assert_ne!(trie.hash(), cloned_trie.hash());
     }
 
     #[test]

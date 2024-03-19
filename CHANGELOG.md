@@ -7,10 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2024-03-19
+
+### Changed
+- Clean up logging output upon Kernel failure ([#74](https://github.com/0xPolygonZero/zk_evm/pull/74))
+- Fix CPU Cycle display in logs during simulations ([#77](https://github.com/0xPolygonZero/zk_evm/pull/77))
+- Fix blake2 precompile ([#78](https://github.com/0xPolygonZero/zk_evm/pull/78))
+- Create subtries without ever hashing leaves ([#76](https://github.com/0xPolygonZero/zk_evm/pull/76))
+- Fix generation inputs logging pre-transaction execution ([#89](https://github.com/0xPolygonZero/zk_evm/pull/89))
+- Reduce state trie size for dummy payloads ([#88](https://github.com/0xPolygonZero/zk_evm/pull/88))
+- Fix post-txn trie debugging output for multi-logs receipts ([#86](https://github.com/0xPolygonZero/zk_evm/pull/86))
+- Fixed *most* failing blocks caused by the merged in aggressive pruning changes ([#97](https://github.com/0xPolygonZero/zk_evm/pull/97))
+- Fixed trie hash collision issue when constructing storage tries [#75](https://github.com/0xPolygonZero/zk_evm/pull/75)
+- Fix interpreter rollback by adding the clock to generation state checkpoints ([#109] https://github.com/0xPolygonZero/zk_evm/pull/109)
+
 ## [0.1.1] - 2024-03-01
 
 ### Changed
-- Add verification for invalid jumps. [#36](https://github.com/0xPolygonZero/zk_evm/pull/36)
+- Add verification for invalid jumps ([#36](https://github.com/0xPolygonZero/zk_evm/pull/36))
 - Refactor accessed lists as sorted linked lists ([#30](https://github.com/0xPolygonZero/zk_evm/pull/30))
 - Change visibility of `compact` mod ([#57](https://github.com/0xPolygonZero/zk_evm/pull/57))
 - Fix running doctests in release mode ([#60](https://github.com/0xPolygonZero/zk_evm/pull/60))

@@ -18,6 +18,38 @@ It uses starky and plonky2 as proving backend: https://github.com/0xPolygonZero/
 
 * [proof_gen](./proof_gen/README.md): A convenience library for generating proofs from inputs already in Intermediate Representation (IR) format.
 
+## Dependency graph
+
+Below is a simplified view of the dependency graph, including the proving systems backend and the application layer defined within [zero-bin](https://github.com/0xPolygonZero/zero-bin).
+
+```mermaid
+flowchart TD
+    subgraph ps [proving systems]
+    A1{{plonky2}}
+    A2{{starky}}
+    end
+
+    subgraph zk_evm [zk_evm]
+    B[mpt_trie]
+    C[evm_arithmetization]
+    D[trace_decoder]
+    E[proof_gen]
+    A1 --> C
+    A1 --> E
+    A2 --> C
+    B --> C
+    B ---> D
+    C ---> D
+    C --> E
+    D --> E
+    end
+
+    F{zero-bin}
+    A1 --> F
+    C --> F
+    D --> F
+    E --> F
+```
 
 ## Documentation
 
@@ -27,6 +59,9 @@ be found in the [docs](./docs/) section, including:
 * [sequence diagrams](./docs/usage_seq_diagrams.md) for the proof generation flow
 * [zkEVM specifications](./docs/arithmetization/zkevm.pdf), detailing the underlying EVM proving statement
 
+## Branches
+The default branch for the repo is the `develop` branch which is not stable but under active development. Most PRs should target `develop`. If you need a stable branch then a tagged version of `main` is what you're after.
+It should be assumed that `develop` will break and should only be used for development. 
 
 ## Building
 

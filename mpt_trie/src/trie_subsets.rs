@@ -288,7 +288,7 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
                 return Err(SubsetTrieError::UnexpectedKey(
                     *curr_nibbles,
                     format!("{:?}", trie),
-                ))
+                ));
             }
             true => {
                 trie.info.touched = true;
@@ -307,19 +307,22 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
             return mark_nodes_that_are_needed(&mut children[nib as usize], curr_nibbles);
         }
         TrackedNodeIntern::Extension(child) => {
-            let nibbles = trie.info.get_nibbles_expected();
-            let r = curr_nibbles.pop_nibbles_front(nibbles.count);
+            // If we hit an extension node, we always must include it unless we exhausted
+            // our key.
+            if curr_nibbles.is_empty() {
+                return Ok(());
+            }
 
-            if r.nibbles_are_identical_up_to_smallest_count(nibbles) {
-                trie.info.touched = true;
+            trie.info.touched = true;
+
+            let nibbles: &Nibbles = trie.info.get_nibbles_expected();
+            if curr_nibbles.nibbles_are_identical_up_to_smallest_count(nibbles) {
+                curr_nibbles.pop_nibbles_front(nibbles.count);
                 return mark_nodes_that_are_needed(child, curr_nibbles);
             }
         }
         TrackedNodeIntern::Leaf => {
-            let (k, _) = trie.info.get_leaf_nibbles_and_value_expected();
-            if k == curr_nibbles {
-                trie.info.touched = true;
-            }
+            trie.info.touched = true;
         }
     }
 
@@ -719,14 +722,14 @@ mod tests {
     }
 
     #[test]
-    fn sub_trie_for_non_existent_key_that_hits_branch_leaf_hashes_out_leaf() {
+    fn sub_trie_for_non_existent_key_that_hits_branch_leaf_does_not_hash_out_leaf() {
         common_setup();
 
         let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346]);
         let partial_trie = create_trie_subset(&trie, [0x1234567]).unwrap();
 
         // Note that `0x1234589` gets hashed at the branch slot at `0x12345`.
-        assert_nodes_are_hash_nodes(&partial_trie, [0x12345, 0x12346]);
+        assert_nodes_are_hash_nodes(&partial_trie, Vec::<Nibbles>::default());
     }
 
     #[test]

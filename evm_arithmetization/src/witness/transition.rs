@@ -1,28 +1,20 @@
-use anyhow::bail;
 use ethereum_types::U256;
 use log::log_enabled;
 use plonky2::field::types::Field;
 
-use super::memory::{MemoryOp, MemoryOpKind, MemorySegmentState};
-use super::util::{
-    fill_channel_with_value, mem_read_gp_with_log_and_fill, push_no_write,
-    stack_pop_with_log_and_fill,
-};
+use super::util::{mem_read_gp_with_log_and_fill, stack_pop_with_log_and_fill};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
-    EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MAX_USER_STACK_SIZE,
-    MIGHT_OVERFLOW, STACK_BEHAVIORS,
+    EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::extension_tower::BN_BASE;
-use crate::generation::state::{GenerationState, GenerationStateCheckpoint, State};
+use crate::generation::state::{GenerationState, State};
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
 use crate::witness::memory::MemoryAddress;
-use crate::witness::memory::MemoryChannel::GeneralPurpose;
 use crate::witness::operation::*;
 use crate::witness::state::RegistersState;
 use crate::witness::util::mem_read_code_with_log_and_fill;
@@ -268,13 +260,13 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
     }
 }
 
-pub(crate) fn log_kernel_instruction<F: Field>(state: &mut GenerationState<F>, op: Operation) {
+pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: Operation) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     if !log_enabled!(log::Level::Debug) {
         return;
     }
 
-    let pc = state.registers.program_counter;
+    let pc = state.get_registers().program_counter;
     let is_interesting_offset = KERNEL
         .offset_label(pc)
         .filter(|label| !label.starts_with("halt"))
@@ -287,11 +279,11 @@ pub(crate) fn log_kernel_instruction<F: Field>(state: &mut GenerationState<F>, o
     log::log!(
         level,
         "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
-        state.traces.clock(),
-        state.registers.context,
+        state.get_clock(),
+        state.get_context(),
         KERNEL.offset_name(pc),
         op,
-        state.stack(),
+        state.get_generation_state().stack(),
     );
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);

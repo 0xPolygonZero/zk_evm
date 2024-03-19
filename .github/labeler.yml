@@ -1,0 +1,24 @@
+# Add 'crate: mpt_trie' label to any changes within 'mpt_trie' folder.
+'crate: mpt_trie':
+- changed-files:
+  - any-glob-to-any-file: mpt_trie/**
+
+# Add 'crate: evm_arithmetization' label to any changes within 'evm_arithmetization' folder.
+'crate: evm_arithmetization':
+- changed-files:
+  - any-glob-to-any-file: evm_arithmetization/**
+
+# Add 'crate: trace_decoder' label to any changes within 'trace_decoder' folder.
+'crate: trace_decoder':
+- changed-files:
+  - any-glob-to-any-file: trace_decoder/**
+
+# Add 'crate: proof_gen' label to any changes within 'proof_gen' folder.
+'crate: proof_gen':
+- changed-files:
+  - any-glob-to-any-file: proof_gen/**
+
+# Add 'specs' label to any changes within 'docs' folder.
+'specs':
+- changed-files:
+  - any-glob-to-any-file: docs/**

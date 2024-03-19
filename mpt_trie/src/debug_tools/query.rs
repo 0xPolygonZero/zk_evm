@@ -159,7 +159,7 @@ pub struct DebugQueryOutput {
     k: Nibbles,
 
     /// The nodes hit during the query.
-    pub node_path: TriePath,
+    node_path: TriePath,
     extra_node_info: Vec<Option<ExtraNodeSegmentInfo>>,
     node_found: bool,
     params: DebugQueryParams,
