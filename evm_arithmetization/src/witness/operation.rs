@@ -225,8 +225,7 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
             val.0[0] as u8
         })
         .collect_vec();
-    log::debug!("La codiga no rellenada = {:?}", input);
-    log::debug!("Poseidon hashing {:?}", input);
+    log::debug!("base_address = {:?}", base_address);
 
     // poseidon_pad_byte_vec(&mut input);
 

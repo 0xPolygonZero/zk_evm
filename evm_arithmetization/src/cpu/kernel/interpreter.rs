@@ -6,6 +6,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::{anyhow, bail};
 use ethereum_types::{BigEndianHash, H160, H256, U256, U512};
+use itertools::Itertools;
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -13,6 +14,7 @@ use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::poseidon::Poseidon;
 use serde::Serialize;
+use smt_trie::code::poseidon_hash_padded_byte_vec;
 use smt_trie::smt::{hash_serialize, hash_serialize_u256};
 use smt_trie::utils::hashout2u;
 
@@ -822,6 +824,7 @@ impl<'a, F: RichField> Interpreter<'a, F> {
             0x20 => self.run_syscall(opcode, 2, false), // "KECCAK256",
             0x21 => self.run_keccak_general(),          // "KECCAK_GENERAL",
             0x22 => self.run_poseidon(),                // "POSEIDON",
+            0x23 => self.run_poseidon_general(),        // "POSEIDON_GENERAL",
             0x30 => self.run_syscall(opcode, 0, true),  // "ADDRESS",
             0x31 => self.run_syscall(opcode, 1, false), // "BALANCE",
             0x32 => self.run_syscall(opcode, 0, true),  // "ORIGIN",
@@ -1139,6 +1142,29 @@ impl<'a, F: RichField> Interpreter<'a, F> {
         .map(F::from_canonical_u64);
         let hash = F::poseidon(arr);
         let hash = U256(std::array::from_fn(|i| hash[i].to_canonical_u64()));
+        self.push(hash)
+    }
+
+    fn run_poseidon_general(&mut self) -> anyhow::Result<(), ProgramError> {
+        let base_address = MemoryAddress::new_bundle(self.pop()?)?;
+        let len = u256_to_usize(self.pop()?)?;
+
+        let mut input = (0..len)
+            .map(|i| {
+                let address = MemoryAddress {
+                    virt: base_address.virt.saturating_add(i),
+                    ..base_address
+                };
+                let val = self.generation_state.memory.get(address);
+
+                val.0[0] as u8
+            })
+            .collect_vec();
+
+        // TODO: We are assuming the bytes are already padded
+        // poseidon_pad_byte_vec(&mut input);
+
+        let hash = hashout2u(poseidon_hash_padded_byte_vec(input));
         self.push(hash)
     }
 

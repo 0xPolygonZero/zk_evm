@@ -128,7 +128,7 @@ pub(crate) const STACK_BEHAVIORS: OpsColumnsView<Option<StackBehavior>> = OpsCol
         disable_other_channels: true,
     }),
     poseidon_general: Some(StackBehavior {
-        num_pops: 3,
+        num_pops: 2,
         pushes: true,
         disable_other_channels: true,
     }),
