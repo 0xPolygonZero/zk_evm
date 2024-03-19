@@ -249,15 +249,13 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             {
                 trace_col_vecs[IS_PRUNED][i] = F::ONE;
                 trace_col_vecs[PRUNED_CONTEXTS_FREQUENCIES][addr_ctx_usize] += F::ONE;
-            } else {
-                if trace_col_vecs[FILTER][i].is_one()
-                    && (trace_col_vecs[CONTEXT_FIRST_CHANGE][i].is_one()
-                        || trace_col_vecs[SEGMENT_FIRST_CHANGE][i].is_one()
-                        || trace_col_vecs[VIRTUAL_FIRST_CHANGE][i].is_one())
-                {
-                    // `mem_after_filter = filter * address_changed * (1 - pruned)`
-                    trace_col_vecs[MEM_AFTER_FILTER][i] = F::ONE;
-                }
+            } else if trace_col_vecs[FILTER][i].is_one()
+                && (trace_col_vecs[CONTEXT_FIRST_CHANGE][i].is_one()
+                    || trace_col_vecs[SEGMENT_FIRST_CHANGE][i].is_one()
+                    || trace_col_vecs[VIRTUAL_FIRST_CHANGE][i].is_one())
+            {
+                // `mem_after_filter = filter * address_changed * (1 - pruned)`
+                trace_col_vecs[MEM_AFTER_FILTER][i] = F::ONE;
             }
         }
     }
@@ -347,7 +345,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         }
     }
 
-    fn insert_pruned_contexts(trace_rows: &mut Vec<[F; NUM_COLUMNS]>, pruned_contexts: Vec<usize>) {
+    fn insert_pruned_contexts(trace_rows: &mut [[F; NUM_COLUMNS]], pruned_contexts: Vec<usize>) {
         let mut dedup_vec = pruned_contexts.clone();
         dedup_vec.sort();
         dedup_vec.dedup();
