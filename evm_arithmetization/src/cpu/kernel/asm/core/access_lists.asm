@@ -199,15 +199,15 @@ global remove_accessed_addresses:
 
 
 %macro insert_accessed_storage_keys
-    %stack (addr, key, value) -> (addr, key, value, %%after)
+    %stack (addr, key) -> (addr, key, %%after)
     %jump(insert_accessed_storage_keys)
 %%after:
-    // stack: cold_access, original_value
+    // stack: cold_access, value_ptr
 %endmacro
 
 // Multiply the ptr at the top of the stack by 4
 // and abort if 4*ptr - SEGMENT_ACCESSED_STORAGE_KEYS >= @GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN
-// In this way ptr must be poiting to the begining of a node.
+// In this way ptr must be pointing to the beginning of a node.
 %macro get_valid_storage_ptr
     // stack: ptr
     %mul_const(4)
@@ -218,41 +218,41 @@ global remove_accessed_addresses:
     // stack: 2*ptr
 %endmacro
 
-/// Inserts the storage key and value into the access list if it is not already present.
-/// `value` should be the current storage value at the slot `(addr, key)`.
-/// Return `1, value` if the storage key was inserted, `0, original_value` if it was already present.
+/// Inserts the storage key into the access list if it is not already present.
+/// Return `1, value_ptr` if the storage key was inserted, `0, value_ptr` if it was already present.
+/// Callers to this function must ensure the current storage value is stored at `value_ptr`.
 global insert_accessed_storage_keys:
-    // stack: addr, key, value, retdest
+    // stack: addr, key, retdest
     PROVER_INPUT(access_lists::storage_insert)
-    // stack: pred_ptr/4, addr, key, value, retdest
+    // stack: pred_ptr/4, addr, key, retdest
     %get_valid_storage_ptr
-    // stack: pred_ptr, addr, key, value, retdest
+    // stack: pred_ptr, addr, key, retdest
     DUP1
     MLOAD_GENERAL
     DUP1
-    // stack: pred_addr, pred_addr, pred_ptr, addr, key, value, retdest
+    // stack: pred_addr, pred_addr, pred_ptr, addr, key, retdest
     DUP4 GT
     DUP3 %eq_const(@SEGMENT_ACCESSED_STORAGE_KEYS)
     ADD // OR
     %jumpi(insert_storage_key)
-    // stack: pred_addr, pred_ptr, addr, key, value, retdest
+    // stack: pred_addr, pred_ptr, addr, key, retdest
     // We know that addr <= pred_addr. It must hold that pred_addr == addr.
     DUP3
     %assert_eq
-    // stack: pred_ptr, addr, key, value, retdest
+    // stack: pred_ptr, addr, key, retdest
     DUP1
     %increment
     MLOAD_GENERAL
-    // stack: pred_key, pred_ptr, addr, key, value, retdest
+    // stack: pred_key, pred_ptr, addr, key, retdest
     DUP1 DUP5
     GT
-    // stack: key > pred_key, pred_key, pred_ptr, addr, key, value, retdest
+    // stack: key > pred_key, pred_key, pred_ptr, addr, key, retdest
     %jumpi(insert_storage_key)
-    // stack: pred_key, pred_ptr, addr, key, value, retdest
+    // stack: pred_key, pred_ptr, addr, key, retdest
     DUP4
     // We know that key <= pred_key. It must hold that pred_key == key.
     %assert_eq
-    // stack: pred_ptr, addr, key, value, retdest
+    // stack: pred_ptr, addr, key, retdest
     // Check that this is not a deleted node
     DUP1
     %add_const(3)
@@ -262,75 +262,78 @@ global insert_accessed_storage_keys:
     PANIC
 storage_key_found:
     // The address was already in the list
-    // stack: pred_ptr, addr, key, value, retdest
+    // stack: pred_ptr, addr, key, retdest
     %add_const(2)
-    MLOAD_GENERAL
-    %stack (original_value, addr, key, value, retdest) -> (retdest, 0, original_value) // Return 0 to indicate that the address was already present.
+    %stack (value_ptr, addr, key, retdest) -> (retdest, 0, value_ptr) // Return 0 to indicate that the address was already present.
     JUMP
 
 insert_storage_key:
-    // stack: pred_addr or pred_key, pred_ptr, addr, key, value, retdest
+    // stack: pred_addr or pred_key, pred_ptr, addr, key, retdest
     POP
     // Insert a new storage key
-    // stack: pred_ptr, addr, key, value, retdest
+    // stack: pred_ptr, addr, key, retdest
     // get the value of the next address
     %add_const(3)
-    // stack: next_ptr_ptr, addr, key, value, retdest
+    // stack: next_ptr_ptr, addr, key, retdest
     %mload_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
     DUP2
     MLOAD_GENERAL
-    // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
+    // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
     // Check that this is not a deleted node
     DUP1
     %eq_const(@U256_MAX)
     %assert_zero
     DUP1
     MLOAD_GENERAL
-    // stack: next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
+    // stack: next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
     DUP5
     // Check that addr < next_val OR (next_val == addr AND key < next_key)
     DUP2 DUP2
     LT
-    // stack: addr < next_val, addr, next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
+    // stack: addr < next_val, addr, next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
     SWAP2
     EQ
-    // stack: next_val == addr, addr < next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
+    // stack: next_val == addr, addr < next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
     DUP3 %increment
     MLOAD_GENERAL
     DUP8
     LT
-    // stack: next_key > key, next_val == addr, addr < next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
+    // stack: next_key > key, next_val == addr, addr < next_val, next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
     AND
     OR
     %assert_nonzero
-    // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
+    // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, retdest
     SWAP2
     DUP2
     MSTORE_GENERAL
-    // stack: new_ptr, next_ptr, addr, key, value, retdest
+    // stack: new_ptr, next_ptr, addr, key, retdest
     DUP1
     DUP4
     MSTORE_GENERAL // store addr
-    // stack: new_ptr, next_ptr, addr, key, value, retdest
+    // stack: new_ptr, next_ptr, addr, key, retdest
     %increment
     DUP1
+    // stack: new_ptr+1, new_ptr+1, next_ptr, addr, key, retdest
     DUP5
+    // stack: key, new_ptr+1, new_ptr+1, next_ptr, addr, key, retdest
     MSTORE_GENERAL // store key
+    // stack: new_ptr+1, next_ptr, addr, key, retdest
     %increment
     DUP1
-    DUP6
-    MSTORE_GENERAL // store value
-    // stack: new_ptr + 2, next_ptr, addr, key, value, retdest
+    // stack: new_ptr+2, value_ptr, next_ptr, addr, key, retdest
     %increment
     DUP1
-    // stack: new_next_ptr, new_next_ptr, next_ptr, addr, key, value, retdest
-    SWAP2
+    // stack: new_next_ptr, new_next_ptr, value_ptr, next_ptr, addr, key, retdest
+    SWAP3
+    // stack: next_ptr, new_next_ptr, value_ptr, next_ptr, addr, key, retdest
     MSTORE_GENERAL
-    // stack: new_next_ptr, addr, key, value, retdest
+    // stack: value_ptr, next_ptr, addr, key, retdest
+    SWAP1
+    // stack: next_ptr, value_ptr, addr, key, retdest
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
-    // stack: addr, key, value, retdest
-    %stack (addr, key, value, retdest) -> (addr, key, retdest, 1, value)
+    // stack: value_ptr, addr, key, retdest
+    %stack (value_ptr, addr, key, retdest) -> (addr, key, retdest, 1, value_ptr)
     %journal_add_storage_loaded
     JUMP
 

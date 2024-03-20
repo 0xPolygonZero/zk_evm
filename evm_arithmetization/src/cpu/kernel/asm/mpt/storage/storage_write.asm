@@ -9,8 +9,12 @@ global sys_sstore:
     %stack (kexit_info, slot, value) -> (slot, kexit_info, slot, value)
     %sload_current
     %address
-    %stack (addr, current_value, kexit_info, slot, value) -> (addr, slot, current_value, current_value, kexit_info, slot, value)
+    %stack (addr, current_value, kexit_info, slot, value) -> (addr, slot, current_value, kexit_info, slot, value)
     %insert_accessed_storage_keys
+    // stack: cold_access, value_ptr, current_value, kexit_info, slot, value
+    DUP2 MLOAD_GENERAL
+    %stack (original_value, cold_access, value_ptr, current_value) -> (current_value, value_ptr, cold_access, original_value, current_value)
+    MSTORE_GENERAL
     // stack: cold_access, original_value, current_value, kexit_info, slot, value
     %mul_const(@GAS_COLDSLOAD)
 
