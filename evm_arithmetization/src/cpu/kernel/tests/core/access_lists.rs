@@ -234,7 +234,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
 
     for i in 0..10 {
         // Test for storage key already in list.
-        let (addr, key ) = storage_keys[i];
+        let (addr, key) = storage_keys[i];
         interpreter.push(retaddr);
         interpreter.push(key);
         interpreter.push(U256::from(addr.0.as_slice()));
@@ -257,10 +257,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
 
     interpreter.run()?;
-    assert_eq!(
-        interpreter.stack()[1],
-        U256::one()
-    );
+    assert_eq!(interpreter.stack()[1], U256::one());
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
             MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
