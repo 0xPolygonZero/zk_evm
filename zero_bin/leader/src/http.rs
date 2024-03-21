@@ -23,10 +23,8 @@ pub(crate) async fn http_main(runtime: Runtime, port: u16, output_dir: PathBuf) 
             move |body| prove(body, runtime, output_dir.clone())
         }),
     );
-
-    Ok(axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await?)
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    Ok(axum::serve(listener, app).await?)
 }
 
 /// Writes the generated block proof to a file.
