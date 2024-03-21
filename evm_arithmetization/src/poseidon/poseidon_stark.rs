@@ -52,6 +52,7 @@ pub fn ctl_looked_data<F: Field>() -> Vec<Column<F>> {
 pub(crate) fn ctl_looked<F: Field>() -> TableWithColumns<F> {
     let mut columns = Column::singles(POSEIDON_COL_MAP.input).collect_vec();
     columns.extend(Column::singles(POSEIDON_COL_MAP.digest));
+    columns.push(Column::single(POSEIDON_COL_MAP.is_simple));
     TableWithColumns::new(
         *Table::Poseidon,
         columns,
