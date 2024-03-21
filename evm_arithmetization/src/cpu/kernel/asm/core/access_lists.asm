@@ -220,7 +220,7 @@ global remove_accessed_addresses:
 
 /// Inserts the storage key into the access list if it is not already present.
 /// Return `1, value_ptr` if the storage key was inserted, `0, value_ptr` if it was already present.
-/// Callers to this function must ensure the current storage value is stored at `value_ptr`.
+/// Callers to this function must ensure the original storage value is stored at `value_ptr`.
 global insert_accessed_storage_keys:
     // stack: addr, key, retdest
     PROVER_INPUT(access_lists::storage_insert)
