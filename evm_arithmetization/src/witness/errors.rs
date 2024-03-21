@@ -31,6 +31,7 @@ pub enum ProverInputError {
     OutOfMptData,
     OutOfRlpData,
     OutOfWithdrawalData,
+    OutOfGerData,
     CodeHashNotFound,
     InvalidMptInput,
     InvalidInput,

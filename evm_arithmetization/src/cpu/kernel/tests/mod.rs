@@ -3,6 +3,7 @@ mod add11;
 mod balance;
 mod bignum;
 mod blake2_f;
+mod blobhash;
 mod block_hash;
 mod bls381;
 mod bn254;
@@ -18,6 +19,7 @@ mod receipt;
 mod rlp;
 mod signed_syscalls;
 mod transaction_parsing;
+mod transient_storage;
 
 use std::str::FromStr;
 

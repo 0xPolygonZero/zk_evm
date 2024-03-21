@@ -14,7 +14,7 @@
 %endmacro
 
 /// Remove one occurrence of the address from the list.
-/// Panics if the address is not in the list.
+/// No effect if the address is not in the list.
 global remove_selfdestruct_list:
     // stack: addr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN)
@@ -24,7 +24,7 @@ global remove_selfdestruct_list:
 remove_selfdestruct_list_loop:
     // `i` and `len` are both scaled by SEGMENT_SELFDESTRUCT_LIST
     %stack (i, len, addr, retdest) -> (i, len, i, len, addr, retdest)
-    EQ %jumpi(panic)
+    EQ %jumpi(remove_selfdestruct_not_found)
     // stack: i, len, addr, retdest
     DUP1 MLOAD_GENERAL
     // stack: loaded_addr, i, len, addr, retdest
@@ -44,6 +44,10 @@ remove_selfdestruct_list_found:
     MLOAD_GENERAL // Load the last address in the list.
     // stack: last_addr, i, retdest
     MSTORE_GENERAL // Store the last address at the position of the removed address.
+    JUMP
+remove_selfdestruct_not_found:
+    // stack: i, len, addr, retdest
+    %pop3
     JUMP
 
 global delete_all_selfdestructed_addresses:

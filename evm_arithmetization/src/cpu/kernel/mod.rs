@@ -11,6 +11,9 @@ pub mod stack;
 mod utils;
 
 pub(crate) mod interpreter;
+
+pub use constants::cancun_constants;
+
 #[cfg(test)]
 mod tests;
 
