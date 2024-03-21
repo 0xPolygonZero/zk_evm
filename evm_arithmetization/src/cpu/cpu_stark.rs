@@ -444,9 +444,7 @@ pub(crate) fn ctl_poseidon<F: Field>() -> TableWithColumns<F> {
         }
     }
     columns.extend(Column::singles_next_row(COL_MAP.mem_channels[0].value));
-    // res.extend(Column::singles(COL_MAP.mem_channels[1].value));
-    // res.extend(Column::singles(COL_MAP.mem_channels[2].value));
-    // res
+    columns.push(Column::one());
     TableWithColumns::new(
         *Table::Cpu,
         columns,
