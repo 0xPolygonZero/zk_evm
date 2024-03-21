@@ -12,6 +12,7 @@ use plonky2::hash::poseidon::Poseidon;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use plonky2_maybe_rayon::rayon::iter::{self, repeat};
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use starky::cross_table_lookup::TableWithColumns;
 use starky::evaluation_frame::{StarkEvaluationFrame, StarkFrame};
@@ -55,7 +56,7 @@ pub(crate) fn ctl_looked<F: Field>() -> TableWithColumns<F> {
         *Table::Poseidon,
         columns,
         Some(Filter::new_simple(Column::single(
-            POSEIDON_COL_MAP.not_padding,
+            POSEIDON_COL_MAP.is_simple,
         ))),
     )
 }
@@ -78,7 +79,26 @@ pub fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
         F::from_canonical_usize(i),
     ));
 
-    res.push(Column::single(cols.input[i]));
+    // The first byte of of each field element is
+    // mem[virt + already_absorbed_elements + i/ FELT_MAX_BYTES] - \sum_j
+    // input_bytes[i/FELT_MAX_BYTES][j]* 8^j.
+    // The other bytes are input_bytes[i/FELT_MAX_BYTES][]
+    if i % FELT_MAX_BYTES == 0 {
+        res.push(Column::linear_combination(
+            std::iter::once((cols.input[i / FELT_MAX_BYTES], F::ONE)).chain(
+                (0..FELT_MAX_BYTES - 1).map(|j| {
+                    (
+                        cols.input_bytes[i / FELT_MAX_BYTES][j],
+                        -F::from_canonical_u64(1 << (8 * (j + 1))),
+                    )
+                }),
+            ),
+        ));
+    } else {
+        res.push(Column::single(
+            cols.input_bytes[i / FELT_MAX_BYTES][(i % FELT_MAX_BYTES) - 1],
+        ));
+    }
     res.extend((1..8).map(|_| Column::zero()));
 
     res.push(Column::single(cols.timestamp));
@@ -91,13 +111,16 @@ pub fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
     res
 }
 
-pub fn ctl_looking_memory_filter<F: Field>(i: usize) -> Column<F> {
+// TODO: Support non-padded inputs?
+pub fn ctl_looking_memory_filter<F: Field>() -> Filter<F> {
     let cols = POSEIDON_COL_MAP;
-    if i == POSEIDON_SPONGE_RATE - 1 {
-        Column::single(cols.is_full_input_block)
-    } else {
-        Column::sum(once(&cols.is_full_input_block).chain(&cols.is_final_input_len[i + 1..]))
-    }
+    Filter::new(
+        vec![(
+            Column::single(cols.not_padding),
+            Column::linear_combination_with_constant([(cols.is_simple, -F::ONE)], F::ONE),
+        )],
+        vec![],
+    )
 }
 
 #[derive(Clone, Debug)]
@@ -184,6 +207,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
         Self::generate_perm(&mut row, op.0);
         row.is_final_input_len[POSEIDON_SPONGE_RATE - 1] = F::ONE;
         row.not_padding = F::ONE;
+        row.is_simple = F::ONE;
         row.into()
     }
 
@@ -205,7 +229,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
                     })
                     .collect::<Vec<F>>(),
             );
-            let row = if counter == total_length - 1 {
+            let mut row = if counter == total_length - 1 {
                 let tmp_row =
                     self.generate_trace_final_row_for_perm(state, &op, already_absorbed_elements);
                 already_absorbed_elements += last_non_padding_elt;
@@ -216,6 +240,20 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
                 already_absorbed_elements += FELT_MAX_BYTES * POSEIDON_SPONGE_RATE;
                 tmp_row
             };
+            row.not_padding = F::ONE;
+            for (i, (input_bytes_chunk, block_chunk)) in row
+                .input_bytes
+                .iter_mut()
+                .zip_eq(block.chunks(FELT_MAX_BYTES))
+                .enumerate()
+            {
+                input_bytes_chunk.copy_from_slice(
+                    &block_chunk[1..]
+                        .iter()
+                        .map(|&byte| F::from_canonical_u8(byte))
+                        .collect::<Vec<F>>(),
+                );
+            }
             state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH].copy_from_slice(&row.output_partial);
 
             rows.push(row.into());
@@ -359,6 +397,14 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             timing,
             "generate trace rows",
             self.generate_trace_rows(operations, min_rows)
+        );
+        log::debug!(
+            "poseidon row[53] = {:?}",
+            PoseidonColumnsView::from(trace_rows[53])
+        );
+        log::debug!(
+            "poseidon row[180] = {:?}",
+            PoseidonColumnsView::from(trace_rows[180])
         );
         let trace_polys = timed!(
             timing,
@@ -625,9 +671,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         yield_constr.constraint_first_row(builder, already_absorbed_elements);
 
         // TODO: Enable this constraint
-        // for i in 0..POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE {
-        //     yield_constr.constraint_first_row(builder,
-        // lv.input[reg_input_capacity(i)]); }
+        for i in 0..POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE {
+            yield_constr.constraint_first_row(builder, lv.input[reg_input_capacity(i)]);
+        }
 
         // If this is a final row and there is an upcoming operation, then
         // we make the previous checks for next row's `already_absorbed_elements`

@@ -23,8 +23,9 @@ use crate::logic;
 use crate::logic::LogicStark;
 use crate::memory::memory_stark;
 use crate::memory::memory_stark::MemoryStark;
-use crate::poseidon::poseidon_stark;
+use crate::poseidon::columns::POSEIDON_SPONGE_RATE;
 use crate::poseidon::poseidon_stark::PoseidonStark;
+use crate::poseidon::poseidon_stark::{self, FELT_MAX_BYTES};
 
 /// Structure containing all STARKs and the cross-table lookups.
 #[derive(Clone)]
@@ -296,6 +297,14 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
             Some(byte_packing_stark::ctl_looking_memory_filter(i)),
         )
     });
+
+    let poseidon_general_reads = (0..FELT_MAX_BYTES * POSEIDON_SPONGE_RATE).map(|i| {
+        TableWithColumns::new(
+            *Table::Poseidon,
+            poseidon_stark::ctl_looking_memory(i),
+            Some(poseidon_stark::ctl_looking_memory_filter()),
+        )
+    });
     let all_lookers = vec![
         cpu_memory_code_read,
         cpu_push_write_ops,
@@ -306,6 +315,7 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
     .chain(cpu_memory_gp_ops)
     .chain(keccak_sponge_reads)
     .chain(byte_packing_ops)
+    .chain(poseidon_general_reads)
     .collect();
     let memory_looked = TableWithColumns::new(
         *Table::Memory,
