@@ -192,19 +192,19 @@ fn gen_rand_u256_bytes(rng: &mut StdRng) -> Vec<u8> {
 
 /// Initializes a trie with keys large enough to force hashing (nodes less than
 /// 32 bytes are not hashed).
-pub(crate) fn create_trie_with_large_entry_nodes<T: Into<Nibbles> + Copy>(keys: &[T]) -> TrieType {
+pub(crate) fn create_trie_with_large_entry_nodes<T: Into<Nibbles> + Copy>(keys: &[T]) -> anyhow::Result<TrieType> {
     let mut trie = TrieType::default();
     for (k, v) in keys.iter().map(|k| (*k).into()).map(large_entry) {
-        trie.insert(k, v.clone());
+        trie.insert(k, v.clone())?;
     }
 
-    trie
+    Ok(trie)
 }
 
-pub(crate) fn handmade_trie_1() -> (TrieType, Vec<Nibbles>) {
+pub(crate) fn handmade_trie_1() -> anyhow::Result<(TrieType, Vec<Nibbles>)> {
     let ks = vec![0x1234, 0x1324, 0x132400005_u64, 0x2001, 0x2002];
     let ks_nibbles: Vec<Nibbles> = ks.into_iter().map(|k| k.into()).collect();
-    let trie = create_trie_with_large_entry_nodes(&ks_nibbles);
+    let trie = create_trie_with_large_entry_nodes(&ks_nibbles)?;
 
     // Branch (0x)  --> 1, 2
     // Branch (0x1) --> 2, 3
@@ -219,5 +219,5 @@ pub(crate) fn handmade_trie_1() -> (TrieType, Vec<Nibbles>) {
     // Leaf  (0x2001) --> (n: 0x1, v: [3])
     // Leaf  (0x2002) --> (n: 0x2, v: [4])
 
-    (trie, ks_nibbles)
+    Ok((trie, ks_nibbles))
 }

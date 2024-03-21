@@ -9,7 +9,7 @@ use mpt_trie::{
     trie_ops::ValOrHash,
 };
 
-fn main() {
+fn main() -> anyhow::Result<()>{
     // Construct an empty trie:
     let mut trie = StandardTrie::default();
 
@@ -17,7 +17,7 @@ fn main() {
     trie.insert(
         Nibbles::from_bytes_be(b"hello").unwrap(),
         b"world!".to_vec(),
-    );
+    )?;
 
     // Or by initializing the trie with an iterator of key value pairs:
     let mut trie = StandardTrie::from_iter(vec![
@@ -44,7 +44,7 @@ fn main() {
 
     // Values can be deleted:
     let del_val = trie.delete(0x1234_u32);
-    assert_eq!(del_val, Some(b"some data".to_vec()));
+    assert_eq!(del_val.ok().unwrap(), Some(b"some data".to_vec()));
     assert_eq!(trie.get(0x1234_u32), None);
 
     // It's important to note how types are converted to `Nibbles`. This is
@@ -76,4 +76,6 @@ fn main() {
         format!("{:x}", Nibbles::from_bytes_le(&[69, 35, 1]).unwrap()),
         "0x012345"
     );
+
+    Ok(())
 }

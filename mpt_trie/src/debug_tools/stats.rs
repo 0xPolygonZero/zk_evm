@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn hand_made_trie_has_correct_node_stats() {
-        let (trie, _) = handmade_trie_1();
+        let (trie, _) = handmade_trie_1().unwrap();
         let stats = get_trie_stats(&trie);
 
         assert_eq!(stats.counts.leaf, 4);
@@ -370,8 +370,8 @@ mod tests {
         let hash_entries = generate_n_random_fixed_trie_hash_entries(n_hash_nodes, seed + 1);
 
         let mut trie = HashedPartialTrie::default();
-        trie.extend(val_entries);
-        trie.extend(hash_entries);
+        assert!(trie.extend(val_entries).is_ok());
+        assert!(trie.extend(hash_entries).is_ok());
 
         let stats = get_trie_stats(&trie);
 

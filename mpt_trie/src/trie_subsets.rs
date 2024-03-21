@@ -503,7 +503,7 @@ mod tests {
         common_setup();
 
         let mut trie = TrieType::default();
-        trie.insert(0x1234, vec![0, 1, 2]);
+        assert!(trie.insert(0x1234, vec![0, 1, 2]).is_ok());
         let res = create_trie_subset(&trie, once(0x5678));
 
         assert!(res.is_ok());
@@ -524,7 +524,7 @@ mod tests {
         common_setup();
 
         let mut trie = TrieType::default();
-        trie.insert(0x1234, vec![0, 1, 2]);
+        assert!(trie.insert(0x1234, vec![0, 1, 2]).is_ok());
         let trie_subset = create_trie_subset(&trie, once(0x1234)).unwrap();
 
         assert_eq!(trie, trie_subset);
@@ -534,7 +534,7 @@ mod tests {
     fn multi_node_trie_returns_proper_subset() {
         common_setup();
 
-        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345_u64]);
+        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345_u64]).unwrap();
 
         let trie_subset = create_trie_subset(&trie, vec![0x1234, 0x56]).unwrap();
         let leaf_keys = get_all_nibbles_of_leaf_nodes_in_trie(&trie_subset);
@@ -548,7 +548,7 @@ mod tests {
     fn intermediate_nodes_are_included_in_subset() {
         common_setup();
 
-        let (trie, ks_nibbles) = handmade_trie_1();
+        let (trie, ks_nibbles) = handmade_trie_1().unwrap();
         let trie_subset_all = create_trie_subset(&trie, ks_nibbles.iter().cloned()).unwrap();
 
         let subset_keys = get_all_nibbles_of_leaf_nodes_in_trie(&trie_subset_all);
@@ -703,7 +703,7 @@ mod tests {
 
     #[test]
     fn hash_of_single_leaf_trie_partial_trie_matches_original_trie() {
-        let trie = create_trie_with_large_entry_nodes(&[0x0]);
+        let trie = create_trie_with_large_entry_nodes(&[0x0]).unwrap();
 
         let base_hash = trie.hash();
         let partial_trie = create_trie_subset(&trie, [0x1234]).unwrap();
@@ -715,7 +715,7 @@ mod tests {
     fn sub_trie_that_includes_branch_but_not_children_hashes_out_children() {
         common_setup();
 
-        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x12345, 0x12346, 0x1234f]);
+        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x12345, 0x12346, 0x1234f]).unwrap();
         let partial_trie = create_trie_subset(&trie, [0x1234f]).unwrap();
 
         assert_nodes_are_hash_nodes(&partial_trie, [0x12345, 0x12346]);
@@ -725,7 +725,7 @@ mod tests {
     fn sub_trie_for_non_existent_key_that_hits_branch_leaf_does_not_hash_out_leaf() {
         common_setup();
 
-        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346]);
+        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346]).unwrap();
         let partial_trie = create_trie_subset(&trie, [0x1234567]).unwrap();
 
         // Note that `0x1234589` gets hashed at the branch slot at `0x12345`.
@@ -735,7 +735,7 @@ mod tests {
     #[test]
     fn hash_of_branch_partial_tries_matches_original_trie() {
         common_setup();
-        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345]);
+        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345]).unwrap();
 
         let base_hash: H256 = trie.hash();
         let partial_tries = vec![

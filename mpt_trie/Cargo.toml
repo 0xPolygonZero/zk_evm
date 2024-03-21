@@ -14,6 +14,7 @@ exclude = [
 ]
 
 [dependencies]
+anyhow = "1.0.40"
 bytes = { workspace = true }
 enum-as-inner = { workspace = true }
 ethereum-types = { workspace = true }

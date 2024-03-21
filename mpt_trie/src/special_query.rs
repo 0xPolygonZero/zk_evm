@@ -131,7 +131,7 @@ mod test {
     #[test]
     fn query_iter_works_no_last_node() {
         common_setup();
-        let (trie, ks) = handmade_trie_1();
+        let (trie, ks) = handmade_trie_1().unwrap();
 
         // ks --> vec![0x1234, 0x1324, 0x132400005_u64, 0x2001, 0x2002];
         let res = vec![
@@ -175,7 +175,7 @@ mod test {
     #[test]
     fn query_iter_works_with_last_node() {
         common_setup();
-        let (trie, _) = handmade_trie_1();
+        let (trie, _) = handmade_trie_1().unwrap();
 
         let extension_expected = vec![
             TrieSegment::Branch(1),

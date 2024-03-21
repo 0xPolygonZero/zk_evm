@@ -316,7 +316,7 @@ impl ProcessedBlockTrace {
             {
                 // If we are writing a zero, then we actually need to perform a delete.
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
-                    false => storage_trie.insert(slot, val.clone()),
+                    false => storage_trie.insert(slot, val.clone()).unwrap(),
                     true => {
                         if let Some(remaining_slot_key) =
                             Self::delete_node_and_report_remaining_key_if_branch_collapsed(

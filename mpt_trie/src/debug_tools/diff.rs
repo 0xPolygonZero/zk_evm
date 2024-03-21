@@ -423,11 +423,11 @@ mod tests {
     fn depth_single_node_hash_diffs_work() {
         // TODO: Reduce duplication once we identify common structures across tests...
         let mut a = HashedPartialTrie::default();
-        a.insert(0x1234, vec![0]);
+        assert!(a.insert(0x1234, vec![0]).is_ok());
         let a_hash = a.hash();
 
         let mut b = a.clone();
-        b.insert(0x1234, vec![1]);
+        assert!(b.insert(0x1234, vec![1]).is_ok());
         let b_hash = b.hash();
 
         let diff = create_diff_between_tries(&a, &b);

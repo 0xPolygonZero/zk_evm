@@ -232,7 +232,7 @@ mod tests {
         let mut trie = HashedPartialTrie::new(Node::Empty);
 
         entries.map(move |(k, v)| {
-            trie.insert(k, v);
+            assert!(trie.insert(k, v).is_ok());
             trie.get_hash()
         })
     }
@@ -376,7 +376,8 @@ mod tests {
         let half_entries = entries.len() / 2;
         let entries_to_delete = entries.into_iter().take(half_entries);
         for (k, _) in entries_to_delete {
-            our_trie.delete(k);
+            let res = our_trie.delete(k);
+            assert_eq!(res.is_ok(), true, "Failed to delete key: {:?}", k);
             truth_trie.remove(&k.bytes_be()).unwrap();
 
             let truth_root_hash = H256(truth_trie.root_hash().unwrap().0);
