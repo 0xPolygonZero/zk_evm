@@ -3,6 +3,7 @@ use std::mem::{size_of, transmute};
 
 use plonky2::hash::poseidon;
 
+use super::poseidon_stark::FELT_MAX_BYTES;
 use crate::util::{indices_arr, transmute_no_compile_time_size_checks};
 
 pub(crate) const POSEIDON_SPONGE_WIDTH: usize = poseidon::SPONGE_WIDTH;
@@ -25,7 +26,6 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
     /// The length of the original input for `PoseidonGeneralOp``. 0 for
     /// `PoseidonSimpleOp`.
     pub len: T,
-
     /// The number of elements that have already been absorbed prior
     /// to this block.
     pub already_absorbed_elements: T,
@@ -70,6 +70,14 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
 
     /// Holds the pseudo-inverse of (digest_high_limb_i - 2^32 + 1).
     pub pinv: [T; POSEIDON_DIGEST],
+
+    /// Holds the byte decomposition of the input, except for the less
+    /// significative byte.
+    pub input_bytes: [[T; FELT_MAX_BYTES - 1]; POSEIDON_SPONGE_RATE],
+
+    /// A flag indicating if this is a simple operation where inputs are
+    /// read from the top of the stack.
+    pub is_simple: T,
 
     pub not_padding: T,
 }
