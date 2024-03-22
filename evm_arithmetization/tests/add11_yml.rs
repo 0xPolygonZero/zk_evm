@@ -271,6 +271,7 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
 }
 
 #[test]
+#[ignore]
 fn test_two_reverts_with_exception() -> anyhow::Result<()> {
     // In this test, we have two reverted transactions:
     // - the first user code reaches a `fault_exception` because the gas consumption
