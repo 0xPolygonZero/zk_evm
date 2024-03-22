@@ -377,7 +377,7 @@ mod tests {
         let entries_to_delete = entries.into_iter().take(half_entries);
         for (k, _) in entries_to_delete {
             let res = our_trie.delete(k);
-            assert_eq!(res.is_ok(), true, "Failed to delete key: {:?}", k);
+            assert!(res.is_ok(), "Failed to delete key: {:?}", k);
             truth_trie.remove(&k.bytes_be()).unwrap();
 
             let truth_root_hash = H256(truth_trie.root_hash().unwrap().0);
