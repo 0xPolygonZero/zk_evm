@@ -54,13 +54,10 @@ global sys_sload:
     // stack: value, cold_access, value_ptr, kexit_info
     SWAP1 %jumpi(sload_cold_access)
     %stack (value, value_ptr, kexit_info) -> (kexit_info, value)
-    %jump(sload_end)
+    EXIT_KERNEL
 
 sload_cold_access:
     // stack: value, value_ptr, kexit_info
     %stack (value, value_ptr, kexit_info) -> (value, value_ptr, kexit_info, value)
     MSTORE_GENERAL
-
-sload_end:
-    // stack: kexit_info, value
     EXIT_KERNEL

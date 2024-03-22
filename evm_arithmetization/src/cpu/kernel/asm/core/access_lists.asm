@@ -325,11 +325,11 @@ insert_storage_key:
     DUP1
     // stack: new_next_ptr, new_next_ptr, value_ptr, next_ptr, addr, key, retdest
     SWAP3
-    // stack: next_ptr, new_next_ptr, value_ptr, next_ptr, addr, key, retdest
+    // stack: next_ptr, new_next_ptr, value_ptr, new_next_ptr, addr, key, retdest
     MSTORE_GENERAL
-    // stack: value_ptr, next_ptr, addr, key, retdest
+    // stack: value_ptr, new_next_ptr, addr, key, retdest
     SWAP1
-    // stack: next_ptr, value_ptr, addr, key, retdest
+    // stack: new_next_ptr, value_ptr, addr, key, retdest
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
     // stack: value_ptr, addr, key, retdest

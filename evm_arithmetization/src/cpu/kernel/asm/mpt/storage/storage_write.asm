@@ -18,7 +18,7 @@ global sys_sstore:
     // stack: original_value, current_value, kexit_info, slot, value
     PUSH 0
     // stack: gas, original_value, current_value, kexit_info, slot, value
-    %jump(sstore_after_cold_access)
+    %jump(sstore_after_cold_access_check)
 
 sstore_cold_access:
     // stack: value_ptr, current_value, kexit_info, slot, value
@@ -28,7 +28,7 @@ sstore_cold_access:
     PUSH @GAS_COLDSLOAD
     // stack: gas, original_value, current_value, kexit_info, slot, value
 
-sstore_after_cold_access:
+sstore_after_cold_access_check:
     // Check for warm access.
     %stack (gas, original_value, current_value, kexit_info, slot, value) ->
         (value, current_value, current_value, original_value, gas, original_value, current_value, kexit_info, slot, value)
