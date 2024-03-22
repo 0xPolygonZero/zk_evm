@@ -11,9 +11,7 @@ use evm_arithmetization::generation::mpt::transaction_testing::{
 };
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{
-    BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots,
-};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
@@ -660,17 +658,8 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
 
     all_circuits.verify_segment_aggregation(&segment_aggreg)?;
 
-    let extra_block_data = ExtraBlockData {
-        checkpoint_state_trie_root,
-        txn_number_before: block_aggreg.extra_block_data.txn_number_before,
-        gas_used_before: block_aggreg.extra_block_data.gas_used_before,
-        ..second_aggreg_pv.extra_block_data
-    };
     let block_pvs = PublicValues {
         trie_roots_before: block_aggreg.trie_roots_before,
-        registers_before: block_aggreg.registers_before,
-        mem_before: block_aggreg.mem_before,
-        extra_block_data,
         ..second_aggreg_pv.clone()
     };
     let (second_block_proof, _second_block_pvs) =
