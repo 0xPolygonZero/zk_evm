@@ -6,10 +6,10 @@ use mpt_trie::partial_trie::PartialTrie;
 use mpt_trie::{
     nibbles::{Nibbles, ToNibbles},
     partial_trie::{HashedPartialTrie, StandardTrie},
-    trie_ops::{ValOrHash, TrieOpResult},
+    trie_ops::{TrieOpResult, ValOrHash},
 };
 
-fn main() -> TrieOpResult<()>{
+fn main() -> TrieOpResult<()> {
     // Construct an empty trie:
     let mut trie = StandardTrie::default();
 

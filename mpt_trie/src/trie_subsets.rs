@@ -715,7 +715,8 @@ mod tests {
     fn sub_trie_that_includes_branch_but_not_children_hashes_out_children() {
         common_setup();
 
-        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x12345, 0x12346, 0x1234f]).unwrap();
+        let trie =
+            create_trie_with_large_entry_nodes(&[0x1234, 0x12345, 0x12346, 0x1234f]).unwrap();
         let partial_trie = create_trie_subset(&trie, [0x1234f]).unwrap();
 
         assert_nodes_are_hash_nodes(&partial_trie, [0x12345, 0x12346]);

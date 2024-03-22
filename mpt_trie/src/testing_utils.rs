@@ -192,7 +192,9 @@ fn gen_rand_u256_bytes(rng: &mut StdRng) -> Vec<u8> {
 
 /// Initializes a trie with keys large enough to force hashing (nodes less than
 /// 32 bytes are not hashed).
-pub(crate) fn create_trie_with_large_entry_nodes<T: Into<Nibbles> + Copy>(keys: &[T]) -> TrieOpResult<TrieType> {
+pub(crate) fn create_trie_with_large_entry_nodes<T: Into<Nibbles> + Copy>(
+    keys: &[T],
+) -> TrieOpResult<TrieType> {
     let mut trie = TrieType::default();
     for (k, v) in keys.iter().map(|k| (*k).into()).map(large_entry) {
         trie.insert(k, v.clone())?;

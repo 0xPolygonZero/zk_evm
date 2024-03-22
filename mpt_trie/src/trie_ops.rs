@@ -6,14 +6,13 @@ use std::{fmt::Display, mem::size_of};
 use enum_as_inner::EnumAsInner;
 use ethereum_types::{H256, U128, U256, U512};
 use log::trace;
+use thiserror::Error;
 
 use crate::{
     nibbles::{Nibble, Nibbles},
     partial_trie::{Node, PartialTrie, WrappedNode},
     utils::TrieNodeType,
 };
-use thiserror::Error;
-
 
 /// Stores the result of trie operations. Returns a [TrieOpError] upon
 /// failure.
@@ -22,15 +21,18 @@ pub type TrieOpResult<T> = Result<T, TrieOpError>;
 /// An error type for trie operation.
 #[derive(Debug, Error)]
 pub enum TrieOpError {
-    /// An error that occurs when a hash node is found during an insert operation.
+    /// An error that occurs when a hash node is found during an insert
+    /// operation.
     #[error("Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!")]
     HashNodeInsertError(),
 
-    /// An error that occurs when a hash node is found during a delete operation.
+    /// An error that occurs when a hash node is found during a delete
+    /// operation.
     #[error("Attempted to delete a value that ended up inside a hash node")]
     HashNodeDeleteError(),
 
-    /// An error that occurs when a hash node is found during an extension node collapse.
+    /// An error that occurs when a hash node is found during an extension node
+    /// collapse.
     #[error("Extension managed to get a child node type that is impossible! (child: {0})")]
     HashNodeExtError(TrieNodeType),
 
@@ -493,7 +495,7 @@ fn delete_intern<N: PartialTrie>(
             trace!("Delete traversed Empty");
             Ok(None)
         }
-        Node::Hash(_) => Err(TrieOpError::HashNodeDeleteError()), 
+        Node::Hash(_) => Err(TrieOpError::HashNodeDeleteError()),
         // TODO: Find a nice way to get the full key path...
         Node::Branch { children, value } => {
             if curr_k.is_empty() {
@@ -765,7 +767,10 @@ fn leaf<N: PartialTrie>(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode<N> {
     Node::Leaf { nibbles, value }.into()
 }
 
-fn leaf_from_insert_val<N: PartialTrie>(nibbles: Nibbles, value: ValOrHash) -> TrieOpResult<WrappedNode<N>> {
+fn leaf_from_insert_val<N: PartialTrie>(
+    nibbles: Nibbles,
+    value: ValOrHash,
+) -> TrieOpResult<WrappedNode<N>> {
     create_node_if_ins_val_not_hash(value, |value| Node::Leaf { nibbles, value }.into())
 }
 
@@ -819,8 +824,8 @@ mod tests {
             generate_n_random_variable_trie_value_entries, get_non_hash_values_in_trie,
             unwrap_iter_item_to_val, TestInsertValEntry,
         },
-        utils::create_mask_of_1s,
         trie_ops::TrieOpResult,
+        utils::create_mask_of_1s,
     };
 
     const MASSIVE_TRIE_SIZE: usize = 100000;
