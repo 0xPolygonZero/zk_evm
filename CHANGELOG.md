@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Update plonky2 dependencies ([#119](https://github.com/0xPolygonZero/zk_evm/pull/119))
+
 ## [0.2.0] - 2024-03-19
 
 ### Changed
