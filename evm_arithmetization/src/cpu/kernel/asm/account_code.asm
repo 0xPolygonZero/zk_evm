@@ -78,6 +78,8 @@ global sys_extcodesize:
     SWAP1
     EXIT_KERNEL
 
+// Pre stack: address, retdest
+// Post stack: code_size, codesize_ctx
 global extcodesize:
     // stack: address, retdest
     %next_context_id

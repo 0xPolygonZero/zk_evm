@@ -213,6 +213,7 @@ pub(crate) trait State<F: Field> {
                         assert_eq!(self.get_clock() - final_clock, NUM_EXTRA_CYCLES_AFTER - 1);
                     }
                     let final_mem = if let Some(mut mem) = self.get_full_memory() {
+                        // Clear memory we will not use again.
                         for &ctx in &self.get_generation_state().pruned_contexts {
                             mem.contexts[ctx] = MemoryContextState::default();
                         }
@@ -333,7 +334,8 @@ pub struct GenerationState<F: Field> {
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
 
-    /// Stale contexts you can prune from memory.
+    /// Memory used by stale contexts can be pruned so proving segments can be
+    /// smaller.
     pub(crate) pruned_contexts: Vec<usize>,
 
     /// Prover inputs containing RLP data, in reverse order so that the next

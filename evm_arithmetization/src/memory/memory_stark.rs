@@ -223,6 +223,8 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
 
     /// Generates the `COUNTER`, `RANGE_CHECK` and `FREQUENCIES` columns, given
     /// a trace in column-major form.
+    /// Also generates the `IS_PRUNED`, `PRUNED_CONTEXT_FREQUENCIES` and
+    /// `MEM_AFTER_FILTER` columns.
     fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>], pruned_contexts: Vec<usize>) {
         let height = trace_col_vecs[0].len();
         trace_col_vecs[COUNTER] = (0..height).map(|i| F::from_canonical_usize(i)).collect();
