@@ -166,18 +166,6 @@ pub(crate) fn ctl_arithmetic_context_pruning<F: Field>() -> TableWithColumns<F> 
     )
 }
 
-/// Temporary hack to make things work.
-/// TODO: Remove this.
-pub(crate) fn ctl_arithmetic_dummy<F: Field>() -> TableWithColumns<F> {
-    let mut columns = vec![Column::constant(F::from_canonical_usize(0x10)); 33];
-
-    TableWithColumns::new(
-        *Table::Cpu,
-        columns,
-        Some(Filter::new_simple(Column::constant(F::ZERO))),
-    )
-}
-
 /// Returns a column containing pruned contexts.
 pub(crate) fn ctl_context_pruning_looked<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
