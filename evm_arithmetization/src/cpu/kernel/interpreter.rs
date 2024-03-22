@@ -16,12 +16,12 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
-use crate::generation::debug_inputs;
 use crate::generation::mpt::{load_all_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
 };
+use crate::generation::{debug_inputs, TrimmedGenerationInputs};
 use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
@@ -148,6 +148,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 /// State data required to initialize the state passed to the prover.
 #[derive(Default, Debug, Clone)]
 pub(crate) struct ExtraSegmentData {
+    pub(crate) trimmed_inputs: TrimmedGenerationInputs,
     pub(crate) bignum_modmul_result_limbs: Vec<U256>,
     pub(crate) rlp_prover_inputs: Vec<U256>,
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
@@ -193,6 +194,7 @@ pub(crate) fn generate_segment<F: Field>(
     for i in 0..=index {
         if i == index {
             extra_data = ExtraSegmentData {
+                trimmed_inputs: interpreter.generation_state.inputs.clone(),
                 bignum_modmul_result_limbs: interpreter
                     .generation_state
                     .bignum_modmul_result_limbs
@@ -905,6 +907,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         GenerationStateCheckpoint {
             registers: self.generation_state.registers,
             traces: self.generation_state.traces.checkpoint(),
+            clock: self.get_clock(),
         }
     }
 
@@ -971,6 +974,7 @@ impl<F: Field> State<F> for Interpreter<F> {
     fn push_keccak_sponge(&mut self, _op: KeccakSpongeOp) {}
 
     fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
+        self.clock = checkpoint.clock;
         self.generation_state.rollback(checkpoint)
     }
 

@@ -18,6 +18,38 @@ It uses starky and plonky2 as proving backend: https://github.com/0xPolygonZero/
 
 * [proof_gen](./proof_gen/README.md): A convenience library for generating proofs from inputs already in Intermediate Representation (IR) format.
 
+## Dependency graph
+
+Below is a simplified view of the dependency graph, including the proving systems backend and the application layer defined within [zero-bin](https://github.com/0xPolygonZero/zero-bin).
+
+```mermaid
+flowchart TD
+    subgraph ps [proving systems]
+    A1{{plonky2}}
+    A2{{starky}}
+    end
+
+    subgraph zk_evm [zk_evm]
+    B[mpt_trie]
+    C[evm_arithmetization]
+    D[trace_decoder]
+    E[proof_gen]
+    A1 --> C
+    A1 --> E
+    A2 --> C
+    B --> C
+    B ---> D
+    C ---> D
+    C --> E
+    D --> E
+    end
+
+    F{zero-bin}
+    A1 --> F
+    C --> F
+    D --> F
+    E --> F
+```
 
 ## Documentation
 
