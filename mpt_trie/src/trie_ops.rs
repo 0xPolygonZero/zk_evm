@@ -825,14 +825,15 @@ mod tests {
             unwrap_iter_item_to_val, TestInsertValEntry,
         },
         trie_ops::TrieOpResult,
-        utils::create_mask_of_1s,
+        utils::{create_mask_of_1s, TryFromIterator},
     };
 
     const MASSIVE_TRIE_SIZE: usize = 100000;
     const COW_TEST_TRIE_SIZE: usize = 500;
 
     fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[TestInsertValEntry]) {
-        let trie = StandardTrie::from_iter(entries.iter().cloned());
+        let trie =
+            StandardTrie::try_from_iter(entries.iter().cloned()).expect("Failed to create trie");
         assert_all_entries_in_trie(entries, &trie)
     }
 
@@ -914,7 +915,7 @@ mod tests {
         let mut entries = [entry(0x1234), entry(0x1234)];
         entries[1].1 = vec![100];
 
-        let trie = StandardTrie::from_iter(entries);
+        let trie = StandardTrie::try_from_iter(entries).expect("Failed to create trie");
         assert_eq!(trie.get(0x1234), Some([100].as_slice()));
     }
 
@@ -928,9 +929,9 @@ mod tests {
 
     fn assert_cloning_works_for_tries<T>()
     where
-        T: FromIterator<(Nibbles, Vec<u8>)> + PartialTrie,
+        T: TryFromIterator<(Nibbles, Vec<u8>)> + PartialTrie,
     {
-        let trie = T::from_iter(once(entry(0x1234)));
+        let trie = T::try_from_iter(once(entry(0x1234))).expect("Failed to create trie");
         let mut cloned_trie = trie.clone();
 
         assert!(cloned_trie.extend(once(entry(0x5678))).is_ok());
@@ -962,7 +963,8 @@ mod tests {
         common_setup();
         let non_hash_entries: Vec<_> =
             generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 0).collect();
-        let mut trie = StandardTrie::from_iter(non_hash_entries.iter().cloned());
+        let mut trie = StandardTrie::try_from_iter(non_hash_entries.iter().cloned())
+            .expect("Failed to create trie");
 
         let extra_hash_entries = generate_n_hash_nodes_entries_for_empty_slots_in_trie(
             &trie,
@@ -993,11 +995,11 @@ mod tests {
         );
 
         let entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 0);
-        let big_trie_1 = StandardTrie::from_iter(entries);
+        let big_trie_1 = StandardTrie::try_from_iter(entries).expect("Failed to create trie");
         assert_eq!(big_trie_1, big_trie_1);
 
         let entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 1);
-        let big_trie_2 = StandardTrie::from_iter(entries);
+        let big_trie_2 = StandardTrie::try_from_iter(entries).expect("Failed to create trie");
 
         assert_ne!(big_trie_1, big_trie_2)
     }
@@ -1007,7 +1009,8 @@ mod tests {
         common_setup();
 
         let entries = [entry_with_value(0x1234, 1), entry_with_value(0x12345678, 2)];
-        let trie = StandardTrie::from_iter(entries.iter().cloned());
+        let trie =
+            StandardTrie::try_from_iter(entries.iter().cloned()).expect("Failed to create trie");
 
         assert_eq!(trie.get(0x1234), Some([1].as_slice()));
         assert_eq!(trie.get(0x12345678), Some([2].as_slice()));
@@ -1019,7 +1022,8 @@ mod tests {
 
         let random_entries: Vec<_> =
             generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 9001).collect();
-        let trie = StandardTrie::from_iter(random_entries.iter().cloned());
+        let trie = StandardTrie::try_from_iter(random_entries.iter().cloned())
+            .expect("Failed to create trie");
 
         for (k, v) in random_entries.into_iter() {
             debug!("Attempting to retrieve {:?}...", (k, &v));
@@ -1063,7 +1067,8 @@ mod tests {
 
         let entries: HashSet<_> =
             generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 9003).collect();
-        let trie = StandardTrie::from_iter(entries.iter().cloned());
+        let trie =
+            StandardTrie::try_from_iter(entries.iter().cloned()).expect("Failed to create trie");
 
         let trie_items: HashSet<_> = trie
             .items()
@@ -1100,7 +1105,8 @@ mod tests {
 
         let entries: Vec<_> =
             generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 7).collect();
-        let mut trie = StandardTrie::from_iter(entries.iter().cloned());
+        let mut trie =
+            StandardTrie::try_from_iter(entries.iter().cloned()).expect("Failed to create trie");
 
         // Delete half of the elements
         let half_entries = entries.len() / 2;

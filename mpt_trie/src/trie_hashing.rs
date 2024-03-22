@@ -113,6 +113,7 @@ mod tests {
             generate_n_random_variable_trie_value_entries, large_entry, TestInsertValEntry,
         },
         trie_hashing::hash_bytes,
+        utils::TryFromIterator,
     };
 
     const PYEVM_TRUTH_VALS_JSON_PATH: &str = "test_data/pyevm_account_ground_truth.json";
@@ -232,7 +233,7 @@ mod tests {
         let mut trie = HashedPartialTrie::new(Node::Empty);
 
         entries.map(move |(k, v)| {
-            assert!(trie.insert(k, v).is_ok());
+            trie.insert(k, v).expect("Failed to insert into trie");
             trie.get_hash()
         })
     }
@@ -274,7 +275,9 @@ mod tests {
             get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
                 .next()
                 .unwrap();
-        let our_hash = HashedPartialTrie::from_iter(once(ins_entry)).get_hash();
+        let our_hash = HashedPartialTrie::try_from_iter(once(ins_entry))
+            .expect("Failed to create trie")
+            .get_hash();
 
         assert_eq!(py_evm_truth_val, our_hash);
         assert_eq!(eth_trie_lib_truth_val, our_hash);
@@ -366,7 +369,8 @@ mod tests {
         )
         .collect();
 
-        let mut our_trie = HashedPartialTrie::from_iter(entries.iter().cloned());
+        let mut our_trie = HashedPartialTrie::try_from_iter(entries.iter().cloned())
+            .expect("Failed to create trie");
         let mut truth_trie = create_truth_trie();
 
         for (k, v) in entries.iter() {
@@ -387,12 +391,13 @@ mod tests {
 
     #[test]
     fn replacing_branch_of_leaves_with_hash_nodes_produced_same_hash() {
-        let mut trie = HashedPartialTrie::from_iter([
+        let mut trie = HashedPartialTrie::try_from_iter([
             large_entry(0x1),
             large_entry(0x2),
             large_entry(0x3),
             large_entry(0x4),
-        ]);
+        ])
+        .expect("Failed to create trie");
 
         let orig_hash = trie.hash();
 
@@ -429,7 +434,7 @@ mod tests {
             })
         });
 
-        let mut trie = HashedPartialTrie::from_iter(entries);
+        let mut trie = HashedPartialTrie::try_from_iter(entries).expect("Failed to create trie");
         let orig_hash = trie.get_hash();
 
         let root_branch_children = match &mut *trie {

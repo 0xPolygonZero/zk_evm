@@ -14,7 +14,7 @@ use crate::{
     nibbles::Nibbles,
     trie_hashing::{hash_trie, rlp_encode_and_hash_node, EncodedNode},
     trie_ops::{TrieOpResult, ValOrHash},
-    utils::bytes_to_h256,
+    utils::{bytes_to_h256, TryFromIterator},
 };
 
 macro_rules! impl_from_for_trie_type {
@@ -283,12 +283,12 @@ impl DerefMut for StandardTrie {
     }
 }
 
-impl<K, V> FromIterator<(K, V)> for StandardTrie
+impl<K, V> TryFromIterator<(K, V)> for StandardTrie
 where
     K: Into<Nibbles>,
     V: Into<ValOrHash>,
 {
-    fn from_iter<T: IntoIterator<Item = (K, V)>>(nodes: T) -> Self {
+    fn try_from_iter<T: IntoIterator<Item = (K, V)>>(nodes: T) -> TrieOpResult<Self> {
         from_iter_common(nodes)
     }
 }
@@ -421,24 +421,24 @@ impl PartialEq for HashedPartialTrie {
     }
 }
 
-impl<K, V> FromIterator<(K, V)> for HashedPartialTrie
+impl<K, V> TryFromIterator<(K, V)> for HashedPartialTrie
 where
     K: Into<Nibbles>,
     V: Into<ValOrHash>,
 {
-    fn from_iter<T: IntoIterator<Item = (K, V)>>(nodes: T) -> Self {
+    fn try_from_iter<T: IntoIterator<Item = (K, V)>>(nodes: T) -> TrieOpResult<Self> {
         from_iter_common(nodes)
     }
 }
 
-fn from_iter_common<N: PartialTrie, T: IntoIterator<Item = (K, V)>, K, V>(nodes: T) -> N
+fn from_iter_common<N: PartialTrie, T: IntoIterator<Item = (K, V)>, K, V>(
+    nodes: T,
+) -> TrieOpResult<N>
 where
     K: Into<Nibbles>,
     V: Into<ValOrHash>,
 {
     let mut root = N::new(Node::Empty);
-    match root.extend(nodes) {
-        Ok(_) => root,
-        Err(e) => panic!("Error extending trie: {}", e),
-    }
+    root.extend(nodes)?;
+    Ok(root)
 }

@@ -201,7 +201,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_after).to_vec(),
     )?;
-    expected_state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+    expected_state_trie_after
+        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
 
     let transactions_trie: HashedPartialTrie = Node::Leaf {
@@ -390,7 +391,8 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_after).to_vec(),
     )?;
-    expected_state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+    expected_state_trie_after
+        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
     expected_state_trie_after.insert(
         to_second_nibbles,
@@ -538,7 +540,8 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_after).to_vec(),
     )?;
-    expected_state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+    expected_state_trie_after
+        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
     expected_state_trie_after.insert(
         to_second_nibbles,

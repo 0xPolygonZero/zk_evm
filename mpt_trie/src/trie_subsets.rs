@@ -397,7 +397,7 @@ mod tests {
             generate_n_random_fixed_trie_value_entries, handmade_trie_1, TrieType,
         },
         trie_ops::ValOrHash,
-        utils::TrieNodeType,
+        utils::{TrieNodeType, TryFromIterator},
     };
 
     const MASSIVE_TEST_NUM_SUB_TRIES: usize = 10;
@@ -800,7 +800,7 @@ mod tests {
         let random_entries: Vec<_> =
             generate_n_random_fixed_trie_value_entries(trie_size, seed).collect();
         let entry_keys: Vec<_> = random_entries.iter().map(|(k, _)| k).cloned().collect();
-        let trie = TrieType::from_iter(random_entries);
+        let trie = TrieType::try_from_iter(random_entries).expect("Failed to create trie");
 
         let keys_of_subsets: Vec<Vec<_>> = (0..MASSIVE_TEST_NUM_SUB_TRIES)
             .map(|i| {
