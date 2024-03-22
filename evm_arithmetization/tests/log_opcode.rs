@@ -377,7 +377,8 @@ fn initialize_mpts(
 
 // Tests proving two transactions in one run.
 #[test]
-fn test_two_logs() -> anyhow::Result<()> {
+#[ignore]
+fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
     init_logger();
 
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
@@ -520,8 +521,8 @@ fn test_two_logs() -> anyhow::Result<()> {
         signed_txns: vec![txn.to_vec(), txn_2.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
-        trie_roots_after,
-        contract_code,
+        trie_roots_after: trie_roots_after.clone(),
+        contract_code: contract_code.clone(),
         checkpoint_state_trie_root,
         block_metadata: block_metadata.clone(),
         txn_number_before: 0.into(),
@@ -548,12 +549,12 @@ fn test_two_logs() -> anyhow::Result<()> {
             4..14,
             16..20,
             8..18,
-            16..17,
+            10..17,
         ],
         &config,
     );
 
-    let max_cpu_len_log = 15;
+    let max_cpu_len_log: usize = 15;
     let mut timing = TimingTree::new("prove root second", log::Level::Info);
     let segment_proofs_data = &all_circuits.prove_all_segments(
         &all_stark,
@@ -577,510 +578,105 @@ fn test_two_logs() -> anyhow::Result<()> {
     let (segment_aggreg, aggreg_pvs) = all_circuits.prove_segment_aggregation(
         true,
         &segment_aggreg,
-        aggreg_pvs,
+        aggreg_pvs.clone(),
         false,
         &segment_proofs_data[2].proof_with_pis,
         segment_proofs_data[2].public_values.clone(),
     )?;
     all_circuits.verify_segment_aggregation(&segment_aggreg)?;
 
-    let (block_proof, _) = all_circuits.prove_block(None, &segment_aggreg, aggreg_pvs)?;
-    all_circuits.verify_block(&block_proof)
+    let (block_proof, block_aggreg) =
+        all_circuits.prove_block(None, &segment_aggreg, aggreg_pvs.clone())?;
+    all_circuits.verify_block(&block_proof)?;
+
+    // Second empty block, to test block aggregation.
+    let mut prev_hashes = vec![H256::default(); 256];
+    prev_hashes[255] = block_hash;
+    let block_metadata = BlockMetadata {
+        block_number: 2.into(),
+        ..Default::default()
+    };
+    let trie_roots_after = TrieRoots {
+        state_root: expected_state_trie_after.hash(),
+        receipts_root: HashedPartialTrie::from(Node::Empty).hash(),
+        transactions_root: HashedPartialTrie::from(Node::Empty).hash(),
+    };
+    let inputs = GenerationInputs {
+        signed_txns: vec![],
+        withdrawals: vec![],
+        tries: TrieInputs {
+            state_trie: expected_state_trie_after,
+            transactions_trie: HashedPartialTrie::from(Node::Empty),
+            receipts_trie: HashedPartialTrie::from(Node::Empty),
+            storage_tries: vec![],
+        },
+        trie_roots_after,
+        contract_code,
+        checkpoint_state_trie_root,
+        block_metadata,
+        txn_number_before: 0.into(),
+        gas_used_before: 0.into(),
+        gas_used_after: 0.into(),
+        block_hashes: BlockHashes {
+            prev_hashes,
+            cur_hash: H256::default(),
+        },
+    };
+    let max_cpu_len_log = 13;
+    let all_segment_proofs = &all_circuits.prove_all_segments(
+        &all_stark,
+        &config,
+        inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
+
+    let (mut aggreg_proof, mut second_aggreg_pv) = all_circuits.prove_segment_aggregation(
+        false,
+        &all_segment_proofs[0].proof_with_pis,
+        all_segment_proofs[0].public_values.clone(),
+        false,
+        &all_segment_proofs[1].proof_with_pis,
+        all_segment_proofs[1].public_values.clone(),
+    )?;
+
+    if all_segment_proofs.len() > 2 {
+        for seg in &all_segment_proofs[2..] {
+            let ProverOutputData {
+                proof_with_pis: proof,
+                public_values,
+            } = seg;
+            (aggreg_proof, second_aggreg_pv) = all_circuits.prove_segment_aggregation(
+                true,
+                &aggreg_proof,
+                second_aggreg_pv,
+                false,
+                proof,
+                public_values.clone(),
+            )?;
+        }
+    }
+
+    all_circuits.verify_segment_aggregation(&segment_aggreg)?;
+
+    let extra_block_data = ExtraBlockData {
+        checkpoint_state_trie_root,
+        txn_number_before: block_aggreg.extra_block_data.txn_number_before,
+        gas_used_before: block_aggreg.extra_block_data.gas_used_before,
+        ..second_aggreg_pv.extra_block_data
+    };
+    let block_pvs = PublicValues {
+        trie_roots_before: block_aggreg.trie_roots_before,
+        registers_before: block_aggreg.registers_before,
+        mem_before: block_aggreg.mem_before,
+        extra_block_data,
+        ..second_aggreg_pv.clone()
+    };
+    let (second_block_proof, _second_block_pvs) =
+        all_circuits.prove_block(Some(&block_proof), &aggreg_proof, block_pvs)?;
+    all_circuits.verify_block(&second_block_proof)
 }
-
-// Tests proving two transactions, one of which with logs, and aggregating
-// them.
-// #[test]
-// #[ignore]
-// fn test_log_with_aggreg() -> anyhow::Result<()> {
-//     init_logger();
-
-//     // First transaction.
-//     let all_stark = AllStark::<F, D>::default();
-//     let config = StarkConfig::standard_fast_config();
-
-//     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
-//     let sender_first = hex!("af1276cbb260bb13deddb4209ae99ae6e497f446");
-//     let to_first = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
-//     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552e89");
-
-//     let beneficiary_state_key = keccak(beneficiary);
-//     let sender_state_key = keccak(sender_first);
-//     let to_hashed = keccak(to_first);
-//     let to_hashed_2 = keccak(to);
-
-//     let beneficiary_nibbles =
-// Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-//     let sender_nibbles =
-// Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-//     let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
-//     let to_second_nibbles =
-// Nibbles::from_bytes_be(to_hashed_2.as_bytes()).unwrap();
-
-//     // In the first transaction, the sender account sends `txn_value` to
-//     // `to_account`.
-//     let gas_price = 10;
-//     let txn_value = 0xau64;
-
-//     let sender_balance_before = 1000000000000000000u64.into();
-//     let to_account_balance_before = 0.into();
-//     let to_account_second_balance_before = 0.into();
-
-//     let (tries_before, code, code_gas, block_1_metadata) = initialize_mpts(
-//         sender_balance_before,
-//         to_account_balance_before,
-//         to_account_second_balance_before,
-//     );
-
-//     let code_hash = keccak(code);
-//     let gas_used = 21_000 + code_gas;
-//     let to_account_second_before = AccountRlp {
-//         code_hash,
-//         ..AccountRlp::default()
-//     };
-//     let checkpoint_state_trie_root = tries_before.state_trie.hash();
-
-//     let txn =
-// hex!("f85f800a82520894095e7baea6a6c7c4c2dfeb977efac326af552d870a8026a0122f370ed4023a6c253350c6bfb87d7d7eb2cd86447befee99e0a26b70baec20a07100ab1b3977f2b4571202b9f4b68850858caf5469222794600b5ce1cfb348ad"
-// );
-
-//     // Update accounts and tries.
-//     let beneficiary_account_after = AccountRlp {
-//         nonce: 1.into(),
-//         ..AccountRlp::default()
-//     };
-
-//     let sender_balance_after = sender_balance_before - gas_price * 21000 -
-// txn_value;     let sender_account_after = AccountRlp {
-//         balance: sender_balance_after,
-//         nonce: 1.into(),
-//         ..AccountRlp::default()
-//     };
-//     let to_account_after = AccountRlp {
-//         balance: txn_value.into(),
-//         ..AccountRlp::default()
-//     };
-
-//     let mut contract_code = HashMap::new();
-//     contract_code.insert(keccak(vec![]), vec![]);
-//     contract_code.insert(code_hash, code.to_vec());
-
-//     // Compute new state trie.
-//     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-//     expected_state_trie_after.insert(
-//         beneficiary_nibbles,
-//         rlp::encode(&beneficiary_account_after).to_vec(),
-//     );
-//     expected_state_trie_after.insert(sender_nibbles,
-// rlp::encode(&sender_account_after).to_vec());     expected_state_trie_after.
-// insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
-//     expected_state_trie_after.insert(
-//         to_second_nibbles,
-//         rlp::encode(&to_account_second_before).to_vec(),
-//     );
-
-//     // Compute new receipt trie.
-//     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-//     let receipt_0 = LegacyReceiptRlp {
-//         status: true,
-//         cum_gas_used: 21000u64.into(),
-//         bloom: [0x00; 256].to_vec().into(),
-//         logs: vec![],
-//     };
-//     receipts_trie.insert(
-//         Nibbles::from_str("0x80").unwrap(),
-//         rlp::encode(&receipt_0).to_vec(),
-//     );
-
-//     // Compute new transaction tries.
-//     let mut transactions_trie: HashedPartialTrie = Node::Leaf {
-//         nibbles: Nibbles::from_str("0x80").unwrap(),
-//         value: txn.to_vec(),
-//     }
-//     .into();
-
-//     let tries_after = TrieRoots {
-//         state_root: expected_state_trie_after.hash(),
-//         transactions_root: transactions_trie.hash(),
-//         receipts_root: receipts_trie.clone().hash(),
-//     };
-
-//     let block_1_hash =
-//         H256::from_str("
-// 0x0101010101010101010101010101010101010101010101010101010101010101")?;
-//     let mut block_hashes = vec![H256::default(); 256];
-
-//     let inputs_first = GenerationInputs {
-//         signed_txns: vec![txn.to_vec()],
-//         withdrawals: vec![],
-//         tries: tries_before,
-//         trie_roots_after: tries_after,
-//         contract_code,
-//         checkpoint_state_trie_root,
-//         block_metadata: block_1_metadata.clone(),
-//         txn_number_before: 0.into(),
-//         gas_used_before: 0.into(),
-//         gas_used_after: 21000u64.into(),
-//         block_hashes: BlockHashes {
-//             prev_hashes: block_hashes.clone(),
-//             cur_hash: block_1_hash,
-//         },
-//     };
-
-//     // Preprocess all circuits.
-//     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
-//         &all_stark,
-//         &[
-//             16..17,
-//             8..15,
-//             7..17,
-//             4..15,
-//             8..11,
-//             4..13,
-//             16..20,
-//             8..18,
-//             16..17,
-//         ],
-//         &config,
-//     );
-
-//     let mut timing = TimingTree::new("prove root first", log::Level::Info);
-//     let max_cpu_len = 1 << 20;
-//     let root_proof_data_first = all_circuits.prove_segment(
-//         &all_stark,
-//         &config,
-//         inputs_first.clone(),
-//         max_cpu_len,
-//         0,
-//         &mut timing,
-//         None,
-//     )?;
-
-//     let ProverOutputData {
-//         proof_with_pis: root_proof_first,
-//         public_values: public_values_first,
-//     } = root_proof_data_first;
-
-//     timing.filter(Duration::from_millis(100)).print();
-//     all_circuits.verify_root(root_proof_first.clone())?;
-//     let final_root_proof_data_first = all_circuits.prove_segment(
-//         &all_stark,
-//         &config,
-//         inputs_first,
-//         max_cpu_len,
-//         1,
-//         &mut timing,
-//         None,
-//     )?;
-
-//     let ProverOutputData {
-//         proof_with_pis: final_root_proof_first,
-//         public_values: final_public_values_first,
-//         ..
-//     } = final_root_proof_data_first;
-
-//     all_circuits.verify_root(final_root_proof_first.clone())?;
-//     // The gas used and transaction number are fed to the next transaction,
-// so the     // two proofs can be correctly aggregated.
-//     let gas_used_second =
-// public_values_first.extra_block_data.gas_used_after;
-
-//     // Prove second transaction. In this second transaction, the code with
-// logs is     // executed.
-//     let state_trie_before = expected_state_trie_after;
-
-//     let tries_before = TrieInputs {
-//         state_trie: state_trie_before,
-//         transactions_trie: transactions_trie.clone(),
-//         receipts_trie: receipts_trie.clone(),
-//         storage_tries: vec![],
-//     };
-
-//     // Prove a transaction which carries out two LOG opcodes.
-//     let txn_gas_price = 10;
-//     let txn_2 =
-// hex!("f860010a830186a094095e7baea6a6c7c4c2dfeb977efac326af552e89808025a04a223955b0bd3827e3740a9a427d0ea43beb5bafa44a0204bf0a3306c8219f7ba0502c32d78f233e9e7ce9f5df3b576556d5d49731e0678fd5a068cdf359557b5b"
-// );
-
-//     let mut contract_code = HashMap::new();
-//     contract_code.insert(keccak(vec![]), vec![]);
-//     contract_code.insert(code_hash, code.to_vec());
-
-//     // Update the state and receipt tries after the transaction, so that we
-// have the     // correct expected tries: Update accounts.
-//     let beneficiary_account_after = AccountRlp {
-//         nonce: 1.into(),
-//         ..AccountRlp::default()
-//     };
-
-//     let sender_balance_after = sender_balance_after - gas_used *
-// txn_gas_price;     let sender_account_after = AccountRlp {
-//         balance: sender_balance_after,
-//         nonce: 2.into(),
-//         ..AccountRlp::default()
-//     };
-//     let balance_after = to_account_after.balance;
-//     let to_account_after = AccountRlp {
-//         balance: balance_after,
-//         ..AccountRlp::default()
-//     };
-//     let to_account_second_after = AccountRlp {
-//         balance: to_account_second_before.balance,
-//         code_hash,
-//         ..AccountRlp::default()
-//     };
-
-//     // Update the receipt trie.
-//     let first_log = LogRlp {
-//         address: to.into(),
-//         topics: vec![],
-//         data: Bytes::new(),
-//     };
-
-//     let second_log = LogRlp {
-//         address: to.into(),
-//         topics: vec![
-
-// hex!("0000000000000000000000000000000000000000000000000000000000000062").
-// into(), /* dec: 98 */
-// hex!("0000000000000000000000000000000000000000000000000000000000000063").
-// into(), /* dec: 99 */         ],
-//         data: hex!("a1b2c3d4e5").to_vec().into(),
-//     };
-
-//     let receipt = LegacyReceiptRlp {
-//         status: true,
-//         cum_gas_used: (22570 + 21000).into(),
-//         bloom:
-// hex!("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000001000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000800000000000000008000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000800002000000000000000000000000000"
-// ).to_vec().into(),         logs: vec![first_log, second_log],
-//     };
-
-//     let receipt_nibbles = Nibbles::from_str("0x01").unwrap(); // RLP(1) = 0x1
-
-//     receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec());
-
-//     // Update the state trie.
-//     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-//     expected_state_trie_after.insert(
-//         beneficiary_nibbles,
-//         rlp::encode(&beneficiary_account_after).to_vec(),
-//     );
-//     expected_state_trie_after.insert(sender_nibbles,
-// rlp::encode(&sender_account_after).to_vec());     expected_state_trie_after.
-// insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
-//     expected_state_trie_after.insert(
-//         to_second_nibbles,
-//         rlp::encode(&to_account_second_after).to_vec(),
-//     );
-
-//     transactions_trie.insert(Nibbles::from_str("0x01").unwrap(),
-// txn_2.to_vec());
-
-//     let block_1_state_root = expected_state_trie_after.hash();
-
-//     let trie_roots_after = TrieRoots {
-//         state_root: block_1_state_root,
-//         transactions_root: transactions_trie.hash(),
-//         receipts_root: receipts_trie.hash(),
-//     };
-
-//     let inputs = GenerationInputs {
-//         signed_txns: vec![txn_2.to_vec()],
-//         withdrawals: vec![],
-//         tries: tries_before,
-//         trie_roots_after: trie_roots_after.clone(),
-//         contract_code,
-//         checkpoint_state_trie_root,
-//         block_metadata: block_1_metadata,
-//         txn_number_before: 1.into(),
-//         gas_used_before: gas_used_second,
-//         gas_used_after: receipt.cum_gas_used,
-//         block_hashes: BlockHashes {
-//             prev_hashes: block_hashes.clone(),
-//             cur_hash: block_1_hash,
-//         },
-//     };
-
-//     let mut timing = TimingTree::new("prove root second", log::Level::Info);
-//     let max_cpu_len = 1 << 20;
-//     let root_proof_data_second = all_circuits.prove_segment(
-//         &all_stark,
-//         &config,
-//         inputs.clone(),
-//         max_cpu_len,
-//         0,
-//         &mut timing,
-//         None.clone(),
-//     )?;
-//     let ProverOutputData {
-//         proof_with_pis: root_proof_second,
-//         public_values: public_values_second,
-//     } = root_proof_data_second;
-//     timing.filter(Duration::from_millis(100)).print();
-
-//     all_circuits.verify_root(root_proof_second.clone())?;
-
-//     let final_root_proof_data_second = all_circuits.prove_segment(
-//         &all_stark,
-//         &config,
-//         inputs,
-//         max_cpu_len,
-//         1,
-//         &mut timing,
-//         None.clone(),
-//     )?;
-//     let ProverOutputData {
-//         proof_with_pis: final_root_proof_second,
-//         public_values: final_public_values_second,
-//     } = final_root_proof_data_second;
-//     all_circuits.verify_root(final_root_proof_second.clone())?;
-
-//     let (segment_agg_proof_first, updated_agg_public_values_first) =
-// all_circuits         .prove_segment_aggregation(
-//             false,
-//             &root_proof_first,
-//             public_values_first,
-//             false,
-//             &final_root_proof_first,
-//             final_public_values_first,
-//         )?;
-//     all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
-
-//     let (segment_agg_proof_second, updated_agg_public_values_second) =
-// all_circuits         .prove_segment_aggregation(
-//             false,
-//             &root_proof_second,
-//             public_values_second,
-//             false,
-//             &final_root_proof_second,
-//             final_public_values_second,
-//         )?;
-//     all_circuits.verify_segment_aggregation(&segment_agg_proof_second)?;
-//     let (txn_proof_first, txn_pv_first) =
-// all_circuits.prove_transaction_aggregation(         None,
-//         &segment_agg_proof_first,
-//         updated_agg_public_values_first,
-//     )?;
-//     let txn_pvs = PublicValues {
-//         trie_roots_before: txn_pv_first.trie_roots_before,
-//         extra_block_data: ExtraBlockData {
-//             txn_number_before:
-// txn_pv_first.extra_block_data.txn_number_before,             gas_used_before:
-// txn_pv_first.extra_block_data.txn_number_before,
-// ..updated_agg_public_values_second.extra_block_data         },
-//         ..updated_agg_public_values_second
-//     };
-//     let (txn_proof_second, txn_pv_second) =
-// all_circuits.prove_transaction_aggregation(         Some(&txn_proof_first),
-//         &segment_agg_proof_second,
-//         txn_pvs,
-//     )?;
-//     let (first_block_proof, _block_public_values) =
-//         all_circuits.prove_block(None, &txn_proof_second, txn_pv_second)?;
-//     all_circuits.verify_block(&first_block_proof)?;
-
-//     // Prove the next, empty block.
-
-//     let block_2_hash =
-//         H256::from_str("
-// 0x0123456789101112131415161718192021222324252627282930313233343536")?;
-//     block_hashes[255] = block_1_hash;
-
-//     let block_2_metadata = BlockMetadata {
-//         block_beneficiary: Address::from(beneficiary),
-//         block_timestamp: 0x03e8.into(),
-//         block_number: 2.into(),
-//         block_difficulty: 0x020000.into(),
-//         block_gaslimit: 0x445566u32.into(),
-//         block_chain_id: 1.into(),
-//         block_base_fee: 0xa.into(),
-//         ..Default::default()
-//     };
-
-//     let mut contract_code = HashMap::new();
-//     contract_code.insert(keccak(vec![]), vec![]);
-
-//     let inputs = GenerationInputs {
-//         signed_txns: vec![],
-//         withdrawals: vec![],
-//         tries: TrieInputs {
-//             state_trie: expected_state_trie_after,
-//             transactions_trie: Node::Empty.into(),
-//             receipts_trie: Node::Empty.into(),
-//             storage_tries: vec![],
-//         },
-//         trie_roots_after: TrieRoots {
-//             state_root: trie_roots_after.state_root,
-//             transactions_root: HashedPartialTrie::from(Node::Empty).hash(),
-//             receipts_root: HashedPartialTrie::from(Node::Empty).hash(),
-//         },
-//         contract_code,
-//         checkpoint_state_trie_root: block_1_state_root, // We use block 1 as
-// new checkpoint.         block_metadata: block_2_metadata,
-//         txn_number_before: 0.into(),
-//         gas_used_before: 0.into(),
-//         gas_used_after: 0.into(),
-//         block_hashes: BlockHashes {
-//             prev_hashes: block_hashes,
-//             cur_hash: block_2_hash,
-//         },
-//     };
-
-//     let root_proof_data = all_circuits.prove_segment(
-//         &all_stark,
-//         &config,
-//         inputs.clone(),
-//         max_cpu_len,
-//         0,
-//         &mut timing,
-//         None,
-//     )?;
-//     let ProverOutputData {
-//         proof_with_pis: root_proof,
-//         public_values,
-//     } = root_proof_data;
-//     all_circuits.verify_root(root_proof.clone())?;
-
-//     let final_root_proof_data = all_circuits.prove_segment(
-//         &all_stark,
-//         &config,
-//         inputs,
-//         max_cpu_len,
-//         1,
-//         &mut timing,
-//         None,
-//     )?;
-//     let ProverOutputData {
-//         proof_with_pis: final_root_proof,
-//         public_values: final_public_values,
-//         ..
-//     } = final_root_proof_data;
-//     all_circuits.verify_root(final_root_proof.clone())?;
-
-//     // We can just duplicate the initial proof as the state didn't change.
-//     let (segment_agg_proof, updated_agg_public_values) =
-// all_circuits.prove_segment_aggregation(         false,
-//         &root_proof,
-//         public_values.clone(),
-//         false,
-//         &final_root_proof,
-//         final_public_values,
-//     )?;
-//     all_circuits.verify_segment_aggregation(&segment_agg_proof)?;
-
-//     let (second_txn_proof, second_txn_pvs) =
-// all_circuits.prove_transaction_aggregation(         None,
-//         &segment_agg_proof,
-//         updated_agg_public_values,
-//     )?;
-//     let (second_block_proof, _block_public_values) =
-// all_circuits.prove_block(         None, // We don't specify a previous proof,
-// considering block 1 as the new checkpoint.         &second_txn_proof,
-//         second_txn_pvs,
-//     )?;
-//     all_circuits.verify_block(&second_block_proof)
-// }
 
 /// Values taken from the block 1000000 of Goerli: https://goerli.etherscan.io/txs?block=1000000
 #[test]

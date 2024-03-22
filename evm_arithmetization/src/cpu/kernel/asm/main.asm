@@ -177,7 +177,6 @@ global check_receipt_trie:
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_LOGS_PAYLOAD_LEN)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_JOURNAL_LEN)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_JOURNAL_DATA_LEN)
-    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_LARGEST_CONTEXT)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN)
 %endmacro
