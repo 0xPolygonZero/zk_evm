@@ -77,7 +77,9 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
 
     /// A flag indicating if this is a simple operation where inputs are
     /// read from the top of the stack.
-    pub is_simple: T,
+    pub is_simple_op: T,
+
+    pub is_first_row_general_op: T,
 
     pub not_padding: T,
 }
