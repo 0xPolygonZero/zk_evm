@@ -93,14 +93,12 @@ fn generate_fake_account_and_storage_trie(
 fn generate_fake_account_storage_trie(rng: &mut StdRng) -> TrieOpResult<HashedPartialTrie> {
     let num_storage_entries = rng.gen_range(RANGE_OF_STORAGE_ENTRIES_AN_ACCOUNT_CAN_HAVE);
 
-    HashedPartialTrie::try_from_iter(
-        (0..num_storage_entries).map(|_| {
-            let hashed_storage_addr = Nibbles::from_h256_be(rng.gen::<HashedAccountAddr>());
-            let storage_data = gen_u256(rng).rlp_bytes().to_vec();
+    HashedPartialTrie::try_from_iter((0..num_storage_entries).map(|_| {
+        let hashed_storage_addr = Nibbles::from_h256_be(rng.gen::<HashedAccountAddr>());
+        let storage_data = gen_u256(rng).rlp_bytes().to_vec();
 
-            (hashed_storage_addr, storage_data)
-        }),
-    )
+        (hashed_storage_addr, storage_data)
+    }))
 }
 
 fn gen_u256(rng: &mut StdRng) -> U256 {
