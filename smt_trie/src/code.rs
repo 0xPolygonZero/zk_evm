@@ -36,23 +36,16 @@ pub fn poseidon_hash_padded_byte_vec(
             .try_into()
             .unwrap();
     }
-    log::debug!(
-        "paded code = {:?} hashed to = {:?}",
-        bytes,
-        hashout2u(HashOut { elements: capacity })
-    );
     HashOut { elements: capacity }
 }
 
 // TODO: Move this function to plonky2::hash::poseidon?
 pub fn poseidon_pad_byte_vec(bytes: &mut Vec<u8>) {
-    log::debug!("le unpadded code = {:?}", bytes);
     bytes.push(0x01);
     while bytes.len() % 56 != 0 {
         bytes.push(0x00);
     }
     *bytes.last_mut().unwrap() |= 0x80;
-    log::debug!("le code = {:?}", bytes);
 }
 
 pub fn hash_bytecode_u256(code: Vec<u8>) -> U256 {

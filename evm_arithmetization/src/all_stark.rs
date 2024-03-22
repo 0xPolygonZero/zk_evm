@@ -129,6 +129,8 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
         ctl_logic(),
         ctl_memory(),
         ctl_poseidon(),
+        ctl_poseidon_general_input(),
+        ctl_poseidon_general_output(),
     ]
 }
 
@@ -327,7 +329,21 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
 
 fn ctl_poseidon<F: Field>() -> CrossTableLookup<F> {
     CrossTableLookup::new(
-        vec![cpu_stark::ctl_poseidon()],
-        poseidon_stark::ctl_looked(),
+        vec![cpu_stark::ctl_poseidon_simple_op()],
+        poseidon_stark::ctl_looked_simple_op(),
+    )
+}
+
+fn ctl_poseidon_general_input<F: Field>() -> CrossTableLookup<F> {
+    CrossTableLookup::new(
+        vec![cpu_stark::ctl_poseidon_general_input()],
+        poseidon_stark::ctl_looked_general_input(),
+    )
+}
+
+fn ctl_poseidon_general_output<F: Field>() -> CrossTableLookup<F> {
+    CrossTableLookup::new(
+        vec![cpu_stark::ctl_poseidon_general_output()],
+        poseidon_stark::ctl_looked_general_output(),
     )
 }

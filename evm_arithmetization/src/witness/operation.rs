@@ -202,7 +202,6 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
     state: &mut GenerationState<F>,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
-    row.op.poseidon_general = F::ONE;
     let [(addr, _), (len, log_in1)] = stack_pop_with_log_and_fill::<2, _>(state, &mut row)?;
     let len = u256_to_usize(len)?;
 
@@ -225,7 +224,6 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
             val.0[0] as u8
         })
         .collect_vec();
-    log::debug!("base_address = {:?}", base_address);
 
     // poseidon_pad_byte_vec(&mut input);
 
@@ -238,7 +236,6 @@ pub(crate) fn generate_poseidon_general<F: RichField>(
     state.traces.poseidon_ops.push(poseidon_op);
 
     let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
-    log::debug!("La codiga = {:?}, la hash = {:?}", input, hash);
 
     push_no_write(state, hash);
 

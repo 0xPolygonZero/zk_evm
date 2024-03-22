@@ -6,13 +6,14 @@ use itertools::Itertools;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::Field;
+use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::poseidon::Poseidon;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use plonky2_maybe_rayon::rayon::iter::{self, repeat};
+use smt_trie::code::poseidon_hash_padded_byte_vec;
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use starky::cross_table_lookup::TableWithColumns;
 use starky::evaluation_frame::{StarkEvaluationFrame, StarkFrame};
@@ -49,21 +50,53 @@ pub fn ctl_looked_data<F: Field>() -> Vec<Column<F>> {
     res
 }
 
-pub(crate) fn ctl_looked<F: Field>() -> TableWithColumns<F> {
+pub(crate) fn ctl_looked_simple_op<F: Field>() -> TableWithColumns<F> {
     let mut columns = Column::singles(POSEIDON_COL_MAP.input).collect_vec();
     columns.extend(Column::singles(POSEIDON_COL_MAP.digest));
-    columns.push(Column::single(POSEIDON_COL_MAP.is_simple));
+    columns.push(Column::single(POSEIDON_COL_MAP.is_simple_op));
     TableWithColumns::new(
         *Table::Poseidon,
         columns,
         Some(Filter::new_simple(Column::single(
-            POSEIDON_COL_MAP.is_simple,
+            POSEIDON_COL_MAP.is_simple_op,
         ))),
     )
 }
 
-pub fn ctl_looked_filter<F: Field>() -> Column<F> {
-    Column::sum(POSEIDON_COL_MAP.is_final_input_len)
+pub(crate) fn ctl_looked_general_output<F: Field>() -> TableWithColumns<F> {
+    let mut columns = Column::singles(POSEIDON_COL_MAP.digest).collect_vec();
+    columns.push(Column::single(POSEIDON_COL_MAP.is_simple_op));
+    TableWithColumns::new(
+        *Table::Poseidon,
+        columns,
+        Some(Filter::new(
+            vec![(
+                Column::sum(POSEIDON_COL_MAP.is_final_input_len),
+                Column::linear_combination_with_constant(
+                    [(POSEIDON_COL_MAP.is_simple_op, -F::ONE)],
+                    F::ONE,
+                ),
+            )],
+            vec![],
+        )),
+    )
+}
+
+pub(crate) fn ctl_looked_general_input<F: Field>() -> TableWithColumns<F> {
+    let context = Column::single(POSEIDON_COL_MAP.context);
+    let segment: Column<F> = Column::single(POSEIDON_COL_MAP.segment);
+    let virt = Column::single(POSEIDON_COL_MAP.virt);
+    let len = Column::single(POSEIDON_COL_MAP.len);
+
+    let timestamp = Column::single(POSEIDON_COL_MAP.timestamp);
+
+    TableWithColumns::new(
+        *Table::Poseidon,
+        vec![context, segment, virt, len, timestamp],
+        Some(Filter::new_simple(Column::single(
+            POSEIDON_COL_MAP.is_first_row_general_op,
+        ))),
+    )
 }
 
 pub fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
@@ -82,8 +115,8 @@ pub fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
 
     // The first byte of of each field element is
     // mem[virt + already_absorbed_elements + i/ FELT_MAX_BYTES] - \sum_j
-    // input_bytes[i/FELT_MAX_BYTES][j]* 8^j.
-    // The other bytes are input_bytes[i/FELT_MAX_BYTES][]
+    // input_bytes[i/FELT_MAX_BYTES][j]* 256^j.
+    // The other bytes are input_bytes[i/FELT_MAX_BYTES][i % FELT_MAX_BYTES - 1]
     if i % FELT_MAX_BYTES == 0 {
         res.push(Column::linear_combination(
             std::iter::once((cols.input[i / FELT_MAX_BYTES], F::ONE)).chain(
@@ -118,7 +151,7 @@ pub fn ctl_looking_memory_filter<F: Field>() -> Filter<F> {
     Filter::new(
         vec![(
             Column::single(cols.not_padding),
-            Column::linear_combination_with_constant([(cols.is_simple, -F::ONE)], F::ONE),
+            Column::linear_combination_with_constant([(cols.is_simple_op, -F::ONE)], F::ONE),
         )],
         vec![],
     )
@@ -208,13 +241,14 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
         Self::generate_perm(&mut row, op.0);
         row.is_final_input_len[POSEIDON_SPONGE_RATE - 1] = F::ONE;
         row.not_padding = F::ONE;
-        row.is_simple = F::ONE;
+        row.is_simple_op = F::ONE;
         row.into()
     }
 
     fn generate_rows_for_general_op(&self, op: PoseidonGeneralOp) -> Vec<[F; NUM_COLUMNS]> {
         let mut input_blocks = op.input.chunks_exact(FELT_MAX_BYTES * POSEIDON_SPONGE_RATE);
-        let mut rows = Vec::with_capacity(op.input.len() / (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE));
+        let mut rows: Vec<[F; NUM_COLUMNS]> =
+            Vec::with_capacity(op.input.len() / (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE));
         let last_non_padding_elt = op.len % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE);
         let total_length = input_blocks.len();
         let mut already_absorbed_elements = 0;
@@ -255,10 +289,20 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
                         .collect::<Vec<F>>(),
                 );
             }
-            state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH].copy_from_slice(&row.output_partial);
+            // Set the capacity to the digest
+            state[POSEIDON_SPONGE_RATE..POSEIDON_SPONGE_WIDTH].copy_from_slice(
+                &row.digest
+                    .chunks(2)
+                    .map(|x| x[0] + F::from_canonical_u64(1 << 32) * x[1])
+                    .collect_vec(),
+            );
 
             rows.push(row.into());
         }
+        if let Some(first_row) = rows.first_mut() {
+            first_row[POSEIDON_COL_MAP.is_first_row_general_op] = F::ONE;
+        }
+
         rows
     }
 
@@ -303,6 +347,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
         row.is_final_input_len[op.len % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE)] = F::ONE;
 
         Self::generate_commons(&mut row, input, op, already_absorbed_elements);
+
         row
     }
 
@@ -399,14 +444,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             "generate trace rows",
             self.generate_trace_rows(operations, min_rows)
         );
-        log::debug!(
-            "poseidon row[53] = {:?}",
-            PoseidonColumnsView::from(trace_rows[53])
-        );
-        log::debug!(
-            "poseidon row[180] = {:?}",
-            PoseidonColumnsView::from(trace_rows[180])
-        );
+
         let trace_polys = timed!(
             timing,
             "convert to PolynomialValues",
@@ -498,7 +536,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         for i in 0..POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE {
             yield_constr.constraint_transition(
                 is_full_input_block
-                    * (lv.output_partial[reg_output_capacity(i)]
+                    * (lv.digest[2 * i]
+                        + lv.digest[2 * i + 1] * P::Scalar::from_canonical_u64(1 << 32)
                         - nv.input[POSEIDON_SPONGE_RATE + i]),
             );
         }
