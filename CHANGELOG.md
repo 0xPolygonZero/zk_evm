@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Update plonky2 dependencies ([#119](https://github.com/0xPolygonZero/zk_evm/pull/119))
+
+## [0.2.0] - 2024-03-19
+
+### Changed
 - Clean up logging output upon Kernel failure ([#74](https://github.com/0xPolygonZero/zk_evm/pull/74))
 - Fix CPU Cycle display in logs during simulations ([#77](https://github.com/0xPolygonZero/zk_evm/pull/77))
 - Fix blake2 precompile ([#78](https://github.com/0xPolygonZero/zk_evm/pull/78))
