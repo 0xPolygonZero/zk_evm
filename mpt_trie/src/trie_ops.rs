@@ -12,6 +12,32 @@ use crate::{
     partial_trie::{Node, PartialTrie, WrappedNode},
     utils::TrieNodeType,
 };
+use thiserror::Error;
+
+
+/// Stores the result of trie operations. Returns a [TrieOpError] upon
+/// failure.
+pub type TrieOpResult<T> = Result<T, TrieOpError>;
+
+/// An error type for trie operation.
+#[derive(Debug, Error)]
+pub enum TrieOpError {
+    /// An error that occurs when a hash node is found during an insert operation.
+    #[error("Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!")]
+    HashNodeInsertError(),
+
+    /// An error that occurs when a hash node is found during a delete operation.
+    #[error("Attempted to delete a value that ended up inside a hash node")]
+    HashNodeDeleteError(),
+
+    /// An error that occurs when a hash node is found during an extension node collapse.
+    #[error("Extension managed to get a child node type that is impossible! (child: {0})")]
+    HashNodeExtError(TrieNodeType),
+
+    /// Failed to insert a hash node into the trie.
+    #[error("Attempted to place a hash node on an existing node! (hash: {0})")]
+    ExistingHashNodeError(H256),
+}
 
 /// A entry to be inserted into a `PartialTrie`.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -263,7 +289,7 @@ impl<N: PartialTrie> Iterator for PartialTrieIter<N> {
 }
 
 impl<T: PartialTrie> Node<T> {
-    pub(crate) fn trie_insert<K, V>(&mut self, k: K, v: V) -> anyhow::Result<()>
+    pub(crate) fn trie_insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
@@ -277,7 +303,7 @@ impl<T: PartialTrie> Node<T> {
         Ok(())
     }
 
-    pub(crate) fn trie_extend<K, V, I>(&mut self, nodes: I) -> anyhow::Result<()>
+    pub(crate) fn trie_extend<K, V, I>(&mut self, nodes: I) -> TrieOpResult<()>
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
@@ -332,7 +358,7 @@ impl<T: PartialTrie> Node<T> {
         }
     }
 
-    pub(crate) fn trie_delete<K>(&mut self, k: K) -> anyhow::Result<Option<Vec<u8>>>
+    pub(crate) fn trie_delete<K>(&mut self, k: K) -> TrieOpResult<Option<Vec<u8>>>
     where
         K: Into<Nibbles>,
     {
@@ -368,7 +394,7 @@ impl<T: PartialTrie> Node<T> {
 fn insert_into_trie_rec<N: PartialTrie>(
     node: &Node<N>,
     mut new_node: InsertEntry,
-) -> anyhow::Result<Option<WrappedNode<N>>> {
+) -> TrieOpResult<Option<WrappedNode<N>>> {
     match node {
         Node::Empty => {
             trace!("Insert traversed Empty");
@@ -379,7 +405,7 @@ fn insert_into_trie_rec<N: PartialTrie>(
         }
         Node::Hash(_) => {
             trace!("Insert traversed {:?}", node);
-            Err(anyhow::Error::msg("Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!"))
+            Err(TrieOpError::HashNodeInsertError())
         }
         Node::Branch { children, value } => {
             if new_node.nibbles.count == 0 {
@@ -461,15 +487,14 @@ fn insert_into_trie_rec<N: PartialTrie>(
 fn delete_intern<N: PartialTrie>(
     node: &Node<N>,
     mut curr_k: Nibbles,
-) -> anyhow::Result<Option<(WrappedNode<N>, Vec<u8>)>> {
+) -> TrieOpResult<Option<(WrappedNode<N>, Vec<u8>)>> {
     match node {
         Node::Empty => {
             trace!("Delete traversed Empty");
             Ok(None)
         }
-        Node::Hash(_) => Err(anyhow::Error::msg(
-            "Attempted to delete a value that ended up inside a hash node",
-        )), // TODO: Find a nice way to get the full key path...
+        Node::Hash(_) => Err(TrieOpError::HashNodeDeleteError()), 
+        // TODO: Find a nice way to get the full key path...
         Node::Branch { children, value } => {
             if curr_k.is_empty() {
                 return Ok(Some((branch(children.clone(), Vec::new()), value.clone())));
@@ -544,7 +569,7 @@ fn delete_intern<N: PartialTrie>(
     }
 }
 
-fn try_collapse_if_extension<N: PartialTrie>(node: WrappedNode<N>) -> anyhow::Result<WrappedNode<N>> {
+fn try_collapse_if_extension<N: PartialTrie>(node: WrappedNode<N>) -> TrieOpResult<WrappedNode<N>> {
     match node.as_ref() {
         Node::Extension { nibbles, child } => collapse_ext_node_if_needed(nibbles, child),
         _ => Ok(node),
@@ -554,7 +579,7 @@ fn try_collapse_if_extension<N: PartialTrie>(node: WrappedNode<N>) -> anyhow::Re
 fn collapse_ext_node_if_needed<N: PartialTrie>(
     ext_nibbles: &Nibbles,
     child: &WrappedNode<N>,
-) -> anyhow::Result<WrappedNode<N>> {
+) -> TrieOpResult<WrappedNode<N>> {
     trace!(
         "Collapsing extension node ({:x}) with child {}...",
         ext_nibbles,
@@ -575,10 +600,7 @@ fn collapse_ext_node_if_needed<N: PartialTrie>(
             value,
         } => Ok(leaf(ext_nibbles.merge_nibbles(leaf_nibbles), value.clone())),
         Node::Hash(_) => Ok(extension(*ext_nibbles, child.clone())),
-        _ => Err(anyhow::Error::msg(format!(
-            "Extension managed to get a child node type that is impossible! (child: {})",
-            TrieNodeType::from(child)
-        ))),
+        _ => Err(TrieOpError::HashNodeExtError(TrieNodeType::from(child))),
     }
 }
 
@@ -731,7 +753,7 @@ pub(crate) fn branch<N: PartialTrie>(
 fn branch_from_insert_val<N: PartialTrie>(
     children: [WrappedNode<N>; 16],
     value: ValOrHash,
-) -> anyhow::Result<WrappedNode<N>> {
+) -> TrieOpResult<WrappedNode<N>> {
     create_node_if_ins_val_not_hash(value, |value| Node::Branch { children, value }.into())
 }
 
@@ -743,7 +765,7 @@ fn leaf<N: PartialTrie>(nibbles: Nibbles, value: Vec<u8>) -> WrappedNode<N> {
     Node::Leaf { nibbles, value }.into()
 }
 
-fn leaf_from_insert_val<N: PartialTrie>(nibbles: Nibbles, value: ValOrHash) -> anyhow::Result<WrappedNode<N>> {
+fn leaf_from_insert_val<N: PartialTrie>(nibbles: Nibbles, value: ValOrHash) -> TrieOpResult<WrappedNode<N>> {
     create_node_if_ins_val_not_hash(value, |value| Node::Leaf { nibbles, value }.into())
 }
 
@@ -773,13 +795,10 @@ fn create_node_from_insert_val<N: PartialTrie>(
 fn create_node_if_ins_val_not_hash<N, F: FnOnce(Vec<u8>) -> WrappedNode<N>>(
     value: ValOrHash,
     create_node_f: F,
-) -> anyhow::Result<WrappedNode<N>> {
+) -> TrieOpResult<WrappedNode<N>> {
     match value {
         ValOrHash::Val(leaf_v) => Ok(create_node_f(leaf_v)),
-        ValOrHash::Hash(h) => Err(anyhow::Error::msg(format!(
-            "Attempted to place a hash node on an existing node! (hash: {})",
-            h
-        ))),
+        ValOrHash::Hash(h) => Err(TrieOpError::ExistingHashNodeError(h)),
     }
 }
 
@@ -801,6 +820,7 @@ mod tests {
             unwrap_iter_item_to_val, TestInsertValEntry,
         },
         utils::create_mask_of_1s,
+        trie_ops::TrieOpResult,
     };
 
     const MASSIVE_TRIE_SIZE: usize = 100000;
@@ -1005,7 +1025,7 @@ mod tests {
     }
 
     #[test]
-    fn held_trie_cow_references_do_not_change_as_trie_changes() -> anyhow::Result<()> {
+    fn held_trie_cow_references_do_not_change_as_trie_changes() -> TrieOpResult<()> {
         common_setup();
 
         let entries = generate_n_random_variable_trie_value_entries(COW_TEST_TRIE_SIZE, 9002);

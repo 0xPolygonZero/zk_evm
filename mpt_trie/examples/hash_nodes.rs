@@ -54,9 +54,10 @@ use mpt_trie::partial_trie::PartialTrie;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node},
+    trie_ops::TrieOpResult,
 };
 
-fn main() -> anyhow::Result<()> {
+fn main() -> TrieOpResult<()> {
     pretty_env_logger::try_init().unwrap();
 
     // Lets build the (binary) tries in the module-level docs. Since the example

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     nibbles::Nibbles,
     trie_hashing::{hash_trie, rlp_encode_and_hash_node, EncodedNode},
-    trie_ops::ValOrHash,
+    trie_ops::{TrieOpResult, ValOrHash},
     utils::bytes_to_h256,
 };
 
@@ -58,13 +58,13 @@ pub trait PartialTrie:
     fn new(n: Node<Self>) -> Self;
 
     /// Inserts a node into the trie.
-    fn insert<K, V>(&mut self, k: K, v: V) -> anyhow::Result<()>
+    fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>;
 
     /// Add more nodes to the trie through an iterator
-    fn extend<K, V, I>(&mut self, nodes: I) -> anyhow::Result<()>
+    fn extend<K, V, I>(&mut self, nodes: I) -> TrieOpResult<()>
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
@@ -89,7 +89,7 @@ pub trait PartialTrie:
     /// are meant for parts of the trie that are not relevant, traversing one
     /// means that a `Hash` node was created that potentially should not have
     /// been.
-    fn delete<K>(&mut self, k: K) -> anyhow::Result<Option<Vec<u8>>>
+    fn delete<K>(&mut self, k: K) -> TrieOpResult<Option<Vec<u8>>>
     where
         K: Into<Nibbles>;
 
@@ -214,7 +214,7 @@ impl PartialTrie for StandardTrie {
         Self(n)
     }
 
-    fn insert<K, V>(&mut self, k: K, v: V) -> anyhow::Result<()>
+    fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
@@ -223,7 +223,7 @@ impl PartialTrie for StandardTrie {
         Ok(())
     }
 
-    fn extend<K, V, I>(&mut self, nodes: I) -> anyhow::Result<()>
+    fn extend<K, V, I>(&mut self, nodes: I) -> TrieOpResult<()>
     where
         K: Into<Nibbles>,
         V: Into<ValOrHash>,
@@ -239,7 +239,7 @@ impl PartialTrie for StandardTrie {
         self.0.trie_get(k)
     }
 
-    fn delete<K>(&mut self, k: K) -> anyhow::Result<Option<Vec<u8>>>
+    fn delete<K>(&mut self, k: K) -> TrieOpResult<Option<Vec<u8>>>
     where
         K: Into<Nibbles>,
     {
@@ -328,7 +328,7 @@ impl PartialTrie for HashedPartialTrie {
         }
     }
 
-    fn insert<K, V>(&mut self, k: K, v: V) -> anyhow::Result<()>
+    fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where
         K: Into<crate::nibbles::Nibbles>,
         V: Into<crate::trie_ops::ValOrHash>,
@@ -338,7 +338,7 @@ impl PartialTrie for HashedPartialTrie {
         Ok(())
     }
 
-    fn extend<K, V, I>(&mut self, nodes: I) -> anyhow::Result<()>
+    fn extend<K, V, I>(&mut self, nodes: I) -> TrieOpResult<()>
     where
         K: Into<crate::nibbles::Nibbles>,
         V: Into<crate::trie_ops::ValOrHash>,
@@ -356,7 +356,7 @@ impl PartialTrie for HashedPartialTrie {
         self.node.trie_get(k)
     }
 
-    fn delete<K>(&mut self, k: K) -> anyhow::Result<Option<Vec<u8>>>
+    fn delete<K>(&mut self, k: K) -> TrieOpResult<Option<Vec<u8>>>
     where
         K: Into<crate::nibbles::Nibbles>,
     {
