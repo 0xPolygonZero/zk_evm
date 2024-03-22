@@ -31,8 +31,8 @@ pub enum TrieOpError {
     #[error("Attempted to delete a value that ended up inside a hash node")]
     HashNodeDeleteError(),
 
-    /// An error that occurs when encontered an unexisting type of node during an extension node
-    /// collapse.
+    /// An error that occurs when encontered an unexisting type of node during
+    /// an extension node collapse.
     #[error("Extension managed to get an unexisting child node type! (child: {0})")]
     HashNodeExtError(TrieNodeType),
 
