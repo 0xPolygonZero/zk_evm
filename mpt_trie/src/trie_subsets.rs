@@ -520,28 +520,32 @@ mod tests {
     }
 
     #[test]
-    fn single_node_trie_is_queryable() {
+    fn single_node_trie_is_queryable() -> Result<(), Box<dyn std::error::Error>> {
         common_setup();
 
         let mut trie = TrieType::default();
-        assert!(trie.insert(0x1234, vec![0, 1, 2]).is_ok());
-        let trie_subset = create_trie_subset(&trie, once(0x1234)).unwrap();
+        trie.insert(0x1234, vec![0, 1, 2])?;
+        let trie_subset = create_trie_subset(&trie, once(0x1234))?;
 
         assert_eq!(trie, trie_subset);
+
+        Ok(())
     }
 
     #[test]
-    fn multi_node_trie_returns_proper_subset() {
+    fn multi_node_trie_returns_proper_subset() -> Result<(), Box<dyn std::error::Error>> {
         common_setup();
 
-        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345_u64]).unwrap();
+        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345_u64])?;
 
-        let trie_subset = create_trie_subset(&trie, vec![0x1234, 0x56]).unwrap();
+        let trie_subset = create_trie_subset(&trie, vec![0x1234, 0x56])?;
         let leaf_keys = get_all_nibbles_of_leaf_nodes_in_trie(&trie_subset);
 
         assert!(leaf_keys.contains(&(Nibbles::from(0x1234))));
         assert!(leaf_keys.contains(&(Nibbles::from(0x56))));
         assert!(!leaf_keys.contains(&Nibbles::from(0x12345)));
+
+        Ok(())
     }
 
     #[test]
@@ -726,20 +730,23 @@ mod tests {
     }
 
     #[test]
-    fn sub_trie_for_non_existent_key_that_hits_branch_leaf_does_not_hash_out_leaf() {
+    fn sub_trie_for_non_existent_key_that_hits_branch_leaf_does_not_hash_out_leaf(
+    ) -> TrieOpResult<()> {
         common_setup();
 
-        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346]).unwrap();
+        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x1234589, 0x12346])?;
         let partial_trie = create_trie_subset(&trie, [0x1234567]).unwrap();
 
         // Note that `0x1234589` gets hashed at the branch slot at `0x12345`.
         assert_nodes_are_hash_nodes(&partial_trie, Vec::<Nibbles>::default());
+
+        Ok(())
     }
 
     #[test]
-    fn hash_of_branch_partial_tries_matches_original_trie() {
+    fn hash_of_branch_partial_tries_matches_original_trie() -> TrieOpResult<()> {
         common_setup();
-        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345]).unwrap();
+        let trie = create_trie_with_large_entry_nodes(&[0x1234, 0x56, 0x12345])?;
 
         let base_hash: H256 = trie.hash();
         let partial_tries = vec![
@@ -751,7 +758,9 @@ mod tests {
         ];
         assert!(partial_tries
             .into_iter()
-            .all(|p_tree| p_tree.hash() == base_hash))
+            .all(|p_tree| p_tree.hash() == base_hash));
+
+        Ok(())
     }
 
     #[test]

@@ -63,7 +63,7 @@ fn test_erc721() -> anyhow::Result<()> {
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
     state_trie_before.insert(owner_nibbles, rlp::encode(&owner_account()).to_vec())?;
-    state_trie_before.insert(contract_nibbles, rlp::encode(&contract_account()).to_vec())?;
+    state_trie_before.insert(contract_nibbles, rlp::encode(&contract_account()?).to_vec())?;
 
     let storage_tries = vec![(contract_state_key, contract_storage()?)];
 
@@ -93,7 +93,7 @@ fn test_erc721() -> anyhow::Result<()> {
         state_trie_after.insert(owner_nibbles, rlp::encode(&owner_account_after).to_vec())?;
         let contract_account_after = AccountRlp {
             storage_root: contract_storage_after()?.hash(),
-            ..contract_account()
+            ..contract_account()?
         };
         state_trie_after.insert(
             contract_nibbles,
@@ -199,6 +199,7 @@ fn insert_storage(trie: &mut HashedPartialTrie, slot: U256, value: U256) -> anyh
     let r = rlp::encode(&value);
     let r = r.freeze().to_vec();
     trie.insert(nibbles, r)?;
+
     Ok(())
 }
 
@@ -279,13 +280,13 @@ fn owner_account() -> AccountRlp {
     }
 }
 
-fn contract_account() -> AccountRlp {
-    AccountRlp {
+fn contract_account() -> anyhow::Result<AccountRlp> {
+    Ok(AccountRlp {
         nonce: 0.into(),
         balance: 0.into(),
-        storage_root: contract_storage().expect("storage insert failure").hash(),
+        storage_root: contract_storage()?.hash(),
         code_hash: keccak(contract_bytecode()),
-    }
+    })
 }
 
 fn signed_tx() -> Vec<u8> {

@@ -63,8 +63,8 @@ fn test_erc20() -> anyhow::Result<()> {
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account()).to_vec())?;
-    state_trie_before.insert(giver_nibbles, rlp::encode(&giver_account()).to_vec())?;
-    state_trie_before.insert(token_nibbles, rlp::encode(&token_account()).to_vec())?;
+    state_trie_before.insert(giver_nibbles, rlp::encode(&giver_account()?).to_vec())?;
+    state_trie_before.insert(token_nibbles, rlp::encode(&token_account()?).to_vec())?;
 
     let storage_tries = vec![
         (giver_state_key, giver_storage()?),
@@ -108,10 +108,10 @@ fn test_erc20() -> anyhow::Result<()> {
             ..sender_account
         };
         state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-        state_trie_after.insert(giver_nibbles, rlp::encode(&giver_account()).to_vec())?;
+        state_trie_after.insert(giver_nibbles, rlp::encode(&giver_account()?).to_vec())?;
         let token_account_after = AccountRlp {
             storage_root: token_storage_after()?.hash(),
-            ..token_account()
+            ..token_account()?
         };
         state_trie_after.insert(token_nibbles, rlp::encode(&token_account_after).to_vec())?;
 
@@ -242,22 +242,22 @@ fn token_storage_after() -> anyhow::Result<HashedPartialTrie> {
     Ok(trie)
 }
 
-fn giver_account() -> AccountRlp {
-    AccountRlp {
+fn giver_account() -> anyhow::Result<AccountRlp> {
+    Ok(AccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
-        storage_root: giver_storage().expect("storage insert failure").hash(),
+        storage_root: giver_storage()?.hash(),
         code_hash: keccak(giver_bytecode()),
-    }
+    })
 }
 
-fn token_account() -> AccountRlp {
-    AccountRlp {
+fn token_account() -> anyhow::Result<AccountRlp> {
+    Ok(AccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
-        storage_root: token_storage().expect("storage insert failure").hash(),
+        storage_root: token_storage()?.hash(),
         code_hash: keccak(token_bytecode()),
-    }
+    })
 }
 
 fn sender_account() -> AccountRlp {
