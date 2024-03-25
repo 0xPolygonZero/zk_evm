@@ -938,7 +938,7 @@ mod tests {
         let trie = T::try_from_iter(once(entry(0x1234)))?;
         let mut cloned_trie = trie.clone();
 
-        assert!(cloned_trie.extend(once(entry(0x5678))).is_ok());
+        cloned_trie.extend(once(entry(0x5678)))?;
 
         assert_ne!(trie, cloned_trie);
         assert_ne!(trie.hash(), cloned_trie.hash());
@@ -1093,23 +1093,27 @@ mod tests {
     }
 
     #[test]
-    fn deleting_a_non_existent_node_returns_none() {
+    fn deleting_a_non_existent_node_returns_none() -> TrieOpResult<()> {
         common_setup();
 
         let mut trie = StandardTrie::default();
-        assert!(trie.insert(0x1234, vec![91]).is_ok());
+        trie.insert(0x1234, vec![91])?;
 
-        assert!(trie.delete(0x5678).is_ok());
-        assert!(trie.delete(0x5678).unwrap().is_none())
+        let res = trie.delete(0x5678)?;
+        assert!(res.is_none());
+
+        Ok(())
     }
 
     #[test]
-    fn deleting_from_an_empty_trie_returns_none() {
+    fn deleting_from_an_empty_trie_returns_none() -> TrieOpResult<()> {
         common_setup();
 
         let mut trie = StandardTrie::default();
-        assert!(trie.delete(0x1234).is_ok());
-        assert!(trie.delete(0x1234).unwrap().is_none())
+        let res = trie.delete(0x1234)?;
+        assert!(res.is_none());
+
+        Ok(())
     }
 
     #[test]
@@ -1125,10 +1129,10 @@ mod tests {
 
         let entries_to_delete = entries.iter().take(half_entries);
         for (k, v) in entries_to_delete {
-            let res = trie.delete(*k);
+            let res = trie.delete(*k)?;
 
             assert!(trie.get(*k).is_none());
-            assert_eq!(res.ok().unwrap().as_ref(), Some(v));
+            assert_eq!(res.as_ref(), Some(v));
         }
 
         let entries_that_still_should_exist = entries.into_iter().skip(half_entries);
