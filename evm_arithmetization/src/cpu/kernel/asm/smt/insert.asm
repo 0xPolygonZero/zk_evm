@@ -80,7 +80,7 @@ smt_insert_internal:
     DUP1 %eq_const(0) %jumpi(smt_insert_internal_0)
     DUP1 %eq_const(1) %jumpi(smt_insert_internal_1)
     DUP1 %eq_const(2) %jumpi(smt_insert_internal_2)
-    DUP1 %eq_const(3) %jumpi(smt_insert_internal_3)
+         %eq_const(3) %jumpi(smt_insert_internal_3)
     PANIC
 smt_insert_internal_0:
     // stack: level%4, node_payload_ptr, level, ks, value, retdest
@@ -102,7 +102,7 @@ smt_insert_internal_2:
     %jump(smt_insert_internal_contd)
 smt_insert_internal_3:
     // stack: level%4, node_payload_ptr, level, ks, value, retdest
-    %stack (level_mod_4, node_payload_ptr, level, k0, k1, k2, k3 ) -> (k3, node_payload_ptr, level, k0, k1, k2, k3 )
+    %stack (node_payload_ptr, level, k0, k1, k2, k3 ) -> (k3, node_payload_ptr, level, k0, k1, k2, k3 )
     %pop_bit
     %stack (bit, newk3, node_payload_ptr, level, k0, k1, k2, k3 ) -> (bit, node_payload_ptr, level, k0, k1, k2, newk3 )
     %jump(smt_insert_internal_contd)
