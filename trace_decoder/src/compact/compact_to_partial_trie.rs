@@ -54,12 +54,14 @@ pub(super) fn create_partial_trie_from_compact_node_rec(
     trace!("Processing node {} into `PartialTrie` node...", curr_node);
 
     match curr_node {
+        NodeEntry::BranchSMT(n) => process_branch_smt(curr_key, n, output),
         NodeEntry::Branch(n) => process_branch(curr_key, n, output),
         NodeEntry::Code(c_bytes) => process_code(c_bytes.clone(), output),
         NodeEntry::Empty => process_empty(),
         NodeEntry::Hash(h) => process_hash(curr_key, *h, &mut output.trie),
         NodeEntry::Leaf(k, v) => process_leaf(curr_key, k, v, output),
         NodeEntry::Extension(k, c) => process_extension(curr_key, k, c, output),
+        NodeEntry::SMTLeaf(n, a, s, v) => process_empty()
     }
 }
 
@@ -69,6 +71,23 @@ fn process_branch(
     output: &mut CompactToPartialTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
     for (i, slot) in branch.iter().enumerate().take(16) {
+        if let Some(child) = slot {
+            // TODO: Seriously update `mpt_trie` to have a better API...
+            let mut new_k = curr_key;
+            new_k.push_nibble_back(i as Nibble);
+            create_partial_trie_from_compact_node_rec(new_k, child, output)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn process_branch_smt(
+    curr_key: Nibbles,
+    branch: &[Option<Box<NodeEntry>>],
+    output: &mut CompactToPartialTrieExtractionOutput,
+) -> CompactParsingResult<()> {
+    for (i, slot) in branch.iter().enumerate().take(2) {
         if let Some(child) = slot {
             // TODO: Seriously update `mpt_trie` to have a better API...
             let mut new_k = curr_key;
