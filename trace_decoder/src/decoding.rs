@@ -499,26 +499,18 @@ impl ProcessedBlockTrace {
         withdrawals: Vec<(Address, U256)>,
         dummies_already_added: bool,
     ) -> TraceParsingResult<()> {
-        let withdrawals_with_hashed_addrs_iter = withdrawals
-            .iter()
-            .map(|(addr, v)| (*addr, hash(addr.as_bytes()), *v));
+        let withdrawals_with_hashed_addrs_iter = || {
+            withdrawals
+                .iter()
+                .map(|(addr, v)| (*addr, hash(addr.as_bytes()), *v))
+        };
 
         match dummies_already_added {
             // If we have no actual dummy proofs, then we create one and append it to the
             // end of the block.
             false => {
-                // TODO: Decide if we want this allocation...
-                // To avoid double hashing the addrs, but I don't know if the extra `Vec`
-                // allocation is worth it.
-                let withdrawals_with_hashed_addrs: Vec<_> =
-                    withdrawals_with_hashed_addrs_iter.collect();
-
-                // Dummy state will be the state after the final txn. Also need to include the
-                // account nodes that were accessed by the withdrawals.
-                let withdrawal_addrs = withdrawals_with_hashed_addrs
-                    .iter()
-                    .cloned()
-                    .map(|(_, h_addr, _)| h_addr);
+                let withdrawal_addrs =
+                    withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
                 let mut withdrawal_dummy = create_dummy_gen_input_with_state_addrs_accessed(
                     other_data,
                     extra_data,
@@ -527,7 +519,7 @@ impl ProcessedBlockTrace {
                 )?;
 
                 Self::update_trie_state_from_withdrawals(
-                    withdrawals_with_hashed_addrs,
+                    withdrawals_with_hashed_addrs_iter(),
                     &mut final_trie_state.state,
                 )?;
 
@@ -540,7 +532,7 @@ impl ProcessedBlockTrace {
             }
             true => {
                 Self::update_trie_state_from_withdrawals(
-                    withdrawals_with_hashed_addrs_iter,
+                    withdrawals_with_hashed_addrs_iter(),
                     &mut final_trie_state.state,
                 )?;
 
