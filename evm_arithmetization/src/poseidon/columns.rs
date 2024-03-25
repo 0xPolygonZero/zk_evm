@@ -79,6 +79,7 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
     /// read from the top of the stack.
     pub is_simple_op: T,
 
+    /// Indicates if this is  the first row of a general operation.
     pub is_first_row_general_op: T,
 
     pub not_padding: T,

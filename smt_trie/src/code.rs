@@ -1,7 +1,6 @@
 /// Functions to hash contract bytecode using Poseidon.
 /// See `hashContractBytecode()` in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt-utils.js for reference implementation.
 use ethereum_types::U256;
-use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::Field;
 use plonky2::hash::poseidon::{self, Poseidon};
 
@@ -15,9 +14,7 @@ pub fn hash_contract_bytecode(mut code: Vec<u8>) -> HashOut {
 }
 
 // TODO: Move this function to plonky2::hash::poseidon?
-pub fn poseidon_hash_padded_byte_vec(
-    bytes: Vec<u8>,
-) -> plonky2::hash::hash_types::HashOut<plonky2::field::goldilocks_field::GoldilocksField> {
+pub fn poseidon_hash_padded_byte_vec(bytes: Vec<u8>) -> HashOut {
     let mut capacity = [F::ZERO; poseidon::SPONGE_CAPACITY];
     let mut arr = [F::ZERO; poseidon::SPONGE_WIDTH];
     for blocks in bytes.chunks_exact(poseidon::SPONGE_RATE * 7) {
@@ -55,6 +52,7 @@ pub fn hash_bytecode_u256(code: Vec<u8>) -> U256 {
 #[cfg(test)]
 mod tests {
     use hex_literal::hex;
+    use plonky2::field::types::Field;
 
     use super::*;
 

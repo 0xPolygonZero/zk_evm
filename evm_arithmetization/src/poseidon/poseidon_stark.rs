@@ -343,7 +343,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
     ) -> PoseidonColumnsView<F> {
         let mut row = PoseidonColumnsView::default();
         // TODO: I think we're assumming op.len is a multiple FELT_MAX_BYTES *
-        // POSEIDONG_SPONGE_RATE
+        // POSEIDON_SPONGE_RATE
         row.is_final_input_len[op.len % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE)] = F::ONE;
 
         Self::generate_commons(&mut row, input, op, already_absorbed_elements);
@@ -475,8 +475,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         let nv: &[P; NUM_COLUMNS] = vars.get_next_values().try_into().unwrap();
         let nv: &PoseidonColumnsView<P> = nv.borrow();
 
-        // Each flag (full-input block, final block or implied dummy flag) must be
-        // boolean.
+        // Each flag must be boolean.
         let is_full_input_block = lv.is_full_input_block;
         yield_constr.constraint(is_full_input_block * (is_full_input_block - P::ONES));
 
@@ -486,6 +485,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         for &is_final_len in lv.is_final_input_len.iter() {
             yield_constr.constraint(is_final_len * (is_final_len - P::ONES));
         }
+
+        let is_first_row_general_op = lv.is_first_row_general_op;
+        yield_constr.constraint(is_first_row_general_op * (is_first_row_general_op - P::ONES));
 
         // Ensure that full-input block and final block flags are not set to 1 at the
         // same time.
@@ -509,8 +511,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         yield_constr.constraint_transition(is_final_block * nv.already_absorbed_elements);
 
         for i in POSEIDON_SPONGE_RATE..POSEIDON_SPONGE_WIDTH {
-            // If the operation has len > 0 and this is a final block, the capacity
-            // must be 0
+            // If the next block is a general operation (len > 0) and this is a final block,
+            // the capacity must be 0 for the next row.
             yield_constr.constraint_transition(nv.len * is_final_block * nv.input[i]);
         }
 
@@ -523,7 +525,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
 
         // If this is a full-input block, the next row's already_absorbed_elements
         // should be ours plus `POSEIDON_SPONGE_RATE`, and the next input's
-        // capacity is the current output's capacity.
+        // capacity is the current digest.
         yield_constr.constraint_transition(
             is_full_input_block
                 * (already_absorbed_elements
@@ -557,11 +559,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
                 - P::from(FE::from_canonical_usize(
                     FELT_MAX_BYTES * POSEIDON_SPONGE_RATE - i,
                 ));
-            // if lv.len * is_final_len * entry_match != P::ZEROS {
-            //     log::debug!("lv.is_final_input_len = {:?}", lv);
-            //     log::debug!("nv = {:?}", nv);
-            //     panic!("jajaj");
-            // }
             yield_constr.constraint(lv.len * is_final_len * entry_match);
         }
 
@@ -680,8 +677,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         let nv: &[ExtensionTarget<D>; NUM_COLUMNS] = vars.get_next_values().try_into().unwrap();
         let nv: &PoseidonColumnsView<ExtensionTarget<D>> = nv.borrow();
 
-        // Each flag (full-input block, final block or implied dummy flag) must be
-        // boolean.
+        //Each flag (full-input block, final block or implied dummy flag) must be
+        //boolean.
         let is_full_input_block = lv.is_full_input_block;
         let constr = builder.mul_sub_extension(
             is_full_input_block,
@@ -699,6 +696,15 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
             yield_constr.constraint(builder, constr);
         }
 
+        let one = builder.one_extension();
+        let is_first_row_general_op = lv.is_first_row_general_op;
+        let constr = builder.mul_sub_extension(
+            is_first_row_general_op,
+            is_first_row_general_op,
+            is_first_row_general_op,
+        );
+        yield_constr.constraint(builder, constr);
+
         // Ensure that full-input block and final block flags are not set to 1 at the
         // same time.
         let constr = builder.mul_extension(is_final_block, is_full_input_block);
@@ -710,9 +716,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         let already_absorbed_elements = lv.already_absorbed_elements;
         yield_constr.constraint_first_row(builder, already_absorbed_elements);
 
-        // TODO: Enable this constraint
-        for i in 0..POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE {
-            yield_constr.constraint_first_row(builder, lv.input[reg_input_capacity(i)]);
+        for i in POSEIDON_SPONGE_RATE..POSEIDON_SPONGE_WIDTH {
+            let constr = builder.mul_extension(lv.input[i], lv.len);
+            yield_constr.constraint_first_row(builder, constr);
         }
 
         // If this is a final row and there is an upcoming operation, then
@@ -721,8 +727,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         let constr = builder.mul_extension(is_final_block, nv.already_absorbed_elements);
         yield_constr.constraint_transition(builder, constr);
 
-        for i in 0..POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE {
-            let constr = builder.mul_extension(is_final_block, nv.input[reg_input_capacity(i)]);
+        for i in POSEIDON_SPONGE_RATE..POSEIDON_SPONGE_WIDTH {
+            let mut constr = builder.mul_extension(is_final_block, nv.input[i]);
+            constr = builder.mul_extension(constr, nv.len);
             yield_constr.constraint_transition(builder, constr);
         }
 
@@ -747,7 +754,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         let diff = builder.sub_extension(already_absorbed_elements, nv.already_absorbed_elements);
         let constr = builder.arithmetic_extension(
             F::ONE,
-            F::from_canonical_usize(POSEIDON_SPONGE_RATE),
+            F::from_canonical_usize(FELT_MAX_BYTES * POSEIDON_SPONGE_RATE),
             diff,
             is_full_input_block,
             is_full_input_block,
@@ -755,10 +762,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         yield_constr.constraint_transition(builder, constr);
 
         for i in 0..POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE {
-            let mut constr = builder.sub_extension(
-                lv.output_partial[reg_output_capacity(i)],
-                nv.input[reg_input_capacity(i)],
+            let mut constr = builder.mul_const_add_extension(
+                F::from_canonical_u64(1 << 32),
+                lv.digest[2 * i + 1],
+                lv.digest[2 * i],
             );
+            constr = builder.sub_extension(constr, nv.input[POSEIDON_SPONGE_RATE + i]);
             constr = builder.mul_extension(is_full_input_block, constr);
             yield_constr.constraint_transition(builder, constr);
         }
@@ -766,20 +775,22 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         // A dummy row is always followed by another dummy row, so the prover can't put
         // dummy rows "in between" to avoid the above checks.
         let mut is_dummy = builder.add_extension(is_full_input_block, is_final_block);
-        let one = builder.one_extension();
         is_dummy = builder.sub_extension(one, is_dummy);
         let next_is_final_block = builder.add_many_extension(nv.is_final_input_len.iter());
         let mut constr = builder.add_extension(nv.is_full_input_block, next_is_final_block);
         constr = builder.mul_extension(is_dummy, constr);
         yield_constr.constraint_transition(builder, constr);
 
-        // If this is a final block, is_final_input_len implies `len - already_absorbed
-        // == i`
+        // If len > 0  and this is a final block, is_final_input_len implies `len -
+        // already_absorbed == i`
         let offset = builder.sub_extension(lv.len, already_absorbed_elements);
         for (i, &is_final_len) in lv.is_final_input_len.iter().enumerate() {
-            let index = builder.constant_extension(F::from_canonical_usize(i).into());
+            let mut index = builder.constant_extension(
+                F::from_canonical_usize(FELT_MAX_BYTES * POSEIDON_SPONGE_RATE - i).into(),
+            );
             let entry_match = builder.sub_extension(offset, index);
-            let constr = builder.mul_extension(is_final_len, entry_match);
+            let mut constr = builder.mul_extension(is_final_len, entry_match);
+            constr = builder.mul_extension(constr, lv.len);
             yield_constr.constraint(builder, constr);
         }
 
@@ -939,6 +950,8 @@ mod tests {
 
     use anyhow::Result;
     use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
+    use itertools::Itertools;
+    use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::field::polynomial::PolynomialValues;
     use plonky2::field::types::{Field, PrimeField64, Sample};
     use plonky2::fri::oracle::PolynomialBatch;
@@ -947,6 +960,8 @@ mod tests {
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::timed;
     use plonky2::util::timing::TimingTree;
+    use smt_trie::code::poseidon_hash_padded_byte_vec;
+    use smt_trie::smt::F;
     use starky::config::StarkConfig;
     use starky::cross_table_lookup::{CtlData, CtlZData};
     use starky::lookup::{GrandProductChallenge, GrandProductChallengeSet};
@@ -1001,11 +1016,10 @@ mod tests {
             ),
             input: input.clone(),
             timestamp: 0,
-            len: POSEIDON_SPONGE_RATE,
+            len: POSEIDON_SPONGE_RATE * FELT_MAX_BYTES,
         });
         const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
+        type F = GoldilocksField;
         type S = PoseidonStark<F, D>;
 
         let stark = S {
@@ -1014,26 +1028,21 @@ mod tests {
 
         let rows = stark.generate_trace_rows(vec![int_inputs], 8);
         assert_eq!(rows.len(), 8);
-        let last_row: &PoseidonColumnsView<F> = rows[0].borrow();
+        let last_row: &PoseidonColumnsView<_> = rows[0].borrow();
         let mut output: Vec<_> = (0..POSEIDON_DIGEST)
             .map(|i| {
                 last_row.digest[2 * i] + F::from_canonical_u64(1 << 32) * last_row.digest[2 * i + 1]
             })
             .collect();
-        output.extend(&last_row.output_partial);
 
-        let mut state: Vec<F> = input
-            .chunks(FELT_MAX_BYTES)
-            .map(|block| {
-                let mut bytes = [0u8; 8];
-                bytes[0..FELT_MAX_BYTES].copy_from_slice(block);
-                F::from_canonical_u64(u64::from_le_bytes(bytes))
-            })
-            .collect();
-        state.extend(vec![F::ZERO; POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE]);
-        let expected = <F as Poseidon>::poseidon(state.try_into().unwrap());
+        let hash = poseidon_hash_padded_byte_vec(input);
 
-        assert_eq!(output, expected);
+        // TODO: Without the maps it says: "can't compare `GoldilocksField` with
+        // `plonky2_field::goldilocks_field::GoldilocksField`""
+        assert_eq!(
+            output.iter().map(|x| x.0).collect::<Vec<_>>(),
+            hash.elements.iter().map(|x| x.0).collect::<Vec<_>>()
+        );
 
         Ok(())
     }
