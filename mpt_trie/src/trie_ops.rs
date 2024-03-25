@@ -832,7 +832,9 @@ mod tests {
         entries: &[TestInsertValEntry],
     ) -> TrieOpResult<()> {
         let trie = StandardTrie::try_from_iter(entries.iter().cloned())?;
-        Ok(assert_all_entries_in_trie(entries, &trie))
+        assert_all_entries_in_trie(entries, &trie);
+
+        Ok(())
     }
 
     fn assert_all_entries_in_trie(entries: &[TestInsertValEntry], trie: &Node<StandardTrie>) {
