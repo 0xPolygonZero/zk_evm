@@ -14,6 +14,7 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
+    trie_ops::TrieOpError,
     trie_subsets::{create_trie_subset, SubsetTrieError},
     utils::{IntoTrieKey, TriePath, TrieSegment},
 };
@@ -56,6 +57,17 @@ pub enum TraceParsingError {
     /// Failure due to trying to withdraw from a missing account
     #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
     MissingWithdrawalAccount(Address, HashedAccountAddr, U256),
+
+    /// Failure due to a trie operation error.
+    #[error("Trie operation error: {0}")]
+    TrieOpError(TrieOpError),
+}
+
+impl From<TrieOpError> for TraceParsingError {
+    fn from(err: TrieOpError) -> Self {
+        // Convert TrieOpError into TraceParsingError
+        TraceParsingError::TrieOpError(err)
+    }
 }
 
 /// An enum to cover all Ethereum trie types (see https://ethereum.github.io/yellowpaper/paper.pdf for details).
@@ -316,7 +328,7 @@ impl ProcessedBlockTrace {
             {
                 // If we are writing a zero, then we actually need to perform a delete.
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
-                    false => storage_trie.insert(slot, val.clone()),
+                    false => storage_trie.insert(slot, val.clone())?,
                     true => {
                         if let Some(remaining_slot_key) =
                             Self::delete_node_and_report_remaining_key_if_branch_collapsed(
