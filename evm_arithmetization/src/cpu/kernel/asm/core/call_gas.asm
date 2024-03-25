@@ -13,8 +13,10 @@ global call_charge_gas:
     // stack: is_call_or_callcode, is_call_or_staticcall, cold_access, address, gas, kexit_info, value, retdest
     SWAP2
     // stack: cold_access, is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
-    %mul_const(@GAS_COLDACCOUNTACCESS_MINUS_WARMACCESS)
-    %add_const(@GAS_WARMACCESS)
+    %jumpi(charge_cold_access_gas)
+    // stack: is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
+call_charge_gas_contd:
+    PUSH @GAS_WARMACCESS
     // stack: cost, is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
     DUP3
     // stack: is_call_or_callcode, cost, is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
@@ -90,3 +92,15 @@ new_cost_nonzero:
     // stack: cost, is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
     %add_const(@GAS_NEWACCOUNT)
     %jump(after_new_cost)
+
+charge_cold_access_gas:
+    // stack: is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
+    PUSH @GAS_COLDACCOUNTACCESS_MINUS_WARMACCESS
+    // stack: cold_access_cost, is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
+    DUP6
+    // stack: kexit_info, cold_access_cost, is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
+    SWAP1 %charge_gas
+    // stack: kexit_info', is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
+    SWAP5 POP
+    // stack: is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info', value, retdest
+    %jump(call_charge_gas_contd)
