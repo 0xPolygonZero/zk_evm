@@ -396,7 +396,7 @@ mod tests {
             common_setup, create_trie_with_large_entry_nodes,
             generate_n_random_fixed_trie_value_entries, handmade_trie_1, TrieType,
         },
-        trie_ops::ValOrHash,
+        trie_ops::{TrieOpResult, ValOrHash},
         utils::{TrieNodeType, TryFromIterator},
     };
 
@@ -690,15 +690,18 @@ mod tests {
     }
 
     #[test]
-    fn all_leafs_of_keys_to_create_subset_are_included_in_subset_for_giant_trie() {
+    fn all_leafs_of_keys_to_create_subset_are_included_in_subset_for_giant_trie() -> TrieOpResult<()>
+    {
         common_setup();
 
-        let (_, trie_subsets, keys_of_subsets) = create_massive_trie_and_subsets(9009);
+        let (_, trie_subsets, keys_of_subsets) = create_massive_trie_and_subsets(9009)?;
 
         for (sub_trie, ks_used) in trie_subsets.into_iter().zip(keys_of_subsets.into_iter()) {
             let leaf_nibbles = get_all_nibbles_of_leaf_nodes_in_trie(&sub_trie);
             assert!(ks_used.into_iter().all(|k| leaf_nibbles.contains(&k)));
         }
+
+        Ok(())
     }
 
     #[test]
@@ -752,22 +755,24 @@ mod tests {
     }
 
     #[test]
-    fn hash_of_giant_random_partial_tries_matches_original_trie() {
+    fn hash_of_giant_random_partial_tries_matches_original_trie() -> TrieOpResult<()> {
         common_setup();
 
-        let (base_trie, trie_subsets, _) = create_massive_trie_and_subsets(9010);
+        let (base_trie, trie_subsets, _) = create_massive_trie_and_subsets(9010)?;
         let base_hash = base_trie.hash();
 
         assert!(trie_subsets
             .into_iter()
-            .all(|p_tree| p_tree.hash() == base_hash))
+            .all(|p_tree| p_tree.hash() == base_hash));
+
+        Ok(())
     }
 
     #[test]
-    fn giant_random_partial_tries_hashes_leaves_correctly() {
+    fn giant_random_partial_tries_hashes_leaves_correctly() -> TrieOpResult<()> {
         common_setup();
 
-        let (base_trie, trie_subsets, leaf_keys_per_trie) = create_massive_trie_and_subsets(9011);
+        let (base_trie, trie_subsets, leaf_keys_per_trie) = create_massive_trie_and_subsets(9011)?;
         let all_keys: Vec<Nibbles> = base_trie.keys().collect();
 
         for (partial_trie, leaf_trie_keys) in
@@ -786,6 +791,8 @@ mod tests {
             // over a `Hash` node, we return `None`.)
             assert_all_keys_do_not_exist(&partial_trie, keys_of_hash_nodes);
         }
+
+        Ok(())
     }
 
     fn assert_all_keys_do_not_exist(trie: &TrieType, ks: impl Iterator<Item = Nibbles>) {
@@ -794,13 +801,15 @@ mod tests {
         }
     }
 
-    fn create_massive_trie_and_subsets(seed: u64) -> (TrieType, Vec<TrieType>, Vec<Vec<Nibbles>>) {
+    fn create_massive_trie_and_subsets(
+        seed: u64,
+    ) -> TrieOpResult<(TrieType, Vec<TrieType>, Vec<Vec<Nibbles>>)> {
         let trie_size = MASSIVE_TEST_NUM_SUB_TRIES * MASSIVE_TEST_NUM_SUB_TRIE_SIZE;
 
         let random_entries: Vec<_> =
             generate_n_random_fixed_trie_value_entries(trie_size, seed).collect();
         let entry_keys: Vec<_> = random_entries.iter().map(|(k, _)| k).cloned().collect();
-        let trie = TrieType::try_from_iter(random_entries).expect("Failed to create trie");
+        let trie = TrieType::try_from_iter(random_entries)?;
 
         let keys_of_subsets: Vec<Vec<_>> = (0..MASSIVE_TEST_NUM_SUB_TRIES)
             .map(|i| {
@@ -813,6 +822,6 @@ mod tests {
         let trie_subsets =
             create_trie_subsets(&trie, keys_of_subsets.iter().map(|v| v.iter().cloned())).unwrap();
 
-        (trie, trie_subsets, keys_of_subsets)
+        Ok((trie, trie_subsets, keys_of_subsets))
     }
 }

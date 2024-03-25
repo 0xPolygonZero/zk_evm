@@ -41,16 +41,11 @@ struct StateTrieEntry {
 fn main() -> TrieOpResult<()> {
     let mut rng = StdRng::seed_from_u64(0);
 
-    let generated: Result<Vec<_>, _> = (0..NUM_ACCOUNTS_TO_GEN)
+    let (account_entries, account_storage_tries): (Vec<_>, Vec<_>) = (0..NUM_ACCOUNTS_TO_GEN)
         .map(|_| generate_fake_account_and_storage_trie(&mut rng))
-        .collect();
-
-    let (account_entries, account_storage_tries): (Vec<_>, Vec<_>) = match generated {
-        Ok(pairs) => pairs.into_iter().unzip(),
-        Err(e) => {
-            return Err(e);
-        }
-    };
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .unzip();
 
     let _state_trie = StandardTrie::try_from_iter(
         account_entries

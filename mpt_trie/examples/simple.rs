@@ -44,10 +44,8 @@ fn main() -> TrieOpResult<()> {
     );
 
     // Values can be deleted:
-    let del_val = trie
-        .delete(0x1234_u32)?
-        .expect("Failed to delete from trie");
-    assert_eq!(del_val, b"some data".to_vec());
+    let del_val = trie.delete(0x1234_u32)?;
+    assert_eq!(del_val.unwrap(), b"some data".to_vec());
     assert_eq!(trie.get(0x1234_u32), None);
 
     // It's important to note how types are converted to `Nibbles`. This is

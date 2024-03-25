@@ -23,13 +23,13 @@ pub type TrieOpResult<T> = Result<T, TrieOpError>;
 pub enum TrieOpError {
     /// An error that occurs when a hash node is found during an insert
     /// operation.
-    #[error("Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert!")]
-    HashNodeInsertError(),
+    #[error("Found a `Hash` node during an insert in a `PartialTrie`! These should not be able to be traversed during an insert! (hash: {0})")]
+    HashNodeInsertError(H256),
 
     /// An error that occurs when a hash node is found during a delete
     /// operation.
-    #[error("Attempted to delete a value that ended up inside a hash node")]
-    HashNodeDeleteError(),
+    #[error("Attempted to delete a value that ended up inside a hash node! (hash: {0})")]
+    HashNodeDeleteError(H256),
 
     /// An error that occurs when encontered an unexisting type of node during
     /// an extension node collapse.
@@ -405,9 +405,9 @@ fn insert_into_trie_rec<N: PartialTrie>(
                 new_node.v,
             )))
         }
-        Node::Hash(_) => {
+        Node::Hash(h) => {
             trace!("Insert traversed {:?}", node);
-            Err(TrieOpError::HashNodeInsertError())
+            Err(TrieOpError::HashNodeInsertError(*h))
         }
         Node::Branch { children, value } => {
             if new_node.nibbles.count == 0 {
@@ -418,13 +418,12 @@ fn insert_into_trie_rec<N: PartialTrie>(
             let nibble = new_node.nibbles.pop_next_nibble_front();
             trace!("Insert traversed Branch (nibble: {:x})", nibble);
 
-            insert_into_trie_rec(&children[nibble as usize], new_node)?.map_or(
-                Ok(None),
-                |updated_child| {
+            Ok(
+                insert_into_trie_rec(&children[nibble as usize], new_node)?.map(|updated_child| {
                     let mut updated_children = children.clone();
                     updated_children[nibble as usize] = updated_child;
-                    Ok(Some(branch(updated_children, value.clone())))
-                },
+                    branch(updated_children, value.clone())
+                }),
             )
         }
         Node::Extension { nibbles, child } => {
@@ -495,7 +494,7 @@ fn delete_intern<N: PartialTrie>(
             trace!("Delete traversed Empty");
             Ok(None)
         }
-        Node::Hash(_) => Err(TrieOpError::HashNodeDeleteError()),
+        Node::Hash(h) => Err(TrieOpError::HashNodeDeleteError(*h)),
         // TODO: Find a nice way to get the full key path...
         Node::Branch { children, value } => {
             if curr_k.is_empty() {
@@ -561,12 +560,10 @@ fn delete_intern<N: PartialTrie>(
         }
         Node::Leaf { nibbles, value } => {
             trace!("Delete traversed Leaf (nibbles: {:?})", nibbles);
-            (*nibbles == curr_k)
-                .then(|| {
-                    trace!("Deleting leaf ({:x})", nibbles);
-                    Ok(Some((Node::Empty.into(), value.clone())))
-                })
-                .unwrap_or(Ok(None))
+            Ok((*nibbles == curr_k).then(|| {
+                trace!("Deleting leaf ({:x})", nibbles);
+                (Node::Empty.into(), value.clone())
+            }))
         }
     }
 }
@@ -831,10 +828,11 @@ mod tests {
     const MASSIVE_TRIE_SIZE: usize = 100000;
     const COW_TEST_TRIE_SIZE: usize = 500;
 
-    fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(entries: &[TestInsertValEntry]) {
-        let trie =
-            StandardTrie::try_from_iter(entries.iter().cloned()).expect("Failed to create trie");
-        assert_all_entries_in_trie(entries, &trie)
+    fn insert_entries_and_assert_all_exist_in_trie_with_no_extra(
+        entries: &[TestInsertValEntry],
+    ) -> TrieOpResult<()> {
+        let trie = StandardTrie::try_from_iter(entries.iter().cloned())?;
+        Ok(assert_all_entries_in_trie(entries, &trie))
     }
 
     fn assert_all_entries_in_trie(entries: &[TestInsertValEntry], trie: &Node<StandardTrie>) {
@@ -872,99 +870,105 @@ mod tests {
     }
 
     #[test]
-    fn single_insert() {
+    fn single_insert() -> TrieOpResult<()> {
         common_setup();
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&[entry(0x1234)]);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&[entry(0x1234)])
     }
 
     #[test]
-    fn two_disjoint_inserts_works() {
+    fn two_disjoint_inserts_works() -> TrieOpResult<()> {
         common_setup();
         let entries = [entry(0x1234), entry(0x5678)];
 
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries)
     }
 
     #[test]
-    fn two_inserts_that_share_one_nibble_works() {
+    fn two_inserts_that_share_one_nibble_works() -> TrieOpResult<()> {
         common_setup();
         let entries = [entry(0x1234), entry(0x1567)];
 
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries)
     }
 
     #[test]
-    fn two_inserts_that_differ_on_last_nibble_works() {
+    fn two_inserts_that_differ_on_last_nibble_works() -> TrieOpResult<()> {
         common_setup();
         let entries = [entry(0x1234), entry(0x1235)];
 
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries)
     }
 
     #[test]
-    fn diagonal_inserts_to_base_of_trie_works() {
+    fn diagonal_inserts_to_base_of_trie_works() -> TrieOpResult<()> {
         common_setup();
         let entries: Vec<_> = (0..=64).map(|i| entry(create_mask_of_1s(i * 4))).collect();
 
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries)
     }
 
     #[test]
-    fn updating_an_existing_node_works() {
+    fn updating_an_existing_node_works() -> TrieOpResult<()> {
         common_setup();
         let mut entries = [entry(0x1234), entry(0x1234)];
         entries[1].1 = vec![100];
 
-        let trie = StandardTrie::try_from_iter(entries).expect("Failed to create trie");
+        let trie = StandardTrie::try_from_iter(entries)?;
         assert_eq!(trie.get(0x1234), Some([100].as_slice()));
+
+        Ok(())
     }
 
     #[test]
-    fn cloning_a_trie_creates_two_separate_tries() {
+    fn cloning_a_trie_creates_two_separate_tries() -> TrieOpResult<()> {
         common_setup();
 
-        assert_cloning_works_for_tries::<StandardTrie>();
-        assert_cloning_works_for_tries::<HashedPartialTrie>();
+        assert_cloning_works_for_tries::<StandardTrie>()?;
+        assert_cloning_works_for_tries::<HashedPartialTrie>()?;
+
+        Ok(())
     }
 
-    fn assert_cloning_works_for_tries<T>()
+    fn assert_cloning_works_for_tries<T>() -> TrieOpResult<()>
     where
         T: TryFromIterator<(Nibbles, Vec<u8>)> + PartialTrie,
     {
-        let trie = T::try_from_iter(once(entry(0x1234))).expect("Failed to create trie");
+        let trie = T::try_from_iter(once(entry(0x1234)))?;
         let mut cloned_trie = trie.clone();
 
         assert!(cloned_trie.extend(once(entry(0x5678))).is_ok());
 
         assert_ne!(trie, cloned_trie);
         assert_ne!(trie.hash(), cloned_trie.hash());
+
+        Ok(())
     }
 
     #[test]
-    fn mass_inserts_fixed_sized_keys_all_entries_are_retrievable() {
+    fn mass_inserts_fixed_sized_keys_all_entries_are_retrievable() -> TrieOpResult<()> {
         common_setup();
         let entries: Vec<_> =
             generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 0).collect();
 
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries)
     }
 
     #[test]
-    fn mass_inserts_variable_sized_keys_all_entries_are_retrievable() {
+    fn mass_inserts_variable_sized_keys_all_entries_are_retrievable() -> TrieOpResult<()> {
         common_setup();
         let entries: Vec<_> =
             generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 0).collect();
 
-        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries);
+        insert_entries_and_assert_all_exist_in_trie_with_no_extra(&entries)
     }
 
     #[test]
-    fn mass_inserts_variable_sized_keys_with_hash_nodes_all_entries_are_retrievable() {
+    fn mass_inserts_variable_sized_keys_with_hash_nodes_all_entries_are_retrievable(
+    ) -> TrieOpResult<()> {
         common_setup();
         let non_hash_entries: Vec<_> =
             generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 0).collect();
-        let mut trie = StandardTrie::try_from_iter(non_hash_entries.iter().cloned())
-            .expect("Failed to create trie");
+        let mut trie = StandardTrie::try_from_iter(non_hash_entries.iter().cloned())?;
 
         let extra_hash_entries = generate_n_hash_nodes_entries_for_empty_slots_in_trie(
             &trie,
@@ -983,10 +987,12 @@ mod tests {
         assert!(extra_hash_entries
             .into_iter()
             .all(|(k, h)| all_nodes.contains(&(k, ValOrHash::Hash(h)))));
+
+        Ok(())
     }
 
     #[test]
-    fn equivalency_check_works() {
+    fn equivalency_check_works() -> TrieOpResult<()> {
         common_setup();
 
         assert_eq!(
@@ -995,35 +1001,37 @@ mod tests {
         );
 
         let entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 0);
-        let big_trie_1 = StandardTrie::try_from_iter(entries).expect("Failed to create trie");
+        let big_trie_1 = StandardTrie::try_from_iter(entries)?;
         assert_eq!(big_trie_1, big_trie_1);
 
         let entries = generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 1);
-        let big_trie_2 = StandardTrie::try_from_iter(entries).expect("Failed to create trie");
+        let big_trie_2 = StandardTrie::try_from_iter(entries)?;
 
-        assert_ne!(big_trie_1, big_trie_2)
+        assert_ne!(big_trie_1, big_trie_2);
+
+        Ok(())
     }
 
     #[test]
-    fn two_variable_length_keys_with_overlap_are_queryable() {
+    fn two_variable_length_keys_with_overlap_are_queryable() -> TrieOpResult<()> {
         common_setup();
 
         let entries = [entry_with_value(0x1234, 1), entry_with_value(0x12345678, 2)];
-        let trie =
-            StandardTrie::try_from_iter(entries.iter().cloned()).expect("Failed to create trie");
+        let trie = StandardTrie::try_from_iter(entries.iter().cloned())?;
 
         assert_eq!(trie.get(0x1234), Some([1].as_slice()));
         assert_eq!(trie.get(0x12345678), Some([2].as_slice()));
+
+        Ok(())
     }
 
     #[test]
-    fn get_massive_trie_works() {
+    fn get_massive_trie_works() -> TrieOpResult<()> {
         common_setup();
 
         let random_entries: Vec<_> =
             generate_n_random_fixed_trie_value_entries(MASSIVE_TRIE_SIZE, 9001).collect();
-        let trie = StandardTrie::try_from_iter(random_entries.iter().cloned())
-            .expect("Failed to create trie");
+        let trie = StandardTrie::try_from_iter(random_entries.iter().cloned())?;
 
         for (k, v) in random_entries.into_iter() {
             debug!("Attempting to retrieve {:?}...", (k, &v));
@@ -1031,6 +1039,8 @@ mod tests {
 
             assert_eq!(res, Some(v.as_slice()));
         }
+
+        Ok(())
     }
 
     #[test]
@@ -1062,13 +1072,12 @@ mod tests {
     }
 
     #[test]
-    fn trie_iter_works() {
+    fn trie_iter_works() -> TrieOpResult<()> {
         common_setup();
 
         let entries: HashSet<_> =
             generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 9003).collect();
-        let trie =
-            StandardTrie::try_from_iter(entries.iter().cloned()).expect("Failed to create trie");
+        let trie = StandardTrie::try_from_iter(entries.iter().cloned())?;
 
         let trie_items: HashSet<_> = trie
             .items()
@@ -1077,6 +1086,8 @@ mod tests {
 
         assert!(entries.iter().all(|e| trie_items.contains(e)));
         assert!(trie_items.iter().all(|item| entries.contains(item)));
+
+        Ok(())
     }
 
     #[test]
@@ -1100,13 +1111,12 @@ mod tests {
     }
 
     #[test]
-    fn deletion_massive_trie() {
+    fn deletion_massive_trie() -> TrieOpResult<()> {
         common_setup();
 
         let entries: Vec<_> =
             generate_n_random_variable_trie_value_entries(MASSIVE_TRIE_SIZE, 7).collect();
-        let mut trie =
-            StandardTrie::try_from_iter(entries.iter().cloned()).expect("Failed to create trie");
+        let mut trie = StandardTrie::try_from_iter(entries.iter().cloned())?;
 
         // Delete half of the elements
         let half_entries = entries.len() / 2;
@@ -1123,5 +1133,7 @@ mod tests {
         for (k, v) in entries_that_still_should_exist {
             assert_eq!(trie.get(k), Some(v.as_slice()));
         }
+
+        Ok(())
     }
 }

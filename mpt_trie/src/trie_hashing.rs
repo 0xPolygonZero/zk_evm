@@ -113,6 +113,7 @@ mod tests {
             generate_n_random_variable_trie_value_entries, large_entry, TestInsertValEntry,
         },
         trie_hashing::hash_bytes,
+        trie_ops::TrieOpResult,
         utils::TryFromIterator,
     };
 
@@ -258,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn single_account_leaf_hash_is_correct() {
+    fn single_account_leaf_hash_is_correct() -> TrieOpResult<()> {
         common_setup();
 
         let acc_and_hash_entry = &load_pyevm_truth_vals()[0];
@@ -275,12 +276,12 @@ mod tests {
             get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
                 .next()
                 .unwrap();
-        let our_hash = HashedPartialTrie::try_from_iter(once(ins_entry))
-            .expect("Failed to create trie")
-            .get_hash();
+        let our_hash = HashedPartialTrie::try_from_iter(once(ins_entry))?.get_hash();
 
         assert_eq!(py_evm_truth_val, our_hash);
         assert_eq!(eth_trie_lib_truth_val, our_hash);
+
+        Ok(())
     }
 
     #[test]
@@ -360,7 +361,7 @@ mod tests {
     }
 
     #[test]
-    fn massive_trie_data_deletion_agrees_with_eth_trie() {
+    fn massive_trie_data_deletion_agrees_with_eth_trie() -> Result<(), Box<dyn std::error::Error>> {
         common_setup();
 
         let entries: Vec<_> = generate_n_random_fixed_even_nibble_padded_trie_value_entries(
@@ -369,12 +370,11 @@ mod tests {
         )
         .collect();
 
-        let mut our_trie = HashedPartialTrie::try_from_iter(entries.iter().cloned())
-            .expect("Failed to create trie");
+        let mut our_trie = HashedPartialTrie::try_from_iter(entries.iter().cloned())?;
         let mut truth_trie = create_truth_trie();
 
         for (k, v) in entries.iter() {
-            truth_trie.insert(&k.bytes_be(), v).unwrap();
+            truth_trie.insert(&k.bytes_be(), v)?;
         }
 
         let half_entries = entries.len() / 2;
@@ -382,22 +382,23 @@ mod tests {
         for (k, _) in entries_to_delete {
             let res = our_trie.delete(k);
             assert!(res.is_ok(), "Failed to delete key: {:?}", k);
-            truth_trie.remove(&k.bytes_be()).unwrap();
+            truth_trie.remove(&k.bytes_be())?;
 
-            let truth_root_hash = H256(truth_trie.root_hash().unwrap().0);
+            let truth_root_hash = H256(truth_trie.root_hash()?.0);
             assert_eq!(our_trie.get_hash(), truth_root_hash);
         }
+
+        Ok(())
     }
 
     #[test]
-    fn replacing_branch_of_leaves_with_hash_nodes_produced_same_hash() {
+    fn replacing_branch_of_leaves_with_hash_nodes_produced_same_hash() -> TrieOpResult<()> {
         let mut trie = HashedPartialTrie::try_from_iter([
             large_entry(0x1),
             large_entry(0x2),
             large_entry(0x3),
             large_entry(0x4),
-        ])
-        .expect("Failed to create trie");
+        ])?;
 
         let orig_hash = trie.hash();
 
@@ -407,6 +408,8 @@ mod tests {
 
         let new_hash = trie.hash();
         assert_eq!(orig_hash, new_hash);
+
+        Ok(())
     }
 
     fn get_branch_children_expected(
@@ -419,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn replacing_part_of_a_trie_with_a_hash_node_produces_same_hash() {
+    fn replacing_part_of_a_trie_with_a_hash_node_produces_same_hash() -> TrieOpResult<()> {
         let entries = (0..16).flat_map(|i| {
             generate_n_random_variable_trie_value_entries(
                 NODES_PER_BRANCH_FOR_HASH_REPLACEMENT_TEST,
@@ -434,7 +437,7 @@ mod tests {
             })
         });
 
-        let mut trie = HashedPartialTrie::try_from_iter(entries).expect("Failed to create trie");
+        let mut trie = HashedPartialTrie::try_from_iter(entries)?;
         let orig_hash = trie.get_hash();
 
         let root_branch_children = match &mut *trie {
@@ -450,5 +453,7 @@ mod tests {
 
         let new_hash = trie.get_hash();
         assert_eq!(orig_hash, new_hash);
+
+        Ok(())
     }
 }
