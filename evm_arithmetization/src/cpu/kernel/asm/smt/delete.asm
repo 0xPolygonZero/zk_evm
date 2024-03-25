@@ -27,12 +27,12 @@ smt_delete_with_keys:
     // stack: node_type, node_payload_ptr, level, ks, retdest
 
     DUP1 %eq_const(@SMT_NODE_INTERNAL)  %jumpi(smt_delete_internal)
-    DUP1 %eq_const(@SMT_NODE_LEAF)      %jumpi(smt_delete_leaf)
+         %eq_const(@SMT_NODE_LEAF)      %jumpi(smt_delete_leaf)
     PANIC // Should never happen.
 
 smt_delete_leaf:
-    // stack: node_type, node_payload_ptr, level, ks, retdest
-    %pop7
+    // stack: node_payload_ptr, level, ks, retdest
+    %pop6
     PUSH 0 // empty node ptr
     SWAP1 JUMP
 
@@ -45,7 +45,7 @@ smt_delete_internal:
     DUP1 %eq_const(0) %jumpi(smt_delete_internal_0)
     DUP1 %eq_const(1) %jumpi(smt_delete_internal_1)
     DUP1 %eq_const(2) %jumpi(smt_delete_internal_2)
-    DUP1 %eq_const(3) %jumpi(smt_delete_internal_3)
+         %eq_const(3) %jumpi(smt_delete_internal_3)
     PANIC
 smt_delete_internal_0:
     // stack: level%4, node_payload_ptr, level, ks, retdest
@@ -64,7 +64,7 @@ smt_delete_internal_2:
     %stack (bit, newk2, node_payload_ptr, level, k0, k1, k2, k3 ) -> (bit, node_payload_ptr, level, k0, k1, newk2, k3 )
     %jump(smt_delete_internal_contd)
 smt_delete_internal_3:
-    %stack (level_mod_4, node_payload_ptr, level, k0, k1, k2, k3 ) -> (k3, node_payload_ptr, level, k0, k1, k2, k3 )
+    %stack (node_payload_ptr, level, k0, k1, k2, k3 ) -> (k3, node_payload_ptr, level, k0, k1, k2, k3 )
     %pop_bit
     %stack (bit, newk3, node_payload_ptr, level, k0, k1, k2, k3 ) -> (bit, node_payload_ptr, level, k0, k1, k2, newk3 )
 smt_delete_internal_contd:
@@ -93,8 +93,10 @@ internal_update:
     //stack: sibling_ptr_ptr, deleted_child_ptr, bit, node_payload_ptr, level, ks, retdest
     %mload_trie_data DUP1 %mload_trie_data
     //stack: sibling_node_type, sibling_ptr, deleted_child_ptr, bit, node_payload_ptr, level, ks, retdest
-    DUP1 %eq_const(@SMT_NODE_HASH) %jumpi(sibling_is_hash)
-    %eq_const(@SMT_NODE_LEAF) %jumpi(sibling_is_leaf)
+    DUP1 %eq_const(@SMT_NODE_HASH)     %jumpi(sibling_is_hash)
+    DUP1 %eq_const(@SMT_NODE_LEAF)     %jumpi(sibling_is_leaf)
+         %eq_const(@SMT_NODE_INTERNAL) %jumpi(sibling_is_internal)
+    PANIC // Should never happen.
 sibling_is_internal:
     //stack: sibling_ptr, deleted_child_ptr, bit, node_payload_ptr, level, ks, retdest
     POP
@@ -151,10 +153,8 @@ sibling_is_empty_child_is_leaf:
     // stack: level, deleted_child_key_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
     DUP3
     // stack: bit, level, deleted_child_key_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
-    PUSH 1 SUB
-    // stack: obit, level, deleted_child_key_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
     DUP3 %mload_trie_data
-    // stack: child_key, obit, level, deleted_child_key_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
+    // stack: child_key, bit, level, deleted_child_key_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
     %recombine_key
     // stack: new_child_key, deleted_child_key_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
     DUP2 %mstore_trie_data
@@ -168,6 +168,8 @@ sibling_is_empty_child_is_leaf:
     SWAP1 JUMP
 
 sibling_is_leaf:
+    // stack: sibling_node_type, sibling_ptr, deleted_child_ptr, bit, node_payload_ptr, level, ks, retdest
+    POP
     // stack: sibling_ptr, deleted_child_ptr, bit, node_payload_ptr, level, ks, retdest
     DUP2 %is_non_empty_node
     // stack: child_is_non_empty, sibling_ptr, deleted_child_ptr, bit, node_payload_ptr, level, ks, retdest
@@ -180,8 +182,10 @@ sibling_is_leaf_child_is_empty:
     // stack: level, sibling_key_ptr, deleted_child_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
     DUP4
     // stack: bit, level, sibling_key_ptr, deleted_child_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
+    PUSH 1 SUB
+    // stack: obit, level, sibling_key_ptr, deleted_child_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
     DUP3 %mload_trie_data
-    // stack: sibling_key, bit, level, sibling_key_ptr, deleted_child_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
+    // stack: sibling_key, obit, level, sibling_key_ptr, deleted_child_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
     %recombine_key
     // stack: new_key, sibling_key_ptr, deleted_child_ptr, bit, node_payload_ptr, level, k0, k1, k2, k3, retdest
     DUP2 %mstore_trie_data
