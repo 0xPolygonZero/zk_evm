@@ -29,6 +29,8 @@ use crate::{
     types::{CodeHash, HashedAccountAddr, TrieRootHash},
 };
 
+/// Result alias for any error that can occur when processing encoded compact
+/// prestate.
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
 
 type BranchMask = u32;
@@ -46,20 +48,29 @@ const MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE: usize = 3;
 const BRANCH_MAX_CHILDREN: usize = 16;
 const CURSOR_ERROR_BYTES_MAX_LEN: usize = 10;
 
+/// An error from processing Erigon's compact witness format.
 #[derive(Debug, Error)]
 pub enum CompactParsingError {
+    /// The header in the compact payload was missing. This is just a single
+    /// byte that is used for versioning.
     #[error("Missing header")]
     MissingHeader,
 
+    /// Encountered a byte representing an opcode that does not represent any
+    /// known opcode
     #[error("Invalid opcode operator (\"{0:x}\")")]
-    InvalidOperator(u8),
+    InvalidOpcode(u8),
 
+    /// Encountered the end of the byte stream when we were still expecting more
+    /// data.
     #[error("Reached the end of the byte stream when we still expected more data")]
     UnexpectedEndOfStream,
 
+    /// Failed to decode a byte vector from CBOR.
     #[error("Unable to parse an expected byte vector (field name: {0}) (error: {1}). Cursor error info: {2}")]
     InvalidByteVector(&'static str, String, CursorBytesErrorInfo),
 
+    /// Failed to decode a given type from CBOR.
     #[error(
         "Unable to parse the type \"{0}\" (field name: {1}) from bytes {2}. Cursor error info: {3} (err: {4})"
     )]
@@ -71,32 +82,48 @@ pub enum CompactParsingError {
         String,
     ),
 
+    /// Encountered a sequence of instructions of nodes that should not be able
+    /// to occur.
     #[error("Invalid block witness entries: {0:?}")]
     InvalidWitnessFormat(Vec<WitnessEntry>),
 
+    /// Multiple entries were remaining after we were unable to apply any more
+    /// rules. There should always only be one remaining entry after we can not
+    /// apply any more rules.
     #[error("There were multiple entries remaining after the compact block witness was processed (Remaining entries: {0:#?})")]
     NonSingleEntryAfterProcessing(WitnessEntries),
 
+    /// A branch was found that had an unexpected number of child nodes trailing
+    /// it than expected.
     #[error("Branch mask {0:#b} stated there should be {1} preceding nodes but instead found {2} (nodes: {3:?})")]
     IncorrectNumberOfNodesPrecedingBranch(BranchMask, usize, usize, Vec<WitnessEntry>),
 
+    /// Found a branch that had claimed to have `n` children but instead had a
+    /// different amount.
     #[error(
         "Expected a branch to have {0} preceding nodes but only had {1} (mask: {2}, nodes: {3:?})"
     )]
     MissingExpectedNodesPrecedingBranch(usize, usize, BranchMask, Vec<WitnessEntry>),
 
+    /// Expected a preceding node to be of a given type but instead found one of
+    /// a different type.
+    #[error("Expected the entry preceding {0} positions behind a {1} entry to be a node of type but instead found a {2} node. (nodes: {3:?})")]
+    UnexpectedPrecedingNodeFoundWhenProcessingRule(usize, &'static str, String, Vec<WitnessEntry>),
+
+    /// Expected a compact node type that should not be present in the given
+    /// type of trie.
     #[error("Found an unexpected compact node type ({0:?}) during processing compact into a `mpt_trie` {1} partial trie.")]
     UnexpectedNodeForTrieType(UnexpectedCompactNodeType, TrieType),
 
-    #[error("Expected the entry preceding {0} positions behind a {1} entry to be a node but instead found a {2}. (nodes: {3:?})")]
-    PrecedingNonNodeEntryFoundWhenProcessingRule(usize, &'static str, String, Vec<WitnessEntry>),
-
+    // TODO: No constructors for this, but I think there should be one in
+    // [`key_bytes_to_nibbles`]...
+    /// Error when constructing a key from bytes.
     #[error("Unable to create key nibbles from bytes {0}")]
     KeyError(#[from] FromHexPrefixError),
 }
 
 #[derive(Debug)]
-pub struct CursorBytesErrorInfo {
+pub(crate) struct CursorBytesErrorInfo {
     error_start_pos: usize,
     bad_bytes_hex: String,
 }
@@ -141,7 +168,7 @@ enum Opcode {
 }
 
 #[derive(Clone, Debug, EnumAsInner)]
-pub enum WitnessEntry {
+pub(crate) enum WitnessEntry {
     Instruction(Instruction),
     Node(NodeEntry),
 }
@@ -290,11 +317,11 @@ impl Header {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct WitnessOutput {
-    pub(crate) tries: PartialTriePreImages,
-    pub(crate) code: Option<HashMap<CodeHash, Vec<u8>>>,
-}
+// #[derive(Debug)]
+// pub struct CompactWitnessDecodingOutput {
+//     pub tries: PartialTriePreImages,
+//     pub code: Option<HashMap<CodeHash, Vec<u8>>>,
+// }
 
 #[derive(Debug)]
 struct ParserState {
@@ -325,7 +352,7 @@ impl ParserState {
         Ok((header, p_state))
     }
 
-    fn parse(mut self) -> CompactParsingResult<WitnessOutput> {
+    fn parse(mut self) -> CompactParsingResult<StateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
 
         loop {
@@ -346,15 +373,7 @@ impl ParserState {
             )),
         }?;
 
-        let tries = PartialTriePreImages {
-            state: res.trie,
-            storage: res.storage_tries,
-        };
-
-        // Replace with a none if there are no entries.
-        let code = (!res.code.is_empty()).then_some(res.code);
-
-        Ok(WitnessOutput { tries, code })
+        Ok(res)
     }
 
     fn apply_rules_to_witness_entries(
@@ -484,7 +503,7 @@ impl ParserState {
                         let n_entries_behind_cursor =
                             number_available_preceding_elems - curr_traverser_node_idx;
 
-                        CompactParsingError::PrecedingNonNodeEntryFoundWhenProcessingRule(
+                        CompactParsingError::UnexpectedPrecedingNodeFoundWhenProcessingRule(
                             n_entries_behind_cursor,
                             "Branch",
                             entry_to_check.to_string(),
@@ -722,7 +741,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         let opcode_byte = self.byte_cursor.read_byte()?;
 
         let opcode =
-            Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOperator(opcode_byte))?;
+            Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOpcode(opcode_byte))?;
 
         trace!("Processed \"{:?}\" opcode", opcode);
 
@@ -1219,24 +1238,38 @@ enum TraverserDirection {
 
 #[derive(Debug, Default)]
 pub(crate) struct PartialTriePreImages {
-    pub(crate) state: HashedPartialTrie,
-    pub(crate) storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
+    pub state: HashedPartialTrie,
+    pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
 }
 
+/// The output we get from processing prestate compact into the trie format of
+/// `mpt_trie`.
+///
+/// Note that this format contains storage tries embedded within the state trie,
+/// so there may be multiple tries inside this output. Also note that the
+/// bytecode (instead of just the code hash) may be embedded directly in this
+/// format.
 #[derive(Debug)]
-pub(crate) struct ProcessedCompactOutput {
-    pub(crate) header: Header,
-    pub(crate) witness_out: WitnessOutput,
+pub struct ProcessedCompactOutput {
+    /// The header of the compact.
+    pub header: Header,
+
+    /// The actual processed `mpt_trie` tries and additional code hash mappings
+    /// from the compact.
+    pub witness_out: StateTrieExtractionOutput,
 }
 
-pub(crate) fn process_compact_prestate(
+/// Processes the compact prestate into the trie format of `mpt_trie`.
+pub fn process_compact_prestate(
     state: TrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header)
 }
 
+/// Processes the compact prestate into the trie format of `mpt_trie`. Also
+/// enables heavy debug traces during processing.
 // TODO: Move behind a feature flag...
-pub(crate) fn process_compact_prestate_debug(
+pub fn process_compact_prestate_debug(
     state: TrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
