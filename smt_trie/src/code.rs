@@ -52,7 +52,6 @@ pub fn hash_bytecode_u256(code: Vec<u8>) -> U256 {
 #[cfg(test)]
 mod tests {
     use hex_literal::hex;
-    use plonky2::field::types::Field;
 
     use super::*;
 
