@@ -4,7 +4,7 @@ use std::{
     any::type_name,
     collections::{linked_list::CursorMut, HashMap, LinkedList},
     error::Error,
-    fmt::{self, Display},
+    fmt::{self, Debug, Display},
     io::{Cursor, Read},
     iter,
 };
@@ -20,7 +20,8 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use super::compact_to_partial_trie::{
-    create_partial_trie_from_remaining_witness_elem, create_storage_partial_trie_from_compact_node,
+    create_mpt_trie_from_remaining_witness_elem, create_smt_trie_from_remaining_witness_elem,
+    create_storage_mpt_partial_trie_from_compact_node, SmtStateTrieExtractionOutput,
     StateTrieExtractionOutput, UnexpectedCompactNodeType,
 };
 use crate::{
@@ -228,30 +229,34 @@ impl From<Instruction> for WitnessEntry {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum NodeEntry {
     Branch([Option<Box<NodeEntry>>; 16]),
+    BranchSMT([Option<Box<NodeEntry>>; 2]),
     Code(Vec<u8>),
     Empty,
     Hash(HashValue),
     Leaf(Nibbles, LeafNodeData),
     Extension(Nibbles, Box<NodeEntry>),
+    SMTLeaf(NodeType, Address, Storage, Value),
 }
 
 impl Display for NodeEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             NodeEntry::Branch(_) => write!(f, "Branch"),
+            NodeEntry::BranchSMT(_) => write!(f, "BranchSMT"),
             NodeEntry::Code(_) => write!(f, "Code"),
             NodeEntry::Empty => write!(f, "Empty"),
             NodeEntry::Hash(_) => write!(f, "Hash"),
             NodeEntry::Leaf(_, _) => write!(f, "Leaf"),
             NodeEntry::Extension(_, _) => write!(f, "Extension"),
+            NodeEntry::SMTLeaf(_, _, _, _) => write!(f, "SMTLeaf"),
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct ValueNodeData(pub(super) Vec<u8>);
 
 impl From<Vec<u8>> for ValueNodeData {
@@ -260,13 +265,13 @@ impl From<Vec<u8>> for ValueNodeData {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) enum LeafNodeData {
     Value(ValueNodeData),
     Account(AccountNodeData),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) enum AccountNodeCode {
     CodeNode(Vec<u8>),
     HashNode(TrieRootHash),
@@ -284,7 +289,7 @@ impl From<TrieRootHash> for AccountNodeCode {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct AccountNodeData {
     pub(super) nonce: Nonce,
     pub(super) balance: Balance,
@@ -334,6 +339,36 @@ impl Header {
 #[derive(Debug)]
 struct ParserState {
     entries: WitnessEntries,
+}
+
+struct Stack<T> {
+    stack: Vec<T>,
+}
+
+impl<T> Stack<T> {
+    fn new() -> Self {
+        Stack { stack: Vec::new() }
+    }
+
+    fn length(&self) -> usize {
+        self.stack.len()
+    }
+
+    fn pop(&mut self) -> Option<T> {
+        self.stack.pop()
+    }
+
+    fn push(&mut self, item: T) {
+        self.stack.push(item)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.stack.is_empty()
+    }
+
+    fn peek(&self) -> Option<&T> {
+        self.stack.last()
+    }
 }
 
 impl ParserState {
@@ -388,7 +423,6 @@ impl ParserState {
     fn parse(mut self) -> CompactParsingResult<StateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
 
-        println!("----------------- parse");
         loop {
             let num_rules_applied = self.apply_rules_to_witness_entries(&mut entry_buf)?;
 
@@ -398,7 +432,7 @@ impl ParserState {
         }
 
         let res = match self.entries.len() {
-            1 => create_partial_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
+            1 => create_mpt_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
 
             // Case for when nothing except the header is passed in.
             0 => Ok(StateTrieExtractionOutput::default()),
@@ -408,6 +442,38 @@ impl ParserState {
         }?;
 
         Ok(res)
+    }
+
+    fn parse_smt(mut self) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
+        let mut entry_buf = Vec::new();
+
+        // TODO: Consider moving this into the `Self`...
+        let mut storage_tries = HashMap::new();
+
+        let node_entry =
+            self.apply_rules_to_witness_entries_smt(&mut storage_tries, &mut entry_buf);
+
+        let res = match self.entries.len() {
+            1 => create_smt_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
+            0 => Ok(SmtStateTrieExtractionOutput::default()), /* Case for when nothing */
+            // except the header is
+            // passed in.
+            _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
+                self.entries,
+            )),
+        }?;
+
+        Ok(res)
+    }
+
+    fn apply_rules_to_witness_entries_smt(
+        &mut self,
+        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
+        entry_buf: &mut Vec<WitnessEntry>,
+    ) -> NodeEntry {
+        let mut traverser = self.entries.create_collapsable_traverser();
+
+        Self::try_apply_rules_to_curr_entry_smt(&mut traverser, storage_tries, entry_buf)
     }
 
     fn apply_rules_to_witness_entries(
@@ -492,26 +558,96 @@ impl ParserState {
             WitnessEntry::Instruction(Instruction::Branch(mask)) => {
                 Self::process_branch_instr(traverser, buf, mask)
             }
-            WitnessEntry::Instruction(Instruction::SMTLeaf(node_type, address, storage, value)) => {
-                Self::process_smt_leaf_instr(traverser, buf, node_type, address, storage, value)
-            }
             _ => Ok(0),
         }
     }
 
-    fn process_smt_leaf_instr(
+    fn try_apply_rules_to_curr_entry_smt(
         traverser: &mut CollapsableWitnessEntryTraverser,
+        storage_tries: &mut HashMap<TrieRootHash, HashedPartialTrie>,
         buf: &mut Vec<WitnessEntry>,
-        node_type: u8,
-        address: Vec<u8>,
-        storage: Vec<u8>,
-        value: Vec<u8>,
-    ) -> CompactParsingResult<usize> {
-        println!(
-            "process_smt_leaf_instr -------------- {:?}, {:?}, {:?}, {:?}",
-            node_type, address, storage, value
-        );
-        Err(CompactParsingError::InvalidOpcode(0x07))
+    ) -> NodeEntry {
+        buf.extend(traverser.get_next_n_elems(1).cloned());
+        traverser.advance();
+
+        match buf[buf.len() - 1].clone() {
+            WitnessEntry::Instruction(Instruction::Hash(h)) => NodeEntry::Hash(h),
+            WitnessEntry::Instruction(Instruction::Branch(mask)) => {
+                let mut branch_nodes = Self::create_empty_branch_node_entry_smt();
+
+                let node_entry =
+                    Self::try_apply_rules_to_curr_entry_smt(traverser, storage_tries, buf);
+                match node_entry.clone() {
+                    NodeEntry::SMTLeaf(n, a, s, v) => {
+                        if mask == 3 {
+                            if branch_nodes[0].is_none() {
+                                branch_nodes[0] = Some(Box::new(node_entry));
+                                branch_nodes[1] = Some(
+                                    (Box::new(Self::try_apply_rules_to_curr_entry_smt(
+                                        traverser,
+                                        storage_tries,
+                                        buf,
+                                    ))),
+                                );
+                            } else {
+                                branch_nodes[1] = Some(Box::new(node_entry));
+                            }
+                        } else if mask == 2 {
+                            branch_nodes[1] = Some(Box::new(node_entry));
+                        } else if mask == 1 {
+                            branch_nodes[0] = Some(Box::new(node_entry));
+                        }
+                    }
+                    NodeEntry::Hash(h) => {
+                        if mask == 3 {
+                            if branch_nodes[0].is_none() {
+                                branch_nodes[0] = Some(Box::new(node_entry));
+                                branch_nodes[1] = Some(
+                                    (Box::new(Self::try_apply_rules_to_curr_entry_smt(
+                                        traverser,
+                                        storage_tries,
+                                        buf,
+                                    ))),
+                                );
+                            } else {
+                                branch_nodes[1] = Some(Box::new(node_entry));
+                            }
+                        } else if mask == 2 {
+                            branch_nodes[1] = Some(Box::new(node_entry));
+                        } else if mask == 1 {
+                            branch_nodes[0] = Some(Box::new(node_entry));
+                        }
+                    }
+                    NodeEntry::BranchSMT(n) => {
+                        if mask == 3 {
+                            if branch_nodes[0].is_none() {
+                                branch_nodes[0] = Some(Box::new(node_entry));
+                                branch_nodes[1] = Some(
+                                    (Box::new(Self::try_apply_rules_to_curr_entry_smt(
+                                        traverser,
+                                        storage_tries,
+                                        buf,
+                                    ))),
+                                );
+                            } else {
+                                branch_nodes[1] = Some(Box::new(node_entry));
+                            }
+                        } else if mask == 2 {
+                            branch_nodes[1] = Some(Box::new(node_entry));
+                        } else if mask == 1 {
+                            branch_nodes[0] = Some(Box::new(node_entry));
+                        }
+                    }
+                    _ => (),
+                }
+                // println!("branch_nodes {:?}", branch_nodes);
+                NodeEntry::BranchSMT(branch_nodes)
+            }
+            WitnessEntry::Instruction(Instruction::SMTLeaf(node_type, address, storage, value)) => {
+                NodeEntry::SMTLeaf(node_type, address, storage, value)
+            }
+            _ => NodeEntry::Empty,
+        }
     }
 
     fn process_branch_instr(
@@ -587,6 +723,11 @@ impl ParserState {
         ]
     }
 
+    // ... Because we can't do `[None; 2]` without implementing `Copy`.
+    fn create_empty_branch_node_entry_smt() -> [Option<Box<NodeEntry>>; 2] {
+        [None, None]
+    }
+
     const fn match_account_leaf_no_code_and_no_storage(
     ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         Ok((1, None, None))
@@ -658,7 +799,8 @@ impl ParserState {
     ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         match Self::try_get_storage_root_node(node) {
             Some(storage_root_node) => {
-                let s_trie_out = create_storage_partial_trie_from_compact_node(storage_root_node)?;
+                let s_trie_out =
+                    create_storage_mpt_partial_trie_from_compact_node(storage_root_node)?;
                 Ok((n, account_node_code, Some(s_trie_out.trie)))
             }
             None => Self::invalid_witness_err(n, TraverserDirection::Backwards, traverser),
@@ -1365,20 +1507,24 @@ pub(crate) struct MptPartialTriePreImages {
 /// bytecode (instead of just the code hash) may be embedded directly in this
 /// format.
 #[derive(Debug)]
-pub struct ProcessedCompactOutput {
+pub struct ProcessedCompactOutput<T> {
     /// The header of the compact.
     pub header: Header,
 
     /// The actual processed `mpt_trie` tries and additional code hash mappings
     /// from the compact.
-    pub witness_out: StateTrieExtractionOutput,
+    pub witness_out: T,
 }
 
 /// Processes the compact prestate into the trie format of `mpt_trie`.
 pub fn process_compact_prestate(
     state: MptTrieCompact,
-) -> CompactParsingResult<ProcessedCompactOutput> {
-    process_compact_prestate_common(state, ParserState::create_and_extract_header)
+) -> CompactParsingResult<ProcessedCompactOutput<StateTrieExtractionOutput>> {
+    process_compact_prestate_common(
+        state,
+        ParserState::create_and_extract_header,
+        ParserState::parse,
+    )
 }
 
 /// Processes the compact prestate into the trie format of `mpt_trie`. Also
@@ -1386,40 +1532,36 @@ pub fn process_compact_prestate(
 // TODO: Move behind a feature flag...
 pub fn process_compact_prestate_debug(
     state: MptTrieCompact,
-) -> CompactParsingResult<ProcessedCompactOutput> {
-    process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
+) -> CompactParsingResult<ProcessedCompactOutput<StateTrieExtractionOutput>> {
+    process_compact_prestate_common(
+        state,
+        ParserState::create_and_extract_header_debug,
+        ParserState::parse,
+    )
 }
 
 pub(crate) fn process_compact_prestate_debug_smt(
     state: MptTrieCompact,
-) -> CompactParsingResult<ProcessedCompactOutput> {
-    process_compact_prestate_common_smt(state, ParserState::create_and_extract_header_debug_smt)
+) -> CompactParsingResult<ProcessedCompactOutput<SmtStateTrieExtractionOutput>> {
+    process_compact_prestate_common(
+        state,
+        ParserState::create_and_extract_header_debug_smt,
+        ParserState::parse_smt,
+    )
 }
 
-fn process_compact_prestate_common(
+fn process_compact_prestate_common<T>(
     state: MptTrieCompact,
     create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
-) -> CompactParsingResult<ProcessedCompactOutput> {
-    let (header, parser) = create_and_extract_header_f(state.0)?;
-    let witness_out = parser.parse()?;
-
-    let out = ProcessedCompactOutput {
-        header,
-        witness_out,
-    };
-
-    Ok(out)
-}
-
-fn process_compact_prestate_common_smt(
-    state: MptTrieCompact,
-    create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
-) -> CompactParsingResult<ProcessedCompactOutput> {
-    println!("------- state: {:?}", state.0.len());
-    let (header, parser) = create_and_extract_header_f(state.0)?;
-    println!("Parsing witness bytes to instructions...");
-    let witness_out = parser.parse()?;
-    println!("Done parsing witness bytes to instructions...");
+    parse_f: fn(ParserState) -> CompactParsingResult<T>,
+) -> CompactParsingResult<ProcessedCompactOutput<T>>
+where
+    T: Debug,
+{
+    let (header, mut parser) = create_and_extract_header_f(state.0)?;
+    println!("-------------- header: {:?}", header);
+    let witness_out = (parse_f(parser))?;
+    println!("-------------- witness_out: {:?}", witness_out);
 
     let out = ProcessedCompactOutput {
         header,

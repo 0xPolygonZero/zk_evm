@@ -6,6 +6,7 @@ use ethereum_types::{Address, H256, U256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
+use crate::compact::compact_to_partial_trie::StateTrieExtractionOutput;
 use crate::decoding_mpt::{MptTraceParsingResult, TxnMetaState};
 use crate::processed_block_trace::ProcessedBlockTrace;
 use crate::protocol_processing::{
@@ -165,8 +166,8 @@ pub(crate) struct MptProcessedBlockTracePreImages {
     pub(crate) extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
 }
 
-impl From<ProcessedCompactOutput> for MptProcessedBlockTracePreImages {
-    fn from(v: ProcessedCompactOutput) -> Self {
+impl From<ProcessedCompactOutput<StateTrieExtractionOutput>> for MptProcessedBlockTracePreImages {
+    fn from(v: ProcessedCompactOutput<StateTrieExtractionOutput>) -> Self {
         let tries = MptPartialTriePreImages {
             state: v.witness_out.state_trie,
             storage: v.witness_out.storage_tries,

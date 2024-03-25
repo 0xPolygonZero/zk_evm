@@ -6,6 +6,7 @@ use std::{
     fmt::{self, Display},
 };
 
+use ethereum_types::U256;
 use log::trace;
 use mpt_trie::{
     nibbles::{Nibble, Nibbles},
@@ -41,6 +42,24 @@ trait CompactToPartialTrieExtractionOutput {
         children: &[Option<Box<NodeEntry>>],
     ) -> CompactParsingResult<()> {
         for (i, slot) in children.iter().enumerate().take(16) {
+            if let Some(child) = slot {
+                // TODO: Seriously update `mpt_trie` to have a better API...
+                let mut new_k = curr_key;
+                new_k.push_nibble_back(i as Nibble);
+                create_partial_trie_from_compact_node_rec(new_k, child, self)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    // TODO: This is here only for a rebase, and needs to be removed ASAP!
+    fn process_branch_smt(
+        &mut self,
+        curr_key: Nibbles,
+        branch: &[Option<Box<NodeEntry>>],
+    ) -> CompactParsingResult<()> {
+        for (i, slot) in branch.iter().enumerate().take(2) {
             if let Some(child) = slot {
                 // TODO: Seriously update `mpt_trie` to have a better API...
                 let mut new_k = curr_key;
@@ -150,10 +169,21 @@ impl CompactToPartialTrieExtractionOutput for StateTrieExtractionOutput {
     }
 }
 
-/// Output from constructing a storage trie from compact.
+/// Output from constructing a storage trie from mpt compact.
 #[derive(Debug, Default)]
 pub(super) struct StorageTrieExtractionOutput {
     pub(super) trie: HashedPartialTrie,
+}
+
+/// Output from constructing a storage trie from smt compact.
+#[derive(Debug, Default)]
+pub struct SmtStateTrieExtractionOutput {
+    /// The state (and storage tries?) trie of the compact.
+    pub state_smt: Vec<U256>,
+
+    /// Any embedded contract bytecode that appears in the compact will be
+    /// present here.
+    pub code: HashMap<CodeHash, Vec<u8>>,
 }
 
 impl CompactToPartialTrieExtractionOutput for StorageTrieExtractionOutput {
@@ -209,23 +239,46 @@ fn process_leaf_common<F: FnMut(&AccountNodeData, &Nibbles) -> CompactParsingRes
     Ok(())
 }
 
-pub(super) fn create_partial_trie_from_remaining_witness_elem(
+// TODO: Merge both `SMT` & `MPT` versions of this function into a single one...
+pub(super) fn create_smt_trie_from_remaining_witness_elem(
+    remaining_entry: WitnessEntry,
+) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
+    let remaining_node = remaining_entry
+        .into_node()
+        .expect("Final node in compact entries was not a node! This is a bug!");
+
+    create_smt_trie_from_compact_node(remaining_node)
+}
+
+fn create_smt_trie_from_compact_node(
+    node: NodeEntry,
+) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
+    let mut output = SmtStateTrieExtractionOutput::default();
+
+    todo!()
+    // create_partial_trie_from_compact_node_rec(Nibbles::default(), &node, &mut
+    // output)?;
+
+    // Ok(output)
+}
+
+pub(super) fn create_mpt_trie_from_remaining_witness_elem(
     remaining_entry: WitnessEntry,
 ) -> CompactParsingResult<StateTrieExtractionOutput> {
     let remaining_node = remaining_entry
         .into_node()
         .expect("Final node in compact entries was not a node! This is a bug!");
 
-    create_partial_trie_from_compact_node(remaining_node)
+    create_mpt_trie_from_compact_node(remaining_node)
 }
 
-pub(super) fn create_storage_partial_trie_from_compact_node(
+pub(super) fn create_storage_mpt_partial_trie_from_compact_node(
     node: NodeEntry,
 ) -> CompactParsingResult<StorageTrieExtractionOutput> {
-    create_partial_trie_from_compact_node(node)
+    create_mpt_trie_from_compact_node(node)
 }
 
-fn create_partial_trie_from_compact_node<T>(node: NodeEntry) -> CompactParsingResult<T>
+fn create_mpt_trie_from_compact_node<T>(node: NodeEntry) -> CompactParsingResult<T>
 where
     T: CompactToPartialTrieExtractionOutput + Default,
 {
@@ -248,12 +301,14 @@ where
     trace!("Processing node {} into `PartialTrie` node...", curr_node);
 
     match curr_node {
+        NodeEntry::BranchSMT(n) => output.process_branch_smt(curr_key, n),
         NodeEntry::Branch(n) => output.process_branch(curr_key, n),
         NodeEntry::Code(c_bytes) => output.process_code(c_bytes.clone()),
         NodeEntry::Empty => output.process_empty(),
         NodeEntry::Hash(h) => output.process_hash(curr_key, *h),
         NodeEntry::Leaf(k, v) => output.process_leaf(curr_key, k, v),
         NodeEntry::Extension(k, c) => output.process_extension(curr_key, k, c),
+        NodeEntry::SMTLeaf(n, a, s, v) => output.process_empty(),
     }
 }
 
