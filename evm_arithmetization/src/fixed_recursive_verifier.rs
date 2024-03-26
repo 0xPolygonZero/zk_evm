@@ -1004,7 +1004,7 @@ where
         // Check the initial and final register values.
         Self::connect_initial_final_segment(&mut builder, &public_values);
 
-        // Check the initial `MemBefore` `MerklCap` value.
+        // Check the initial `MemBefore` `MerkleCap` value.
         Self::check_init_merkle_cap(&mut builder, &agg_pv, stark_config);
 
         let cyclic_vk = builder.add_verifier_data_public_inputs();
@@ -1229,7 +1229,7 @@ where
     /// - max_cpu_len_log: logarithm of the max number of CPU cycles in the
     ///   current segment.
     /// - segment_index: index of the segment to prove (i.e. segment 0 proves
-    ///   the first `max_cpu_len` cycles, the second proves the following
+    ///   the first `max_cpu_len` cycles, segment 1 proves the following
     ///   `max_cpu_len` cycles etc.)
     /// - `timing`: a profiler defining a scope hierarchy and the time consumed
     ///   by each one.
@@ -1450,8 +1450,8 @@ where
     /// of some parts of one execution.
     ///
     /// While regular segment proofs can only assert validity of a
-    /// single segment of a transaction, segment aggregation proofs
-    /// can cover an arbitrary range, up to an entire transaction.
+    /// single segment of a block, segment aggregation proofs
+    /// can cover an arbitrary range, up to an entire block.
     ///
     /// # Arguments
     ///
@@ -1463,7 +1463,7 @@ where
     ///   proof.
     /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
     ///   aggregation proof or
-    /// a regular transaction proof.
+    /// a regular segment proof.
     /// - `rhs_proof`: the right child proof.
     /// - `rhs_public_values`: the public values associated to the right child
     ///   proof.
