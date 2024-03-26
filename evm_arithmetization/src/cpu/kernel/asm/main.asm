@@ -112,10 +112,11 @@ global start_txns:
     DUP1 %scalar_to_rlp
     // stack: txn_counter, txn_nb
     DUP1 %num_bytes %mul_const(2)
-    // stack: num_nibbles, txn_counter, txn_nb
+    SWAP1
+    // stack: txn_counter, num_nibbles, txn_nb
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE)
 
-    // stack: init_gas_used, num_nibbles, txn_counter, txn_nb
+    // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
 global txn_loop:
     // If the prover has no more txns for us to process, halt.
     PROVER_INPUT(end_of_txns)
@@ -127,8 +128,8 @@ global txn_loop:
     // Call route_txn. When we return, we will process the txn receipt.
     PUSH txn_loop_after
    
-    // stack: retdest, prev_gas_used, num_nibbles, txn_counter, txn_nb
-    %stack(retdest, prev_gas_used, num_nibbles, txn_counter) -> (txn_counter, num_nibbles, retdest, prev_gas_used, txn_counter, num_nibbles) 
+    // stack: retdest, prev_gas_used, txn_counter, num_nibbles, txn_nb
+    %stack(retdest, prev_gas_used, txn_counter, num_nibbles) -> (txn_counter, num_nibbles, retdest, prev_gas_used, txn_counter, num_nibbles) 
     %jump(route_txn)
 
 global txn_loop_after:
