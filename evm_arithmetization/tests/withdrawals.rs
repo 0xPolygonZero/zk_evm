@@ -50,7 +50,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
             balance: withdrawals[0].1,
             ..AccountRlp::default()
         };
-        trie.insert(addr_nibbles, rlp::encode(&account).to_vec());
+        trie.insert(addr_nibbles, rlp::encode(&account).to_vec())?;
         trie
     };
 

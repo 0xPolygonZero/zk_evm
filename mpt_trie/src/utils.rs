@@ -13,6 +13,7 @@ use num_traits::PrimInt;
 use crate::{
     nibbles::{Nibble, Nibbles},
     partial_trie::{Node, PartialTrie},
+    trie_ops::TrieOpResult,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -241,6 +242,16 @@ pub(crate) fn get_segment_from_node_and_key_piece<T: PartialTrie>(
         TrieNodeType::Extension => TrieSegment::Extension(*k_piece),
         TrieNodeType::Leaf => TrieSegment::Leaf(*k_piece),
     }
+}
+
+/// Conversion from an [`Iterator`] within an allocator.
+///
+/// By implementing `TryFromIteratorIn` for a type, you define how it will be
+/// created from an iterator. This is common for types which describe a
+/// collection of some kind.
+pub trait TryFromIterator<A>: Sized {
+    /// Creates a value from an iterator within an allocator.
+    fn try_from_iter<T: IntoIterator<Item = A>>(iter: T) -> TrieOpResult<Self>;
 }
 
 #[cfg(test)]

@@ -13,6 +13,8 @@ use std::ops::RangeInclusive;
 use ethereum_types::{H160, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::PartialTrie;
+use mpt_trie::trie_ops::TrieOpResult;
+use mpt_trie::utils::TryFromIterator;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, StandardTrie},
@@ -36,34 +38,38 @@ struct StateTrieEntry {
     code_hash: H256,
 }
 
-fn main() {
+fn main() -> TrieOpResult<()> {
     let mut rng = StdRng::seed_from_u64(0);
 
     let (account_entries, account_storage_tries): (Vec<_>, Vec<_>) = (0..NUM_ACCOUNTS_TO_GEN)
         .map(|_| generate_fake_account_and_storage_trie(&mut rng))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
         .unzip();
 
-    let _state_trie = StandardTrie::from_iter(
+    let _state_trie = StandardTrie::try_from_iter(
         account_entries
             .into_iter()
             .map(|(k, acc)| (Nibbles::from_h256_be(k), acc.rlp_bytes().to_vec())),
-    );
+    )?;
 
     let _account_storage_tries: Vec<(AccountAddr, HashedPartialTrie)> = account_storage_tries;
+
+    Ok(())
 
     // TODO: Generate remaining tries...
 }
 
 fn generate_fake_account_and_storage_trie(
     rng: &mut StdRng,
-) -> (
+) -> TrieOpResult<(
     (HashedAccountAddr, StateTrieEntry),
     (AccountAddr, HashedPartialTrie),
-) {
+)> {
     let account_addr: H160 = rng.gen();
     let hashed_account_addr = keccak(account_addr.as_bytes());
 
-    let account_storage_trie = generate_fake_account_storage_trie(rng);
+    let account_storage_trie = generate_fake_account_storage_trie(rng)?;
 
     let acc_entry = StateTrieEntry {
         nonce: gen_u256(rng),
@@ -73,16 +79,16 @@ fn generate_fake_account_and_storage_trie(
                                * "fake" it here. */
     };
 
-    (
+    Ok((
         (hashed_account_addr, acc_entry),
         (account_addr, account_storage_trie),
-    )
+    ))
 }
 
-fn generate_fake_account_storage_trie(rng: &mut StdRng) -> HashedPartialTrie {
+fn generate_fake_account_storage_trie(rng: &mut StdRng) -> TrieOpResult<HashedPartialTrie> {
     let num_storage_entries = rng.gen_range(RANGE_OF_STORAGE_ENTRIES_AN_ACCOUNT_CAN_HAVE);
 
-    HashedPartialTrie::from_iter((0..num_storage_entries).map(|_| {
+    HashedPartialTrie::try_from_iter((0..num_storage_entries).map(|_| {
         let hashed_storage_addr = Nibbles::from_h256_be(rng.gen::<HashedAccountAddr>());
         let storage_data = gen_u256(rng).rlp_bytes().to_vec();
 

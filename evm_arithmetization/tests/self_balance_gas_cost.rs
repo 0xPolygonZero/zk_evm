@@ -77,9 +77,9 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     state_trie_before.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    )?;
+    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
+    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
@@ -138,10 +138,10 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
         expected_state_trie_after.insert(
             beneficiary_nibbles,
             rlp::encode(&beneficiary_account_after).to_vec(),
-        );
+        )?;
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
         expected_state_trie_after
     };
 
@@ -155,7 +155,7 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
