@@ -403,10 +403,6 @@ impl ParserState {
     ) -> CompactParsingResult<usize> {
         traverser.get_next_n_elems_into_buf(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE, buf);
 
-        // TODO: There is a decent amount of code duplication with the matches and the
-        // calls to `invalid_witness_err`. We should condense this...
-
-        // TODO: These clones are really bad, but we will clean this up once it works.
         match buf[0].clone() {
             WitnessEntry::Instruction(Instruction::EmptyRoot) => {
                 Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Empty)
@@ -418,13 +414,13 @@ impl ParserState {
                 Self::traverser_replace_prev_n_nodes_entry_helper(
                     1,
                     traverser,
-                    NodeEntry::Leaf(k, LeafNodeData::Value(v.clone().into())),
+                    NodeEntry::Leaf(k, LeafNodeData::Value(v.into())),
                 )
             }
             WitnessEntry::Instruction(Instruction::Extension(k)) => {
                 traverser.get_prev_n_elems_into_buf(1, buf);
 
-                match buf[0].clone() {
+                match &buf[0] {
                     WitnessEntry::Node(node) => Self::traverser_replace_prev_n_nodes_entry_helper(
                         2,
                         traverser,
@@ -434,11 +430,7 @@ impl ParserState {
                 }
             }
             WitnessEntry::Instruction(Instruction::Code(c)) => {
-                Self::traverser_replace_prev_n_nodes_entry_helper(
-                    1,
-                    traverser,
-                    NodeEntry::Code(c.clone()),
-                )
+                Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Code(c))
             }
             WitnessEntry::Instruction(Instruction::AccountLeaf(k, n, b, has_code, has_storage)) => {
                 let (n_nodes_to_replace, account_node_code, s_trie) = match (has_code, has_storage)
