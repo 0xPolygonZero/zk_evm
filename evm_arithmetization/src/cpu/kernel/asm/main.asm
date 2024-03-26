@@ -113,11 +113,9 @@ global start_txns:
     // stack: txn_counter, txn_nb
     DUP1 %num_bytes %mul_const(2)
     // stack: num_nibbles, txn_counter, txn_nb
-    %increment_bounded_rlp
-    // stack: txn_counter, num_nibbles, next_txn_counter, next_num_nibbles,  txn_nb
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE)
 
-    // stack: init_gas_used, txn_counter, num_nibbles, next_txn_counter, next_num_nibbles, txn_nb
+    // stack: init_gas_used, num_nibbles, txn_counter, txn_nb
 global txn_loop:
     // If the prover has no more txns for us to process, halt.
     PROVER_INPUT(end_of_txns)
@@ -128,24 +126,26 @@ global txn_loop:
     
     // Call route_txn. When we return, we will process the txn receipt.
     PUSH txn_loop_after
-    // stack: retdest, prev_gas_used, txn_counter, num_nibbles, next_txn_counter, next_num_nibbles, txn_nb
-    DUP4 DUP4
-
+   
+    // stack: retdest, prev_gas_used, num_nibbles, txn_counter, txn_nb
+    %stack(retdest, prev_gas_used, num_nibbles, txn_counter) -> (txn_counter, num_nibbles, retdest, prev_gas_used, txn_counter, num_nibbles) 
     %jump(route_txn)
 
 global txn_loop_after:
-    // stack: success, leftover_gas, cur_cum_gas, prev_txn_counter, prev_num_nibbles, txn_counter, num_nibbles, txn_nb
+    // stack: success, leftover_gas, cur_cum_gas, prev_txn_counter, prev_num_nibbles, txn_nb
+    DUP5 DUP5 %increment_bounded_rlp
+    // stack: txn_counter, num_nibbles, success, leftover_gas, cur_cum_gas, prev_txn_counter, prev_num_nibbles, txn_nb
+    %stack (txn_counter, num_nibbles, success, leftover_gas, cur_cum_gas, prev_txn_counter, prev_num_nibbles) -> (success, leftover_gas, cur_cum_gas, prev_txn_counter, prev_num_nibbles, txn_counter, num_nibbles)
     %process_receipt
+
     // stack: new_cum_gas, txn_counter, num_nibbles, txn_nb
     SWAP3 %increment SWAP3
-    SWAP2 %increment_bounded_rlp
-    // stack: txn_counter, num_nibbles, next_txn_counter, next_num_nibbles, new_cum_gas, txn_nb
-    %stack (txn_counter, num_nibbles, next_txn_counter, next_num_nibbles, new_cum_gas) -> (new_cum_gas, txn_counter, num_nibbles, next_txn_counter, next_num_nibbles)
+
+    // stack: new_cum_gas, txn_counter, num_nibbles, new_txn_number
     %jump(txn_loop)
 
 global execute_withdrawals:
-    // stack: cum_gas, txn_counter, num_nibbles, next_txn_counter, next_num_nibbles, txn_nb
-    %stack (cum_gas, txn_counter, num_nibbles, next_txn_counter, next_num_nibbles) -> (cum_gas, txn_counter, num_nibbles)
+    // stack: cum_gas, txn_counter, num_nibbles, txn_nb
     %withdrawals
 
 global perform_final_checks:
