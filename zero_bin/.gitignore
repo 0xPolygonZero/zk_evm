@@ -9,3 +9,7 @@ circuits/
 # Folders containing logs from the utility scripts in tools/
 debug/
 proofs/
+
+# Serialized generated prover & verifier state used by plonky2
+prover_state_*
+verifier_state_*
