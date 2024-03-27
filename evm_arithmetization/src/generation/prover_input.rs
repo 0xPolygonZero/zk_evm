@@ -42,7 +42,7 @@ impl From<Vec<String>> for ProverInputFn {
 impl<F: Field> GenerationState<F> {
     pub(crate) fn prover_input(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[0].as_str() {
-            "no_txn" => self.no_txn(),
+            "end_of_txns" => self.run_end_of_txns(),
             "trie_ptr" => self.run_trie_ptr(input_fn),
             "ff" => self.run_ff(input_fn),
             "sf" => self.run_sf(input_fn),
@@ -59,8 +59,16 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    fn no_txn(&mut self) -> Result<U256, ProgramError> {
-        Ok(U256::from(!self.inputs.has_txn as u8))
+    fn run_end_of_txns(&mut self) -> Result<U256, ProgramError> {
+        // Reset the jumpdest table before the next transaction.
+        self.jumpdest_table = None;
+        let end = self.next_txn_index == self.inputs.txns_len;
+        if end {
+            Ok(U256::one())
+        } else {
+            self.next_txn_index += 1;
+            Ok(U256::zero())
+        }
     }
 
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
