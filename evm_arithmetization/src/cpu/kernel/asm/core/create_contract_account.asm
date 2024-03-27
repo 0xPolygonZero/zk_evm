@@ -23,7 +23,13 @@
 
 %%add_account:
     // stack: address
-    DUP1 %journal_add_account_created
+    DUP1 PUSH 1
+    // stack: is_contract, address, address
+    %journal_add_account_created
+    // stack: address
+    DUP1
+    %append_created_contracts
+    // stack: address
     PUSH 0
 %%do_insert:
     // stack: new_acct_value, address
@@ -48,4 +54,16 @@
 
 %%end:
     // stack: status
+%endmacro
+
+%macro append_created_contracts
+    // stack: address
+    %mload_global_metadata(@GLOBAL_METADATA_CREATED_CONTRACTS_LEN)
+    // stack: nb_created_contracts, address
+    SWAP1 DUP2
+    // stack: nb_created_contracts, address, nb_created_contracts
+    %mstore_kernel(@SEGMENT_CREATED_CONTRACTS)
+    // stack: nb_created_contracts
+    %increment
+    %mstore_global_metadata(@GLOBAL_METADATA_CREATED_CONTRACTS_LEN)
 %endmacro

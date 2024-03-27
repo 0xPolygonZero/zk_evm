@@ -103,10 +103,20 @@ fn test_selfdestruct() -> anyhow::Result<()> {
             balance: eth_to_wei(110_000.into()) - 26_002 * 0xa,
             ..Default::default()
         };
+        let to_account_after = AccountRlp {
+            balance: U256::zero(),
+            ..to_account_before
+        };
         set_account(
             &mut smt,
             H160(sender),
             &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(to),
+            &to_account_after,
             &HashMap::new(),
         );
         smt
