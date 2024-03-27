@@ -34,7 +34,7 @@ global smt_read:
 
     DUP1 %eq_const(@SMT_NODE_HASH)      %jumpi(smt_read_hash)
     DUP1 %eq_const(@SMT_NODE_INTERNAL)  %jumpi(smt_read_internal)
-    DUP1 %eq_const(@SMT_NODE_LEAF)      %jumpi(smt_read_leaf)
+    %eq_const(@SMT_NODE_LEAF)           %jumpi(smt_read_leaf)
     PANIC
 
 smt_read_hash:
@@ -91,8 +91,6 @@ smt_read_internal_contd:
     %jump(smt_read)
 
 smt_read_leaf:
-    // stack: node_type, node_payload_ptr, level, ks, retdest
-    POP
     // stack: node_payload_ptr, level, ks, retdest
     DUP1 %mload_trie_data
     // stack: rem_key, node_payload_ptr, level, ks, retdest

@@ -16,7 +16,6 @@
     // stack: node_ptr
     %increment %mload_trie_data
     // stack: hash
-    %jump(%%end)
 %%end:
 %endmacro
 
