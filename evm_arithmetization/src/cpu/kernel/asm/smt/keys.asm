@@ -13,7 +13,7 @@
     // stack: a_0 + a_1<<64 + a_2<<128, u32max, addr
     DUP3 %shr_const(96) DUP3 AND %shl_const(192) ADD
     // stack: a_0 + a_1<<64 + a_2<<128 + a_3<<192, u32max, addr
-    SWAP2 %shr_const(128) DUP2 AND
+    SWAP2 %shr_const(128)
     // stack: a_4, u32max, a_0 + a_1<<64 + a_2<<128 + a_3<<192
     %stack (y, u32max, x) -> (x, y, @POSEIDON_HASH_ZEROS)
     POSEIDON
@@ -32,7 +32,7 @@
     // stack: a_0 + a_1<<64 + a_2<<128, u32max, addr
     DUP3 %shr_const(96) DUP3 AND %shl_const(192) ADD
     // stack: a_0 + a_1<<64 + a_2<<128 + a_3<<192, u32max, addr
-    SWAP2 %shr_const(128) DUP2 AND
+    SWAP2 %shr_const(128)
     // stack: a_4, u32max, a_0 + a_1<<64 + a_2<<128 + a_3<<192
     %add_const(0x100000000000000000000000000000000) // SMT_KEY_NONCE (=1) << 128
     %stack (y, u32max, x) -> (x, y, @POSEIDON_HASH_ZEROS)
@@ -52,7 +52,7 @@
     // stack: a_0 + a_1<<64 + a_2<<128, u32max, addr
     DUP3 %shr_const(96) DUP3 AND %shl_const(192) ADD
     // stack: a_0 + a_1<<64 + a_2<<128 + a_3<<192, u32max, addr
-    SWAP2 %shr_const(128) DUP2 AND
+    SWAP2 %shr_const(128)
     // stack: a_4, u32max, a_0 + a_1<<64 + a_2<<128 + a_3<<192
     %add_const(0x200000000000000000000000000000000) // SMT_KEY_CODE (=2) << 128
     %stack (y, u32max, x) -> (x, y, @POSEIDON_HASH_ZEROS)
@@ -72,7 +72,7 @@
     // stack: a_0 + a_1<<64 + a_2<<128, u32max, addr
     DUP3 %shr_const(96) DUP3 AND %shl_const(192) ADD
     // stack: a_0 + a_1<<64 + a_2<<128 + a_3<<192, u32max, addr
-    SWAP2 %shr_const(128) DUP2 AND
+    SWAP2 %shr_const(128)
     // stack: a_4, u32max, a_0 + a_1<<64 + a_2<<128 + a_3<<192
     %add_const(0x400000000000000000000000000000000) // SMT_KEY_CODE_LENGTH (=4) << 128
     %stack (y, u32max, x) -> (x, y, @POSEIDON_HASH_ZEROS)
@@ -97,7 +97,7 @@
     // stack: a_0 + a_1<<64 + a_2<<128, u32max, addr
     DUP3 %shr_const(96) DUP3 AND %shl_const(192) ADD
     // stack: a_0 + a_1<<64 + a_2<<128 + a_3<<192, u32max, addr
-    SWAP2 %shr_const(128) DUP2 AND
+    SWAP2 %shr_const(128)
     // stack: a_4, u32max, a_0 + a_1<<64 + a_2<<128 + a_3<<192
     %add_const(0x300000000000000000000000000000000) // SMT_KEY_STORAGE (=3) << 128
     %stack (y, u32max, x, capacity) -> (x, y, capacity)
