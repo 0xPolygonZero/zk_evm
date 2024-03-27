@@ -172,7 +172,7 @@ codecopy_after:
     EXIT_KERNEL
 
 codecopy_no_prune:
-    // stack: src_ctx
+    // stack: src_ctx, kexit_info
     POP
     EXIT_KERNEL
 

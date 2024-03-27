@@ -348,12 +348,13 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
     }
 
     fn insert_pruned_contexts(trace_rows: &mut [[F; NUM_COLUMNS]], pruned_contexts: Vec<usize>) {
-        let mut dedup_vec = pruned_contexts.clone();
-        dedup_vec.sort();
-        dedup_vec.dedup();
-
-        assert!(
-            dedup_vec.len() == pruned_contexts.len(),
+        debug_assert!(
+            {
+                let mut dedup_vec = pruned_contexts.clone();
+                dedup_vec.sort();
+                dedup_vec.dedup();
+                dedup_vec.len() == pruned_contexts.len()
+            },
             "Pruned contexts are not unique.",
         );
 

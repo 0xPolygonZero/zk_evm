@@ -42,11 +42,11 @@ pub(crate) const VIRTUAL_FIRST_CHANGE: usize = SEGMENT_FIRST_CHANGE + 1;
 // Contains `next_segment * addr_changed * next_is_read`.
 pub(crate) const INITIALIZE_AUX: usize = VIRTUAL_FIRST_CHANGE + 1;
 
-// Contains the list of pruned contexts. Each pruned context must appear exactly
-// once; unused rows are set to zero.
+// Contains `row_index` if and only if context `row_index` must be pruned,
+// and zero if not.
 pub(crate) const PRUNED_CONTEXTS: usize = INITIALIZE_AUX + 1;
 
-// Inverse of `PRUNED_CONTEXTS`.Used to ascertain it's nonzero.
+// Pseudo-inverse of `PRUNED_CONTEXTS`. Used to ascertain it's nonzero.
 pub(crate) const PRUNED_CONTEXTS_INV: usize = PRUNED_CONTEXTS + 1;
 
 // Used for the context pruning lookup.
