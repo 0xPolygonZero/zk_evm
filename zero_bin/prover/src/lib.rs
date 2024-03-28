@@ -1,5 +1,6 @@
 use anyhow::Result;
 use ethereum_types::U256;
+#[cfg(feature = "test_only")]
 use futures::stream::TryStreamExt;
 use ops::TxProof;
 use paladin::{
@@ -56,7 +57,7 @@ impl ProverInput {
                 intern: p,
             });
 
-            let block_proof = paladin::Literal(proof)
+            let block_proof = paladin::directive::Literal(proof)
                 .map(&ops::BlockProof { prev })
                 .run(runtime)
                 .await?;
