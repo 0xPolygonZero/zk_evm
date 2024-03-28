@@ -190,7 +190,7 @@ pub(crate) fn generate_poseidon<F: RichField>(
     state
         .traces
         .poseidon_ops
-        .push(PoseidonOp::PoseidonStackOp(PoseidonSimpleOp(arr)));
+        .push(PoseidonOp::PoseidonSimpleOp(PoseidonSimpleOp(arr)));
 
     state.traces.push_memory(log_in1);
     state.traces.push_memory(log_in2);

@@ -158,7 +158,7 @@ pub fn ctl_looking_memory_filter<F: Field>() -> Filter<F> {
 
 #[derive(Clone, Debug)]
 pub enum PoseidonOp<F: RichField> {
-    PoseidonStackOp(PoseidonSimpleOp<F>),
+    PoseidonSimpleOp(PoseidonSimpleOp<F>),
     PoseidonGeneralOp(PoseidonGeneralOp),
 }
 
@@ -199,7 +199,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
         let base_len: usize = operations
             .iter()
             .map(|op| match op {
-                PoseidonOp::PoseidonStackOp(_) => 1,
+                PoseidonOp::PoseidonSimpleOp(_) => 1,
                 PoseidonOp::PoseidonGeneralOp(op) => {
                     debug_assert!(op.input.len() % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE) == 0);
                     (op.input.len() + FELT_MAX_BYTES * POSEIDON_SPONGE_RATE - 1)
@@ -213,7 +213,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
 
         for op in operations {
             match op {
-                PoseidonOp::PoseidonStackOp(op) => rows.push(self.generate_row_for_simple_op(op)),
+                PoseidonOp::PoseidonSimpleOp(op) => rows.push(self.generate_row_for_simple_op(op)),
                 PoseidonOp::PoseidonGeneralOp(op) => {
                     rows.extend(self.generate_rows_for_general_op(op))
                 }
