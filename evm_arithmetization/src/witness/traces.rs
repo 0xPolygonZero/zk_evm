@@ -1,5 +1,6 @@
 use core::mem::size_of;
 
+use env_logger::fmt::Timestamp;
 use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -12,9 +13,10 @@ use starky::util::trace_rows_to_poly_values;
 use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::arithmetic::{BinaryOperator, Operation};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
-use crate::cpu::columns::CpuColumnsView;
+use crate::cpu::columns::{CpuColumnsView, NUM_CPU_COLUMNS};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
+use crate::poseidon::columns::PoseidonColumnsView;
 use crate::poseidon::poseidon_stark::PoseidonOp;
 use crate::witness::memory::MemoryOp;
 use crate::{arithmetic, keccak, keccak_sponge, logic};
@@ -202,7 +204,8 @@ impl<T: Copy + RichField> Traces<T> {
                 .byte_packing_stark
                 .generate_trace(byte_packing_ops, cap_elements, timing)
         );
-        let cpu_rows = cpu.into_iter().map(|x| x.into()).collect();
+        let cpu_rows: Vec<[T; NUM_CPU_COLUMNS]> = cpu.into_iter().map(|x| x.into()).collect();
+
         let cpu_trace = trace_rows_to_poly_values(cpu_rows);
         let keccak_trace = timed!(
             timing,

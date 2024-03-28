@@ -102,6 +102,20 @@ pub(crate) const JUMPDEST_OP: StackBehavior = StackBehavior {
     disable_other_channels: true,
 };
 
+/// Stack behavior for POSEIDON.
+pub(crate) const POSEIDON_OP: StackBehavior = StackBehavior {
+    num_pops: 3,
+    pushes: true,
+    disable_other_channels: true,
+};
+
+/// Stack behavior for POSEIDON_GENERAL.
+pub(crate) const POSEIDON_GENERAL_OP: StackBehavior = StackBehavior {
+    num_pops: 2,
+    pushes: true,
+    disable_other_channels: true,
+};
+
 // AUDITORS: If the value below is `None`, then the operation must be manually
 // checked to ensure that every general-purpose memory channel is either
 // disabled or has its read flag and address properly constrained. The same
@@ -121,11 +135,7 @@ pub(crate) const STACK_BEHAVIORS: OpsColumnsView<Option<StackBehavior>> = OpsCol
         disable_other_channels: false,
     }),
     jumpdest_keccak_general: None,
-    poseidon: Some(StackBehavior {
-        num_pops: 3,
-        pushes: true,
-        disable_other_channels: true,
-    }),
+    poseidon: None,
     push_prover_input: Some(StackBehavior {
         num_pops: 0,
         pushes: true,
@@ -333,6 +343,20 @@ pub(crate) fn eval_packed<P: PackedField>(
         nv,
         keccak_general_filter,
         KECCAK_GENERAL_OP,
+        yield_constr,
+    );
+
+    // Constrain stack for POSEIDON.
+    let poseidon_filter = lv.op.poseidon * (P::ONES - lv.opcode_bits[0]);
+    eval_packed_one(lv, nv, poseidon_filter, POSEIDON_OP, yield_constr);
+
+    // Constrain stack for POSEIDON_GENERAL.
+    let poseidon_general_filter = lv.op.poseidon * lv.opcode_bits[0];
+    eval_packed_one(
+        lv,
+        nv,
+        poseidon_general_filter,
+        POSEIDON_GENERAL_OP,
         yield_constr,
     );
 
@@ -653,6 +677,22 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         nv,
         keccak_general_filter,
         KECCAK_GENERAL_OP,
+        yield_constr,
+    );
+
+    // Constrain stack for POSEIDON.
+    let mut poseidon_filter = builder.sub_extension(one, lv.opcode_bits[0]);
+    poseidon_filter = builder.mul_extension(lv.op.poseidon, poseidon_filter);
+    eval_ext_circuit_one(builder, lv, nv, poseidon_filter, POSEIDON_OP, yield_constr);
+
+    // Constrain stack for POSEIDON_GENERAL.
+    let poseidon_general_filter = builder.mul_extension(lv.op.poseidon, lv.opcode_bits[0]);
+    eval_ext_circuit_one(
+        builder,
+        lv,
+        nv,
+        poseidon_general_filter,
+        POSEIDON_GENERAL_OP,
         yield_constr,
     );
 

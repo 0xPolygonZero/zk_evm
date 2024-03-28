@@ -113,6 +113,14 @@ where
         &[],
         config,
     )?;
+    verify_stark_proof_with_challenges(
+        poseidon_stark,
+        &stark_proofs[Table::Poseidon as usize].proof,
+        &stark_challenges[Table::Poseidon as usize],
+        Some(&ctl_vars_per_table[Table::Poseidon as usize]),
+        &[],
+        config,
+    )?;
 
     let public_values = all_proof.public_values;
 

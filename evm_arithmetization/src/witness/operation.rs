@@ -3,6 +3,8 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
+use smt_trie::code::{poseidon_hash_padded_byte_vec, poseidon_pad_byte_vec};
+use smt_trie::utils::hashout2u;
 
 use super::util::{
     byte_packing_log, byte_unpacking_log, mem_read_with_log, mem_write_log,
@@ -19,7 +21,9 @@ use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
-use crate::poseidon::poseidon_stark::PoseidonOp;
+use crate::memory::NUM_CHANNELS;
+use crate::poseidon::columns::POSEIDON_SPONGE_RATE;
+use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonSimpleOp};
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
 use crate::witness::errors::ProgramError;
@@ -27,7 +31,7 @@ use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKin
 use crate::witness::operation::MemoryChannel::GeneralPurpose;
 use crate::witness::transition::fill_stack_fields;
 use crate::witness::util::{
-    keccak_sponge_log, mem_read_gp_with_log_and_fill, mem_write_gp_log_and_fill,
+    compute_poseidon, keccak_sponge_log, mem_read_gp_with_log_and_fill, mem_write_gp_log_and_fill,
     stack_pop_with_log_and_fill,
 };
 use crate::{arithmetic, logic};
@@ -43,6 +47,7 @@ pub(crate) enum Operation {
     TernaryArithmetic(arithmetic::TernaryOperator),
     KeccakGeneral,
     Poseidon,
+    PoseidonGeneral,
     ProverInput,
     Pop,
     Jump,
@@ -182,10 +187,59 @@ pub(crate) fn generate_poseidon<F: RichField>(
     log::debug!("Poseidon hashing {:?} -> {}", arr, hash);
     push_no_write(state, hash);
 
-    state.traces.poseidon_ops.push(PoseidonOp(arr));
+    state
+        .traces
+        .poseidon_ops
+        .push(PoseidonOp::PoseidonSimpleOp(PoseidonSimpleOp(arr)));
 
     state.traces.push_memory(log_in1);
     state.traces.push_memory(log_in2);
+    state.traces.push_cpu(row);
+    Ok(())
+}
+
+pub(crate) fn generate_poseidon_general<F: RichField>(
+    state: &mut GenerationState<F>,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    let [(addr, _), (len, log_in1)] = stack_pop_with_log_and_fill::<2, _>(state, &mut row)?;
+    let len = u256_to_usize(len)?;
+
+    let base_address = MemoryAddress::new_bundle(addr)?;
+    let mut input = (0..len)
+        .map(|i| {
+            let address = MemoryAddress {
+                virt: base_address.virt.saturating_add(i),
+                ..base_address
+            };
+            let val = state.memory.get(address);
+            state.traces.push_memory(MemoryOp::new(
+                MemoryChannel::Code,
+                state.traces.clock(),
+                address,
+                MemoryOpKind::Read,
+                val.0[0].into(),
+            ));
+
+            val.0[0] as u8
+        })
+        .collect_vec();
+
+    // poseidon_pad_byte_vec(&mut input);
+
+    let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
+        base_address,
+        timestamp: state.traces.clock() * NUM_CHANNELS,
+        input: input.clone(),
+        len: input.len(),
+    });
+    state.traces.poseidon_ops.push(poseidon_op);
+
+    let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
+
+    push_no_write(state, hash);
+
+    state.traces.push_memory(log_in1);
     state.traces.push_cpu(row);
     Ok(())
 }
