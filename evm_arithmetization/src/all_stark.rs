@@ -128,7 +128,7 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
         ctl_keccak_outputs(),
         ctl_logic(),
         ctl_memory(),
-        ctl_poseidon(),
+        ctl_poseidon_simple(),
         ctl_poseidon_general_input(),
         ctl_poseidon_general_output(),
     ]
@@ -327,7 +327,7 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
     CrossTableLookup::new(all_lookers, memory_looked)
 }
 
-fn ctl_poseidon<F: Field>() -> CrossTableLookup<F> {
+fn ctl_poseidon_simple<F: Field>() -> CrossTableLookup<F> {
     CrossTableLookup::new(
         vec![cpu_stark::ctl_poseidon_simple_op()],
         poseidon_stark::ctl_looked_simple_op(),

@@ -28,7 +28,6 @@ const SIMPLE_OPCODES: OpsColumnsView<Option<u32>> = OpsColumnsView {
     shift: G_VERYLOW,
     jumpdest_keccak_general: None, // This is handled manually below.
     poseidon: KERNEL_ONLY_INSTR,
-    poseidon_general: KERNEL_ONLY_INSTR,
     push_prover_input: None, // This is handled manually below.
     jumps: None,             // Combined flag handled separately.
     pc_push0: G_BASE,
