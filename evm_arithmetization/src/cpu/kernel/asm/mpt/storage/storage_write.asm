@@ -104,6 +104,13 @@ sstore_after_refund:
     EQ %jumpi(sstore_noop)
 
     // stack: current_value, slot, value, kexit_info
+    DUP1 ISZERO
+    // stack: current_value==0, current_value, slot, value, kexit_info
+    DUP4 MUL
+    // stack: value & current_value==0, current_value, slot, value, kexit_info
+    %jumpi(new_storage_slot)
+global not_new_storage_slot:
+    // stack: current_value, slot, value, kexit_info
     DUP2 %address %journal_add_storage_change
     // stack: slot, value, kexit_info
 

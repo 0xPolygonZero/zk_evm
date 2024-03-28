@@ -75,10 +75,12 @@ pub(crate) enum Segment {
     BlockHashes = 33 << SEGMENT_SCALING_FACTOR,
     /// List of contracts which have been created during the current transaction.
     CreatedContracts = 34 << SEGMENT_SCALING_FACTOR,
+    /// List of used storage slots in newly created contracts.
+    NewStorageSlots = 35 << SEGMENT_SCALING_FACTOR,
 }
 
 impl Segment {
-    pub(crate) const COUNT: usize = 35;
+    pub(crate) const COUNT: usize = 36;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
     pub(crate) const fn unscale(&self) -> usize {
@@ -122,6 +124,7 @@ impl Segment {
             Self::ContextCheckpoints,
             Self::BlockHashes,
             Self::CreatedContracts,
+            Self::NewStorageSlots,
         ]
     }
 
@@ -163,6 +166,7 @@ impl Segment {
             Segment::ContextCheckpoints => "SEGMENT_CONTEXT_CHECKPOINTS",
             Segment::BlockHashes => "SEGMENT_BLOCK_HASHES",
             Segment::CreatedContracts => "SEGMENT_CREATED_CONTRACTS",
+            Segment::NewStorageSlots => "SEGMENT_NEW_STORAGE_SLOTS",
         }
     }
 
@@ -203,6 +207,7 @@ impl Segment {
             Segment::ContextCheckpoints => 256,
             Segment::BlockHashes => 256,
             Segment::CreatedContracts => 256,
+            Segment::NewStorageSlots => 256,
         }
     }
 }
