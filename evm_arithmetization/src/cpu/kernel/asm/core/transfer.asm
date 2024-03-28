@@ -96,7 +96,9 @@ add_eth_zero_balance:
 
 global add_eth_new_account:
     // stack: addr, amount, retdest
-    DUP1 %journal_add_account_created
+    DUP1 PUSH 0
+    // stack: is_eoa, addr, amount, retdest
+    %journal_add_account_created
     // stack: addr, amount, retdest
     DUP1 %key_code
     %stack (key_code) -> (key_code, @EMPTY_STRING_POSEIDON_HASH)

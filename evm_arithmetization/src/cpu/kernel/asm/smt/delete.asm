@@ -245,7 +245,45 @@ zero_code:
 zero_code_length:
     // N.B.: We don't delete the storage, since there's no way of knowing keys used.
     // stack: key_code_length, address, retdest
-    %pop2 JUMP
+    POP
+    // stack: address, retdest
+    %mload_global_metadata(@GLOBAL_METADATA_NEW_STORAGE_SLOTS_LEN)
+    // stack: slots_len, address, retdest
+    PUSH 0
+    // stack: i, slots_len, address, retdest
+delete_storage_slots_loop:
+    // stack: i, slots_len, address, retdest
+    DUP2 DUP2 EQ %jumpi(delete_storage_slots_loop_end)
+    // stack: i, slots_len, address, retdest
+    DUP1 %add_const(@SEGMENT_NEW_STORAGE_SLOTS)
+    // stack: addr_index, i, slots_len, address, retdest
+    MLOAD_GENERAL
+    // stack: slot_addr, i, slots_len, address, retdest
+    DUP4 EQ
+    // stack: address==slot_addr, i, slots_len, address, retdest
+    %jumpi(delete_storage_slot)
+    // stack: i, slots_len, address, retdest
+    %add_const(2) %jump(delete_storage_slots_loop)
+delete_storage_slot:
+    // stack: i, slots_len, address, retdest
+    DUP1 %increment %add_const(@SEGMENT_NEW_STORAGE_SLOTS)
+    // stack: slot_index, i, slots_len, address, retdest
+    MLOAD_GENERAL
+    // stack: slot, i, slots_len, address, retdest
+    DUP4 %key_storage
+    // stack: key_storage, i, slots_len, address, retdest
+    DUP1 %smt_read_state ISZERO %jumpi(zero_slot)
+    // stack: key_storage, i, slots_len, address, retdest
+    DUP1 %smt_delete_state
+zero_slot:
+    // stack: key_storage, i, slots_len, address, retdest
+    POP
+    // stack: i, slots_len, address, retdest
+    %add_const(2) %jump(delete_storage_slots_loop)
+
+delete_storage_slots_loop_end:
+    // stack: i, slots_len, address, retdest
+    %pop3 JUMP
 
 %macro delete_account
     %stack (address) -> (address, %%after)
