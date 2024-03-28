@@ -118,8 +118,6 @@ load_code_padded_ctd:
     MSTORE_GENERAL
     // stack: retdest, code_size
     JUMP
-
-// TODO: This could certainly be optimized, or implemented directly in the Poseidon Stark.
 global poseidon_hash_code:
     // stack: padded_code_size, codehash, ctx, retdest
     // %stack (padded_code_size, codehash, ctx) -> (0, 0, padded_code_size, ctx, codehash)

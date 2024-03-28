@@ -35,21 +35,6 @@ use crate::witness::memory::MemoryAddress;
 // TODO: this constant depends on the size of F, which is not bounded.
 pub const FELT_MAX_BYTES: usize = 7;
 
-pub fn ctl_looked_data<F: Field>() -> Vec<Column<F>> {
-    let cols = POSEIDON_COL_MAP;
-    let outputs: Vec<Column<F>> = Column::singles(cols.digest).collect();
-    let mut res: Vec<_> = Column::singles([
-        cols.context,
-        cols.segment,
-        cols.virt,
-        cols.len,
-        cols.timestamp,
-    ])
-    .collect();
-    res.extend(outputs);
-    res
-}
-
 pub(crate) fn ctl_looked_simple_op<F: Field>() -> TableWithColumns<F> {
     let mut columns = Column::singles(POSEIDON_COL_MAP.input).collect_vec();
     columns.extend(Column::singles(POSEIDON_COL_MAP.digest));
