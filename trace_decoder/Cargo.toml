@@ -28,7 +28,7 @@ thiserror = { workspace = true }
 
 # Local dependencies
 # TODO: update decoder to take local versions again
-mpt_trie = "0.1.0"
+mpt_trie = "0.2.0"
 evm_arithmetization = "0.1.0"
 
 [dev-dependencies]
