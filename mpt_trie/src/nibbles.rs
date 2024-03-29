@@ -27,6 +27,7 @@ pub type Nibble = u8;
 
 construct_uint! {
     /// Used for the internal representation of a sequence of nibbles.
+    #[allow(clippy::assign_op_pattern)]
     pub struct NibblesIntern(5);
 }
 
@@ -150,6 +151,8 @@ macro_rules! impl_to_nibbles {
     ($type:ty) => {
         impl ToNibbles for $type {
             fn to_nibbles(self) -> Nibbles {
+                // Ethereum types don't have `BITS` defined.
+                #[allow(clippy::manual_bits)]
                 let size_bits = size_of::<Self>() * 8;
                 let count = (size_bits - self.leading_zeros() as usize + 3) / 4;
                 let mut packed = NibblesIntern::zero();
@@ -208,9 +211,9 @@ impl<'a> TryFrom<&'a NibblesIntern> for U256 {
     }
 }
 
-impl Into<NibblesIntern> for U256 {
-    fn into(self) -> NibblesIntern {
-        let arr = self.as_u64s();
+impl From<U256> for NibblesIntern {
+    fn from(val: U256) -> Self {
+        let arr = val.as_u64s();
 
         let mut ret = NibblesIntern::zero();
         ret.0[0] = arr[0];
@@ -221,9 +224,9 @@ impl Into<NibblesIntern> for U256 {
     }
 }
 
-impl Into<ethereum_types::U256> for Nibbles {
-    fn into(self) -> ethereum_types::U256 {
-        U256::try_from(&self.packed).unwrap()
+impl From<Nibbles> for U256 {
+    fn from(val: Nibbles) -> Self {
+        U256::try_from(&val.packed).unwrap()
     }
 }
 
