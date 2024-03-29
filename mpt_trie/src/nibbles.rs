@@ -885,8 +885,6 @@ impl Nibbles {
         (k.bits() + 3) / 4
     }
 
-    // TODO: Make not terrible at some point... Consider moving away from `U256`
-    // internally?
     /// Returns the nibbles bytes in big-endian format.
     pub fn bytes_be(&self) -> Vec<u8> {
         let mut byte_buf = [0; 40];
