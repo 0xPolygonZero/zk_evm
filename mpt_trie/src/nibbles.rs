@@ -1,6 +1,7 @@
+#![allow(clippy::assign_op_pattern)]
+
 //! Define [`Nibbles`] and how to convert bytes, hex prefix encodings and
 //! strings into nibbles.
-
 use std::mem::size_of;
 use std::{
     fmt::{self, Debug},
@@ -27,12 +28,11 @@ pub type Nibble = u8;
 
 construct_uint! {
     /// Used for the internal representation of a sequence of nibbles.
-    #[allow(clippy::assign_op_pattern)]
     pub struct NibblesIntern(5);
 }
 
 const MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG: &str =
-    "Attempted to create a nibbles sequence longer than 80!";
+    "Attempted to create a nibbles sequence longer than 64!";
 const SINGLE_NIBBLE_APPEND_ASSERT_ERR_MSG: &str =
     "Attempted to append a single nibble that was greater than 15!";
 
@@ -211,6 +211,24 @@ impl<'a> TryFrom<&'a NibblesIntern> for U256 {
     }
 }
 
+impl TryInto<U256> for Nibbles {
+    type Error = NibblesToTypeError;
+
+    fn try_into(self) -> Result<U256, NibblesToTypeError> {
+        let arr = self.packed;
+        if arr.0[4] != 0 {
+            return Err(NibblesToTypeError::Overflow);
+        }
+
+        let mut ret = [0; 4];
+        ret[0] = arr.0[0];
+        ret[1] = arr.0[1];
+        ret[2] = arr.0[2];
+        ret[3] = arr.0[3];
+        Ok(U256(ret))
+    }
+}
+
 impl From<U256> for NibblesIntern {
     fn from(val: U256) -> Self {
         let arr = val.as_u64s();
@@ -221,12 +239,6 @@ impl From<U256> for NibblesIntern {
         ret.0[2] = arr[2];
         ret.0[3] = arr[3];
         ret
-    }
-}
-
-impl From<Nibbles> for U256 {
-    fn from(val: Nibbles) -> Self {
-        U256::try_from(&val.packed).unwrap()
     }
 }
 
@@ -478,7 +490,7 @@ impl Nibbles {
     ///
     /// # Panics
     /// Panics if appending the `Nibble` causes an overflow (total nibbles >
-    /// 80).
+    /// 64).
     pub fn push_nibble_front(&mut self, n: Nibble) {
         self.nibble_append_safety_asserts(n);
 
@@ -492,7 +504,7 @@ impl Nibbles {
     ///
     /// # Panics
     /// Panics if appending the `Nibble` causes an overflow (total nibbles >
-    /// 80).
+    /// 64).
     pub fn push_nibble_back(&mut self, n: Nibble) {
         self.nibble_append_safety_asserts(n);
 
@@ -504,7 +516,7 @@ impl Nibbles {
     ///
     /// # Panics
     /// Panics if appending the `Nibbles` causes an overflow (total nibbles >
-    /// 80).
+    /// 64).
     pub fn push_nibbles_front(&mut self, n: &Self) {
         let new_count = self.count + n.count;
         self.nibbles_append_safety_asserts(new_count);
@@ -519,7 +531,7 @@ impl Nibbles {
     ///
     /// # Panics
     /// Panics if appending the `Nibbles` causes an overflow (total nibbles >
-    /// 80).
+    /// 64).
     pub fn push_nibbles_back(&mut self, n: &Self) {
         let new_count = self.count + n.count;
         self.nibbles_append_safety_asserts(new_count);
@@ -672,7 +684,7 @@ impl Nibbles {
     /// Merge a single Nibble with a `Nibbles`. `self` will be the prefix.
     ///
     /// # Panics
-    /// Panics if merging the `Nibble` causes an overflow (total nibbles > 80).
+    /// Panics if merging the `Nibble` causes an overflow (total nibbles > 64).
     pub fn merge_nibble(&self, post: Nibble) -> Nibbles {
         self.nibble_append_safety_asserts(post);
 
@@ -685,10 +697,10 @@ impl Nibbles {
     /// Merge two `Nibbles` together. `self` will be the prefix.
     ///
     /// # Panics
-    /// Panics if merging the `Nibbles` causes an overflow (total nibbles > 80).
+    /// Panics if merging the `Nibbles` causes an overflow (total nibbles > 64).
     pub fn merge_nibbles(&self, post: &Nibbles) -> Nibbles {
         let new_count = self.count + post.count;
-        assert!(new_count <= 80);
+        assert!(new_count <= 64);
 
         Nibbles {
             count: new_count,
@@ -842,7 +854,7 @@ impl Nibbles {
         // println!("Count: {}", count);
         let odd_nib_count = count & 0b1 == 1;
 
-        let hex_prefix_byes_iter = hex_prefix_bytes.iter().skip(1).take(20).cloned();
+        let hex_prefix_byes_iter = hex_prefix_bytes.iter().skip(1).take(32).cloned();
 
         let mut i = 0;
         let mut nibbles_raw = [0; 40];
@@ -915,7 +927,7 @@ impl Nibbles {
 
     fn nibble_append_safety_asserts(&self, n: Nibble) {
         assert!(
-            self.count < 80,
+            self.count < 64,
             "{}",
             MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG
         );
@@ -924,7 +936,7 @@ impl Nibbles {
 
     fn nibbles_append_safety_asserts(&self, new_count: usize) {
         assert!(
-            new_count <= 80,
+            new_count <= 64,
             "{}",
             MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG
         );
@@ -1321,7 +1333,7 @@ mod tests {
             from_hex_prefix_encoding_str_unwrapped(
                 "0x2000080000000000000000000000000000000000000000000000000000000000"
             ),
-            Nibbles::from_str("0x0008000000000000000000000000000000000000100000000000000000000000")
+            Nibbles::from_str("0x0008000000000000000000000000000000000000000000000000000000000010")
                 .unwrap()
         );
     }
