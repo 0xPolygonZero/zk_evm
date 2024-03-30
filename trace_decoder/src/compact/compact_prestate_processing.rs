@@ -250,7 +250,10 @@ impl Display for NodeEntry {
             NodeEntry::Empty => write!(f, "Empty"),
             NodeEntry::Hash(_) => write!(f, "Hash"),
             NodeEntry::Leaf(_, _) => write!(f, "Leaf"),
-            NodeEntry::Extension(_, _) => write!(f, "Extension"),
+            NodeEntry::Extension(_, _) => {
+                println!("------------ eeeee");
+                write!(f, "Extension")
+            }
             NodeEntry::SMTLeaf(_, _, _, _) => write!(f, "SMTLeaf"),
         }
     }
@@ -286,6 +289,23 @@ impl From<Vec<u8>> for AccountNodeCode {
 impl From<TrieRootHash> for AccountNodeCode {
     fn from(v: TrieRootHash) -> Self {
         Self::HashNode(v)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct SMTLeafNode {
+    pub(super) address: Vec<u8>,
+    pub(super) storage_key: Vec<u8>,
+    pub(super) value: Vec<u8>,
+}
+
+impl SMTLeafNode {
+    fn new(address: Vec<u8>, storage_key: Vec<u8>, value: Vec<u8>) -> Self {
+        Self {
+            address,
+            storage_key,
+            value,
+        }
     }
 }
 
@@ -638,7 +658,7 @@ impl ParserState {
                             branch_nodes[0] = Some(Box::new(node_entry));
                         }
                     }
-                    _ => (),
+                    _ => {}
                 }
                 // println!("branch_nodes {:?}", branch_nodes);
                 NodeEntry::BranchSMT(branch_nodes)
@@ -1114,8 +1134,8 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     fn process_smt_leaf(&mut self) -> CompactParsingResult<()> {
-        println!("-------------- smt leaf");
         let node_type: u8 = self.byte_cursor.read_t("nodeType")?;
+        println!("-------------- smt leaf, node_type {:?}", node_type);
         let address: Vec<u8> = self.byte_cursor.read_cbor_byte_array_to_vec("address")?;
         let mut storage = Vec::new();
         if node_type == 0x03 {

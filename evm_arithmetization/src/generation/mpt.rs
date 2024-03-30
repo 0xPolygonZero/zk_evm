@@ -16,6 +16,13 @@ use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
 #[derive(RlpEncodable, RlpDecodable, Debug)]
+pub struct SMTLeafNodeRlp {
+    pub address: Vec<u8>,
+    pub storage_key: Vec<u8>,
+    pub value: Vec<u8>,
+}
+
+#[derive(RlpEncodable, RlpDecodable, Debug)]
 pub struct AccountRlp {
     pub nonce: U256,
     pub balance: U256,

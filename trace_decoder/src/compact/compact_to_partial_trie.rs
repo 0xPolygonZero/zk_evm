@@ -7,6 +7,7 @@ use std::{
 };
 
 use ethereum_types::U256;
+use evm_arithmetization_mpt::generation::mpt::SMTLeafNodeRlp;
 use log::trace;
 use mpt_trie::{
     nibbles::{Nibble, Nibbles},
@@ -24,7 +25,7 @@ use crate::{
         CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH,
         EMPTY_TRIE_HASH,
     },
-    utils::{h_addr_nibs_to_h256, hash},
+    utils::hash,
 };
 
 /// A trait to represent building either a state or storage trie from compact
@@ -59,6 +60,7 @@ trait CompactToPartialTrieExtractionOutput {
         curr_key: Nibbles,
         branch: &[Option<Box<NodeEntry>>],
     ) -> CompactParsingResult<()> {
+        println!("-------------- branch smt node -------------- ");
         for (i, slot) in branch.iter().enumerate().take(2) {
             if let Some(child) = slot {
                 // TODO: Seriously update `mpt_trie` to have a better API...
@@ -164,6 +166,7 @@ impl CompactToPartialTrieExtractionOutput for StateTrieExtractionOutput {
             },
         )
     }
+
     fn trie(&mut self) -> &mut HashedPartialTrie {
         &mut self.state_trie
     }
@@ -318,7 +321,7 @@ fn process_account_node(
     c_hash_to_code: &mut HashMap<CodeHash, Vec<u8>>,
     h_addr_to_storage_trie: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
 ) -> Vec<u8> {
-    let code_hash = match &acc_data.account_node_code {
+    let code_hash: keccak_hash::H256 = match &acc_data.account_node_code {
         Some(AccountNodeCode::CodeNode(c_bytes)) => {
             let c_hash = hash(c_bytes);
             c_hash_to_code.insert(c_hash, c_bytes.clone());
