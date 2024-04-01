@@ -336,6 +336,7 @@ pub mod cancun_constants {
         hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"),
     ];
 
+    // Taken from <https://github.com/ethereum/c-kzg-4844/blob/main/src/trusted_setup.txt>.
     pub const G2_TRUSTED_SETUP_POINT: [[u8; 64]; 4] = [
         hex!("00000000000000000000000000000000185cbfee53492714734429b7b38608e23926c911cceceac9a36851477ba4c60b087041de621000edc98edada20c1def2"), // x_re
         hex!("0000000000000000000000000000000015bfd7dd8cdeb128843bc287230af38926187075cbfbefa81009a2ce615ac53d2914e5870cb452d2afaaab24f3499f72"), // x_im
