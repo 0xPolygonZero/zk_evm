@@ -582,6 +582,7 @@ pub fn generate_all_data_segments<F: RichField>(
     max_cpu_len_log: Option<usize>,
     inputs: GenerationInputs,
 ) -> anyhow::Result<Vec<GenerationSegmentData>> {
+    // TODO: change this value after some benchmarks have been carried out?
     let mut all_data = Vec::with_capacity(50);
     let mut running = true;
     while running {
