@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Update plonky2 dependencies ([#119](https://github.com/0xPolygonZero/zk_evm/pull/119))
+- Swap out the internal U512 inside nibbles to [u64;5] ([#132](https://github.com/0xPolygonZero/zk_evm/pull/132))
 
 ## [0.2.0] - 2024-03-19
 
