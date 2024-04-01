@@ -429,10 +429,14 @@ impl<F: Field> GenerationState<F> {
 
         // Validate scalars
         if z > BLS_SCALAR {
-            return Ok(U256::zero()); // abort early
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure("z is not canonical.".to_string()),
+            ));
         }
         if y > BLS_SCALAR {
-            return Ok(U256::zero()); // abort early
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure("y is not canonical.".to_string()),
+            ));
         }
 
         let mut comm_bytes = [0u8; 64];
@@ -447,11 +451,14 @@ impl<F: Field> GenerationState<F> {
         expected_versioned_hash[0] = KZG_VERSIONED_HASH;
 
         if versioned_hash != U256::from_big_endian(&expected_versioned_hash) {
-            return Ok(U256::zero()); // abort early
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Versioned hash does not match expected value.".to_string(),
+                ),
+            ));
         }
 
         self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes)
-            .or(Ok(U256::zero()))
     }
 
     /// POINT_EVALUATION_PRECOMPILE returns a 64-byte value. Because EVM words
@@ -465,8 +472,12 @@ impl<F: Field> GenerationState<F> {
                 &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
             ))
         } else {
-            assert!(prev_value == U256::zero());
-            Ok(U256::zero())
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "run_kzg_point_eval_1 should have output the expected return value or errored"
+                        .to_string(),
+                ),
+            ));
         }
     }
 

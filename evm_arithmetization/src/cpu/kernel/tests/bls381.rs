@@ -14,6 +14,7 @@ use crate::cpu::kernel::interpreter::{
 };
 use crate::extension_tower::{Fp2, Stack, BLS381};
 use crate::memory::segments::Segment::{self, KernelGeneral};
+use crate::witness::errors::ProgramError;
 
 #[test]
 fn test_bls_fp2_mul() -> Result<()> {
@@ -142,12 +143,12 @@ fn test_kzg_peval_precompile() -> Result<()> {
         let verify_kzg_proof = KERNEL.global_labels["verify_kzg_proof"];
         let mut interpreter: Interpreter<F> = Interpreter::new(verify_kzg_proof, stack);
         interpreter.halt_offsets = vec![KERNEL.global_labels["store_kzg_verification"]];
-        interpreter.run().unwrap();
-
-        let mut post_stack = interpreter.stack();
-        post_stack.reverse();
-
         if *is_correct {
+            interpreter.run().unwrap();
+
+            let mut post_stack = interpreter.stack();
+            post_stack.reverse();
+
             assert_eq!(
                 post_stack[0],
                 U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0])
@@ -157,8 +158,10 @@ fn test_kzg_peval_precompile() -> Result<()> {
                 U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1])
             );
         } else {
-            assert_eq!(post_stack[0], U256::zero());
-            assert_eq!(post_stack[1], U256::zero());
+            assert!(interpreter.run().is_err());
+
+            let err_msg = interpreter.run().unwrap_err();
+            assert!(err_msg.to_string().contains("KzgEvalFailure"));
         }
     }
 
