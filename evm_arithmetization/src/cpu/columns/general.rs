@@ -158,8 +158,8 @@ pub(crate) struct CpuShiftView<T: Copy> {
 /// View of the first `CpuGeneralColumns` storing a flag for context pruning.
 #[derive(Copy, Clone)]
 pub(crate) struct CpuContextPruningView<T: Copy> {
-    /// If the OP flag `context_op` is set, then this is 1 if the operation is
-    /// `SET_CONTEXT` and `new_ctx < old_ctx`, 0 otherwise.
+    /// The flag is 1 if the OP flag `context_op` is set, the operation is
+    /// `SET_CONTEXT` and `new_ctx < old_ctx`, and 0 otherwise.
     pub(crate) pruning_flag: T,
 }
 
