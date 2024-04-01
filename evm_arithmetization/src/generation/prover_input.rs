@@ -460,13 +460,11 @@ impl<F: Field> GenerationState<F> {
         let prev_value = stack_peek(self, 0)?;
 
         if prev_value == U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1]) {
-            println!("PREV VALUE OK");
             Ok(U256::from_big_endian(
                 &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
             ))
         } else {
             assert!(prev_value == U256::zero());
-            println!("PREV VALUE NOT OK");
             Ok(U256::zero())
         }
     }
@@ -479,6 +477,10 @@ impl<F: Field> GenerationState<F> {
         y: U256,
         proof_bytes: &[u8; 64],
     ) -> U256 {
+        if comm_bytes[0..16] != [0; 16] || proof_bytes[0..16] != [0; 16] {
+            return U256::zero(); // abort early
+        }
+
         let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes[16..64].try_into().unwrap()) {
             c
         } else {
@@ -495,7 +497,7 @@ impl<F: Field> GenerationState<F> {
         let mut z_bytes = [0u8; 32];
         z.to_big_endian(&mut z_bytes);
         let mut acc = CurveAff::<Fp2<BLS381>>::unit();
-        for byte in z_bytes {
+        for (i, &byte) in z_bytes.iter().enumerate() {
             acc = acc * 256 as i32;
             acc = acc + (CurveAff::<Fp2<BLS381>>::GENERATOR * byte as i32);
         }
@@ -531,8 +533,7 @@ impl<F: Field> GenerationState<F> {
         let x_minus_z = x + minus_z_g2;
 
         // TODO: If this ends up being implemented in the Kernel directly, we should
-        // really not have to go through the final exponentiation
-        // twice.
+        // really not have to go through the final exponentiation twice.
         if bls381::ate_optim(comm_minus_y, -CurveAff::<Fp2<BLS381>>::GENERATOR)
             * bls381::ate_optim(proof, x_minus_z)
             != Fp12::<BLS381>::UNIT

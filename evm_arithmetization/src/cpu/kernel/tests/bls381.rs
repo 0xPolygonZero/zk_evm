@@ -6,6 +6,7 @@ use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::Rng;
 
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::cancun_constants::POINT_EVALUATION_PRECOMPILE_RETURN_VALUE;
 use crate::cpu::kernel::constants::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::interpreter::{
@@ -78,11 +79,20 @@ fn test_kzg_peval_precompile() -> Result<()> {
 
     let verify_kzg_proof = KERNEL.global_labels["verify_kzg_proof"];
     let mut interpreter: Interpreter<F> = Interpreter::new(verify_kzg_proof, stack);
-    // interpreter.set_context(1);
     interpreter.halt_offsets = vec![KERNEL.global_labels["store_kzg_verification"]];
     interpreter.run().unwrap();
 
-    println!("{:?}", interpreter.stack());
+    let mut post_stack = interpreter.stack();
+    post_stack.reverse();
 
-    panic!("TODO: debug test");
+    assert_eq!(
+        post_stack[0],
+        U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0])
+    );
+    assert_eq!(
+        post_stack[1],
+        U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1])
+    );
+
+    Ok(())
 }

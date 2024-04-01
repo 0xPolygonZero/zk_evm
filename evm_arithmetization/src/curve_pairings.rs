@@ -119,6 +119,9 @@ where
         if self == CurveAff::<T>::unit() {
             return CurveAff::<T>::unit();
         }
+        if other == 1 {
+            return self;
+        }
 
         let mut x: CurveAff<T> = self;
         if other.is_negative() {
