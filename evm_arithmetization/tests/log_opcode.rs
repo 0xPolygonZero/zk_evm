@@ -14,7 +14,7 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots,
 };
-use evm_arithmetization::prover::prove;
+use evm_arithmetization::prover::{generate_all_data_segments, prove};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -237,18 +237,22 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         },
     };
 
-    let mut timing = TimingTree::new("prove", log::Level::Debug);
+    let mut data = generate_all_data_segments::<F>(None, inputs.clone())?;
+
     let max_cpu_len_log = 20;
+    assert_eq!(data.len(), 2);
+    let registers_after = data[1].registers;
+    let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,
         inputs,
         max_cpu_len_log,
-        0,
+        &mut data[0],
+        registers_after,
         &mut timing,
         None,
-    )?
-    .expect("The initial registers should not be at the halt label.");
+    )?;
     timing.filter(Duration::from_millis(100)).print();
 
     // Assert that the proof leads to the correct state and receipt roots.

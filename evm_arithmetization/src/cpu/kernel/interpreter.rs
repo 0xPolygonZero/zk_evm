@@ -26,6 +26,7 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::prover::GenerationSegmentData;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
@@ -212,29 +213,6 @@ pub(crate) fn generate_segment<F: Field>(
         if registers_after.program_counter == KERNEL.global_labels["halt"] {
             return Ok(None);
         }
-        [
-            registers_after.program_counter.into(),
-            (registers_after.is_kernel as usize).into(),
-            registers_after.stack_len.into(),
-            registers_after.stack_top,
-            registers_after.context.into(),
-            registers_after.gas_used.into(),
-        ]
-        .iter()
-        .enumerate()
-        .map(|(i, reg_content)| {
-            let (addr, val) = (
-                MemoryAddress::new_u256s(
-                    0.into(),
-                    (Segment::RegistersStates.unscale()).into(),
-                    i.into(),
-                )
-                .expect("All input values are known to be valid for MemoryAddress"),
-                *reg_content,
-            );
-            interpreter.generation_state.memory.set(addr, val);
-        })
-        .collect::<Vec<_>>();
 
         (registers_before, before_mem_values) = (registers_after, after_mem_values);
         interpreter.generation_state.registers = registers_before;
@@ -242,7 +220,9 @@ pub(crate) fn generate_segment<F: Field>(
         interpreter.generation_state.registers.is_kernel = true;
         interpreter.clock = 0;
 
-        let (updated_registers_after, opt_after_mem_values) = interpreter.run()?;
+        let (updated_registers_after, opt_after_mem_values) =
+            set_registers_and_run(registers_after, &mut interpreter)?;
+
         registers_after = updated_registers_after;
         after_mem_values = opt_after_mem_values.expect(
             "We are in the interpreter: the run should return a memory
@@ -256,6 +236,119 @@ pub(crate) fn generate_segment<F: Field>(
         before_mem_values,
         extra_data,
     )))
+}
+
+pub(crate) fn generate_segment_given_data<F: Field>(
+    max_cpu_len_log: Option<usize>,
+    inputs: GenerationInputs,
+    all_seg_data: &mut Vec<GenerationSegmentData>,
+) -> anyhow::Result<Option<()>> {
+    let mut segment_data = GenerationSegmentData::default();
+    let init_label = KERNEL.global_labels["init"];
+    let mut interpreter =
+        Interpreter::<F>::new_with_generation_inputs(init_label, vec![], &inputs, max_cpu_len_log);
+    if !all_seg_data.is_empty() {
+        segment_data = all_seg_data.last().unwrap().clone();
+
+        // Set interpreter state.
+        interpreter.generation_state.memory = segment_data.memory;
+        interpreter.generation_state.inputs = segment_data.extra_data.trimmed_inputs;
+        interpreter.generation_state.bignum_modmul_result_limbs =
+            segment_data.extra_data.bignum_modmul_result_limbs;
+        interpreter.generation_state.jumpdest_table = segment_data.extra_data.jumpdest_table;
+        interpreter.generation_state.rlp_prover_inputs = segment_data.extra_data.rlp_prover_inputs;
+        interpreter.generation_state.trie_root_ptrs = segment_data.extra_data.trie_root_ptrs;
+        interpreter.generation_state.withdrawal_prover_inputs =
+            segment_data.extra_data.withdrawal_prover_inputs;
+        // For registers, we need the interpreter to start at label "init".
+        interpreter.generation_state.registers = RegistersState {
+            program_counter: init_label,
+            is_kernel: true,
+            ..segment_data.registers
+        };
+    } else {
+        let initial_registers = RegistersState::new();
+        let init_label = KERNEL.global_labels["init"];
+        segment_data = GenerationSegmentData {
+            registers: initial_registers,
+            memory: MemoryState::default(),
+            extra_data: ExtraSegmentData {
+                trimmed_inputs: interpreter.generation_state.inputs.clone(),
+                bignum_modmul_result_limbs: interpreter
+                    .generation_state
+                    .bignum_modmul_result_limbs
+                    .clone(),
+                rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+                withdrawal_prover_inputs: interpreter
+                    .generation_state
+                    .withdrawal_prover_inputs
+                    .clone(),
+                trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+                jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            },
+        };
+        all_seg_data.push(segment_data.clone());
+    };
+
+    let registers = segment_data.registers;
+
+    if registers.program_counter == KERNEL.global_labels["halt"] {
+        return Ok(None);
+    }
+
+    let (registers_after, mem_after) = set_registers_and_run(registers, &mut interpreter)?;
+
+    let final_segment_data = GenerationSegmentData {
+        registers: registers_after,
+        memory: mem_after
+            .expect("The interpreter was running, so it should have returned a MemoryState"),
+        extra_data: ExtraSegmentData {
+            trimmed_inputs: interpreter.generation_state.inputs,
+            bignum_modmul_result_limbs: interpreter.generation_state.bignum_modmul_result_limbs,
+            rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs,
+            withdrawal_prover_inputs: interpreter.generation_state.withdrawal_prover_inputs,
+            trie_root_ptrs: interpreter.generation_state.trie_root_ptrs,
+            jumpdest_table: interpreter.generation_state.jumpdest_table,
+        },
+    };
+
+    all_seg_data.push(final_segment_data);
+    Ok(Some(()))
+}
+
+pub(crate) fn set_registers_and_run<F: Field>(
+    registers: RegistersState,
+    interpreter: &mut Interpreter<F>,
+) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
+    // Write initial registers.
+    [
+        registers.program_counter.into(),
+        (registers.is_kernel as usize).into(),
+        registers.stack_len.into(),
+        registers.stack_top,
+        registers.context.into(),
+        registers.gas_used.into(),
+    ]
+    .iter()
+    .enumerate()
+    .map(|(i, reg_content)| {
+        let (addr, val) = (
+            MemoryAddress::new_u256s(
+                0.into(),
+                (Segment::RegistersStates.unscale()).into(),
+                i.into(),
+            )
+            .expect(
+                "All input values are known to be valid for
+MemoryAddress",
+            ),
+            *reg_content,
+        );
+        interpreter.generation_state.memory.set(addr, val);
+    })
+    .collect::<Vec<_>>();
+
+    interpreter.run()
 }
 
 impl<F: Field> Interpreter<F> {
@@ -323,6 +416,35 @@ impl<F: Field> Interpreter<F> {
             clock: 0,
             max_cpu_len_log,
         }
+    }
+
+    pub(crate) fn new_with_segment_data(
+        max_cpu_len_log: Option<usize>,
+        segment_data: GenerationSegmentData,
+    ) -> Self {
+        let kernel_hash = KERNEL.code_hash;
+        let kernel_code_len = KERNEL.code.len();
+
+        let init_label = KERNEL.global_labels["init"];
+
+        let mut interpreter = Self::new(init_label, vec![], max_cpu_len_log);
+        interpreter.generation_state.registers = RegistersState {
+            program_counter: interpreter.generation_state.registers.program_counter,
+            is_kernel: interpreter.generation_state.registers.is_kernel,
+            ..segment_data.registers
+        };
+
+        interpreter.generation_state.memory = segment_data.memory;
+        interpreter.generation_state.inputs = segment_data.extra_data.trimmed_inputs;
+        interpreter.generation_state.bignum_modmul_result_limbs =
+            segment_data.extra_data.bignum_modmul_result_limbs;
+        interpreter.generation_state.jumpdest_table = segment_data.extra_data.jumpdest_table;
+        interpreter.generation_state.rlp_prover_inputs = segment_data.extra_data.rlp_prover_inputs;
+        interpreter.generation_state.trie_root_ptrs = segment_data.extra_data.trie_root_ptrs;
+        interpreter.generation_state.withdrawal_prover_inputs =
+            segment_data.extra_data.withdrawal_prover_inputs;
+
+        interpreter
     }
 
     /// Initializes the interpreter state given `GenerationInputs`.
