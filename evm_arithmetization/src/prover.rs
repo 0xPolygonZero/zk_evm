@@ -41,13 +41,18 @@ use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
 use crate::witness::memory::{MemoryAddress, MemoryState};
 use crate::witness::state::RegistersState;
 
+/// Structure holding the data needed to initialize a segment.
 #[derive(Clone, Default, Debug)]
 pub struct GenerationSegmentData {
+    /// Registers at the start of the segment execution.
     pub registers: RegistersState,
+    /// Memory at the start of the segment execution.
     pub(crate) memory: MemoryState,
+    /// Extra data required to initialize a segment.
     pub(crate) extra_data: ExtraSegmentData,
 }
 
+/// Alias for `RegistersState`.
 pub type Registers = RegistersState;
 
 /// Generate traces, then create all STARK proofs.
@@ -571,6 +576,8 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     Ok(())
 }
 
+/// Returns a vector containing the data required to generate all segments for
+/// one full execution.
 pub fn generate_all_data_segments<F: RichField>(
     max_cpu_len_log: Option<usize>,
     inputs: GenerationInputs,

@@ -1419,6 +1419,8 @@ where
         })
     }
 
+    /// Returns a proof for each segment that is part of a full transaction
+    /// proof.
     pub fn prove_all_segments(
         &self,
         all_stark: &AllStark<F, D>,
