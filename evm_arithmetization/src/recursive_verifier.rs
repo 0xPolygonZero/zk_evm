@@ -635,6 +635,18 @@ pub(crate) fn add_virtual_extra_block_data<F: RichField + Extendable<D>, const D
     }
 }
 
+pub(crate) fn debug_public_values(public_values: &PublicValues) {
+    log::debug!("Public Values:");
+    log::debug!(
+        "  Trie Roots Before: {:?}",
+        &public_values.trie_roots_before
+    );
+    log::debug!("  Trie Roots After: {:?}", &public_values.trie_roots_after);
+    log::debug!("  Block Metadata: {:?}", &public_values.block_metadata);
+    log::debug!("  Block Hashes: {:?}", &public_values.block_hashes);
+    log::debug!("  Extra Block Data: {:?}", &public_values.extra_block_data);
+}
+
 pub fn set_public_value_targets<F, W, const D: usize>(
     witness: &mut W,
     public_values_target: &PublicValuesTarget,
@@ -644,6 +656,8 @@ where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
+    debug_public_values(public_values);
+
     set_trie_roots_target(
         witness,
         &public_values_target.trie_roots_before,
