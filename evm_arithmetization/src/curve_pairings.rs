@@ -730,6 +730,8 @@ pub mod bls381 {
             ) {
                 return Err(anyhow!("Byte flags are contradictory"));
             }
+
+            return Ok(CurveAff::<BLS381>::unit());
         }
 
         // Recover a y-coordinate given x by y = sqrt(x^3 + 4)

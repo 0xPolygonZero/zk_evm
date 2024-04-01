@@ -450,7 +450,8 @@ impl<F: Field> GenerationState<F> {
             return Ok(U256::zero()); // abort early
         }
 
-        Ok(self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes))
+        self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes)
+            .or(Ok(U256::zero()))
     }
 
     /// POINT_EVALUATION_PRECOMPILE returns a 64-byte value. Because EVM words
@@ -476,21 +477,34 @@ impl<F: Field> GenerationState<F> {
         z: U256,
         y: U256,
         proof_bytes: &[u8; 64],
-    ) -> U256 {
+    ) -> Result<U256, ProgramError> {
         if comm_bytes[0..16] != [0; 16] || proof_bytes[0..16] != [0; 16] {
-            return U256::zero(); // abort early
+            // Proofs and commitments must fit in 48 bytes to be deserializable.
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Proof or commitment do not fit in 48 bytes.".to_string(),
+                ),
+            ));
         }
 
         let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes[16..64].try_into().unwrap()) {
             c
         } else {
-            return U256::zero(); // abort early
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Commitment did not deserialize into a valid G1 point.".to_string(),
+                ),
+            ));
         };
 
         let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes[16..64].try_into().unwrap()) {
             p
         } else {
-            return U256::zero(); // abort early
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Proof did not deserialize into a valid G1 point.".to_string(),
+                ),
+            ));
         };
 
         // TODO: use some WNAF method if performance becomes critical
@@ -538,9 +552,15 @@ impl<F: Field> GenerationState<F> {
             * bls381::ate_optim(proof, x_minus_z)
             != Fp12::<BLS381>::UNIT
         {
-            U256::zero()
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Final pairing check did not succeed.".to_string(),
+                ),
+            ));
         } else {
-            U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1])
+            Ok(U256::from_big_endian(
+                &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1],
+            ))
         }
     }
 }
