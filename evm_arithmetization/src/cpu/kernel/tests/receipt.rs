@@ -130,7 +130,7 @@ fn test_receipt_encoding() -> Result<()> {
     let expected_rlp = rlp::encode(&rlp::encode(&receipt_1));
 
     // Address at which the encoding is written.
-    let rlp_addr = U256::from(Segment::RlpRaw.unscale()) << SEGMENT_SCALING_FACTOR;
+    let rlp_addr = U256::from(Segment::RlpRaw as usize);
     let initial_stack: Vec<U256> = vec![retdest, 0.into(), 0.into(), rlp_addr];
     let mut interpreter: Interpreter<F> = Interpreter::new(encode_receipt, initial_stack);
 
