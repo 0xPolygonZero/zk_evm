@@ -118,7 +118,7 @@ fn test_kzg_peval_precompile() -> Result<()> {
         let commitment_bytes = bytes.0;
         let comm_hi = U256::from_big_endian(&commitment_bytes[0..16]);
         let comm_lo = U256::from_big_endian(&commitment_bytes[16..48]);
-        let mut versioned_hash = keccak(&commitment_bytes).0;
+        let mut versioned_hash = keccak(commitment_bytes).0;
         versioned_hash[0] = KZG_VERSIONED_HASH;
         let versioned_hash = U256::from_big_endian(&versioned_hash);
         let z = U256::from_big_endian(&bytes.1);

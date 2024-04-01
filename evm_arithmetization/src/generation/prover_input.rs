@@ -512,7 +512,7 @@ impl<F: Field> GenerationState<F> {
         z.to_big_endian(&mut z_bytes);
         let mut acc = CurveAff::<Fp2<BLS381>>::unit();
         for (i, &byte) in z_bytes.iter().enumerate() {
-            acc = acc * 256 as i32;
+            acc = acc * 256_i32;
             acc = acc + (CurveAff::<Fp2<BLS381>>::GENERATOR * byte as i32);
         }
         let minus_z_g2 = -acc;
@@ -521,7 +521,7 @@ impl<F: Field> GenerationState<F> {
         y.to_big_endian(&mut y_bytes);
         let mut acc = CurveAff::<BLS381>::unit();
         for byte in y_bytes {
-            acc = acc * 256 as i32;
+            acc = acc * 256_i32;
             acc = acc + (CurveAff::<BLS381>::GENERATOR * byte as i32);
         }
         let comm_minus_y = comm + (acc.neg());
@@ -552,11 +552,11 @@ impl<F: Field> GenerationState<F> {
             * bls381::ate_optim(proof, x_minus_z)
             != Fp12::<BLS381>::UNIT
         {
-            return Err(ProgramError::ProverInputError(
+            Err(ProgramError::ProverInputError(
                 ProverInputError::KzgEvalFailure(
                     "Final pairing check did not succeed.".to_string(),
                 ),
-            ));
+            ))
         } else {
             Ok(U256::from_big_endian(
                 &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1],
