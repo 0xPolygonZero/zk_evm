@@ -15,6 +15,10 @@ use std::{
 
 use bytes::{Bytes, BytesMut};
 use ethereum_types::{H256, U128, U256};
+use impl_codec::impl_uint_codec;
+use impl_num_traits::impl_uint_num_traits;
+use impl_rlp::impl_uint_rlp;
+use impl_serde::impl_uint_serde;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uint::construct_uint;
@@ -28,8 +32,16 @@ pub type Nibble = u8;
 
 construct_uint! {
     /// Used for the internal representation of a sequence of nibbles.
+    /// The choice of [u64; 5] accommodates the 260-bit key requirement efficiently by
+    /// leveraging 64-bit instructions for performance, while providing an additional u64
+    /// to handle the overflow case beyond the 256-bit capacity of [u64; 4].
     pub struct NibblesIntern(5);
 }
+
+impl_uint_num_traits!(NibblesIntern, 5);
+impl_uint_serde!(NibblesIntern, 5);
+impl_uint_codec!(NibblesIntern, 5);
+impl_uint_rlp!(NibblesIntern, 5);
 
 const MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG: &str =
     "Attempted to create a nibbles sequence longer than 64!";
@@ -85,10 +97,11 @@ pub enum FromHexPrefixError {
 }
 
 /// Error type for conversion.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum NibblesToTypeError {
+    #[error("Overflow encountered when converting to U256: {0}")]
     /// Overflow encountered.
-    Overflow,
+    Overflow(NibblesIntern),
 }
 
 trait AsU64s {
@@ -182,14 +195,10 @@ impl<'a> TryFrom<&'a Nibbles> for U256 {
     fn try_from(value: &'a Nibbles) -> Result<U256, NibblesToTypeError> {
         let NibblesIntern(ref arr) = value.packed;
         if arr[4] != 0 {
-            return Err(NibblesToTypeError::Overflow);
+            return Err(NibblesToTypeError::Overflow(value.packed));
         }
 
-        let mut ret = [0; 4];
-        ret[0] = arr[0];
-        ret[1] = arr[1];
-        ret[2] = arr[2];
-        ret[3] = arr[3];
+        let ret = [arr[0], arr[1], arr[2], arr[3]];
         Ok(U256(ret))
     }
 }
@@ -199,14 +208,10 @@ impl<'a> TryFrom<&'a NibblesIntern> for U256 {
 
     fn try_from(value: &'a NibblesIntern) -> Result<U256, NibblesToTypeError> {
         if value.0[4] != 0 {
-            return Err(NibblesToTypeError::Overflow);
+            return Err(NibblesToTypeError::Overflow(*value));
         }
 
-        let mut ret = [0; 4];
-        ret[0] = value.0[0];
-        ret[1] = value.0[1];
-        ret[2] = value.0[2];
-        ret[3] = value.0[3];
+        let ret = [value.0[0], value.0[1], value.0[2], value.0[3]];
         Ok(U256(ret))
     }
 }
@@ -217,14 +222,10 @@ impl TryInto<U256> for Nibbles {
     fn try_into(self) -> Result<U256, NibblesToTypeError> {
         let arr = self.packed;
         if arr.0[4] != 0 {
-            return Err(NibblesToTypeError::Overflow);
+            return Err(NibblesToTypeError::Overflow(arr));
         }
 
-        let mut ret = [0; 4];
-        ret[0] = arr.0[0];
-        ret[1] = arr.0[1];
-        ret[2] = arr.0[2];
-        ret[3] = arr.0[3];
+        let ret = [arr.0[0], arr.0[1], arr.0[2], arr.0[3]];
         Ok(U256(ret))
     }
 }
@@ -291,34 +292,7 @@ pub struct Nibbles {
     pub count: usize,
     /// A packed encoding of these nibbles. Only the first (least significant)
     /// `4 * count` bits are used. The rest are unused and should be zero.
-    #[serde(with = "nibbles_intern_helper")]
     pub packed: NibblesIntern,
-}
-
-// This module will provide serialization/deserialization for NibblesIntern.
-mod nibbles_intern_helper {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-    use super::NibblesIntern;
-
-    #[derive(Serialize, Deserialize)]
-    struct NibblesInternSerializable([u64; 5]);
-
-    pub fn serialize<S>(value: &NibblesIntern, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let serializable = NibblesInternSerializable(value.0);
-        serializable.serialize(serializer)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<NibblesIntern, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let NibblesInternSerializable(data) = NibblesInternSerializable::deserialize(deserializer)?;
-        Ok(NibblesIntern(NibblesIntern(data).0))
-    }
 }
 
 impl Display for Nibbles {
@@ -949,7 +923,7 @@ mod tests {
 
     use ethereum_types::{H256, U256};
 
-    use super::{Nibble, Nibbles, ToNibbles};
+    use super::{Nibble, Nibbles, StrToNibblesError, ToNibbles};
     use crate::nibbles::FromHexPrefixError;
 
     const ZERO_NIBS_63: &str = "0x000000000000000000000000000000000000000000000000000000000000000";
@@ -960,23 +934,42 @@ mod tests {
         "0x0000000000000000000000000000000000000000000000000000000000000001";
 
     #[test]
-    fn get_nibble_works() {
+    fn get_nibble_works() -> Result<(), StrToNibblesError> {
         let n = Nibbles::from(0x1234);
-
         assert_eq!(n.get_nibble(0), 0x1);
         assert_eq!(n.get_nibble(3), 0x4);
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(n.get_nibble(30), 0x1);
+        assert_eq!(n.get_nibble(33), 0xc);
+
+        Ok(())
     }
 
     #[test]
     fn pop_nibble_front_works() {
         pop_and_assert_nibbles(0x1, 0x0, 1, Nibbles::pop_next_nibble_front);
         pop_and_assert_nibbles(0x1234, 0x234, 1, Nibbles::pop_next_nibble_front);
+        pop_and_assert_nibbles(
+            0x1234567890123,
+            0x234567890123,
+            1,
+            Nibbles::pop_next_nibble_front,
+        );
     }
 
     #[test]
     fn pop_nibble_back_works() {
         pop_and_assert_nibbles(0x1, 0x0, 1, Nibbles::pop_next_nibble_back);
         pop_and_assert_nibbles(0x1234, 0x123, 4, Nibbles::pop_next_nibble_back);
+        pop_and_assert_nibbles(
+            0x1234567890123,
+            0x123456789012,
+            3,
+            Nibbles::pop_next_nibble_back,
+        );
     }
 
     fn pop_and_assert_nibbles<F: Fn(&mut Nibbles) -> Nibble>(
@@ -1001,7 +994,7 @@ mod tests {
     }
 
     #[test]
-    fn pop_nibbles_front_works() {
+    fn pop_nibbles_front_works() -> Result<(), StrToNibblesError> {
         let nib = 0x1234.into();
 
         assert_pop_nibbles(
@@ -1032,10 +1025,30 @@ mod tests {
             0x1234.into(),
             Nibbles::pop_nibbles_front,
         );
+        assert_pop_nibbles(
+            &nib,
+            4,
+            0x0.into(),
+            0x1234.into(),
+            Nibbles::pop_nibbles_front,
+        );
+
+        let nib = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_pop_nibbles(
+            &nib,
+            24,
+            Nibbles::from_str("0x0ffd1e165c754b28a41a95922f9f70682c581353")?,
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea9678")?,
+            Nibbles::pop_nibbles_front,
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn pop_nibbles_back_works() {
+    fn pop_nibbles_back_works() -> Result<(), StrToNibblesError> {
         let nib = 0x1234.into();
 
         assert_pop_nibbles(
@@ -1054,6 +1067,19 @@ mod tests {
             0x4321.into(),
             Nibbles::pop_nibbles_back,
         );
+
+        let nib = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_pop_nibbles(
+            &nib,
+            24,
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e165c754b28")?,
+            Nibbles::from_str("0x353185c28607f9f22959a14a")?,
+            Nibbles::pop_nibbles_back,
+        );
+
+        Ok(())
     }
 
     fn assert_pop_nibbles<F: Fn(&mut Nibbles, usize) -> Nibbles>(
@@ -1130,7 +1156,7 @@ mod tests {
     }
 
     #[test]
-    fn get_next_nibbles_works() {
+    fn get_next_nibbles_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.get_next_nibbles(0), Nibbles::default());
@@ -1140,20 +1166,37 @@ mod tests {
         assert_eq!(n.get_next_nibbles(4), Nibbles::from(0x1234));
 
         assert_eq!(Nibbles::from(0x0).get_next_nibbles(0), Nibbles::default());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.get_next_nibbles(24),
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea9678")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn get_nibble_range_works() {
+    fn get_nibble_range_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.get_nibble_range(0..0), 0x0.into());
         assert_eq!(n.get_nibble_range(0..1), 0x1.into());
         assert_eq!(n.get_nibble_range(0..2), 0x12.into());
         assert_eq!(n.get_nibble_range(0..4), 0x1234.into());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(n.get_nibble_range(16..24), Nibbles::from_str("0x17ea9678")?);
+
+        Ok(())
     }
 
     #[test]
-    fn truncate_nibbles_works() {
+    fn truncate_nibbles_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.truncate_n_nibbles_front(0), n);
@@ -1169,16 +1212,43 @@ mod tests {
         assert_eq!(n.truncate_n_nibbles_back(3), 0x1.into());
         assert_eq!(n.truncate_n_nibbles_back(4), 0x0.into());
         assert_eq!(n.truncate_n_nibbles_back(8), 0x0.into());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.truncate_n_nibbles_front(16),
+            Nibbles::from_str("0x17ea96780ffd1e165c754b28a41a95922f9f70682c581353")?
+        );
+        assert_eq!(
+            n.truncate_n_nibbles_back(16),
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a9592")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn split_at_idx_works() {
+    fn split_at_idx_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.split_at_idx(0), (0x0.into(), 0x1234.into()));
         assert_eq!(n.split_at_idx(1), (0x1.into(), 0x234.into()));
         assert_eq!(n.split_at_idx(2), (0x12.into(), 0x34.into()));
         assert_eq!(n.split_at_idx(3), (0x123.into(), 0x4.into()));
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.split_at_idx(24),
+            (
+                Nibbles::from_str("0x3ab76c381c0f8ea617ea9678")?,
+                Nibbles::from_str("0x0ffd1e165c754b28a41a95922f9f70682c581353")?
+            )
+        );
+
+        Ok(())
     }
 
     #[test]
@@ -1188,31 +1258,60 @@ mod tests {
     }
 
     #[test]
-    fn split_at_idx_prefix_works() {
+    fn split_at_idx_prefix_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.split_at_idx_prefix(0), 0x0.into());
         assert_eq!(n.split_at_idx_prefix(1), 0x1.into());
         assert_eq!(n.split_at_idx_prefix(3), 0x123.into());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.split_at_idx_prefix(24),
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea9678")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn split_at_idx_postfix_works() {
+    fn split_at_idx_postfix_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.split_at_idx_postfix(0), 0x1234.into());
         assert_eq!(n.split_at_idx_postfix(1), 0x234.into());
         assert_eq!(n.split_at_idx_postfix(3), 0x4.into());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.split_at_idx_postfix(24),
+            Nibbles::from_str("0x0ffd1e165c754b28a41a95922f9f70682c581353")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn merge_nibble_works() {
+    fn merge_nibble_works() -> Result<(), StrToNibblesError> {
         assert_eq!(Nibbles::from(0x0).merge_nibble(1), 0x1.into());
         assert_eq!(Nibbles::from(0x1234).merge_nibble(5), 0x12345.into());
+        assert_eq!(
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c58135")?
+                .merge_nibble(3),
+            Nibbles::from_str(
+                "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353"
+            )?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn merge_nibbles_works() {
+    fn merge_nibbles_works() -> Result<(), StrToNibblesError> {
         assert_eq!(
             Nibbles::from(0x12).merge_nibbles(&(0x34.into())),
             0x1234.into()
@@ -1226,18 +1325,34 @@ mod tests {
             0x34.into()
         );
         assert_eq!(Nibbles::from(0x0).merge_nibbles(&(0x0).into()), 0x0.into());
+        assert_eq!(
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e1")?
+                .merge_nibbles(&Nibbles::from_str("0x65c754b28a41a95922f9f70682c581353")?),
+            Nibbles::from_str(
+                "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353"
+            )?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn reverse_works() {
+    fn reverse_works() -> Result<(), StrToNibblesError> {
         assert_eq!(Nibbles::from(0x0).reverse(), Nibbles::from(0x0_u64));
         assert_eq!(Nibbles::from(0x1).reverse(), Nibbles::from(0x1_u64));
         assert_eq!(Nibbles::from(0x12).reverse(), Nibbles::from(0x21_u64));
         assert_eq!(Nibbles::from(0x1234).reverse(), Nibbles::from(0x4321_u64));
+        assert_eq!(
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c58135")?
+                .reverse(),
+            Nibbles::from_str("0x53185c28607f9f22959a14a82b457c561e1dff08769ae716ae8f0c183c67ba3")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn find_nibble_idx_that_differs_between_nibbles_works() {
+    fn find_nibble_idx_that_differs_between_nibbles_works() -> Result<(), StrToNibblesError> {
         assert_eq!(
             Nibbles::find_nibble_idx_that_differs_between_nibbles_equal_lengths(
                 &(0x1234.into()),
@@ -1273,6 +1388,19 @@ mod tests {
             ),
             4
         );
+        assert_eq!(
+            Nibbles::find_nibble_idx_that_differs_between_nibbles_different_lengths(
+                &(Nibbles::from_str(
+                    "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c58135"
+                )?),
+                &(Nibbles::from_str(
+                    "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41ae716ae8f0c183c67ba3"
+                )?),
+            ),
+            44
+        );
+
+        Ok(())
     }
 
     #[test]
