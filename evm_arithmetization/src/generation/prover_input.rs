@@ -472,12 +472,12 @@ impl<F: Field> GenerationState<F> {
                 &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
             ))
         } else {
-            return Err(ProgramError::ProverInputError(
+            Err(ProgramError::ProverInputError(
                 ProverInputError::KzgEvalFailure(
                     "run_kzg_point_eval_1 should have output the expected return value or errored"
                         .to_string(),
                 ),
-            ));
+            ))
         }
     }
 
