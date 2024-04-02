@@ -178,7 +178,10 @@ fn test_extcodesize() -> Result<()> {
         HashMap::from([(keccak(&code), code.clone())]);
     interpreter.run()?;
 
-    assert_eq!(interpreter.stack(), vec![code.len().into()]);
+    assert_eq!(
+        interpreter.stack(),
+        vec![U256::one() << CONTEXT_SCALING_FACTOR, code.len().into()]
+    );
 
     Ok(())
 }

@@ -423,9 +423,14 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let (tables, final_values) = timed!(
         timing,
         "convert trace data to tables",
-        state
-            .traces
-            .into_tables(all_stark, &memory_before, trace_lengths, config, timing)
+        state.traces.into_tables(
+            all_stark,
+            &memory_before,
+            state.stale_contexts,
+            trace_lengths,
+            config,
+            timing
+        )
     );
     Ok((tables, public_values, final_values))
 }
