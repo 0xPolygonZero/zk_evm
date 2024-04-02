@@ -426,7 +426,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         state.traces.into_tables(
             all_stark,
             &memory_before,
-            state.pruned_contexts,
+            state.stale_contexts,
             trace_lengths,
             config,
             timing

@@ -331,7 +331,7 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
     CrossTableLookup::new(all_lookers, memory_looked)
 }
 
-/// `CrossTableLookup` for `Cpu` to propagate pruned contexts to `Memory`.
+/// `CrossTableLookup` for `Cpu` to propagate stale contexts to `Memory`.
 fn ctl_context_pruning<F: Field>() -> CrossTableLookup<F> {
     CrossTableLookup::new(
         vec![ctl_context_pruning_looking()],

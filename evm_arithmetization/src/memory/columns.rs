@@ -42,22 +42,22 @@ pub(crate) const VIRTUAL_FIRST_CHANGE: usize = SEGMENT_FIRST_CHANGE + 1;
 // Contains `next_segment * addr_changed * next_is_read`.
 pub(crate) const INITIALIZE_AUX: usize = VIRTUAL_FIRST_CHANGE + 1;
 
-// Contains `row_index` if and only if context `row_index` must be pruned,
+// Contains `row_index` if and only if context `row_index` is stale,
 // and zero if not.
-pub(crate) const PRUNED_CONTEXTS: usize = INITIALIZE_AUX + 1;
+pub(crate) const STALE_CONTEXTS: usize = INITIALIZE_AUX + 1;
 
-// Pseudo-inverse of `PRUNED_CONTEXTS`. Used to ascertain it's nonzero.
-pub(crate) const PRUNED_CONTEXTS_INV: usize = PRUNED_CONTEXTS + 1;
+// Pseudo-inverse of `STALE_CONTEXTS`. Used to ascertain it's nonzero.
+pub(crate) const STALE_CONTEXTS_INV: usize = STALE_CONTEXTS + 1;
 
 // Used for the context pruning lookup.
-pub(crate) const PRUNED_CONTEXTS_FREQUENCIES: usize = PRUNED_CONTEXTS_INV + 1;
+pub(crate) const STALE_CONTEXTS_FREQUENCIES: usize = STALE_CONTEXTS_INV + 1;
 
 // Flag indicating whether the row should be pruned, i.e. whether its
-// `ADDR_CONTEXT` is in `PRUNED_CONTEXTS`.
-pub(crate) const IS_PRUNED: usize = PRUNED_CONTEXTS_FREQUENCIES + 1;
+// `ADDR_CONTEXT` is in `STALE_CONTEXTS`.
+pub(crate) const IS_STALE: usize = STALE_CONTEXTS_FREQUENCIES + 1;
 
 // Filter for the `MemAfter` CTL.
-pub(crate) const MEM_AFTER_FILTER: usize = IS_PRUNED + 1;
+pub(crate) const MEM_AFTER_FILTER: usize = IS_STALE + 1;
 
 // We use a range check to enforce the ordering.
 pub(crate) const RANGE_CHECK: usize = MEM_AFTER_FILTER + 1;

@@ -214,7 +214,7 @@ pub(crate) trait State<F: Field> {
                     }
                     let final_mem = if let Some(mut mem) = self.get_full_memory() {
                         // Clear memory we will not use again.
-                        for &ctx in &self.get_generation_state().pruned_contexts {
+                        for &ctx in &self.get_generation_state().stale_contexts {
                             mem.contexts[ctx] = MemoryContextState::default();
                         }
                         Some(mem)
@@ -336,7 +336,7 @@ pub struct GenerationState<F: Field> {
 
     /// Memory used by stale contexts can be pruned so proving segments can be
     /// smaller.
-    pub(crate) pruned_contexts: Vec<usize>,
+    pub(crate) stale_contexts: Vec<usize>,
 
     /// Prover inputs containing RLP data, in reverse order so that the next
     /// input can be obtained via `pop()`.
@@ -387,7 +387,7 @@ impl<F: Field> GenerationState<F> {
             registers: Default::default(),
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
-            pruned_contexts: Vec::new(),
+            stale_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
             state_key_to_address: HashMap::new(),
@@ -475,7 +475,7 @@ impl<F: Field> GenerationState<F> {
             registers: self.registers,
             memory: self.memory.clone(),
             traces: Traces::default(),
-            pruned_contexts: Vec::new(),
+            stale_contexts: Vec::new(),
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),
             state_key_to_address: self.state_key_to_address.clone(),
             bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),

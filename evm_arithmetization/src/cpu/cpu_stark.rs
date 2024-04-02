@@ -166,7 +166,7 @@ pub(crate) fn ctl_arithmetic_context_pruning<F: Field>() -> TableWithColumns<F> 
     )
 }
 
-/// Returns a column containing pruned contexts.
+/// Returns a column containing stale contexts.
 pub(crate) fn ctl_context_pruning_looked<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Cpu,

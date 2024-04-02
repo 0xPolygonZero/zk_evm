@@ -19,14 +19,14 @@ use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
 use super::columns::{
-    MEM_AFTER_FILTER, PRUNED_CONTEXTS, PRUNED_CONTEXTS_FREQUENCIES, PRUNED_CONTEXTS_INV,
+    MEM_AFTER_FILTER, STALE_CONTEXTS, STALE_CONTEXTS_FREQUENCIES, STALE_CONTEXTS_INV,
 };
 use super::segments::Segment;
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::memory::columns::{
     value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, CONTEXT_FIRST_CHANGE, COUNTER, FILTER,
-    FREQUENCIES, INITIALIZE_AUX, IS_PRUNED, IS_READ, NUM_COLUMNS, RANGE_CHECK,
-    SEGMENT_FIRST_CHANGE, TIMESTAMP, TIMESTAMP_INV, VIRTUAL_FIRST_CHANGE,
+    FREQUENCIES, INITIALIZE_AUX, IS_READ, IS_STALE, NUM_COLUMNS, RANGE_CHECK, SEGMENT_FIRST_CHANGE,
+    TIMESTAMP, TIMESTAMP_INV, VIRTUAL_FIRST_CHANGE,
 };
 use crate::memory::VALUE_LIMBS;
 use crate::witness::memory::MemoryOpKind::Read;
@@ -59,15 +59,15 @@ pub(crate) fn ctl_looking_mem<F: Field>() -> Vec<Column<F>> {
     res
 }
 
-/// Returns the (non-zero) pruned contexts.
+/// Returns the (non-zero) stale contexts.
 pub(crate) fn ctl_context_pruning_looking<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Memory,
-        vec![Column::single(PRUNED_CONTEXTS)],
+        vec![Column::single(STALE_CONTEXTS)],
         Some(Filter::new(
             vec![(
-                Column::single(PRUNED_CONTEXTS),
-                Column::single(PRUNED_CONTEXTS_INV),
+                Column::single(STALE_CONTEXTS),
+                Column::single(STALE_CONTEXTS_INV),
             )],
             vec![],
         )),
@@ -223,9 +223,9 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
 
     /// Generates the `COUNTER`, `RANGE_CHECK` and `FREQUENCIES` columns, given
     /// a trace in column-major form.
-    /// Also generates the `IS_PRUNED`, `PRUNED_CONTEXT_FREQUENCIES` and
+    /// Also generates the `STALE_CONTEXTS`, `STALE_CONTEXTS_FREQUENCIES` and
     /// `MEM_AFTER_FILTER` columns.
-    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>], pruned_contexts: Vec<usize>) {
+    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>], stale_contexts: Vec<usize>) {
         let height = trace_col_vecs[0].len();
         trace_col_vecs[COUNTER] = (0..height).map(|i| F::from_canonical_usize(i)).collect();
 
@@ -247,16 +247,15 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
 
             let addr_ctx = trace_col_vecs[ADDR_CONTEXT][i];
             let addr_ctx_usize = addr_ctx.to_canonical_u64() as usize;
-            if addr_ctx.is_nonzero() && addr_ctx == trace_col_vecs[PRUNED_CONTEXTS][addr_ctx_usize]
-            {
-                trace_col_vecs[IS_PRUNED][i] = F::ONE;
-                trace_col_vecs[PRUNED_CONTEXTS_FREQUENCIES][addr_ctx_usize] += F::ONE;
+            if addr_ctx.is_nonzero() && addr_ctx == trace_col_vecs[STALE_CONTEXTS][addr_ctx_usize] {
+                trace_col_vecs[IS_STALE][i] = F::ONE;
+                trace_col_vecs[STALE_CONTEXTS_FREQUENCIES][addr_ctx_usize] += F::ONE;
             } else if trace_col_vecs[FILTER][i].is_one()
                 && (trace_col_vecs[CONTEXT_FIRST_CHANGE][i].is_one()
                     || trace_col_vecs[SEGMENT_FIRST_CHANGE][i].is_one()
                     || trace_col_vecs[VIRTUAL_FIRST_CHANGE][i].is_one())
             {
-                // `mem_after_filter = filter * address_changed * (1 - pruned)`
+                // `mem_after_filter = filter * address_changed * (1 - is_stale)`
                 trace_col_vecs[MEM_AFTER_FILTER][i] = F::ONE;
             }
         }
@@ -339,30 +338,30 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             value: U256::zero(),
         };
         let num_ops = memory_ops.len();
-        // We want at least one padded row, so that the last real operation can have its
-        // flags set correctly.
+        // We want at least one padding row, so that the last real operation can have
+        // its flags set correctly.
         let num_ops_padded = (num_ops + 1).next_power_of_two();
         for _ in num_ops..num_ops_padded {
             memory_ops.push(padding_op);
         }
     }
 
-    fn insert_pruned_contexts(trace_rows: &mut [[F; NUM_COLUMNS]], pruned_contexts: Vec<usize>) {
+    fn insert_stale_contexts(trace_rows: &mut [[F; NUM_COLUMNS]], stale_contexts: Vec<usize>) {
         debug_assert!(
             {
-                let mut dedup_vec = pruned_contexts.clone();
+                let mut dedup_vec = stale_contexts.clone();
                 dedup_vec.sort();
                 dedup_vec.dedup();
-                dedup_vec.len() == pruned_contexts.len()
+                dedup_vec.len() == stale_contexts.len()
             },
-            "Pruned contexts are not unique.",
+            "Stale contexts are not unique.",
         );
 
-        for ctx in pruned_contexts {
-            assert!(ctx != 0, "Context 0 cannot be pruned.");
+        for ctx in stale_contexts {
+            assert!(ctx != 0, "Context 0 cannot be stale.");
             let ctx_field = F::from_canonical_usize(ctx);
-            trace_rows[ctx][PRUNED_CONTEXTS] = ctx_field;
-            trace_rows[ctx][PRUNED_CONTEXTS_INV] = ctx_field.inverse();
+            trace_rows[ctx][STALE_CONTEXTS] = ctx_field;
+            trace_rows[ctx][STALE_CONTEXTS_INV] = ctx_field.inverse();
         }
     }
 
@@ -370,7 +369,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         &self,
         mut memory_ops: Vec<MemoryOp>,
         mem_before_values: &[(MemoryAddress, U256)],
-        pruned_contexts: Vec<usize>,
+        stale_contexts: Vec<usize>,
         timing: &mut TimingTree,
     ) -> (Vec<PolynomialValues<F>>, Vec<Vec<F>>, usize) {
         // First, push `mem_before` operations.
@@ -390,7 +389,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             self.generate_trace_row_major(memory_ops)
         );
 
-        Self::insert_pruned_contexts(&mut trace_rows, pruned_contexts.clone());
+        Self::insert_stale_contexts(&mut trace_rows, stale_contexts.clone());
 
         let trace_row_vecs: Vec<_> = trace_rows.into_iter().map(|row| row.to_vec()).collect();
 
@@ -398,7 +397,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         let mut trace_col_vecs = transpose(&trace_row_vecs);
 
         // A few final generation steps, which work better in column-major form.
-        Self::generate_trace_col_major(&mut trace_col_vecs, pruned_contexts);
+        Self::generate_trace_col_major(&mut trace_col_vecs, stale_contexts);
 
         let final_rows = transpose(&trace_col_vecs);
 
@@ -540,11 +539,11 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
         }
 
         // Validate `mem_after_filter`. Its value is `filter * address_changed * (1 -
-        // is_pruned)`
+        // is_stale)`
         let mem_after_filter = local_values[MEM_AFTER_FILTER];
-        let is_pruned = local_values[IS_PRUNED];
+        let is_stale = local_values[IS_STALE];
         yield_constr.constraint_transition(
-            mem_after_filter + filter * not_address_unchanged * (is_pruned - P::ONES),
+            mem_after_filter + filter * not_address_unchanged * (is_stale - P::ONES),
         );
 
         // Validate timestamp_inv. Since it's used as a CTL filter, its value must be
@@ -720,12 +719,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
         }
 
         // Validate `mem_after_filter`. Its value is `filter * address_changed * (1 -
-        // is_pruned)`
+        // is_stale)`
         let mem_after_filter = local_values[MEM_AFTER_FILTER];
-        let is_pruned = local_values[IS_PRUNED];
+        let is_stale = local_values[IS_STALE];
         {
             let rhs = builder.mul_extension(filter, not_address_unchanged);
-            let rhs = builder.mul_sub_extension(rhs, is_pruned, rhs);
+            let rhs = builder.mul_sub_extension(rhs, is_stale, rhs);
             let constr = builder.add_extension(mem_after_filter, rhs);
             yield_constr.constraint_transition(builder, constr);
         }
@@ -771,9 +770,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             },
             Lookup {
                 columns: vec![Column::single(ADDR_CONTEXT)],
-                table_column: Column::single(PRUNED_CONTEXTS),
-                frequencies_column: Column::single(PRUNED_CONTEXTS_FREQUENCIES),
-                filter_columns: vec![Some(Filter::new_simple(Column::single(IS_PRUNED)))],
+                table_column: Column::single(STALE_CONTEXTS),
+                frequencies_column: Column::single(STALE_CONTEXTS_FREQUENCIES),
+                filter_columns: vec![Some(Filter::new_simple(Column::single(IS_STALE)))],
             },
         ]
     }

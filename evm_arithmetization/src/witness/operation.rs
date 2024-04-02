@@ -341,7 +341,7 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
 
     if new_ctx < old_ctx {
         row.general.context_pruning_mut().pruning_flag = F::ONE;
-        generation_state.pruned_contexts.push(old_ctx);
+        generation_state.stale_contexts.push(old_ctx);
     }
 
     generation_state.registers.context = new_ctx;
