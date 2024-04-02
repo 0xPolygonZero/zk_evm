@@ -1,3 +1,4 @@
+use std::env;
 use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
@@ -9,11 +10,14 @@ use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::types::PlonkyProofIntern;
 
+use crate::utils::get_package_version;
+
 mod cli;
 mod http;
 mod init;
 mod jerigon;
 mod stdio;
+mod utils;
 
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<PlonkyProofIntern>> {
     if path.is_none() {
@@ -31,6 +35,15 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<PlonkyProofIntern>
 async fn main() -> Result<()> {
     dotenv().ok();
     init::tracing();
+
+    if env::var("EVM_ARITHMETIZATION_PKG_VER").is_err() {
+        let pkg_ver = get_package_version("evm_arithmetization")?;
+        // Set the environment variable for the evm_arithmetization package version
+        env::set_var(
+            "EVM_ARITHMETIZATION_PKG_VER",
+            pkg_ver.unwrap_or("NA".to_string()),
+        );
+    }
 
     let args = cli::Cli::parse();
     if let paladin::config::Runtime::InMemory = args.paladin.runtime {
