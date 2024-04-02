@@ -177,7 +177,7 @@ fn add11_yml() -> anyhow::Result<()> {
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
-    let registers_after = data[1].registers;
+    let registers_after = data[1].get_registers();
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,

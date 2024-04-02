@@ -157,7 +157,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
 
     let max_cpu_len_log = 20;
     assert_eq!(data.len(), 2);
-    let registers_after = data[1].registers;
+    let registers_after = data[1].get_registers();
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(
         &all_stark,

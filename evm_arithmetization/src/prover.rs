@@ -45,15 +45,31 @@ use crate::witness::state::RegistersState;
 #[derive(Clone, Default, Debug)]
 pub struct GenerationSegmentData {
     /// Registers at the start of the segment execution.
-    pub registers: RegistersState,
+    pub(crate) registers: RegistersState,
     /// Memory at the start of the segment execution.
     pub(crate) memory: MemoryState,
     /// Extra data required to initialize a segment.
     pub(crate) extra_data: ExtraSegmentData,
 }
 
+impl GenerationSegmentData {
+    pub fn get_registers(&self) -> RegistersState {
+        self.registers
+    }
+}
+
 /// Alias for `RegistersState`.
 pub type Registers = RegistersState;
+
+fn initialize_shift_table(memory: &mut MemoryState) {
+    let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
+    let mut shift_val = U256::one();
+    for _ in 0..256 {
+        memory.set(shift_addr, shift_val);
+        shift_addr.increment();
+        shift_val <<= 1;
+    }
+}
 
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
@@ -75,29 +91,9 @@ where
     let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
-    state.inputs = segment_data.extra_data.trimmed_inputs.clone();
-    state
-        .bignum_modmul_result_limbs
-        .clone_from(&segment_data.extra_data.bignum_modmul_result_limbs);
-    state
-        .rlp_prover_inputs
-        .clone_from(&segment_data.extra_data.rlp_prover_inputs);
-    state
-        .withdrawal_prover_inputs
-        .clone_from(&segment_data.extra_data.withdrawal_prover_inputs);
-    state.trie_root_ptrs = segment_data.extra_data.trie_root_ptrs.clone();
-    state
-        .jumpdest_table
-        .clone_from(&segment_data.extra_data.jumpdest_table);
+    state.set_segment_data(segment_data);
 
-    let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
-    let mut shift_val = U256::one();
-
-    for _ in 0..256 {
-        segment_data.memory.set(shift_addr, shift_val);
-        shift_addr.increment();
-        shift_val <<= 1;
-    }
+    initialize_shift_table(&mut segment_data.memory);
 
     let actual_mem_before = {
         let mut res = vec![];
@@ -121,14 +117,6 @@ where
     };
 
     let registers_before = segment_data.registers;
-
-    state.registers = RegistersState {
-        program_counter: state.registers.program_counter,
-        is_kernel: state.registers.is_kernel,
-        is_stack_top_read: false,
-        check_overflow: false,
-        ..registers_before
-    };
 
     let registers_data_before = RegistersData {
         program_counter: registers_before.program_counter.into(),
@@ -578,18 +566,17 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 
 /// Returns a vector containing the data required to generate all segments for
 /// one full execution.
+/// Note: For n segments, there are n+1 `GenerationSegmentData`s, as we also
+/// need the final register values. However, the last `GenerationSegmentData`
+/// onlly contains the final registers: the rest of the values are set to
+/// Default.
 pub fn generate_all_data_segments<F: RichField>(
     max_cpu_len_log: Option<usize>,
     inputs: GenerationInputs,
 ) -> anyhow::Result<Vec<GenerationSegmentData>> {
-    // TODO: change this value after some benchmarks have been carried out?
-    let mut all_data = Vec::with_capacity(50);
-    let mut running = true;
-    while running {
-        let res = generate_segment_given_data::<F>(max_cpu_len_log, inputs.clone(), &mut all_data)?;
-        if res.is_none() {
-            running = false;
-        }
+    let mut all_data = vec![];
+    while generate_segment_given_data::<F>(max_cpu_len_log, &inputs, &mut all_data)?.is_some() {
+        // Iterate until we have generated all segments.
     }
     Ok(all_data)
 }
@@ -648,19 +635,6 @@ pub mod testing {
             proofs.push(proof);
         }
 
-        // let mut proofs = vec![];
-        // while let Some(proof) = prove(
-        //     all_stark,
-        //     config,
-        //     inputs.clone(),
-        //     max_cpu_len,
-        //     segment_idx,
-        //     timing,
-        //     abort_signal.clone(),
-        // )? {
-        //     segment_idx += 1;
-        //     proofs.push(proof);
-        // }
         Ok(proofs)
     }
 
