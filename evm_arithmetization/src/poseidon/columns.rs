@@ -23,7 +23,7 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
     /// The timestamp at which Poseidon is called.
     pub timestamp: T,
 
-    /// The length of the original input for `PoseidonGeneralOp``. 0 for
+    /// The length of the original input for `PoseidonGeneralOp`. 0 for
     /// `PoseidonSimpleOp`.
     pub len: T,
     /// The number of elements that have already been absorbed prior
@@ -75,11 +75,11 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
     /// significative byte.
     pub input_bytes: [[T; FELT_MAX_BYTES - 1]; POSEIDON_SPONGE_RATE],
 
-    /// A flag indicating if this is a simple operation where inputs are
+    /// Indicates if this is a simple operation where inputs are
     /// read from the top of the stack.
     pub is_simple_op: T,
 
-    /// Indicates if this is  the first row of a general operation.
+    /// Indicates if this is the first row of a general operation.
     pub is_first_row_general_op: T,
 
     pub not_padding: T,
