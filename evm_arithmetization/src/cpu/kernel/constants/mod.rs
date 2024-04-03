@@ -109,7 +109,7 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c
 }
 
-const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
+const MISC_CONSTANTS: [(&str, [u8; 32]); 5] = [
     // Base for limbs used in bignum arithmetic.
     (
         "BIGNUM_LIMB_BASE",
@@ -133,6 +133,12 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     (
         "INITIAL_TXN_RLP_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000c00000001"),
+    ),
+    // Scaled boolean value indicating that we are in kernel mode, to be used within `kexit_info`.
+    // It is equal to 2^32.
+    (
+        "IS_KERNEL",
+        hex!("0000000000000000000000000000000000000000000000000000000100000000"),
     ),
 ];
 

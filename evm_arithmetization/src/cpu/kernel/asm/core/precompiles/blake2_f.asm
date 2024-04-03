@@ -35,7 +35,7 @@ global precompile_blake2_f:
     // stack: flag, flag, flag_addr, blake2_f_contd
     %gt_const(1) %jumpi(fault_exception) // Check flag < 2 (flag = 0 or flag = 1)
 
-    PUSH 0x100000000 // = 2^32 (is_kernel = true)
+    PUSH @IS_KERNEL // true
     // stack: kexit_info, flag, flag_addr, blake2_f_contd
 
     %stack () -> (@SEGMENT_CALLDATA, 4)
