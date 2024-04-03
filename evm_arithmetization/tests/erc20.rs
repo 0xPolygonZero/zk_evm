@@ -177,8 +177,6 @@ fn test_erc20() -> anyhow::Result<()> {
     let mut data = generate_all_data_segments::<F>(None, inputs.clone())?;
 
     let max_cpu_len_log = 20;
-    assert_eq!(data.len(), 2);
-    let registers_after = data[1].get_registers();
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(
         &all_stark,
@@ -186,7 +184,6 @@ fn test_erc20() -> anyhow::Result<()> {
         inputs,
         max_cpu_len_log,
         &mut data[0],
-        registers_after,
         &mut timing,
         None,
     )?;

@@ -173,18 +173,14 @@ fn add11_yml() -> anyhow::Result<()> {
     let max_cpu_len_log = 20;
     let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
 
-    assert_eq!(data.len(), 2);
-
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
-    let registers_after = data[1].get_registers();
     let proof = prove::<F, C, D>(
         &all_stark,
         &config,
         inputs,
         max_cpu_len_log,
         &mut data[0],
-        registers_after,
         &mut timing,
         None,
     )?;

@@ -31,9 +31,9 @@ use starky::stark::Stark;
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{
-    generate_segment, generate_segment_given_data, ExtraSegmentData,
+    generate_segment, set_registers_and_run, ExtraSegmentData, Interpreter,
 };
-use crate::generation::state::GenerationState;
+use crate::generation::state::{GenerationState, State};
 use crate::generation::{generate_traces, GenerationInputs, MemBeforeValues, SegmentData};
 use crate::get_challenges::observe_public_values;
 use crate::memory::segments::Segment;
@@ -45,21 +45,14 @@ use crate::witness::state::RegistersState;
 #[derive(Clone, Default, Debug)]
 pub struct GenerationSegmentData {
     /// Registers at the start of the segment execution.
-    pub(crate) registers: RegistersState,
+    pub(crate) registers_before: RegistersState,
+    /// Registers at the end of the segment execution.
+    pub(crate) registers_after: RegistersState,
     /// Memory at the start of the segment execution.
     pub(crate) memory: MemoryState,
     /// Extra data required to initialize a segment.
     pub(crate) extra_data: ExtraSegmentData,
 }
-
-impl GenerationSegmentData {
-    pub fn get_registers(&self) -> RegistersState {
-        self.registers
-    }
-}
-
-/// Alias for `RegistersState`.
-pub type Registers = RegistersState;
 
 fn initialize_shift_table(memory: &mut MemoryState) {
     let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
@@ -78,7 +71,6 @@ pub fn prove<F, C, const D: usize>(
     inputs: GenerationInputs,
     max_cpu_len_log: usize,
     segment_data: &mut GenerationSegmentData,
-    registers_after: RegistersState,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> Result<AllProof<F, C, D>>
@@ -116,7 +108,7 @@ where
         res
     };
 
-    let registers_before = segment_data.registers;
+    let registers_before = segment_data.registers_before;
 
     let registers_data_before = RegistersData {
         program_counter: registers_before.program_counter.into(),
@@ -126,6 +118,8 @@ where
         context: registers_before.context.into(),
         gas_used: registers_before.gas_used.into(),
     };
+
+    let registers_after = segment_data.registers_after;
     let registers_data_after = RegistersData {
         program_counter: registers_after.program_counter.into(),
         is_kernel: (registers_after.is_kernel as u64).into(),
@@ -566,20 +560,78 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 
 /// Returns a vector containing the data required to generate all segments for
 /// one full execution.
-/// Note: For n segments, there are n+1 `GenerationSegmentData`s, as we also
-/// need the final register values. However, the last `GenerationSegmentData`
-/// onlly contains the final registers: the rest of the values are set to
-/// Default.
 pub fn generate_all_data_segments<F: RichField>(
     max_cpu_len_log: Option<usize>,
     inputs: GenerationInputs,
 ) -> anyhow::Result<Vec<GenerationSegmentData>> {
-    let mut all_data = vec![];
-    while generate_segment_given_data::<F>(max_cpu_len_log, &inputs, &mut all_data)?.is_some() {
-        // Iterate until we have generated all segments.
+    let mut all_seg_data = vec![];
+
+    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+        KERNEL.global_labels["init"],
+        vec![],
+        &inputs,
+        max_cpu_len_log,
+    );
+
+    let mut segment_data = GenerationSegmentData {
+        registers_before: RegistersState::new(),
+        registers_after: RegistersState::new(),
+        memory: MemoryState::default(),
+        extra_data: ExtraSegmentData {
+            trimmed_inputs: interpreter.generation_state.inputs.clone(),
+            bignum_modmul_result_limbs: interpreter
+                .generation_state
+                .bignum_modmul_result_limbs
+                .clone(),
+            rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+            withdrawal_prover_inputs: interpreter
+                .generation_state
+                .withdrawal_prover_inputs
+                .clone(),
+            trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+            jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+        },
+    };
+
+    while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
+        interpreter.generation_state.registers = segment_data.registers_after;
+        interpreter.generation_state.registers.program_counter = KERNEL.global_labels["init"];
+        interpreter.generation_state.registers.is_kernel = true;
+        interpreter.clock = 0;
+
+        let (updated_registers, mem_after) =
+            set_registers_and_run(segment_data.registers_after, &mut interpreter)?;
+
+        // Set `registers_after` correctly and push the data.
+        segment_data.registers_after = updated_registers;
+        all_seg_data.push(segment_data);
+
+        segment_data = GenerationSegmentData {
+            registers_before: updated_registers,
+            // `registers_after` will be set correctly at the next iteration.`
+            registers_after: updated_registers,
+            memory: mem_after
+                .expect("The interpreter was running, so it should have returned a MemoryState"),
+            extra_data: ExtraSegmentData {
+                trimmed_inputs: interpreter.generation_state.inputs.clone(),
+                bignum_modmul_result_limbs: interpreter
+                    .generation_state
+                    .bignum_modmul_result_limbs
+                    .clone(),
+                rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+                withdrawal_prover_inputs: interpreter
+                    .generation_state
+                    .withdrawal_prover_inputs
+                    .clone(),
+                trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+                jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            },
+        };
     }
-    Ok(all_data)
+
+    Ok(all_seg_data)
 }
+
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use super::*;
@@ -618,17 +670,15 @@ pub mod testing {
     {
         let mut segment_idx = 0;
         let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
-        let nb_proofs = data.len() - 1;
-        let mut proofs = Vec::with_capacity(nb_proofs);
-        for i in 0..nb_proofs {
-            let registers_after = data[i + 1].registers;
+
+        let mut proofs = Vec::with_capacity(data.len());
+        for mut d in data {
             let proof = prove(
                 all_stark,
                 config,
                 inputs.clone(),
                 max_cpu_len_log,
-                &mut data[i],
-                registers_after,
+                &mut d,
                 timing,
                 abort_signal.clone(),
             )?;

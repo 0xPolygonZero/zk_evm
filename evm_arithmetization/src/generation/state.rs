@@ -508,7 +508,7 @@ impl<F: Field> GenerationState<F> {
             is_kernel: self.registers.is_kernel,
             is_stack_top_read: false,
             check_overflow: false,
-            ..segment_data.registers
+            ..segment_data.registers_before
         };
     }
 }

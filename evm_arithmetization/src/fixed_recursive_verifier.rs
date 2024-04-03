@@ -1352,7 +1352,6 @@ where
         generation_inputs: GenerationInputs,
         max_cpu_len_log: usize,
         segment_data: &mut GenerationSegmentData,
-        registers_after: RegistersState,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProverOutputData<F, C, D>> {
@@ -1362,7 +1361,6 @@ where
             generation_inputs,
             max_cpu_len_log,
             segment_data,
-            registers_after,
             timing,
             abort_signal.clone(),
         )?;
@@ -1432,17 +1430,14 @@ where
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
         let mut all_data_segments =
             generate_all_data_segments::<F>(Some(max_cpu_len_log), generation_inputs.clone())?;
-        let nb_proofs = all_data_segments.len() - 1;
-        let mut proofs = Vec::with_capacity(nb_proofs);
-        for i in 0..nb_proofs {
-            let registers_after = all_data_segments[i + 1].registers;
+        let mut proofs = Vec::with_capacity(all_data_segments.len());
+        for mut data in all_data_segments {
             let proof = self.prove_segment(
                 all_stark,
                 config,
                 generation_inputs.clone(),
                 max_cpu_len_log,
-                &mut all_data_segments[i],
-                registers_after,
+                &mut data,
                 timing,
                 abort_signal.clone(),
             )?;
