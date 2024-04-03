@@ -185,10 +185,8 @@ mod tests {
     use plonky2::field::types::{Field, Sample};
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
-    use starky::constraint_consumer::ConstraintConsumer;
 
     use super::*;
-    use crate::arithmetic::columns::NUM_ARITH_COLUMNS;
 
     const N_RND_TESTS: usize = 1000;
 

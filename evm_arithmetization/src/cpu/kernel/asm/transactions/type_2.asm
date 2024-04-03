@@ -11,7 +11,7 @@ global process_type_2_txn:
     // stack: retdest
     // Initial rlp address offset of 1 (skipping over the 0x02 byte)
     PUSH 1
-    PUSH @SEGMENT_RLP_RAW
+    PUSH @INITIAL_TXN_RLP_ADDR
     %build_kernel_address
     // stack: rlp_addr, retdest
     %decode_rlp_list_len

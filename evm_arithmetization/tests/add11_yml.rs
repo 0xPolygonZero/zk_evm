@@ -149,7 +149,7 @@ fn add11_yml() -> anyhow::Result<()> {
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),

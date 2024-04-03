@@ -41,7 +41,7 @@ pub(crate) fn ctl_looked<F: Field>() -> TableWithColumns<F> {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct PoseidonOp<F: RichField>(pub [F; POSEIDON_SPONGE_WIDTH]);
+pub struct PoseidonOp<F: Field>(pub [F; POSEIDON_SPONGE_WIDTH]);
 
 #[derive(Copy, Clone, Default)]
 pub struct PoseidonStark<F, const D: usize> {

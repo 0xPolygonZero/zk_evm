@@ -54,9 +54,10 @@ use mpt_trie::partial_trie::PartialTrie;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node},
+    trie_ops::TrieOpResult,
 };
 
-fn main() {
+fn main() -> TrieOpResult<()> {
     pretty_env_logger::try_init().unwrap();
 
     // Lets build the (binary) tries in the module-level docs. Since the example
@@ -66,10 +67,10 @@ fn main() {
 
     // Note the nibbles read the most significant nibble first (eg. `0x12` reads `1`
     // first).
-    full_trie.insert(Nibbles::from_str("0x00").unwrap(), large_val(1)); // 1st from left.
-    full_trie.insert(Nibbles::from_str("0x01").unwrap(), large_val(2)); // 2nd from left.
-    full_trie.insert(Nibbles::from(0x10_u64), large_val(3)); // 3rd from left.
-    full_trie.insert(Nibbles::from(0x11_u64), large_val(4)); // 4th from left.
+    full_trie.insert(Nibbles::from_str("0x00").unwrap(), large_val(1))?; // 1st from left.
+    full_trie.insert(Nibbles::from_str("0x01").unwrap(), large_val(2))?; // 2nd from left.
+    full_trie.insert(Nibbles::from(0x10_u64), large_val(3))?; // 3rd from left.
+    full_trie.insert(Nibbles::from(0x11_u64), large_val(4))?; // 4th from left.
 
     let full_trie_hash = full_trie.hash();
 
@@ -83,14 +84,16 @@ fn main() {
 
     // Hash version. `0` branch is replaced with a `Hash` node.
     let mut hash_trie = HashedPartialTrie::default();
-    hash_trie.insert(Nibbles::from_str("0x0").unwrap(), left_side_hash); // Hash node
-    hash_trie.insert(0x10_u64, large_val(3)); // 3rd from left.
-    hash_trie.insert(0x11_u64, large_val(4)); // 4th from left.
+    hash_trie.insert(Nibbles::from_str("0x0").unwrap(), left_side_hash)?; // Hash node
+    hash_trie.insert(0x10_u64, large_val(3))?; // 3rd from left.
+    hash_trie.insert(0x11_u64, large_val(4))?; // 4th from left.
 
     let hash_trie_hash = hash_trie.hash();
 
     // Hashes should be equal.
     assert_eq!(full_trie_hash, hash_trie_hash);
+
+    Ok(())
 }
 
 /// We want to ensure that all leafs are >= 32 bytes when RLP encoded in order

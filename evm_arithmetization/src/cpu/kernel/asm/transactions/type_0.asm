@@ -13,7 +13,7 @@
 
 global process_type_0_txn:
     // stack: retdest
-    PUSH @SEGMENT_RLP_RAW // ctx == virt == 0
+    PUSH @INITIAL_TXN_RLP_ADDR
     // stack: rlp_addr, retdest
     %decode_rlp_list_len
     // We don't actually need the length.

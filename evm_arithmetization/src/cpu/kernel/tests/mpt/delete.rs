@@ -66,7 +66,7 @@ fn test_state_trie(state_smt: Smt<MemoryDb>, k: Key, value: U256) -> Result<()> 
     let smt_hash = KERNEL.global_labels["smt_hash"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
 
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
@@ -77,8 +77,8 @@ fn test_state_trie(state_smt: Smt<MemoryDb>, k: Key, value: U256) -> Result<()> 
     if trie_data.is_empty() {
         // In the assembly we skip over 0, knowing trie_data[0] = 0 by default.
         // Since we don't explicitly set it to 0, we need to do so here.
-        trie_data.push(0.into());
-        trie_data.push(0.into());
+        trie_data.push(Some(0.into()));
+        trie_data.push(Some(0.into()));
     }
     let len = trie_data.len();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, len.into());

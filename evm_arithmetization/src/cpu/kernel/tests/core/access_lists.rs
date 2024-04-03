@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use ethereum_types::{Address, H160, U256};
-use hashbrown::hash_map::rayon::IntoParIter;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::{thread_rng, Rng};
 
@@ -12,7 +11,6 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata::{
 };
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::memory::segments::Segment::{self, AccessedAddresses, AccessedStorageKeys};
-use crate::memory::segments::SEGMENT_SCALING_FACTOR;
 use crate::witness::memory::MemoryAddress;
 
 #[test]
@@ -21,18 +19,17 @@ fn test_init_access_lists() -> Result<()> {
 
     // Check the initial state of the access list in the kernel.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new_with_kernel(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
     interpreter.run()?;
 
     assert!(interpreter.stack().is_empty());
 
     let acc_addr_list: Vec<U256> = (0..2)
         .map(|i| {
-            interpreter.generation_state.memory.get(MemoryAddress::new(
-                0,
-                Segment::AccessedAddresses,
-                i,
-            ))
+            interpreter
+                .generation_state
+                .memory
+                .get_with_init(MemoryAddress::new(0, Segment::AccessedAddresses, i))
         })
         .collect();
     assert_eq!(
@@ -42,11 +39,10 @@ fn test_init_access_lists() -> Result<()> {
 
     let acc_storage_keys: Vec<U256> = (0..4)
         .map(|i| {
-            interpreter.generation_state.memory.get(MemoryAddress::new(
-                0,
-                Segment::AccessedStorageKeys,
-                i,
-            ))
+            interpreter
+                .generation_state
+                .memory
+                .get_with_init(MemoryAddress::new(0, Segment::AccessedStorageKeys, i))
         })
         .collect();
 
@@ -68,7 +64,7 @@ fn test_list_iterator() -> Result<()> {
     let init_label = KERNEL.global_labels["init_access_lists"];
 
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new_with_kernel(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
     interpreter.run()?;
 
     // test the list iterator
@@ -95,7 +91,7 @@ fn test_insert_address() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new_with_kernel(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
     interpreter.run()?;
 
     let insert_accessed_addresses = KERNEL.global_labels["insert_accessed_addresses"];
@@ -113,10 +109,9 @@ fn test_insert_address() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[U256::one()]);
     assert_eq!(
-        interpreter
-            .generation_state
-            .memory
-            .get(MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap()),
+        interpreter.generation_state.memory.get_with_init(
+            MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
+        ),
         U256::from(Segment::AccessedAddresses as usize + 4)
     );
 
@@ -129,7 +124,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new_with_kernel(init_access_lists, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack);
     interpreter.run()?;
 
     let insert_accessed_addresses = KERNEL.global_labels["insert_accessed_addresses"];
@@ -167,10 +162,9 @@ fn test_insert_accessed_addresses() -> Result<()> {
         interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::zero());
         assert_eq!(
-            interpreter
-                .generation_state
-                .memory
-                .get(MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap()),
+            interpreter.generation_state.memory.get_with_init(
+                MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
+            ),
             U256::from(offset + 2 * (n + 1))
         );
     }
@@ -183,18 +177,16 @@ fn test_insert_accessed_addresses() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[U256::one()]);
     assert_eq!(
-        interpreter
-            .generation_state
-            .memory
-            .get(MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap()),
+        interpreter.generation_state.memory.get_with_init(
+            MemoryAddress::new_bundle(U256::from(AccessedAddressesLen as usize)).unwrap(),
+        ),
         U256::from(offset + 2 * (n + 2))
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(MemoryAddress::new(
-            0,
-            AccessedAddresses,
-            2 * (n + 1)
-        )),
+        interpreter
+            .generation_state
+            .memory
+            .get_with_init(MemoryAddress::new(0, AccessedAddresses, 2 * (n + 1)),),
         U256::from(addr_not_in_list.0.as_slice())
     );
 
@@ -207,7 +199,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new_with_kernel(init_access_lists, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack);
     interpreter.run()?;
 
     let insert_accessed_storage_keys = KERNEL.global_labels["insert_accessed_storage_keys"];
@@ -216,12 +208,12 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     let mut rng = thread_rng();
     let n = 10;
     let mut storage_keys = (0..n)
-        .map(|_| (rng.gen::<Address>(), U256(rng.gen()), U256(rng.gen())))
+        .map(|_| (rng.gen::<Address>(), U256(rng.gen())))
         .collect::<HashSet<_>>()
         .into_iter()
-        .collect::<Vec<(Address, U256, U256)>>();
+        .collect::<Vec<(Address, U256)>>();
     let storage_key_in_list = storage_keys[rng.gen_range(0..n)];
-    let storage_key_not_in_list = (rng.gen::<Address>(), U256(rng.gen()), U256(rng.gen()));
+    let storage_key_not_in_list = (rng.gen::<Address>(), U256(rng.gen()));
     assert!(
         !storage_keys.contains(&storage_key_not_in_list),
         "Cosmic luck or bad RNG?"
@@ -231,31 +223,28 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     for i in 0..n {
         let addr = U256::from(storage_keys[i].0 .0.as_slice());
         let key = storage_keys[i].1;
-        let value = storage_keys[i].2;
         interpreter.push(retaddr);
-        interpreter.push(value);
         interpreter.push(key);
         interpreter.push(addr);
         interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
         interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::one());
-        assert_eq!(interpreter.pop().unwrap(), value);
+        interpreter.pop().expect("Stack shouldn't be empty"); // Pop the value_ptr.
     }
 
     for i in 0..10 {
         // Test for storage key already in list.
-        let (addr, key, value) = storage_keys[i];
+        let (addr, key) = storage_keys[i];
         interpreter.push(retaddr);
-        interpreter.push(value);
         interpreter.push(key);
         interpreter.push(U256::from(addr.0.as_slice()));
         interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
         interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::zero());
-        assert_eq!(interpreter.pop().unwrap(), value);
+        interpreter.pop().expect("Stack shouldn't be empty"); // Pop the value_ptr.
         assert_eq!(
-            interpreter.generation_state.memory.get(
-                MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap()
+            interpreter.generation_state.memory.get_with_init(
+                MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
             ),
             U256::from(offset + 4 * (n + 1))
         );
@@ -263,46 +252,31 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
 
     // Test for storage key not in list.
     interpreter.push(retaddr);
-    interpreter.push(storage_key_not_in_list.2);
     interpreter.push(storage_key_not_in_list.1);
     interpreter.push(U256::from(storage_key_not_in_list.0 .0.as_slice()));
     interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
 
     interpreter.run()?;
+    assert_eq!(interpreter.stack()[1], U256::one());
     assert_eq!(
-        interpreter.stack(),
-        &[storage_key_not_in_list.2, U256::one()]
+        interpreter.generation_state.memory.get_with_init(
+            MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap(),
+        ),
+        U256::from(offset + 4 * (n + 2))
     );
     assert_eq!(
         interpreter
             .generation_state
             .memory
-            .get(MemoryAddress::new_bundle(U256::from(AccessedStorageKeysLen as usize)).unwrap()),
-        U256::from(offset + 4 * (n + 2))
-    );
-    assert_eq!(
-        interpreter.generation_state.memory.get(MemoryAddress::new(
-            0,
-            AccessedStorageKeys,
-            4 * (n + 1)
-        )),
+            .get_with_init(MemoryAddress::new(0, AccessedStorageKeys, 4 * (n + 1)),),
         U256::from(storage_key_not_in_list.0 .0.as_slice())
     );
     assert_eq!(
-        interpreter.generation_state.memory.get(MemoryAddress::new(
-            0,
-            AccessedStorageKeys,
-            4 * (n + 1) + 1
-        )),
+        interpreter
+            .generation_state
+            .memory
+            .get_with_init(MemoryAddress::new(0, AccessedStorageKeys, 4 * (n + 1) + 1),),
         storage_key_not_in_list.1
-    );
-    assert_eq!(
-        interpreter.generation_state.memory.get(MemoryAddress::new(
-            0,
-            AccessedStorageKeys,
-            4 * (n + 1) + 2
-        )),
-        storage_key_not_in_list.2
     );
 
     Ok(())

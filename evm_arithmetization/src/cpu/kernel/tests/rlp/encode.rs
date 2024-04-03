@@ -14,12 +14,15 @@ fn test_encode_rlp_scalar_small() -> Result<()> {
     let scalar = 42.into();
     let pos = U256::from(Segment::RlpRaw as usize + 2);
     let initial_stack = vec![retdest, scalar, pos];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(encode_rlp_scalar, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(encode_rlp_scalar, initial_stack);
 
     interpreter.run()?;
     let expected_stack = vec![pos + U256::from(1)]; // pos' = pos + rlp_len = 2 + 1
-    let expected_rlp = vec![0, 0, 42];
+
+    // The two first values of the RLP segment are the hardcoded 0x80 for an empty
+    // node, and 0 (i.e. unset).
+    let expected_rlp = vec![0x80, 0, 42];
+
     assert_eq!(interpreter.stack(), expected_stack);
     assert_eq!(interpreter.get_rlp_memory(), expected_rlp);
 
@@ -34,12 +37,15 @@ fn test_encode_rlp_scalar_medium() -> Result<()> {
     let scalar = 0x12345.into();
     let pos = U256::from(Segment::RlpRaw as usize + 2);
     let initial_stack = vec![retdest, scalar, pos];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(encode_rlp_scalar, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(encode_rlp_scalar, initial_stack);
 
     interpreter.run()?;
     let expected_stack = vec![pos + U256::from(4)]; // pos' = pos + rlp_len = 2 + 4
-    let expected_rlp = vec![0, 0, 0x80 + 3, 0x01, 0x23, 0x45];
+
+    // The two first values of the RLP segment are the hardcoded 0x80 for an empty
+    // node, and 0 (i.e. unset).
+    let expected_rlp = vec![0x80, 0, 0x80 + 3, 0x01, 0x23, 0x45];
+
     assert_eq!(interpreter.stack(), expected_stack);
     assert_eq!(interpreter.get_rlp_memory(), expected_rlp);
 
@@ -54,8 +60,7 @@ fn test_encode_rlp_160() -> Result<()> {
     let string = 0x12345.into();
     let pos = U256::from(Segment::RlpRaw as usize);
     let initial_stack = vec![retdest, string, pos, U256::from(20)];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(encode_rlp_fixed, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(encode_rlp_fixed, initial_stack);
 
     interpreter.run()?;
     let expected_stack = vec![pos + U256::from(1 + 20)]; // pos'
@@ -75,8 +80,7 @@ fn test_encode_rlp_256() -> Result<()> {
     let string = 0x12345.into();
     let pos = U256::from(Segment::RlpRaw as usize);
     let initial_stack = vec![retdest, string, pos, U256::from(32)];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(encode_rlp_fixed, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(encode_rlp_fixed, initial_stack);
 
     interpreter.run()?;
     let expected_stack = vec![pos + U256::from(1 + 32)]; // pos'
@@ -96,8 +100,7 @@ fn test_prepend_rlp_list_prefix_small() -> Result<()> {
     let start_pos = U256::from(Segment::RlpRaw as usize + 9);
     let end_pos = U256::from(Segment::RlpRaw as usize + 9 + 5);
     let initial_stack = vec![retdest, start_pos, end_pos];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(prepend_rlp_list_prefix, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(prepend_rlp_list_prefix, initial_stack);
     interpreter.set_rlp_memory(vec![
         // Nine 0s to leave room for the longest possible RLP list prefix.
         0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -126,8 +129,7 @@ fn test_prepend_rlp_list_prefix_large() -> Result<()> {
     let start_pos = U256::from(Segment::RlpRaw as usize + 9);
     let end_pos = U256::from(Segment::RlpRaw as usize + 9 + 60);
     let initial_stack = vec![retdest, start_pos, end_pos];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_kernel(prepend_rlp_list_prefix, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(prepend_rlp_list_prefix, initial_stack);
 
     #[rustfmt::skip]
     interpreter.set_rlp_memory(vec![

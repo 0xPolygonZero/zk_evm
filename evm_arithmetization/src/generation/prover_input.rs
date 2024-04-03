@@ -14,7 +14,6 @@ use smt_trie::code::hash_bytecode_u256;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
-use crate::cpu::kernel::opcodes::get_push_opcode;
 use crate::extension_tower::{FieldExt, Fp12, BLS381, BN254};
 use crate::generation::prover_input::EvmField::{
     Bls381Base, Bls381Scalar, Bn254Base, Bn254Scalar, Secp256k1Base, Secp256k1Scalar,
@@ -170,7 +169,7 @@ impl<F: RichField> GenerationState<F> {
         let mut len = code_len + 1;
         len = 56 * ((len + 55) / 56);
         let last_byte_addr = MemoryAddress::new(context, Segment::Code, len - 1);
-        let mut last_byte = u256_to_usize(self.memory.get(last_byte_addr))?;
+        let mut last_byte = u256_to_usize(self.memory.get_with_init(last_byte_addr))?;
         last_byte |= 0x80;
         self.memory.set(last_byte_addr, last_byte.into());
 
@@ -214,11 +213,11 @@ impl<F: RichField> GenerationState<F> {
         m_start_loc: usize,
     ) -> (Vec<U256>, Vec<U256>) {
         let n = self.memory.contexts.len();
-        let a = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
+        let a = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content()
             [a_start_loc..a_start_loc + len];
-        let b = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
+        let b = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content()
             [b_start_loc..b_start_loc + len];
-        let m = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content
+        let m = &self.memory.contexts[n - 1].segments[Segment::KernelGeneral.unscale()].content()
             [m_start_loc..m_start_loc + len];
 
         let a_biguint = mem_vec_to_biguint(a);
@@ -255,12 +254,13 @@ impl<F: RichField> GenerationState<F> {
         }
     }
 
-    /// Generate either the next used jump address or the proof for the last
-    /// jump address.
+    /// Generate either the next used jump address, the proof for the last
+    /// jump address, or a non-jumpdest proof.
     fn run_jumpdest_table(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[1].as_str() {
             "next_address" => self.run_next_jumpdest_table_address(),
             "next_proof" => self.run_next_jumpdest_table_proof(),
+            "non_jumpdest_proof" => self.run_next_non_jumpdest_proof(),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -336,6 +336,20 @@ impl<F: RichField> GenerationState<F> {
         }
     }
 
+    /// Returns a non-jumpdest proof for the address on the top of the stack. A
+    /// non-jumpdest proof is the closest address to the address on the top of
+    /// the stack, if the closses address is >= 32, or zero otherwise.
+    fn run_next_non_jumpdest_proof(&mut self) -> Result<U256, ProgramError> {
+        let code = self.get_current_code()?;
+        let address = u256_to_usize(stack_peek(self, 0)?)?;
+        let closest_opcode_addr = get_closest_opcode_address(&code, address);
+        Ok(if closest_opcode_addr < 32 {
+            U256::zero()
+        } else {
+            closest_opcode_addr.into()
+        })
+    }
+
     /// Returns a pointer to an element in the list whose value is such that
     /// `value <= addr < next_value` and `addr` is the top of the stack.
     fn run_next_addresses_insert(&mut self) -> Result<U256, ProgramError> {
@@ -399,7 +413,7 @@ impl<F: RichField> GenerationState<F> {
             .map(|i| {
                 let mut a = addr;
                 a.virt += i;
-                self.memory.get(a).as_usize() as u8
+                self.memory.get_with_init(a).as_usize() as u8
             })
             .collect_vec();
 
@@ -411,8 +425,6 @@ impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
-        let checkpoint = self.checkpoint();
-
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
         self.jumpdest_table = simulate_cpu_and_get_user_jumps("terminate_common", self);
@@ -450,7 +462,7 @@ impl<F: RichField> GenerationState<F> {
             .map(|i| {
                 u256_to_u8(
                     self.memory
-                        .get(MemoryAddress::new(context, Segment::Code, i)),
+                        .get_with_init(MemoryAddress::new(context, Segment::Code, i)),
                 )
             })
             .collect::<Result<Vec<u8>, _>>()?;
@@ -458,7 +470,7 @@ impl<F: RichField> GenerationState<F> {
     }
 
     fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
-        let code_len = u256_to_usize(self.memory.get(MemoryAddress::new(
+        let code_len = u256_to_usize(self.memory.get_with_init(MemoryAddress::new(
             context,
             Segment::ContextMetadata,
             ContextMetadata::CodeSize.unscale(),
@@ -497,7 +509,7 @@ impl<F: RichField> GenerationState<F> {
     }
 
     fn get_global_metadata(&self, data: GlobalMetadata) -> U256 {
-        self.memory.get(MemoryAddress::new(
+        self.memory.get_with_init(MemoryAddress::new(
             0,
             Segment::GlobalMetadata,
             data.unscale(),
@@ -509,7 +521,7 @@ impl<F: RichField> GenerationState<F> {
         // virtual address in the segment. In order to get the length we need
         // to substract Segment::AccessedStorageKeys as usize
         let acc_storage_len = u256_to_usize(
-            self.memory.get(MemoryAddress::new(
+            self.memory.get_with_init(MemoryAddress::new(
                 0,
                 Segment::GlobalMetadata,
                 GlobalMetadata::AccessedStorageKeysLen.unscale(),
@@ -558,6 +570,15 @@ fn get_proofs_and_jumpdests(
         },
     );
     proofs
+}
+
+/// Return the largest prev_addr in `code` such that `code[pred_addr]` is an
+/// opcode (and not the argument of some PUSHXX) and pred_addr <= address
+fn get_closest_opcode_address(code: &[u8], address: usize) -> usize {
+    let (prev_addr, _) = CodeIterator::until(code, address + 1)
+        .last()
+        .unwrap_or((0, 0));
+    prev_addr
 }
 
 /// An iterator over the EVM code contained in `code`, which skips the bytes
@@ -611,7 +632,7 @@ impl<'a> Iterator for CodeIterator<'a> {
 // `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
 // 1]` holds the address of the next node, where i = node_size * j.
 pub(crate) struct AccList<'a> {
-    access_list_mem: &'a [U256],
+    access_list_mem: &'a [Option<U256>],
     node_size: usize,
     offset: usize,
     pos: usize,
@@ -619,7 +640,7 @@ pub(crate) struct AccList<'a> {
 
 impl<'a> AccList<'a> {
     fn from_mem_and_segment(
-        access_list_mem: &'a [U256],
+        access_list_mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {
         if access_list_mem.is_empty() {
@@ -642,19 +663,24 @@ impl<'a> Iterator for AccList<'a> {
     type Item = (usize, U256, U256);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let addr = self.access_list_mem[self.pos];
-        if let Ok(new_pos) = u256_to_usize(self.access_list_mem[self.pos + self.node_size - 1]) {
+        if let Ok(new_pos) =
+            u256_to_usize(self.access_list_mem[self.pos + self.node_size - 1].unwrap_or_default())
+        {
             let old_pos = self.pos;
             self.pos = new_pos - self.offset;
             if self.node_size == 2 {
                 // addresses
-                Some((old_pos, self.access_list_mem[self.pos], U256::zero()))
+                Some((
+                    old_pos,
+                    self.access_list_mem[self.pos].unwrap_or_default(),
+                    U256::zero(),
+                ))
             } else {
                 // storage_keys
                 Some((
                     old_pos,
-                    self.access_list_mem[self.pos],
-                    self.access_list_mem[self.pos + 1],
+                    self.access_list_mem[self.pos].unwrap_or_default(),
+                    self.access_list_mem[self.pos + 1].unwrap_or_default(),
                 ))
             }
         } else {
