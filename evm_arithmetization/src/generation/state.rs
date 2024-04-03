@@ -6,6 +6,9 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
+use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
+use smt_trie::utils::hashout2u;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
 use super::TrieInputs;
@@ -19,6 +22,7 @@ use crate::generation::GenerationInputs;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::poseidon::poseidon_stark::PoseidonOp;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
@@ -36,7 +40,7 @@ use crate::{arithmetic, keccak, logic};
 
 /// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
 /// a `GenerationState`.
-pub(crate) trait State<F: Field> {
+pub(crate) trait State<F: RichField> {
     /// Returns a `State`'s latest `Checkpoint`.
     fn checkpoint(&mut self) -> GenerationStateCheckpoint;
 
@@ -96,6 +100,10 @@ pub(crate) trait State<F: Field> {
 
     fn push_memory(&mut self, op: MemoryOp) {
         self.get_mut_generation_state().traces.memory_ops.push(op);
+    }
+
+    fn push_poseidon(&mut self, op: PoseidonOp<F>) {
+        self.get_mut_generation_state().traces.poseidon_ops.push(op);
     }
 
     fn push_byte_packing(&mut self, op: BytePackingOp) {
@@ -297,7 +305,7 @@ pub(crate) struct GenerationState<F: Field> {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     fn preinitialize_mpts(&mut self, trie_inputs: &TrieInputs) -> TrieRootPtrs {
         let (trie_roots_ptrs, trie_data) =
             load_all_mpts(trie_inputs).expect("Invalid MPT data for preinitialization");
@@ -346,8 +354,7 @@ impl<F: Field> GenerationState<F> {
             self.observe_address(tip_h160);
         } else if dst == KERNEL.global_labels["observe_new_contract"] {
             let tip_u256 = stack_peek(self, 0)?;
-            let tip_h256 = H256::from_uint(&tip_u256);
-            self.observe_contract(tip_h256)?;
+            self.observe_contract(tip_u256)?;
         }
 
         Ok(())
@@ -363,7 +370,7 @@ impl<F: Field> GenerationState<F> {
     /// Observe the given code hash and store the associated code.
     /// When called, the code corresponding to `codehash` should be stored in
     /// the return data.
-    pub(crate) fn observe_contract(&mut self, codehash: H256) -> Result<(), ProgramError> {
+    pub(crate) fn observe_contract(&mut self, codehash: U256) -> Result<(), ProgramError> {
         if self.inputs.contract_code.contains_key(&codehash) {
             return Ok(()); // Return early if the code hash has already been
                            // observed.
@@ -379,7 +386,7 @@ impl<F: Field> GenerationState<F> {
             .iter()
             .map(|x| x.unwrap_or_default().low_u32() as u8)
             .collect::<Vec<_>>();
-        debug_assert_eq!(keccak(&code), codehash);
+        debug_assert_eq!(hash_bytecode_u256(code.clone()), codehash);
 
         self.inputs.contract_code.insert(codehash, code);
 
@@ -419,7 +426,7 @@ impl<F: Field> GenerationState<F> {
     }
 }
 
-impl<F: Field> State<F> for GenerationState<F> {
+impl<F: RichField> State<F> for GenerationState<F> {
     fn checkpoint(&mut self) -> GenerationStateCheckpoint {
         GenerationStateCheckpoint {
             registers: self.registers,
@@ -535,7 +542,7 @@ impl<F: Field> State<F> for GenerationState<F> {
     }
 }
 
-impl<F: Field> Transition<F> for GenerationState<F> {
+impl<F: RichField> Transition<F> for GenerationState<F> {
     fn skip_if_necessary(&mut self, op: Operation) -> Result<Operation, ProgramError> {
         Ok(op)
     }

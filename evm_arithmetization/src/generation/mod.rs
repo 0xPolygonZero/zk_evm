@@ -11,6 +11,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use serde::{Deserialize, Serialize};
+use smt_trie::smt::hash_serialize_u256;
 use starky::config::StarkConfig;
 use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,
@@ -68,7 +69,7 @@ pub struct GenerationInputs {
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    pub contract_code: HashMap<H256, Vec<u8>>,
+    pub contract_code: HashMap<U256, Vec<u8>>,
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,
@@ -78,12 +79,12 @@ pub struct GenerationInputs {
     pub block_hashes: BlockHashes,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TrieInputs {
-    /// A partial version of the state trie prior to these transactions. It
-    /// should include all nodes that will be accessed by these
-    /// transactions.
-    pub state_trie: HashedPartialTrie,
+    /// A serialized partial version of the state SMT prior to these
+    /// transactions. It should include all nodes that will be accessed by
+    /// these transactions.
+    pub state_smt: Vec<U256>,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
@@ -94,11 +95,18 @@ pub struct TrieInputs {
     /// should include all nodes that will be accessed by these
     /// transactions.
     pub receipts_trie: HashedPartialTrie,
+}
 
-    /// A partial version of each storage trie prior to these transactions. It
-    /// should include all storage tries, and nodes therein, that will be
-    /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+impl Default for TrieInputs {
+    fn default() -> Self {
+        Self {
+            // First 2 zeros are for the default empty node.
+            // The next 2 are for the current empty state trie root.
+            state_smt: vec![U256::zero(); 4],
+            transactions_trie: Default::default(),
+            receipts_trie: Default::default(),
+        }
+    }
 }
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
@@ -137,7 +145,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         ),
         (
             GlobalMetadata::StateTrieRootDigestBefore,
-            h2u(tries.state_trie.hash()),
+            hash_serialize_u256(&tries.state_smt),
         ),
         (
             GlobalMetadata::TransactionTrieRootDigestBefore,
@@ -206,13 +214,12 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 
 pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
     log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
-    log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
+    log::debug!("Input state_trie: {:?}", &inputs.tries.state_smt);
     log::debug!(
         "Input transactions_trie: {:?}",
         &inputs.tries.transactions_trie
     );
     log::debug!("Input receipts_trie: {:?}", &inputs.tries.receipts_trie);
-    log::debug!("Input storage_tries: {:?}", &inputs.tries.storage_tries);
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }
 
@@ -279,7 +286,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     Ok((tables, public_values))
 }
 
-fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
+fn simulate_cpu<F: RichField>(state: &mut GenerationState<F>) -> anyhow::Result<()> {
     state.run_cpu()?;
 
     let pc = state.registers.program_counter;

@@ -221,9 +221,8 @@ decode_and_store_access_list_finish:
 %endmacro
 
 insert_accessed_storage_keys_with_original_value:
-    %stack (addr, key, retdest) -> (key, addr, after_read, addr, key, retdest)
-    %jump(sload_with_addr)
-after_read:
+    %stack (addr, key, retdest) -> (addr, key, addr, key, retdest)
+    %key_storage %smt_read_state %mload_trie_data
     %stack (value, addr, key, retdest) -> ( addr, key, value, retdest)
     %insert_accessed_storage_keys
     // stack: cold_access, value_ptr, value, retdest
@@ -233,25 +232,3 @@ after_read:
     // stack: cold_access, retdest
     POP
     JUMP
-
-
-sload_with_addr:
-    %stack (slot, addr) -> (slot, addr, after_storage_read)
-    %slot_to_storage_key
-    // stack: storage_key, addr, after_storage_read
-    PUSH 64 // storage_key has 64 nibbles
-    %stack (n64, storage_key, addr, after_storage_read) -> (addr, n64, storage_key, after_storage_read)
-    %mpt_read_state_trie
-    // stack: account_ptr, 64, storage_key, after_storage_read
-    DUP1 ISZERO %jumpi(ret_zero) // TODO: Fix this. This should never happen.
-    // stack: account_ptr, 64, storage_key, after_storage_read
-    %add_const(2)
-    // stack: storage_root_ptr_ptr
-    %mload_trie_data
-    // stack: storage_root_ptr, 64, storage_key, after_storage_read
-    %jump(mpt_read)
-
-ret_zero:
-    // stack: account_ptr, 64, storage_key, after_storage_read, retdest
-    %pop4
-    PUSH 0 SWAP1 JUMP

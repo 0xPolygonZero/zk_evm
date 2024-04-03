@@ -1,14 +1,20 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use ethereum_types::{Address, BigEndianHash, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
+use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
+use smt_trie::db::{Db, MemoryDb};
+use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
+use smt_trie::smt::Smt;
+use smt_trie::utils::{hashout2u, key2u};
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
@@ -22,7 +28,7 @@ use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 use crate::Node;
 
-pub(crate) fn initialize_mpts<F: Field>(
+pub(crate) fn initialize_mpts<F: RichField>(
     interpreter: &mut Interpreter<F>,
     trie_inputs: &TrieInputs,
 ) {
@@ -62,8 +68,8 @@ fn test_account(code: &[u8]) -> AccountRlp {
     AccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: keccak(code),
+        code_hash: hashout2u(hash_contract_bytecode(code.to_vec())),
+        code_length: code.len().into(),
     }
 }
 
@@ -75,14 +81,14 @@ fn random_code() -> Vec<u8> {
 
 // Stolen from `tests/mpt/insert.rs`
 // Prepare the interpreter by inserting the account in the state trie.
-fn prepare_interpreter<F: Field>(
+fn prepare_interpreter<F: RichField>(
     interpreter: &mut Interpreter<F>,
     address: Address,
     account: &AccountRlp,
 ) -> Result<()> {
-    let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
-    let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
-    let mut state_trie: HashedPartialTrie = Default::default();
+    let smt_insert_state = KERNEL.global_labels["smt_insert_state"];
+    let smt_hash_state = KERNEL.global_labels["smt_hash_state"];
+    let mut state_smt = Smt::<MemoryDb>::default();
     let trie_inputs = Default::default();
 
     initialize_mpts(interpreter, &trie_inputs);
@@ -91,48 +97,52 @@ fn prepare_interpreter<F: Field>(
         keccak(address.to_fixed_bytes()).as_bytes(),
     ));
     // Next, execute mpt_insert_state_trie.
-    interpreter.generation_state.registers.program_counter = mpt_insert_state_trie;
     let trie_data = interpreter.get_trie_data_mut();
     if trie_data.is_empty() {
         // In the assembly we skip over 0, knowing trie_data[0] = 0 by default.
         // Since we don't explicitly set it to 0, we need to do so here.
         trie_data.push(Some(0.into()));
+        trie_data.push(Some(0.into()));
     }
-    let value_ptr = trie_data.len();
-    trie_data.push(Some(account.nonce));
-    trie_data.push(Some(account.balance));
-    // In memory, storage_root gets interpreted as a pointer to a storage trie,
-    // so we have to ensure the pointer is valid. It's easiest to set it to 0,
-    // which works as an empty node, since trie_data[0] = 0 = MPT_TYPE_EMPTY.
-    trie_data.push(Some(H256::zero().into_uint()));
-    trie_data.push(Some(account.code_hash.into_uint()));
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
-    interpreter
-        .push(0xDEADBEEFu32.into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push(value_ptr.into())
-        .expect("The stack should not overflow"); // value_ptr
-    interpreter
-        .push(k.try_into_u256().unwrap())
-        .expect("The stack should not overflow"); // key
+    for (key, value) in [
+        (key_balance(address), account.balance),
+        (key_nonce(address), account.nonce),
+        (key_code(address), account.code_hash),
+        (key_code_length(address), account.code_length),
+    ] {
+        if value.is_zero() {
+            continue;
+        }
+        interpreter.generation_state.registers.program_counter = smt_insert_state;
+        interpreter
+            .push(0xDEADBEEFu32.into())
+            .expect("The stack should not overflow");
+        interpreter
+            .push(value)
+            .expect("The stack should not overflow"); // value_ptr
+        let keyu = key2u(key);
+        interpreter
+            .push(keyu)
+            .expect("The stack should not overflow"); // key
 
-    interpreter.run()?;
-    assert_eq!(
-        interpreter.stack().len(),
-        0,
-        "Expected empty stack after insert, found {:?}",
-        interpreter.stack()
-    );
+        interpreter.run()?;
+        assert_eq!(
+            interpreter.stack().len(),
+            0,
+            "Expected empty stack after insert, found {:?}",
+            interpreter.stack()
+        );
+    }
 
     // Now, execute mpt_hash_state_trie.
-    interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
+    interpreter.generation_state.registers.program_counter = smt_hash_state;
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(1.into()) // Initial length of the trie data segment, unused.
+        .push(2.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow");
     interpreter.run()?;
 
@@ -142,10 +152,10 @@ fn prepare_interpreter<F: Field>(
         "Expected 2 items on stack after hashing, found {:?}",
         interpreter.stack()
     );
-    let hash = H256::from_uint(&interpreter.stack()[1]);
+    let hash = interpreter.stack()[1];
 
-    state_trie.insert(k, rlp::encode(account).to_vec());
-    let expected_state_trie_hash = state_trie.hash();
+    set_account(&mut state_smt, address, account, &HashMap::new());
+    let expected_state_trie_hash = hashout2u(state_smt.root);
     assert_eq!(hash, expected_state_trie_hash);
 
     Ok(())
@@ -174,8 +184,10 @@ fn test_extcodesize() -> Result<()> {
     interpreter
         .push(U256::from_big_endian(address.as_bytes()))
         .expect("The stack should not overflow");
-    interpreter.generation_state.inputs.contract_code =
-        HashMap::from([(keccak(&code), code.clone())]);
+    interpreter.generation_state.inputs.contract_code = HashMap::from([(
+        hashout2u(hash_contract_bytecode(code.clone())),
+        code.clone(),
+    )]);
     interpreter.run()?;
 
     assert_eq!(interpreter.stack(), vec![code.len().into()]);
@@ -243,8 +255,10 @@ fn test_extcodecopy() -> Result<()> {
     interpreter
         .push((0xDEADBEEFu64 + (1 << 32)).into())
         .expect("The stack should not overflow"); // kexit_info
-    interpreter.generation_state.inputs.contract_code =
-        HashMap::from([(keccak(&code), code.clone())]);
+    interpreter.generation_state.inputs.contract_code = HashMap::from([(
+        hashout2u(hash_contract_bytecode(code.clone())),
+        code.clone(),
+    )]);
     interpreter.run()?;
 
     assert!(interpreter.stack().is_empty());
@@ -265,7 +279,7 @@ fn test_extcodecopy() -> Result<()> {
 /// Prepare the interpreter for storage tests by inserting all necessary
 /// accounts in the state trie, adding the code we want to context 1 and
 /// switching the context.
-fn prepare_interpreter_all_accounts<F: Field>(
+fn prepare_interpreter_all_accounts<F: RichField>(
     interpreter: &mut Interpreter<F>,
     trie_inputs: TrieInputs,
     addr: [u8; 20],
@@ -306,12 +320,8 @@ fn sstore() -> Result<()> {
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
-    let addr_hashed = keccak(addr);
-
-    let addr_nibbles = Nibbles::from_bytes_be(addr_hashed.as_bytes()).unwrap();
-
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     let account_before = AccountRlp {
         balance: 0x0de0b6b3a7640000u64.into(),
@@ -319,15 +329,18 @@ fn sstore() -> Result<()> {
         ..AccountRlp::default()
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
-
-    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec());
+    let mut state_smt_before = Smt::<MemoryDb>::default();
+    set_account(
+        &mut state_smt_before,
+        H160(addr),
+        &account_before,
+        &HashMap::new(),
+    );
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
     };
 
     let initial_stack = vec![];
@@ -349,21 +362,9 @@ fn sstore() -> Result<()> {
     interpreter.pop().expect("Stack should not be empty");
     interpreter.pop().expect("Stack should not be empty");
 
-    // The code should have added an element to the storage of `to_account`. We run
-    // `mpt_hash_state_trie` to check that.
-    let account_after = AccountRlp {
-        balance: 0x0de0b6b3a7640000u64.into(),
-        code_hash,
-        storage_root: HashedPartialTrie::from(Node::Leaf {
-            nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
-            value: vec![2],
-        })
-        .hash(),
-        ..AccountRlp::default()
-    };
-    // Now, execute mpt_hash_state_trie.
-    let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
-    interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
+    // Now, execute smt_hash_state.
+    let smt_hash_state = KERNEL.global_labels["smt_hash_state"];
+    interpreter.generation_state.registers.program_counter = smt_hash_state;
     interpreter.set_is_kernel(true);
     interpreter.set_context(0);
     interpreter
@@ -381,12 +382,17 @@ fn sstore() -> Result<()> {
         interpreter.stack()
     );
 
-    let hash = H256::from_uint(&interpreter.stack()[1]);
+    let hash = interpreter.stack()[1];
 
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec());
+    let mut expected_state_smt_after = Smt::<MemoryDb>::default();
+    set_account(
+        &mut expected_state_smt_after,
+        H160(addr),
+        &account_before,
+        &[(0.into(), 2.into())].into(),
+    );
 
-    let expected_state_trie_hash = expected_state_trie_after.hash();
+    let expected_state_trie_hash = hashout2u(expected_state_smt_after.root);
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
 }
@@ -397,17 +403,13 @@ fn sload() -> Result<()> {
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
-    let addr_hashed = keccak(addr);
-
-    let addr_nibbles = Nibbles::from_bytes_be(addr_hashed.as_bytes()).unwrap();
-
     // This code is similar to the one in add11_yml's contract, but we pop the added
     // value and carry out an SLOAD instead of an SSTORE. We also add a PUSH at
     // the end.
     let code = [
         0x60, 0x01, 0x60, 0x01, 0x01, 0x50, 0x60, 0x00, 0x54, 0x60, 0x03, 0x00,
     ];
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     let account_before = AccountRlp {
         balance: 0x0de0b6b3a7640000u64.into(),
@@ -415,15 +417,18 @@ fn sload() -> Result<()> {
         ..AccountRlp::default()
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
-
-    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec());
+    let mut state_smt_before = Smt::<MemoryDb>::default();
+    set_account(
+        &mut state_smt_before,
+        H160(addr),
+        &account_before,
+        &HashMap::new(),
+    );
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
     };
 
     let initial_stack = vec![];
@@ -458,17 +463,17 @@ fn sload() -> Result<()> {
     interpreter
         .pop()
         .expect("The stack length should not be empty.");
-    // Now, execute mpt_hash_state_trie. We check that the state trie has not
-    // changed.
-    let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
-    interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
+
+    // Now, execute smt_hash_state.
+    let smt_hash_state = KERNEL.global_labels["smt_hash_state"];
+    interpreter.generation_state.registers.program_counter = smt_hash_state;
     interpreter.set_is_kernel(true);
     interpreter.set_context(0);
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow.");
     interpreter
-        .push(1.into()) // Initial length of the trie data segment, unused.
+        .push(2.into()) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow.");
     interpreter.run()?;
 
@@ -480,6 +485,7 @@ fn sload() -> Result<()> {
     );
 
     let trie_data_segment_len = interpreter.stack()[0];
+    dbg!(interpreter.get_memory_segment(Segment::TrieData));
     assert_eq!(
         trie_data_segment_len,
         interpreter
@@ -488,9 +494,24 @@ fn sload() -> Result<()> {
             .into()
     );
 
-    let hash = H256::from_uint(&interpreter.stack()[1]);
+    let hash = interpreter.stack()[1];
 
-    let expected_state_trie_hash = state_trie_before.hash();
+    let expected_state_trie_hash = hashout2u(state_smt_before.root);
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
+}
+
+pub(crate) fn set_account<D: Db>(
+    smt: &mut Smt<D>,
+    addr: Address,
+    account: &AccountRlp,
+    storage: &HashMap<U256, U256>,
+) {
+    smt.set(key_balance(addr), account.balance);
+    smt.set(key_nonce(addr), account.nonce);
+    smt.set(key_code(addr), account.code_hash);
+    smt.set(key_code_length(addr), account.code_length);
+    for (&k, &v) in storage {
+        smt.set(key_storage(addr, k), v);
+    }
 }

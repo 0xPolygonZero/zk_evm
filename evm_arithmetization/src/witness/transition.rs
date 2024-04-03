@@ -1,6 +1,7 @@
 use ethereum_types::U256;
 use log::log_enabled;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use super::util::{mem_read_gp_with_log_and_fill, stack_pop_with_log_and_fill};
 use crate::cpu::columns::CpuColumnsView;
@@ -20,7 +21,7 @@ use crate::witness::state::RegistersState;
 use crate::witness::util::mem_read_code_with_log_and_fill;
 use crate::{arithmetic, logic};
 
-pub(crate) fn read_code_memory<F: Field, T: Transition<F>>(
+pub(crate) fn read_code_memory<F: RichField, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
 ) -> u8 {
@@ -88,6 +89,7 @@ pub(crate) fn decode(registers: RegistersState, opcode: u8) -> Result<Operation,
         (0x1d, _) => Ok(Operation::Syscall(opcode, 2, false)), // SAR
         (0x20, _) => Ok(Operation::Syscall(opcode, 2, false)), // KECCAK256
         (0x21, true) => Ok(Operation::KeccakGeneral),
+        (0x22, true) => Ok(Operation::Poseidon),
         (0x30, _) => Ok(Operation::Syscall(opcode, 0, true)), // ADDRESS
         (0x31, _) => Ok(Operation::Syscall(opcode, 1, false)), // BALANCE
         (0x32, _) => Ok(Operation::Syscall(opcode, 0, true)), // ORIGIN
@@ -180,6 +182,7 @@ pub(crate) fn fill_op_flag<F: Field>(op: Operation, row: &mut CpuColumnsView<F>)
         Operation::BinaryArithmetic(_) => &mut flags.binary_op,
         Operation::TernaryArithmetic(_) => &mut flags.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => &mut flags.jumpdest_keccak_general,
+        Operation::Poseidon => &mut flags.poseidon,
         Operation::ProverInput | Operation::Push(1..) => &mut flags.push_prover_input,
         Operation::Jump | Operation::Jumpi => &mut flags.jumps,
         Operation::Pc | Operation::Push(0) => &mut flags.pc_push0,
@@ -212,6 +215,7 @@ pub(crate) const fn get_op_special_length(op: Operation) -> Option<usize> {
         Operation::BinaryArithmetic(_) => STACK_BEHAVIORS.binary_op,
         Operation::TernaryArithmetic(_) => STACK_BEHAVIORS.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => STACK_BEHAVIORS.jumpdest_keccak_general,
+        Operation::Poseidon => STACK_BEHAVIORS.poseidon,
         Operation::Jump => JUMP_OP,
         Operation::Jumpi => JUMPI_OP,
         Operation::GetContext | Operation::SetContext => None,
@@ -251,6 +255,7 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
         Operation::BinaryArithmetic(_) => MIGHT_OVERFLOW.binary_op,
         Operation::TernaryArithmetic(_) => MIGHT_OVERFLOW.ternary_op,
         Operation::KeccakGeneral | Operation::Jumpdest => MIGHT_OVERFLOW.jumpdest_keccak_general,
+        Operation::Poseidon => MIGHT_OVERFLOW.poseidon,
         Operation::Jump | Operation::Jumpi => MIGHT_OVERFLOW.jumps,
         Operation::Pc | Operation::Push(0) => MIGHT_OVERFLOW.pc_push0,
         Operation::GetContext | Operation::SetContext => MIGHT_OVERFLOW.context_op,
@@ -260,7 +265,7 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
     }
 }
 
-pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: Operation) {
+pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, op: Operation) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     if !log_enabled!(log::Level::Debug) {
         return;
@@ -289,7 +294,7 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
 
-pub(crate) trait Transition<F: Field>: State<F> {
+pub(crate) trait Transition<F: RichField>: State<F> {
     /// When in jumpdest analysis, adds the offset `dst` to the jumpdest table.
     /// Returns a boolean indicating whether we are running the jumpdest
     /// analysis.
@@ -305,6 +310,7 @@ pub(crate) trait Transition<F: Field>: State<F> {
     ) -> Result<Operation, ProgramError>
     where
         Self: Sized,
+        F: RichField,
     {
         self.perform_op(op, opcode, row)?;
         self.incr_pc(match op {
@@ -466,6 +472,7 @@ pub(crate) trait Transition<F: Field>: State<F> {
     ) -> Result<(), ProgramError>
     where
         Self: Sized,
+        F: RichField,
     {
         let op = self.skip_if_necessary(op)?;
 
@@ -506,6 +513,7 @@ pub(crate) trait Transition<F: Field>: State<F> {
             Operation::TernaryArithmetic(op) => generate_ternary_arithmetic_op(op, self, row)?,
             Operation::KeccakGeneral => generate_keccak_general(self, row)?,
             Operation::ProverInput => generate_prover_input(self, row)?,
+            Operation::Poseidon => generate_poseidon(self, row)?,
             Operation::Pop => generate_pop(self, row)?,
             Operation::Jump => self.generate_jump(row)?,
             Operation::Jumpi => self.generate_jumpi(row)?,

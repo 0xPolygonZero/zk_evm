@@ -7,13 +7,16 @@ use ethereum_types::{BigEndianHash, H256};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
-use keccak_hash::keccak;
 use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::db::MemoryDb;
+use smt_trie::smt::Smt;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -33,40 +36,38 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let state_trie = HashedPartialTrie::from(Node::Empty);
+    let state_smt = Smt::<MemoryDb>::default();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
-    let storage_tries = vec![];
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
 
     // No transactions, so no trie roots change.
     let trie_roots_after = TrieRoots {
-        state_root: state_trie.hash(),
+        state_root: H256::from_uint(&hashout2u(state_smt.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
     let mut initial_block_hashes = vec![H256::default(); 256];
-    initial_block_hashes[255] = H256::from_uint(&0x200.into());
+    initial_block_hashes[255] = H256::from_uint(&hashout2u(state_smt.root));
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
         tries: TrieInputs {
-            state_trie,
+            state_smt: state_smt.serialize(),
             transactions_trie,
             receipts_trie,
-            storage_tries,
         },
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: H256::from_uint(&hashout2u(state_smt.root)),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0.into(),
         block_hashes: BlockHashes {
-            prev_hashes: initial_block_hashes,
+            prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
     };
@@ -74,8 +75,8 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     // Initialize the preprocessed circuits for the zkEVM.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 9..11, 12..13, 14..15, 9..11, 12..13, 17..18], /* Minimal ranges to prove an
-                                                                  * empty list */
+        // Minimal ranges to prove an empty list
+        &[16..17, 9..10, 12..13, 14..15, 9..10, 12..13, 17..18, 4..5],
         &config,
     );
 

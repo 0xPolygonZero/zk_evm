@@ -27,8 +27,10 @@ serde_with = "3.4.0"
 thiserror = { workspace = true }
 
 # Local dependencies
-mpt_trie = { version = "0.2.0", path = "../mpt_trie" }
-evm_arithmetization = { version = "0.1.2", path = "../evm_arithmetization" }
+# TODO: update decoder to take local versions again
+mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
 
 [dev-dependencies]
 pretty_env_logger = "0.5.0"
+

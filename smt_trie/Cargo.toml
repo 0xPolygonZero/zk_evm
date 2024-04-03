@@ -1,0 +1,39 @@
+[package]
+name = "smt_trie"
+description = "Types and utility functions for building/working with Polygon Hermez Sparse Merkle Trees."
+version = "0.1.0"
+authors = ["William Borgeaud <williamborgeaud@gmail.com>"]
+readme = "README.md"
+categories = ["cryptography"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytes = { workspace = true }
+enum-as-inner = { workspace = true }
+ethereum-types = { workspace = true }
+hex = { workspace = true }
+hex-literal = { workspace = true }
+keccak-hash = { workspace = true }
+thiserror = "1.0.40"
+log = { workspace = true }
+num-traits = "0.2.15"
+uint = "0.9.5"
+rlp = { workspace = true }
+parking_lot = { version = "0.12.1", features = ["serde"] }
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
+rand = "0.8.5"
+serde = { workspace = true, features = ["derive", "rc"] }
+
+
+[dev-dependencies]
+eth_trie = "0.1.0"
+pretty_env_logger = "0.4.0"
+rlp-derive = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1.0.96"

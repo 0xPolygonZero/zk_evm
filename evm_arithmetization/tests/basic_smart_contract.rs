@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
@@ -12,12 +12,16 @@ use evm_arithmetization::prover::prove;
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
-use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::db::{Db, MemoryDb};
+use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
+use smt_trie::smt::Smt;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -36,20 +40,12 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
     let sender = hex!("2c7536e3605d9c16a7a3d7b1898e529396a65c23");
     let to = hex!("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0");
 
-    let beneficiary_state_key = keccak(beneficiary);
-    let sender_state_key = keccak(sender);
-    let to_state_key = keccak(to);
-
-    let beneficiary_nibbles = Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
-
     let push1 = get_push_opcode(1);
     let add = get_opcode("ADD");
     let stop = get_opcode("STOP");
     let code = [push1, 3, push1, 4, add, stop];
     let code_gas = 3 + 3 + 3;
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     let beneficiary_account_before = AccountRlp {
         nonce: 1.into(),
@@ -65,35 +61,30 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
-    let state_trie_before = {
-        let mut children = core::array::from_fn(|_| Node::Empty.into());
-        children[beneficiary_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: beneficiary_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&beneficiary_account_before).to_vec(),
-        }
-        .into();
-        children[sender_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: sender_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&sender_account_before).to_vec(),
-        }
-        .into();
-        children[to_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: to_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&to_account_before).to_vec(),
-        }
-        .into();
-        Node::Branch {
-            children,
-            value: vec![],
-        }
-    }
-    .into();
+    let mut state_smt_before = Smt::<MemoryDb>::default();
+    set_account(
+        &mut state_smt_before,
+        H160(beneficiary),
+        &beneficiary_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(sender),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_before,
+        &HashMap::new(),
+    );
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![],
     };
 
     let txdata_gas = 2 * 16;
@@ -117,10 +108,12 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
-    let expected_state_trie_after: HashedPartialTrie = {
+    let expected_state_smt_after = {
+        let mut smt = Smt::<MemoryDb>::default();
+
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -135,28 +128,22 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
             ..to_account_before
         };
 
-        let mut children = core::array::from_fn(|_| Node::Empty.into());
-        children[beneficiary_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: beneficiary_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&beneficiary_account_after).to_vec(),
-        }
-        .into();
-        children[sender_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: sender_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&sender_account_after).to_vec(),
-        }
-        .into();
-        children[to_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: to_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&to_account_after).to_vec(),
-        }
-        .into();
-        Node::Branch {
-            children,
-            value: vec![],
-        }
-    }
-    .into();
+        set_account(
+            &mut smt,
+            H160(beneficiary),
+            &beneficiary_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(sender),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(&mut smt, H160(to), &to_account_after, &HashMap::new());
+
+        smt
+    };
 
     let receipt_0 = LegacyReceiptRlp {
         status: true,
@@ -176,7 +163,7 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
     .into();
 
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -211,4 +198,19 @@ fn eth_to_wei(eth: U256) -> U256 {
 
 fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
+}
+
+fn set_account<D: Db>(
+    smt: &mut Smt<D>,
+    addr: Address,
+    account: &AccountRlp,
+    storage: &HashMap<U256, U256>,
+) {
+    smt.set(key_balance(addr), account.balance);
+    smt.set(key_nonce(addr), account.nonce);
+    smt.set(key_code(addr), account.code_hash);
+    smt.set(key_code_length(addr), account.code_length);
+    for (&k, &v) in storage {
+        smt.set(key_storage(addr, k), v);
+    }
 }

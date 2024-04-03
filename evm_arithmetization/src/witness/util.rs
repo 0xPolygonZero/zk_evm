@@ -1,5 +1,5 @@
 use ethereum_types::U256;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use super::memory::DUMMY_MEMOP;
 use super::transition::Transition;
@@ -22,7 +22,7 @@ fn to_byte_checked(n: U256) -> u8 {
     res
 }
 
-fn to_bits_le<F: Field>(n: u8) -> [F; 8] {
+fn to_bits_le<F: RichField>(n: u8) -> [F; 8] {
     let mut res = [F::ZERO; 8];
     for (i, bit) in res.iter_mut().enumerate() {
         *bit = F::from_bool(n & (1 << i) != 0);
@@ -31,7 +31,7 @@ fn to_bits_le<F: Field>(n: u8) -> [F; 8] {
 }
 
 /// Peek at the stack item `i`th from the top. If `i=0` this gives the tip.
-pub(crate) fn stack_peek<F: Field>(
+pub(crate) fn stack_peek<F: RichField>(
     state: &GenerationState<F>,
     i: usize,
 ) -> Result<U256, ProgramError> {
@@ -50,7 +50,7 @@ pub(crate) fn stack_peek<F: Field>(
 }
 
 /// Peek at kernel at specified segment and address
-pub(crate) fn current_context_peek<F: Field>(
+pub(crate) fn current_context_peek<F: RichField>(
     state: &GenerationState<F>,
     segment: Segment,
     virt: usize,
@@ -61,7 +61,11 @@ pub(crate) fn current_context_peek<F: Field>(
         .get_with_init(MemoryAddress::new(context, segment, virt))
 }
 
-pub(crate) fn fill_channel_with_value<F: Field>(row: &mut CpuColumnsView<F>, n: usize, val: U256) {
+pub(crate) fn fill_channel_with_value<F: RichField>(
+    row: &mut CpuColumnsView<F>,
+    n: usize,
+    val: U256,
+) {
     let channel = &mut row.mem_channels[n];
     let val_limbs: [u64; 4] = val.0;
     for (i, limb) in val_limbs.into_iter().enumerate() {
@@ -72,14 +76,14 @@ pub(crate) fn fill_channel_with_value<F: Field>(row: &mut CpuColumnsView<F>, n: 
 
 /// Pushes without writing in memory. This happens in opcodes where a push
 /// immediately follows a pop.
-pub(crate) fn push_no_write<F: Field>(state: &mut GenerationState<F>, val: U256) {
+pub(crate) fn push_no_write<F: RichField>(state: &mut GenerationState<F>, val: U256) {
     state.registers.stack_top = val;
     state.registers.stack_len += 1;
 }
 
 /// Pushes and (maybe) writes the previous stack top in memory. This happens in
 /// opcodes which only push.
-pub(crate) fn push_with_write<F: Field, T: Transition<F>>(
+pub(crate) fn push_with_write<F: RichField, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
     val: U256,
@@ -115,7 +119,7 @@ pub(crate) fn push_with_write<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn mem_read_with_log<F: Field>(
+pub(crate) fn mem_read_with_log<F: RichField>(
     channel: MemoryChannel,
     address: MemoryAddress,
     state: &GenerationState<F>,
@@ -131,7 +135,7 @@ pub(crate) fn mem_read_with_log<F: Field>(
     (val, op)
 }
 
-pub(crate) fn mem_write_log<F: Field>(
+pub(crate) fn mem_write_log<F: RichField>(
     channel: MemoryChannel,
     address: MemoryAddress,
     state: &GenerationState<F>,
@@ -146,7 +150,7 @@ pub(crate) fn mem_write_log<F: Field>(
     )
 }
 
-pub(crate) fn mem_read_code_with_log_and_fill<F: Field>(
+pub(crate) fn mem_read_code_with_log_and_fill<F: RichField>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
@@ -159,7 +163,7 @@ pub(crate) fn mem_read_code_with_log_and_fill<F: Field>(
     (val_u8, op)
 }
 
-pub(crate) fn mem_read_gp_with_log_and_fill<F: Field>(
+pub(crate) fn mem_read_gp_with_log_and_fill<F: RichField>(
     n: usize,
     address: MemoryAddress,
     state: &GenerationState<F>,
@@ -183,7 +187,7 @@ pub(crate) fn mem_read_gp_with_log_and_fill<F: Field>(
     (val, op)
 }
 
-pub(crate) fn mem_write_gp_log_and_fill<F: Field>(
+pub(crate) fn mem_write_gp_log_and_fill<F: RichField>(
     n: usize,
     address: MemoryAddress,
     state: &GenerationState<F>,
@@ -208,7 +212,7 @@ pub(crate) fn mem_write_gp_log_and_fill<F: Field>(
     op
 }
 
-pub(crate) fn mem_write_partial_log_and_fill<F: Field>(
+pub(crate) fn mem_write_partial_log_and_fill<F: RichField>(
     address: MemoryAddress,
     state: &GenerationState<F>,
     row: &mut CpuColumnsView<F>,
@@ -230,7 +234,7 @@ pub(crate) fn mem_write_partial_log_and_fill<F: Field>(
 // Channel 0 already contains the top of the stack. You only need to read
 // from the second popped element.
 // If the resulting stack isn't empty, update `stack_top`.
-pub(crate) fn stack_pop_with_log_and_fill<const N: usize, F: Field>(
+pub(crate) fn stack_pop_with_log_and_fill<const N: usize, F: RichField>(
     state: &mut GenerationState<F>,
     row: &mut CpuColumnsView<F>,
 ) -> Result<[(U256, MemoryOp); N], ProgramError> {
@@ -267,7 +271,7 @@ pub(crate) fn stack_pop_with_log_and_fill<const N: usize, F: Field>(
     Ok(result)
 }
 
-fn xor_into_sponge<F: Field, T: Transition<F>>(
+fn xor_into_sponge<F: RichField, T: Transition<F>>(
     state: &mut T,
     sponge_state: &mut [u8; KECCAK_WIDTH_BYTES],
     block: &[u8; KECCAK_RATE_BYTES],
@@ -283,7 +287,7 @@ fn xor_into_sponge<F: Field, T: Transition<F>>(
     }
 }
 
-pub(crate) fn keccak_sponge_log<F: Field, T: Transition<F>>(
+pub(crate) fn keccak_sponge_log<F: RichField, T: Transition<F>>(
     state: &mut T,
     base_address: MemoryAddress,
     input: Vec<u8>,
@@ -339,7 +343,7 @@ pub(crate) fn keccak_sponge_log<F: Field, T: Transition<F>>(
     });
 }
 
-pub(crate) fn byte_packing_log<F: Field, T: Transition<F>>(
+pub(crate) fn byte_packing_log<F: RichField, T: Transition<F>>(
     state: &mut T,
     base_address: MemoryAddress,
     bytes: Vec<u8>,
@@ -366,7 +370,7 @@ pub(crate) fn byte_packing_log<F: Field, T: Transition<F>>(
     });
 }
 
-pub(crate) fn byte_unpacking_log<F: Field, T: Transition<F>>(
+pub(crate) fn byte_unpacking_log<F: RichField, T: Transition<F>>(
     state: &mut T,
     base_address: MemoryAddress,
     val: U256,

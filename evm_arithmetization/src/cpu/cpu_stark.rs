@@ -429,6 +429,28 @@ pub(crate) fn ctl_filter_set_context<F: Field>() -> Filter<F> {
     )
 }
 
+/// Returns the `TableWithColumns` for the CPU rows calling POSEIDON.
+pub(crate) fn ctl_poseidon<F: Field>() -> TableWithColumns<F> {
+    let mut columns = Vec::new();
+    for channel in 0..3 {
+        for i in 0..VALUE_LIMBS / 2 {
+            columns.push(Column::linear_combination([
+                (COL_MAP.mem_channels[channel].value[2 * i], F::ONE),
+                (
+                    COL_MAP.mem_channels[channel].value[2 * i + 1],
+                    F::from_canonical_u64(1 << 32),
+                ),
+            ]));
+        }
+    }
+    columns.extend(Column::singles_next_row(COL_MAP.mem_channels[0].value));
+    TableWithColumns::new(
+        *Table::Cpu,
+        columns,
+        Some(Filter::new_simple(Column::single(COL_MAP.op.poseidon))),
+    )
+}
+
 /// Disable the specified memory channels.
 /// Since channel 0 contains the top of the stack and is handled specially,
 /// channels to disable are 1, 2 or both. All cases can be expressed as a vec.

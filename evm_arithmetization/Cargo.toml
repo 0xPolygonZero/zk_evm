@@ -42,6 +42,7 @@ serde_json = { workspace = true }
 
 # Local dependencies
 mpt_trie = { version = "0.2.0", path = "../mpt_trie" }
+smt_trie = { version = "0.1.0", path = "../smt_trie" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"

@@ -192,6 +192,7 @@ pub mod keccak;
 pub mod keccak_sponge;
 pub mod logic;
 pub mod memory;
+pub mod poseidon;
 
 // Proving system components
 pub mod all_stark;
