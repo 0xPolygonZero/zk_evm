@@ -515,7 +515,7 @@ pub(crate) trait Transition<F: RichField>: State<F> {
             Operation::KeccakGeneral => generate_keccak_general(self, row)?,
             Operation::ProverInput => generate_prover_input(self, row)?,
             Operation::Poseidon => generate_poseidon(self, row)?,
-            Operation::PoseidonGeneral => generate_poseidon_general(state, row)?,
+            Operation::PoseidonGeneral => generate_poseidon_general(self, row)?,
             Operation::Pop => generate_pop(self, row)?,
             Operation::Jump => self.generate_jump(row)?,
             Operation::Jumpi => self.generate_jumpi(row)?,

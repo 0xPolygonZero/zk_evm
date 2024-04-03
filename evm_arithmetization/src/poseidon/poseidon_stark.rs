@@ -142,13 +142,13 @@ pub fn ctl_looking_memory_filter<F: Field>() -> Filter<F> {
 }
 
 #[derive(Clone, Debug)]
-pub enum PoseidonOp<F: RichField> {
+pub enum PoseidonOp<F: Field> {
     PoseidonSimpleOp(PoseidonSimpleOp<F>),
     PoseidonGeneralOp(PoseidonGeneralOp),
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct PoseidonSimpleOp<F: RichField>(pub [F; POSEIDON_SPONGE_WIDTH]);
+pub struct PoseidonSimpleOp<F: Field>(pub [F; POSEIDON_SPONGE_WIDTH]);
 
 #[derive(Clone, Debug)]
 pub struct PoseidonGeneralOp {

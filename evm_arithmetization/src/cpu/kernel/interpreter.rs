@@ -4,10 +4,8 @@ use core::cmp::Ordering;
 use core::ops::Range;
 use std::collections::{BTreeSet, HashMap};
 
-use anyhow::anyhow;
 use anyhow::{anyhow, bail};
 use ethereum_types::{BigEndianHash, H160, H256, U256, U512};
-use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::PartialTrie;
@@ -51,7 +49,7 @@ use crate::{arithmetic, keccak, logic};
 /// Halt interpreter execution whenever a jump to this offset is done.
 const DEFAULT_HALT_OFFSET: usize = 0xdeadbeef;
 
-pub(crate) struct Interpreter<F: Field> {
+pub(crate) struct Interpreter<F: Field + RichField> {
     /// The interpreter holds a `GenerationState` to keep track of the memory
     /// and registers.
     pub(crate) generation_state: GenerationState<F>,

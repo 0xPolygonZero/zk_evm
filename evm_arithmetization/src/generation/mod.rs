@@ -11,7 +11,6 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use serde::{Deserialize, Serialize};
-use smt_trie::smt::hash_serialize_u256;
 use starky::config::StarkConfig;
 use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,
@@ -40,7 +39,6 @@ use smt_trie::smt::{hash_serialize, hash_serialize_u256};
 
 use self::mpt::{load_all_mpts, TrieRootPtrs};
 use self::state::State;
-use crate::witness::util::mem_write_log;
 use crate::witness::util::{mem_write_log, stack_peek};
 
 /// Inputs needed for trace generation.
