@@ -260,7 +260,7 @@ impl ProverStateManager {
                 info!("attempting to load preprocessed circuits from disk...");
 
                 // Check the package consistency before loading the circuits.
-                pkg_consistency_check(&[
+                pkg_consistency_check([
                     self.circuit_config
                         .as_all_recursive_circuits()
                         .block
