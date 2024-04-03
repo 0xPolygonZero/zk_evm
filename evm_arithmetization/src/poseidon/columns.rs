@@ -72,7 +72,7 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
     pub pinv: [T; POSEIDON_DIGEST],
 
     /// Holds the byte decomposition of the input, except for the less
-    /// significative byte.
+    /// significant byte.
     pub input_bytes: [[T; FELT_MAX_BYTES - 1]; POSEIDON_SPONGE_RATE],
 
     /// Indicates if this is a simple operation where inputs are

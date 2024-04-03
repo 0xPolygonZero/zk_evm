@@ -25,13 +25,14 @@ use crate::cpu::columns::{CpuColumnsView, COL_MAP};
 /// Note: invalid opcodes are not represented here. _Any_ opcode is permitted to
 /// decode to `is_invalid`. The kernel then verifies that the opcode was
 /// _actually_ invalid.
-const OPCODES: [(u8, usize, bool, usize); 5] = [
+const OPCODES: [(u8, usize, bool, usize); 6] = [
     // (start index of block, number of top bits to check (log2), kernel-only, flag column)
     // ADD, MUL, SUB, DIV, MOD, LT, GT and BYTE flags are handled partly manually here, and partly
     // through the Arithmetic table CTL. ADDMOD, MULMOD and SUBMOD flags are handled partly
     // manually here, and partly through the Arithmetic table CTL. FP254 operation flags are
     // handled partly manually here, and partly through the Arithmetic table CTL.
     (0x14, 1, false, COL_MAP.op.eq_iszero),
+    (0x22, 1, true, COL_MAP.op.poseidon),
     // AND, OR and XOR flags are handled partly manually here, and partly through the Logic table
     // CTL. NOT and POP are handled manually here.
     // SHL and SHR flags are handled partly manually here, and partly through the Logic table CTL.
@@ -46,7 +47,7 @@ const OPCODES: [(u8, usize, bool, usize); 5] = [
 /// List of combined opcodes requiring a special handling.
 /// Each index in the list corresponds to an arbitrary combination
 /// of opcodes defined in evm/src/cpu/columns/ops.rs.
-const COMBINED_OPCODES: [usize; 12] = [
+const COMBINED_OPCODES: [usize; 11] = [
     COL_MAP.op.logic_op,
     COL_MAP.op.fp254_op,
     COL_MAP.op.binary_op,
@@ -58,7 +59,6 @@ const COMBINED_OPCODES: [usize; 12] = [
     COL_MAP.op.pc_push0,
     COL_MAP.op.m_op_32bytes,
     COL_MAP.op.push_prover_input,
-    COL_MAP.op.poseidon,
 ];
 
 /// Break up an opcode (which is 8 bits long) into its eight bits.

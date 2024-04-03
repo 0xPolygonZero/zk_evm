@@ -13,7 +13,6 @@ pub fn hash_contract_bytecode(mut code: Vec<u8>) -> HashOut {
     poseidon_hash_padded_byte_vec(code)
 }
 
-// TODO: Move this function to plonky2::hash::poseidon?
 pub fn poseidon_hash_padded_byte_vec(bytes: Vec<u8>) -> HashOut {
     let mut capacity = [F::ZERO; poseidon::SPONGE_CAPACITY];
     let mut arr = [F::ZERO; poseidon::SPONGE_WIDTH];
@@ -36,7 +35,6 @@ pub fn poseidon_hash_padded_byte_vec(bytes: Vec<u8>) -> HashOut {
     HashOut { elements: capacity }
 }
 
-// TODO: Move this function to plonky2::hash::poseidon?
 pub fn poseidon_pad_byte_vec(bytes: &mut Vec<u8>) {
     bytes.push(0x01);
     while bytes.len() % 56 != 0 {

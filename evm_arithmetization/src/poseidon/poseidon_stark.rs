@@ -948,7 +948,7 @@ mod tests {
     use smt_trie::smt::F;
     use starky::config::StarkConfig;
     use starky::cross_table_lookup::{CtlData, CtlZData};
-    use starky::lookup::{GrandProductChallenge, GrandProductChallengeSet};
+    use starky::lookup::{Column, GrandProductChallenge, GrandProductChallengeSet};
     use starky::stark_testing::{test_stark_circuit_constraints, test_stark_low_degree};
 
     use crate::memory::segments::Segment;
@@ -1030,93 +1030,6 @@ mod tests {
 
         Ok(())
     }
-
-    #[test]
-    // fn poseidon_benchmark() -> Result<()> {
-    //     const NUM_PERMS: usize = 85;
-    //     const D: usize = 2;
-    //     type C = PoseidonGoldilocksConfig;
-    //     type F = <C as GenericConfig<D>>::F;
-    //     type S = PoseidonStark<F, D>;
-    //     let stark = S::default();
-    //     let config = StarkConfig::standard_fast_config();
-
-    //     init_logger();
-
-    //     let input: Vec<Vec<u32>> = (0..NUM_PERMS)
-    //         .map(|_| {
-    //             (0..POSEIDON_SPONGE_RATE)
-    //                 .map(|_| rand::random())
-    //                 .collect::<Vec<_>>()
-    //         })
-    //         .collect();
-    //     let ops: Vec<_> = (0..NUM_PERMS)
-    //         .map(|i| {
-    //             PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
-    //                 base_address: MemoryAddress::new(0, Segment::BlockHashes, 0),
-    //                 timestamp: 0,
-    //                 input: input[i].clone(),
-    //                 len: 5,
-    //             })
-    //         })
-    //         .collect();
-    //     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    //     let trace_poly_values = timed!(
-    //         timing,
-    //         "generate trace",
-    //         stark.generate_trace(ops, 8, &mut timing)
-    //     );
-
-    //     // TODO: Cloning this isn't great; consider having `from_values` accept a
-    //     // reference, or having `compute_permutation_z_polys` read trace values
-    //     // from the `PolynomialBatch`.
-    //     let cloned_trace_poly_values = timed!(timing, "clone",
-    // trace_poly_values.clone());
-
-    //     let trace_commitments = timed!(
-    //         timing,
-    //         "compute trace commitment",
-    //         PolynomialBatch::<F, C, D>::from_values(
-    //             cloned_trace_poly_values,
-    //             config.fri_config.rate_bits,
-    //             false,
-    //             config.fri_config.cap_height,
-    //             &mut timing,
-    //             None,
-    //         )
-    //     );
-    //     let degree = 1 << trace_commitments.degree_log;
-
-    //     // Fake CTL data.
-    //     let ctl_z_data = CtlZData {
-    //         z: PolynomialValues::zero(degree),
-    //         challenge: GrandProductChallenge {
-    //             beta: F::ZERO,
-    //             gamma: F::ZERO,
-    //         },
-    //         columns: vec![],
-    //         filter_column: None,
-    //     };
-    //     let ctl_data = CtlData {
-    //         zs_columns: vec![ctl_z_data.clone(); config.num_challenges],
-    //     };
-
-    //     prove_single_table(
-    //         &stark,
-    //         &config,
-    //         &trace_poly_values,
-    //         &trace_commitments,
-    //         &ctl_data,
-    //         &GrandProductChallengeSet {
-    //             challenges: vec![ctl_z_data.challenge; config.num_challenges],
-    //         },
-    //         &mut Challenger::new(),
-    //         &mut timing,
-    //     )?;
-
-    //     timing.print();
-    //     Ok(())
-    // }
 
     fn init_logger() {
         let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
