@@ -13,6 +13,7 @@ use num_traits::PrimInt;
 use crate::{
     nibbles::{Nibble, Nibbles},
     partial_trie::{Node, PartialTrie},
+    trie_ops::TrieOpResult,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -216,7 +217,7 @@ impl TrieSegment {
     }
 
     /// Extracts the key piece used by the segment (if applicable).
-    pub fn get_key_piece_from_seg_if_present(&self) -> Option<Nibbles> {
+    pub(crate) fn get_key_piece_from_seg_if_present(&self) -> Option<Nibbles> {
         match self {
             TrieSegment::Empty | TrieSegment::Hash => None,
             TrieSegment::Branch(nib) => Some(Nibbles::from_nibble(*nib)),
@@ -230,7 +231,7 @@ impl TrieSegment {
 /// This function is intended to be used during a trie query as we are
 /// traversing down a trie. Depending on the current node, we pop off nibbles
 /// and use these to create `TrieSegment`s.
-pub fn get_segment_from_node_and_key_piece<T: PartialTrie>(
+pub(crate) fn get_segment_from_node_and_key_piece<T: PartialTrie>(
     n: &Node<T>,
     k_piece: &Nibbles,
 ) -> TrieSegment {
@@ -241,6 +242,16 @@ pub fn get_segment_from_node_and_key_piece<T: PartialTrie>(
         TrieNodeType::Extension => TrieSegment::Extension(*k_piece),
         TrieNodeType::Leaf => TrieSegment::Leaf(*k_piece),
     }
+}
+
+/// Conversion from an [`Iterator`] within an allocator.
+///
+/// By implementing `TryFromIteratorIn` for a type, you define how it will be
+/// created from an iterator. This is common for types which describe a
+/// collection of some kind.
+pub trait TryFromIterator<A>: Sized {
+    /// Creates a value from an iterator within an allocator.
+    fn try_from_iter<T: IntoIterator<Item = A>>(iter: T) -> TrieOpResult<Self>;
 }
 
 #[cfg(test)]

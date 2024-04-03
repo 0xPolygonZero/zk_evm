@@ -101,8 +101,8 @@ fn prepare_interpreter<F: RichField>(
     if trie_data.is_empty() {
         // In the assembly we skip over 0, knowing trie_data[0] = 0 by default.
         // Since we don't explicitly set it to 0, we need to do so here.
-        trie_data.push(0.into());
-        trie_data.push(0.into());
+        trie_data.push(Some(0.into()));
+        trie_data.push(Some(0.into()));
     }
     let trie_data_len = trie_data.len().into();
     interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, trie_data_len);
@@ -166,7 +166,7 @@ fn test_extcodesize() -> Result<()> {
     let code = random_code();
     let account = test_account(&code);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;
@@ -200,7 +200,7 @@ fn test_extcodecopy() -> Result<()> {
     let code = random_code();
     let account = test_account(&code);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
     let address: Address = thread_rng().gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;
@@ -344,7 +344,7 @@ fn sstore() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
 
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
@@ -432,7 +432,7 @@ fn sload() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
 
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];

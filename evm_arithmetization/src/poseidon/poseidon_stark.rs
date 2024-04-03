@@ -411,7 +411,6 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             row.digest[2 * i] = F::from_canonical_u32(state_val as u32);
             row.digest[2 * i + 1] = hi_limb;
         }
-
         row.output_partial
             .copy_from_slice(&state[POSEIDON_DIGEST..POSEIDON_SPONGE_WIDTH]);
     }
@@ -428,7 +427,6 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
             "generate trace rows",
             self.generate_trace_rows(operations, min_rows)
         );
-
         let trace_polys = timed!(
             timing,
             "convert to PolynomialValues",

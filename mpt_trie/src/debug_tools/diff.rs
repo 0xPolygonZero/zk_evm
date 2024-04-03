@@ -306,7 +306,7 @@ fn find_latest_diff_point_between_tries_rec(
 
     // Note that differences in a node's `value` will be picked up by a hash
     // mismatch.
-    if (a_type, a_key_piece) == (b_type, b_key_piece) {
+    if (a_type, a_key_piece) != (b_type, b_key_piece) {
         depth_state.try_update_longest_divergence_key_node(state);
         DiffDetectionState::NodeTypesDiffer
     } else {
@@ -416,18 +416,19 @@ mod tests {
     use crate::{
         nibbles::Nibbles,
         partial_trie::{HashedPartialTrie, PartialTrie},
+        trie_ops::TrieOpResult,
         utils::TrieNodeType,
     };
 
     #[test]
-    fn depth_single_node_hash_diffs_work() {
+    fn depth_single_node_hash_diffs_work() -> TrieOpResult<()> {
         // TODO: Reduce duplication once we identify common structures across tests...
         let mut a = HashedPartialTrie::default();
-        a.insert(0x1234, vec![0]);
+        a.insert(0x1234, vec![0])?;
         let a_hash = a.hash();
 
         let mut b = a.clone();
-        b.insert(0x1234, vec![1]);
+        b.insert(0x1234, vec![1])?;
         let b_hash = b.hash();
 
         let diff = create_diff_between_tries(&a, &b);
@@ -455,6 +456,8 @@ mod tests {
         };
 
         assert_eq!(diff.latest_diff_res, Some(expected));
+
+        Ok(())
     }
 
     // TODO: Will finish these tests later (low-priority).

@@ -31,7 +31,7 @@ fn smt_read() -> Result<()> {
     let smt_read_state = KERNEL.global_labels["smt_read_state"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 

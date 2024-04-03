@@ -132,7 +132,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     receipts_trie.insert(
         Nibbles::from_str("0x1337").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
 
     let tries_before = TrieInputs {
         state_smt: state_smt_before.serialize(),
@@ -205,16 +205,17 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 
     let receipt_nibbles = Nibbles::from_str("0x80").unwrap(); // RLP(0) = 0x80
 
-    receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec());
+    receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
 
     // Update the state trie.
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
     expected_state_trie_after.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_after).to_vec(),
-    );
-    expected_state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+    )?;
+    expected_state_trie_after
+        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
 
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
@@ -264,6 +265,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     verify_proof(&all_stark, proof, &config)
 }
 
+// TODO: fix
 // Tests proving two transactions, one of which with logs, and aggregating them.
 // #[test]
 // #[ignore] // Too slow to run on CI.

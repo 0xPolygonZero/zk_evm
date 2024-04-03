@@ -291,7 +291,6 @@ where
     running_sum + challenge.combine(row.iter()).inverse()
 }
 
-#[cfg(debug_assertions)]
 pub(crate) mod debug_utils {
     use super::*;
 

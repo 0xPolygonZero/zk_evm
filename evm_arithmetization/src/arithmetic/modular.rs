@@ -828,14 +828,11 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 #[cfg(test)]
 mod tests {
     use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::field::types::{Field, Sample};
+    use plonky2::field::types::Sample;
     use rand::{Rng, SeedableRng};
     use rand_chacha::ChaCha8Rng;
-    use starky::constraint_consumer::ConstraintConsumer;
 
     use super::*;
-    use crate::arithmetic::columns::NUM_ARITH_COLUMNS;
-    use crate::extension_tower::BN_BASE;
 
     const N_RND_TESTS: usize = 1000;
     const MODULAR_OPS: [usize; 6] = [

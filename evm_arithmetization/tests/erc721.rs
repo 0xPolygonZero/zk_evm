@@ -71,7 +71,7 @@ fn test_erc721() -> anyhow::Result<()> {
     set_account(
         &mut state_smt_before,
         H160(contract),
-        &contract_account(),
+        &contract_account()?,
         &contract_storage(),
     );
 
@@ -98,9 +98,7 @@ fn test_erc721() -> anyhow::Result<()> {
             ..owner_account
         };
         set_account(&mut smt, H160(owner), &owner_account_after, &HashMap::new());
-        let contract_account_after = AccountRlp {
-            ..contract_account()
-        };
+        let contract_account_after = contract_account()?;
         set_account(
             &mut smt,
             H160(contract),
@@ -136,7 +134,7 @@ fn test_erc721() -> anyhow::Result<()> {
         logs,
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(Nibbles::from_str("0x80").unwrap(), receipt_0.encode(0));
+    receipts_trie.insert(Nibbles::from_str("0x80").unwrap(), receipt_0.encode(0))?;
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
@@ -267,13 +265,13 @@ fn owner_account() -> AccountRlp {
     }
 }
 
-fn contract_account() -> AccountRlp {
-    AccountRlp {
+fn contract_account() -> anyhow::Result<AccountRlp> {
+    Ok(AccountRlp {
         nonce: 0.into(),
         balance: 0.into(),
         code_hash: hash_bytecode_u256(contract_bytecode()),
         ..Default::default()
-    }
+    })
 }
 
 fn signed_tx() -> Vec<u8> {

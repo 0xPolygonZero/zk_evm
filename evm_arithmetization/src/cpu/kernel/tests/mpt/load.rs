@@ -31,7 +31,7 @@ fn load_all_mpts_empty() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
@@ -67,7 +67,7 @@ fn load_all_mpts_leaf() -> Result<()> {
     };
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new_with_kernel(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 

@@ -4,7 +4,7 @@
     // stack: key
     DUP1 %shr_const(1)
     // stack: key>>1, key
-    SWAP1 %and_const(1)
+    SWAP1 %mod_const(2)
     // stack: key&1, key>>1
 %endmacro
 
@@ -16,7 +16,6 @@
     // stack: node_ptr
     %increment %mload_trie_data
     // stack: hash
-    %jump(%%end)
 %%end:
 %endmacro
 
@@ -24,13 +23,13 @@
 // Output: (k0, k1, k2, k3)
 %macro split_key
     // stack: key
-    DUP1 %shr_const(128) %and_const(0xffffffffffffffff)
+    DUP1 %shr_const(128) %mod_const(0x10000000000000000)
     // stack: k2, key
-    DUP2 %shr_const(64) %and_const(0xffffffffffffffff)
+    DUP2 %shr_const(64) %mod_const(0x10000000000000000)
     // stack: k1, k2, key
     DUP3 %shr_const(192)
     // stack: k3, k1, k2, key
-    SWAP3 %and_const(0xffffffffffffffff)
+    SWAP3 %mod_const(0x10000000000000000)
     // stack: k0, k1, k2, k3
 %endmacro
 
@@ -64,7 +63,7 @@
     // stack: bit, key, level
     SWAP2
     // stack: level, key, bit
-    %and_const(3)
+    %mod_const(4)
     // stack: level%4, key, bit
     DUP1 %eq_const(0) %jumpi(%%recombine_key_0)
     DUP1 %eq_const(1) %jumpi(%%recombine_key_1)

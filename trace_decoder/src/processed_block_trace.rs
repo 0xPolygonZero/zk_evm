@@ -8,7 +8,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
 use crate::compact::compact_prestate_processing::{
-    process_compact_prestate_debug, PartialTriePreImages,
+    process_compact_prestate_debug, PartialTriePreImages, ProcessedCompactOutput,
 };
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
@@ -17,8 +17,9 @@ use crate::trace_protocol::{
     TrieUncompressed, TxnInfo,
 };
 use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-    OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
+    HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH,
+    EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,
@@ -35,6 +36,8 @@ pub(crate) struct ProcessedBlockTrace {
 const COMPATIBLE_HEADER_VERSION: u8 = 1;
 
 impl BlockTrace {
+    /// Processes and returns the [GenerationInputs] for all transactions in the
+    /// block.
     pub fn into_txn_proof_gen_ir<F>(
         self,
         p_meta: &ProcessingMeta<F>,
@@ -106,6 +109,21 @@ struct ProcessedBlockTracePreImages {
     extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
 }
 
+impl From<ProcessedCompactOutput> for ProcessedBlockTracePreImages {
+    fn from(v: ProcessedCompactOutput) -> Self {
+        let tries = PartialTriePreImages {
+            state: v.witness_out.state_trie,
+            storage: v.witness_out.storage_tries,
+        };
+
+        Self {
+            tries,
+            extra_code_hash_mappings: (!v.witness_out.code.is_empty())
+                .then_some(v.witness_out.code),
+        }
+    }
+}
+
 fn process_block_trace_trie_pre_images(
     block_trace_pre_images: BlockTraceTriePreImages,
 ) -> ProcessedBlockTracePreImages {
@@ -166,12 +184,10 @@ fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     // TODO: Make this into a result...
     assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
 
-    ProcessedBlockTracePreImages {
-        tries: out.witness_out.tries,
-        extra_code_hash_mappings: out.witness_out.code,
-    }
+    out.into()
 }
 
+/// Structure storing a function turning a `CodeHash` into bytes.
 #[derive(Debug)]
 pub struct ProcessingMeta<F>
 where
@@ -184,6 +200,8 @@ impl<F> ProcessingMeta<F>
 where
     F: CodeHashResolveFunc,
 {
+    /// Returns a `ProcessingMeta` given the provided code hash resolving
+    /// function.
     pub fn new(resolve_code_hash_fn: F) -> Self {
         Self {
             resolve_code_hash_fn,
@@ -246,7 +264,7 @@ impl TxnInfo {
             let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
 
             nodes_used_by_txn.storage_accesses.push((
-                Nibbles::from_h256_be(hashed_addr),
+                hashed_addr,
                 storage_access_keys
                     .map(|k| Nibbles::from_h256_be(hash(&k.0)))
                     .collect(),
@@ -279,7 +297,7 @@ impl TxnInfo {
 
             nodes_used_by_txn
                 .storage_writes
-                .push((Nibbles::from_h256_be(hashed_addr), storage_writes_vec));
+                .push((hashed_addr, storage_writes_vec));
 
             nodes_used_by_txn.state_accesses.push(hashed_addr);
 
@@ -320,9 +338,7 @@ impl TxnInfo {
             .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
 
         let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
-            .filter(|&(addr, _data)| {
-                !accounts_with_storage_accesses.contains(&Nibbles::from_h256_be(*addr))
-            })
+            .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(addr))
             .map(|(addr, data)| (*addr, data.storage_root));
 
         nodes_used_by_txn
@@ -375,8 +391,8 @@ pub(crate) struct NodesUsedByTxn {
     pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(Nibbles, StorageAccess)>,
-    pub(crate) storage_writes: Vec<(Nibbles, StorageWrite)>,
+    pub(crate) storage_accesses: Vec<(HashedAccountAddr, StorageAccess)>,
+    pub(crate) storage_writes: Vec<(HashedAccountAddr, StorageWrite)>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries:
         HashMap<HashedAccountAddr, TrieRootHash>,
     pub(crate) self_destructed_accounts: Vec<HashedAccountAddr>,

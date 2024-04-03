@@ -2,7 +2,7 @@
 name = "trace_decoder"
 description = "Processes trace payloads into Intermediate Representation (IR) format."
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -28,8 +28,8 @@ thiserror = { workspace = true }
 
 # Local dependencies
 # TODO: update decoder to take local versions again
-mpt_trie = "0.2.0"
-evm_arithmetization = "0.1.0"
+mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
 
 [dev-dependencies]
 pretty_env_logger = "0.5.0"

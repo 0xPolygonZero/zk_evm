@@ -156,7 +156,7 @@ fn test_erc20() -> anyhow::Result<()> {
         }],
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(Nibbles::from_str("0x80").unwrap(), receipt_0.encode(2));
+    receipts_trie.insert(Nibbles::from_str("0x80").unwrap(), receipt_0.encode(2))?;
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
