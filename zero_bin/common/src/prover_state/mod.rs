@@ -14,9 +14,12 @@
 use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
-use evm_arithmetization::{proof::AllProof, prover::prove, AllStark, StarkConfig};
+use evm_arithmetization::{
+    cpu::kernel::aggregator::KERNEL, proof::AllProof, prover::prove, AllStark, StarkConfig,
+};
 use plonky2::{
-    field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
+    field::goldilocks_field::GoldilocksField,
+    plonk::config::{GenericHashOut, PoseidonGoldilocksConfig},
     util::timing::TimingTree,
 };
 use proof_gen::{proof_types::GeneratedTxnProof, prover_state::ProverState, VerifierState};
@@ -24,14 +27,18 @@ use trace_decoder::types::TxnProofGenIR;
 use tracing::info;
 
 use self::circuit::{CircuitConfig, NUM_TABLES};
-use crate::prover_state::persistence::{
-    BaseProverResource, DiskResource, MonolithicProverResource, RecursiveCircuitResource,
-    VerifierResource,
+use crate::prover_state::{
+    persistence::{
+        BaseProverResource, DiskResource, MonolithicProverResource, RecursiveCircuitResource,
+        VerifierResource,
+    },
+    utils::pkg_consistency_check,
 };
 
 pub mod circuit;
 pub mod cli;
 pub mod persistence;
+mod utils;
 
 pub(crate) type Config = PoseidonGoldilocksConfig;
 pub(crate) type Field = GoldilocksField;
@@ -251,6 +258,18 @@ impl ProverStateManager {
             }
             CircuitPersistence::Disk(strategy) => {
                 info!("attempting to load preprocessed circuits from disk...");
+
+                // Check the package consistency before loading the circuits.
+                pkg_consistency_check(&[
+                    self.circuit_config
+                        .as_all_recursive_circuits()
+                        .block
+                        .circuit
+                        .verifier_only
+                        .circuit_digest
+                        .to_bytes(),
+                    KERNEL.hash().to_fixed_bytes().to_vec(),
+                ]);
 
                 let disk_state = match strategy {
                     TableLoadStrategy::OnDemand => BaseProverResource::get(&self.circuit_config),
