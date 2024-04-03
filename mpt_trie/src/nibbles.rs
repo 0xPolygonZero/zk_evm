@@ -105,14 +105,14 @@ pub enum NibblesToTypeError {
 }
 
 trait AsU64s {
-    fn as_u64s(&self) -> Vec<u64>;
+    fn as_u64s(&self) -> impl Iterator<Item = u64> + '_;
 }
 
 macro_rules! impl_as_u64s_for_primitive {
     ($type:ty) => {
         impl AsU64s for $type {
-            fn as_u64s(&self) -> Vec<u64> {
-                vec![*self as u64]
+            fn as_u64s(&self) -> impl Iterator<Item = u64> + '_ {
+                std::iter::once(*self as u64)
             }
         }
     };
@@ -124,23 +124,20 @@ impl_as_u64s_for_primitive!(u32);
 impl_as_u64s_for_primitive!(u64);
 
 impl AsU64s for U128 {
-    fn as_u64s(&self) -> Vec<u64> {
-        let U128(ref arr) = self;
-        arr.to_vec()
+    fn as_u64s(&self) -> impl Iterator<Item = u64> + '_ {
+        self.0.iter().copied()
     }
 }
 
 impl AsU64s for U256 {
-    fn as_u64s(&self) -> Vec<u64> {
-        let U256(ref arr) = self;
-        arr.to_vec()
+    fn as_u64s(&self) -> impl Iterator<Item = u64> + '_ {
+        self.0.iter().copied()
     }
 }
 
 impl AsU64s for NibblesIntern {
-    fn as_u64s(&self) -> Vec<u64> {
-        let NibblesIntern(ref arr) = self;
-        arr.to_vec()
+    fn as_u64s(&self) -> impl Iterator<Item = u64> + '_ {
+        self.0.iter().copied()
     }
 }
 
@@ -171,7 +168,7 @@ macro_rules! impl_to_nibbles {
                 let mut packed = NibblesIntern::zero();
 
                 let parts = self.as_u64s();
-                for (i, part) in parts.into_iter().enumerate().take(packed.0.len()) {
+                for (i, part) in parts.enumerate().take(packed.0.len()) {
                     packed.0[i] = part;
                 }
 
@@ -235,10 +232,9 @@ impl From<U256> for NibblesIntern {
         let arr = val.as_u64s();
 
         let mut ret = NibblesIntern::zero();
-        ret.0[0] = arr[0];
-        ret.0[1] = arr[1];
-        ret.0[2] = arr[2];
-        ret.0[3] = arr[3];
+        for (i, part) in arr.enumerate() {
+            ret.0[i] = part;
+        }
         ret
     }
 }
