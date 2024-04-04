@@ -9,7 +9,6 @@ use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::memory::segments::Segment;
 
-#[ignore]
 #[test]
 fn process_type_0_txn() -> Result<()> {
     let process_type_0_txn = KERNEL.global_labels["process_type_0_txn"];
