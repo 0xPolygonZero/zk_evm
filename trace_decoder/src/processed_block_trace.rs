@@ -17,9 +17,8 @@ use crate::trace_protocol::{
     TrieUncompressed, TxnInfo,
 };
 use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
-    HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH,
-    EMPTY_TRIE_HASH,
+    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
+    OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,

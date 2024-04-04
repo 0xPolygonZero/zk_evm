@@ -1,10 +1,7 @@
 //! Logic to convert the decoded compact into a `mpt_trie`
 //! [`HashedPartialTrie`]. This is the final stage in the decoding process.
 
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-};
+use std::collections::HashMap;
 
 use evm_arithmetization::generation::mpt::AccountRlp;
 use log::trace;
@@ -19,11 +16,8 @@ use super::compact_prestate_processing::{
 };
 use crate::{
     decoding::TrieType,
-    types::{
-        CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH,
-        EMPTY_TRIE_HASH,
-    },
-    utils::{h_addr_nibs_to_h256, hash},
+    types::{CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH},
+    utils::hash,
 };
 
 /// A trait to represent building either a state or storage trie from compact
@@ -64,7 +58,7 @@ trait CompactToPartialTrieExtractionOutput {
     /// Insert a hash node with our key that we constructed so far from
     /// traversing down the trie.
     fn process_hash(&mut self, curr_key: Nibbles, hash: TrieRootHash) -> CompactParsingResult<()> {
-        self.trie().insert(curr_key, hash);
+        let _ = self.trie().insert(curr_key, hash);
 
         Ok(())
     }
@@ -157,7 +151,7 @@ pub(super) struct StorageTrieExtractionOutput {
 }
 
 impl CompactToPartialTrieExtractionOutput for StorageTrieExtractionOutput {
-    fn process_code(&mut self, c_bytes: Vec<u8>) -> CompactParsingResult<()> {
+    fn process_code(&mut self, _c_bytes: Vec<u8>) -> CompactParsingResult<()> {
         Err(CompactParsingError::UnexpectedNodeForTrieType(
             UnexpectedCompactNodeType::Code,
             TrieType::Storage,
@@ -170,8 +164,8 @@ impl CompactToPartialTrieExtractionOutput for StorageTrieExtractionOutput {
         leaf_key: &Nibbles,
         leaf_node_data: &LeafNodeData,
     ) -> CompactParsingResult<()> {
-        /// If we encounter an `AccountLeaf` when processing a storage trie,
-        /// then something is wrong.
+        // If we encounter an `AccountLeaf` when processing a storage trie,
+        // then something is wrong.
         process_leaf_common(
             &mut self.trie,
             curr_key,
@@ -205,7 +199,7 @@ fn process_leaf_common<F: FnMut(&AccountNodeData, &Nibbles) -> CompactParsingRes
         LeafNodeData::Account(acc_data) => account_leaf_proc_f(acc_data, &full_k)?,
     };
 
-    trie.insert(full_k, l_val);
+    let _ = trie.insert(full_k, l_val);
     Ok(())
 }
 

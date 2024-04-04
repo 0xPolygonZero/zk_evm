@@ -14,7 +14,7 @@ use ethereum_types::{H256, U256};
 use log::trace;
 use mpt_trie::{
     nibbles::{FromHexPrefixError, Nibbles},
-    partial_trie::{HashedPartialTrie, PartialTrie},
+    partial_trie::HashedPartialTrie,
 };
 use serde::de::DeserializeOwned;
 use thiserror::Error;
@@ -26,7 +26,7 @@ use super::compact_to_partial_trie::{
 use crate::{
     decoding::TrieType,
     trace_protocol::TrieCompact,
-    types::{CodeHash, HashedAccountAddr, TrieRootHash},
+    types::{HashedAccountAddr, TrieRootHash},
 };
 
 /// Result alias for any error that can occur when processing encoded compact
@@ -688,46 +688,49 @@ impl<C: CompactCursor> WitnessBytes<C> {
     // TODO: Move behind a feature flag...
     // TODO: Fairly hacky...
     // TODO: Replace `unwrap()`s with `Result`s?
-    fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure(
-        self,
-    ) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
-        let mut instr_and_bytes_buf = Vec::new();
-        let res = self.process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(&mut instr_and_bytes_buf);
+    // fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure(
+    //     self,
+    // ) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
+    //     let mut instr_and_bytes_buf = Vec::new();
+    //     let res =
+    // self.process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(&
+    // mut instr_and_bytes_buf);
 
-        (instr_and_bytes_buf.into(), res)
-    }
+    //     (instr_and_bytes_buf.into(), res)
+    // }
 
-    fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(
-        mut self,
-        instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,
-    ) -> CompactParsingResult<()> {
-        // Skip header.
-        self.byte_cursor.intern().set_position(1);
+    // fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(
+    //     mut self,
+    //     instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,
+    // ) -> CompactParsingResult<()> {
+    //     // Skip header.
+    //     self.byte_cursor.intern().set_position(1);
 
-        loop {
-            let op_start_pos = self.byte_cursor.intern().position();
-            self.process_operator()?;
+    //     loop {
+    //         let op_start_pos = self.byte_cursor.intern().position();
+    //         self.process_operator()?;
 
-            let instr_bytes = get_bytes_from_cursor(&mut self.byte_cursor, op_start_pos);
+    //         let instr_bytes = get_bytes_from_cursor(&mut self.byte_cursor,
+    // op_start_pos);
 
-            let instr_added = self
-                .instrs
-                .intern
-                .front()
-                .cloned()
-                .unwrap()
-                .into_instruction()
-                .unwrap();
+    //         let instr_added = self
+    //             .instrs
+    //             .intern
+    //             .front()
+    //             .cloned()
+    //             .unwrap()
+    //             .into_instruction()
+    //             .unwrap();
 
-            instr_and_bytes_buf.push((instr_added, instr_bytes));
+    //         instr_and_bytes_buf.push((instr_added, instr_bytes));
 
-            if self.byte_cursor.at_eof() {
-                break;
-            }
-        }
+    //         if self.byte_cursor.at_eof() {
+    //             break;
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn process_operator(&mut self) -> CompactParsingResult<()> {
         let opcode_byte = self.byte_cursor.read_byte()?;
@@ -1186,13 +1189,13 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
     }
 
     // Inclusive.
-    fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
-        for _ in 0..n {
-            self.entry_cursor.remove_current();
-        }
+    // fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry:
+    // WitnessEntry) {     for _ in 0..n {
+    //         self.entry_cursor.remove_current();
+    //     }
 
-        self.entry_cursor.insert_after(entry)
-    }
+    //     self.entry_cursor.insert_after(entry)
+    // }
 
     // Inclusive.
     fn replace_prev_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
@@ -1328,13 +1331,13 @@ impl Display for InstructionAndBytesParsedFromBuf {
 }
 
 // TODO: Also move behind a feature flag...
-fn parse_to_instructions_and_bytes_for_instruction(
-    bytes: Vec<u8>,
-) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
-    let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
-    witness_bytes
-        .process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure()
-}
+// fn parse_to_instructions_and_bytes_for_instruction(
+//     bytes: Vec<u8>,
+// ) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
+//     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
+//     witness_bytes
+//         .process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure()
+// }
 
 // TODO: This could probably be made a bit faster...
 fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
@@ -1427,7 +1430,7 @@ fn get_bytes_from_cursor<C: CompactCursor>(cursor: &mut C, cursor_start_pos: u64
 
 #[cfg(test)]
 mod tests {
-    use mpt_trie::{nibbles::Nibbles, partial_trie::PartialTrie};
+    use mpt_trie::nibbles::Nibbles;
 
     use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
     use crate::compact::{
