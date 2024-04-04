@@ -27,6 +27,7 @@ use crate::generation::mpt::TrieRootPtrs;
 use crate::generation::MemBeforeValues;
 use crate::util::{get_h160, get_h256, get_u256, h2u};
 use crate::witness::memory::MemoryAddress;
+use crate::witness::state::RegistersState;
 
 /// A STARK proof for each table, plus some metadata used to create recursive
 /// wrapper proofs.
@@ -377,6 +378,19 @@ impl RegistersData {
             stack_top,
             context,
             gas_used,
+        }
+    }
+}
+
+impl From<RegistersState> for RegistersData {
+    fn from(registers: RegistersState) -> Self {
+        RegistersData {
+            program_counter: registers.program_counter.into(),
+            is_kernel: (registers.is_kernel as u64).into(),
+            stack_len: registers.stack_len.into(),
+            stack_top: registers.stack_top,
+            context: registers.context.into(),
+            gas_used: registers.gas_used.into(),
         }
     }
 }

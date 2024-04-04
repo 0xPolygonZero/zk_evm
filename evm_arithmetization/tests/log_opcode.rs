@@ -237,19 +237,11 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         },
     };
 
-    let mut data = generate_all_data_segments::<F>(None, inputs.clone())?;
-
     let max_cpu_len_log = 20;
+    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
+
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let proof = prove::<F, C, D>(
-        &all_stark,
-        &config,
-        inputs,
-        max_cpu_len_log,
-        &mut data[0],
-        &mut timing,
-        None,
-    )?;
+    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut data[0], &mut timing, None)?;
     timing.filter(Duration::from_millis(100)).print();
 
     // Assert that the proof leads to the correct state and receipt roots.

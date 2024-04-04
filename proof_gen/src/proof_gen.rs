@@ -42,7 +42,7 @@ impl From<String> for ProofGenError {
 }
 
 /// Generates a transaction proof from some IR data.
-pub fn generate_txn_proof(
+pub fn generate_segment_proof(
     p_state: &ProverState,
     gen_inputs: TxnProofGenIR,
     segment_data: &mut GenerationSegmentData,

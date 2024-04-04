@@ -29,7 +29,7 @@ use crate::memory::segments::Segment;
 use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
 };
-use crate::prover::{check_abort_signal, get_mem_after_value_from_row};
+use crate::prover::{check_abort_signal, get_mem_after_value_from_row, GenerationSegmentData};
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
@@ -151,14 +151,6 @@ pub struct TrieInputs {
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
     pub storage_tries: Vec<(H256, HashedPartialTrie)>,
-}
-
-pub struct SegmentData<F: RichField> {
-    pub max_cpu_len_log: usize,
-    pub starting_state: GenerationState<F>,
-    pub memory_before: Vec<(MemoryAddress, U256)>,
-    pub registers_before: RegistersData,
-    pub registers_after: RegistersData,
 }
 
 impl GenerationInputs {
@@ -335,6 +327,42 @@ pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }
 
+fn initialize_shift_table(memory: &mut MemoryState) {
+    let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
+    let mut shift_val = U256::one();
+    for _ in 0..256 {
+        memory.set(shift_addr, shift_val);
+        shift_addr.increment();
+        shift_val <<= 1;
+    }
+}
+
+/// Returns the memory addresses and values that should comprise the state at
+/// the start of the segment's execution.
+fn get_all_memory_address_and_values<F: RichField + Extendable<D>, const D: usize>(
+    memory_before: &MemoryState,
+    state: &mut GenerationState<F>,
+) -> Vec<(MemoryAddress, U256)> {
+    let mut res = vec![];
+    for (ctx_idx, ctx) in memory_before.contexts.iter().enumerate() {
+        for (segment_idx, segment) in ctx.segments.iter().enumerate() {
+            for (virt, value) in segment.content.iter().enumerate() {
+                if let &Some(val) = value {
+                    res.push((
+                        MemoryAddress {
+                            context: ctx_idx,
+                            segment: segment_idx,
+                            virt,
+                        },
+                        val,
+                    ));
+                }
+            }
+        }
+    }
+    res
+}
+
 type TablesWithPVsAndFinalMem<F> = (
     [Vec<PolynomialValues<F>>; NUM_TABLES],
     PublicValues,
@@ -344,32 +372,43 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
     config: &StarkConfig,
-    segment_data: SegmentData<F>,
+    segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
 ) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
     debug_inputs(&inputs);
 
+    let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
+        .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
+
+    state.set_segment_data(segment_data);
+
+    initialize_shift_table(&mut segment_data.memory);
+
+    // Retrieve initial memory addresses and values.
+    let actual_mem_before = get_all_memory_address_and_values(&segment_data.memory, &mut state);
+
     // Initialize the state with the one at the end of the
     // previous segment execution, if any.
-
-    let SegmentData {
+    let GenerationSegmentData {
         max_cpu_len_log,
-        starting_state: mut state,
-        memory_before,
+        memory,
         registers_before,
         registers_after,
+        extra_data,
     } = segment_data;
 
-    for &(address, val) in &memory_before {
+    for &(address, val) in &actual_mem_before {
         state.memory.set(address, val);
     }
 
+    let registers_before: RegistersData = RegistersData::from(*registers_before);
+    let registers_after: RegistersData = RegistersData::from(*registers_after);
     apply_metadata_and_tries_memops(&mut state, &inputs, &registers_before, &registers_after);
 
     let cpu_res = timed!(
         timing,
         "simulate CPU",
-        simulate_cpu(&mut state, max_cpu_len_log)
+        simulate_cpu(&mut state, *max_cpu_len_log)
     );
     let (final_registers, mem_after) = if let Ok(res) = cpu_res {
         res
@@ -425,7 +464,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         "convert trace data to tables",
         state.traces.into_tables(
             all_stark,
-            &memory_before,
+            &actual_mem_before,
             state.stale_contexts,
             trace_lengths,
             config,
@@ -437,9 +476,9 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
 fn simulate_cpu<F: Field>(
     state: &mut GenerationState<F>,
-    max_cpu_len_log: usize,
+    max_cpu_len_log: Option<usize>,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
-    let (final_registers, mem_after) = state.run_cpu(Some(max_cpu_len_log))?;
+    let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log)?;
 
     let pc = state.registers.program_counter;
     // Setting the values of padding rows.

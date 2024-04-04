@@ -43,7 +43,7 @@ use starky::stark::Stark;
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::generation::state::GenerationState;
-use crate::generation::{GenerationInputs, SegmentData};
+use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
@@ -976,7 +976,7 @@ where
     ) where
         F: RichField + Extendable<D>,
     {
-        // At the start of a transaction proof, `MemBefore` only contains the RLP the
+        // At the start of a transaction proof, `MemBefore` only contains the
         // `ShiftTable`.
         let mut trace = vec![];
 
@@ -1359,7 +1359,6 @@ where
             all_stark,
             config,
             generation_inputs,
-            max_cpu_len_log,
             segment_data,
             timing,
             abort_signal.clone(),

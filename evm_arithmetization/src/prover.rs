@@ -34,7 +34,7 @@ use crate::cpu::kernel::interpreter::{
     generate_segment, set_registers_and_run, ExtraSegmentData, Interpreter,
 };
 use crate::generation::state::{GenerationState, State};
-use crate::generation::{generate_traces, GenerationInputs, MemBeforeValues, SegmentData};
+use crate::generation::{generate_traces, GenerationInputs, MemBeforeValues};
 use crate::get_challenges::observe_public_values;
 use crate::memory::segments::Segment;
 use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
@@ -52,16 +52,8 @@ pub struct GenerationSegmentData {
     pub(crate) memory: MemoryState,
     /// Extra data required to initialize a segment.
     pub(crate) extra_data: ExtraSegmentData,
-}
-
-fn initialize_shift_table(memory: &mut MemoryState) {
-    let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
-    let mut shift_val = U256::one();
-    for _ in 0..256 {
-        memory.set(shift_addr, shift_val);
-        shift_addr.increment();
-        shift_val <<= 1;
-    }
+    /// Log of the maximal cpu length.
+    pub(crate) max_cpu_len_log: Option<usize>,
 }
 
 /// Generate traces, then create all STARK proofs.
@@ -69,7 +61,6 @@ pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     inputs: GenerationInputs,
-    max_cpu_len_log: usize,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -79,62 +70,6 @@ where
     C: GenericConfig<D, F = F>,
 {
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
-
-    let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
-        .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
-
-    state.set_segment_data(segment_data);
-
-    initialize_shift_table(&mut segment_data.memory);
-
-    let actual_mem_before = {
-        let mut res = vec![];
-        for (ctx_idx, ctx) in segment_data.memory.contexts.iter().enumerate() {
-            for (segment_idx, segment) in ctx.segments.iter().enumerate() {
-                for (virt, value) in segment.content.iter().enumerate() {
-                    if let &Some(val) = value {
-                        res.push((
-                            MemoryAddress {
-                                context: ctx_idx,
-                                segment: segment_idx,
-                                virt,
-                            },
-                            val,
-                        ));
-                    }
-                }
-            }
-        }
-        res
-    };
-
-    let registers_before = segment_data.registers_before;
-
-    let registers_data_before = RegistersData {
-        program_counter: registers_before.program_counter.into(),
-        is_kernel: (registers_before.is_kernel as u64).into(),
-        stack_len: registers_before.stack_len.into(),
-        stack_top: registers_before.stack_top,
-        context: registers_before.context.into(),
-        gas_used: registers_before.gas_used.into(),
-    };
-
-    let registers_after = segment_data.registers_after;
-    let registers_data_after = RegistersData {
-        program_counter: registers_after.program_counter.into(),
-        is_kernel: (registers_after.is_kernel as u64).into(),
-        stack_len: registers_after.stack_len.into(),
-        stack_top: registers_after.stack_top,
-        context: registers_after.context.into(),
-        gas_used: registers_after.gas_used.into(),
-    };
-    let segment_data = SegmentData {
-        max_cpu_len_log,
-        starting_state: state,
-        memory_before: actual_mem_before,
-        registers_before: registers_data_before,
-        registers_after: registers_data_after,
-    };
 
     let (traces, mut public_values, final_values) = timed!(
         timing,
@@ -558,8 +493,8 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     Ok(())
 }
 
-/// Returns a vector containing the data required to generate all segments for
-/// one full execution.
+/// Returns a vector containing the data required to generate all the segments
+/// of a transaction.
 pub fn generate_all_data_segments<F: RichField>(
     max_cpu_len_log: Option<usize>,
     inputs: GenerationInputs,
@@ -577,6 +512,7 @@ pub fn generate_all_data_segments<F: RichField>(
         registers_before: RegistersState::new(),
         registers_after: RegistersState::new(),
         memory: MemoryState::default(),
+        max_cpu_len_log,
         extra_data: ExtraSegmentData {
             trimmed_inputs: interpreter.generation_state.inputs.clone(),
             bignum_modmul_result_limbs: interpreter
@@ -610,6 +546,7 @@ pub fn generate_all_data_segments<F: RichField>(
             registers_before: updated_registers,
             // `registers_after` will be set correctly at the next iteration.`
             registers_after: updated_registers,
+            max_cpu_len_log,
             memory: mem_after
                 .expect("The interpreter was running, so it should have returned a MemoryState"),
             extra_data: ExtraSegmentData {
@@ -677,7 +614,6 @@ pub mod testing {
                 all_stark,
                 config,
                 inputs.clone(),
-                max_cpu_len_log,
                 &mut d,
                 timing,
                 abort_signal.clone(),
