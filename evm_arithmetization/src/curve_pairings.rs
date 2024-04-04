@@ -234,7 +234,7 @@ pub mod bn254 {
 
     /// The BN curve consists of pairs
     ///     (x, y): (BN254, BN254) | y^2 = x^3 + 3
-    // with generator given by (1, 2)
+    // with generator given by (1, 2).
     impl CyclicGroup for CurveAff<BN254> {
         const GENERATOR: CurveAff<BN254> = CurveAff {
             x: BN254 { val: U256::one() },
@@ -246,7 +246,7 @@ pub mod bn254 {
 
     /// The twisted curve consists of pairs
     ///     (x, y): (Fp2<BN254>, Fp2<BN254>) | y^2 = x^3 + 3/(9 + i)
-    /// with generator given as follows
+    /// with generator given as follows:
     impl CyclicGroup for CurveAff<Fp2<BN254>> {
         const GENERATOR: CurveAff<Fp2<BN254>> = CurveAff {
             x: Fp2 {
@@ -306,7 +306,7 @@ pub mod bn254 {
         sparse_embed::<BN254>(p1.y * p2.x - p2.y * p1.x, q.x * cx, q.y * cy)
     }
 
-    // The tate pairing takes a point each from the curve and its twist and outputs
+    // The tate pairing takes points from the curve and its twist and outputs
     // an Fp12 element.
     pub(crate) fn tate(p: CurveAff<BN254>, q: CurveAff<Fp2<BN254>>) -> Fp12<BN254> {
         let miller_output = miller_loop(p, q);
@@ -441,7 +441,7 @@ pub mod bn254 {
         false, false, false, false, false, false, false, false,
     ];
 
-    // The following constants are defined above get_custom_powers
+    // The following constants are defined above get_custom_powers.
     const BN_EXPS4: [(bool, bool, bool); 64] = [
         (true, true, false),
         (true, true, true),
@@ -734,7 +734,7 @@ pub mod bls381 {
             return Ok(CurveAff::<BLS381>::unit());
         }
 
-        // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
+        // Recover a y-coordinate given x with y = sqrt(x^3 + 4).
         if let Ok(mut y) = ((x * x * x) + B_G1).sqrt() {
             // Switch to the correct y-coordinate if necessary.
 

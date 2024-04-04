@@ -418,6 +418,7 @@ impl<F: Field> GenerationState<F> {
         Ok((Segment::AccessedStorageKeys as usize).into())
     }
 
+    /// Returns the first part of the KZG precompile output.
     fn run_kzg_point_eval(&mut self) -> Result<U256, ProgramError> {
         let versioned_hash = stack_peek(self, 0)?;
         let z = stack_peek(self, 1)?;
@@ -461,9 +462,10 @@ impl<F: Field> GenerationState<F> {
         self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes)
     }
 
-    /// POINT_EVALUATION_PRECOMPILE returns a 64-byte value. Because EVM words
-    /// only fit in 32 bytes, we read the previously pushed value and then
-    /// accordingly push the following word
+    /// Returns the second part of the KZG precompile output.
+    /// The POINT_EVALUATION_PRECOMPILE returns a 64-byte value. Because EVM
+    /// words only fit in 32 bytes, we read the previously pushed value and
+    /// then accordingly push the following word.
     fn run_kzg_point_eval_2(&mut self) -> Result<U256, ProgramError> {
         let prev_value = stack_peek(self, 0)?;
 
@@ -481,7 +483,7 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    /// Verifies a KZG proof.
+    /// Verifies a KZG proof, i.e. that the commitment opens to y at z.
     fn verify_kzg_proof(
         &self,
         comm_bytes: &[u8; 64],
