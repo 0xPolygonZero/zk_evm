@@ -109,7 +109,7 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c
 }
 
-const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
+const MISC_CONSTANTS: [(&str, [u8; 32]); 5] = [
     // Base for limbs used in bignum arithmetic.
     (
         "BIGNUM_LIMB_BASE",
@@ -133,6 +133,12 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     (
         "INITIAL_TXN_RLP_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000c00000001"),
+    ),
+    // Scaled boolean value indicating that we are in kernel mode, to be used within `kexit_info`.
+    // It is equal to 2^32.
+    (
+        "IS_KERNEL",
+        hex!("0000000000000000000000000000000000000000000000000000000100000000"),
     ),
 ];
 
@@ -276,7 +282,7 @@ const GAS_CONSTANTS: [(&str, u16); 37] = [
 
 const REFUND_CONSTANTS: [(&str, u16); 2] = [("REFUND_SCLEAR", 4_800), ("MAX_REFUND_QUOTIENT", 5)];
 
-const PRECOMPILES: [(&str, u16); 9] = [
+const PRECOMPILES: [(&str, u16); 10] = [
     ("ECREC", 1),
     ("SHA256", 2),
     ("RIP160", 3),
@@ -286,9 +292,10 @@ const PRECOMPILES: [(&str, u16); 9] = [
     ("BN_MUL", 7),
     ("SNARKV", 8),
     ("BLAKE2_F", 9),
+    ("KZG_PEVAL", 10),
 ];
 
-const PRECOMPILES_GAS: [(&str, u16); 13] = [
+const PRECOMPILES_GAS: [(&str, u16); 14] = [
     ("ECREC_GAS", 3_000),
     ("SHA256_STATIC_GAS", 60),
     ("SHA256_DYNAMIC_GAS", 12),
@@ -302,6 +309,7 @@ const PRECOMPILES_GAS: [(&str, u16); 13] = [
     ("SNARKV_STATIC_GAS", 45_000),
     ("SNARKV_DYNAMIC_GAS", 34_000),
     ("BLAKE2_F__GAS", 1),
+    ("KZG_PEVAL_GAS", 50_000),
 ];
 
 const SNARKV_POINTERS: [(&str, u64); 2] = [("SNARKV_INP", 112), ("SNARKV_OUT", 100)];
@@ -324,6 +332,23 @@ pub mod cancun_constants {
     pub const BLOB_BASE_FEE_UPDATE_FRACTION: U256 = U256([0x32f0ed, 0, 0, 0]);
 
     pub const MIN_BLOB_BASE_FEE: U256 = U256::one();
+
+    pub const KZG_VERSIONED_HASH: u8 = 0x01;
+
+    pub const POINT_EVALUATION_PRECOMPILE_RETURN_VALUE: [[u8; 32]; 2] = [
+        // U256(FIELD_ELEMENTS_PER_BLOB).to_be_bytes()
+        hex!("0000000000000000000000000000000000000000000000000000000000001000"),
+        // BLS_MODULUS.to_bytes32()
+        hex!("73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"),
+    ];
+
+    // Taken from <https://github.com/ethereum/c-kzg-4844/blob/main/src/trusted_setup.txt>.
+    pub const G2_TRUSTED_SETUP_POINT: [[u8; 64]; 4] = [
+        hex!("00000000000000000000000000000000185cbfee53492714734429b7b38608e23926c911cceceac9a36851477ba4c60b087041de621000edc98edada20c1def2"), // x_re
+        hex!("0000000000000000000000000000000015bfd7dd8cdeb128843bc287230af38926187075cbfbefa81009a2ce615ac53d2914e5870cb452d2afaaab24f3499f72"), // x_im
+        hex!("00000000000000000000000000000000014353bdb96b626dd7d5ee8599d1fca2131569490e28de18e82451a496a9c9794ce26d105941f383ee689bfbbb832a99"), // y_re
+        hex!("000000000000000000000000000000001666c54b0a32529503432fcae0181b4bef79de09fc63671fda5ed1ba9bfa07899495346f3d7ac9cd23048ef30d0a154f"), // y_im
+    ];
 
     pub const BEACON_ROOTS_ADDRESS: (&str, [u8; 20]) = (
         "BEACON_ROOTS_ADDRESS",

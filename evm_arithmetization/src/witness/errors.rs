@@ -39,4 +39,6 @@ pub enum ProverInputError {
     NumBitsError,
     InvalidJumpDestination,
     InvalidJumpdestSimulation,
+    KzgEvalFailure(String),
+    Unimplemented,
 }

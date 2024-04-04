@@ -9,7 +9,7 @@ global precompile_id:
     %checkpoint // Checkpoint
     %increment_call_depth
     // stack: (empty)
-    PUSH 0x100000000 // = 2^32 (is_kernel = true)
+    PUSH @IS_KERNEL // true
     // stack: kexit_info
 
     %calldatasize

@@ -97,6 +97,7 @@ global warm_precompiles:
     PUSH @BN_MUL %insert_accessed_addresses_no_return
     PUSH @SNARKV %insert_accessed_addresses_no_return
     PUSH @BLAKE2_F %insert_accessed_addresses_no_return
+    PUSH @KZG_PEVAL %insert_accessed_addresses_no_return
 
 // EIP-3651
 global warm_coinbase:

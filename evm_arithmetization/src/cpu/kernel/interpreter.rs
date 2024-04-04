@@ -737,6 +737,14 @@ impl<F: Field> Interpreter<F> {
         if context == 0 {
             assert!(self.is_kernel());
         }
+
+        while self.generation_state.memory.contexts.len() <= context {
+            self.generation_state
+                .memory
+                .contexts
+                .push(MemoryContextState::default());
+        }
+
         self.generation_state.registers.context = context;
     }
 

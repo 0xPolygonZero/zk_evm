@@ -1,22 +1,27 @@
+use core::cmp::min;
 use core::mem::transmute;
-use std::cmp::min;
+use core::ops::Neg;
 use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
-use anyhow::{bail, Error};
+use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
+use keccak_hash::keccak;
 use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
+use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
-    BLOB_BASE_FEE_UPDATE_FRACTION, MIN_BLOB_BASE_FEE,
+    BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BLOB_BASE_FEE,
+    POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
-use crate::extension_tower::{FieldExt, Fp12, BLS381, BN254};
+use crate::curve_pairings::{bls381, CurveAff, CyclicGroup};
+use crate::extension_tower::{FieldExt, Fp12, Fp2, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
 use crate::generation::prover_input::EvmField::{
     Bls381Base, Bls381Scalar, Bn254Base, Bn254Scalar, Secp256k1Base, Secp256k1Scalar,
 };
@@ -24,7 +29,7 @@ use crate::generation::prover_input::FieldOp::{Inverse, Sqrt};
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::memory::segments::Segment::BnPairing;
-use crate::util::{biguint_to_mem_vec, mem_vec_to_biguint, u256_to_u8, u256_to_usize};
+use crate::util::{biguint_to_mem_vec, h2u, mem_vec_to_biguint, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProverInputError::*;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::MemoryAddress;
@@ -61,6 +66,8 @@ impl<F: Field> GenerationState<F> {
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
             "ger" => self.run_global_exit_roots(),
+            "kzg_point_eval" => self.run_kzg_point_eval(),
+            "kzg_point_eval_2" => self.run_kzg_point_eval_2(),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
         }
     }
@@ -410,6 +417,165 @@ impl<F: Field> GenerationState<F> {
         }
         Ok((Segment::AccessedStorageKeys as usize).into())
     }
+
+    /// Returns the first part of the KZG precompile output.
+    fn run_kzg_point_eval(&mut self) -> Result<U256, ProgramError> {
+        let versioned_hash = stack_peek(self, 0)?;
+        let z = stack_peek(self, 1)?;
+        let y = stack_peek(self, 2)?;
+        let comm_hi = stack_peek(self, 3)?;
+        let comm_lo = stack_peek(self, 4)?;
+        let proof_hi = stack_peek(self, 5)?;
+        let proof_lo = stack_peek(self, 6)?;
+
+        // Validate scalars
+        if z > BLS_SCALAR {
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure("z is not canonical.".to_string()),
+            ));
+        }
+        if y > BLS_SCALAR {
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure("y is not canonical.".to_string()),
+            ));
+        }
+
+        let mut comm_bytes = [0u8; 64];
+        comm_hi.to_big_endian(&mut comm_bytes[0..32]);
+        comm_lo.to_big_endian(&mut comm_bytes[32..64]); // only actually 16 bits
+
+        let mut proof_bytes = [0u8; 64];
+        proof_hi.to_big_endian(&mut proof_bytes[0..32]);
+        proof_lo.to_big_endian(&mut proof_bytes[32..64]); // only actually 16 bits
+
+        let mut expected_versioned_hash = keccak(&comm_bytes[16..64]).0;
+        expected_versioned_hash[0] = KZG_VERSIONED_HASH;
+
+        if versioned_hash != U256::from_big_endian(&expected_versioned_hash) {
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Versioned hash does not match expected value.".to_string(),
+                ),
+            ));
+        }
+
+        self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes)
+    }
+
+    /// Returns the second part of the KZG precompile output.
+    /// The POINT_EVALUATION_PRECOMPILE returns a 64-byte value. Because EVM
+    /// words only fit in 32 bytes, we read the previously pushed value and
+    /// then accordingly push the following word.
+    fn run_kzg_point_eval_2(&mut self) -> Result<U256, ProgramError> {
+        let prev_value = stack_peek(self, 0)?;
+
+        if prev_value == U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1]) {
+            Ok(U256::from_big_endian(
+                &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
+            ))
+        } else {
+            Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "run_kzg_point_eval_1 should have output the expected return value or errored"
+                        .to_string(),
+                ),
+            ))
+        }
+    }
+
+    /// Verifies a KZG proof, i.e. that the commitment opens to y at z.
+    fn verify_kzg_proof(
+        &self,
+        comm_bytes: &[u8; 64],
+        z: U256,
+        y: U256,
+        proof_bytes: &[u8; 64],
+    ) -> Result<U256, ProgramError> {
+        if comm_bytes[0..16] != [0; 16] || proof_bytes[0..16] != [0; 16] {
+            // Proofs and commitments must fit in 48 bytes to be deserializable.
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Proof or commitment do not fit in 48 bytes.".to_string(),
+                ),
+            ));
+        }
+
+        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes[16..64].try_into().unwrap()) {
+            c
+        } else {
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Commitment did not deserialize into a valid G1 point.".to_string(),
+                ),
+            ));
+        };
+
+        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes[16..64].try_into().unwrap()) {
+            p
+        } else {
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Proof did not deserialize into a valid G1 point.".to_string(),
+                ),
+            ));
+        };
+
+        // TODO: use some WNAF method if performance becomes critical
+        let mut z_bytes = [0u8; 32];
+        z.to_big_endian(&mut z_bytes);
+        let mut acc = CurveAff::<Fp2<BLS381>>::unit();
+        for (i, &byte) in z_bytes.iter().enumerate() {
+            acc = acc * 256_i32;
+            acc = acc + (CurveAff::<Fp2<BLS381>>::GENERATOR * byte as i32);
+        }
+        let minus_z_g2 = -acc;
+
+        let mut y_bytes = [0u8; 32];
+        y.to_big_endian(&mut y_bytes);
+        let mut acc = CurveAff::<BLS381>::unit();
+        for byte in y_bytes {
+            acc = acc * 256_i32;
+            acc = acc + (CurveAff::<BLS381>::GENERATOR * byte as i32);
+        }
+        let comm_minus_y = comm + (acc.neg());
+
+        let x = CurveAff::<Fp2<BLS381>> {
+            x: Fp2::<BLS381> {
+                re: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[0]),
+                },
+                im: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[1]),
+                },
+            },
+            y: Fp2::<BLS381> {
+                re: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[2]),
+                },
+                im: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[3]),
+                },
+            },
+        };
+        let x_minus_z = x + minus_z_g2;
+
+        // TODO: If this ends up being implemented in the Kernel directly, we should
+        // really not have to go through the final exponentiation twice.
+        if bls381::ate_optim(comm_minus_y, -CurveAff::<Fp2<BLS381>>::GENERATOR)
+            * bls381::ate_optim(proof, x_minus_z)
+            != Fp12::<BLS381>::UNIT
+        {
+            Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Final pairing check did not succeed.".to_string(),
+                ),
+            ))
+        } else {
+            Ok(U256::from_big_endian(
+                &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1],
+            ))
+        }
+    }
 }
 
 impl<F: Field> GenerationState<F> {
@@ -723,22 +889,21 @@ impl FromStr for FieldOp {
 }
 
 impl EvmField {
-    fn order(&self) -> U256 {
+    fn order(&self) -> U512 {
         match self {
-            EvmField::Bls381Base => todo!(),
-            EvmField::Bls381Scalar => todo!(),
-            EvmField::Bn254Base => {
-                U256::from_str("0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47")
-                    .unwrap()
-            }
+            EvmField::Bls381Base => BLS_BASE,
+            EvmField::Bls381Scalar => BLS_SCALAR.into(),
+            EvmField::Bn254Base => BN_BASE.into(),
             EvmField::Bn254Scalar => todo!(),
             EvmField::Secp256k1Base => {
                 U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
                     .unwrap()
+                    .into()
             }
             EvmField::Secp256k1Scalar => {
                 U256::from_str("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
                     .unwrap()
+                    .into()
             }
         }
     }
@@ -751,7 +916,8 @@ impl EvmField {
     }
 
     fn inverse(&self, x: U256) -> Result<U256, ProgramError> {
-        let n = self.order();
+        let n = U256::try_from(self.order())
+            .map_err(|_| ProgramError::ProverInputError(Unimplemented))?;
         if x >= n {
             return Err(ProgramError::ProverInputError(InvalidInput));
         };
@@ -759,7 +925,8 @@ impl EvmField {
     }
 
     fn sqrt(&self, x: U256) -> Result<U256, ProgramError> {
-        let n = self.order();
+        let n = U256::try_from(self.order())
+            .map_err(|_| ProgramError::ProverInputError(Unimplemented))?;
         if x >= n {
             return Err(ProgramError::ProverInputError(InvalidInput));
         };
