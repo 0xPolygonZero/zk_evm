@@ -85,7 +85,7 @@ pub(crate) enum GlobalMetadata {
     ContractCreation,
     IsPrecompileFromEoa,
     CallStackDepth,
-    /// Transaction logs list length
+    /// Transaction logs list length.
     LogsLen,
     LogsDataLen,
     LogsPayloadLen,
@@ -94,10 +94,16 @@ pub(crate) enum GlobalMetadata {
 
     KernelHash,
     KernelLen,
+
+    /// Number of created contracts during the current transaction.
+    CreatedContractsLen,
+
+    /// Number of used storage slots in newly created contracts.
+    NewStorageSlotsLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 47;
+    pub(crate) const COUNT: usize = 49;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -153,6 +159,8 @@ impl GlobalMetadata {
             Self::TxnNumberAfter,
             Self::KernelHash,
             Self::KernelLen,
+            Self::CreatedContractsLen,
+            Self::NewStorageSlotsLen,
         ]
     }
 
@@ -206,6 +214,8 @@ impl GlobalMetadata {
             Self::TxnNumberAfter => "GLOBAL_METADATA_TXN_NUMBER_AFTER",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
+            Self::CreatedContractsLen => "GLOBAL_METADATA_CREATED_CONTRACTS_LEN",
+            Self::NewStorageSlotsLen => "GLOBAL_METADATA_NEW_STORAGE_SLOTS_LEN",
         }
     }
 }
