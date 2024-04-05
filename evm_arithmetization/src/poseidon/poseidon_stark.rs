@@ -1022,8 +1022,14 @@ mod tests {
         // TODO: Without the maps it says: "can't compare `GoldilocksField` with
         // `plonky2_field::goldilocks_field::GoldilocksField`""
         assert_eq!(
-            output.iter().map(|x| x.0).collect::<Vec<_>>(),
-            hash.elements.iter().map(|x| x.0).collect::<Vec<_>>()
+            output
+                .iter()
+                .map(|x| x.to_noncanonical_u64())
+                .collect::<Vec<_>>(),
+            hash.elements
+                .iter()
+                .map(|x| x.to_noncanonical_u64())
+                .collect::<Vec<_>>()
         );
 
         Ok(())
