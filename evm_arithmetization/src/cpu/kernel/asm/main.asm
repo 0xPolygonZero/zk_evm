@@ -17,7 +17,11 @@ global main:
 
     // Initialize the RLP DATA pointer to its initial position, 
     // skipping over the preinitialized empty node.
+    // Because hashing with the SMT doesn't require RLP encoding,
+    // we shift the initial pointer by MAX_RLP_BLOB_SIZE to not
+    // overwrite any transaction field.
     PUSH @INITIAL_TXN_RLP_ADDR
+    %add_const(@MAX_RLP_BLOB_SIZE)
     %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
 
     // Encode constant nodes
