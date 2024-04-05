@@ -124,6 +124,7 @@
 pub mod compact;
 /// Defines the main functions used to generate the IR.
 pub mod decoding;
+mod decoding_traits;
 mod deserializers;
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
