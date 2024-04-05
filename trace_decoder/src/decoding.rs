@@ -34,7 +34,7 @@ use crate::{
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
 /// failure.
-pub type TraceParsingResult<T> = Result<T, TraceParsingError>;
+pub type TraceParsingResult<T> = Result<T, Box<TraceParsingError>>;
 
 /// Represents errors that can occur during the processing of a block trace.
 ///
@@ -713,7 +713,7 @@ impl ProcessedBlockTrace {
             &other_data.b_data.b_meta.block_beneficiary,
         )?;
 
-        let trie_roots_after = calculate_trie_input_hashes(&curr_block_tries);
+        let trie_roots_after = calculate_trie_input_hashes(curr_block_tries);
         let gen_inputs = GenerationInputs {
             txn_number_before: extra_data.txn_number_before,
             gas_used_before: extra_data.gas_used_before,
@@ -948,17 +948,16 @@ fn create_trie_subset_wrapped(
             SubsetTrieError::UnexpectedKey(key, _) => key,
         };
 
-        TraceParsingError::new(TraceParsingErrorReason::MissingKeysCreatingSubPartialTrie(
-            key, trie_type,
+        Box::new(TraceParsingError::new(
+            TraceParsingErrorReason::MissingKeysCreatingSubPartialTrie(key, trie_type),
         ))
     })
 }
 
 fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {
     rlp::decode(bytes).map_err(|err| {
-        TraceParsingError::new(TraceParsingErrorReason::AccountDecode(
-            hex::encode(bytes),
-            err.to_string(),
+        Box::new(TraceParsingError::new(
+            TraceParsingErrorReason::AccountDecode(hex::encode(bytes), err.to_string()),
         ))
     })
 }
