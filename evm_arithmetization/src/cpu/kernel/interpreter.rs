@@ -19,7 +19,7 @@ use crate::generation::debug_inputs;
 use crate::generation::mpt::load_all_mpts;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
-    all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
+    all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint, StateLog,
 };
 use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
@@ -857,8 +857,6 @@ impl<F: Field> State<F> for Interpreter<F> {
 
         if registers.is_kernel {
             log_kernel_instruction(self, op);
-        } else {
-            log::debug!("User instruction: {:?}", op);
         }
 
         let generation_state = self.get_mut_generation_state();
@@ -921,6 +919,12 @@ impl<F: Field> Transition<F> for Interpreter<F> {
 
         Ok(())
     }
+}
+
+impl<F: Field> StateLog for Interpreter<F> {
+    fn log_log(_: log::Level, _: &str) {}
+
+    fn log_debug(_: &str) {}
 }
 
 fn get_mnemonic(opcode: u8) -> &'static str {

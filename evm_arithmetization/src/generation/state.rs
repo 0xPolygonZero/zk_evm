@@ -5,6 +5,7 @@ use anyhow::{anyhow, bail};
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
+use log::Level;
 use plonky2::field::types::Field;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
@@ -297,6 +298,11 @@ pub(crate) struct GenerationState<F: Field> {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 }
 
+pub(crate) trait StateLog {
+    fn log_log(level: Level, msg: &str);
+    fn log_debug(msg: &str);
+}
+
 impl<F: Field> GenerationState<F> {
     fn preinitialize_mpts(&mut self, trie_inputs: &TrieInputs) -> TrieRootPtrs {
         let (trie_roots_ptrs, trie_data) =
@@ -497,7 +503,10 @@ impl<F: Field> State<F> for GenerationState<F> {
         vec![KERNEL.global_labels["halt"]]
     }
 
-    fn try_perform_instruction(&mut self) -> Result<Operation, ProgramError> {
+    fn try_perform_instruction(&mut self) -> Result<Operation, ProgramError>
+    where
+        Self: StateLog,
+    {
         let registers = self.registers;
         let (mut row, opcode) = self.base_row();
 
@@ -506,7 +515,7 @@ impl<F: Field> State<F> for GenerationState<F> {
         if registers.is_kernel {
             log_kernel_instruction(self, op);
         } else {
-            log::debug!("User instruction: {:?}", op);
+            Self::log_debug(&format!("User instruction: {:?}", op));
         }
         fill_op_flag(op, &mut row);
 
@@ -586,6 +595,16 @@ impl<F: Field> Transition<F> for GenerationState<F> {
         self.registers.check_overflow = false;
 
         Ok(())
+    }
+}
+
+impl<F: Field> StateLog for GenerationState<F> {
+    fn log_log(level: Level, msg: &str) {
+        log::log!(level, "{}", msg);
+    }
+
+    fn log_debug(msg: &str) {
+        log::debug!("{}", msg);
     }
 }
 

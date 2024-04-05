@@ -10,7 +10,7 @@ use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::state::{GenerationState, State};
+use crate::generation::state::{GenerationState, State, StateLog};
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
@@ -260,7 +260,10 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
     }
 }
 
-pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: Operation) {
+pub(crate) fn log_kernel_instruction<F: Field, S: State<F> + StateLog>(
+    state: &mut S,
+    op: Operation,
+) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     if !log_enabled!(log::Level::Debug) {
         return;
@@ -276,14 +279,16 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     } else {
         log::Level::Trace
     };
-    log::log!(
+    S::log_log(
         level,
-        "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
-        state.get_clock(),
-        state.get_context(),
-        KERNEL.offset_name(pc),
-        op,
-        state.get_generation_state().stack(),
+        &format!(
+            "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
+            state.get_clock(),
+            state.get_context(),
+            KERNEL.offset_name(pc),
+            op,
+            state.get_generation_state().stack()
+        ),
     );
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
@@ -304,7 +309,7 @@ pub(crate) trait Transition<F: Field>: State<F> {
         row: CpuColumnsView<F>,
     ) -> Result<Operation, ProgramError>
     where
-        Self: Sized,
+        Self: Sized + StateLog,
     {
         self.perform_op(op, opcode, row)?;
         self.incr_pc(match op {
@@ -465,13 +470,13 @@ pub(crate) trait Transition<F: Field>: State<F> {
         row: CpuColumnsView<F>,
     ) -> Result<(), ProgramError>
     where
-        Self: Sized,
+        Self: Sized + StateLog,
     {
         let op = self.skip_if_necessary(op)?;
 
         #[cfg(debug_assertions)]
         if !self.get_registers().is_kernel {
-            log::debug!(
+            Self::log_debug(&format!(
                 "User instruction {:?}, stack = {:?}, ctx = {}",
                 op,
                 {
@@ -480,7 +485,7 @@ pub(crate) trait Transition<F: Field>: State<F> {
                     stack
                 },
                 self.get_registers().context
-            );
+            ));
         }
 
         match op {

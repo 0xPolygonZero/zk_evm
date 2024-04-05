@@ -16,6 +16,7 @@ use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
+use crate::generation::state::{State, StateLog};
 use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
@@ -132,7 +133,7 @@ pub(crate) fn generate_ternary_arithmetic_op<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_keccak_general<F: Field, T: Transition<F>>(
+pub(crate) fn generate_keccak_general<F: Field, T: Transition<F> + StateLog>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -152,7 +153,7 @@ pub(crate) fn generate_keccak_general<F: Field, T: Transition<F>>(
             val.low_u32() as u8
         })
         .collect_vec();
-    log::debug!("Hashing {:?}", input);
+    T::log_debug(&format!("Hashing {:?}", input));
 
     let hash = keccak(&input);
     push_no_write(generation_state, hash.into_uint());
@@ -621,7 +622,7 @@ pub(crate) fn generate_shr<F: Field, T: Transition<F>>(
     append_shift(state, row, false, input0, input1, log_in1, result)
 }
 
-pub(crate) fn generate_syscall<F: Field, T: Transition<F>>(
+pub(crate) fn generate_syscall<F: Field, T: Transition<F> + StateLog>(
     opcode: u8,
     stack_values_read: usize,
     stack_len_increased: bool,
@@ -702,7 +703,10 @@ pub(crate) fn generate_syscall<F: Field, T: Transition<F>>(
 
     push_with_write(state, &mut row, syscall_info)?;
 
-    log::debug!("Syscall to {}", KERNEL.offset_name(new_program_counter));
+    T::log_debug(&format!(
+        "Syscall to {}",
+        KERNEL.offset_name(new_program_counter)
+    ));
     byte_packing_log(state, base_address, bytes);
 
     state.push_arithmetic(range_check_op);
@@ -729,7 +733,7 @@ pub(crate) fn generate_eq<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_exit_kernel<F: Field, T: Transition<F>>(
+pub(crate) fn generate_exit_kernel<F: Field, T: Transition<F> + StateLog>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -748,11 +752,10 @@ pub(crate) fn generate_exit_kernel<F: Field, T: Transition<F>>(
     generation_state.registers.program_counter = program_counter;
     generation_state.registers.is_kernel = is_kernel_mode;
     generation_state.registers.gas_used = gas_used_val;
-    log::debug!(
+    T::log_debug(&format!(
         "Exiting to {}, is_kernel={}",
-        program_counter,
-        is_kernel_mode
-    );
+        program_counter, is_kernel_mode,
+    ));
 
     state.push_cpu(row);
 
