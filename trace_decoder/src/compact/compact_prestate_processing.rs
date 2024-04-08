@@ -19,10 +19,14 @@ use mpt_trie::{
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-use super::compact_to_partial_trie::{
-    create_mpt_trie_from_remaining_witness_elem, create_smt_trie_from_remaining_witness_elem,
-    create_storage_mpt_partial_trie_from_compact_node, SmtStateTrieExtractionOutput,
-    StateTrieExtractionOutput, UnexpectedCompactNodeType,
+use super::{
+    compact_to_mpt_trie::{
+        create_mpt_trie_from_remaining_witness_elem, create_storage_mpt_trie_from_compact_node,
+        StateTrieExtractionOutput, UnexpectedCompactNodeType,
+    },
+    compact_to_smt_trie::{
+        create_smt_trie_from_remaining_witness_elem, SmtStateTrieExtractionOutput,
+    },
 };
 use crate::{
     decoding::TrieType,
@@ -821,8 +825,7 @@ impl ParserState {
     ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         match Self::try_get_storage_root_node(node) {
             Some(storage_root_node) => {
-                let s_trie_out =
-                    create_storage_mpt_partial_trie_from_compact_node(storage_root_node)?;
+                let s_trie_out = create_storage_mpt_trie_from_compact_node(storage_root_node)?;
                 Ok((n, account_node_code, Some(s_trie_out.trie)))
             }
             None => Self::invalid_witness_err(n, TraverserDirection::Backwards, traverser),
@@ -1745,7 +1748,7 @@ mod tests {
         compact_prestate_processing::ParserState,
         complex_test_payloads::{
             TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
-            TEST_PAYLOAD_6, TEST_PAYLOAD_7,
+            TEST_PAYLOAD_6, TEST_PAYLOAD_7, TEST_PAYLOAD_8,
         },
     };
 
@@ -1849,5 +1852,11 @@ mod tests {
     fn complex_payload_7() {
         init();
         TEST_PAYLOAD_7.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_8() {
+        init();
+        TEST_PAYLOAD_8.parse_and_check_hash_matches_with_debug_smt();
     }
 }

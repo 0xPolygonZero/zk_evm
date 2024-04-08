@@ -6,7 +6,7 @@ use ethereum_types::{Address, H256, U256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
-use crate::compact::compact_to_partial_trie::StateTrieExtractionOutput;
+use crate::compact::compact_to_mpt_trie::StateTrieExtractionOutput;
 use crate::decoding_mpt::{MptTraceParsingResult, TxnMetaState};
 use crate::processed_block_trace::ProcessedBlockTrace;
 use crate::protocol_processing::{

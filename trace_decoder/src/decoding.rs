@@ -27,7 +27,7 @@ use crate::{
     processed_block_trace_mpt::{NodesUsedByTxn, ProcessedSectionTxnInfo, StateTrieWrites},
     types::{
         HashedAccountAddr, HashedNodeAddr, HashedStorageAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TriePathIter, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
+        OtherBlockData, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
         ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, optional_field, optional_field_hex, update_val_if_some},
