@@ -43,6 +43,31 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
+  test_smt_trie:
+    name: Test smt_trie
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Test in smt_trie subdirectory
+        run: cargo test --manifest-path smt_trie/Cargo.toml
+        env:
+          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
+          RUST_LOG: 1
+          CARGO_INCREMENTAL: 1
+          RUST_BACKTRACE: 1
+
   test_trace_decoder:
     name: Test trace_decoder
     runs-on: ubuntu-latest
