@@ -169,9 +169,10 @@ fn test_add11_yml() {
         },
     };
 
+    let initial_offset = KERNEL.global_labels["main"];
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(0, initial_stack, inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
 
     let route_txn_label = KERNEL.global_labels["main"];
     // Switch context and initialize memory with the data we need for the tests.
@@ -326,9 +327,10 @@ hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ff
         },
     };
 
+    let initial_offset = KERNEL.global_labels["main"];
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(0, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, tries_inputs);
 
     let route_txn_label = KERNEL.global_labels["main"];
     // Switch context and initialize memory with the data we need for the tests.
