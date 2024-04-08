@@ -1019,8 +1019,6 @@ mod tests {
 
         let hash = poseidon_hash_padded_byte_vec(input);
 
-        // TODO: Without the maps it says: "can't compare `GoldilocksField` with
-        // `plonky2_field::goldilocks_field::GoldilocksField`""
         assert_eq!(
             output
                 .iter()
