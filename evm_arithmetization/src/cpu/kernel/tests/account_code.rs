@@ -96,7 +96,7 @@ fn prepare_interpreter<F: RichField>(
     let k = nibbles_64(U256::from_big_endian(
         keccak(address.to_fixed_bytes()).as_bytes(),
     ));
-    // Next, execute mpt_insert_state_trie.
+    // Next, execute smt_insert_state.
     let trie_data = interpreter.get_trie_data_mut();
     if trie_data.is_empty() {
         // In the assembly we skip over 0, knowing trie_data[0] = 0 by default.
@@ -136,7 +136,7 @@ fn prepare_interpreter<F: RichField>(
         );
     }
 
-    // Now, execute mpt_hash_state_trie.
+    // Now, execute smt_hash_state.
     interpreter.generation_state.registers.program_counter = smt_hash_state;
     interpreter
         .push(0xDEADBEEFu32.into())
