@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 pub(crate) const SEGMENT_SCALING_FACTOR: usize = 32;
 
 /// This contains all the existing memory segments. The values in the enum are
@@ -5,7 +7,7 @@ pub(crate) const SEGMENT_SCALING_FACTOR: usize = 32;
 /// segment / virtual) bundling in the kernel.
 #[allow(dead_code)]
 #[allow(clippy::enum_clike_unportable_variant)]
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub(crate) enum Segment {
     /// Contains EVM bytecode.
     // The Kernel has optimizations relying on the Code segment being 0.

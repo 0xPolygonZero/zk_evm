@@ -42,7 +42,7 @@ impl From<String> for ProofGenError {
 }
 
 /// Generates a transaction proof from some IR data.
-pub fn generate_segment_proof(
+pub fn generate_txn_proof(
     p_state: &ProverState,
     gen_inputs: TxnProofGenIR,
     segment_data: &mut GenerationSegmentData,
@@ -56,7 +56,6 @@ pub fn generate_segment_proof(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
             gen_inputs,
-            32,
             segment_data,
             &mut TimingTree::default(),
             abort_signal,
@@ -96,27 +95,22 @@ pub fn generate_agg_proof(
 /// Note that the child proofs may be either transaction or aggregation proofs.
 pub fn generate_transaction_agg_proof(
     p_state: &ProverState,
-    prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
+    prev_opt_parent_b_proof: Option<&GeneratedAggProof>,
     curr_block_agg_proof: &GeneratedAggProof,
-) -> ProofGenResult<GeneratedBlockProof> {
-    let b_height = curr_block_agg_proof
-        .p_vals
-        .block_metadata
-        .block_number
-        .low_u64();
+) -> ProofGenResult<GeneratedAggProof> {
     let parent_intern = prev_opt_parent_b_proof.map(|p| &p.intern);
 
-    let (b_proof_intern, _) = p_state
+    let (b_proof_intern, p_vals) = p_state
         .state
-        .prove_block(
+        .prove_transaction_aggregation(
             parent_intern,
             &curr_block_agg_proof.intern,
             curr_block_agg_proof.p_vals.clone(),
         )
         .map_err(|err| err.to_string())?;
 
-    Ok(GeneratedBlockProof {
-        b_height,
+    Ok(GeneratedAggProof {
+        p_vals,
         intern: b_proof_intern,
     })
 }

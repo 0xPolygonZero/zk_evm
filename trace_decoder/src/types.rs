@@ -2,6 +2,7 @@ use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::{
     generation::GenerationInputs,
     proof::{BlockHashes, BlockMetadata},
+    prover::GenerationSegmentData,
 };
 use mpt_trie::{nibbles::Nibbles, partial_trie::HashedPartialTrie};
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,9 @@ pub(crate) type TriePathIter = mpt_trie::special_query::TriePathIter<HashedParti
 
 /// A function which turns a code hash into bytes.
 pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;
+
+/// All data needed to prove all transaction segments.
+pub type AllData = (GenerationInputs, GenerationSegmentData);
 
 // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 pub(crate) const EMPTY_CODE_HASH: H256 = H256([

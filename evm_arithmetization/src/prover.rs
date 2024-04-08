@@ -20,6 +20,7 @@ use plonky2::iop::challenger::Challenger;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
 use starky::evaluation_frame::StarkEvaluationFrame;
@@ -42,7 +43,7 @@ use crate::witness::memory::{MemoryAddress, MemoryState};
 use crate::witness::state::RegistersState;
 
 /// Structure holding the data needed to initialize a segment.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct GenerationSegmentData {
     /// Registers at the start of the segment execution.
     pub(crate) registers_before: RegistersState,
