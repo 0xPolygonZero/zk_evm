@@ -3,6 +3,8 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
+use smt_trie::code::{poseidon_hash_padded_byte_vec, poseidon_pad_byte_vec};
+use smt_trie::utils::hashout2u;
 
 use super::transition::Transition;
 use super::util::{
@@ -18,7 +20,9 @@ use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::memory::segments::Segment;
-use crate::poseidon::poseidon_stark::PoseidonOp;
+use crate::memory::NUM_CHANNELS;
+use crate::poseidon::columns::POSEIDON_SPONGE_RATE;
+use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonSimpleOp};
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
 use crate::witness::errors::ProgramError;
@@ -41,6 +45,7 @@ pub(crate) enum Operation {
     TernaryArithmetic(arithmetic::TernaryOperator),
     KeccakGeneral,
     Poseidon,
+    PoseidonGeneral,
     ProverInput,
     Pop,
     Jump,
@@ -188,10 +193,58 @@ pub(crate) fn generate_poseidon<F: RichField, T: Transition<F>>(
     log::debug!("Poseidon hashing {:?} -> {}", arr, hash);
     push_no_write(generation_state, hash);
 
-    state.push_poseidon(PoseidonOp(arr));
+    state.push_poseidon(PoseidonOp::PoseidonSimpleOp(PoseidonSimpleOp(arr)));
 
     state.push_memory(log_in1);
     state.push_memory(log_in2);
+    state.push_cpu(row);
+    Ok(())
+}
+
+pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
+    state: &mut T,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    let clock = state.get_clock();
+    let generation_state = state.get_mut_generation_state();
+    let [(addr, _), (len, log_in1)] =
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+    let len = u256_to_usize(len)?;
+
+    let base_address = MemoryAddress::new_bundle(addr)?;
+    let mut input = (0..len)
+        .map(|i| {
+            let address = MemoryAddress {
+                virt: base_address.virt.saturating_add(i),
+                ..base_address
+            };
+            let val = generation_state.memory.get_with_init(address);
+            generation_state.traces.memory_ops.push(MemoryOp::new(
+                MemoryChannel::Code,
+                clock,
+                address,
+                MemoryOpKind::Read,
+                val.0[0].into(),
+            ));
+
+            val.0[0] as u8
+        })
+        .collect_vec();
+
+    let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
+        base_address,
+        timestamp: clock * NUM_CHANNELS,
+        input: input.clone(),
+        len: input.len(),
+    });
+
+    let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
+
+    push_no_write(generation_state, hash);
+
+    state.push_poseidon(poseidon_op);
+
+    state.push_memory(log_in1);
     state.push_cpu(row);
     Ok(())
 }

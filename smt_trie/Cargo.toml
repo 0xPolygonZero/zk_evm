@@ -26,7 +26,7 @@ num-traits = "0.2.15"
 uint = "0.9.5"
 rlp = { workspace = true }
 parking_lot = { version = "0.12.1", features = ["serde"] }
-plonky2 = { git = "https://github.com/0xPolygonZero/plonky2", rev = "c1728d4e43e9ff434f9297e4f6171ddf28ec8fca" }
+plonky2 = "0.2.1"
 rand = "0.8.5"
 serde = { workspace = true, features = ["derive", "rc"] }
 

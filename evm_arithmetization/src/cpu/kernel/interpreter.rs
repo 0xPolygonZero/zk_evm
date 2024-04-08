@@ -4,14 +4,17 @@ use core::cmp::Ordering;
 use core::ops::Range;
 use std::collections::{BTreeSet, HashMap};
 
-use anyhow::anyhow;
-use ethereum_types::{BigEndianHash, U256};
+use anyhow::{anyhow, bail};
+use ethereum_types::{BigEndianHash, H160, H256, U256, U512};
+use itertools::Itertools;
+use keccak_hash::keccak;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::poseidon::Poseidon;
 use serde::Serialize;
+use smt_trie::code::poseidon_hash_padded_byte_vec;
 use smt_trie::smt::{hash_serialize, hash_serialize_u256};
 use smt_trie::utils::hashout2u;
 
@@ -46,7 +49,7 @@ use crate::{arithmetic, keccak, logic};
 /// Halt interpreter execution whenever a jump to this offset is done.
 const DEFAULT_HALT_OFFSET: usize = 0xdeadbeef;
 
-pub(crate) struct Interpreter<F: Field> {
+pub(crate) struct Interpreter<F: Field + RichField> {
     /// The interpreter holds a `GenerationState` to keep track of the memory
     /// and registers.
     pub(crate) generation_state: GenerationState<F>,

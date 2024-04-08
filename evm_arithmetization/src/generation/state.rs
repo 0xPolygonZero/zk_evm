@@ -271,7 +271,7 @@ pub(crate) trait State<F: RichField> {
 }
 
 #[derive(Debug)]
-pub(crate) struct GenerationState<F: Field> {
+pub(crate) struct GenerationState<F: RichField> {
     pub(crate) inputs: GenerationInputs,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,

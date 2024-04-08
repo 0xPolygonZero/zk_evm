@@ -59,7 +59,7 @@ asmtools = ["hex"]
 parallel = [
     "plonky2/parallel",
     "plonky2_maybe_rayon/parallel",
-    "starky/parallel"
+    "starky/parallel",
 ]
 
 [[bin]]

@@ -1,5 +1,7 @@
 use ethereum_types::U256;
+use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
+use plonky2::hash::poseidon::Poseidon;
 
 use super::memory::DUMMY_MEMOP;
 use super::transition::Transition;
@@ -13,6 +15,7 @@ use crate::keccak_sponge::columns::{KECCAK_RATE_BYTES, KECCAK_WIDTH_BYTES};
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::logic;
 use crate::memory::segments::Segment;
+use crate::poseidon::columns::{POSEIDON_SPONGE_RATE, POSEIDON_SPONGE_WIDTH};
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind};
 

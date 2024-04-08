@@ -4,7 +4,7 @@ members = [
     "mpt_trie",
     "proof_gen",
     "smt_trie",
-    "trace_decoder"
+    "trace_decoder",
 ]
 resolver = "2"
 

@@ -32,7 +32,7 @@ const OPCODES: [(u8, usize, bool, usize); 6] = [
     // manually here, and partly through the Arithmetic table CTL. FP254 operation flags are
     // handled partly manually here, and partly through the Arithmetic table CTL.
     (0x14, 1, false, COL_MAP.op.eq_iszero),
-    (0x22, 0, true, COL_MAP.op.poseidon),
+    (0x22, 1, true, COL_MAP.op.poseidon),
     // AND, OR and XOR flags are handled partly manually here, and partly through the Logic table
     // CTL. NOT and POP are handled manually here.
     // SHL and SHR flags are handled partly manually here, and partly through the Logic table CTL.
