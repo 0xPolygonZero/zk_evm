@@ -1,3 +1,5 @@
+// TODO: Rename (or split) module as it's no longer just dealing specifically
+// just with `HashedPartialTries`...
 //! Logic to convert the decoded compact into a `mpt_trie`
 //! [`HashedPartialTrie`]. This is the final stage in the decoding process.
 

@@ -229,6 +229,8 @@ impl From<Instruction> for WitnessEntry {
     }
 }
 
+// TODO: It's probably better to use two separate types for both mpt and smt
+// nodes. Not urgent, but this is probably best for QoL...
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum NodeEntry {
     Branch([Option<Box<NodeEntry>>; 16]),
@@ -250,10 +252,7 @@ impl Display for NodeEntry {
             NodeEntry::Empty => write!(f, "Empty"),
             NodeEntry::Hash(_) => write!(f, "Hash"),
             NodeEntry::Leaf(_, _) => write!(f, "Leaf"),
-            NodeEntry::Extension(_, _) => {
-                println!("------------ eeeee");
-                write!(f, "Extension")
-            }
+            NodeEntry::Extension(_, _) => write!(f, "Extension"),
             NodeEntry::SMTLeaf(_, _, _, _) => write!(f, "SMTLeaf"),
         }
     }
@@ -469,9 +468,12 @@ impl ParserState {
 
         // TODO: Consider moving this into the `Self`...
         let mut storage_tries = HashMap::new();
+        self.apply_rules_to_witness_entries_smt(&mut storage_tries, &mut entry_buf);
 
         let node_entry =
             self.apply_rules_to_witness_entries_smt(&mut storage_tries, &mut entry_buf);
+        // when nothing */     // except the header is
+        // storage_tries);
 
         let res = match self.entries.len() {
             1 => create_smt_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
