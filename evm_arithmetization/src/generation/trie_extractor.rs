@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use ethereum_types::{BigEndianHash, H256, U256, U512};
-use mpt_trie::nibbles::Nibbles;
+use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode};
 
 use super::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
@@ -47,7 +47,7 @@ pub(crate) fn read_trie<V>(
     let mut res = HashMap::new();
     let empty_nibbles = Nibbles {
         count: 0,
-        packed: U512::zero(),
+        packed: NibblesIntern::zero(),
     };
     read_trie_helper::<V>(memory, ptr, read_value, empty_nibbles, &mut res)?;
     Ok(res)
@@ -260,7 +260,7 @@ pub(crate) fn get_trie<N: PartialTrie>(
 ) -> Result<N, ProgramError> {
     let empty_nibbles = Nibbles {
         count: 0,
-        packed: U512::zero(),
+        packed: NibblesIntern::zero(),
     };
     Ok(N::new(get_trie_helper(
         memory,

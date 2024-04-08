@@ -3,12 +3,12 @@ use std::{
     iter::{once, repeat},
 };
 
-use ethereum_types::{H256, U256, U512};
+use ethereum_types::{H256, U256};
 use log::info;
 use rand::{rngs::StdRng, seq::IteratorRandom, Rng, RngCore, SeedableRng};
 
 use crate::{
-    nibbles::Nibbles,
+    nibbles::{Nibbles, NibblesIntern},
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     trie_ops::{TrieOpResult, ValOrHash},
     utils::is_even,
@@ -29,7 +29,7 @@ type TestInsertEntry<T> = (Nibbles, T);
 // Don't want this exposed publicly, but it is useful for testing.
 impl From<i32> for Nibbles {
     fn from(k: i32) -> Self {
-        let packed = U512::from(k);
+        let packed = NibblesIntern::from(k);
 
         Self {
             count: Self::get_num_nibbles_in_key(&packed),

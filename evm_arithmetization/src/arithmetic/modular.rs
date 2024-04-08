@@ -307,7 +307,7 @@ pub(crate) fn generate_modular_op<F: PrimeField64>(
         let (lo, hi) = quot_limbs.split_at_mut(N_LIMBS);
 
         // Verify that the elements are in the expected range.
-        debug_assert!(lo.iter().all(|&c| c <= u16::max_value() as i64));
+        debug_assert!(lo.iter().all(|&c| c <= u16::MAX as i64));
 
         // Top half of quot_limbs should be zero.
         debug_assert!(hi.iter().all(|&d| d.is_zero()));
@@ -318,7 +318,7 @@ pub(crate) fn generate_modular_op<F: PrimeField64>(
             // it's in the range [0, 2^16 - 1] which will correctly
             // range-check.
             for c in lo {
-                *c += u16::max_value() as i64;
+                *c += u16::MAX as i64;
             }
             // Store the sign of the quotient after the quotient.
             hi[0] = 1;
@@ -522,7 +522,7 @@ pub(crate) fn submod_constr_poly<P: PackedField>(
     let sign = hi[0];
     // sign must be 1 (negative) or 0 (positive)
     yield_constr.constraint(filter * sign * (sign - P::ONES));
-    let offset = P::Scalar::from_canonical_u16(u16::max_value());
+    let offset = P::Scalar::from_canonical_u16(u16::MAX);
     for c in lo {
         *c -= offset * sign;
     }
@@ -723,7 +723,7 @@ pub(crate) fn submod_constr_poly_ext_circuit<F: RichField + Extendable<D>, const
     let t = builder.mul_extension(filter, t);
     // sign must be 1 (negative) or 0 (positive)
     yield_constr.constraint(builder, t);
-    let offset = F::from_canonical_u16(u16::max_value());
+    let offset = F::from_canonical_u16(u16::MAX);
     for c in lo {
         let t = builder.mul_const_extension(offset, sign);
         *c = builder.sub_extension(*c, t);

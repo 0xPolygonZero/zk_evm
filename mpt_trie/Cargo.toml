@@ -1,7 +1,7 @@
 [package]
 name = "mpt_trie"
 description = "Types and utility functions for building/working with partial Ethereum tries."
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
 readme = "README.md"
 edition.workspace = true
@@ -27,6 +27,10 @@ num-traits = "0.2.15"
 uint = "0.9.5"
 rlp = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
+impl-rlp = "0.3.0"
+impl-codec = "0.6.0"
+impl-serde = "0.4.0"
+impl-num-traits = "0.1.2"
 
 [dev-dependencies]
 eth_trie = "0.4.0"
