@@ -1,11 +1,8 @@
 [package]
 name = "evm_arithmetization"
 description = "Implementation of STARKs for the Ethereum Virtual Machine"
-version = "0.1.2"
-authors = [
-    "Daniel Lubarov <daniel@lubarov.com>",
-    "William Borgeaud <williamborgeaud@gmail.com>",
-]
+version = "0.1.3"
+authors = ["Daniel Lubarov <daniel@lubarov.com>", "William Borgeaud <williamborgeaud@gmail.com>"]
 readme = "README.md"
 categories = ["cryptography"]
 edition.workspace = true
@@ -44,7 +41,7 @@ tiny-keccak = "2.0.2"
 serde_json = { workspace = true }
 
 # Local dependencies
-mpt_trie = { version = "0.2.0", path = "../mpt_trie" }
+mpt_trie = { version = "0.2.1", path = "../mpt_trie" }
 smt_trie = { version = "0.1.0", path = "../smt_trie" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
