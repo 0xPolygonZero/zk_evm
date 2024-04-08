@@ -20,20 +20,20 @@ ethereum-types = { workspace = true }
 hex = { workspace = true }
 hex-literal = { workspace = true }
 keccak-hash = { workspace = true }
-thiserror = "1.0.40"
 log = { workspace = true }
-num-traits = "0.2.15"
-uint = "0.9.5"
+num-traits = { workspace = true }
+parking_lot = { workspace = true, features = ["serde"] }
+plonky2 = { workspace = true }
+rand = { workspace = true }
 rlp = { workspace = true }
-parking_lot = { version = "0.12.1", features = ["serde"] }
-plonky2 = "0.2.1"
-rand = "0.8.5"
 serde = { workspace = true, features = ["derive", "rc"] }
+thiserror = { workspace = true }
+uint = { workspace = true }
 
 
 [dev-dependencies]
-eth_trie = "0.1.0"
-pretty_env_logger = "0.4.0"
+eth_trie = "0.4.0"
+pretty_env_logger = "0.5.0"
 rlp-derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = "1.0.96"
+serde_json = { workspace = true }
