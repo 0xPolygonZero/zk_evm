@@ -93,9 +93,10 @@ where
     /// The segment aggregation circuit, which verifies that two segment proofs
     /// that can either be root or aggregation proofs.
     pub segment_aggregation: AggregationCircuitData<F, C, D>,
-    /// The transaction aggregation circuit, which verifies a transaction proof
-    /// and an optional previous transaction proof.
-    pub txn_aggregation: BlockCircuitData<F, C, D>,
+    /// The transaction aggregation circuit, which verifies the aggregation of
+    /// two proofs that can either be a transaction or an aggregation of
+    /// transactions. and an optional previous transaction proof.
+    pub txn_aggregation: AggregationCircuitData<F, C, D>,
     /// The block circuit, which verifies an aggregation root proof and an
     /// optional previous block proof.
     pub block: BlockCircuitData<F, C, D>,
@@ -405,8 +406,11 @@ where
             gate_serializer,
             generator_serializer,
         )?;
-        let txn_aggregation =
-            BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
+        let txn_aggregation = AggregationCircuitData::from_buffer(
+            &mut buffer,
+            gate_serializer,
+            generator_serializer,
+        )?;
         let block =
             BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
 
@@ -853,38 +857,29 @@ where
         }
     }
 
-    // We assume that transactions are always aggregated on the right.
     fn create_transaction_circuit(
         agg: &AggregationCircuitData<F, C, D>,
         stark_config: &StarkConfig,
-    ) -> BlockCircuitData<F, C, D> {
+    ) -> AggregationCircuitData<F, C, D> {
         // Create a circuit for the aggregation of two transactions.
-        let expected_common_data = CommonCircuitData {
-            fri_params: FriParams {
-                degree_bits: 14,
-                ..agg.circuit.common.fri_params.clone()
-            },
-            ..agg.circuit.common.clone()
-        };
 
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+        let cap_before_len = agg.public_values.mem_before.mem_cap.0.len();
 
-        let len_before = agg.public_values.mem_before.mem_cap.0.len();
-        let public_values = add_virtual_public_values(&mut builder, len_before);
-        let has_parent_block = builder.add_virtual_bool_target_safe();
-        let parent_txn_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
-        let agg_root_proof = builder.add_virtual_proof_with_pis(&agg.circuit.common);
+        let mut builder = CircuitBuilder::<F, D>::new(agg.circuit.common.config.clone());
+        let public_values = add_virtual_public_values(&mut builder, cap_before_len);
+        let cyclic_vk = builder.add_verifier_data_public_inputs();
 
-        let parent_pv =
-            PublicValuesTarget::from_public_inputs(&parent_txn_proof.public_inputs, len_before);
-        let agg_pv =
-            PublicValuesTarget::from_public_inputs(&agg_root_proof.public_inputs, len_before);
+        let parent_txn_proof = Self::add_txn_agg_child(&mut builder, agg);
+        let txn_proof = Self::add_txn_agg_child(&mut builder, agg);
+
+        let parent_pv = parent_txn_proof.public_values(&mut builder, cap_before_len);
+        let txn_pv = txn_proof.public_values(&mut builder, cap_before_len);
 
         // Connect all block hash values
         BlockHashesTarget::connect(
             &mut builder,
             public_values.block_hashes,
-            agg_pv.block_hashes,
+            txn_pv.block_hashes,
         );
         BlockHashesTarget::connect(
             &mut builder,
@@ -895,7 +890,7 @@ where
         BlockMetadataTarget::connect(
             &mut builder,
             public_values.block_metadata,
-            agg_pv.block_metadata,
+            txn_pv.block_metadata,
         );
         BlockMetadataTarget::connect(
             &mut builder,
@@ -906,13 +901,13 @@ where
         TrieRootsTarget::connect(
             &mut builder,
             public_values.trie_roots_after,
-            agg_pv.trie_roots_after,
+            txn_pv.trie_roots_after,
         );
         // Connect lhs `trie_roots_after` with rhs `trie_roots_before`.
         TrieRootsTarget::connect(
             &mut builder,
             parent_pv.trie_roots_after,
-            agg_pv.trie_roots_before,
+            txn_pv.trie_roots_before,
         );
         // Connect lhs `trie_roots_before` with public values `trie_roots_before`.
         TrieRootsTarget::connect(
@@ -924,46 +919,39 @@ where
             &mut builder,
             &public_values.extra_block_data,
             &parent_pv.extra_block_data,
-            &agg_pv.extra_block_data,
+            &txn_pv.extra_block_data,
         );
 
         // We check the registers before and after for the current aggregation.
         RegistersDataTarget::connect(
             &mut builder,
             public_values.registers_after.clone(),
-            agg_pv.registers_after.clone(),
+            txn_pv.registers_after.clone(),
         );
 
         RegistersDataTarget::connect(
             &mut builder,
             public_values.registers_before.clone(),
-            agg_pv.registers_before.clone(),
+            txn_pv.registers_before.clone(),
         );
 
         // Check the initial and final register values.
         Self::connect_initial_final_segment(&mut builder, &public_values);
+        Self::connect_initial_final_segment(&mut builder, &parent_pv);
 
         // Check the initial `MemBefore` `MerklCap` value.
-        Self::check_init_merkle_cap(&mut builder, &agg_pv, stark_config);
+        Self::check_init_merkle_cap(&mut builder, &txn_pv, stark_config);
+        Self::check_init_merkle_cap(&mut builder, &parent_pv, stark_config);
 
-        let cyclic_vk = builder.add_verifier_data_public_inputs();
-        builder
-            .conditionally_verify_cyclic_proof_or_dummy::<C>(
-                has_parent_block,
-                &parent_txn_proof,
-                &expected_common_data,
-            )
-            .expect("Failed to build cyclic recursion circuit");
-
-        let agg_verifier_data = builder.constant_verifier_data(&agg.circuit.verifier_only);
-        builder.verify_proof::<C>(&agg_root_proof, &agg_verifier_data, &agg.circuit.common);
+        while log2_ceil(builder.num_gates()) < agg.circuit.common.degree_bits() {
+            builder.add_gate(NoopGate, vec![]);
+        }
 
         let circuit = builder.build::<C>();
-        BlockCircuitData {
+        AggregationCircuitData {
             circuit,
-            has_parent_block,
-            parent_block_proof: parent_txn_proof,
-            agg_root_proof,
+            lhs: parent_txn_proof,
+            rhs: txn_proof,
             public_values,
             cyclic_vk,
         }
@@ -1053,7 +1041,7 @@ where
         builder.connect(x.registers_before.program_counter, main_label);
     }
 
-    fn create_block_circuit(agg: &BlockCircuitData<F, C, D>) -> BlockCircuitData<F, C, D> {
+    fn create_block_circuit(agg: &AggregationCircuitData<F, C, D>) -> BlockCircuitData<F, C, D> {
         // Here, we have two block proofs and we aggregate them together.
         // The block circuit is similar to the agg circuit; both verify two inner
         // proofs.
@@ -1185,6 +1173,31 @@ where
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg, &agg_proof, &evm_proof, &root_vk, common,
+            )
+            .expect("Failed to build cyclic recursion circuit");
+        AggregationChildTarget {
+            is_agg,
+            agg_proof,
+            evm_proof,
+        }
+    }
+
+    fn add_txn_agg_child(
+        builder: &mut CircuitBuilder<F, D>,
+        agg: &AggregationCircuitData<F, C, D>,
+    ) -> AggregationChildTarget<D> {
+        let common = &agg.circuit.common;
+        let inner_agg_vk = builder.constant_verifier_data(&agg.circuit.verifier_only);
+        let is_agg = builder.add_virtual_bool_target_safe();
+        let agg_proof = builder.add_virtual_proof_with_pis(common);
+        let evm_proof = builder.add_virtual_proof_with_pis(common);
+        builder
+            .conditionally_verify_cyclic_proof::<C>(
+                is_agg,
+                &agg_proof,
+                &evm_proof,
+                &inner_agg_vk,
+                common,
             )
             .expect("Failed to build cyclic recursion circuit");
         AggregationChildTarget {
@@ -1667,226 +1680,36 @@ where
     /// for a verifier to assert correctness of the computation.
     pub fn prove_transaction_aggregation(
         &self,
-        opt_parent_txn_proof: Option<&ProofWithPublicInputs<F, C, D>>,
-        agg_segment_proof: &ProofWithPublicInputs<F, C, D>,
-        public_values: PublicValues,
+        lhs_is_agg: bool,
+        lhs_proof: &ProofWithPublicInputs<F, C, D>,
+        lhs_public_values: PublicValues,
+        rhs_is_agg: bool,
+        rhs_proof: &ProofWithPublicInputs<F, C, D>,
+        rhs_public_values: PublicValues,
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
         let mut txn_inputs = PartialWitness::new();
 
-        txn_inputs.set_bool_target(
-            self.txn_aggregation.has_parent_block,
-            opt_parent_txn_proof.is_some(),
-        );
-        if let Some(parent_txn_proof) = opt_parent_txn_proof {
-            txn_inputs.set_proof_with_pis_target(
-                &self.txn_aggregation.parent_block_proof,
-                parent_txn_proof,
-            );
-        } else {
-            // Initialize some public inputs for a correct connection between the first
-            // transaction and the current one.
-            let mut nonzero_pis = HashMap::new();
+        txn_inputs.set_bool_target(self.txn_aggregation.lhs.is_agg, lhs_is_agg);
+        txn_inputs.set_proof_with_pis_target(&self.txn_aggregation.lhs.agg_proof, lhs_proof);
+        txn_inputs.set_proof_with_pis_target(&self.txn_aggregation.lhs.evm_proof, lhs_proof);
 
-            // Initialize checkpoint state trie.
-            let checkpoint_state_trie_keys =
-                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + 8;
-            for (key, &value) in checkpoint_state_trie_keys.zip_eq(&h256_limbs::<F>(
-                public_values.extra_block_data.checkpoint_state_trie_root,
-            )) {
-                nonzero_pis.insert(key, value);
-            }
-
-            // Initialize the block metadata for a correct connection between the first
-            // transaction and the current one.
-            let block_metadata_keys = TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + 5;
-            for (key, value) in block_metadata_keys.zip_eq(
-                u256_limbs::<F>(U256::from_big_endian(
-                    &public_values.block_metadata.block_beneficiary.0,
-                ))[..5]
-                    .to_vec(),
-            ) {
-                nonzero_pis.insert(key, value);
-            }
-            let block_timestamp_key = TrieRootsTarget::SIZE * 2 + 5;
-            nonzero_pis.insert(
-                block_timestamp_key,
-                F::from_canonical_u64(public_values.block_metadata.block_timestamp.as_u64()),
-            );
-            let block_number_key = block_timestamp_key + 1;
-            nonzero_pis.insert(
-                block_number_key,
-                F::from_canonical_u64(public_values.block_metadata.block_number.as_u64()),
-            );
-            let block_difficulty_key = block_number_key + 1;
-            nonzero_pis.insert(
-                block_difficulty_key,
-                F::from_canonical_u64(public_values.block_metadata.block_difficulty.as_u64()),
-            );
-            let block_random_keys = block_difficulty_key + 1..block_difficulty_key + 9;
-            for (key, &value) in
-                block_random_keys.zip_eq(&h256_limbs(public_values.block_metadata.block_random))
-            {
-                nonzero_pis.insert(key, value);
-            }
-            let block_gaslimit_key = block_difficulty_key + 9;
-            nonzero_pis.insert(
-                block_gaslimit_key,
-                F::from_canonical_u64(public_values.block_metadata.block_gaslimit.as_u64()),
-            );
-            let block_chain_id_key = block_gaslimit_key + 1;
-            nonzero_pis.insert(
-                block_chain_id_key,
-                F::from_canonical_u64(public_values.block_metadata.block_chain_id.as_u64()),
-            );
-            let block_basefee_key_low = block_chain_id_key + 1;
-            nonzero_pis.insert(
-                block_basefee_key_low,
-                F::from_canonical_u64(public_values.block_metadata.block_base_fee.low_u32() as u64),
-            );
-            let block_basefee_key_hi = block_basefee_key_low + 1;
-            nonzero_pis.insert(
-                block_basefee_key_hi,
-                F::from_canonical_u64(
-                    (public_values.block_metadata.block_base_fee >> 32).low_u32() as u64,
-                ),
-            );
-            let block_gas_used_key = block_basefee_key_hi + 1;
-            nonzero_pis.insert(
-                block_gas_used_key,
-                F::from_canonical_u64(public_values.block_metadata.block_gas_used.as_u64()),
-            );
-            let init_block_bloom = block_gas_used_key + 1;
-            for i in 0..8 {
-                let block_bloom_keys = init_block_bloom + i * 8..init_block_bloom + (i + 1) * 8;
-                for (key, &value) in block_bloom_keys
-                    .zip_eq(&u256_limbs(public_values.block_metadata.block_bloom[i]))
-                {
-                    nonzero_pis.insert(key, value);
-                }
-            }
-
-            // Initialize the block hashes. They are all the same within the same block.
-            let block_hashes_keys = TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    - 8;
-
-            for i in 0..public_values.block_hashes.prev_hashes.len() {
-                let targets = h256_limbs::<F>(public_values.block_hashes.prev_hashes[i]);
-                for j in 0..8 {
-                    nonzero_pis.insert(block_hashes_keys.start + 8 * i + j, targets[j]);
-                }
-            }
-            let block_hashes_current_start =
-                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE - 8;
-            let cur_targets = h256_limbs::<F>(public_values.block_hashes.cur_hash);
-            for i in 0..8 {
-                nonzero_pis.insert(block_hashes_current_start + i, cur_targets[i]);
-            }
-
-            // Initialize the first transaction roots before, and state root after.
-            // At the start of the block, the transaction and receipt roots are empty.
-            let state_trie_root_before_keys = 0..TrieRootsTarget::HASH_SIZE;
-            for (key, &value) in state_trie_root_before_keys
-                .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
-            {
-                nonzero_pis.insert(key, value);
-            }
-
-            let initial_trie = HashedPartialTrie::from(Node::Empty).hash();
-
-            let txn_trie_root_before_keys =
-                TrieRootsTarget::HASH_SIZE..TrieRootsTarget::HASH_SIZE * 2;
-            for (key, &value) in txn_trie_root_before_keys
-                .clone()
-                .zip_eq(&h256_limbs::<F>(initial_trie))
-            {
-                nonzero_pis.insert(key, value);
-            }
-            let receipts_trie_root_before_keys =
-                TrieRootsTarget::HASH_SIZE * 2..TrieRootsTarget::HASH_SIZE * 3;
-            for (key, &value) in receipts_trie_root_before_keys
-                .clone()
-                .zip_eq(&h256_limbs::<F>(initial_trie))
-            {
-                nonzero_pis.insert(key, value);
-            }
-            let state_trie_root_after_keys =
-                TrieRootsTarget::SIZE..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE;
-            for (key, &value) in state_trie_root_after_keys
-                .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
-            {
-                nonzero_pis.insert(key, value);
-            }
-
-            let txn_trie_root_after_keys = TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE
-                ..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE * 2;
-            for (key, &value) in txn_trie_root_after_keys
-                .clone()
-                .zip_eq(&h256_limbs::<F>(initial_trie))
-            {
-                nonzero_pis.insert(key, value);
-            }
-            let receipts_trie_root_after_keys = TrieRootsTarget::SIZE
-                + TrieRootsTarget::HASH_SIZE * 2
-                ..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE * 3;
-            for (key, &value) in receipts_trie_root_after_keys
-                .clone()
-                .zip_eq(&h256_limbs::<F>(initial_trie))
-            {
-                nonzero_pis.insert(key, value);
-            }
-
-            txn_inputs.set_proof_with_pis_target(
-                &self.txn_aggregation.parent_block_proof,
-                &cyclic_base_proof(
-                    &self.txn_aggregation.circuit.common,
-                    &self.txn_aggregation.circuit.verifier_only,
-                    nonzero_pis,
-                ),
-            );
-        }
-
-        txn_inputs
-            .set_proof_with_pis_target(&self.txn_aggregation.agg_root_proof, agg_segment_proof);
+        txn_inputs.set_bool_target(self.txn_aggregation.rhs.is_agg, rhs_is_agg);
+        txn_inputs.set_proof_with_pis_target(&self.txn_aggregation.rhs.agg_proof, rhs_proof);
+        txn_inputs.set_proof_with_pis_target(&self.txn_aggregation.rhs.evm_proof, rhs_proof);
 
         txn_inputs.set_verifier_data_target(
             &self.txn_aggregation.cyclic_vk,
-            &self.txn_aggregation.circuit.verifier_only,
+            &self.segment_aggregation.circuit.verifier_only,
         );
 
-        // This is basically identical to this block public values, apart from the
-        // `trie_roots_before`, the `txn_number_before` and the
-        // `gas_used_before`, that may come from the previous proof, if any.
-        let txn_number_before_key =
-            TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE + 8;
-        let gas_used_before_key =
-            TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE + 10;
         let txn_public_values = PublicValues {
-            trie_roots_before: opt_parent_txn_proof
-                .map(|p| TrieRoots::from_public_inputs(&p.public_inputs[0..TrieRootsTarget::SIZE]))
-                .unwrap_or(public_values.trie_roots_before),
+            trie_roots_before: lhs_public_values.trie_roots_before,
             extra_block_data: ExtraBlockData {
-                txn_number_before: opt_parent_txn_proof
-                    .map(|p| {
-                        p.public_inputs[txn_number_before_key]
-                            .to_canonical_u64()
-                            .into()
-                    })
-                    .unwrap_or(public_values.extra_block_data.txn_number_before),
-                gas_used_before: opt_parent_txn_proof
-                    .map(|p| {
-                        p.public_inputs[gas_used_before_key]
-                            .to_canonical_u64()
-                            .into()
-                    })
-                    .unwrap_or(public_values.extra_block_data.gas_used_before),
-                ..public_values.extra_block_data
+                txn_number_before: lhs_public_values.extra_block_data.txn_number_before,
+                gas_used_before: lhs_public_values.extra_block_data.gas_used_before,
+                ..rhs_public_values.extra_block_data
             },
-            ..public_values
+            ..rhs_public_values
         };
 
         set_public_value_targets(

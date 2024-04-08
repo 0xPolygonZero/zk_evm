@@ -95,17 +95,18 @@ pub fn generate_agg_proof(
 /// Note that the child proofs may be either transaction or aggregation proofs.
 pub fn generate_transaction_agg_proof(
     p_state: &ProverState,
-    prev_opt_parent_b_proof: Option<&GeneratedAggProof>,
-    curr_block_agg_proof: &GeneratedAggProof,
+    lhs_child: &AggregatableProof,
+    rhs_child: &AggregatableProof,
 ) -> ProofGenResult<GeneratedAggProof> {
-    let parent_intern = prev_opt_parent_b_proof.map(|p| &p.intern);
-
     let (b_proof_intern, p_vals) = p_state
         .state
         .prove_transaction_aggregation(
-            parent_intern,
-            &curr_block_agg_proof.intern,
-            curr_block_agg_proof.p_vals.clone(),
+            lhs_child.is_agg(),
+            lhs_child.intern(),
+            lhs_child.public_values(),
+            rhs_child.is_agg(),
+            rhs_child.intern(),
+            rhs_child.public_values(),
         )
         .map_err(|err| err.to_string())?;
 

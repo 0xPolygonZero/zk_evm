@@ -217,7 +217,7 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
     let all_segment_proofs = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
-        inputs,
+        inputs.clone(),
         max_cpu_len_log,
         &mut timing,
         None,
@@ -253,8 +253,55 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
     )?;
     all_circuits.verify_segment_aggregation(&second_aggreg_proof)?;
 
-    let (txn_aggreg_proof, _) =
-        all_circuits.prove_transaction_aggregation(None, &second_aggreg_proof, second_aggreg_pv)?;
+    let trie_roots_before = TrieRoots {
+        state_root: inputs.tries.state_trie.hash(),
+        transactions_root: inputs.tries.transactions_trie.hash(),
+        receipts_root: inputs.tries.receipts_trie.hash(),
+    };
+
+    let dummy_inputs = GenerationInputs {
+        txn_number_before: 0.into(),
+        gas_used_before: inputs.gas_used_before,
+        gas_used_after: inputs.gas_used_before,
+        signed_txn: None,
+        withdrawals: vec![],
+        tries: inputs.tries,
+        trie_roots_after: trie_roots_before,
+        checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
+        contract_code: inputs.contract_code,
+        block_metadata: inputs.block_metadata,
+        block_hashes: inputs.block_hashes,
+    };
+
+    let max_cpu_len_log = 13;
+
+    let dummy_segs = all_circuits.prove_all_segments(
+        &all_stark,
+        &config,
+        dummy_inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
+
+    assert_eq!(dummy_segs.len(), 2);
+
+    let dummy_aggreg = all_circuits.prove_segment_aggregation(
+        false,
+        &dummy_segs[0].proof_with_pis,
+        dummy_segs[0].public_values.clone(),
+        false,
+        &dummy_segs[1].proof_with_pis,
+        dummy_segs[1].public_values.clone(),
+    )?;
+    let (txn_aggreg_proof, _) = all_circuits.prove_transaction_aggregation(
+        false,
+        &dummy_aggreg.0,
+        dummy_aggreg.1,
+        false,
+        &second_aggreg_proof,
+        second_aggreg_pv,
+    )?;
     all_circuits.verify_txn_aggregation(&txn_aggreg_proof)
 }
 
