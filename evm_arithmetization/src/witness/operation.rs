@@ -29,7 +29,7 @@ use crate::witness::errors::ProgramError;
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryOp, MemoryOpKind};
 use crate::witness::operation::MemoryChannel::GeneralPurpose;
 use crate::witness::util::{
-    compute_poseidon, keccak_sponge_log, mem_read_gp_with_log_and_fill, mem_write_gp_log_and_fill,
+    keccak_sponge_log, mem_read_gp_with_log_and_fill, mem_write_gp_log_and_fill,
     stack_pop_with_log_and_fill,
 };
 use crate::{arithmetic, logic};
@@ -230,8 +230,6 @@ pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
             val.0[0] as u8
         })
         .collect_vec();
-
-    // poseidon_pad_byte_vec(&mut input);
 
     let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
         base_address,

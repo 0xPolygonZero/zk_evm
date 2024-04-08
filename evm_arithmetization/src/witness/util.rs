@@ -346,19 +346,6 @@ pub(crate) fn keccak_sponge_log<F: RichField, T: Transition<F>>(
     });
 }
 
-pub(crate) fn compute_poseidon<F: RichField>(input: Vec<F>) -> [F; 4] {
-    let mut state = [F::ZERO; POSEIDON_SPONGE_WIDTH];
-    assert_eq!(input.len() % POSEIDON_SPONGE_RATE, 0);
-    let input_blocks = input.chunks_exact(POSEIDON_SPONGE_RATE);
-    for block in input_blocks {
-        for i in 0..POSEIDON_SPONGE_RATE {
-            state[i] = F::from_canonical_u64(block[i].to_canonical_u64());
-        }
-        state = <F as Poseidon>::poseidon(state);
-    }
-    state[0..4].try_into().unwrap()
-}
-
 pub(crate) fn byte_packing_log<F: RichField, T: Transition<F>>(
     state: &mut T,
     base_address: MemoryAddress,
