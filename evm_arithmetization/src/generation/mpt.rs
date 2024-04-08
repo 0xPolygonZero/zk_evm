@@ -34,6 +34,16 @@ pub struct TrieRootPtrs {
     pub receipt_root_ptr: usize,
 }
 
+impl Default for TrieRootPtrs {
+    fn default() -> Self {
+        Self {
+            state_root_ptr: 2,
+            txn_root_ptr: 0,
+            receipt_root_ptr: 0,
+        }
+    }
+}
+
 impl Default for AccountRlp {
     fn default() -> Self {
         Self {

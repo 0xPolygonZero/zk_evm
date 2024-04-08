@@ -307,6 +307,10 @@ pub(crate) struct GenerationState<F: RichField> {
 
 impl<F: RichField> GenerationState<F> {
     fn preinitialize_mpts(&mut self, trie_inputs: &TrieInputs) -> TrieRootPtrs {
+        if trie_inputs.state_smt == TrieInputs::default().state_smt {
+            return TrieRootPtrs::default();
+        }
+
         let (trie_roots_ptrs, trie_data) =
             load_all_mpts(trie_inputs).expect("Invalid MPT data for preinitialization");
 
