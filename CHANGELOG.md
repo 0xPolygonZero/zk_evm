@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Remove interpreter-specific preinialization logic from State trait ([#139](https://github.com/0xPolygonZero/zk_evm/pull/139))
+- Make some more functions constant ([#154](https://github.com/0xPolygonZero/zk_evm/pull/154))
 
 ## [0.3.0] - 2024-04-03
 
