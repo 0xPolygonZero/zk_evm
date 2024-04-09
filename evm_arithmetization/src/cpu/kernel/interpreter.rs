@@ -705,7 +705,7 @@ impl<F: Field> Interpreter<F> {
         self.generation_state.registers.stack_len
     }
 
-    pub(crate) fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
+    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
         if self.stack_len() > 0 {
             Ok(self.generation_state.registers.stack_top)
         } else {
