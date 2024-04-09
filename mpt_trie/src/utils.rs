@@ -206,7 +206,7 @@ impl Display for TrieSegment {
 
 impl TrieSegment {
     /// Get the node type of the [`TrieSegment`].
-    pub fn node_type(&self) -> TrieNodeType {
+    pub const fn node_type(&self) -> TrieNodeType {
         match self {
             TrieSegment::Empty => TrieNodeType::Empty,
             TrieSegment::Hash => TrieNodeType::Hash,
