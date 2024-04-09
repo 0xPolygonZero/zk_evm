@@ -57,7 +57,7 @@ macro_rules! define_set_circuit_size_method {
         paste! {
             /// Specifies a range of degrees to be supported for this STARK
             /// table's associated recursive circuits.
-            pub fn [<set_ $name _circuit_size>](mut self, size: Range<usize>) -> Self {
+            pub const fn [<set_ $name _circuit_size>](mut self, size: Range<usize>) -> Self {
                 self.[<$name _circuit_size>] = size;
                 self
             }
