@@ -122,8 +122,9 @@ pub enum CompactParsingError {
     KeyError(#[from] FromHexPrefixError),
 }
 
+///
 #[derive(Debug)]
-pub(crate) struct CursorBytesErrorInfo {
+pub struct CursorBytesErrorInfo {
     error_start_pos: usize,
     bad_bytes_hex: String,
 }
@@ -167,9 +168,12 @@ enum Opcode {
     EmptyRoot = 0x06,
 }
 
+///
 #[derive(Clone, Debug, EnumAsInner)]
-pub(crate) enum WitnessEntry {
+pub enum WitnessEntry {
+    ///
     Instruction(Instruction),
+    ///
     Node(NodeEntry),
 }
 
@@ -182,15 +186,23 @@ impl Display for WitnessEntry {
     }
 }
 
+///
 // TODO: Ignore `NEW_TRIE` for now...
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum Instruction {
+pub enum Instruction {
+    ///
     Leaf(Nibbles, RawValue),
+    ///
     Extension(Nibbles),
+    ///
     Branch(BranchMask),
+    ///
     Hash(HashValue),
+    ///
     Code(RawCode),
+    ///
     AccountLeaf(Nibbles, Nonce, Balance, HasCode, HasStorage),
+    ///
     EmptyRoot,
 }
 
@@ -220,13 +232,20 @@ impl From<Instruction> for WitnessEntry {
     }
 }
 
+///
 #[derive(Clone, Debug)]
-pub(crate) enum NodeEntry {
+pub enum NodeEntry {
+    ///
     Branch([Option<Box<NodeEntry>>; 16]),
+    ///
     Code(Vec<u8>),
+    ///
     Empty,
+    ///
     Hash(HashValue),
+    ///
     Leaf(Nibbles, LeafNodeData),
+    ///
     Extension(Nibbles, Box<NodeEntry>),
 }
 
@@ -243,8 +262,9 @@ impl Display for NodeEntry {
     }
 }
 
+///
 #[derive(Clone, Debug)]
-pub(super) struct ValueNodeData(pub(super) Vec<u8>);
+pub struct ValueNodeData(pub(super) Vec<u8>);
 
 impl From<Vec<u8>> for ValueNodeData {
     fn from(v: Vec<u8>) -> Self {
@@ -252,9 +272,12 @@ impl From<Vec<u8>> for ValueNodeData {
     }
 }
 
+///
 #[derive(Clone, Debug)]
-pub(super) enum LeafNodeData {
+pub enum LeafNodeData {
+    ///
     Value(ValueNodeData),
+    ///
     Account(AccountNodeData),
 }
 
@@ -276,8 +299,9 @@ impl From<TrieRootHash> for AccountNodeCode {
     }
 }
 
+///
 #[derive(Clone, Debug)]
-pub(super) struct AccountNodeData {
+pub struct AccountNodeData {
     pub(super) nonce: Nonce,
     pub(super) balance: Balance,
     pub(super) storage_trie: Option<HashedPartialTrie>,
@@ -300,8 +324,9 @@ impl AccountNodeData {
     }
 }
 
+///
 #[derive(Debug)]
-pub(crate) struct Header {
+pub struct Header {
     version: u8,
 }
 
@@ -625,19 +650,19 @@ impl ParserState {
         traverser: &mut CollapsableWitnessEntryTraverser,
     ) -> CompactParsingResult<T> {
         let adjacent_elems_buf = match t_dir {
-            TraverserDirection::Forwards => traverser.get_next_n_elems(n).cloned().collect(),
+            // TraverserDirection::Forwards => traverser.get_next_n_elems(n).cloned().collect(),
             TraverserDirection::Backwards => traverser.get_prev_n_elems(n).cloned().collect(),
-            TraverserDirection::Both => {
-                let prev_elems = traverser.get_prev_n_elems(n);
-                let next_elems_including_curr = traverser.get_next_n_elems(n + 1);
-                let prev_elems_vec: Vec<_> = prev_elems.collect();
+            // TraverserDirection::Both => {
+            //     let prev_elems = traverser.get_prev_n_elems(n);
+            //     let next_elems_including_curr = traverser.get_next_n_elems(n + 1);
+            //     let prev_elems_vec: Vec<_> = prev_elems.collect();
 
-                prev_elems_vec
-                    .into_iter()
-                    .chain(next_elems_including_curr)
-                    .cloned()
-                    .collect()
-            }
+            //     prev_elems_vec
+            //         .into_iter()
+            //         .chain(next_elems_including_curr)
+            //         .cloned()
+            //         .collect()
+            // }
         };
 
         Err(CompactParsingError::InvalidWitnessFormat(
@@ -1226,9 +1251,9 @@ fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&NodeEn
 
 #[derive(Debug)]
 enum TraverserDirection {
-    Forwards,
+    // Forwards,
     Backwards,
-    Both,
+    // Both,
 }
 
 #[derive(Debug, Default)]
@@ -1283,24 +1308,6 @@ fn process_compact_prestate_common(
     };
 
     Ok(out)
-}
-
-// TODO: Move behind a feature flag just used for debugging (but probably not
-// `debug`)...
-fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
-    let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
-    let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
-
-    Ok(entries
-        .intern
-        .into_iter()
-        .map(|entry| match entry {
-            WitnessEntry::Instruction(instr) => instr,
-            _ => unreachable!(
-                "Found a non-instruction at a stage when we should only have instructions!"
-            ),
-        })
-        .collect())
 }
 
 // Using struct to make printing this nicer easier.
@@ -1432,7 +1439,10 @@ fn get_bytes_from_cursor<C: CompactCursor>(cursor: &mut C, cursor_start_pos: u64
 mod tests {
     use mpt_trie::nibbles::Nibbles;
 
-    use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
+    use super::{
+        key_bytes_to_nibbles, CompactParsingResult, DebugCompactCursor, Instruction, WitnessBytes,
+        WitnessEntry,
+    };
     use crate::compact::{
         compact_prestate_processing::ParserState,
         complex_test_payloads::{
@@ -1454,6 +1464,24 @@ mod tests {
 
     fn h_decode(b_str: &str) -> Vec<u8> {
         hex::decode(b_str).unwrap()
+    }
+
+    // TODO: Move behind a feature flag just used for debugging (but probably not
+    // `debug`)...
+    fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
+        let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
+        let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
+
+        Ok(entries
+            .intern
+            .into_iter()
+            .map(|entry| match entry {
+                WitnessEntry::Instruction(instr) => instr,
+                _ => unreachable!(
+                    "Found a non-instruction at a stage when we should only have instructions!"
+                ),
+            })
+            .collect())
     }
 
     // TODO: Refactor (or remove?) this test as it will crash when it tries to
