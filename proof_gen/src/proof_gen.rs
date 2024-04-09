@@ -3,15 +3,16 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{AllStark, StarkConfig};
+use evm_arithmetization::{AllStark, GenerationInputs, StarkConfig};
 use plonky2::{
     gates::noop::NoopGate,
     iop::witness::PartialWitness,
     plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
     util::timing::TimingTree,
 };
-use trace_decoder::types::TxnProofGenIR;
 
+// TODO: bring back import from trace_decoder once SMT logic is implemented
+// use trace_decoder::types::TxnProofGenIR;
 use crate::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
     prover_state::ProverState,
@@ -44,7 +45,9 @@ impl From<String> for ProofGenError {
 /// Generates a transaction proof from some IR data.
 pub fn generate_txn_proof(
     p_state: &ProverState,
-    gen_inputs: TxnProofGenIR,
+    // gen_inputs: TxnProofGenIR, // TODO: bring back import from trace_decoder once SMT logic is
+    // implemented
+    gen_inputs: GenerationInputs,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {
     let (intern, p_vals) = p_state
