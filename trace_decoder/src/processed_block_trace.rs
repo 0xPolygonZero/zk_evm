@@ -202,7 +202,7 @@ where
 {
     /// Returns a `ProcessingMeta` given the provided code hash resolving
     /// function.
-    pub fn new(resolve_code_hash_fn: F) -> Self {
+    pub const fn new(resolve_code_hash_fn: F) -> Self {
         Self {
             resolve_code_hash_fn,
         }
