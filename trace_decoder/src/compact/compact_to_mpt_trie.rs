@@ -45,7 +45,7 @@ trait CompactToPartialTrieExtractionOutput {
                 // TODO: Seriously update `mpt_trie` to have a better API...
                 let mut new_k = curr_key;
                 new_k.push_nibble_back(i as Nibble);
-                create_partial_trie_from_compact_node_rec(new_k, child, self)?;
+                create_mpt_trie_from_compact_node_rec(new_k, child, self)?;
             }
         }
 
@@ -86,7 +86,7 @@ trait CompactToPartialTrieExtractionOutput {
         ext_child: &NodeEntry,
     ) -> CompactParsingResult<()> {
         let new_k = curr_key.merge_nibbles(ext_node_key);
-        create_partial_trie_from_compact_node_rec(new_k, ext_child, self)?;
+        create_mpt_trie_from_compact_node_rec(new_k, ext_child, self)?;
 
         Ok(())
     }
@@ -216,28 +216,28 @@ pub(super) fn create_mpt_trie_from_remaining_witness_elem(
         .into_node()
         .expect("Final node in compact entries was not a node! This is a bug!");
 
-    create_partial_trie_from_compact_node(remaining_node)
+    create_mpt_trie_from_compact_node(remaining_node)
 }
 
 pub(super) fn create_storage_mpt_trie_from_compact_node(
     node: NodeEntry,
 ) -> CompactParsingResult<StorageTrieExtractionOutput> {
-    create_partial_trie_from_compact_node(node)
+    create_mpt_trie_from_compact_node(node)
 }
 
-fn create_partial_trie_from_compact_node<T>(node: NodeEntry) -> CompactParsingResult<T>
+fn create_mpt_trie_from_compact_node<T>(node: NodeEntry) -> CompactParsingResult<T>
 where
     T: CompactToPartialTrieExtractionOutput + Default,
 {
     let mut output = T::default();
-    create_partial_trie_from_compact_node_rec(Nibbles::default(), &node, &mut output)?;
+    create_mpt_trie_from_compact_node_rec(Nibbles::default(), &node, &mut output)?;
 
     Ok(output)
 }
 
 // TODO: Consider putting in some asserts that invalid nodes are not appearing
 // in the wrong trie type (eg. account )
-fn create_partial_trie_from_compact_node_rec<T>(
+fn create_mpt_trie_from_compact_node_rec<T>(
     curr_key: Nibbles,
     curr_node: &NodeEntry,
     output: &mut T,
@@ -254,7 +254,7 @@ where
         NodeEntry::Hash(h) => output.process_hash(curr_key, *h),
         NodeEntry::Leaf(k, v) => output.process_leaf(curr_key, k, v),
         NodeEntry::Extension(k, c) => output.process_extension(curr_key, k, c),
-        _ => unreachable!(), // TODO: Make this a result...
+        _ => unreachable!(), // TODO: Remove once we split NodeEntry into two types...
     }
 }
 

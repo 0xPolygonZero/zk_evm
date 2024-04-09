@@ -10,6 +10,7 @@ use std::{
 };
 
 use enum_as_inner::EnumAsInner;
+use enumn::N;
 use ethereum_types::{H256, U256};
 use log::{info, trace};
 use mpt_trie::{
@@ -51,7 +52,7 @@ type RawCode = Vec<u8>;
 
 type NodeType = u8;
 type Address = Vec<u8>;
-type Storage = Vec<u8>;
+type Slot = Vec<u8>;
 type Value = Vec<u8>;
 
 const MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE: usize = 3;
@@ -203,7 +204,7 @@ enum Instruction {
     Code(RawCode),
     AccountLeaf(Nibbles, Nonce, Balance, HasCode, HasStorage),
     EmptyRoot,
-    SMTLeaf(NodeType, Address, Storage, Value),
+    SMTLeaf(NodeType, Address, Slot, Value),
 }
 
 impl Display for Instruction {
@@ -233,6 +234,15 @@ impl From<Instruction> for WitnessEntry {
     }
 }
 
+#[derive(Copy, Clone, Debug, N, PartialEq)]
+pub(crate) enum SmtNodeType {
+    Balance = 0,
+    Nonce = 1,
+    Code = 2,
+    Storage = 3,
+    CodeLength = 4,
+}
+
 // TODO: It's probably better to use two separate types for both mpt and smt
 // nodes. Not urgent, but this is probably best for QoL...
 #[derive(Clone, Debug, PartialEq)]
@@ -244,7 +254,7 @@ pub(crate) enum NodeEntry {
     Hash(HashValue),
     Leaf(Nibbles, LeafNodeData),
     Extension(Nibbles, Box<NodeEntry>),
-    SMTLeaf(NodeType, Address, Storage, Value),
+    SMTLeaf(SmtNodeType, Address, Slot, Value),
 }
 
 impl Display for NodeEntry {
@@ -669,9 +679,19 @@ impl ParserState {
                 // println!("branch_nodes {:?}", branch_nodes);
                 NodeEntry::BranchSMT(branch_nodes)
             }
-            WitnessEntry::Instruction(Instruction::SMTLeaf(node_type, address, storage, value)) => {
-                NodeEntry::SMTLeaf(node_type, address, storage, value)
-            }
+
+            // TODO: Move out into separate module...
+            WitnessEntry::Instruction(Instruction::SMTLeaf(
+                node_type_byte,
+                address,
+                storage,
+                value,
+            )) => NodeEntry::SMTLeaf(
+                SmtNodeType::n(node_type_byte).unwrap(),
+                address,
+                storage,
+                value,
+            ),
             _ => NodeEntry::Empty,
         }
     }
