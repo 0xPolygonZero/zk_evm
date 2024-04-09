@@ -34,7 +34,7 @@ impl Display for TrieStats {
 
 impl TrieStats {
     /// Compares with the statistics of another trie.
-    pub fn compare(&self, other: &Self) -> TrieComparison {
+    pub const fn compare(&self, other: &Self) -> TrieComparison {
         TrieComparison {
             node_comp: self.counts.compare(&other.counts),
             depth_comp: self.depth_stats.compare(&other.depth_stats),
@@ -77,19 +77,19 @@ impl NodeCounts {
 }
 
 impl NodeCounts {
-    fn total_nodes(&self) -> usize {
+    const fn total_nodes(&self) -> usize {
         self.empty + self.total_node_non_empty()
     }
 
-    fn total_node_non_empty(&self) -> usize {
+    const fn total_node_non_empty(&self) -> usize {
         self.branch + self.extension + self.hash_and_leaf_node_count()
     }
 
-    fn hash_and_leaf_node_count(&self) -> usize {
+    const fn hash_and_leaf_node_count(&self) -> usize {
         self.hash + self.leaf
     }
 
-    fn compare(&self, other: &Self) -> NodeComparison {
+    const fn compare(&self, other: &Self) -> NodeComparison {
         NodeComparison {
             tot_node_rat: RatioStat::new(self.total_nodes(), other.total_nodes()),
             non_empty_rat: RatioStat::new(
@@ -184,7 +184,7 @@ impl<T: Display + ToPrimitive> Display for RatioStat<T> {
 impl<T: ToPrimitive> RatioStat<T> {
     /// `new` doesn't have any logic, but this will reduce a lot of line lengths
     /// since this is called so many times.
-    fn new(a: T, b: T) -> Self {
+    const fn new(a: T, b: T) -> Self {
         Self { a, b }
     }
 
@@ -234,7 +234,7 @@ impl Display for DepthStats {
 }
 
 impl DepthStats {
-    fn compare(&self, other: &Self) -> DepthComparison {
+    const fn compare(&self, other: &Self) -> DepthComparison {
         DepthComparison {
             lowest_depth_rat: RatioStat::new(self.lowest_depth, other.lowest_depth),
             avg_leaf_depth_rat: RatioStat::new(self.avg_leaf_depth, other.avg_leaf_depth),

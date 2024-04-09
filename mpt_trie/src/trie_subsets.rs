@@ -163,7 +163,7 @@ struct TrackedNodeInfo<N: PartialTrie> {
 }
 
 impl<N: PartialTrie> TrackedNodeInfo<N> {
-    fn new(underlying_node: N) -> Self {
+    const fn new(underlying_node: N) -> Self {
         Self {
             underlying_node,
             touched: false,

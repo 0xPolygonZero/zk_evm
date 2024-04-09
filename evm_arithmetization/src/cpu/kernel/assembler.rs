@@ -60,7 +60,7 @@ impl Kernel {
     }
 
     /// Outputs the Kernel code hash.
-    pub fn hash(&self) -> H256 {
+    pub const fn hash(&self) -> H256 {
         self.code_hash
     }
 

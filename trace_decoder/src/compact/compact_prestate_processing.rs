@@ -285,7 +285,7 @@ pub(super) struct AccountNodeData {
 }
 
 impl AccountNodeData {
-    fn new(
+    const fn new(
         nonce: Nonce,
         balance: Balance,
         storage_trie: Option<HashedPartialTrie>,
@@ -312,7 +312,7 @@ impl Display for Header {
 }
 
 impl Header {
-    pub(crate) fn version_is_compatible(&self, target_ver: u8) -> bool {
+    pub(crate) const fn version_is_compatible(&self, target_ver: u8) -> bool {
         self.version == target_ver
     }
 }
@@ -527,14 +527,14 @@ impl ParserState {
     }
 
     // ... Because we can't do `[None; 16]` without implementing `Copy`.
-    fn create_empty_branch_node_entry() -> [Option<Box<NodeEntry>>; 16] {
+    const fn create_empty_branch_node_entry() -> [Option<Box<NodeEntry>>; 16] {
         [
             None, None, None, None, None, None, None, None, None, None, None, None, None, None,
             None, None,
         ]
     }
 
-    fn match_account_leaf_no_code_and_no_storage(
+    const fn match_account_leaf_no_code_and_no_storage(
     ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         Ok((1, None, None))
     }
@@ -1214,7 +1214,7 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
     }
 }
 
-fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&NodeEntry> {
+const fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&NodeEntry> {
     match entry {
         WitnessEntry::Node(n_entry) => Some(n_entry),
         _ => None,

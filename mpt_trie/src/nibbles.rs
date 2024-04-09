@@ -579,7 +579,7 @@ impl Nibbles {
         self.packed = (self.packed & truncate_mask) >> shift_amt;
     }
 
-    fn get_min_truncate_amount_to_prevent_over_truncating(&self, n: usize) -> usize {
+    const fn get_min_truncate_amount_to_prevent_over_truncating(&self, n: usize) -> usize {
         match self.count >= n {
             false => self.count,
             true => n,
@@ -588,7 +588,7 @@ impl Nibbles {
 
     /// Returns whether or not this `Nibbles` contains actual nibbles. (If
     /// `count` is set to `0`)
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.count == 0
     }
 
@@ -861,7 +861,7 @@ impl Nibbles {
     }
 
     /// Returns the minimum number of bytes needed to represent these `Nibbles`.
-    pub fn min_bytes(&self) -> usize {
+    pub const fn min_bytes(&self) -> usize {
         (self.count + 1) / 2
     }
 
@@ -895,7 +895,7 @@ impl Nibbles {
         }
     }
 
-    fn nibble_append_safety_asserts(&self, n: Nibble) {
+    const fn nibble_append_safety_asserts(&self, n: Nibble) {
         assert!(
             self.count < 64,
             "{}",
@@ -904,7 +904,7 @@ impl Nibbles {
         assert!(n < 16, "{}", SINGLE_NIBBLE_APPEND_ASSERT_ERR_MSG);
     }
 
-    fn nibbles_append_safety_asserts(&self, new_count: usize) {
+    const fn nibbles_append_safety_asserts(&self, new_count: usize) {
         assert!(
             new_count <= 64,
             "{}",
