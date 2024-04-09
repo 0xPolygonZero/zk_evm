@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 
 use seahash::SeaHasher;
-use tracing::info;
+use tracing::{info, warn};
 
 use super::persistence::CIRCUITS_FOLDER;
 
@@ -61,11 +61,13 @@ where
                     // Hashes are the same, do nothing
                     return;
                 }
+            } else {
+                warn!("Unable to read circuits consistency hash file");
             }
 
             // Hashes differ or hash file cannot be read, delete the folder
             if fs::remove_dir_all(CIRCUITS_FOLDER).is_err() {
-                return; // Early return if unable to delete
+                panic!("Failed to delete circuits storage folder");
             }
         }
         Err(_) => {
@@ -82,5 +84,7 @@ where
             // Ignore errors in writing the hash
             let _ = hash_file.write_all(hash.to_string().as_bytes());
         }
+    } else {
+        panic!("Failed to create circuits storage folder");
     }
 }
