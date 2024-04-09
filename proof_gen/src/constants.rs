@@ -16,3 +16,5 @@ pub(crate) const DEFAULT_KECCAK_SPONGE_RANGE: Range<usize> = 9..25;
 pub(crate) const DEFAULT_LOGIC_RANGE: Range<usize> = 12..28;
 /// Default range to be used for the `MemoryStark` table.
 pub(crate) const DEFAULT_MEMORY_RANGE: Range<usize> = 17..30;
+/// Default range to be used for the `PoseidonStark` table.
+pub(crate) const DEFAULT_POSEIDON_RANGE: Range<usize> = 4..25;

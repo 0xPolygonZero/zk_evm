@@ -17,5 +17,5 @@ plonky2 = { workspace = true }
 serde = { workspace = true }
 
 # Local dependencies
-trace_decoder = "0.2.0"
-evm_arithmetization = "0.1.2" # TODO: adapt with type2 and bring back paths
+trace_decoder = "0.2.0" # TODO: adapt with type2 and bring back paths
+evm_arithmetization = { version = "0.1.3", path = "../evm_arithmetization" }
