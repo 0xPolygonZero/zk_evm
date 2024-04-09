@@ -29,7 +29,7 @@ use crate::{
         OtherBlockData, TriePathIter, TrieRootHash, TxnIdx, TxnProofGenIR,
         EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
-    utils::{hash, update_val_if_some},
+    utils::{hash, update_val_if_some, write_optional},
 };
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
@@ -57,28 +57,17 @@ pub struct TraceParsingError {
 
 impl std::fmt::Display for TraceParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Error processing trace: {}", self.reason)?;
-
-        if let Some(block_num) = self.block_num {
-            write!(f, "\nBlock num: {}", block_num)?;
-        }
-        if let Some(block_chain_id) = self.block_chain_id {
-            write!(f, "\nBlock chain id: {}", block_chain_id)?;
-        }
-        if let Some(txn_idx) = self.txn_idx {
-            write!(f, "\nTxn idx: {}", txn_idx)?;
-        }
-        if let Some(addr) = self.addr {
-            write!(f, "\nAddress: {}", addr)?;
-        }
-        if let Some(h_addr) = self.h_addr {
-            write!(f, "\nHashed address: {}", h_addr)?;
-        }
+        writeln!(f, "Error processing trace: {}", self.reason)?;
+        write_optional(f, "Block num", self.block_num)?;
+        write_optional(f, "Block chain id", self.block_chain_id)?;
+        write_optional(f, "Txn idx", self.txn_idx)?;
+        write_optional(f, "Address", self.addr.as_ref())?;
+        write_optional(f, "Hashed address", self.h_addr.as_ref())?;
         if let Some(slot) = self.slot {
-            write!(f, "\nSlot: {:x}", slot)?;
+            writeln!(f, "Slot: {:x}", slot)?;
         }
         if let Some(slot_value) = self.slot_value {
-            write!(f, "\nSlot value: {:x}", slot_value)?;
+            writeln!(f, "Slot value: {:x}", slot_value)?;
         }
 
         Ok(())

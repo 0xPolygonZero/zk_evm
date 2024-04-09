@@ -57,3 +57,14 @@ pub(crate) fn h_addr_nibs_to_h256(h_addr_nibs: &Nibbles) -> H256 {
 
     H256::from_slice(&nib_bytes)
 }
+
+pub(crate) fn write_optional<T: std::fmt::Display>(
+    f: &mut std::fmt::Formatter,
+    label: &str,
+    value: Option<T>,
+) -> std::fmt::Result {
+    if let Some(v) = value {
+        writeln!(f, "{}: {}", label, v)?;
+    }
+    Ok(())
+}
