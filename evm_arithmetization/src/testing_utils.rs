@@ -35,33 +35,37 @@ pub fn sh2u(s: &str) -> U256 {
 }
 
 /// Inserts a new pair `(slot, value)` into the provided storage trie.
-fn insert_storage(trie: &mut HashedPartialTrie, slot: U256, value: U256) {
+fn insert_storage(trie: &mut HashedPartialTrie, slot: U256, value: U256) -> anyhow::Result<()> {
     let mut bytes = [0; 32];
     slot.to_big_endian(&mut bytes);
     let key = keccak(bytes);
     let nibbles = Nibbles::from_bytes_be(key.as_bytes()).unwrap();
     if value.is_zero() {
-        trie.delete(nibbles);
+        trie.delete(nibbles)?;
     } else {
         let r = rlp::encode(&value);
-        trie.insert(nibbles, r.freeze().to_vec());
+        trie.insert(nibbles, r.freeze().to_vec())?;
     }
+    Ok(())
 }
 
 /// Creates a storage trie for an account, given a list of `(slot, value)`
 /// pairs.
-pub fn create_account_storage(storage_pairs: &[(U256, U256)]) -> HashedPartialTrie {
+pub fn create_account_storage(storage_pairs: &[(U256, U256)]) -> anyhow::Result<HashedPartialTrie> {
     let mut trie = HashedPartialTrie::from(Node::Empty);
     for (slot, value) in storage_pairs {
-        insert_storage(&mut trie, *slot, *value);
+        insert_storage(&mut trie, *slot, *value)?;
     }
-    trie
+    Ok(trie)
 }
 
 /// Creates the storage trie of the beacon roots contract account at the
 /// provided timestamp. Not passing any parent root will consider the parent
 /// root at genesis, i.e. the empty hash.
-fn beacon_roots_contract_storage(timestamp: U256, parent_root: H256) -> HashedPartialTrie {
+fn beacon_roots_contract_storage(
+    timestamp: U256,
+    parent_root: H256,
+) -> anyhow::Result<HashedPartialTrie> {
     let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.1;
     let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.1;
 
@@ -74,12 +78,12 @@ pub fn update_beacon_roots_account_storage(
     storage_trie: &mut HashedPartialTrie,
     timestamp: U256,
     parent_root: H256,
-) {
+) -> anyhow::Result<()> {
     let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.1;
     let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.1;
 
-    insert_storage(storage_trie, timestamp_idx, timestamp);
-    insert_storage(storage_trie, root_idx, h2u(parent_root));
+    insert_storage(storage_trie, timestamp_idx, timestamp)?;
+    insert_storage(storage_trie, root_idx, h2u(parent_root))
 }
 
 /// Returns the beacon roots contract account from its provided storage trie.
@@ -93,16 +97,16 @@ pub fn beacon_roots_contract_from_storage(storage_trie: &HashedPartialTrie) -> A
 /// Returns an initial state trie containing the beacon roots and global exit
 /// roots contracts, along with their storage tries.
 pub fn preinitialized_state_and_storage_tries(
-) -> (HashedPartialTrie, Vec<(H256, HashedPartialTrie)>) {
+) -> anyhow::Result<(HashedPartialTrie, Vec<(H256, HashedPartialTrie)>)> {
     let mut state_trie = HashedPartialTrie::from(Node::Empty);
     state_trie.insert(
         beacon_roots_account_nibbles(),
         rlp::encode(&BEACON_ROOTS_ACCOUNT).to_vec(),
-    );
+    )?;
     state_trie.insert(
         ger_account_nibbles(),
         rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-    );
+    )?;
 
     let storage_tries = vec![
         (
@@ -112,7 +116,7 @@ pub fn preinitialized_state_and_storage_tries(
         (H256(GLOBAL_EXIT_ROOT_ADDRESS_HASHED), Node::Empty.into()),
     ];
 
-    (state_trie, storage_tries)
+    Ok((state_trie, storage_tries))
 }
 
 /// Returns the `Nibbles` corresponding to the beacon roots contract account.
@@ -129,12 +133,12 @@ pub fn update_ger_account_storage(
     storage_trie: &mut HashedPartialTrie,
     root: H256,
     timestamp: U256,
-) {
+) -> anyhow::Result<()> {
     let mut arr = [0; 64];
     arr[0..32].copy_from_slice(&root.0);
     U256::from(GLOBAL_EXIT_ROOT_STORAGE_POS.1).to_big_endian(&mut arr[32..64]);
     let slot = keccak(arr);
-    insert_storage(storage_trie, slot.into_uint(), timestamp);
+    insert_storage(storage_trie, slot.into_uint(), timestamp)
 }
 
 pub fn ger_contract_from_storage(storage_trie: &HashedPartialTrie) -> AccountRlp {

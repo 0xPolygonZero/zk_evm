@@ -55,14 +55,21 @@ fn test_add11_yml() {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, mut storage_tries) =
+        preinitialized_state_and_storage_tries().unwrap();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    state_trie_before
+        .insert(
+            beneficiary_nibbles,
+            rlp::encode(&beneficiary_account_before).to_vec(),
+        )
+        .unwrap();
+    state_trie_before
+        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+        .unwrap();
+    state_trie_before
+        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+        .unwrap();
 
     storage_tries.push((to_hashed, Node::Empty.into()));
 
@@ -224,14 +231,21 @@ fn test_add11_yml_with_exception() {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, mut storage_tries) =
+        preinitialized_state_and_storage_tries().unwrap();
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    state_trie_before
+        .insert(
+            beneficiary_nibbles,
+            rlp::encode(&beneficiary_account_before).to_vec(),
+        )
+        .unwrap();
+    state_trie_before
+        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+        .unwrap();
+    state_trie_before
+        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+        .unwrap();
 
     storage_tries.push((to_hashed, Node::Empty.into()));
 

@@ -77,14 +77,14 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    )?;
+    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
+    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
     storage_tries.push((to_hashed, Node::Empty.into()));
 
@@ -144,7 +144,7 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
-        );
+        )?;
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
@@ -152,18 +152,18 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
         expected_state_trie_after.insert(
             beneficiary_nibbles,
             rlp::encode(&beneficiary_account_after).to_vec(),
-        );
+        )?;
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
         expected_state_trie_after.insert(
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
-        );
+        )?;
         expected_state_trie_after.insert(
             ger_account_nibbles(),
             rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        );
+        )?;
 
         expected_state_trie_after
     };
@@ -178,7 +178,7 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),

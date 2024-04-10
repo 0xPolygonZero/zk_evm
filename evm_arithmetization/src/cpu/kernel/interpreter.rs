@@ -713,7 +713,7 @@ impl<F: Field> Interpreter<F> {
         self.generation_state.registers.stack_len
     }
 
-    pub(crate) fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
+    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
         if self.stack_len() > 0 {
             Ok(self.generation_state.registers.stack_top)
         } else {
@@ -754,19 +754,9 @@ impl<F: Field> Interpreter<F> {
             .memory
             .set(MemoryAddress::new(0, Segment::RlpRaw, 0), 0x80.into())
     }
-}
 
-impl<F: Field> State<F> for Interpreter<F> {
-    //// Returns a `GenerationStateCheckpoint` to save the current registers and
-    /// reset memory operations to the empty vector.
-    fn checkpoint(&mut self) -> GenerationStateCheckpoint {
-        self.generation_state.traces.memory_ops = vec![];
-        GenerationStateCheckpoint {
-            registers: self.generation_state.registers,
-            traces: self.generation_state.traces.checkpoint(),
-        }
-    }
-
+    /// Inserts a preinitialized segment, given as a [Segment],
+    /// into the `preinitialized_segments` memory field.
     fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
         self.generation_state
             .memory
@@ -777,6 +767,19 @@ impl<F: Field> State<F> for Interpreter<F> {
         self.generation_state
             .memory
             .is_preinitialized_segment(segment)
+    }
+}
+
+impl<F: Field> State<F> for Interpreter<F> {
+    //// Returns a `GenerationStateCheckpoint` to save the current registers and
+    /// reset memory operations to the empty vector.
+    fn checkpoint(&mut self) -> GenerationStateCheckpoint {
+        self.generation_state.traces.memory_ops = vec![];
+        GenerationStateCheckpoint {
+            registers: self.generation_state.registers,
+            traces: self.generation_state.traces.checkpoint(),
+            clock: self.get_clock(),
+        }
     }
 
     fn incr_gas(&mut self, n: u64) {
@@ -830,6 +833,7 @@ impl<F: Field> State<F> for Interpreter<F> {
     fn push_keccak_sponge(&mut self, _op: KeccakSpongeOp) {}
 
     fn rollback(&mut self, checkpoint: GenerationStateCheckpoint) {
+        self.clock = checkpoint.clock;
         self.generation_state.rollback(checkpoint)
     }
 

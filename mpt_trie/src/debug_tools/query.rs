@@ -49,19 +49,19 @@ pub struct DebugQueryParamsBuilder {
 
 impl DebugQueryParamsBuilder {
     /// Defaults to `true`.
-    pub fn print_key_pieces(mut self, enabled: bool) -> Self {
+    pub const fn print_key_pieces(mut self, enabled: bool) -> Self {
         self.params.include_key_piece_per_node = enabled;
         self
     }
 
     /// Defaults to `true`.
-    pub fn print_node_type(mut self, enabled: bool) -> Self {
+    pub const fn print_node_type(mut self, enabled: bool) -> Self {
         self.params.include_node_type = enabled;
         self
     }
 
     /// Defaults to `false`.
-    pub fn print_node_specific_values(mut self, enabled: bool) -> Self {
+    pub const fn print_node_specific_values(mut self, enabled: bool) -> Self {
         self.params.include_node_specific_values = enabled;
         self
     }
@@ -159,7 +159,7 @@ pub struct DebugQueryOutput {
     k: Nibbles,
 
     /// The nodes hit during the query.
-    pub node_path: TriePath,
+    node_path: TriePath,
     extra_node_info: Vec<Option<ExtraNodeSegmentInfo>>,
     node_found: bool,
     params: DebugQueryParams,

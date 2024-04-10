@@ -42,7 +42,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let (state_trie, storage_tries) = preinitialized_state_and_storage_tries();
+    let (state_trie, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
@@ -53,18 +53,18 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
-        );
+        )?;
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
         state_trie_after.insert(
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
-        );
+        )?;
         state_trie_after.insert(
             ger_account_nibbles(),
             rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        );
+        )?;
 
         state_trie_after
     };

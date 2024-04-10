@@ -60,10 +60,10 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         code_hash: keccak(&code),
     };
 
-    let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries();
+    let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
+    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
@@ -97,7 +97,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
-        );
+        )?;
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
@@ -107,7 +107,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
             storage_root: HashedPartialTrie::from(Node::Empty).hash(),
             code_hash: keccak([]),
         };
-        state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
+        state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
 
         // EIP-6780: The account won't be deleted because it wasn't created during this
         // transaction.
@@ -117,15 +117,15 @@ fn test_selfdestruct() -> anyhow::Result<()> {
             storage_root: HashedPartialTrie::from(Node::Empty).hash(),
             code_hash: keccak(&code),
         };
-        state_trie_after.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+        state_trie_after.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
         state_trie_after.insert(
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
-        );
+        )?;
         state_trie_after.insert(
             ger_account_nibbles(),
             rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        );
+        )?;
 
         state_trie_after
     };
@@ -140,7 +140,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),

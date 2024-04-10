@@ -38,7 +38,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
         ..BlockMetadata::default()
     };
 
-    let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries();
+    let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
@@ -55,7 +55,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
-        );
+        )?;
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
@@ -65,15 +65,15 @@ fn test_withdrawals() -> anyhow::Result<()> {
             balance: withdrawals[0].1,
             ..AccountRlp::default()
         };
-        trie.insert(addr_nibbles, rlp::encode(&account).to_vec());
+        trie.insert(addr_nibbles, rlp::encode(&account).to_vec())?;
         trie.insert(
             beacon_roots_account_nibbles(),
             rlp::encode(&beacon_roots_account).to_vec(),
-        );
+        )?;
         trie.insert(
             ger_account_nibbles(),
             rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        );
+        )?;
 
         trie
     };
