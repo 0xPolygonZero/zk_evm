@@ -20,6 +20,7 @@ hex = { workspace = true }
 hex-literal = { workspace = true }
 keccak-hash = { workspace = true }
 log = { workspace = true }
+plonky2 = "0.2.1"
 rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true }
