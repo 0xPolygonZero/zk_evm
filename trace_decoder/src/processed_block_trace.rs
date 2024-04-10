@@ -192,9 +192,15 @@ fn process_single_combined_storage_tries(
 }
 
 fn process_multiple_storage_tries(
-    _tries: HashMap<HashedAccountAddr, SeparateTriePreImage>,
+    tries: HashMap<HashedAccountAddr, SeparateTriePreImage>,
 ) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
-    todo!()
+    tries
+        .into_iter()
+        .map(|(k, v)| match v {
+            SeparateTriePreImage::Uncompressed(_) => todo!(),
+            SeparateTriePreImage::Direct(t) => (k, t.0),
+        })
+        .collect()
 }
 
 fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
