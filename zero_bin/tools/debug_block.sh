@@ -6,7 +6,7 @@
 
 export RUST_BACKTRACE=1
 export RUST_MIN_STACK=8388608
-export RUST_LOG=mpt_trie=info,trace_decoder=info,plonky2=info,evm_arithmetization=trace
+export RUST_LOG=mpt_trie=info,trace_decoder=info,plonky2=info,evm_arithmetization=trace,leader=info
 
 # Speciying smallest ranges, as we won't need them anyway.
 export ARITHMETIC_CIRCUIT_SIZE="16..17"
