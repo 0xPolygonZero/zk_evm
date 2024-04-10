@@ -13,7 +13,10 @@ use plonky2::{
 use trace_decoder::types::TxnProofGenIR;
 
 use crate::{
-    proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
+    proof_types::{
+        GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedSegmentProof, GeneratedTxnAggProof,
+        SegmentAggregatableProof, TxnAggregatableProof,
+    },
     prover_state::ProverState,
     types::{Config, Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
@@ -42,12 +45,12 @@ impl From<String> for ProofGenError {
 }
 
 /// Generates a transaction proof from some IR data.
-pub fn generate_txn_proof(
+pub fn generate_segment_proof(
     p_state: &ProverState,
     gen_inputs: TxnProofGenIR,
     segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> ProofGenResult<GeneratedTxnProof> {
+) -> ProofGenResult<GeneratedSegmentProof> {
     // TODO: change the `max_cpu_len_log` argument once we can
     // automatically determine it.
     let output_data = p_state
@@ -64,17 +67,17 @@ pub fn generate_txn_proof(
 
     let p_vals = output_data.public_values;
     let intern = output_data.proof_with_pis;
-    Ok(GeneratedTxnProof { p_vals, intern })
+    Ok(GeneratedSegmentProof { p_vals, intern })
 }
 
 /// Generates an aggregation proof from two child proofs.
 ///
 /// Note that the child proofs may be either transaction or aggregation proofs.
-pub fn generate_agg_proof(
+pub fn generate_segment_agg_proof(
     p_state: &ProverState,
-    lhs_child: &AggregatableProof,
-    rhs_child: &AggregatableProof,
-) -> ProofGenResult<GeneratedAggProof> {
+    lhs_child: &SegmentAggregatableProof,
+    rhs_child: &SegmentAggregatableProof,
+) -> ProofGenResult<GeneratedSegmentAggProof> {
     let (intern, p_vals) = p_state
         .state
         .prove_segment_aggregation(
@@ -87,7 +90,7 @@ pub fn generate_agg_proof(
         )
         .map_err(|err| err.to_string())?;
 
-    Ok(GeneratedAggProof { p_vals, intern })
+    Ok(GeneratedSegmentAggProof { p_vals, intern })
 }
 
 /// Generates a transaction aggregation proof from two child proofs.
@@ -95,9 +98,9 @@ pub fn generate_agg_proof(
 /// Note that the child proofs may be either transaction or aggregation proofs.
 pub fn generate_transaction_agg_proof(
     p_state: &ProverState,
-    lhs_child: &AggregatableProof,
-    rhs_child: &AggregatableProof,
-) -> ProofGenResult<GeneratedAggProof> {
+    lhs_child: &TxnAggregatableProof,
+    rhs_child: &TxnAggregatableProof,
+) -> ProofGenResult<GeneratedTxnAggProof> {
     let (b_proof_intern, p_vals) = p_state
         .state
         .prove_transaction_aggregation(
@@ -110,7 +113,7 @@ pub fn generate_transaction_agg_proof(
         )
         .map_err(|err| err.to_string())?;
 
-    Ok(GeneratedAggProof {
+    Ok(GeneratedTxnAggProof {
         p_vals,
         intern: b_proof_intern,
     })
@@ -123,7 +126,7 @@ pub fn generate_transaction_agg_proof(
 pub fn generate_block_proof(
     p_state: &ProverState,
     prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
-    curr_block_agg_proof: &GeneratedAggProof,
+    curr_block_agg_proof: &GeneratedTxnAggProof,
 ) -> ProofGenResult<GeneratedBlockProof> {
     let b_height = curr_block_agg_proof
         .p_vals

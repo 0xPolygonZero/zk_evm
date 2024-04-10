@@ -57,15 +57,6 @@ pub struct GenerationSegmentData {
     pub(crate) max_cpu_len_log: Option<usize>,
 }
 
-impl GenerationSegmentData {
-    pub fn set_to_final_regs(&mut self) {
-        let mut final_regs = RegistersState::new();
-        final_regs.program_counter = KERNEL.global_labels["final"];
-        self.registers_before = final_regs;
-        self.registers_after = final_regs;
-    }
-}
-
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
