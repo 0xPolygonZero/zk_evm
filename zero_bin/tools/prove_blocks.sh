@@ -7,7 +7,7 @@
 # 4 --> Ignore previous proofs (boolean)
 
 export RUST_BACKTRACE=1
-export RUST_LOG=plonky2=trace,evm_arithmetization=trace
+export RUST_LOG=mpt_trie=info,trace_decoder=info,plonky2=info,evm_arithmetization=trace,leader=info
 
 export ARITHMETIC_CIRCUIT_SIZE="16..23"
 export BYTE_PACKING_CIRCUIT_SIZE="9..21"
