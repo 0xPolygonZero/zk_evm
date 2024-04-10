@@ -13,9 +13,12 @@ use mpt_trie::{
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
 
-use super::compact_prestate_processing::{
-    AccountNodeCode, AccountNodeData, CompactParsingError, CompactParsingResult, LeafNodeData,
-    NodeEntry, WitnessEntry,
+use super::{
+    compact_mpt_processing::AccountNodeData,
+    compact_processing_common::{
+        AccountNodeCode, CompactParsingError, CompactParsingResult, LeafNodeData, NodeEntry,
+        WitnessEntry,
+    },
 };
 use crate::{
     decoding::TrieType,

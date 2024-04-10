@@ -5,10 +5,18 @@ use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
 
-use super::compact_prestate_processing::{
-    CompactParsingResult, NodeEntry, SmtNodeType, WitnessEntry,
+use super::{
+    compact_processing_common::{
+        CompactCursor, CompactParsingError, CompactParsingResult, DebugCompactCursor, Header,
+        NodeEntry, ParserState, WitnessBytes, WitnessEntries, WitnessEntry,
+    },
+    compact_smt_processing::SmtNodeType,
+    compact_to_mpt_trie::{create_mpt_trie_from_remaining_witness_elem, StateTrieExtractionOutput},
 };
-use crate::types::{CodeHash, TrieRootHash};
+use crate::{
+    compact::compact_processing_common::Opcode,
+    types::{CodeHash, TrieRootHash},
+};
 
 /// Output from constructing a storage trie from smt compact.
 #[derive(Debug, Default)]

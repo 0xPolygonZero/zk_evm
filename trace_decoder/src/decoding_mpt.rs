@@ -21,7 +21,7 @@ use crate::{
     aliased_crate_types::{
         MptAccountRlp, MptExtraBlockData, MptGenerationInputs, MptTrieInputs, MptTrieRoots,
     },
-    compact::compact_prestate_processing::MptPartialTriePreImages,
+    compact::compact_mpt_processing::MptPartialTriePreImages,
     decoding::TrieType,
     processed_block_trace_mpt::{
         MptProcessedBlockTrace, NodesUsedByTxn, ProcedBlockTraceMptSpec, ProcessedSectionInfo,

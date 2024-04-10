@@ -6,6 +6,8 @@ use ethereum_types::{Address, H256, U256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
+use crate::aliased_crate_types::{MptAccountRlp, MptLegacyReceiptRlp};
+use crate::compact::compact_mpt_processing::{MptPartialTriePreImages, ProcessedCompactOutput};
 use crate::compact::compact_to_mpt_trie::StateTrieExtractionOutput;
 use crate::decoding_mpt::{MptTraceParsingResult, TxnMetaState};
 use crate::processed_block_trace::ProcessedBlockTrace;
@@ -27,12 +29,6 @@ use crate::utils::{
 };
 use crate::{
     aliased_crate_types::MptGenerationInputs, protocol_processing::process_mpt_trie_images,
-};
-use crate::{
-    aliased_crate_types::{MptAccountRlp, MptLegacyReceiptRlp},
-    compact::compact_prestate_processing::{
-        process_compact_prestate_debug, MptPartialTriePreImages, ProcessedCompactOutput,
-    },
 };
 
 pub(crate) type MptProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceMptSpec>;

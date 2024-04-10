@@ -1,0 +1,612 @@
+//! Processing for the mpt compact format as specified here: <https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md>
+
+use std::{
+    any::type_name,
+    collections::{linked_list::CursorMut, HashMap, LinkedList},
+    error::Error,
+    fmt::{self, Debug, Display},
+    io::{Cursor, Read},
+    iter,
+};
+
+use enum_as_inner::EnumAsInner;
+use enumn::N;
+use ethereum_types::{H256, U256};
+use log::{info, trace};
+use mpt_trie::{
+    nibbles::{FromHexPrefixError, Nibbles},
+    partial_trie::{HashedPartialTrie, PartialTrie},
+};
+use serde::de::DeserializeOwned;
+use thiserror::Error;
+
+use super::{
+    compact_processing_common::{
+        get_bytes_from_cursor, process_compact_prestate_common,
+        try_get_node_entry_from_witness_entry, AccountNodeCode, Balance, BranchMask,
+        CollapsableWitnessEntryTraverser, CompactCursor, CompactCursorFast, CompactParsingError,
+        CompactParsingResult, CursorBytesErrorInfo, DebugCompactCursor, Header, Instruction,
+        LeafNodeData, NodeEntry, Nonce, Opcode, ParserState, TraverserDirection, WitnessBytes,
+        WitnessEntries, WitnessEntry, BRANCH_MAX_CHILDREN,
+        MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
+    },
+    compact_smt_processing::SmtNodeType,
+    compact_to_mpt_trie::{
+        create_mpt_trie_from_remaining_witness_elem, create_storage_mpt_trie_from_compact_node,
+        StateTrieExtractionOutput, UnexpectedCompactNodeType,
+    },
+    compact_to_smt_trie::{
+        create_smt_trie_from_remaining_witness_elem, SmtStateTrieExtractionOutput,
+    },
+};
+use crate::{
+    decoding::TrieType,
+    trace_protocol::MptTrieCompact,
+    types::{CodeHash, HashedAccountAddr, TrieRootHash},
+};
+
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct AccountNodeData {
+    pub(super) nonce: Nonce,
+    pub(super) balance: Balance,
+    pub(super) storage_trie: Option<HashedPartialTrie>,
+    pub(super) account_node_code: Option<AccountNodeCode>,
+}
+
+impl AccountNodeData {
+    fn new(
+        nonce: Nonce,
+        balance: Balance,
+        storage_trie: Option<HashedPartialTrie>,
+        account_node_code: Option<AccountNodeCode>,
+    ) -> Self {
+        Self {
+            nonce,
+            balance,
+            storage_trie,
+            account_node_code,
+        }
+    }
+}
+
+impl ParserState {
+    fn create_and_extract_header_mpt(
+        witness_bytes_raw: Vec<u8>,
+    ) -> CompactParsingResult<(Header, Self)> {
+        let witness_bytes = WitnessBytes::<CompactCursorFast>::new(witness_bytes_raw);
+        let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
+
+        let p_state = Self { entries };
+
+        Ok((header, p_state))
+    }
+
+    // TODO: Move behind a feature flag...
+    fn create_and_extract_header_debug_mpt(
+        witness_bytes_raw: Vec<u8>,
+    ) -> CompactParsingResult<(Header, Self)> {
+        let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
+        let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
+
+        let p_state = Self { entries };
+
+        Ok((header, p_state))
+    }
+
+    fn apply_rules_to_witness_entries(
+        &mut self,
+        entry_buf: &mut Vec<WitnessEntry>,
+    ) -> CompactParsingResult<usize> {
+        let mut traverser = self.entries.create_collapsable_traverser();
+
+        let mut tot_rules_applied = 0;
+
+        while !traverser.at_end() {
+            let num_rules_applied = Self::try_apply_rules_to_curr_entry(&mut traverser, entry_buf)?;
+            tot_rules_applied += num_rules_applied;
+
+            if num_rules_applied == 0 {
+                // Unable to apply rule at current position, so advance the traverser.
+                traverser.advance();
+            }
+        }
+
+        Ok(tot_rules_applied)
+    }
+
+    fn try_apply_rules_to_curr_entry(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<WitnessEntry>,
+    ) -> CompactParsingResult<usize> {
+        traverser.get_next_n_elems_into_buf(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE, buf);
+
+        match buf[0].clone() {
+            WitnessEntry::Instruction(Instruction::EmptyRoot) => {
+                Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Empty)
+            }
+            WitnessEntry::Instruction(Instruction::Hash(h)) => {
+                Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Hash(h))
+            }
+            WitnessEntry::Instruction(Instruction::Leaf(k, v)) => {
+                Self::traverser_replace_prev_n_nodes_entry_helper(
+                    1,
+                    traverser,
+                    NodeEntry::Leaf(k, LeafNodeData::Value(v.into())),
+                )
+            }
+            WitnessEntry::Instruction(Instruction::Extension(k)) => {
+                traverser.get_prev_n_elems_into_buf(1, buf);
+
+                match &buf[0] {
+                    WitnessEntry::Node(node) => Self::traverser_replace_prev_n_nodes_entry_helper(
+                        2,
+                        traverser,
+                        NodeEntry::Extension(k, Box::new(node.clone())),
+                    ),
+                    _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+                }
+            }
+            WitnessEntry::Instruction(Instruction::Code(c)) => {
+                Self::traverser_replace_prev_n_nodes_entry_helper(1, traverser, NodeEntry::Code(c))
+            }
+            WitnessEntry::Instruction(Instruction::AccountLeaf(k, n, b, has_code, has_storage)) => {
+                let (n_nodes_to_replace, account_node_code, s_trie) = match (has_code, has_storage)
+                {
+                    (false, false) => Self::match_account_leaf_no_code_and_no_storage(),
+                    (false, true) => {
+                        Self::match_account_leaf_no_code_but_has_storage(traverser, buf)
+                    }
+                    (true, false) => {
+                        Self::match_account_leaf_has_code_but_no_storage(traverser, buf)
+                    }
+                    (true, true) => Self::match_account_leaf_has_code_and_storage(traverser, buf),
+                }?;
+
+                let account_leaf_data = AccountNodeData::new(n, b, s_trie, account_node_code);
+                let leaf_node = WitnessEntry::Node(NodeEntry::Leaf(
+                    k,
+                    LeafNodeData::Account(account_leaf_data),
+                ));
+                traverser.replace_prev_n_entries_with_single_entry(n_nodes_to_replace, leaf_node);
+
+                Ok(1)
+            }
+            WitnessEntry::Instruction(Instruction::Branch(mask)) => {
+                Self::process_branch_instr(traverser, buf, mask)
+            }
+            _ => Ok(0),
+        }
+    }
+
+    fn process_branch_instr(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<WitnessEntry>,
+        mask: BranchMask,
+    ) -> CompactParsingResult<usize> {
+        let expected_number_of_preceding_nodes = mask.count_ones() as usize;
+
+        traverser.get_prev_n_elems_into_buf(expected_number_of_preceding_nodes, buf);
+        let number_available_preceding_elems = buf.len();
+
+        if buf.len() != expected_number_of_preceding_nodes {
+            return Err(CompactParsingError::IncorrectNumberOfNodesPrecedingBranch(
+                mask,
+                expected_number_of_preceding_nodes,
+                number_available_preceding_elems,
+                buf.clone(),
+            ));
+        }
+
+        let mut branch_nodes = Self::create_empty_branch_node_entry();
+        let mut curr_traverser_node_idx = 0;
+
+        for (i, branch_node) in branch_nodes
+            .iter_mut()
+            .enumerate()
+            .take(BRANCH_MAX_CHILDREN)
+        {
+            if mask as usize & (1 << i) != 0 {
+                let entry_to_check = &buf[buf.len() - 1 - curr_traverser_node_idx];
+                let node_entry = try_get_node_entry_from_witness_entry(entry_to_check)
+                    .ok_or_else(|| {
+                        let n_entries_behind_cursor =
+                            number_available_preceding_elems - curr_traverser_node_idx;
+
+                        CompactParsingError::UnexpectedPrecedingNodeFoundWhenProcessingRule(
+                            n_entries_behind_cursor,
+                            "Branch",
+                            entry_to_check.to_string(),
+                            buf.clone(),
+                        )
+                    })?
+                    .clone();
+
+                *branch_node = Some(Box::new(node_entry));
+                curr_traverser_node_idx += 1;
+            }
+        }
+
+        let number_of_nodes_traversed = curr_traverser_node_idx; // For readability.
+        if curr_traverser_node_idx != buf.len() {
+            return Err(CompactParsingError::MissingExpectedNodesPrecedingBranch(
+                expected_number_of_preceding_nodes,
+                number_of_nodes_traversed,
+                mask,
+                buf.clone(),
+            ));
+        }
+
+        traverser.replace_prev_n_entries_with_single_entry(
+            number_of_nodes_traversed + 1,
+            NodeEntry::Branch(branch_nodes).into(),
+        );
+        Ok(1)
+    }
+
+    // ... Because we can't do `[None; 16]` without implementing `Copy`.
+    fn create_empty_branch_node_entry() -> [Option<Box<NodeEntry>>; 16] {
+        [
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None,
+        ]
+    }
+
+    fn match_account_leaf_no_code_and_no_storage(
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+        Ok((1, None, None))
+    }
+
+    fn match_account_leaf_no_code_but_has_storage(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<WitnessEntry>,
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+        traverser.get_prev_n_elems_into_buf(1, buf);
+
+        match buf[0].clone() {
+            WitnessEntry::Node(node) => {
+                Self::try_create_and_insert_partial_trie_from_node(&node, None, 2, traverser)
+            }
+            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+        }
+    }
+
+    fn match_account_leaf_has_code_but_no_storage(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<WitnessEntry>,
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+        traverser.get_prev_n_elems_into_buf(1, buf);
+
+        match buf[0].clone() {
+            WitnessEntry::Node(NodeEntry::Code(code)) => {
+                Ok((2, Some(AccountNodeCode::CodeNode(code.clone())), None))
+            }
+            WitnessEntry::Node(NodeEntry::Hash(h)) => {
+                Ok((2, Some(AccountNodeCode::HashNode(h)), None))
+            }
+            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+        }
+    }
+
+    fn match_account_leaf_has_code_and_storage(
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        buf: &mut Vec<WitnessEntry>,
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+        traverser.get_prev_n_elems_into_buf(2, buf);
+
+        match &buf[0..=1] {
+            [WitnessEntry::Node(node), WitnessEntry::Node(NodeEntry::Code(c_bytes))] => {
+                Self::try_create_and_insert_partial_trie_from_node(
+                    node,
+                    Some(c_bytes.clone().into()),
+                    3,
+                    traverser,
+                )
+            }
+            [WitnessEntry::Node(node), WitnessEntry::Node(NodeEntry::Hash(c_hash))] => {
+                Self::try_create_and_insert_partial_trie_from_node(
+                    node,
+                    Some((*c_hash).into()),
+                    3,
+                    traverser,
+                )
+            }
+            _ => Self::invalid_witness_err(3, TraverserDirection::Backwards, traverser),
+        }
+    }
+
+    fn parse(mut self) -> CompactParsingResult<StateTrieExtractionOutput> {
+        let mut entry_buf = Vec::new();
+
+        loop {
+            let num_rules_applied = self.apply_rules_to_witness_entries(&mut entry_buf)?;
+
+            if num_rules_applied == 0 {
+                break;
+            }
+        }
+
+        let res = match self.entries.len() {
+            1 => create_mpt_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
+
+            // Case for when nothing except the header is passed in.
+            0 => Ok(StateTrieExtractionOutput::default()),
+            _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
+                self.entries,
+            )),
+        }?;
+
+        Ok(res)
+    }
+
+    fn try_create_and_insert_partial_trie_from_node(
+        node: &NodeEntry,
+        account_node_code: Option<AccountNodeCode>,
+        n: usize,
+        traverser: &mut CollapsableWitnessEntryTraverser,
+    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+        match Self::try_get_storage_root_node(node) {
+            Some(storage_root_node) => {
+                let s_trie_out = create_storage_mpt_trie_from_compact_node(storage_root_node)?;
+                Ok((n, account_node_code, Some(s_trie_out.trie)))
+            }
+            None => Self::invalid_witness_err(n, TraverserDirection::Backwards, traverser),
+        }
+    }
+
+    fn try_get_storage_root_node(node: &NodeEntry) -> Option<NodeEntry> {
+        match node {
+            NodeEntry::Code(_) => None,
+            _ => Some(node.clone()),
+        }
+    }
+
+    fn invalid_witness_err<T>(
+        n: usize,
+        t_dir: TraverserDirection,
+        traverser: &mut CollapsableWitnessEntryTraverser,
+    ) -> CompactParsingResult<T> {
+        let adjacent_elems_buf = match t_dir {
+            TraverserDirection::Forwards => traverser.get_next_n_elems(n).cloned().collect(),
+            TraverserDirection::Backwards => traverser.get_prev_n_elems(n).cloned().collect(),
+            TraverserDirection::Both => {
+                let prev_elems = traverser.get_prev_n_elems(n);
+                let next_elems_including_curr = traverser.get_next_n_elems(n + 1);
+                let prev_elems_vec: Vec<_> = prev_elems.collect();
+
+                prev_elems_vec
+                    .into_iter()
+                    .chain(next_elems_including_curr)
+                    .cloned()
+                    .collect()
+            }
+        };
+
+        Err(CompactParsingError::InvalidWitnessFormat(
+            adjacent_elems_buf,
+        ))
+    }
+
+    fn traverser_replace_prev_n_nodes_entry_helper(
+        n: usize,
+        traverser: &mut CollapsableWitnessEntryTraverser,
+        entry: NodeEntry,
+    ) -> CompactParsingResult<usize> {
+        traverser.replace_prev_n_entries_with_single_entry(n, WitnessEntry::Node(entry));
+        Ok(1)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct MptPartialTriePreImages {
+    pub state: HashedPartialTrie,
+    pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
+}
+
+/// The output we get from processing prestate compact into the trie format of
+/// `mpt_trie`.
+///
+/// Note that this format contains storage tries embedded within the state trie,
+/// so there may be multiple tries inside this output. Also note that the
+/// bytecode (instead of just the code hash) may be embedded directly in this
+/// format.
+#[derive(Debug)]
+pub struct ProcessedCompactOutput<T> {
+    /// The header of the compact.
+    pub header: Header,
+
+    /// The actual processed `mpt_trie` tries and additional code hash mappings
+    /// from the compact.
+    pub witness_out: T,
+}
+
+/// Processes the compact prestate into the trie format of `mpt_trie`.
+pub fn process_compact_prestate(
+    state: MptTrieCompact,
+) -> CompactParsingResult<ProcessedCompactOutput<StateTrieExtractionOutput>> {
+    process_compact_prestate_common(
+        state,
+        ParserState::create_and_extract_header_mpt,
+        ParserState::parse,
+    )
+}
+
+/// Processes the compact prestate into the trie format of `mpt_trie`. Also
+/// enables heavy debug traces during processing.
+// TODO: Move behind a feature flag...
+pub fn process_compact_mpt_prestate_debug(
+    state: MptTrieCompact,
+) -> CompactParsingResult<ProcessedCompactOutput<StateTrieExtractionOutput>> {
+    process_compact_prestate_common(
+        state,
+        ParserState::create_and_extract_header_debug_mpt,
+        ParserState::parse,
+    )
+}
+
+// TODO: Move behind a feature flag just used for debugging (but probably not
+// `debug`)...
+fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
+    let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
+    let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
+
+    Ok(entries
+        .intern
+        .into_iter()
+        .map(|entry| match entry {
+            WitnessEntry::Instruction(instr) => instr,
+            _ => unreachable!(
+                "Found a non-instruction at a stage when we should only have instructions!"
+            ),
+        })
+        .collect())
+}
+
+// Using struct to make printing this nicer easier.
+#[derive(Debug)]
+struct InstructionAndBytesParsedFromBuf(Vec<(Instruction, Vec<u8>)>);
+
+impl From<Vec<(Instruction, Vec<u8>)>> for InstructionAndBytesParsedFromBuf {
+    fn from(v: Vec<(Instruction, Vec<u8>)>) -> Self {
+        Self(v)
+    }
+}
+
+impl Display for InstructionAndBytesParsedFromBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Instructions and bytes there were parsed from:")?;
+
+        for (instr, parsed_from_bytes) in &self.0 {
+            writeln!(
+                f,
+                "Instruction: {}, Bytes: {}",
+                instr,
+                hex::encode(parsed_from_bytes)
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use mpt_trie::{nibbles::Nibbles, partial_trie::PartialTrie};
+
+    use super::{parse_just_to_instructions, Instruction};
+    use crate::compact::{
+        compact_mpt_processing::ParserState,
+        compact_processing_common::key_bytes_to_nibbles,
+        complex_test_payloads::{
+            TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
+            TEST_PAYLOAD_6, TEST_PAYLOAD_7, TEST_PAYLOAD_8,
+        },
+    };
+
+    const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
+
+    fn init() {
+        let _ = pretty_env_logger::try_init();
+    }
+
+    fn h_decode_key(h_bytes: &str) -> Nibbles {
+        let bytes = hex::decode(h_bytes).unwrap();
+        key_bytes_to_nibbles(&bytes)
+    }
+
+    fn h_decode(b_str: &str) -> Vec<u8> {
+        hex::decode(b_str).unwrap()
+    }
+
+    // TODO: Refactor (or remove?) this test as it will crash when it tries to
+    // deserialize the trie leaves into `AccountRlp`...
+    #[test]
+    #[ignore]
+    fn simple_full() {
+        init();
+
+        let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
+        let (header, parser) = ParserState::create_and_extract_header_mpt(bytes).unwrap();
+
+        assert_eq!(header.version, 1);
+        let _ = match parser.parse() {
+            Ok(trie) => trie,
+            Err(err) => panic!("{}", err),
+        };
+    }
+
+    #[test]
+    fn simple_instructions_are_parsed_correctly() {
+        init();
+
+        let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
+        let instrs = parse_just_to_instructions(bytes);
+
+        let instrs = match instrs {
+            Ok(x) => x,
+            Err(err) => panic!("{}", err),
+        };
+
+        let expected_instrs = vec![
+            Instruction::Leaf(h_decode_key("10"), h_decode("31323334")),
+            Instruction::Leaf(h_decode_key("10"), h_decode("31323334")),
+            Instruction::Branch(0b00110000),
+            Instruction::Leaf(h_decode_key("0350"), h_decode("31323335")),
+            Instruction::Branch(0b00011000),
+            Instruction::Extension(h_decode_key(
+                "0000000000000000000000000000000000000000000000000000000000000012",
+            )),
+        ];
+
+        for (i, expected_instr) in expected_instrs.into_iter().enumerate() {
+            assert_eq!(expected_instr, instrs[i])
+        }
+    }
+
+    #[test]
+    fn complex_payload_1() {
+        init();
+        TEST_PAYLOAD_1.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_2() {
+        init();
+        TEST_PAYLOAD_2.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_3() {
+        init();
+        TEST_PAYLOAD_3.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_4() {
+        init();
+        TEST_PAYLOAD_4.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_5() {
+        init();
+        TEST_PAYLOAD_5.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_6() {
+        init();
+        TEST_PAYLOAD_6.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_7() {
+        init();
+        TEST_PAYLOAD_7.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_8() {
+        init();
+        TEST_PAYLOAD_8.parse_and_check_hash_matches_with_debug_smt();
+    }
+}

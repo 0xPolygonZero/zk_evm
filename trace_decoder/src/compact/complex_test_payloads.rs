@@ -1,10 +1,10 @@
 use mpt_trie::partial_trie::PartialTrie;
 
 use super::{
-    compact_prestate_processing::{
-        process_compact_prestate, process_compact_prestate_debug, CompactParsingResult,
-        ProcessedCompactOutput,
+    compact_mpt_processing::{
+        process_compact_mpt_prestate_debug, process_compact_prestate, ProcessedCompactOutput,
     },
+    compact_processing_common::CompactParsingResult,
     compact_to_mpt_trie::StateTrieExtractionOutput,
 };
 use crate::{
@@ -56,7 +56,7 @@ impl TestProtocolInputAndRoot {
     }
 
     pub(crate) fn parse_and_check_hash_matches_with_debug(self) {
-        self.parse_and_check_hash_matches_common(process_compact_prestate_debug);
+        self.parse_and_check_hash_matches_common(process_compact_mpt_prestate_debug);
     }
 
     pub(crate) fn parse_and_check_hash_matches_with_debug_smt(self) {

@@ -10,8 +10,8 @@ use mpt_trie::partial_trie::HashedPartialTrie;
 use thiserror::Error;
 
 use crate::{
-    compact::compact_prestate_processing::{
-        process_compact_prestate_debug, MptPartialTriePreImages,
+    compact::compact_mpt_processing::{
+        process_compact_mpt_prestate_debug, MptPartialTriePreImages,
     },
     decoding_mpt::{MptTraceParsingError, MptTraceParsingResult},
     decoding_smt::{SmtTraceParsingError, SmtTraceParsingResult},
@@ -150,7 +150,7 @@ fn process_compact_trie(
     trie: MptTrieCompact,
 ) -> MptTraceParsingResult<MptProcessedBlockTracePreImages> {
     // TODO: Wrap in proper result type...
-    let out = process_compact_prestate_debug(trie).unwrap();
+    let out = process_compact_mpt_prestate_debug(trie).unwrap();
 
     // TODO: Make this into a result...
     assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
