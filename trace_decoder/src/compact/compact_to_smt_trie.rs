@@ -3,8 +3,9 @@
 
 use std::collections::HashMap;
 
-use ethereum_types::{Address, U256};
+use ethereum_types::{Address, BigEndianHash, U256};
 use keccak_hash::H256;
+use mpt_trie::nibbles::Nibbles;
 
 use super::{
     compact_processing_common::{
@@ -39,14 +40,31 @@ pub struct SmtStateTrieExtractionOutput {
 impl SmtStateTrieExtractionOutput {
     fn process_branch_smt_node(
         &mut self,
+        curr_key: Nibbles,
         l_child: &Option<Box<NodeEntry>>,
         r_child: &Option<Box<NodeEntry>>,
     ) {
+        if let Some(l_child) = l_child {
+            let mut lkey = curr_key;
+            lkey.push_nibble_back(0);
+            create_smt_trie_from_compact_node_rec(lkey, l_child, self);
+        }
+
+        if let Some(r_child) = r_child {
+            let mut rkey = curr_key;
+            rkey.push_nibble_back(0);
+            create_smt_trie_from_compact_node_rec(rkey, r_child, self);
+        }
     }
 
-    fn process_hash_node(&mut self, hash: &TrieRootHash) {}
+    fn process_hash_node(&mut self, curr_key: Nibbles, h: &TrieRootHash) {
+        self.state_smt_trie.set(curr_key, h.into_uint());
+    }
 
-    fn process_code_node(&mut self, c_bytes: &[u8]) {}
+    fn process_code_node(&mut self, c_bytes: &Vec<u8>) {
+        let c_hash = hash(&c_bytes);
+        self.code.insert(c_hash, c_bytes.clone());
+    }
 
     fn process_smt_leaf(
         &mut self,
@@ -90,22 +108,23 @@ fn create_smt_trie_from_compact_node(
 ) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
     let mut output = SmtStateTrieExtractionOutput::default();
 
-    create_smt_trie_from_compact_node_rec(&node, &mut output)?;
+    create_smt_trie_from_compact_node_rec(Nibbles::default(), &node, &mut output)?;
 
     Ok(output)
 }
 
 fn create_smt_trie_from_compact_node_rec(
+    curr_key: Nibbles,
     curr_node: &NodeEntry,
     output: &mut SmtStateTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
     match curr_node {
         NodeEntry::BranchSMT([l_child, r_child]) => {
-            output.process_branch_smt_node(l_child, r_child)
+            output.process_branch_smt_node(curr_key, l_child, r_child)
         }
         NodeEntry::Code(c_bytes) => output.process_code_node(c_bytes),
         NodeEntry::Empty => (),
-        NodeEntry::Hash(h) => output.process_hash_node(h),
+        NodeEntry::Hash(h) => output.process_hash_node(curr_key, h),
         NodeEntry::SMTLeaf(n_type, addr_bytes, slot_bytes, slot_val) => {
             output.process_smt_leaf(*n_type, addr_bytes, slot_bytes, slot_val)
         }
