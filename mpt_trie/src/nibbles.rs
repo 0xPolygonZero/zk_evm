@@ -1,6 +1,7 @@
+#![allow(clippy::assign_op_pattern)]
+
 //! Define [`Nibbles`] and how to convert bytes, hex prefix encodings and
 //! strings into nibbles.
-
 use std::mem::size_of;
 use std::{
     fmt::{self, Debug},
@@ -13,9 +14,14 @@ use std::{
 };
 
 use bytes::{Bytes, BytesMut};
-use ethereum_types::{H256, U128, U256, U512};
+use ethereum_types::{H256, U128, U256};
+use impl_codec::impl_uint_codec;
+use impl_num_traits::impl_uint_num_traits;
+use impl_rlp::impl_uint_rlp;
+use impl_serde::impl_uint_serde;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use uint::construct_uint;
 use uint::FromHexError;
 
 use crate::utils::{create_mask_of_1s, is_even};
@@ -23,8 +29,19 @@ use crate::utils::{create_mask_of_1s, is_even};
 // Use a whole byte for a Nibble just for convenience
 /// A Nibble has 4 bits and is stored as `u8`.
 pub type Nibble = u8;
-/// Used for the internal representation of a sequence of nibbles.
-pub type NibblesIntern = U512;
+
+construct_uint! {
+    /// Used for the internal representation of a sequence of nibbles.
+    /// The choice of [u64; 5] accommodates the 260-bit key requirement efficiently by
+    /// leveraging 64-bit instructions for performance, while providing an additional u64
+    /// to handle the overflow case beyond the 256-bit capacity of [u64; 4].
+    pub struct NibblesIntern(5);
+}
+
+impl_uint_num_traits!(NibblesIntern, 5);
+impl_uint_serde!(NibblesIntern, 5);
+impl_uint_codec!(NibblesIntern, 5);
+impl_uint_rlp!(NibblesIntern, 5);
 
 const MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG: &str =
     "Attempted to create a nibbles sequence longer than 64!";
@@ -74,9 +91,54 @@ pub enum FromHexPrefixError {
     /// The hex prefix encoding flag is invalid.
     InvalidFlags(Nibble),
 
-    #[error("Tried to convert a hex prefix byte string into `Nibbles` that was longer than 64 bytes: (length: {0}, bytes: {1})")]
+    #[error("Tried to convert a hex prefix byte string into `Nibbles` that was longer than 40 bytes: (length: {0}, bytes: {1})")]
     /// The hex prefix encoding is too large.
     TooLong(String, usize),
+}
+
+/// Error type for conversion.
+#[derive(Debug, Error)]
+pub enum NibblesToTypeError {
+    #[error("Overflow encountered when converting to U256: {0}")]
+    /// Overflow encountered.
+    Overflow(NibblesIntern),
+}
+
+trait AsU64s {
+    fn as_u64s(&self) -> impl Iterator<Item = u64> + '_;
+}
+
+macro_rules! impl_as_u64s_for_primitive {
+    ($type:ty) => {
+        impl AsU64s for $type {
+            fn as_u64s(&self) -> impl Iterator<Item = u64> + '_ {
+                std::iter::once(*self as u64)
+            }
+        }
+    };
+}
+
+impl_as_u64s_for_primitive!(u8);
+impl_as_u64s_for_primitive!(u16);
+impl_as_u64s_for_primitive!(u32);
+impl_as_u64s_for_primitive!(u64);
+
+impl AsU64s for U128 {
+    fn as_u64s(&self) -> impl Iterator<Item = u64> + '_ {
+        self.0.iter().copied()
+    }
+}
+
+impl AsU64s for U256 {
+    fn as_u64s(&self) -> impl Iterator<Item = u64> + '_ {
+        self.0.iter().copied()
+    }
+}
+
+impl AsU64s for NibblesIntern {
+    fn as_u64s(&self) -> impl Iterator<Item = u64> + '_ {
+        self.0.iter().copied()
+    }
 }
 
 #[derive(Debug, Error)]
@@ -103,11 +165,14 @@ macro_rules! impl_to_nibbles {
                 #[allow(clippy::manual_bits)]
                 let size_bits = size_of::<Self>() * 8;
                 let count = (size_bits - self.leading_zeros() as usize + 3) / 4;
+                let mut packed = NibblesIntern::zero();
 
-                Nibbles {
-                    count,
-                    packed: self.into(),
+                let parts = self.as_u64s();
+                for (i, part) in parts.enumerate().take(packed.0.len()) {
+                    packed.0[i] = part;
                 }
+
+                Nibbles { count, packed }
             }
         }
     };
@@ -119,7 +184,60 @@ impl_to_nibbles!(u32);
 impl_to_nibbles!(u64);
 impl_to_nibbles!(U128);
 impl_to_nibbles!(U256);
-impl_to_nibbles!(U512);
+impl_to_nibbles!(NibblesIntern);
+
+impl<'a> TryFrom<&'a Nibbles> for U256 {
+    type Error = NibblesToTypeError;
+
+    fn try_from(value: &'a Nibbles) -> Result<U256, NibblesToTypeError> {
+        let NibblesIntern(ref arr) = value.packed;
+        if arr[4] != 0 {
+            return Err(NibblesToTypeError::Overflow(value.packed));
+        }
+
+        let ret = [arr[0], arr[1], arr[2], arr[3]];
+        Ok(U256(ret))
+    }
+}
+
+impl<'a> TryFrom<&'a NibblesIntern> for U256 {
+    type Error = NibblesToTypeError;
+
+    fn try_from(value: &'a NibblesIntern) -> Result<U256, NibblesToTypeError> {
+        if value.0[4] != 0 {
+            return Err(NibblesToTypeError::Overflow(*value));
+        }
+
+        let ret = [value.0[0], value.0[1], value.0[2], value.0[3]];
+        Ok(U256(ret))
+    }
+}
+
+impl TryInto<U256> for Nibbles {
+    type Error = NibblesToTypeError;
+
+    fn try_into(self) -> Result<U256, NibblesToTypeError> {
+        let arr = self.packed;
+        if arr.0[4] != 0 {
+            return Err(NibblesToTypeError::Overflow(arr));
+        }
+
+        let ret = [arr.0[0], arr.0[1], arr.0[2], arr.0[3]];
+        Ok(U256(ret))
+    }
+}
+
+impl From<U256> for NibblesIntern {
+    fn from(val: U256) -> Self {
+        let arr = val.as_u64s();
+
+        let mut ret = NibblesIntern::zero();
+        for (i, part) in arr.enumerate() {
+            ret.0[i] = part;
+        }
+        ret
+    }
+}
 
 #[derive(Copy, Clone, Deserialize, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 /// A sequence of nibbles which is used as the key type into
@@ -190,7 +308,6 @@ impl Debug for Nibbles {
     }
 }
 
-// TODO: This impl is going to need to change once we move away from `U256`s...
 impl FromStr for Nibbles {
     type Err = StrToNibblesError;
 
@@ -201,7 +318,7 @@ impl FromStr for Nibbles {
             .chars()
             .position(|c| c != '0')
             .unwrap_or(stripped_str.len());
-        let packed = U512::from_str(s)?;
+        let packed = NibblesIntern::from_str(s)?;
 
         Ok(Self {
             count: leading_zeros + Self::get_num_nibbles_in_key(&packed),
@@ -228,7 +345,7 @@ impl Nibbles {
     /// Returns an error if the byte slice is empty or is longer than `32`
     /// bytes.
     pub fn from_bytes_be(bytes: &[u8]) -> Result<Self, BytesToNibblesError> {
-        Self::from_bytes(bytes, U512::from_big_endian)
+        Self::from_bytes(bytes, NibblesIntern::from_big_endian)
     }
 
     /// Creates `Nibbles` from little endian bytes.
@@ -236,7 +353,7 @@ impl Nibbles {
     /// Returns an error if the byte slice is empty or is longer than `32`
     /// bytes.
     pub fn from_bytes_le(bytes: &[u8]) -> Result<Self, BytesToNibblesError> {
-        Self::from_bytes(bytes, U512::from_little_endian)
+        Self::from_bytes(bytes, NibblesIntern::from_little_endian)
     }
 
     fn from_bytes<F>(bytes: &[u8], conv_f: F) -> Result<Self, BytesToNibblesError>
@@ -350,7 +467,7 @@ impl Nibbles {
         let shift_amt = 4 * self.count;
 
         self.count += 1;
-        self.packed |= U512::from(n) << shift_amt;
+        self.packed |= NibblesIntern::from(n) << shift_amt;
     }
 
     /// Pushes a nibble to the back.
@@ -462,7 +579,7 @@ impl Nibbles {
         self.packed = (self.packed & truncate_mask) >> shift_amt;
     }
 
-    fn get_min_truncate_amount_to_prevent_over_truncating(&self, n: usize) -> usize {
+    const fn get_min_truncate_amount_to_prevent_over_truncating(&self, n: usize) -> usize {
         match self.count >= n {
             false => self.count,
             true => n,
@@ -471,7 +588,7 @@ impl Nibbles {
 
     /// Returns whether or not this `Nibbles` contains actual nibbles. (If
     /// `count` is set to `0`)
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.count == 0
     }
 
@@ -564,8 +681,8 @@ impl Nibbles {
     /// Reverses the `Nibbles` such that the last `Nibble` is now the first
     /// `Nibble`.
     pub fn reverse(&self) -> Nibbles {
-        let mut mask = U512::from(0xf);
-        let mut reversed_packed = U512::zero();
+        let mut mask = NibblesIntern::from(0xf);
+        let mut reversed_packed = NibblesIntern::zero();
 
         for i in 0..self.count {
             reversed_packed <<= 4;
@@ -615,7 +732,7 @@ impl Nibbles {
             return n1.count;
         }
 
-        let mut curr_mask: U512 = (U512::from(0xf)) << ((n1.count - 1) * 4);
+        let mut curr_mask: NibblesIntern = (NibblesIntern::from(0xf)) << ((n1.count - 1) * 4);
         for i in 0..n1.count {
             if n1.packed & curr_mask != n2.packed & curr_mask {
                 return i;
@@ -632,11 +749,11 @@ impl Nibbles {
     where
         F: Fn(&[u8]) -> String,
     {
-        let mut byte_buf = [0; 64];
+        let mut byte_buf = [0; 40];
         self.packed.to_big_endian(&mut byte_buf);
 
         let count_bytes = self.min_bytes();
-        let hex_string_raw = hex_encode_f(&byte_buf[(64 - count_bytes)..64]);
+        let hex_string_raw = hex_encode_f(&byte_buf[(40 - count_bytes)..40]);
         let hex_char_iter_raw = hex_string_raw.chars();
 
         // We need this skip to make both match arms have the same type.
@@ -656,10 +773,10 @@ impl Nibbles {
     pub fn to_hex_prefix_encoding(&self, is_leaf: bool) -> Bytes {
         let num_nibbles = self.count + 1;
         let num_bytes = (num_nibbles + 1) / 2;
-        let flag_byte_idx = 65 - num_bytes;
+        let flag_byte_idx = 41 - num_bytes;
 
         // Needed because `to_big_endian` always writes `32` bytes.
-        let mut bytes = BytesMut::zeroed(65);
+        let mut bytes = BytesMut::zeroed(41);
 
         let is_even = is_even(self.count);
         let odd_bit = match is_even {
@@ -673,10 +790,10 @@ impl Nibbles {
         };
 
         let flags: u8 = (odd_bit | (term_bit << 1)) << 4;
-        self.packed.to_big_endian(&mut bytes[1..65]);
+        self.packed.to_big_endian(&mut bytes[1..41]);
 
         bytes[flag_byte_idx] |= flags;
-        Bytes::copy_from_slice(&bytes[flag_byte_idx..65])
+        Bytes::copy_from_slice(&bytes[flag_byte_idx..41])
     }
 
     /// Converts a hex prefix byte string ("AKA "compact") into `Nibbles`.
@@ -710,7 +827,7 @@ impl Nibbles {
         let hex_prefix_byes_iter = hex_prefix_bytes.iter().skip(1).take(32).cloned();
 
         let mut i = 0;
-        let mut nibbles_raw = [0; 64];
+        let mut nibbles_raw = [0; 40];
 
         if odd_nib_count {
             Self::write_byte_iter_to_byte_buf(
@@ -730,7 +847,7 @@ impl Nibbles {
 
         let x = Self {
             count,
-            packed: U512::from_big_endian(&nibbles_raw[..tot_bytes]),
+            packed: NibblesIntern::from_big_endian(&nibbles_raw[..tot_bytes]),
         };
 
         Ok(x)
@@ -744,43 +861,41 @@ impl Nibbles {
     }
 
     /// Returns the minimum number of bytes needed to represent these `Nibbles`.
-    pub fn min_bytes(&self) -> usize {
+    pub const fn min_bytes(&self) -> usize {
         (self.count + 1) / 2
     }
 
     /// Returns the minimum number of nibbles needed to represent a `U256` key.
-    pub fn get_num_nibbles_in_key(k: &U512) -> usize {
+    pub fn get_num_nibbles_in_key(k: &NibblesIntern) -> usize {
         (k.bits() + 3) / 4
     }
 
-    // TODO: Make not terrible at some point... Consider moving away from `U256`
-    // internally?
     /// Returns the nibbles bytes in big-endian format.
     pub fn bytes_be(&self) -> Vec<u8> {
-        let mut byte_buf = [0; 64];
+        let mut byte_buf = [0; 40];
         self.packed.to_big_endian(&mut byte_buf);
 
-        byte_buf[64 - self.min_bytes()..64].to_vec()
+        byte_buf[40 - self.min_bytes()..40].to_vec()
     }
 
     /// Creates `Nibbles` from a big endian `H256`.
     pub fn from_h256_be(v: H256) -> Self {
-        Self::from_h256_common(|v| U512::from_big_endian(v.as_bytes()), v)
+        Self::from_h256_common(|v| NibblesIntern::from_big_endian(v.as_bytes()), v)
     }
 
     /// Creates `Nibbles` from a little endian `H256`.
     pub fn from_h256_le(v: H256) -> Self {
-        Self::from_h256_common(|v| U512::from_little_endian(v.as_bytes()), v)
+        Self::from_h256_common(|v| NibblesIntern::from_little_endian(v.as_bytes()), v)
     }
 
-    fn from_h256_common<F: Fn(H256) -> U512>(conv_f: F, v: H256) -> Self {
+    fn from_h256_common<F: Fn(H256) -> NibblesIntern>(conv_f: F, v: H256) -> Self {
         Self {
             count: 64,
             packed: conv_f(v),
         }
     }
 
-    fn nibble_append_safety_asserts(&self, n: Nibble) {
+    const fn nibble_append_safety_asserts(&self, n: Nibble) {
         assert!(
             self.count < 64,
             "{}",
@@ -789,24 +904,12 @@ impl Nibbles {
         assert!(n < 16, "{}", SINGLE_NIBBLE_APPEND_ASSERT_ERR_MSG);
     }
 
-    fn nibbles_append_safety_asserts(&self, new_count: usize) {
+    const fn nibbles_append_safety_asserts(&self, new_count: usize) {
         assert!(
             new_count <= 64,
             "{}",
             MULTIPLE_NIBBLES_APPEND_ASSERT_ERR_MSG
         );
-    }
-
-    // TODO: REMOVE BEFORE NEXT CRATE VERSION! THIS IS A TEMP HACK!
-    /// Converts to u256 returning an error if not possible.
-    pub fn try_into_u256(&self) -> Result<U256, String> {
-        match self.count <= 64 {
-            false => Err(format!(
-                "Tried getting a U256 from Nibbles that were too big! ({:?})",
-                self
-            )),
-            true => Ok(self.packed.try_into().unwrap()),
-        }
     }
 }
 
@@ -816,7 +919,7 @@ mod tests {
 
     use ethereum_types::{H256, U256};
 
-    use super::{Nibble, Nibbles, ToNibbles};
+    use super::{Nibble, Nibbles, StrToNibblesError, ToNibbles};
     use crate::nibbles::FromHexPrefixError;
 
     const ZERO_NIBS_63: &str = "0x000000000000000000000000000000000000000000000000000000000000000";
@@ -827,23 +930,42 @@ mod tests {
         "0x0000000000000000000000000000000000000000000000000000000000000001";
 
     #[test]
-    fn get_nibble_works() {
+    fn get_nibble_works() -> Result<(), StrToNibblesError> {
         let n = Nibbles::from(0x1234);
-
         assert_eq!(n.get_nibble(0), 0x1);
         assert_eq!(n.get_nibble(3), 0x4);
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(n.get_nibble(30), 0x1);
+        assert_eq!(n.get_nibble(33), 0xc);
+
+        Ok(())
     }
 
     #[test]
     fn pop_nibble_front_works() {
         pop_and_assert_nibbles(0x1, 0x0, 1, Nibbles::pop_next_nibble_front);
         pop_and_assert_nibbles(0x1234, 0x234, 1, Nibbles::pop_next_nibble_front);
+        pop_and_assert_nibbles(
+            0x1234567890123,
+            0x234567890123,
+            1,
+            Nibbles::pop_next_nibble_front,
+        );
     }
 
     #[test]
     fn pop_nibble_back_works() {
         pop_and_assert_nibbles(0x1, 0x0, 1, Nibbles::pop_next_nibble_back);
         pop_and_assert_nibbles(0x1234, 0x123, 4, Nibbles::pop_next_nibble_back);
+        pop_and_assert_nibbles(
+            0x1234567890123,
+            0x123456789012,
+            3,
+            Nibbles::pop_next_nibble_back,
+        );
     }
 
     fn pop_and_assert_nibbles<F: Fn(&mut Nibbles) -> Nibble>(
@@ -868,7 +990,7 @@ mod tests {
     }
 
     #[test]
-    fn pop_nibbles_front_works() {
+    fn pop_nibbles_front_works() -> Result<(), StrToNibblesError> {
         let nib = 0x1234.into();
 
         assert_pop_nibbles(
@@ -899,10 +1021,30 @@ mod tests {
             0x1234.into(),
             Nibbles::pop_nibbles_front,
         );
+        assert_pop_nibbles(
+            &nib,
+            4,
+            0x0.into(),
+            0x1234.into(),
+            Nibbles::pop_nibbles_front,
+        );
+
+        let nib = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_pop_nibbles(
+            &nib,
+            24,
+            Nibbles::from_str("0x0ffd1e165c754b28a41a95922f9f70682c581353")?,
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea9678")?,
+            Nibbles::pop_nibbles_front,
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn pop_nibbles_back_works() {
+    fn pop_nibbles_back_works() -> Result<(), StrToNibblesError> {
         let nib = 0x1234.into();
 
         assert_pop_nibbles(
@@ -921,6 +1063,19 @@ mod tests {
             0x4321.into(),
             Nibbles::pop_nibbles_back,
         );
+
+        let nib = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_pop_nibbles(
+            &nib,
+            24,
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e165c754b28")?,
+            Nibbles::from_str("0x353185c28607f9f22959a14a")?,
+            Nibbles::pop_nibbles_back,
+        );
+
+        Ok(())
     }
 
     fn assert_pop_nibbles<F: Fn(&mut Nibbles, usize) -> Nibbles>(
@@ -997,7 +1152,7 @@ mod tests {
     }
 
     #[test]
-    fn get_next_nibbles_works() {
+    fn get_next_nibbles_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.get_next_nibbles(0), Nibbles::default());
@@ -1007,20 +1162,37 @@ mod tests {
         assert_eq!(n.get_next_nibbles(4), Nibbles::from(0x1234));
 
         assert_eq!(Nibbles::from(0x0).get_next_nibbles(0), Nibbles::default());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.get_next_nibbles(24),
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea9678")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn get_nibble_range_works() {
+    fn get_nibble_range_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.get_nibble_range(0..0), 0x0.into());
         assert_eq!(n.get_nibble_range(0..1), 0x1.into());
         assert_eq!(n.get_nibble_range(0..2), 0x12.into());
         assert_eq!(n.get_nibble_range(0..4), 0x1234.into());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(n.get_nibble_range(16..24), Nibbles::from_str("0x17ea9678")?);
+
+        Ok(())
     }
 
     #[test]
-    fn truncate_nibbles_works() {
+    fn truncate_nibbles_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.truncate_n_nibbles_front(0), n);
@@ -1036,16 +1208,43 @@ mod tests {
         assert_eq!(n.truncate_n_nibbles_back(3), 0x1.into());
         assert_eq!(n.truncate_n_nibbles_back(4), 0x0.into());
         assert_eq!(n.truncate_n_nibbles_back(8), 0x0.into());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.truncate_n_nibbles_front(16),
+            Nibbles::from_str("0x17ea96780ffd1e165c754b28a41a95922f9f70682c581353")?
+        );
+        assert_eq!(
+            n.truncate_n_nibbles_back(16),
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a9592")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn split_at_idx_works() {
+    fn split_at_idx_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.split_at_idx(0), (0x0.into(), 0x1234.into()));
         assert_eq!(n.split_at_idx(1), (0x1.into(), 0x234.into()));
         assert_eq!(n.split_at_idx(2), (0x12.into(), 0x34.into()));
         assert_eq!(n.split_at_idx(3), (0x123.into(), 0x4.into()));
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.split_at_idx(24),
+            (
+                Nibbles::from_str("0x3ab76c381c0f8ea617ea9678")?,
+                Nibbles::from_str("0x0ffd1e165c754b28a41a95922f9f70682c581353")?
+            )
+        );
+
+        Ok(())
     }
 
     #[test]
@@ -1055,31 +1254,60 @@ mod tests {
     }
 
     #[test]
-    fn split_at_idx_prefix_works() {
+    fn split_at_idx_prefix_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.split_at_idx_prefix(0), 0x0.into());
         assert_eq!(n.split_at_idx_prefix(1), 0x1.into());
         assert_eq!(n.split_at_idx_prefix(3), 0x123.into());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.split_at_idx_prefix(24),
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea9678")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn split_at_idx_postfix_works() {
+    fn split_at_idx_postfix_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
         assert_eq!(n.split_at_idx_postfix(0), 0x1234.into());
         assert_eq!(n.split_at_idx_postfix(1), 0x234.into());
         assert_eq!(n.split_at_idx_postfix(3), 0x4.into());
+
+        let n = Nibbles::from_str(
+            "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",
+        )?;
+        assert_eq!(
+            n.split_at_idx_postfix(24),
+            Nibbles::from_str("0x0ffd1e165c754b28a41a95922f9f70682c581353")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn merge_nibble_works() {
+    fn merge_nibble_works() -> Result<(), StrToNibblesError> {
         assert_eq!(Nibbles::from(0x0).merge_nibble(1), 0x1.into());
         assert_eq!(Nibbles::from(0x1234).merge_nibble(5), 0x12345.into());
+        assert_eq!(
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c58135")?
+                .merge_nibble(3),
+            Nibbles::from_str(
+                "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353"
+            )?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn merge_nibbles_works() {
+    fn merge_nibbles_works() -> Result<(), StrToNibblesError> {
         assert_eq!(
             Nibbles::from(0x12).merge_nibbles(&(0x34.into())),
             0x1234.into()
@@ -1093,18 +1321,34 @@ mod tests {
             0x34.into()
         );
         assert_eq!(Nibbles::from(0x0).merge_nibbles(&(0x0).into()), 0x0.into());
+        assert_eq!(
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e1")?
+                .merge_nibbles(&Nibbles::from_str("0x65c754b28a41a95922f9f70682c581353")?),
+            Nibbles::from_str(
+                "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353"
+            )?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn reverse_works() {
+    fn reverse_works() -> Result<(), StrToNibblesError> {
         assert_eq!(Nibbles::from(0x0).reverse(), Nibbles::from(0x0_u64));
         assert_eq!(Nibbles::from(0x1).reverse(), Nibbles::from(0x1_u64));
         assert_eq!(Nibbles::from(0x12).reverse(), Nibbles::from(0x21_u64));
         assert_eq!(Nibbles::from(0x1234).reverse(), Nibbles::from(0x4321_u64));
+        assert_eq!(
+            Nibbles::from_str("0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c58135")?
+                .reverse(),
+            Nibbles::from_str("0x53185c28607f9f22959a14a82b457c561e1dff08769ae716ae8f0c183c67ba3")?
+        );
+
+        Ok(())
     }
 
     #[test]
-    fn find_nibble_idx_that_differs_between_nibbles_works() {
+    fn find_nibble_idx_that_differs_between_nibbles_works() -> Result<(), StrToNibblesError> {
         assert_eq!(
             Nibbles::find_nibble_idx_that_differs_between_nibbles_equal_lengths(
                 &(0x1234.into()),
@@ -1140,6 +1384,19 @@ mod tests {
             ),
             4
         );
+        assert_eq!(
+            Nibbles::find_nibble_idx_that_differs_between_nibbles_different_lengths(
+                &(Nibbles::from_str(
+                    "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c58135"
+                )?),
+                &(Nibbles::from_str(
+                    "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41ae716ae8f0c183c67ba3"
+                )?),
+            ),
+            44
+        );
+
+        Ok(())
     }
 
     #[test]

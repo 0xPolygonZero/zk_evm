@@ -399,7 +399,10 @@ where
                     *table = MaybeUninit::new(value);
                 }
                 unsafe {
-                    mem::transmute::<_, [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES]>(by_table)
+                    mem::transmute::<
+                        [std::mem::MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES],
+                        [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
+                    >(by_table)
                 }
             }
         };
