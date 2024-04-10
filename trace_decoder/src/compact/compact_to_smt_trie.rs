@@ -58,11 +58,12 @@ impl SmtStateTrieExtractionOutput {
     }
 
     fn process_hash_node(&mut self, curr_key: Nibbles, h: &TrieRootHash) {
-        self.state_smt_trie.set(curr_key, h.into_uint());
+        // self.state_smt_trie.set(curr_key, h.into_uint());
+        // TODO: Wait until William implements this upstream...
     }
 
     fn process_code_node(&mut self, c_bytes: &Vec<u8>) {
-        let c_hash = hash(&c_bytes);
+        let c_hash = hash(c_bytes);
         self.code.insert(c_hash, c_bytes.clone());
     }
 
