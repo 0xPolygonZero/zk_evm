@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
+use keccak_hash::H256;
 
 use super::{
     compact_processing_common::{
@@ -12,17 +13,23 @@ use super::{
     },
     compact_smt_processing::SmtNodeType,
     compact_to_mpt_trie::{create_mpt_trie_from_remaining_witness_elem, StateTrieExtractionOutput},
+    tmp::{
+        db::MemoryDb,
+        keys::{key_balance, key_code, key_code_length, key_nonce, key_storage},
+        smt::{Key, Smt},
+    },
 };
 use crate::{
     compact::compact_processing_common::Opcode,
     types::{CodeHash, TrieRootHash},
+    utils::hash,
 };
 
 /// Output from constructing a storage trie from smt compact.
 #[derive(Debug, Default)]
 pub struct SmtStateTrieExtractionOutput {
     /// The state (and storage tries?) trie of the compact.
-    pub state_smt: Vec<U256>,
+    pub state_smt_trie: Smt<MemoryDb>,
 
     /// Any embedded contract bytecode that appears in the compact will be
     /// present here.
@@ -46,8 +53,24 @@ impl SmtStateTrieExtractionOutput {
         n_type: SmtNodeType,
         addr: &[u8],
         slot_bytes: &[u8],
-        slot_val: &[u8],
+        val_bytes: &[u8],
     ) {
+        let addr = Address::from_slice(addr);
+        let val = U256::from_big_endian(val_bytes);
+
+        let key = match n_type {
+            SmtNodeType::Balance => key_balance(addr),
+            SmtNodeType::Nonce => key_nonce(addr),
+            SmtNodeType::Code => key_code(addr),
+            SmtNodeType::Storage => {
+                // Massive assumption: Is the slot unhashed?
+                let slot = U256::from_big_endian(slot_bytes);
+                key_storage(addr, slot)
+            }
+            SmtNodeType::CodeLength => key_code_length(addr),
+        };
+
+        self.state_smt_trie.set(key, val)
     }
 }
 

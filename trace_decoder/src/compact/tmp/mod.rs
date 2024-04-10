@@ -2,7 +2,7 @@
 //! PUT OFF THE HARD TASK OF FEATURE GATING THE BRANCH `feat/type2`!!
 
 mod bits;
-mod db;
+pub(crate) mod db;
 pub(crate) mod keys;
 pub(crate) mod smt;
-mod utils;
+pub(crate) mod utils;
