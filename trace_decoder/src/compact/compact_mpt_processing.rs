@@ -314,7 +314,7 @@ impl ParserState {
         }
     }
 
-    fn parse(mut self) -> CompactParsingResult<StateTrieExtractionOutput> {
+    fn parse_mpt(mut self) -> CompactParsingResult<StateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
 
         loop {
@@ -420,13 +420,13 @@ pub struct ProcessedCompactOutput<T> {
 }
 
 /// Processes the compact prestate into the trie format of `mpt_trie`.
-pub fn process_compact_prestate(
+pub fn process_compact_mpt_prestate(
     state: MptTrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput<StateTrieExtractionOutput>> {
     process_compact_prestate_common(
-        state,
+        state.0,
         ParserState::create_and_extract_header_mpt,
-        ParserState::parse,
+        ParserState::parse_mpt,
     )
 }
 
@@ -437,9 +437,9 @@ pub fn process_compact_mpt_prestate_debug(
     state: MptTrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput<StateTrieExtractionOutput>> {
     process_compact_prestate_common(
-        state,
+        state.0,
         ParserState::create_and_extract_header_debug_mpt,
-        ParserState::parse,
+        ParserState::parse_mpt,
     )
 }
 
@@ -485,128 +485,5 @@ impl Display for InstructionAndBytesParsedFromBuf {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use mpt_trie::{nibbles::Nibbles, partial_trie::PartialTrie};
-
-    use super::{parse_just_to_instructions, Instruction};
-    use crate::compact::{
-        compact_mpt_processing::ParserState,
-        compact_processing_common::key_bytes_to_nibbles,
-        complex_test_payloads::{
-            TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
-            TEST_PAYLOAD_6, TEST_PAYLOAD_7, TEST_PAYLOAD_8,
-        },
-    };
-
-    const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
-
-    fn init() {
-        let _ = pretty_env_logger::try_init();
-    }
-
-    fn h_decode_key(h_bytes: &str) -> Nibbles {
-        let bytes = hex::decode(h_bytes).unwrap();
-        key_bytes_to_nibbles(&bytes)
-    }
-
-    fn h_decode(b_str: &str) -> Vec<u8> {
-        hex::decode(b_str).unwrap()
-    }
-
-    // TODO: Refactor (or remove?) this test as it will crash when it tries to
-    // deserialize the trie leaves into `AccountRlp`...
-    #[test]
-    #[ignore]
-    fn simple_full() {
-        init();
-
-        let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
-        let (header, parser) = ParserState::create_and_extract_header_mpt(bytes).unwrap();
-
-        assert_eq!(header.version, 1);
-        let _ = match parser.parse() {
-            Ok(trie) => trie,
-            Err(err) => panic!("{}", err),
-        };
-    }
-
-    #[test]
-    fn simple_instructions_are_parsed_correctly() {
-        init();
-
-        let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
-        let instrs = parse_just_to_instructions(bytes);
-
-        let instrs = match instrs {
-            Ok(x) => x,
-            Err(err) => panic!("{}", err),
-        };
-
-        let expected_instrs = vec![
-            Instruction::Leaf(h_decode_key("10"), h_decode("31323334")),
-            Instruction::Leaf(h_decode_key("10"), h_decode("31323334")),
-            Instruction::Branch(0b00110000),
-            Instruction::Leaf(h_decode_key("0350"), h_decode("31323335")),
-            Instruction::Branch(0b00011000),
-            Instruction::Extension(h_decode_key(
-                "0000000000000000000000000000000000000000000000000000000000000012",
-            )),
-        ];
-
-        for (i, expected_instr) in expected_instrs.into_iter().enumerate() {
-            assert_eq!(expected_instr, instrs[i])
-        }
-    }
-
-    #[test]
-    fn complex_payload_1() {
-        init();
-        TEST_PAYLOAD_1.parse_and_check_hash_matches_with_debug();
-    }
-
-    #[test]
-    fn complex_payload_2() {
-        init();
-        TEST_PAYLOAD_2.parse_and_check_hash_matches_with_debug();
-    }
-
-    #[test]
-    fn complex_payload_3() {
-        init();
-        TEST_PAYLOAD_3.parse_and_check_hash_matches_with_debug();
-    }
-
-    #[test]
-    fn complex_payload_4() {
-        init();
-        TEST_PAYLOAD_4.parse_and_check_hash_matches_with_debug();
-    }
-
-    #[test]
-    fn complex_payload_5() {
-        init();
-        TEST_PAYLOAD_5.parse_and_check_hash_matches_with_debug();
-    }
-
-    #[test]
-    fn complex_payload_6() {
-        init();
-        TEST_PAYLOAD_6.parse_and_check_hash_matches_with_debug();
-    }
-
-    #[test]
-    fn complex_payload_7() {
-        init();
-        TEST_PAYLOAD_7.parse_and_check_hash_matches_with_debug_smt();
-    }
-
-    #[test]
-    fn complex_payload_8() {
-        init();
-        TEST_PAYLOAD_8.parse_and_check_hash_matches_with_debug_smt();
     }
 }

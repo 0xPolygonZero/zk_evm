@@ -13,6 +13,7 @@ use crate::decoding_mpt::{MptTraceParsingResult, TxnMetaState};
 use crate::processed_block_trace::ProcessedBlockTrace;
 use crate::protocol_processing::{
     process_block_trace_trie_pre_images, process_mpt_block_trace_trie_pre_images,
+    TraceParsingResult,
 };
 use crate::trace_protocol::{
     AtomicUnitInfo, BlockTrace, ContractCodeUsage, MptBlockTraceTriePreImages,
@@ -49,27 +50,29 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> MptTraceParsingResult<Vec<MptGenerationInputs>>
+    ) -> TraceParsingResult<Vec<MptGenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
         let processed_block_trace =
             self.into_mpt_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
 
-        processed_block_trace.into_proof_gen_ir(other_data)
+        let res = processed_block_trace.into_proof_gen_ir(other_data)?;
+
+        Ok(res)
     }
 
     fn into_mpt_processed_block_trace<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> MptTraceParsingResult<MptProcessedBlockTrace>
+    ) -> TraceParsingResult<MptProcessedBlockTrace>
     where
         F: CodeHashResolveFunc,
     {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
-        let pre_image_data = process_mpt_trie_images(self.trie_pre_images)?;
+        let pre_image_data = process_mpt_block_trace_trie_pre_images(self.trie_pre_images)?;
 
         print_value_and_hash_nodes_of_trie(&pre_image_data.tries.state);
 

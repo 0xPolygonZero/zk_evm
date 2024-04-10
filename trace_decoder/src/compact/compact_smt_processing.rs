@@ -18,7 +18,7 @@ use super::{
     },
 };
 use crate::{
-    trace_protocol::MptTrieCompact,
+    trace_protocol::{MptTrieCompact, SingleSmtPreImage},
     types::{HashedAccountAddr, TrieRootHash},
 };
 
@@ -69,7 +69,7 @@ impl ParserState {
         state: MptTrieCompact,
     ) -> CompactParsingResult<ProcessedCompactOutput<SmtStateTrieExtractionOutput>> {
         process_compact_prestate_common(
-            state,
+            state.0,
             ParserState::create_and_extract_header_debug_smt,
             ParserState::parse_smt,
         )
@@ -227,4 +227,17 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
         Ok((header, self.instrs))
     }
+}
+
+/// Processes the compact prestate into the trie format of `mpt_trie`. Also
+/// enables heavy debug traces during processing.
+// TODO: Move behind a feature flag...
+pub fn process_compact_smt_prestate_debug(
+    state: SingleSmtPreImage,
+) -> CompactParsingResult<ProcessedCompactOutput<SmtStateTrieExtractionOutput>> {
+    process_compact_prestate_common(
+        state.0,
+        ParserState::create_and_extract_header_debug_smt,
+        ParserState::parse_smt,
+    )
 }

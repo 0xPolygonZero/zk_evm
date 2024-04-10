@@ -1004,14 +1004,14 @@ pub(super) enum TraverserDirection {
 }
 
 pub(super) fn process_compact_prestate_common<T>(
-    state: MptTrieCompact,
+    state_bytes: Vec<u8>,
     create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
     parse_f: fn(ParserState) -> CompactParsingResult<T>,
 ) -> CompactParsingResult<ProcessedCompactOutput<T>>
 where
     T: Debug,
 {
-    let (header, mut parser) = create_and_extract_header_f(state.0)?;
+    let (header, mut parser) = create_and_extract_header_f(state_bytes)?;
     println!("-------------- header: {:?}", header);
     let witness_out = (parse_f(parser))?;
     println!("-------------- witness_out: {:?}", witness_out);
@@ -1022,4 +1022,111 @@ where
     };
 
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use mpt_trie::{nibbles::Nibbles, partial_trie::PartialTrie};
+
+    use super::Instruction;
+    use crate::compact::{
+        compact_debug_tools::parse_just_to_instructions,
+        compact_mpt_processing::process_compact_mpt_prestate_debug,
+        compact_processing_common::{key_bytes_to_nibbles, ParserState},
+        complex_test_payloads::{
+            TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
+            TEST_PAYLOAD_6, TEST_PAYLOAD_7, TEST_PAYLOAD_8,
+        },
+    };
+
+    const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
+
+    fn init() {
+        let _ = pretty_env_logger::try_init();
+    }
+
+    fn h_decode_key(h_bytes: &str) -> Nibbles {
+        let bytes = hex::decode(h_bytes).unwrap();
+        key_bytes_to_nibbles(&bytes)
+    }
+
+    fn h_decode(b_str: &str) -> Vec<u8> {
+        hex::decode(b_str).unwrap()
+    }
+
+    #[test]
+    fn simple_instructions_are_parsed_correctly() {
+        init();
+
+        let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
+        let instrs = parse_just_to_instructions(bytes);
+
+        let instrs = match instrs {
+            Ok(x) => x,
+            Err(err) => panic!("{}", err),
+        };
+
+        let expected_instrs = vec![
+            Instruction::Leaf(h_decode_key("10"), h_decode("31323334")),
+            Instruction::Leaf(h_decode_key("10"), h_decode("31323334")),
+            Instruction::Branch(0b00110000),
+            Instruction::Leaf(h_decode_key("0350"), h_decode("31323335")),
+            Instruction::Branch(0b00011000),
+            Instruction::Extension(h_decode_key(
+                "0000000000000000000000000000000000000000000000000000000000000012",
+            )),
+        ];
+
+        for (i, expected_instr) in expected_instrs.into_iter().enumerate() {
+            assert_eq!(expected_instr, instrs[i])
+        }
+    }
+
+    #[test]
+    fn complex_payload_1() {
+        init();
+        TEST_PAYLOAD_1.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_2() {
+        init();
+        TEST_PAYLOAD_2.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_3() {
+        init();
+        TEST_PAYLOAD_3.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_4() {
+        init();
+        TEST_PAYLOAD_4.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_5() {
+        init();
+        TEST_PAYLOAD_5.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_6() {
+        init();
+        TEST_PAYLOAD_6.parse_and_check_hash_matches_with_debug();
+    }
+
+    #[test]
+    fn complex_payload_7() {
+        init();
+        TEST_PAYLOAD_7.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_8() {
+        init();
+        TEST_PAYLOAD_8.parse_and_check_hash_matches_with_debug_smt();
+    }
 }

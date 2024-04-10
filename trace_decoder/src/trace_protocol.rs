@@ -41,7 +41,7 @@ use crate::{
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockTrace {
     /// The trie pre-images (state & storage) in multiple possible formats.
-    pub trie_pre_images: MptBlockTraceTriePreImages,
+    pub trie_pre_images: TriePreImage,
 
     /// Traces and other info per txn. The index of the txn corresponds to the
     /// slot in this vec.
@@ -146,7 +146,7 @@ pub enum SmtBlockTraceTriePreImages {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[serde_as]
-pub struct SingleSmtPreImage(#[serde_as(as = "FromInto<ByteString>")] Vec<u8>);
+pub struct SingleSmtPreImage(#[serde_as(as = "FromInto<ByteString>")] pub Vec<u8>);
 
 /// Information that is specific to the atomic unit used by the block. This may
 /// be information for each txn or for each continuation segment.
