@@ -122,7 +122,7 @@ pub enum CompactParsingError {
     KeyError(#[from] FromHexPrefixError),
 }
 
-///
+/// CursorBytesErrorInfo
 #[derive(Debug)]
 pub struct CursorBytesErrorInfo {
     error_start_pos: usize,
@@ -168,12 +168,12 @@ enum Opcode {
     EmptyRoot = 0x06,
 }
 
-///
+/// WitnessEntry
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum WitnessEntry {
-    ///
+    /// Instruction
     Instruction(Instruction),
-    ///
+    /// Node
     Node(NodeEntry),
 }
 
@@ -186,23 +186,23 @@ impl Display for WitnessEntry {
     }
 }
 
-///
+/// Instruction
 // TODO: Ignore `NEW_TRIE` for now...
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Instruction {
-    ///
+    /// Leaf
     Leaf(Nibbles, RawValue),
-    ///
+    /// Extension
     Extension(Nibbles),
-    ///
+    /// Branch
     Branch(BranchMask),
-    ///
+    /// Hash
     Hash(HashValue),
-    ///
+    /// Code
     Code(RawCode),
-    ///
+    /// AccountLeaf
     AccountLeaf(Nibbles, Nonce, Balance, HasCode, HasStorage),
-    ///
+    /// EmptyRoot
     EmptyRoot,
 }
 
@@ -232,20 +232,20 @@ impl From<Instruction> for WitnessEntry {
     }
 }
 
-///
+/// NodeEntry
 #[derive(Clone, Debug)]
 pub enum NodeEntry {
-    ///
+    /// Branch
     Branch([Option<Box<NodeEntry>>; 16]),
-    ///
+    /// Code
     Code(Vec<u8>),
-    ///
+    /// Empty
     Empty,
-    ///
+    /// Hash
     Hash(HashValue),
-    ///
+    /// Leaf
     Leaf(Nibbles, LeafNodeData),
-    ///
+    /// Extension
     Extension(Nibbles, Box<NodeEntry>),
 }
 
@@ -262,7 +262,7 @@ impl Display for NodeEntry {
     }
 }
 
-///
+/// ValueNodeData
 #[derive(Clone, Debug)]
 pub struct ValueNodeData(pub(super) Vec<u8>);
 
@@ -272,12 +272,12 @@ impl From<Vec<u8>> for ValueNodeData {
     }
 }
 
-///
+/// LeafNodeData
 #[derive(Clone, Debug)]
 pub enum LeafNodeData {
-    ///
+    /// Value
     Value(ValueNodeData),
-    ///
+    /// Account
     Account(AccountNodeData),
 }
 
@@ -299,7 +299,7 @@ impl From<TrieRootHash> for AccountNodeCode {
     }
 }
 
-///
+/// AccountNodeData
 #[derive(Clone, Debug)]
 pub struct AccountNodeData {
     pub(super) nonce: Nonce,
@@ -324,7 +324,7 @@ impl AccountNodeData {
     }
 }
 
-///
+/// Header
 #[derive(Debug)]
 pub struct Header {
     version: u8,

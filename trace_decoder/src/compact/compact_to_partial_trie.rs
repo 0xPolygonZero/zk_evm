@@ -90,12 +90,12 @@ trait CompactToPartialTrieExtractionOutput {
     fn trie(&mut self) -> &mut HashedPartialTrie;
 }
 
-///
+/// UnexpectedCompactNodeType
 #[derive(Debug)]
 pub enum UnexpectedCompactNodeType {
-    ///
+    /// AccountLeaf
     AccountLeaf,
-    ///
+    /// Code
     Code,
 }
 
