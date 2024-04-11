@@ -1,11 +1,15 @@
 use ethereum_types::U256;
 use plonky2::field::types::{Field, Sample};
-use rand::{thread_rng, Rng};
+use plonky2::hash::hash_types::HashOut;
+use rand::{thread_rng, Rng, random};
+use rand::seq::SliceRandom;
 
 use crate::{
     db::MemoryDb,
     smt::{hash_serialize, Key, Smt, F},
 };
+use crate::bits::Bits;
+use crate::db::Db;
 
 #[test]
 fn test_add_and_rem() {
@@ -271,4 +275,84 @@ fn test_no_write_0() {
 
     let ser = smt.serialize();
     assert_eq!(hash_serialize(&ser), smt.root);
+}
+
+#[test]
+fn test_set_hash_first_level() {
+    let mut smt = Smt::<MemoryDb>::default();
+
+    let kvs = (0..128)
+        .map(|_| {
+            let k = Key(F::rand_array());
+            let v = U256(random());
+            smt.set(k, v);
+            (k, v)
+        })
+        .collect::<Vec<_>>();
+    for &(k, v) in &kvs {
+        smt.set(k, v);
+    }
+
+    let first_level = smt.db.get_node(&Key(smt.root.elements)).unwrap();
+    let mut hash_smt = Smt::<MemoryDb>::default();
+    let zero = Bits {
+        count: 1,
+        packed: U256::zero(),
+    };
+    let one = Bits {
+        count: 1,
+        packed: U256::one(),
+    };
+    hash_smt.set_hash(zero, HashOut {
+        elements: first_level.0[0..4].try_into().unwrap(),
+    });
+    hash_smt.set_hash(one, HashOut {
+        elements: first_level.0[4..8].try_into().unwrap(),
+    });
+
+    assert_eq!(smt.root, hash_smt.root);
+
+    let ser = hash_smt.serialize();
+    assert_eq!(hash_serialize(&ser), hash_smt.root);
+}
+
+#[test]
+fn test_set_hash_order() {
+    let mut smt = Smt::<MemoryDb>::default();
+
+    let level = 4;
+
+    let mut khs = (1..1<<level)
+        .map(|i| {
+            let k = Bits { count: level, packed: i.into() };
+            let hash = HashOut {
+                elements: F::rand_array(),
+            };
+            (k, hash)
+        })
+        .collect::<Vec<_>>();
+    for &(k, v) in &khs {
+        smt.set_hash(k, v);
+    }
+    let key = loop { // Forgive my laziness
+        let key = Key(F::rand_array());
+        let keys = key.split();
+        if (0..level).all(|i| !keys.get_bit(i)) {
+            break key;
+        }
+    };
+    let val = U256(random());
+    smt.set(key, val);
+
+    let mut second_smt = Smt::<MemoryDb>::default();
+    khs.shuffle(&mut thread_rng());
+    for (k, v) in khs {
+        second_smt.set_hash(k, v);
+    }
+    second_smt.set(key, val);
+
+    assert_eq!(smt.root, second_smt.root);
+
+    let ser = second_smt.serialize();
+    assert_eq!(hash_serialize(&ser), second_smt.root);
 }
