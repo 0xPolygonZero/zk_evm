@@ -35,12 +35,9 @@ impl ParserState {
     fn parse_smt(mut self) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
 
-        // TODO: Consider moving this into the `Self`...
-        let mut storage_tries = HashMap::new();
-        self.apply_rules_to_witness_entries_smt(&mut storage_tries, &mut entry_buf);
+        self.apply_rules_to_witness_entries_smt(&mut entry_buf);
 
-        let node_entry =
-            self.apply_rules_to_witness_entries_smt(&mut storage_tries, &mut entry_buf);
+        let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf);
 
         let res = match self.entries.len() {
             1 => create_smt_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
@@ -77,17 +74,14 @@ impl ParserState {
 
     fn apply_rules_to_witness_entries_smt(
         &mut self,
-        storage_tries: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
         entry_buf: &mut Vec<WitnessEntry>,
     ) -> NodeEntry {
         let mut traverser = self.entries.create_collapsable_traverser();
-
-        Self::try_apply_rules_to_curr_entry_smt(&mut traverser, storage_tries, entry_buf)
+        Self::try_apply_rules_to_curr_entry_smt(&mut traverser, entry_buf)
     }
 
     fn try_apply_rules_to_curr_entry_smt(
         traverser: &mut CollapsableWitnessEntryTraverser,
-        storage_tries: &mut HashMap<TrieRootHash, HashedPartialTrie>,
         buf: &mut Vec<WitnessEntry>,
     ) -> NodeEntry {
         buf.extend(traverser.get_next_n_elems(1).cloned());
@@ -98,19 +92,15 @@ impl ParserState {
             WitnessEntry::Instruction(Instruction::Branch(mask)) => {
                 let mut branch_nodes = Self::create_empty_branch_node_entry_smt();
 
-                let node_entry =
-                    Self::try_apply_rules_to_curr_entry_smt(traverser, storage_tries, buf);
+                let node_entry = Self::try_apply_rules_to_curr_entry_smt(traverser, buf);
                 match node_entry.clone() {
                     NodeEntry::SMTLeaf(n, a, s, v) => {
                         if mask == 3 {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
-                                branch_nodes[1] =
-                                    Some(Box::new(Self::try_apply_rules_to_curr_entry_smt(
-                                        traverser,
-                                        storage_tries,
-                                        buf,
-                                    )));
+                                branch_nodes[1] = Some(Box::new(
+                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf),
+                                ));
                             } else {
                                 branch_nodes[1] = Some(Box::new(node_entry));
                             }
@@ -124,12 +114,9 @@ impl ParserState {
                         if mask == 3 {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
-                                branch_nodes[1] =
-                                    Some(Box::new(Self::try_apply_rules_to_curr_entry_smt(
-                                        traverser,
-                                        storage_tries,
-                                        buf,
-                                    )));
+                                branch_nodes[1] = Some(Box::new(
+                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf),
+                                ));
                             } else {
                                 branch_nodes[1] = Some(Box::new(node_entry));
                             }
@@ -143,12 +130,9 @@ impl ParserState {
                         if mask == 3 {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
-                                branch_nodes[1] =
-                                    Some(Box::new(Self::try_apply_rules_to_curr_entry_smt(
-                                        traverser,
-                                        storage_tries,
-                                        buf,
-                                    )));
+                                branch_nodes[1] = Some(Box::new(
+                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf),
+                                ));
                             } else {
                                 branch_nodes[1] = Some(Box::new(node_entry));
                             }
