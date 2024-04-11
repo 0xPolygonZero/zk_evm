@@ -6,11 +6,10 @@ use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
 use plonky2::plonk::config::Hasher;
 
-use crate::compact::tmp::utils::{get_unique_sibling, limbs2f, u2h, u2k};
-
 use super::bits::Bits;
 use super::db::Db;
 use super::utils::{f2limbs, hash0, hash_key_hash, hashout2u, key2u};
+use crate::compact::tmp::utils::{get_unique_sibling, limbs2f, u2h, u2k};
 
 const HASH_TYPE: u8 = 0;
 const INTERNAL_TYPE: u8 = 1;
@@ -347,7 +346,11 @@ impl<D: Db> Smt<D> {
             }
         }
         level -= 1;
-        assert_eq!(r, Key([F::ZERO; 4]), "Tried to insert a hash node in a non-empty node.");
+        assert_eq!(
+            r,
+            Key([F::ZERO; 4]),
+            "Tried to insert a hash node in a non-empty node."
+        );
 
         if level >= 0 {
             let b = key.get_bit(level as usize) as usize * 4;

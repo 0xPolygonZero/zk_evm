@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use ethereum_types::{Address, BigEndianHash, U256};
 use keccak_hash::H256;
 use mpt_trie::nibbles::Nibbles;
+use plonky2::{hash::hash_types::HashOut, plonk::config::GenericHashOut};
 
 use super::{
     compact_processing_common::{
@@ -15,6 +16,7 @@ use super::{
     compact_smt_processing::SmtNodeType,
     compact_to_mpt_trie::{create_mpt_trie_from_remaining_witness_elem, StateTrieExtractionOutput},
     tmp::{
+        bits::Bits,
         db::MemoryDb,
         keys::{key_balance, key_code, key_code_length, key_nonce, key_storage},
         smt::{Key, Smt},
@@ -40,26 +42,27 @@ pub struct SmtStateTrieExtractionOutput {
 impl SmtStateTrieExtractionOutput {
     fn process_branch_smt_node(
         &mut self,
-        curr_key: Nibbles,
+        curr_key: Bits,
         l_child: &Option<Box<NodeEntry>>,
         r_child: &Option<Box<NodeEntry>>,
     ) {
         if let Some(l_child) = l_child {
             let mut lkey = curr_key;
-            lkey.push_nibble_back(0);
+            lkey.push_bit(false);
             create_smt_trie_from_compact_node_rec(lkey, l_child, self);
         }
 
         if let Some(r_child) = r_child {
             let mut rkey = curr_key;
-            rkey.push_nibble_back(0);
+            rkey.push_bit(true);
             create_smt_trie_from_compact_node_rec(rkey, r_child, self);
         }
     }
 
-    fn process_hash_node(&mut self, curr_key: Nibbles, h: &TrieRootHash) {
-        // self.state_smt_trie.set(curr_key, h.into_uint());
-        // TODO: Wait until William implements this upstream...
+    fn process_hash_node(&mut self, curr_key: Bits, h: &TrieRootHash) {
+        // Note: This may be incorrect in how to construct the key.
+        self.state_smt_trie
+            .set_hash(curr_key, HashOut::from_bytes(h.as_bytes()));
     }
 
     fn process_code_node(&mut self, c_bytes: &Vec<u8>) {
@@ -109,13 +112,13 @@ fn create_smt_trie_from_compact_node(
 ) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
     let mut output = SmtStateTrieExtractionOutput::default();
 
-    create_smt_trie_from_compact_node_rec(Nibbles::default(), &node, &mut output)?;
+    create_smt_trie_from_compact_node_rec(Bits::default(), &node, &mut output)?;
 
     Ok(output)
 }
 
 fn create_smt_trie_from_compact_node_rec(
-    curr_key: Nibbles,
+    curr_key: Bits,
     curr_node: &NodeEntry,
     output: &mut SmtStateTrieExtractionOutput,
 ) -> CompactParsingResult<()> {
