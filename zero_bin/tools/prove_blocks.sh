@@ -8,6 +8,7 @@
 
 export RUST_BACKTRACE=1
 export RUST_LOG=mpt_trie=info,trace_decoder=info,plonky2=info,evm_arithmetization=trace,leader=info
+export RUSTFLAGS='-Ctarget-cpu=native'
 
 export ARITHMETIC_CIRCUIT_SIZE="16..23"
 export BYTE_PACKING_CIRCUIT_SIZE="9..21"
