@@ -325,6 +325,8 @@ impl<D: Db> Smt<D> {
         self.root = new_root;
     }
 
+    /// Set the key to the hash in the SMT.
+    /// Needs to be called before any call to `set` to avoid issues.
     pub fn set_hash(&mut self, key: Bits, hash: HashOut) {
         let mut r = Key(self.root.elements);
         let mut new_root = self.root;
