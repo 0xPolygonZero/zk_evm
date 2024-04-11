@@ -6,10 +6,11 @@ use plonky2::field::types::{Field, PrimeField64};
 use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
 use plonky2::plonk::config::Hasher;
 
+use crate::compact::tmp::utils::{get_unique_sibling, limbs2f, u2h, u2k};
+
 use super::bits::Bits;
 use super::db::Db;
-use super::utils::{get_unique_sibling, hash_key_hash, hashout2u, key2u};
-use crate::compact::tmp::utils::{f2limbs, hash0, limbs2f, u2h, u2k};
+use super::utils::{f2limbs, hash0, hash_key_hash, hashout2u, key2u};
 
 const HASH_TYPE: u8 = 0;
 const INTERNAL_TYPE: u8 = 1;
@@ -324,6 +325,53 @@ impl<D: Db> Smt<D> {
         self.root = new_root;
     }
 
+    /// Set the key to the hash in the SMT.
+    /// Needs to be called before any call to `set` to avoid issues.
+    pub fn set_hash(&mut self, key: Bits, hash: HashOut) {
+        let mut r = Key(self.root.elements);
+        let mut new_root = self.root;
+        let mut level = 0isize;
+        let mut siblings = vec![];
+
+        for _ in 0..key.count {
+            let sibling = self.db.get_node(&r).unwrap_or(&Node([F::ZERO; 12]));
+            siblings.push(*sibling);
+            if sibling.is_one_siblings() {
+                panic!("Hit a leaf node.");
+            } else {
+                let b = key.get_bit(level as usize);
+                r = Key(sibling.0[b as usize * 4..(b as usize + 1) * 4]
+                    .try_into()
+                    .unwrap());
+                level += 1;
+            }
+        }
+        level -= 1;
+        assert_eq!(r, Key([F::ZERO; 4]), "Tried to insert a hash node in a non-empty node.");
+
+        if level >= 0 {
+            let b = key.get_bit(level as usize) as usize * 4;
+            siblings[level as usize].0[b..b + 4].copy_from_slice(&hash.elements);
+        } else {
+            new_root = hash;
+        }
+        siblings.truncate((level + 1) as usize);
+
+        while level >= 0 {
+            new_root = F::poseidon(siblings[level as usize].0)[0..4]
+                .try_into()
+                .unwrap();
+            self.db
+                .set_node(Key(new_root.elements), siblings[level as usize]);
+            level -= 1;
+            if level >= 0 {
+                let b = key.get_bit(level as usize) as usize * 4;
+                siblings[level as usize].0[b..b + 4].copy_from_slice(&new_root.elements);
+            }
+        }
+        self.root = new_root;
+    }
+
     /// Serialize the SMT into a vector of U256.
     /// Starts with a [0, 0] for convenience, that way `ptr=0` is a canonical
     /// empty node. Therefore the root of the SMT is at `ptr=2`.
@@ -380,7 +428,10 @@ fn serialize<D: Db>(smt: &Smt<D>, key: Key, v: &mut Vec<U256>) -> usize {
             index
         }
     } else {
-        todo!("Add a hash node here.");
+        let index = v.len();
+        v.push(HASH_TYPE.into());
+        v.push(key2u(key));
+        index
     }
 }
 
