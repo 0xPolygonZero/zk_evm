@@ -3640,6 +3640,7 @@ dependencies = [
  "anyhow",
  "clap",
  "common",
+ "dotenvy",
  "proof_gen",
  "serde",
  "serde_json",
