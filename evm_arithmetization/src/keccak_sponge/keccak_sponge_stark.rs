@@ -663,14 +663,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
                     - P::from(FE::from_canonical_u8(0b10000001))),
         );
 
-        let is_padding_byte: Vec<P> = local_values
+        let is_padding_byte = local_values
             .is_final_input_len
             .iter()
             .scan(P::ZEROS, |acc, &x| {
                 *acc += x;
                 Some(*acc)
             })
-            .collect();
+            .collect_vec();
         for i in 0..KECCAK_RATE_BYTES - 1 {
             // If the row has multiple padding bytes, the first padding byte must be 1
             yield_constr.constraint_transition(
@@ -860,14 +860,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let constraint = builder.mul_extension(has_single_padding_byte, diff);
         yield_constr.constraint_transition(builder, constraint);
 
-        let is_padding_byte: Vec<ExtensionTarget<D>> = local_values
+        let is_padding_byte = local_values
             .is_final_input_len
             .iter()
             .scan(builder.zero_extension(), |acc, &x| {
                 *acc = builder.add_extension(*acc, x);
                 Some(*acc)
             })
-            .collect();
+            .collect_vec();
         for i in 0..KECCAK_RATE_BYTES - 1 {
             // If the row has multiple padding bytes, the first padding byte must be 1
             let constraint = builder.mul_sub_extension(
