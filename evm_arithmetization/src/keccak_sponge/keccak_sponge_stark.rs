@@ -395,7 +395,6 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
             // Both 1s are placed in the same byte.
             row.block_bytes[final_inputs.len()] = F::from_canonical_u8(0b10000001);
         } else {
-            row.is_multi_padding_block = F::ONE;
             row.block_bytes[final_inputs.len()] = F::ONE;
             row.block_bytes[KECCAK_RATE_BYTES - 1] = F::from_canonical_u8(0b10000000);
         }
@@ -562,13 +561,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let range_max = P::Scalar::from_canonical_u64((BYTE_RANGE_MAX - 1) as u64);
         yield_constr.constraint_last_row(rc1 - range_max);
 
-        // Each flag (full-input block, multi-padding block, final block or implied
-        // dummy flag) must be boolean.
+        // Each flag (full-input block, final block or implied dummy flag) must be
+        // boolean.
         let is_full_input_block = local_values.is_full_input_block;
         yield_constr.constraint(is_full_input_block * (is_full_input_block - P::ONES));
-
-        let is_multi_padding_block = local_values.is_multi_padding_block;
-        yield_constr.constraint(is_multi_padding_block * (is_multi_padding_block - P::ONES));
 
         let is_final_block: P = local_values.is_final_input_len.iter().copied().sum();
         yield_constr.constraint(is_final_block * (is_final_block - P::ONES));
@@ -659,12 +655,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         // single padding byte
         let has_single_padding_byte = local_values.is_final_input_len[KECCAK_RATE_BYTES - 1];
 
-        // If this is the final block, then it can either contain a single padding byte
-        // or be a row with multiple padding bytes
-        yield_constr.constraint_transition(
-            is_final_block * (P::ONES - has_single_padding_byte) - is_multi_padding_block,
-        );
-
         // If the row has a single padding byte, then it must be the last byte with
         // value 0b10000001
         yield_constr.constraint_transition(
@@ -673,17 +663,31 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
                     - P::from(FE::from_canonical_u8(0b10000001))),
         );
 
-        // If the row has multiple padding bytes, then the first padding byte must be 1
+        let is_padding_byte: Vec<P> = local_values
+            .is_final_input_len
+            .iter()
+            .scan(P::ZEROS, |acc, &x| {
+                *acc += x;
+                Some(*acc)
+            })
+            .collect();
         for i in 0..KECCAK_RATE_BYTES - 1 {
+            // If the row has multiple padding bytes, the first padding byte must be 1
             yield_constr.constraint_transition(
-                is_multi_padding_block
-                    * local_values.is_final_input_len[i]
-                    * (local_values.block_bytes[i] - P::ONES),
+                local_values.is_final_input_len[i] * (local_values.block_bytes[i] - P::ONES),
+            );
+            // If the row has multiple padding bytes, the other padding bytes
+            // except the last one must be 0
+            yield_constr.constraint_transition(
+                is_padding_byte[i]
+                    * (local_values.is_final_input_len[i] - P::ONES)
+                    * local_values.block_bytes[i],
             );
         }
         // If the row has multiple padding bytes, then the last byte must be 0b10000000
         yield_constr.constraint_transition(
-            is_multi_padding_block
+            is_final_block
+                * (has_single_padding_byte - P::ONES)
                 * (local_values.block_bytes[KECCAK_RATE_BYTES - 1]
                     - P::from(FE::from_canonical_u8(0b10000000))),
         );
@@ -726,21 +730,13 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let t = builder.sub_extension(rc1, range_max);
         yield_constr.constraint_last_row(builder, t);
 
-        // Each flag (full-input block, multi-padding block, final block or implied
-        // dummy flag) must be boolean.
+        // Each flag (full-input block, final block or implied dummy flag) must be
+        // boolean.
         let is_full_input_block = local_values.is_full_input_block;
         let constraint = builder.mul_sub_extension(
             is_full_input_block,
             is_full_input_block,
             is_full_input_block,
-        );
-        yield_constr.constraint(builder, constraint);
-
-        let is_multi_padding_block = local_values.is_multi_padding_block;
-        let constraint = builder.mul_sub_extension(
-            is_multi_padding_block,
-            is_multi_padding_block,
-            is_multi_padding_block,
         );
         yield_constr.constraint(builder, constraint);
 
@@ -854,17 +850,6 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         // single padding byte
         let has_single_padding_byte = local_values.is_final_input_len[KECCAK_RATE_BYTES - 1];
 
-        // If this is the final block, then it can either contain a single padding byte
-        // or be a row with multiple padding bytes
-        let not_has_single_padding_byte =
-            builder.sub_extension(one, local_values.is_final_input_len[KECCAK_RATE_BYTES - 1]);
-        let constraint = builder.mul_sub_extension(
-            is_final_block,
-            not_has_single_padding_byte,
-            is_multi_padding_block,
-        );
-        yield_constr.constraint_transition(builder, constraint);
-
         // If the row has a single padding byte, then it must be the last byte with
         // value 0b10000001
         let padding_byte = builder.constant_extension(F::Extension::from_canonical_u8(0b10000001));
@@ -875,23 +860,43 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let constraint = builder.mul_extension(has_single_padding_byte, diff);
         yield_constr.constraint_transition(builder, constraint);
 
-        // If the row has multiple padding bytes, then the first padding byte must be 1
+        let is_padding_byte: Vec<ExtensionTarget<D>> = local_values
+            .is_final_input_len
+            .iter()
+            .scan(builder.zero_extension(), |acc, &x| {
+                *acc = builder.add_extension(*acc, x);
+                Some(*acc)
+            })
+            .collect();
         for i in 0..KECCAK_RATE_BYTES - 1 {
-            let diff = builder.sub_extension(local_values.block_bytes[i], one);
-            let constraint = {
-                let sel = builder
-                    .mul_extension(is_multi_padding_block, local_values.is_final_input_len[i]);
-                builder.mul_extension(sel, diff)
-            };
+            // If the row has multiple padding bytes, the first padding byte must be 1
+            let constraint = builder.mul_sub_extension(
+                local_values.is_final_input_len[i],
+                local_values.block_bytes[i],
+                local_values.is_final_input_len[i],
+            );
+            yield_constr.constraint_transition(builder, constraint);
+
+            // If the row has multiple padding bytes, the other padding bytes
+            // except the last one must be 0
+            let sel = builder.mul_sub_extension(
+                is_padding_byte[i],
+                local_values.is_final_input_len[i],
+                is_padding_byte[i],
+            );
+            let constraint = builder.mul_extension(sel, local_values.block_bytes[i]);
             yield_constr.constraint_transition(builder, constraint);
         }
+
         // If the row has multiple padding bytes, then the last byte must be 0b10000000
+        let sel =
+            builder.mul_sub_extension(is_final_block, has_single_padding_byte, is_final_block);
         let padding_byte = builder.constant_extension(F::Extension::from_canonical_u8(0b10000000));
         let diff = builder.sub_extension(
             local_values.block_bytes[KECCAK_RATE_BYTES - 1],
             padding_byte,
         );
-        let constraint = builder.mul_extension(is_multi_padding_block, diff);
+        let constraint = builder.mul_extension(sel, diff);
         yield_constr.constraint_transition(builder, constraint);
 
         // A dummy row is always followed by another dummy row, so the prover can't put
