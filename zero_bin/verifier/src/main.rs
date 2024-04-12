@@ -2,6 +2,7 @@ use std::fs::File;
 
 use anyhow::Result;
 use clap::Parser;
+use dotenvy::dotenv;
 use proof_gen::types::PlonkyProofIntern;
 use serde_json::Deserializer;
 
@@ -9,6 +10,7 @@ mod cli;
 mod init;
 
 fn main() -> Result<()> {
+    dotenv().ok();
     init::tracing();
 
     let args = cli::Cli::parse();
