@@ -1034,8 +1034,8 @@ mod tests {
         compact_mpt_processing::process_compact_mpt_prestate_debug,
         compact_processing_common::{key_bytes_to_nibbles, ParserState},
         complex_test_payloads::{
-            TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
-            TEST_PAYLOAD_6, TEST_PAYLOAD_7, TEST_PAYLOAD_8,
+            TEST_PAYLOAD_1, TEST_PAYLOAD_10, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4,
+            TEST_PAYLOAD_5, TEST_PAYLOAD_6, TEST_PAYLOAD_7, TEST_PAYLOAD_8, TEST_PAYLOAD_9,
         },
     };
 
@@ -1128,5 +1128,17 @@ mod tests {
     fn complex_payload_8() {
         init();
         TEST_PAYLOAD_8.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_9() {
+        init();
+        TEST_PAYLOAD_9.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_10() {
+        init();
+        TEST_PAYLOAD_10.parse_and_check_hash_matches_with_debug_smt();
     }
 }

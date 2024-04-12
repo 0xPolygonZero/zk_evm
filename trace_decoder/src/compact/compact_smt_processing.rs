@@ -35,21 +35,10 @@ impl ParserState {
     fn parse_smt(mut self) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
 
-        self.apply_rules_to_witness_entries_smt(&mut entry_buf);
-
         let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf);
+        println!("node_entry {:?}", node_entry);
 
-        let res = match self.entries.len() {
-            1 => create_smt_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
-
-            // Case for when nothing except the header is passed in.
-            0 => Ok(SmtStateTrieExtractionOutput::default()),
-            _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
-                self.entries,
-            )),
-        }?;
-
-        Ok(res)
+        create_smt_trie_from_remaining_witness_elem(node_entry)
     }
 
     pub(crate) fn create_and_extract_header_debug_smt(
@@ -144,7 +133,6 @@ impl ParserState {
                     }
                     _ => {}
                 }
-                // println!("branch_nodes {:?}", branch_nodes);
                 NodeEntry::BranchSMT(branch_nodes)
             }
 

@@ -98,13 +98,9 @@ impl SmtStateTrieExtractionOutput {
 
 // TODO: Merge both `SMT` & `MPT` versions of this function into a single one...
 pub(super) fn create_smt_trie_from_remaining_witness_elem(
-    remaining_entry: WitnessEntry,
+    remaining_entry: NodeEntry,
 ) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
-    let remaining_node = remaining_entry
-        .into_node()
-        .expect("Final node in compact entries was not a node! This is a bug!");
-
-    create_smt_trie_from_compact_node(remaining_node)
+    create_smt_trie_from_compact_node(remaining_entry)
 }
 
 fn create_smt_trie_from_compact_node(
