@@ -203,18 +203,18 @@ pub(crate) fn ctl_looking_memory_filter<F: Field>(i: usize) -> Filter<F> {
     if i == KECCAK_RATE_BYTES - 1 {
         Filter::new_simple(Column::single(cols.is_full_input_block))
     } else {
-        Filter::new_simple(Column::linear_combination(
-            once((cols.is_full_input_block, F::ONE))
-                .chain(once((cols.is_padding_byte[KECCAK_RATE_BYTES - 1], F::ONE)))
-                .chain(once((cols.is_padding_byte[i], -F::ONE))),
-        ))
+        Filter::new_simple(Column::linear_combination([
+            (cols.is_full_input_block, F::ONE),
+            (cols.is_padding_byte[KECCAK_RATE_BYTES - 1], F::ONE),
+            (cols.is_padding_byte[i], -F::ONE),
+        ]))
     }
 }
 
 /// CTL filter for looking at XORs in the logic table.
 pub(crate) fn ctl_looking_logic_filter<F: Field>() -> Filter<F> {
     let cols = KECCAK_SPONGE_COL_MAP;
-    Filter::new_simple(Column::sum(vec![
+    Filter::new_simple(Column::sum([
         cols.is_full_input_block,
         cols.is_padding_byte[KECCAK_RATE_BYTES - 1],
     ]))
@@ -223,7 +223,7 @@ pub(crate) fn ctl_looking_logic_filter<F: Field>() -> Filter<F> {
 /// CTL filter for looking at the input and output in the Keccak table.
 pub(crate) fn ctl_looking_keccak_filter<F: Field>() -> Filter<F> {
     let cols = KECCAK_SPONGE_COL_MAP;
-    Filter::new_simple(Column::sum(vec![
+    Filter::new_simple(Column::sum([
         cols.is_full_input_block,
         cols.is_padding_byte[KECCAK_RATE_BYTES - 1],
     ]))
