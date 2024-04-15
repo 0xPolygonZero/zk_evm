@@ -579,7 +579,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint(is_padding_byte * (is_padding_byte - P::ONES));
         }
 
-        // A padding byte is always followed by another padding byte
+        // A padding byte is always followed by another padding byte.
         for i in 1..KECCAK_RATE_BYTES {
             yield_constr.constraint(
                 local_values.is_padding_byte[i - 1] * (local_values.is_padding_byte[i] - P::ONES),
