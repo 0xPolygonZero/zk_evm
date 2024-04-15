@@ -11,7 +11,7 @@ use plonky2::{hash::hash_types::HashOut, plonk::config::GenericHashOut};
 use super::{
     compact_processing_common::{
         CompactCursor, CompactParsingError, CompactParsingResult, DebugCompactCursor, Header,
-        NodeEntry, ParserState, WitnessBytes, WitnessEntries, WitnessEntry,
+        NodeEntry, ParserState, SMTLeafNode, WitnessBytes, WitnessEntries, WitnessEntry,
     },
     compact_smt_processing::SmtNodeType,
     compact_to_mpt_trie::{create_mpt_trie_from_remaining_witness_elem, StateTrieExtractionOutput},
@@ -65,9 +65,11 @@ impl SmtStateTrieExtractionOutput {
             .set_hash(curr_key, HashOut::from_bytes(h.as_bytes()));
     }
 
-    fn process_code_node(&mut self, c_bytes: &Vec<u8>) {
-        let c_hash = hash(c_bytes);
-        self.code.insert(c_hash, c_bytes.clone());
+    fn process_code_node(&mut self, addr: &[u8], c_bytes: &[u8]) {
+        let addr_hash = Address::from_slice(addr);
+        self.state_smt_trie.set(key_code(addr_hash), c_bytes);
+        self.state_smt_trie
+            .set(key_code_length(addr_hash), c_bytes.len());
     }
 
     fn process_smt_leaf(
@@ -122,7 +124,7 @@ fn create_smt_trie_from_compact_node_rec(
         NodeEntry::BranchSMT([l_child, r_child]) => {
             output.process_branch_smt_node(curr_key, l_child, r_child)
         }
-        NodeEntry::Code(c_bytes) => output.process_code_node(c_bytes),
+        NodeEntry::CodeSMT(addr, c_bytes) => output.process_code_node(addr, c_bytes),
         NodeEntry::Empty => (),
         NodeEntry::Hash(h) => output.process_hash_node(curr_key, h),
         NodeEntry::SMTLeaf(n_type, addr_bytes, slot_bytes, slot_val) => {

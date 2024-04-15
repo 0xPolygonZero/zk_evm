@@ -43,7 +43,8 @@ impl ParserState {
     pub(crate) fn create_and_extract_header_debug_smt(
         witness_bytes_raw: Vec<u8>,
     ) -> CompactParsingResult<(Header, Self)> {
-        let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
+        let witness_bytes: WitnessBytes<DebugCompactCursor> =
+            WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
         let (header, entries) = witness_bytes.process_into_instructions_and_header_smt()?;
         let p_state = Self { entries };
 
@@ -130,7 +131,7 @@ impl ParserState {
                             branch_nodes[0] = Some(Box::new(node_entry));
                         }
                     }
-                    NodeEntry::Code(code) => {
+                    NodeEntry::CodeSMT(addr, code) => {
                         if mask == 3 {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
@@ -157,13 +158,35 @@ impl ParserState {
                 address,
                 storage,
                 value,
-            )) => NodeEntry::SMTLeaf(
-                SmtNodeType::n(node_type_byte).unwrap(),
-                address,
-                storage,
-                value,
-            ),
-            WitnessEntry::Instruction(Instruction::Code(code)) => NodeEntry::Code(code),
+            )) => {
+                if node_type_byte == 2 || node_type_byte == 4 {
+                    NodeEntry::Empty
+                } else {
+                    NodeEntry::SMTLeaf(
+                        SmtNodeType::n(node_type_byte).unwrap(),
+                        address,
+                        storage,
+                        value,
+                    )
+                }
+            }
+            WitnessEntry::Instruction(Instruction::Code(code)) => {
+                // TODO - Improve this logic... Hacky for now...
+                let wi = traverser.get_next_n_elems(1).cloned();
+                let mut buf2 = Vec::new();
+                buf2.extend(wi);
+                let x = buf2[0].as_instruction().unwrap();
+                let z: Vec<u8> = Vec::new();
+                let mut b = match x {
+                    Instruction::SMTLeaf(a, b, c, d) => b,
+                    _ => {
+                        println!("Not SMTLeaf");
+                        &z
+                    }
+                };
+                println!("b: {:?}", b);
+                NodeEntry::CodeSMT(b.to_vec(), code)
+            }
             _ => NodeEntry::Empty,
         }
     }
