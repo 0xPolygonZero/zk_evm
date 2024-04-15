@@ -7,11 +7,11 @@ use std::{
     sync::Arc,
 };
 
-use ethereum_types::{H256, U512};
+use ethereum_types::H256;
 use num_traits::PrimInt;
 
 use crate::{
-    nibbles::{Nibble, Nibbles},
+    nibbles::{Nibble, Nibbles, NibblesIntern},
     partial_trie::{Node, PartialTrie},
     trie_ops::TrieOpResult,
 };
@@ -71,8 +71,8 @@ pub(crate) fn is_even<T: PrimInt + BitAnd<Output = T>>(num: T) -> bool {
     (num & T::one()) == T::zero()
 }
 
-pub(crate) fn create_mask_of_1s(amt: usize) -> U512 {
-    (U512::one() << amt) - 1
+pub(crate) fn create_mask_of_1s(amt: usize) -> NibblesIntern {
+    (NibblesIntern::one() << amt) - 1
 }
 
 pub(crate) fn bytes_to_h256(b: &[u8; 32]) -> H256 {
@@ -206,7 +206,7 @@ impl Display for TrieSegment {
 
 impl TrieSegment {
     /// Get the node type of the [`TrieSegment`].
-    pub fn node_type(&self) -> TrieNodeType {
+    pub const fn node_type(&self) -> TrieNodeType {
         match self {
             TrieSegment::Empty => TrieNodeType::Empty,
             TrieSegment::Hash => TrieNodeType::Hash,

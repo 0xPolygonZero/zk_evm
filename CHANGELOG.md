@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Remove interpreter-specific preinialization logic from State trait ([#139](https://github.com/0xPolygonZero/zk_evm/pull/139))
+- Make some more functions constant ([#154](https://github.com/0xPolygonZero/zk_evm/pull/154))
 - fix(keccak-sponge): properly constrain padding bytes ([#158](https://github.com/0xPolygonZero/zk_evm/pull/158))
 - Reduce verbosity in logs ([#160](https://github.com/0xPolygonZero/zk_evm/pull/160))
 
@@ -15,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Update plonky2 dependencies ([#119](https://github.com/0xPolygonZero/zk_evm/pull/119))
+- Swap out the internal U512 inside nibbles to [u64;5] ([#132](https://github.com/0xPolygonZero/zk_evm/pull/132))
 - Charge gas before SLOAD and refactor `insert_accessed_storage_keys` ([#117](https://github.com/0xPolygonZero/zk_evm/pull/117))
 - Increased the public interface for `trie_tools` ([#123](https://github.com/0xPolygonZero/zk_evm/pull/123))
 - Mpt trie panic refactor  ([#118](https://github.com/0xPolygonZero/zk_evm/pull/118))
