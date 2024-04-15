@@ -567,6 +567,15 @@ pub fn generate_all_data_segments<F: RichField>(
         };
     }
 
+    // We need at least two segments to prove a segment aggregation.
+    if all_seg_data.len() == 1 {
+        let dummy_seg = GenerationSegmentData {
+            registers_before: segment_data.registers_after,
+            ..segment_data
+        };
+        all_seg_data.push(dummy_seg);
+    }
+
     Ok(all_seg_data)
 }
 
