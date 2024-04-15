@@ -898,7 +898,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
                     local_values.is_padding_byte[i]
                 }
             };
-            // If the row has multiple padding bytes, the first padding byte must be 1
+            // If the row has multiple padding bytes, the first padding byte must be 1.
             let constraint = builder.mul_sub_extension(
                 is_first_padding_byte,
                 local_values.block_bytes[i],
