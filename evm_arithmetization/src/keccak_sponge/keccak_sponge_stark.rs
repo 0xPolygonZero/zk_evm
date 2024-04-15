@@ -567,17 +567,15 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let range_max = P::Scalar::from_canonical_u64((BYTE_RANGE_MAX - 1) as u64);
         yield_constr.constraint_last_row(rc1 - range_max);
 
-        // Each flag (full-input block, final block, padding byte or implied dummy flag)
-        // must be boolean.
+        // Each flag (full-input block, padding byte or implied dummy flag) must be
+        // boolean.
         let is_full_input_block = local_values.is_full_input_block;
         yield_constr.constraint(is_full_input_block * (is_full_input_block - P::ONES));
-
-        let is_final_block: P = local_values.is_padding_byte[KECCAK_RATE_BYTES - 1];
-        yield_constr.constraint(is_final_block * (is_final_block - P::ONES));
 
         for &is_padding_byte in local_values.is_padding_byte.iter() {
             yield_constr.constraint(is_padding_byte * (is_padding_byte - P::ONES));
         }
+        let is_final_block: P = local_values.is_padding_byte[KECCAK_RATE_BYTES - 1];
 
         // A padding byte is always followed by another padding byte.
         for i in 1..KECCAK_RATE_BYTES {
@@ -753,15 +751,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         );
         yield_constr.constraint(builder, constraint);
 
-        let is_final_block = local_values.is_padding_byte[KECCAK_RATE_BYTES - 1];
-        let constraint = builder.mul_sub_extension(is_final_block, is_final_block, is_final_block);
-        yield_constr.constraint(builder, constraint);
-
         for &is_padding_byte in local_values.is_padding_byte.iter() {
             let constraint =
                 builder.mul_sub_extension(is_padding_byte, is_padding_byte, is_padding_byte);
             yield_constr.constraint(builder, constraint);
         }
+        let is_final_block = local_values.is_padding_byte[KECCAK_RATE_BYTES - 1];
 
         // A padding byte is always followed by another padding byte.
         for i in 1..KECCAK_RATE_BYTES {
