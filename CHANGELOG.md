@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Reduce verbosity in logs ([#160](https://github.com/0xPolygonZero/zk_evm/pull/160))
+
 ## [0.3.0] - 2024-04-03
 
 ### Changed
