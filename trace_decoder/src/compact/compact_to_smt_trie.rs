@@ -65,12 +65,9 @@ impl SmtStateTrieExtractionOutput {
             .set_hash(curr_key, HashOut::from_bytes(h.as_bytes()));
     }
 
-    fn process_code_node(&mut self, addr: &[u8], c_bytes: &[u8]) {
-        let val = U256::from_big_endian(c_bytes);
-        let addr_hash = Address::from_slice(addr);
-        self.state_smt_trie.set(key_code(addr_hash), val);
-        self.state_smt_trie
-            .set(key_code_length(addr_hash), U256::exp10(c_bytes.len()));
+    fn process_code_node(&mut self, addr: &[u8], c_bytes: Vec<u8>) {
+        let c_hash = hash(&c_bytes);
+        self.code.insert(c_hash, c_bytes);
     }
 
     fn process_smt_leaf(
@@ -125,7 +122,7 @@ fn create_smt_trie_from_compact_node_rec(
         NodeEntry::BranchSMT([l_child, r_child]) => {
             output.process_branch_smt_node(curr_key, l_child, r_child)
         }
-        NodeEntry::CodeSMT(addr, c_bytes) => output.process_code_node(addr, c_bytes),
+        NodeEntry::CodeSMT(addr, c_bytes) => output.process_code_node(addr, c_bytes.clone()),
         NodeEntry::Empty => (),
         NodeEntry::Hash(h) => output.process_hash_node(curr_key, h),
         NodeEntry::SMTLeaf(n_type, addr_bytes, slot_bytes, slot_val) => {

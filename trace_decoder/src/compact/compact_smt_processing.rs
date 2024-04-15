@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use enumn::N;
+use ethereum_types::Address;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 
@@ -22,7 +23,7 @@ use crate::{
     types::{HashedAccountAddr, TrieRootHash},
 };
 
-#[derive(Copy, Clone, Debug, N, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, N, PartialEq)]
 pub(super) enum SmtNodeType {
     Balance = 0,
     Nonce = 1,
@@ -34,7 +35,6 @@ pub(super) enum SmtNodeType {
 impl ParserState {
     fn parse_smt(mut self) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
-
         let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf);
 
         create_smt_trie_from_remaining_witness_elem(node_entry)
@@ -69,6 +69,7 @@ impl ParserState {
         Self::try_apply_rules_to_curr_entry_smt(&mut traverser, entry_buf)
     }
 
+    // TODO: Switch this to use `Result`s...
     fn try_apply_rules_to_curr_entry_smt(
         traverser: &mut CollapsableWitnessEntryTraverser,
         buf: &mut Vec<WitnessEntry>,
@@ -158,33 +159,16 @@ impl ParserState {
                 address,
                 storage,
                 value,
-            )) => {
-                if node_type_byte == 2 || node_type_byte == 4 {
-                    NodeEntry::Empty
-                } else {
-                    NodeEntry::SMTLeaf(
-                        SmtNodeType::n(node_type_byte).unwrap(),
-                        address,
-                        storage,
-                        value,
-                    )
-                }
-            }
+            )) => NodeEntry::SMTLeaf(node_type_byte, address, storage, value),
             WitnessEntry::Instruction(Instruction::Code(code)) => {
-                // TODO - Improve this logic... Hacky for now...
-                let wi = traverser.get_next_n_elems(1).cloned();
-                let mut buf2 = Vec::new();
-                buf2.extend(wi);
-                let x = buf2[0].as_instruction().unwrap();
-                let z: Vec<u8> = Vec::new();
-                let mut b = match x {
-                    Instruction::SMTLeaf(a, b, c, d) => b,
-                    _ => {
-                        println!("Not SMTLeaf");
-                        &z
+                let addr = match traverser.get_next_n_elems(1).next() {
+                    Some(WitnessEntry::Instruction(Instruction::SMTLeaf(_, addr, _, _))) => {
+                        addr.clone()
                     }
+                    _ => panic!("Expected a SmtLeaf node to proceed a code node!"),
                 };
-                NodeEntry::CodeSMT(b.to_vec(), code)
+
+                NodeEntry::CodeSMT(addr, code)
             }
             _ => NodeEntry::Empty,
         }

@@ -30,7 +30,6 @@ pub(super) type Nonce = U256;
 pub(super) type HasCode = bool;
 pub(super) type HasStorage = bool;
 
-pub(super) type NodeType = u8;
 pub(super) type Address = Vec<u8>;
 pub(super) type Slot = Vec<u8>;
 pub(super) type Value = Vec<u8>;
@@ -119,6 +118,10 @@ pub enum CompactParsingError {
     /// Error when constructing a key from bytes.
     #[error("Unable to create key nibbles from bytes {0}")]
     KeyError(#[from] FromHexPrefixError),
+
+    // TODO: Move behind smt feature flag...
+    #[error("Encountered an unknown smt leaf node type byte ({0:x})")]
+    UnknownSmtNodeType(u8),
 }
 
 #[derive(Debug)]
@@ -183,7 +186,7 @@ impl Display for WitnessEntry {
 }
 
 // TODO: Ignore `NEW_TRIE` for now...
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, EnumAsInner, PartialEq)]
 pub(super) enum Instruction {
     Leaf(Nibbles, RawValue),
     Extension(Nibbles),
@@ -193,7 +196,7 @@ pub(super) enum Instruction {
     CodeSMT(Address, RawCode),
     AccountLeaf(Nibbles, Nonce, Balance, HasCode, HasStorage),
     EmptyRoot,
-    SMTLeaf(NodeType, Address, Slot, Value),
+    SMTLeaf(SmtNodeType, Address, Slot, Value),
 }
 
 impl Display for Instruction {
@@ -226,7 +229,7 @@ impl From<Instruction> for WitnessEntry {
 
 // TODO: It's probably better to use two separate types for both mpt and smt
 // nodes. Not urgent, but this is probably best for QoL...
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, EnumAsInner, PartialEq)]
 pub(super) enum NodeEntry {
     Branch([Option<Box<NodeEntry>>; 16]),
     BranchSMT([Option<Box<NodeEntry>>; 2]),
@@ -752,14 +755,19 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_smt_leaf(&mut self) -> CompactParsingResult<()> {
-        let node_type: u8 = self.byte_cursor.read_t("nodeType")?;
+        let node_type_byte: u8 = self.byte_cursor.read_t("nodeType")?;
+        let node_type = SmtNodeType::n(node_type_byte)
+            .ok_or_else(|| CompactParsingError::UnknownSmtNodeType(node_type_byte))?;
         let address: Vec<u8> = self.byte_cursor.read_cbor_byte_array_to_vec("address")?;
+
         let mut storage = Vec::new();
-        if node_type == 0x03 {
+        if matches!(node_type, SmtNodeType::Storage) {
             storage = self.byte_cursor.read_cbor_byte_array_to_vec("storage")?;
         }
+
         let value = self.byte_cursor.read_cbor_byte_array_to_vec("value")?;
         self.push_entry(Instruction::SMTLeaf(node_type, address, storage, value));
+
         Ok(())
     }
 }
