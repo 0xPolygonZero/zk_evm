@@ -602,12 +602,9 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
     pub(super) fn process_operator(&mut self) -> CompactParsingResult<()> {
         let opcode_byte = self.byte_cursor.read_byte()?;
-        println!("------------ opcode byte: {}", opcode_byte);
 
         let opcode: Opcode =
             Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOpcode(opcode_byte))?;
-
-        println!("Processed \"{:?}\" opcode", opcode);
 
         self.process_data_following_opcode(opcode)
     }
@@ -642,7 +639,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_leaf(&mut self) -> CompactParsingResult<()> {
-        println!("-------------- leaf");
         let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec("leaf key")?);
         let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec("leaf value")?;
 
@@ -651,7 +647,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_extension(&mut self) -> CompactParsingResult<()> {
-        println!("-------------- extension");
         let key = key_bytes_to_nibbles(
             &self
                 .byte_cursor
@@ -663,16 +658,13 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_branch(&mut self) -> CompactParsingResult<()> {
-        println!("-------------- branch");
         let mask = self.byte_cursor.read_t("mask")?;
-        println!("Processed \"{:?}\" mask", mask);
 
         self.push_entry(Instruction::Branch(mask));
         Ok(())
     }
 
     pub(super) fn process_hash(&mut self) -> CompactParsingResult<()> {
-        println!("-------------- hash");
         let hash = self.byte_cursor.read_non_cbor_h256("hash")?;
 
         self.push_entry(Instruction::Hash(hash));
@@ -680,7 +672,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_code(&mut self) -> CompactParsingResult<()> {
-        println!("-------------- code");
         let code = self.byte_cursor.read_t("code")?;
 
         self.push_entry(Instruction::Code(code));
@@ -688,7 +679,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
-        println!("-------------- account leaf");
         let key = key_bytes_to_nibbles(
             &self
                 .byte_cursor
@@ -759,7 +749,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
     pub(super) fn process_smt_leaf(&mut self) -> CompactParsingResult<()> {
         let node_type: u8 = self.byte_cursor.read_t("nodeType")?;
-        println!("-------------- smt leaf, node_type {:?}", node_type);
         let address: Vec<u8> = self.byte_cursor.read_cbor_byte_array_to_vec("address")?;
         let mut storage = Vec::new();
         if node_type == 0x03 {
@@ -1012,9 +1001,7 @@ where
     T: Debug,
 {
     let (header, mut parser) = create_and_extract_header_f(state_bytes)?;
-    println!("-------------- header: {:?}", header);
     let witness_out = (parse_f(parser))?;
-    println!("-------------- witness_out: {:?}", witness_out);
 
     let out = ProcessedCompactOutput {
         header,

@@ -36,7 +36,6 @@ impl ParserState {
         let mut entry_buf = Vec::new();
 
         let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf);
-        println!("node_entry {:?}", node_entry);
 
         create_smt_trie_from_remaining_witness_elem(node_entry)
     }
@@ -131,6 +130,22 @@ impl ParserState {
                             branch_nodes[0] = Some(Box::new(node_entry));
                         }
                     }
+                    NodeEntry::Code(code) => {
+                        if mask == 3 {
+                            if branch_nodes[0].is_none() {
+                                branch_nodes[0] = Some(Box::new(node_entry));
+                                branch_nodes[1] = Some(Box::new(
+                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf),
+                                ));
+                            } else {
+                                branch_nodes[1] = Some(Box::new(node_entry));
+                            }
+                        } else if mask == 2 {
+                            branch_nodes[1] = Some(Box::new(node_entry));
+                        } else if mask == 1 {
+                            branch_nodes[0] = Some(Box::new(node_entry));
+                        }
+                    }
                     _ => {}
                 }
                 NodeEntry::BranchSMT(branch_nodes)
@@ -148,6 +163,7 @@ impl ParserState {
                 storage,
                 value,
             ),
+            WitnessEntry::Instruction(Instruction::Code(code)) => NodeEntry::Code(code),
             _ => NodeEntry::Empty,
         }
     }
@@ -174,12 +190,9 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
     fn process_operator_smt(&mut self) -> CompactParsingResult<()> {
         let opcode_byte = self.byte_cursor.read_byte()?;
-        println!("------------ opcode byte: {}", opcode_byte);
 
         let opcode: Opcode =
             Opcode::n(opcode_byte).ok_or(CompactParsingError::InvalidOpcode(opcode_byte))?;
-
-        println!("Processed \"{:?}\" opcode", opcode);
 
         self.process_data_following_opcode_smt(opcode)
     }
