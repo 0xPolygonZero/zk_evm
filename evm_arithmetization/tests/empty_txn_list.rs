@@ -216,10 +216,10 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     assert_eq!(retrieved_public_values, segmented_agg_public_values);
 
     let (txn_proof, txn_public_values) = all_circuits.prove_transaction_aggregation(
-        true,
+        false,
         &segmented_agg_proof,
         segmented_agg_public_values.clone(),
-        true,
+        false,
         &segmented_agg_proof,
         segmented_agg_public_values,
     )?;

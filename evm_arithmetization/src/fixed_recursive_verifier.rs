@@ -258,7 +258,7 @@ impl<const D: usize> SegmentAggregationChildTarget<D> {
         })
     }
 
-    // `len_mem_cap` us the length of the Merkle
+    // `len_mem_cap` is the length of the Merkle
     // caps for `MemBefore` and `MemAfter`.
     fn public_values<F: RichField + Extendable<D>>(
         &self,
@@ -354,7 +354,7 @@ impl<const D: usize> TxnAggregationChildTarget<D> {
         })
     }
 
-    // `len_mem_cap` us the length of the Merkle
+    // `len_mem_cap` is the length of the Merkle
     // caps for `MemBefore` and `MemAfter`.
     fn public_values<F: RichField + Extendable<D>>(
         &self,
@@ -649,10 +649,8 @@ where
         ];
         let root = Self::create_segment_circuit(&by_table, stark_config);
         let segment_aggregation = Self::create_segment_aggregation_circuit(&root);
-        assert!(root.circuit.common == segment_aggregation.circuit.common);
         let txn_aggregation =
             Self::create_txn_aggregation_circuit(&segment_aggregation, stark_config);
-        assert!(segment_aggregation.circuit.common == txn_aggregation.circuit.common);
         let block = Self::create_block_circuit(&txn_aggregation);
         Self {
             root,
@@ -960,17 +958,17 @@ where
     ) -> TxnAggregationCircuitData<F, C, D> {
         // Create a circuit for the aggregation of two transactions.
 
-        let cap_before_len = agg.public_values.mem_before.mem_cap.0.len();
+        let cap_len = agg.public_values.mem_before.mem_cap.0.len();
 
         let mut builder = CircuitBuilder::<F, D>::new(agg.circuit.common.config.clone());
-        let public_values = add_virtual_public_values(&mut builder, cap_before_len);
+        let public_values = add_virtual_public_values(&mut builder, cap_len);
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         let lhs_txn_proof = Self::add_txn_agg_child(&mut builder, agg);
         let rhs_txn_proof = Self::add_txn_agg_child(&mut builder, agg);
 
-        let lhs_pv = lhs_txn_proof.public_values(&mut builder, cap_before_len);
-        let rhs_pv = rhs_txn_proof.public_values(&mut builder, cap_before_len);
+        let lhs_pv = lhs_txn_proof.public_values(&mut builder, cap_len);
+        let rhs_pv = rhs_txn_proof.public_values(&mut builder, cap_len);
 
         // Connect all block hash values
         BlockHashesTarget::connect(
