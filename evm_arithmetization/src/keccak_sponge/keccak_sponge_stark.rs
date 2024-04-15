@@ -665,12 +665,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         );
 
         // If the first padding byte is at the end of the block, then the block has a
-        // single padding byte
+        // single padding byte.
         let has_single_padding_byte = local_values.is_padding_byte[KECCAK_RATE_BYTES - 1]
             - local_values.is_padding_byte[KECCAK_RATE_BYTES - 2];
 
         // If the row has a single padding byte, then it must be the last byte with
-        // value 0b10000001
+        // value 0b10000001.
         yield_constr.constraint_transition(
             has_single_padding_byte
                 * (local_values.block_bytes[KECCAK_RATE_BYTES - 1]
