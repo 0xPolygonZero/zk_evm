@@ -47,7 +47,11 @@ pub(crate) struct KeccakSpongeColumnsView<T: Copy> {
     /// block.
     pub already_absorbed_bytes: T,
 
-    /// Whether the current byte is a padding byte.
+    /// Indicates whether the byte at position `i` is a padding byte.
+    ///
+    /// For a final block, the `i`th entry should be 1 for all bytes that have
+    /// been padded, including the first `1` byte, all subsequent `0` bytes
+    /// and the last byte as per the 10*1 padding scheme.
     ///
     /// If this row represents a full input block, this should contain all 0s.
     pub is_padding_byte: [T; KECCAK_RATE_BYTES],
