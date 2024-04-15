@@ -1,5 +1,6 @@
 use ethereum_types::H256;
 use keccak_hash::keccak;
+use log::debug;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
@@ -30,7 +31,7 @@ pub(crate) fn print_value_and_hash_nodes_of_storage_trie(
     trie: &HashedPartialTrie,
 ) {
     let trie_elems = print_value_and_hash_nodes_of_trie_common(trie);
-    println!("Storage trie for {:x}: {:#?}", s_trie_addr, trie_elems);
+    debug!("Storage trie for {:x}: {:#?}", s_trie_addr, trie_elems);
 }
 
 // TODO: Move under a feature flag...
