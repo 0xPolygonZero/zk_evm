@@ -685,19 +685,19 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
                     local_values.is_padding_byte[i]
                 }
             };
-            // If the row has multiple padding bytes, the first padding byte must be 1
+            // If the row has multiple padding bytes, the first padding byte must be 1.
             yield_constr.constraint_transition(
                 is_first_padding_byte * (local_values.block_bytes[i] - P::ONES),
             );
             // If the row has multiple padding bytes, the other padding bytes
-            // except the last one must be 0
+            // except the last one must be 0.
             yield_constr.constraint_transition(
                 local_values.is_padding_byte[i]
                     * (is_first_padding_byte - P::ONES)
                     * local_values.block_bytes[i],
             );
         }
-        // If the row has multiple padding bytes, then the last byte must be 0b10000000
+        // If the row has multiple padding bytes, then the last byte must be 0b10000000.
         yield_constr.constraint_transition(
             is_final_block
                 * (has_single_padding_byte - P::ONES)
@@ -763,7 +763,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint(builder, constraint);
         }
 
-        // A padding byte is always followed by another padding byte
+        // A padding byte is always followed by another padding byte.
         for i in 1..KECCAK_RATE_BYTES {
             let constraint = builder.mul_sub_extension(
                 local_values.is_padding_byte[i - 1],
@@ -907,7 +907,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint_transition(builder, constraint);
 
             // If the row has multiple padding bytes, the other padding bytes
-            // except the last one must be 0
+            // except the last one must be 0.
             let sel = builder.mul_sub_extension(
                 local_values.is_padding_byte[i],
                 is_first_padding_byte,
@@ -917,7 +917,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             yield_constr.constraint_transition(builder, constraint);
         }
 
-        // If the row has multiple padding bytes, then the last byte must be 0b10000000
+        // If the row has multiple padding bytes, then the last byte must be 0b10000000.
         let sel =
             builder.mul_sub_extension(is_final_block, has_single_padding_byte, is_final_block);
         let padding_byte = builder.constant_extension(F::Extension::from_canonical_u8(0b10000000));
