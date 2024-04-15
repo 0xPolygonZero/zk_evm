@@ -65,6 +65,9 @@ impl std::fmt::Display for TraceParsingError {
         write_optional(f, "Hashed address", self.h_addr.as_ref())?;
         if let Some(slot) = self.slot {
             writeln!(f, "Slot: {:x}", slot)?;
+            let mut buf = [0u8; 64];
+            slot.to_big_endian(&mut buf);
+            writeln!(f, "Hashed Slot: {}", hash(&buf))?;
         }
         if let Some(slot_value) = self.slot_value {
             writeln!(f, "Slot value: {:x}", slot_value)?;
