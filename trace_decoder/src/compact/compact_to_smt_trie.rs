@@ -66,10 +66,11 @@ impl SmtStateTrieExtractionOutput {
     }
 
     fn process_code_node(&mut self, addr: &[u8], c_bytes: &[u8]) {
+        let val = U256::from_big_endian(c_bytes);
         let addr_hash = Address::from_slice(addr);
-        self.state_smt_trie.set(key_code(addr_hash), c_bytes);
+        self.state_smt_trie.set(key_code(addr_hash), val);
         self.state_smt_trie
-            .set(key_code_length(addr_hash), c_bytes.len());
+            .set(key_code_length(addr_hash), U256::exp10(c_bytes.len()));
     }
 
     fn process_smt_leaf(

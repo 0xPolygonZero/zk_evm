@@ -184,7 +184,6 @@ impl ParserState {
                         &z
                     }
                 };
-                println!("b: {:?}", b);
                 NodeEntry::CodeSMT(b.to_vec(), code)
             }
             _ => NodeEntry::Empty,
