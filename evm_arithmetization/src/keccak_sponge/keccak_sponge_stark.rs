@@ -871,7 +871,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         yield_constr.constraint_transition(builder, constraint);
 
         // If the first padding byte is at the end of the block, then the block has a
-        // single padding byte
+        // single padding byte.
         let has_single_padding_byte = builder.sub_extension(
             local_values.is_padding_byte[KECCAK_RATE_BYTES - 1],
             local_values.is_padding_byte[KECCAK_RATE_BYTES - 2],
