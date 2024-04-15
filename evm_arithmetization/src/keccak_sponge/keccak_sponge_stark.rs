@@ -878,7 +878,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         );
 
         // If the row has a single padding byte, then it must be the last byte with
-        // value 0b10000001
+        // value 0b10000001.
         let padding_byte = builder.constant_extension(F::Extension::from_canonical_u8(0b10000001));
         let diff = builder.sub_extension(
             local_values.block_bytes[KECCAK_RATE_BYTES - 1],
