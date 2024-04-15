@@ -377,8 +377,8 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
 
     /// Generates a row containing the last input bytes.
     /// On top of computing one absorption and padding the input,
-    /// we indicate the padding input bytes by setting
-    /// `row.is_padding_byte` to 1.
+    /// we indicate all the padding input bytes by setting the
+    /// corresponding indices in `row.is_padding_byte` to 1.
     fn generate_final_row(
         &self,
         op: &KeccakSpongeOp,
