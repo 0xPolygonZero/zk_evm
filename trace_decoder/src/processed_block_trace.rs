@@ -178,7 +178,7 @@ fn process_multiple_storage_tries(
 }
 
 fn process_compact_trie(trie: TrieCompact) -> CompactParsingResult<ProcessedBlockTracePreImages> {
-    let out = process_compact_prestate_debug(trie).map_err(|e| e)?; // Handle the error properly by propagating it
+    let out = process_compact_prestate_debug(trie)?;
 
     if !out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION) {
         return Err(CompactParsingError::IncompatibleVersion(
@@ -187,8 +187,7 @@ fn process_compact_trie(trie: TrieCompact) -> CompactParsingResult<ProcessedBloc
         ));
     }
 
-    Ok(out.into()) // Convert ProcessedCompactOutput to
-                   // ProcessedBlockTracePreImages and return it wrapped in Ok
+    Ok(out.into())
 }
 
 /// Structure storing a function turning a `CodeHash` into bytes.
