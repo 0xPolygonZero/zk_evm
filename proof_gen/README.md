@@ -22,7 +22,7 @@ pub struct BlockHashes {
 ```
 Note that `prev_hashes` is going to be `256` elements long (!) most of the time. 
 
-`generate_txn_proof` takes in the output from the parser lib (`TxnProofGenIR`).
+`generate_txn_proof` takes in the output from the parser lib (`GenerationInputs`).
 
 `generate_agg_proof` takes in the two child proofs (wrapped in `AggregatableProof`` to support txn or agg proofs).
 
