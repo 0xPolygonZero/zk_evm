@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use ethereum_types::{Address, BigEndianHash, U256};
 use keccak_hash::H256;
 use mpt_trie::nibbles::Nibbles;
-use plonky2::{hash::hash_types::HashOut, plonk::config::GenericHashOut};
+use plonky2::plonk::config::GenericHashOut;
 
 use super::{
     compact_processing_common::{
@@ -19,7 +19,7 @@ use super::{
         bits::Bits,
         db::MemoryDb,
         keys::{key_balance, key_code, key_code_length, key_nonce, key_storage},
-        smt::{Key, Smt},
+        smt::{HashOut, Key, Smt},
     },
 };
 use crate::{
@@ -28,18 +28,43 @@ use crate::{
     utils::hash,
 };
 
-/// Output from constructing a storage trie from smt compact.
+/// Currently, the smt library requires that all calls to [`set_hash`] must
+/// occur before any [`set`] calls, so we're using an intermediate type to
+/// buffer all calls.
 #[derive(Debug, Default)]
+struct SmtStateTrieExtractionIntermediateOutput {
+    leaf_inserts: Vec<(Key, U256)>,
+    hash_inserts: Vec<(Bits, HashOut)>,
+}
+
+impl SmtStateTrieExtractionIntermediateOutput {
+    fn into_smt_trie(self) -> Smt<MemoryDb> {
+        let mut state_smt_trie = Smt::default();
+
+        for (k, h) in self.hash_inserts {
+            state_smt_trie.set_hash(k, h);
+        }
+
+        for (k, v) in self.leaf_inserts {
+            state_smt_trie.set(k, v);
+        }
+
+        state_smt_trie
+    }
+}
+
+/// Output from constructing a storage trie from smt compact.
+#[derive(Debug)]
 pub struct SmtStateTrieExtractionOutput {
     /// The state (and storage tries?) trie of the compact.
-    pub state_smt_trie: Smt<MemoryDb>,
+    pub state_trie: Smt<MemoryDb>,
 
     /// Any embedded contract bytecode that appears in the compact will be
     /// present here.
     pub code: HashMap<CodeHash, Vec<u8>>,
 }
 
-impl SmtStateTrieExtractionOutput {
+impl SmtStateTrieExtractionIntermediateOutput {
     fn process_branch_smt_node(
         &mut self,
         curr_key: Bits,
@@ -60,9 +85,8 @@ impl SmtStateTrieExtractionOutput {
     }
 
     fn process_hash_node(&mut self, curr_key: Bits, h: &TrieRootHash) {
-        // Note: This may be incorrect in how to construct the key.
-        self.state_smt_trie
-            .set_hash(curr_key, HashOut::from_bytes(h.as_bytes()));
+        self.hash_inserts
+            .push((curr_key, HashOut::from_bytes(h.as_bytes())));
     }
 
     fn process_smt_leaf(
@@ -88,31 +112,31 @@ impl SmtStateTrieExtractionOutput {
             SmtNodeType::CodeLength => key_code_length(addr),
         };
 
-        self.state_smt_trie.set(key, val)
+        self.leaf_inserts.push((key, val))
     }
 }
 
 // TODO: Merge both `SMT` & `MPT` versions of this function into a single one...
 pub(super) fn create_smt_trie_from_remaining_witness_elem(
     remaining_entry: NodeEntry,
+    code: HashMap<CodeHash, Vec<u8>>,
 ) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
-    create_smt_trie_from_compact_node(remaining_entry)
+    let state_trie = create_smt_trie_from_compact_node(remaining_entry)?;
+
+    Ok(SmtStateTrieExtractionOutput { state_trie, code })
 }
 
-fn create_smt_trie_from_compact_node(
-    node: NodeEntry,
-) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
-    let mut output = SmtStateTrieExtractionOutput::default();
-
+fn create_smt_trie_from_compact_node(node: NodeEntry) -> CompactParsingResult<Smt<MemoryDb>> {
+    let mut output = SmtStateTrieExtractionIntermediateOutput::default();
     create_smt_trie_from_compact_node_rec(Bits::default(), &node, &mut output)?;
 
-    Ok(output)
+    Ok(output.into_smt_trie())
 }
 
 fn create_smt_trie_from_compact_node_rec(
     curr_key: Bits,
     curr_node: &NodeEntry,
-    output: &mut SmtStateTrieExtractionOutput,
+    output: &mut SmtStateTrieExtractionIntermediateOutput,
 ) -> CompactParsingResult<()> {
     match curr_node {
         NodeEntry::BranchSMT([l_child, r_child]) => {

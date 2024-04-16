@@ -36,11 +36,10 @@ pub(super) enum SmtNodeType {
 impl ParserState {
     fn parse_smt(mut self) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
-        let mut code: HashMap<CodeHash, Vec<u8>> = HashMap::new();
+        let mut code = HashMap::new();
         let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf, &mut code);
-        let mut res = create_smt_trie_from_remaining_witness_elem(node_entry);
-        // TODO - Assign code to res
-        res
+
+        create_smt_trie_from_remaining_witness_elem(node_entry, code)
     }
 
     pub(crate) fn create_and_extract_header_debug_smt(

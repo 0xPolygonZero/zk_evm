@@ -124,7 +124,7 @@ impl TestProtocolInputAndRoot {
             .unwrap_or_else(|err| panic!("{}", err));
 
         let mut buf = [0; 32];
-        hashout2u(out.witness_out.state_smt_trie.root).to_big_endian(&mut buf);
+        hashout2u(out.witness_out.state_trie.root).to_big_endian(&mut buf);
 
         let hash = hex::encode(buf);
 
