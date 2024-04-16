@@ -1,9 +1,8 @@
 //! This module defines the various proof types used throughout the block proof
 //! generation process.
 
-use evm_arithmetization::proof::PublicValues;
+use evm_arithmetization::{proof::PublicValues, BlockHeight};
 use serde::{Deserialize, Serialize};
-use trace_decoder::types::BlockHeight;
 
 use crate::types::PlonkyProofIntern;
 
