@@ -665,7 +665,9 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_branch(&mut self) -> CompactParsingResult<()> {
+        println!("Processing branch");
         let mask = self.byte_cursor.read_t("mask")?;
+        println!("Processing branch mask {:?}", mask);
 
         self.push_entry(Instruction::Branch(mask));
         Ok(())
@@ -679,6 +681,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_code(&mut self) -> CompactParsingResult<()> {
+        println!("Processing code");
         let code = self.byte_cursor.read_t("code")?;
 
         self.push_entry(Instruction::Code(code));
@@ -756,6 +759,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
     pub(super) fn process_smt_leaf(&mut self) -> CompactParsingResult<()> {
         let node_type_byte: u8 = self.byte_cursor.read_t("nodeType")?;
+        println!("Processing smt leaf node type: {:x}", node_type_byte);
         let node_type = SmtNodeType::n(node_type_byte)
             .ok_or_else(|| CompactParsingError::UnknownSmtNodeType(node_type_byte))?;
         let address: Vec<u8> = self.byte_cursor.read_cbor_byte_array_to_vec("address")?;
@@ -1036,6 +1040,7 @@ mod tests {
         compact_processing_common::{key_bytes_to_nibbles, ParserState},
         complex_test_payloads::{
             TEST_PAYLOAD_1, TEST_PAYLOAD_10, TEST_PAYLOAD_11, TEST_PAYLOAD_12, TEST_PAYLOAD_13,
+            TEST_PAYLOAD_14, TEST_PAYLOAD_15, TEST_PAYLOAD_16, TEST_PAYLOAD_17, TEST_PAYLOAD_18,
             TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5, TEST_PAYLOAD_6,
             TEST_PAYLOAD_7, TEST_PAYLOAD_8, TEST_PAYLOAD_9,
         },
@@ -1160,5 +1165,35 @@ mod tests {
     fn complex_payload_13() {
         init();
         TEST_PAYLOAD_13.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_14() {
+        init();
+        TEST_PAYLOAD_14.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_15() {
+        init();
+        TEST_PAYLOAD_15.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_16() {
+        init();
+        TEST_PAYLOAD_16.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_17() {
+        init();
+        TEST_PAYLOAD_17.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn complex_payload_18() {
+        init();
+        TEST_PAYLOAD_18.parse_and_check_hash_matches_with_debug_smt();
     }
 }

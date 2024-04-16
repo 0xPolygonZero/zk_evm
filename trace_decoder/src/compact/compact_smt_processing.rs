@@ -20,7 +20,8 @@ use super::{
 };
 use crate::{
     trace_protocol::{MptTrieCompact, SingleSmtPreImage},
-    types::{HashedAccountAddr, TrieRootHash},
+    types::{CodeHash, HashedAccountAddr, TrieRootHash},
+    utils::hash,
 };
 
 #[derive(Copy, Clone, Debug, Eq, N, PartialEq)]
@@ -35,9 +36,14 @@ pub(super) enum SmtNodeType {
 impl ParserState {
     fn parse_smt(mut self) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
-        let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf);
+        let mut code: HashMap<CodeHash, Vec<u8>> = HashMap::new();
+        let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf, &mut code);
+        println!("self.entries: {:?}", self.entries);
         println!("Node entry: {:?}", node_entry);
-        create_smt_trie_from_remaining_witness_elem(node_entry)
+        println!("code: {:?}", code);
+        let mut res = create_smt_trie_from_remaining_witness_elem(node_entry);
+        // TODO - Assign code to res
+        res
     }
 
     pub(crate) fn create_and_extract_header_debug_smt(
@@ -64,15 +70,17 @@ impl ParserState {
     fn apply_rules_to_witness_entries_smt(
         &mut self,
         entry_buf: &mut Vec<WitnessEntry>,
+        code: &mut HashMap<CodeHash, Vec<u8>>,
     ) -> NodeEntry {
         let mut traverser = self.entries.create_collapsable_traverser();
-        Self::try_apply_rules_to_curr_entry_smt(&mut traverser, entry_buf)
+        Self::try_apply_rules_to_curr_entry_smt(&mut traverser, entry_buf, code)
     }
 
     // TODO: Switch this to use `Result`s...
     fn try_apply_rules_to_curr_entry_smt(
         traverser: &mut CollapsableWitnessEntryTraverser,
         buf: &mut Vec<WitnessEntry>,
+        code: &mut HashMap<CodeHash, Vec<u8>>,
     ) -> NodeEntry {
         buf.extend(traverser.get_next_n_elems(1).cloned());
         traverser.advance();
@@ -82,14 +90,14 @@ impl ParserState {
             WitnessEntry::Instruction(Instruction::Branch(mask)) => {
                 let mut branch_nodes = Self::create_empty_branch_node_entry_smt();
 
-                let node_entry = Self::try_apply_rules_to_curr_entry_smt(traverser, buf);
+                let node_entry = Self::try_apply_rules_to_curr_entry_smt(traverser, buf, code);
                 match node_entry.clone() {
                     NodeEntry::SMTLeaf(n, a, s, v) => {
                         if mask == 3 {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
                                 branch_nodes[1] = Some(Box::new(
-                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf),
+                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf, code),
                                 ));
                             } else {
                                 branch_nodes[1] = Some(Box::new(node_entry));
@@ -105,7 +113,7 @@ impl ParserState {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
                                 branch_nodes[1] = Some(Box::new(
-                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf),
+                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf, code),
                                 ));
                             } else {
                                 branch_nodes[1] = Some(Box::new(node_entry));
@@ -121,23 +129,7 @@ impl ParserState {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
                                 branch_nodes[1] = Some(Box::new(
-                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf),
-                                ));
-                            } else {
-                                branch_nodes[1] = Some(Box::new(node_entry));
-                            }
-                        } else if mask == 2 {
-                            branch_nodes[1] = Some(Box::new(node_entry));
-                        } else if mask == 1 {
-                            branch_nodes[0] = Some(Box::new(node_entry));
-                        }
-                    }
-                    NodeEntry::CodeSMT(addr, code) => {
-                        if mask == 3 {
-                            if branch_nodes[0].is_none() {
-                                branch_nodes[0] = Some(Box::new(node_entry));
-                                branch_nodes[1] = Some(Box::new(
-                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf),
+                                    Self::try_apply_rules_to_curr_entry_smt(traverser, buf, code),
                                 ));
                             } else {
                                 branch_nodes[1] = Some(Box::new(node_entry));
@@ -160,15 +152,10 @@ impl ParserState {
                 storage,
                 value,
             )) => NodeEntry::SMTLeaf(node_type_byte, address, storage, value),
-            WitnessEntry::Instruction(Instruction::Code(code)) => {
-                let addr = match traverser.get_next_n_elems(1).next() {
-                    Some(WitnessEntry::Instruction(Instruction::SMTLeaf(_, addr, _, _))) => {
-                        addr.clone()
-                    }
-                    _ => panic!("Expected a SmtLeaf node to proceed a code node!"),
-                };
-
-                NodeEntry::CodeSMT(addr, code)
+            WitnessEntry::Instruction(Instruction::Code(c_bytes)) => {
+                let c_hash = hash(&c_bytes);
+                code.insert(c_hash, c_bytes);
+                Self::try_apply_rules_to_curr_entry_smt(traverser, buf, code)
             }
             _ => NodeEntry::Empty,
         }
