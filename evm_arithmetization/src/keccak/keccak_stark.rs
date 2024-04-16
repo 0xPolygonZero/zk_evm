@@ -734,7 +734,7 @@ mod tests {
                 gamma: F::ZERO,
             },
             vec![],
-            vec![Some(Filter::new_simple(Column::constant(F::ZERO)))],
+            vec![Filter::new_simple(Column::constant(F::ZERO))],
         );
         let ctl_data = CtlData {
             zs_columns: vec![ctl_z_data.clone(); config.num_challenges],

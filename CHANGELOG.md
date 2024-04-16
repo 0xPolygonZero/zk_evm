@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make some more functions constant ([#154](https://github.com/0xPolygonZero/zk_evm/pull/154))
 - fix(keccak-sponge): properly constrain padding bytes ([#158](https://github.com/0xPolygonZero/zk_evm/pull/158))
 - Reduce verbosity in logs ([#160](https://github.com/0xPolygonZero/zk_evm/pull/160))
+- Bump with latest starky ([#161](https://github.com/0xPolygonZero/zk_evm/pull/161))
 
 ## [0.3.0] - 2024-04-03
 
