@@ -115,9 +115,6 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
-// TODO: address these lints
-#![allow(unused)]
-#![allow(private_interfaces)]
 
 /// Provides debugging tools and a compact representation of state and storage
 /// tries, used in tests.
@@ -133,6 +130,3 @@ pub mod trace_protocol;
 pub mod types;
 /// Defines useful functions necessary to the other modules.
 pub mod utils;
-
-use trace_protocol::{BlockTrace, TxnInfo};
-use types::OtherBlockData;

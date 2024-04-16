@@ -2,7 +2,6 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use log::debug;
 use mpt_trie::{
-    nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
     trie_ops::ValOrHash,
 };
@@ -45,16 +44,4 @@ fn print_value_and_hash_nodes_of_trie_common(trie: &HashedPartialTrie) -> Vec<St
             format!("{} - {:x}", v_or_h_char, k)
         })
         .collect()
-}
-
-pub(crate) fn h_addr_nibs_to_h256(h_addr_nibs: &Nibbles) -> H256 {
-    // TODO: HACK! This fix really needs to be in `mpt_trie`...
-    let mut nib_bytes = h_addr_nibs.bytes_be();
-    if nib_bytes.len() < 32 {
-        for _ in nib_bytes.len()..32 {
-            nib_bytes.insert(0, 0);
-        }
-    }
-
-    H256::from_slice(&nib_bytes)
 }

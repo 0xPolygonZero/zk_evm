@@ -14,18 +14,19 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
-    trie_ops::TrieOpError,
+    trie_ops::{TrieOpError, TrieOpResult},
     trie_subsets::{create_trie_subset, SubsetTrieError},
-    utils::{IntoTrieKey, TriePath, TrieSegment},
+    utils::{IntoTrieKey, TriePath},
 };
 use thiserror::Error;
 
 use crate::{
+    compact::compact_prestate_processing::CompactParsingError,
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites, TxnMetaState},
     types::{
         HashedAccountAddr, HashedNodeAddr, HashedStorageAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TriePathIter, TrieRootHash, TxnIdx, TxnProofGenIR,
-        EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED,
+        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED,
+        ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, update_val_if_some},
 };
@@ -61,12 +62,23 @@ pub enum TraceParsingError {
     /// Failure due to a trie operation error.
     #[error("Trie operation error: {0}")]
     TrieOpError(TrieOpError),
+
+    /// Failure due to a compact parsing error.
+    #[error("Compact parsing error: {0}")]
+    CompactParsingError(CompactParsingError),
 }
 
 impl From<TrieOpError> for TraceParsingError {
     fn from(err: TrieOpError) -> Self {
         // Convert TrieOpError into TraceParsingError
         TraceParsingError::TrieOpError(err)
+    }
+}
+
+impl From<CompactParsingError> for TraceParsingError {
+    fn from(err: CompactParsingError) -> Self {
+        // Convert TrieOpError into TraceParsingError
+        TraceParsingError::CompactParsingError(err)
     }
 }
 
@@ -170,12 +182,11 @@ impl ProcessedBlockTrace {
                 // do this clone every iteration.
                 let tries_at_start_of_txn = curr_block_tries.clone();
 
-                Self::update_txn_and_receipt_tries(&mut curr_block_tries, &txn_info.meta, txn_idx);
+                Self::update_txn_and_receipt_tries(&mut curr_block_tries, &txn_info.meta, txn_idx)?;
 
                 let delta_out = Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
                     &txn_info.nodes_used_by_txn,
-                    &txn_info.meta,
                 )?;
 
                 let tries = Self::create_minimal_partial_tries_needed_by_txn(
@@ -240,13 +251,13 @@ impl ProcessedBlockTrace {
         trie_state: &mut PartialTrieState,
         meta: &TxnMetaState,
         txn_idx: TxnIdx,
-    ) {
+    ) -> TrieOpResult<()> {
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
-        trie_state.txn.insert(txn_k, meta.txn_bytes());
+        trie_state.txn.insert(txn_k, meta.txn_bytes())?;
 
         trie_state
             .receipt
-            .insert(txn_k, meta.receipt_node_bytes.as_ref());
+            .insert(txn_k, meta.receipt_node_bytes.as_ref())
     }
 
     /// If the account does not have a storage trie or does but is not
@@ -288,7 +299,7 @@ impl ProcessedBlockTrace {
         )?;
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
-        // TODO: Replace cast once `mpt_trie` supports `into` for `usize...
+
         let transactions_trie =
             create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
 
@@ -297,7 +308,6 @@ impl ProcessedBlockTrace {
 
         let storage_tries = create_minimal_storage_partial_tries(
             &curr_block_tries.storage,
-            &nodes_used_by_txn.state_accounts_with_no_accesses_but_storage_tries,
             nodes_used_by_txn.storage_accesses.iter(),
             &delta_application_out.additional_storage_trie_paths_to_not_hash,
         )?;
@@ -313,12 +323,11 @@ impl ProcessedBlockTrace {
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
         deltas: &NodesUsedByTxn,
-        meta: &TxnMetaState,
     ) -> TraceParsingResult<TrieDeltaApplicationOutput> {
         let mut out = TrieDeltaApplicationOutput::default();
 
         for (hashed_acc_addr, storage_writes) in deltas.storage_writes.iter() {
-            let mut storage_trie = trie_state.storage.get_mut(hashed_acc_addr).ok_or(
+            let storage_trie = trie_state.storage.get_mut(hashed_acc_addr).ok_or(
                 TraceParsingError::MissingAccountStorageTrie(*hashed_acc_addr),
             )?;
 
@@ -334,7 +343,7 @@ impl ProcessedBlockTrace {
                             Self::delete_node_and_report_remaining_key_if_branch_collapsed(
                                 storage_trie,
                                 &slot,
-                            )
+                            )?
                         {
                             out.additional_storage_trie_paths_to_not_hash
                                 .entry(*hashed_acc_addr)
@@ -366,7 +375,7 @@ impl ProcessedBlockTrace {
             let updated_account_bytes = rlp::encode(&account);
             trie_state
                 .state
-                .insert(val_k, updated_account_bytes.to_vec());
+                .insert(val_k, updated_account_bytes.to_vec())?;
         }
 
         // Remove any accounts that self-destructed.
@@ -385,7 +394,7 @@ impl ProcessedBlockTrace {
                 Self::delete_node_and_report_remaining_key_if_branch_collapsed(
                     &mut trie_state.state,
                     &k,
-                )
+                )?
             {
                 out.additional_state_trie_paths_to_not_hash
                     .push(remaining_account_key);
@@ -405,12 +414,14 @@ impl ProcessedBlockTrace {
     fn delete_node_and_report_remaining_key_if_branch_collapsed(
         trie: &mut HashedPartialTrie,
         delete_k: &Nibbles,
-    ) -> Option<Nibbles> {
+    ) -> TrieOpResult<Option<Nibbles>> {
         let old_trace = Self::get_trie_trace(trie, delete_k);
-        trie.delete(*delete_k);
+        trie.delete(*delete_k)?;
         let new_trace = Self::get_trie_trace(trie, delete_k);
 
-        Self::node_deletion_resulted_in_a_branch_collapse(&old_trace, &new_trace)
+        Ok(Self::node_deletion_resulted_in_a_branch_collapse(
+            &old_trace, &new_trace,
+        ))
     }
 
     /// Comparing the path of the deleted key before and after the deletion,
@@ -577,7 +588,7 @@ impl ProcessedBlockTrace {
 
             acc_data.balance += amt;
 
-            state.insert(h_addr_nibs, rlp::encode(&acc_data).to_vec());
+            state.insert(h_addr_nibs, rlp::encode(&acc_data).to_vec())?;
         }
 
         Ok(())
@@ -750,7 +761,6 @@ fn create_minimal_state_partial_trie(
 // trie somewhere else! This is a big hack!
 fn create_minimal_storage_partial_tries<'a>(
     storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
-    state_accounts_with_no_accesses_but_storage_tries: &HashMap<HashedAccountAddr, TrieRootHash>,
     accesses_per_account: impl Iterator<Item = &'a (HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
     additional_storage_trie_paths_to_not_hash: &HashMap<HashedAccountAddr, Vec<Nibbles>>,
 ) -> TraceParsingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {

@@ -227,6 +227,19 @@ impl TryInto<U256> for Nibbles {
     }
 }
 
+impl Into<H256> for Nibbles {
+    fn into(self) -> H256 {
+        let mut nib_bytes = self.bytes_be();
+        if nib_bytes.len() < 32 {
+            for _ in nib_bytes.len()..32 {
+                nib_bytes.insert(0, 0);
+            }
+        }
+
+        H256::from_slice(&nib_bytes)
+    }
+}
+
 impl From<U256> for NibblesIntern {
     fn from(val: U256) -> Self {
         let arr = val.as_u64s();
