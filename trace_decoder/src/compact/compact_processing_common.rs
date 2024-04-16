@@ -665,9 +665,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_branch(&mut self) -> CompactParsingResult<()> {
-        println!("Processing branch");
         let mask = self.byte_cursor.read_t("mask")?;
-        println!("Processing branch mask {:?}", mask);
 
         self.push_entry(Instruction::Branch(mask));
         Ok(())
@@ -681,7 +679,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 
     pub(super) fn process_code(&mut self) -> CompactParsingResult<()> {
-        println!("Processing code");
         let code = self.byte_cursor.read_t("code")?;
 
         self.push_entry(Instruction::Code(code));
@@ -759,7 +756,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
     pub(super) fn process_smt_leaf(&mut self) -> CompactParsingResult<()> {
         let node_type_byte: u8 = self.byte_cursor.read_t("nodeType")?;
-        println!("Processing smt leaf node type: {:x}", node_type_byte);
         let node_type = SmtNodeType::n(node_type_byte)
             .ok_or_else(|| CompactParsingError::UnknownSmtNodeType(node_type_byte))?;
         let address: Vec<u8> = self.byte_cursor.read_cbor_byte_array_to_vec("address")?;

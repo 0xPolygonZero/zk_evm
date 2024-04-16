@@ -38,9 +38,6 @@ impl ParserState {
         let mut entry_buf = Vec::new();
         let mut code: HashMap<CodeHash, Vec<u8>> = HashMap::new();
         let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf, &mut code);
-        println!("self.entries: {:?}", self.entries);
-        println!("Node entry: {:?}", node_entry);
-        println!("code: {:?}", code);
         let mut res = create_smt_trie_from_remaining_witness_elem(node_entry);
         // TODO - Assign code to res
         res

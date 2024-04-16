@@ -75,8 +75,6 @@ impl SmtStateTrieExtractionOutput {
         let addr = Address::from_slice(addr);
         let val = U256::from_big_endian(val_bytes);
 
-        println!("Processing SMT leaf: {:?}", n_type);
-
         let key = match n_type {
             SmtNodeType::Balance => key_balance(addr),
             SmtNodeType::Nonce => key_nonce(addr),
@@ -85,7 +83,6 @@ impl SmtStateTrieExtractionOutput {
                 // Massive assumption: Is the slot unhashed?
                 let slot = U256::from_big_endian(slot_bytes);
                 let key = key_storage(addr, slot);
-                println!("Storage key: {:?}", key);
                 key_storage(addr, slot)
             }
             SmtNodeType::CodeLength => key_code_length(addr),
