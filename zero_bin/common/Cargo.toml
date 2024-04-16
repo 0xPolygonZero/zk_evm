@@ -17,3 +17,4 @@ evm_arithmetization = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 trace_decoder = { workspace = true }
+seahash = "4.1.0"

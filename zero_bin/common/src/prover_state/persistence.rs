@@ -16,7 +16,7 @@ use super::{
     Config, RecursiveCircuitsForTableSize, SIZE,
 };
 
-const CIRCUITS_FOLDER: &str = "./circuits";
+pub(crate) const CIRCUITS_FOLDER: &str = "./circuits";
 const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
 
