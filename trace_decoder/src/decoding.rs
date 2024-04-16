@@ -29,7 +29,7 @@ use crate::{
         OtherBlockData, TriePathIter, TrieRootHash, TxnIdx, TxnProofGenIR,
         EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
-    utils::{hash, update_val_if_some, write_optional},
+    utils::{hash, optional_field, optional_field_hex, update_val_if_some},
 };
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
@@ -57,23 +57,24 @@ pub struct TraceParsingError {
 
 impl std::fmt::Display for TraceParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        writeln!(f, "Error processing trace: {}", self.reason)?;
-        write_optional(f, "Block num", self.block_num)?;
-        write_optional(f, "Block chain id", self.block_chain_id)?;
-        write_optional(f, "Txn idx", self.txn_idx)?;
-        write_optional(f, "Address", self.addr.as_ref())?;
-        write_optional(f, "Hashed address", self.h_addr.as_ref())?;
-        if let Some(slot) = self.slot {
-            writeln!(f, "Slot: {:x}", slot)?;
+        let h_slot = self.slot.map(|slot| {
             let mut buf = [0u8; 64];
             slot.to_big_endian(&mut buf);
-            writeln!(f, "Hashed Slot: {}", hash(&buf))?;
-        }
-        if let Some(slot_value) = self.slot_value {
-            writeln!(f, "Slot value: {:x}", slot_value)?;
-        }
-
-        Ok(())
+            hash(&buf)
+        });
+        write!(
+            f,
+            "Error processing trace: {}\n{}{}{}{}{}{}{}{}",
+            self.reason,
+            optional_field("Block num", self.block_num),
+            optional_field("Block chain id", self.block_chain_id),
+            optional_field("Txn idx", self.txn_idx),
+            optional_field("Address", self.addr.as_ref()),
+            optional_field("Hashed address", self.h_addr.as_ref()),
+            optional_field_hex("Slot", self.slot),
+            optional_field("Hashed Slot", h_slot),
+            optional_field_hex("Slot value", self.slot_value),
+        )
     }
 }
 
