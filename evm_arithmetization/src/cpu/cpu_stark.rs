@@ -116,7 +116,7 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Cpu,
         columns,
-        Some(Filter::new(
+        Filter::new(
             vec![(Column::single(COL_MAP.op.push_prover_input), col_bit)],
             vec![Column::sum([
                 COL_MAP.op.binary_op,
@@ -126,7 +126,7 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
                 COL_MAP.op.syscall,
                 COL_MAP.op.exception,
             ])],
-        )),
+        ),
     )
 }
 
