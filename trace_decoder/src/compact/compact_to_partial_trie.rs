@@ -104,10 +104,16 @@ pub(super) enum UnexpectedCompactNodeType {
 
 /// Output from constructing a state trie from compact.
 #[derive(Debug, Default)]
-pub(super) struct StateTrieExtractionOutput {
-    pub(super) trie: HashedPartialTrie,
-    pub(super) code: HashMap<CodeHash, Vec<u8>>,
-    pub(super) storage_tries: HashMap<HashedAccountAddr, HashedPartialTrie>,
+pub struct StateTrieExtractionOutput {
+    /// The state trie of the compact.
+    pub state_trie: HashedPartialTrie,
+
+    /// Any embedded contract bytecode that appears in the compact will be
+    /// present here.
+    pub code: HashMap<CodeHash, Vec<u8>>,
+
+    /// All storage tries present in the compact.
+    pub storage_tries: HashMap<HashedAccountAddr, HashedPartialTrie>,
 }
 
 impl CompactToPartialTrieExtractionOutput for StateTrieExtractionOutput {
@@ -125,7 +131,7 @@ impl CompactToPartialTrieExtractionOutput for StateTrieExtractionOutput {
         leaf_node_data: &LeafNodeData,
     ) -> CompactParsingResult<()> {
         process_leaf_common(
-            &mut self.trie,
+            &mut self.state_trie,
             curr_key,
             leaf_key,
             leaf_node_data,
@@ -140,7 +146,7 @@ impl CompactToPartialTrieExtractionOutput for StateTrieExtractionOutput {
         )
     }
     fn trie(&mut self) -> &mut HashedPartialTrie {
-        &mut self.trie
+        &mut self.state_trie
     }
 }
 

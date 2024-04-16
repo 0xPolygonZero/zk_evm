@@ -8,7 +8,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
 use crate::compact::compact_prestate_processing::{
-    process_compact_prestate_debug, PartialTriePreImages,
+    process_compact_prestate_debug, PartialTriePreImages, ProcessedCompactOutput,
 };
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
@@ -109,6 +109,21 @@ struct ProcessedBlockTracePreImages {
     extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
 }
 
+impl From<ProcessedCompactOutput> for ProcessedBlockTracePreImages {
+    fn from(v: ProcessedCompactOutput) -> Self {
+        let tries = PartialTriePreImages {
+            state: v.witness_out.state_trie,
+            storage: v.witness_out.storage_tries,
+        };
+
+        Self {
+            tries,
+            extra_code_hash_mappings: (!v.witness_out.code.is_empty())
+                .then_some(v.witness_out.code),
+        }
+    }
+}
+
 fn process_block_trace_trie_pre_images(
     block_trace_pre_images: BlockTraceTriePreImages,
 ) -> ProcessedBlockTracePreImages {
@@ -169,10 +184,7 @@ fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     // TODO: Make this into a result...
     assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
 
-    ProcessedBlockTracePreImages {
-        tries: out.witness_out.tries,
-        extra_code_hash_mappings: out.witness_out.code,
-    }
+    out.into()
 }
 
 /// Structure storing a function turning a `CodeHash` into bytes.
@@ -190,7 +202,7 @@ where
 {
     /// Returns a `ProcessingMeta` given the provided code hash resolving
     /// function.
-    pub fn new(resolve_code_hash_fn: F) -> Self {
+    pub const fn new(resolve_code_hash_fn: F) -> Self {
         Self {
             resolve_code_hash_fn,
         }

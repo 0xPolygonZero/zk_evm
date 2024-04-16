@@ -14,6 +14,7 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
+    trie_ops::TrieOpError,
     trie_subsets::{create_trie_subset, SubsetTrieError},
     utils::{IntoTrieKey, TriePath, TrieSegment},
 };
@@ -56,6 +57,17 @@ pub enum TraceParsingError {
     /// Failure due to trying to withdraw from a missing account
     #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
     MissingWithdrawalAccount(Address, HashedAccountAddr, U256),
+
+    /// Failure due to a trie operation error.
+    #[error("Trie operation error: {0}")]
+    TrieOpError(TrieOpError),
+}
+
+impl From<TrieOpError> for TraceParsingError {
+    fn from(err: TrieOpError) -> Self {
+        // Convert TrieOpError into TraceParsingError
+        TraceParsingError::TrieOpError(err)
+    }
 }
 
 /// An enum to cover all Ethereum trie types (see https://ethereum.github.io/yellowpaper/paper.pdf for details).
@@ -316,7 +328,7 @@ impl ProcessedBlockTrace {
             {
                 // If we are writing a zero, then we actually need to perform a delete.
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
-                    false => storage_trie.insert(slot, val.clone()),
+                    false => storage_trie.insert(slot, val.clone())?,
                     true => {
                         if let Some(remaining_slot_key) =
                             Self::delete_node_and_report_remaining_key_if_branch_collapsed(
@@ -499,26 +511,18 @@ impl ProcessedBlockTrace {
         withdrawals: Vec<(Address, U256)>,
         dummies_already_added: bool,
     ) -> TraceParsingResult<()> {
-        let withdrawals_with_hashed_addrs_iter = withdrawals
-            .iter()
-            .map(|(addr, v)| (*addr, hash(addr.as_bytes()), *v));
+        let withdrawals_with_hashed_addrs_iter = || {
+            withdrawals
+                .iter()
+                .map(|(addr, v)| (*addr, hash(addr.as_bytes()), *v))
+        };
 
         match dummies_already_added {
             // If we have no actual dummy proofs, then we create one and append it to the
             // end of the block.
             false => {
-                // TODO: Decide if we want this allocation...
-                // To avoid double hashing the addrs, but I don't know if the extra `Vec`
-                // allocation is worth it.
-                let withdrawals_with_hashed_addrs: Vec<_> =
-                    withdrawals_with_hashed_addrs_iter.collect();
-
-                // Dummy state will be the state after the final txn. Also need to include the
-                // account nodes that were accessed by the withdrawals.
-                let withdrawal_addrs = withdrawals_with_hashed_addrs
-                    .iter()
-                    .cloned()
-                    .map(|(_, h_addr, _)| h_addr);
+                let withdrawal_addrs =
+                    withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
                 let mut withdrawal_dummy = create_dummy_gen_input_with_state_addrs_accessed(
                     other_data,
                     extra_data,
@@ -527,7 +531,7 @@ impl ProcessedBlockTrace {
                 )?;
 
                 Self::update_trie_state_from_withdrawals(
-                    withdrawals_with_hashed_addrs,
+                    withdrawals_with_hashed_addrs_iter(),
                     &mut final_trie_state.state,
                 )?;
 
@@ -540,7 +544,7 @@ impl ProcessedBlockTrace {
             }
             true => {
                 Self::update_trie_state_from_withdrawals(
-                    withdrawals_with_hashed_addrs_iter,
+                    withdrawals_with_hashed_addrs_iter(),
                     &mut final_trie_state.state,
                 )?;
 

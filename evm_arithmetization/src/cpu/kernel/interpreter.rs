@@ -877,7 +877,7 @@ impl<F: Field> Interpreter<F> {
         self.generation_state.registers.stack_len
     }
 
-    pub(crate) fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
+    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
         if self.stack_len() > 0 {
             Ok(self.generation_state.registers.stack_top)
         } else {
@@ -924,6 +924,8 @@ impl<F: Field> State<F> for Interpreter<F> {
         }
     }
 
+    /// Inserts a preinitialized segment, given as a [Segment],
+    /// into the `preinitialized_segments` memory field.
     fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
         self.generation_state
             .memory

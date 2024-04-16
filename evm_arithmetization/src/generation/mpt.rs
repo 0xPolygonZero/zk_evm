@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use bytes::Bytes;
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
 use keccak_hash::keccak;
-use mpt_trie::nibbles::Nibbles;
+use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
@@ -121,7 +121,7 @@ fn parse_storage_value(value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
 const fn empty_nibbles() -> Nibbles {
     Nibbles {
         count: 0,
-        packed: U512::zero(),
+        packed: NibblesIntern::zero(),
     }
 }
 
@@ -172,7 +172,7 @@ where
             trie_data.push(nibbles.count.into());
             trie_data.push(
                 nibbles
-                    .try_into_u256()
+                    .try_into()
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             );
             trie_data.push((trie_data.len() + 1).into());
@@ -188,7 +188,7 @@ where
             trie_data.push(nibbles.count.into());
             trie_data.push(
                 nibbles
-                    .try_into_u256()
+                    .try_into()
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             );
 
@@ -251,7 +251,7 @@ fn load_state_trie(
             trie_data.push(nibbles.count.into());
             trie_data.push(
                 nibbles
-                    .try_into_u256()
+                    .try_into()
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             );
             // Set `value_ptr_ptr`.
@@ -287,7 +287,7 @@ fn load_state_trie(
             trie_data.push(nibbles.count.into());
             trie_data.push(
                 nibbles
-                    .try_into_u256()
+                    .try_into()
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             );
             // Set `value_ptr_ptr`.

@@ -402,7 +402,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for BytePackingSt
             columns: Column::singles(value_bytes(0)..value_bytes(0) + NUM_BYTES).collect(),
             table_column: Column::single(RANGE_COUNTER),
             frequencies_column: Column::single(RC_FREQUENCIES),
-            filter_columns: vec![None; NUM_BYTES],
+            filter_columns: vec![Default::default(); NUM_BYTES],
         }]
     }
 

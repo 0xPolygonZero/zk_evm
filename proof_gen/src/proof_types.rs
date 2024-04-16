@@ -83,14 +83,14 @@ impl SegmentAggregatableProof {
         }
     }
 
-    pub(crate) fn is_agg(&self) -> bool {
+    pub(crate) const fn is_agg(&self) -> bool {
         match self {
             SegmentAggregatableProof::Txn(_) => false,
             SegmentAggregatableProof::Agg(_) => true,
         }
     }
 
-    pub(crate) fn intern(&self) -> &PlonkyProofIntern {
+    pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
         match self {
             SegmentAggregatableProof::Txn(info) => &info.intern,
             SegmentAggregatableProof::Agg(info) => &info.intern,
