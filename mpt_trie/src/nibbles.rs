@@ -227,9 +227,9 @@ impl TryInto<U256> for Nibbles {
     }
 }
 
-impl Into<H256> for Nibbles {
-    fn into(self) -> H256 {
-        let mut nib_bytes = self.bytes_be();
+impl From<Nibbles> for H256 {
+    fn from(val: Nibbles) -> Self {
+        let mut nib_bytes = val.bytes_be();
         if nib_bytes.len() < 32 {
             for _ in nib_bytes.len()..32 {
                 nib_bytes.insert(0, 0);
