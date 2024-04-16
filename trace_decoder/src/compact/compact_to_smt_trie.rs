@@ -45,9 +45,12 @@ impl SmtStateTrieExtractionIntermediateOutput {
             state_smt_trie.set_hash(k, h);
         }
 
+        println!("state_smt_trie after hash inserts: {:?}", state_smt_trie);
+
         for (k, v) in self.leaf_inserts {
             state_smt_trie.set(k, v);
         }
+        println!("state_smt_trie after leaf inserts: {:?}", state_smt_trie);
 
         state_smt_trie
     }
@@ -85,6 +88,8 @@ impl SmtStateTrieExtractionIntermediateOutput {
     }
 
     fn process_hash_node(&mut self, curr_key: Bits, h: &TrieRootHash) {
+        println!("--------------------- Hash: {:?}", h);
+        println!("--------------------- curr_key: {:?}", curr_key);
         self.hash_inserts
             .push((curr_key, HashOut::from_bytes(h.as_bytes())));
     }
