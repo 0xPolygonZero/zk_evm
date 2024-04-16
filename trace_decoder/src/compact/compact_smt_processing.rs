@@ -36,7 +36,7 @@ impl ParserState {
     fn parse_smt(mut self) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
         let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf);
-
+        println!("Node entry: {:?}", node_entry);
         create_smt_trie_from_remaining_witness_elem(node_entry)
     }
 

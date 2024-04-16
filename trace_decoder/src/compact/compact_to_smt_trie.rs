@@ -65,9 +65,14 @@ impl SmtStateTrieExtractionOutput {
             .set_hash(curr_key, HashOut::from_bytes(h.as_bytes()));
     }
 
-    fn process_code_node(&mut self, addr: &[u8], c_bytes: Vec<u8>) {
-        let c_hash = hash(&c_bytes);
-        self.code.insert(c_hash, c_bytes);
+    fn process_code_node(&mut self, addr: &[u8], c_bytes: &Vec<u8>) {
+        let addr_hash = Address::from_slice(addr);
+        let c_hash = hash(c_bytes);
+        self.code.insert(c_hash, c_bytes.clone());
+        self.state_smt_trie
+            .set(key_code(addr_hash), c_hash.into_uint());
+        self.state_smt_trie
+            .set(key_code_length(addr_hash), U256::exp10(c_bytes.len()));
     }
 
     fn process_smt_leaf(
@@ -80,6 +85,8 @@ impl SmtStateTrieExtractionOutput {
         let addr = Address::from_slice(addr);
         let val = U256::from_big_endian(val_bytes);
 
+        println!("Processing SMT leaf: {:?}", n_type);
+
         let key = match n_type {
             SmtNodeType::Balance => key_balance(addr),
             SmtNodeType::Nonce => key_nonce(addr),
@@ -87,6 +94,8 @@ impl SmtStateTrieExtractionOutput {
             SmtNodeType::Storage => {
                 // Massive assumption: Is the slot unhashed?
                 let slot = U256::from_big_endian(slot_bytes);
+                let key = key_storage(addr, slot);
+                println!("Storage key: {:?}", key);
                 key_storage(addr, slot)
             }
             SmtNodeType::CodeLength => key_code_length(addr),
@@ -122,7 +131,7 @@ fn create_smt_trie_from_compact_node_rec(
         NodeEntry::BranchSMT([l_child, r_child]) => {
             output.process_branch_smt_node(curr_key, l_child, r_child)
         }
-        NodeEntry::CodeSMT(addr, c_bytes) => output.process_code_node(addr, c_bytes.clone()),
+        NodeEntry::CodeSMT(addr, c_bytes) => output.process_code_node(addr, c_bytes),
         NodeEntry::Empty => (),
         NodeEntry::Hash(h) => output.process_hash_node(curr_key, h),
         NodeEntry::SMTLeaf(n_type, addr_bytes, slot_bytes, slot_val) => {

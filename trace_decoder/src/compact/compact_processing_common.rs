@@ -1013,7 +1013,9 @@ where
     T: Debug,
 {
     let (header, mut parser) = create_and_extract_header_f(state_bytes)?;
-    let witness_out = (parse_f(parser))?;
+    let witness_out: T = (parse_f(parser))?;
+    println!("Header: {:?}", header);
+    println!("Witness: {:?}", witness_out);
 
     let out = ProcessedCompactOutput {
         header,

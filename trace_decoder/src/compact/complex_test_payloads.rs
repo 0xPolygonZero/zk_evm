@@ -1,3 +1,6 @@
+use std::hash::Hash;
+
+use keccak_hash::H256;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::plonk::config::GenericHashOut;
 
@@ -9,6 +12,7 @@ use super::{
     compact_smt_processing::process_compact_smt_prestate_debug,
     compact_to_mpt_trie::StateTrieExtractionOutput,
     compact_to_smt_trie::SmtStateTrieExtractionOutput,
+    tmp::utils::hashout2u,
 };
 use crate::{
     aliased_crate_types::MptAccountRlp,
@@ -111,9 +115,13 @@ impl TestProtocolInputAndRoot {
 
         let out = process_compact_prestate_f(SingleSmtPreImage(protocol_bytes))
             .unwrap_or_else(|err| panic!("{}", err));
-        let hash = TrieRootHash::from_slice(&out.witness_out.state_smt_trie.root.to_bytes());
 
-        self.header_and_hash_checks(hash, out.header);
+        let mut buf = [0; 32];
+        hashout2u(out.witness_out.state_smt_trie.root).to_big_endian(&mut buf);
+
+        let hash = hex::encode(buf);
+
+        self.header_and_hash_checks(H256::from_slice(&buf), out.header);
     }
 
     fn header_and_hash_checks(self, calculated_hash: TrieRootHash, header: Header) {
