@@ -946,7 +946,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             columns: Column::singles(get_block_bytes_range()).collect(),
             table_column: Column::single(RANGE_COUNTER),
             frequencies_column: Column::single(RC_FREQUENCIES),
-            filter_columns: vec![None; KECCAK_RATE_BYTES],
+            filter_columns: vec![Default::default(); KECCAK_RATE_BYTES],
         }]
     }
 
