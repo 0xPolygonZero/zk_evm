@@ -25,7 +25,7 @@ use crate::{
     processed_block_trace::{NodesUsedByTxn, ProcessedBlockTrace, StateTrieWrites, TxnMetaState},
     types::{
         HashedAccountAddr, HashedNodeAddr, HashedStorageAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TrieRootHash, TxnIdx, TxnProofGenIR, EMPTY_ACCOUNT_BYTES_RLPED,
+        OtherBlockData, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
         ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, update_val_if_some},
@@ -129,7 +129,7 @@ impl ProcessedBlockTrace {
     pub(crate) fn into_txn_proof_gen_ir(
         self,
         other_data: OtherBlockData,
-    ) -> TraceParsingResult<Vec<TxnProofGenIR>> {
+    ) -> TraceParsingResult<Vec<GenerationInputs>> {
         let mut curr_block_tries = PartialTrieState {
             state: self.tries.state.clone(),
             storage: self.tries.storage.clone(),
@@ -460,7 +460,7 @@ impl ProcessedBlockTrace {
     /// `[add_withdrawals_to_txns]`), where the final one will mutate the
     /// state trie.
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
-        gen_inputs: &mut Vec<TxnProofGenIR>,
+        gen_inputs: &mut Vec<GenerationInputs>,
         other_data: &OtherBlockData,
         final_extra_data: &ExtraBlockData,
         initial_extra_data: &ExtraBlockData,
@@ -515,7 +515,7 @@ impl ProcessedBlockTrace {
     /// - If no dummy proofs are already present, then a dummy proof that just
     ///   contains the withdrawals is appended to the end of the IR vec.
     fn add_withdrawals_to_txns(
-        txn_ir: &mut Vec<TxnProofGenIR>,
+        txn_ir: &mut Vec<GenerationInputs>,
         other_data: &OtherBlockData,
         extra_data: &ExtraBlockData,
         final_trie_state: &mut PartialTrieState,
@@ -641,7 +641,7 @@ fn create_dummy_txn_pair_for_empty_block(
     other_data: &OtherBlockData,
     extra_data: &ExtraBlockData,
     final_tries: &PartialTrieState,
-) -> [TxnProofGenIR; 2] {
+) -> [GenerationInputs; 2] {
     [
         create_dummy_gen_input(other_data, extra_data, final_tries),
         create_dummy_gen_input(other_data, extra_data, final_tries),
@@ -652,7 +652,7 @@ fn create_dummy_gen_input(
     other_data: &OtherBlockData,
     extra_data: &ExtraBlockData,
     final_tries: &PartialTrieState,
-) -> TxnProofGenIR {
+) -> GenerationInputs {
     let sub_tries = create_dummy_proof_trie_inputs(
         final_tries,
         create_fully_hashed_out_sub_partial_trie(&final_tries.state),
@@ -665,7 +665,7 @@ fn create_dummy_gen_input_with_state_addrs_accessed(
     extra_data: &ExtraBlockData,
     final_tries: &PartialTrieState,
     account_addrs_accessed: impl Iterator<Item = HashedAccountAddr>,
-) -> TraceParsingResult<TxnProofGenIR> {
+) -> TraceParsingResult<GenerationInputs> {
     let sub_tries = create_dummy_proof_trie_inputs(
         final_tries,
         create_minimal_state_partial_trie(
