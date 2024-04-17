@@ -371,12 +371,12 @@ Which may look like this:
 ./prove_blocks.sh 17 18 http://127.0.0.1:8545 false
 ```
 
-Which will attempt to generate blocks `17` & `18` consecutively and incorporate the previous block proof during generation.
+Which will attempt to generate proofs for blocks `17` & `18` consecutively and incorporate the previous block proof during generation.
 
 A few other notes:
 
 - Proving blocks is very resource intensive in terms of both CPU and memory. You can also only generate the witness for a block instead (see [Generating Witnesses Only](#generating-witnesses-only)) to significantly reduce the CPU and memory requirements.
-- Because incorporating the previous block proof requires a chain of proofs back to the last checkpoint height, you can also disable this requirement by passing `true` for `<IGNORE_PREVIOUS_PROOFS>` (which internally just sets the current checkpoint height to the current block height).
+- Because incorporating the previous block proof requires a chain of proofs back to the last checkpoint height, you can also disable this requirement by passing `true` for `<IGNORE_PREVIOUS_PROOFS>` (which internally just sets the current checkpoint height to the previous block height).
 
 ### Generating Witnesses Only
 
