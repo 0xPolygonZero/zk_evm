@@ -47,10 +47,10 @@ pub(crate) const INITIALIZE_AUX: usize = VIRTUAL_FIRST_CHANGE + 1;
 pub(crate) const STALE_CONTEXTS: usize = INITIALIZE_AUX + 1;
 
 // Pseudo-inverse of `STALE_CONTEXTS`. Used to ascertain it's nonzero.
-pub(crate) const STALE_CONTEXTS_INV: usize = STALE_CONTEXTS + 1;
+pub(crate) const IS_PRUNING: usize = STALE_CONTEXTS + 1;
 
 // Used for the context pruning lookup.
-pub(crate) const STALE_CONTEXTS_FREQUENCIES: usize = STALE_CONTEXTS_INV + 1;
+pub(crate) const STALE_CONTEXTS_FREQUENCIES: usize = IS_PRUNING + 1;
 
 // Flag indicating whether the row should be pruned, i.e. whether its
 // `ADDR_CONTEXT` is in `STALE_CONTEXTS`.

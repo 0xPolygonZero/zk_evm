@@ -383,6 +383,7 @@ call_too_deep:
     // stack: new_ctx
     // Switch to the new context and go to usermode with PC=0.
     DUP1 // new_ctx
+    %set_ctx_pruning_flag
     SET_CONTEXT
     %checkpoint // Checkpoint
     %increment_call_depth
@@ -394,6 +395,14 @@ call_too_deep:
     PUSH 0 // jump dest
     EXIT_KERNEL
     // (Old context) stack: new_ctx
+%endmacro
+
+%macro set_ctx_pruning_flag
+    // stack: old_ctx
+    DUP1 
+    // Check whether we are going to a context such that cur_ctx > new_ctx
+    GET_CONTEXT SWAP1 LT
+    ADD
 %endmacro
 
 %macro copy_mem_to_calldata

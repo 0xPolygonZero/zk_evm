@@ -95,7 +95,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D>
         let mut rows = propagated_values;
 
         let num_rows = rows.len();
-        let num_rows_padded = max(16, num_rows.next_power_of_two());
+        let num_rows_padded = max(128, num_rows.next_power_of_two());
         for _ in num_rows..num_rows_padded {
             rows.push(vec![F::ZERO; NUM_COLUMNS]);
         }

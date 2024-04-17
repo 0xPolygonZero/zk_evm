@@ -161,4 +161,9 @@ global check_receipt_trie:
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_AFTER)   %assert_eq
     // We don't need the trie data length here.
     POP
+
+    // CONTEXT_SCALING_FACTOR is 64, and the context is only 32 bits.
+    PUSH 1
+    SET_CONTEXT
+    
     %jump(halt)

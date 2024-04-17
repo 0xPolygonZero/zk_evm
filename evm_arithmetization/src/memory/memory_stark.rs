@@ -18,15 +18,13 @@ use starky::evaluation_frame::StarkEvaluationFrame;
 use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
-use super::columns::{
-    MEM_AFTER_FILTER, STALE_CONTEXTS, STALE_CONTEXTS_FREQUENCIES, STALE_CONTEXTS_INV,
-};
+use super::columns::{MEM_AFTER_FILTER, STALE_CONTEXTS, STALE_CONTEXTS_FREQUENCIES};
 use super::segments::Segment;
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::memory::columns::{
     value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, CONTEXT_FIRST_CHANGE, COUNTER, FILTER,
-    FREQUENCIES, INITIALIZE_AUX, IS_READ, IS_STALE, NUM_COLUMNS, RANGE_CHECK, SEGMENT_FIRST_CHANGE,
-    TIMESTAMP, TIMESTAMP_INV, VIRTUAL_FIRST_CHANGE,
+    FREQUENCIES, INITIALIZE_AUX, IS_PRUNING, IS_READ, IS_STALE, NUM_COLUMNS, RANGE_CHECK,
+    SEGMENT_FIRST_CHANGE, TIMESTAMP, TIMESTAMP_INV, VIRTUAL_FIRST_CHANGE,
 };
 use crate::memory::VALUE_LIMBS;
 use crate::witness::memory::MemoryOpKind::Read;
@@ -63,14 +61,11 @@ pub(crate) fn ctl_looking_mem<F: Field>() -> Vec<Column<F>> {
 pub(crate) fn ctl_context_pruning_looking<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Memory,
-        vec![Column::single(STALE_CONTEXTS)],
-        Some(Filter::new(
-            vec![(
-                Column::single(STALE_CONTEXTS),
-                Column::single(STALE_CONTEXTS_INV),
-            )],
-            vec![],
-        )),
+        vec![Column::linear_combination_with_constant(
+            vec![(STALE_CONTEXTS, F::ONE)],
+            F::NEG_ONE,
+        )],
+        Some(Filter::new(vec![], vec![Column::single(IS_PRUNING)])),
     )
 }
 
@@ -247,7 +242,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
 
             let addr_ctx = trace_col_vecs[ADDR_CONTEXT][i];
             let addr_ctx_usize = addr_ctx.to_canonical_u64() as usize;
-            if addr_ctx.is_nonzero() && addr_ctx == trace_col_vecs[STALE_CONTEXTS][addr_ctx_usize] {
+            if addr_ctx + F::ONE == trace_col_vecs[STALE_CONTEXTS][addr_ctx_usize] {
                 trace_col_vecs[IS_STALE][i] = F::ONE;
                 trace_col_vecs[STALE_CONTEXTS_FREQUENCIES][addr_ctx_usize] += F::ONE;
             } else if trace_col_vecs[FILTER][i].is_one()
@@ -358,10 +353,9 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         );
 
         for ctx in stale_contexts {
-            assert!(ctx != 0, "Context 0 cannot be stale.");
             let ctx_field = F::from_canonical_usize(ctx);
-            trace_rows[ctx][STALE_CONTEXTS] = ctx_field;
-            trace_rows[ctx][STALE_CONTEXTS_INV] = ctx_field.inverse();
+            trace_rows[ctx][STALE_CONTEXTS] = ctx_field + F::ONE;
+            trace_rows[ctx][IS_PRUNING] = F::ONE;
         }
     }
 
@@ -769,7 +763,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
                 ],
             },
             Lookup {
-                columns: vec![Column::single(ADDR_CONTEXT)],
+                columns: vec![Column::linear_combination_with_constant(
+                    vec![(ADDR_CONTEXT, F::ONE)],
+                    F::ONE,
+                )],
                 table_column: Column::single(STALE_CONTEXTS),
                 frequencies_column: Column::single(STALE_CONTEXTS_FREQUENCIES),
                 filter_columns: vec![Some(Filter::new_simple(Column::single(IS_STALE)))],

@@ -213,7 +213,7 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
             4..13,
             16..19,
             7..18,
-            11..18,
+            7..17,
         ], // Minimal ranges to prove an empty list
         &config,
     );

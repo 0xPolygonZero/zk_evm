@@ -159,6 +159,7 @@ global precompile_expmod:
     %set_new_ctx_parent_pc(after_precompile)
     // stack: new_ctx, (old stack)
     DUP1
+    %set_ctx_pruning_flag
     SET_CONTEXT
     %checkpoint // Checkpoint
     %increment_call_depth
