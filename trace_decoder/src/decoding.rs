@@ -225,11 +225,8 @@ impl ProcessedBlockTrace {
         if !self.withdrawals.is_empty() {
             Self::add_withdrawals_to_txns(
                 &mut txn_gen_inputs,
-                &other_data,
-                &extra_data,
                 &mut curr_block_tries,
                 self.withdrawals,
-                dummies_added,
             )?;
         }
 
@@ -505,11 +502,8 @@ impl ProcessedBlockTrace {
     ///   contains the withdrawals is appended to the end of the IR vec.
     fn add_withdrawals_to_txns(
         txn_ir: &mut Vec<GenerationInputs>,
-        other_data: &OtherBlockData,
-        extra_data: &ExtraBlockData,
         final_trie_state: &mut PartialTrieState,
         withdrawals: Vec<(Address, U256)>,
-        dummies_already_added: bool,
     ) -> TraceParsingResult<()> {
         let withdrawals_with_hashed_addrs_iter = || {
             withdrawals
@@ -517,43 +511,17 @@ impl ProcessedBlockTrace {
                 .map(|(addr, v)| (*addr, hash(addr.as_bytes()), *v))
         };
 
-        match dummies_already_added {
-            // If we have no actual dummy proofs, then we create one and append it to the
-            // end of the block.
-            false => {
-                let withdrawal_addrs =
-                    withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
-                let mut withdrawal_dummy = create_dummy_gen_input_with_state_addrs_accessed(
-                    other_data,
-                    extra_data,
-                    final_trie_state,
-                    withdrawal_addrs,
-                )?;
+        Self::update_trie_state_from_withdrawals(
+            withdrawals_with_hashed_addrs_iter(),
+            &mut final_trie_state.state,
+        )?;
 
-                Self::update_trie_state_from_withdrawals(
-                    withdrawals_with_hashed_addrs_iter(),
-                    &mut final_trie_state.state,
-                )?;
+        let last_inputs = txn_ir
+            .last_mut()
+            .expect("We cannot have an empty list of payloads.");
 
-                withdrawal_dummy.withdrawals = withdrawals;
-
-                // Only the state root hash needs to be updated from the withdrawals.
-                withdrawal_dummy.trie_roots_after.state_root = final_trie_state.state.hash();
-
-                txn_ir.push(withdrawal_dummy);
-            }
-            true => {
-                Self::update_trie_state_from_withdrawals(
-                    withdrawals_with_hashed_addrs_iter(),
-                    &mut final_trie_state.state,
-                )?;
-
-                // If we have dummy proofs (note: `txn_ir[1]` is always a dummy txn in this
-                // case), then this dummy will get the withdrawals.
-                txn_ir[1].withdrawals = withdrawals;
-                txn_ir[1].trie_roots_after.state_root = final_trie_state.state.hash();
-            }
-        }
+        last_inputs.withdrawals = withdrawals;
+        last_inputs.trie_roots_after.state_root = final_trie_state.state.hash();
 
         Ok(())
     }
