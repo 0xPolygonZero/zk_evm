@@ -77,17 +77,17 @@ pub(crate) const SMT_TEST_PAYLOAD_9: TestProtocolInputAndRoot = TestProtocolInpu
 
 pub(crate) const SMT_TEST_PAYLOAD_10: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
     byte_str: include_str!("large_test_payloads/smt_test_payload_10.txt"),
-    root_str: "e3183936f83466ac3a7c4a0c58bcc62eee4a0a9edb0cbb8bb2ecc3094940f389",
+    root_str: "91dfcdeb628dfdc51f3a2ee38cb17c78581e4e7ff91bcc2e327d24a9dfa46982",
 };
 
 pub(crate) const SMT_TEST_PAYLOAD_11: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
     byte_str: include_str!("large_test_payloads/smt_test_payload_11.txt"),
-    root_str: "355baf018ce42aae0df4605ff6274da1c2cd650bee756412dd12e60667794049",
+    root_str: "e3183936f83466ac3a7c4a0c58bcc62eee4a0a9edb0cbb8bb2ecc3094940f389",
 };
 
 pub(crate) const SMT_TEST_PAYLOAD_12: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
     byte_str: include_str!("large_test_payloads/smt_test_payload_12.txt"),
-    root_str: "006c7f763bab6c91bbd785231a463460e3db3956b02f2c3a0277a37556cc98c2",
+    root_str: "355baf018ce42aae0df4605ff6274da1c2cd650bee756412dd12e60667794049",
 };
 
 pub(crate) const SMT_TEST_PAYLOAD_13: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
