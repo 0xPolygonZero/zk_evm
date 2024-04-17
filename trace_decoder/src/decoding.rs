@@ -501,7 +501,7 @@ impl ProcessedBlockTrace {
     /// - If no dummy proofs are already present, then a dummy proof that just
     ///   contains the withdrawals is appended to the end of the IR vec.
     fn add_withdrawals_to_txns(
-        txn_ir: &mut Vec<GenerationInputs>,
+        txn_ir: &mut [GenerationInputs],
         final_trie_state: &mut PartialTrieState,
         withdrawals: Vec<(Address, U256)>,
     ) -> TraceParsingResult<()> {
