@@ -120,9 +120,9 @@ impl TestProtocolInputAndRoot {
     fn parse_and_check_smt_trie(self, process_compact_prestate_f: ProcessSmtCompactPrestateFn) {
         let protocol_bytes = hex::decode(self.byte_str).unwrap();
 
-        let out = process_compact_prestate_f(SingleSmtPreImage(protocol_bytes))
-            .unwrap_or_else(|err| panic!("{}", err));
-        print!("SMT State Trie: out: {:?}", out.witness_out.state_trie);
+        let out: ProcessedCompactOutput<SmtStateTrieExtractionOutput> =
+            process_compact_prestate_f(SingleSmtPreImage(protocol_bytes))
+                .unwrap_or_else(|err| panic!("{}", err));
         let mut buf: [u8; 32] = [0; 32];
         hashout2u(out.witness_out.state_trie.root).to_big_endian(&mut buf);
 

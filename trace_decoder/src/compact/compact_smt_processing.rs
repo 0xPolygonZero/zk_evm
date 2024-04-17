@@ -38,7 +38,6 @@ impl ParserState {
         let mut entry_buf = Vec::new();
         let mut code = HashMap::new();
         let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf, &mut code);
-        println!("Node entry: \n{:?}", node_entry);
 
         create_smt_trie_from_remaining_witness_elem(node_entry, code)
     }
