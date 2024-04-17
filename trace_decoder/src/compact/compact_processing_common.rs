@@ -1035,9 +1035,10 @@ mod tests {
         complex_test_payloads::{
             MPT_TEST_PAYLOAD_1, MPT_TEST_PAYLOAD_2, MPT_TEST_PAYLOAD_3, MPT_TEST_PAYLOAD_4,
             MPT_TEST_PAYLOAD_5, MPT_TEST_PAYLOAD_6, SMT_TEST_PAYLOAD_1, SMT_TEST_PAYLOAD_10,
-            SMT_TEST_PAYLOAD_11, SMT_TEST_PAYLOAD_12, SMT_TEST_PAYLOAD_2, SMT_TEST_PAYLOAD_3,
-            SMT_TEST_PAYLOAD_4, SMT_TEST_PAYLOAD_5, SMT_TEST_PAYLOAD_6, SMT_TEST_PAYLOAD_7,
-            SMT_TEST_PAYLOAD_8, SMT_TEST_PAYLOAD_9,
+            SMT_TEST_PAYLOAD_11, SMT_TEST_PAYLOAD_12, SMT_TEST_PAYLOAD_13, SMT_TEST_PAYLOAD_14,
+            SMT_TEST_PAYLOAD_15, SMT_TEST_PAYLOAD_2, SMT_TEST_PAYLOAD_3, SMT_TEST_PAYLOAD_4,
+            SMT_TEST_PAYLOAD_5, SMT_TEST_PAYLOAD_6, SMT_TEST_PAYLOAD_7, SMT_TEST_PAYLOAD_8,
+            SMT_TEST_PAYLOAD_9,
         },
     };
 
@@ -1190,5 +1191,23 @@ mod tests {
     fn smt_complex_payload_12() {
         init();
         SMT_TEST_PAYLOAD_12.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_13() {
+        init();
+        SMT_TEST_PAYLOAD_13.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_14() {
+        init();
+        SMT_TEST_PAYLOAD_14.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_15() {
+        init();
+        SMT_TEST_PAYLOAD_15.parse_and_check_hash_matches_with_debug_smt();
     }
 }
