@@ -357,21 +357,30 @@ There are three branches that are used for development:
 
 For testing proof generation for blocks, the `testing` branch should be used.
 
+### Proving Blocks
+
 If you want to generate a full block proof, you can use `tools/prove_blocks.sh`:
 
 ```sh
-./prove_blocks.sh <BLOCK_START> <BLOCK_END> <FULL_NODE_ENDPOINT>
+./prove_blocks.sh <BLOCK_START> <BLOCK_END> <FULL_NODE_ENDPOINT> <IGNORE_PREVIOUS_PROOFS>
 ```
 
 Which may look like this:
 
 ```sh
-./prove_blocks.sh 17 18 http://127.0.0.1:8545
+./prove_blocks.sh 17 18 http://127.0.0.1:8545 false
 ```
 
-Which will attempt to generate blocks `17` & `18` consecutively.
+Which will attempt to generate blocks `17` & `18` consecutively and incorporate the previous block proof during generation.
 
-However, proving blocks is very resource intensive in both CPU and memory. You can also only generate the witness for a block instead to significantly reduce the CPU and memory requirements:
+A few other notes:
+
+- Proving blocks is very resource intensive in terms of both CPU and memory. You can also only generate the witness for a block instead (see [Generating Witnesses Only](#generating-witnesses-only)) to significantly reduce the CPU and memory requirements.
+- Because incorporating the previous block proof requires a chain of proofs back to the last checkpoint height, you can also disable this requirement by passing `true` for `<IGNORE_PREVIOUS_PROOFS>` (which internally just sets the current checkpoint height to the current block height).
+
+### Generating Witnesses Only
+
+If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `tools/debug_block.sh`:
 
 ```sh
 ./debug_block.sh <BLOCK_NUMBER> <FULL_NODE_ENDPOINT>
