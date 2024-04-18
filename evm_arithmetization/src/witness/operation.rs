@@ -285,8 +285,7 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
 
     let old_ctx = generation_state.registers.context;
     // The popped value needs to be scaled down.
-    let new_ctx_with_flag = u256_to_usize(ctx >> CONTEXT_SCALING_FACTOR)?;
-    let new_ctx = new_ctx_with_flag & 0xFFFF;
+    let new_ctx = u256_to_usize(ctx >> CONTEXT_SCALING_FACTOR)?;
 
     // Flag indicating whether the old context should be pruned.
     let flag = ctx & 1.into();

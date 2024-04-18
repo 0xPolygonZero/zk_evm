@@ -314,7 +314,8 @@ extcodecopy_contd:
     POP
     SET_CONTEXT
     // We're now in stale_ctx, with stack: curr_ctx
-    %set_ctx_pruning_flag
+    // Set the pruning flag.
+    PUSH 1 ADD
     SET_CONTEXT
     // We're now in curr_ctx, with an empty stack.
 %endmacro
