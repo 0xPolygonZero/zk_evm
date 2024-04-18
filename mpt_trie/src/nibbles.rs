@@ -895,6 +895,23 @@ impl Nibbles {
         }
     }
 
+    /// Returns a slice of the internal bytes of packed nibbles.
+    /// Only the relevant bytes (up to `count` nibbles) are considered valid.
+    pub fn as_byte_slice(&self) -> &[u8] {
+        // Calculate the number of full bytes needed to cover 'count' nibbles
+        let bytes_needed = (self.count + 1) / 2; // each nibble is half a byte
+
+        // Safe because we are ensuring the slice size does not exceed the bounds of the
+        // array
+        unsafe {
+            // Convert the pointer to `packed` to a pointer to `u8`
+            let packed_ptr = self.packed.0.as_ptr() as *const u8;
+
+            // Create a slice from this pointer and the number of needed bytes
+            std::slice::from_raw_parts(packed_ptr, bytes_needed)
+        }
+    }
+
     const fn nibble_append_safety_asserts(&self, n: Nibble) {
         assert!(
             self.count < 64,
@@ -1599,5 +1616,36 @@ mod tests {
         v.to_big_endian(&mut buf);
 
         Nibbles::from_hex_prefix_encoding(&buf).unwrap();
+    }
+
+    #[test]
+    fn nibbles_as_byte_slice_works() -> Result<(), StrToNibblesError> {
+        let cases = [
+            (0x0, vec![]),
+            (0x1, vec![0x01]),
+            (0x12, vec![0x12]),
+            (0x123, vec![0x23, 0x01]),
+        ];
+
+        for case in cases.iter() {
+            let nibbles = Nibbles::from(case.0 as u64);
+            let byte_vec = nibbles.as_byte_slice().to_vec();
+            assert_eq!(byte_vec, case.1.clone(), "Failed for input 0x{:X}", case.0);
+        }
+
+        let input = "3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581351";
+        let nibbles = Nibbles::from_str(input)?;
+
+        let byte_vec = nibbles.as_byte_slice().to_vec();
+        let mut expected_vec: Vec<u8> = hex::decode(input).expect("Invalid hex string");
+        expected_vec.reverse();
+        assert_eq!(
+            byte_vec,
+            expected_vec.clone(),
+            "Failed for input 0x{}",
+            input
+        );
+
+        Ok(())
     }
 }
