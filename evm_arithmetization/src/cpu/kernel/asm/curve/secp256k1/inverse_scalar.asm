@@ -1,5 +1,4 @@
 /// Division modulo 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141, the Secp256k1 scalar field order
-/// To replace with more efficient method using non-determinism later.
 
 %macro mulmodn_secp_scalar
     // stack: x, y
