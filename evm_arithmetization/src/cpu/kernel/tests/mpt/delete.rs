@@ -1,6 +1,6 @@
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256, U512};
-use mpt_trie::nibbles::Nibbles;
+use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::random;
@@ -70,7 +70,7 @@ fn test_after_mpt_delete_extension_branch() -> Result<()> {
     }
     .into();
     let key = nibbles.merge_nibbles(&Nibbles {
-        packed: U512::zero(),
+        packed: NibblesIntern::zero(),
         count: 64 - nibbles.count,
     });
     test_state_trie(state_trie, key, test_account_2())
@@ -130,7 +130,7 @@ fn test_state_trie(
         .push(value_ptr.into())
         .expect("The stack should not overflow"); // value_ptr
     interpreter
-        .push(k.try_into_u256().unwrap())
+        .push(k.try_into().unwrap())
         .expect("The stack should not overflow"); // key
     interpreter.run()?;
     assert_eq!(
@@ -147,7 +147,7 @@ fn test_state_trie(
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(k.try_into_u256().unwrap())
+        .push(k.try_into().unwrap())
         .expect("The stack should not overflow");
     interpreter
         .push(64.into())

@@ -125,13 +125,14 @@ mod test {
     use crate::{
         nibbles::Nibbles,
         testing_utils::{common_setup, handmade_trie_1},
+        trie_ops::TrieOpResult,
         utils::TrieSegment,
     };
 
     #[test]
-    fn query_iter_works_no_last_node() {
+    fn query_iter_works_no_last_node() -> TrieOpResult<()> {
         common_setup();
-        let (trie, ks) = handmade_trie_1();
+        let (trie, ks) = handmade_trie_1()?;
 
         // ks --> vec![0x1234, 0x1324, 0x132400005_u64, 0x2001, 0x2002];
         let res = vec![
@@ -170,12 +171,14 @@ mod test {
             let res: Vec<_> = path_for_query(&trie.node, q, false).collect();
             assert_eq!(res, expected)
         }
+
+        Ok(())
     }
 
     #[test]
-    fn query_iter_works_with_last_node() {
+    fn query_iter_works_with_last_node() -> TrieOpResult<()> {
         common_setup();
-        let (trie, _) = handmade_trie_1();
+        let (trie, _) = handmade_trie_1()?;
 
         let extension_expected = vec![
             TrieSegment::Branch(1),
@@ -212,5 +215,7 @@ mod test {
             path_for_query(&trie, 0x132400, true).collect::<Vec<_>>(),
             leaf_expected
         );
+
+        Ok(())
     }
 }

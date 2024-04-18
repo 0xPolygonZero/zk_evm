@@ -65,7 +65,7 @@ pub(crate) fn ctl_context_pruning_looking<F: Field>() -> TableWithColumns<F> {
             vec![(STALE_CONTEXTS, F::ONE)],
             F::NEG_ONE,
         )],
-        Some(Filter::new(vec![], vec![Column::single(IS_PRUNED)])),
+        Filter::new(vec![], vec![Column::single(IS_PRUNED)]),
     )
 }
 
@@ -757,11 +757,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
                 table_column: Column::single(COUNTER),
                 frequencies_column: Column::single(FREQUENCIES),
                 filter_columns: vec![
-                    None,
-                    Some(Filter::new_simple(Column::sum([
-                        CONTEXT_FIRST_CHANGE,
-                        SEGMENT_FIRST_CHANGE,
-                    ]))),
+                    Default::default(),
+                    Filter::new_simple(Column::sum([CONTEXT_FIRST_CHANGE, SEGMENT_FIRST_CHANGE])),
                 ],
             },
             Lookup {
@@ -771,7 +768,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
                 )],
                 table_column: Column::single(STALE_CONTEXTS),
                 frequencies_column: Column::single(STALE_CONTEXTS_FREQUENCIES),
-                filter_columns: vec![Some(Filter::new_simple(Column::single(IS_STALE)))],
+                filter_columns: vec![Filter::new_simple(Column::single(IS_STALE))],
             },
         ]
     }

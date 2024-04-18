@@ -65,7 +65,7 @@ enum DiffDetectionState {
 }
 
 impl DiffDetectionState {
-    fn pick_most_significant_state(&self, other: &Self) -> Self {
+    const fn pick_most_significant_state(&self, other: &Self) -> Self {
         match self.get_int_repr() > other.get_int_repr() {
             false => *other,
             true => *self,
@@ -73,7 +73,7 @@ impl DiffDetectionState {
     }
 
     /// The integer representation also indicates the more "significant" state.
-    fn get_int_repr(self) -> usize {
+    const fn get_int_repr(self) -> usize {
         self as usize
     }
 }
@@ -403,7 +403,7 @@ fn create_diff_detection_state_based_from_hashes(
 
 /// If the node type contains a value (without looking at the children), then
 /// return it.
-fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
+const fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
     match n {
         Node::Empty | Node::Hash(_) | Node::Extension { .. } => None,
         Node::Branch { value, .. } | Node::Leaf { nibbles: _, value } => Some(value),
@@ -416,18 +416,19 @@ mod tests {
     use crate::{
         nibbles::Nibbles,
         partial_trie::{HashedPartialTrie, PartialTrie},
+        trie_ops::TrieOpResult,
         utils::TrieNodeType,
     };
 
     #[test]
-    fn depth_single_node_hash_diffs_work() {
+    fn depth_single_node_hash_diffs_work() -> TrieOpResult<()> {
         // TODO: Reduce duplication once we identify common structures across tests...
         let mut a = HashedPartialTrie::default();
-        a.insert(0x1234, vec![0]);
+        a.insert(0x1234, vec![0])?;
         let a_hash = a.hash();
 
         let mut b = a.clone();
-        b.insert(0x1234, vec![1]);
+        b.insert(0x1234, vec![1])?;
         let b_hash = b.hash();
 
         let diff = create_diff_between_tries(&a, &b);
@@ -455,6 +456,8 @@ mod tests {
         };
 
         assert_eq!(diff.latest_diff_res, Some(expected));
+
+        Ok(())
     }
 
     // TODO: Will finish these tests later (low-priority).
