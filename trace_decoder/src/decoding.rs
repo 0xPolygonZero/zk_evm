@@ -5,10 +5,6 @@ use std::{
 };
 
 use ethereum_types::{Address, H256, U256, U512};
-use evm_arithmetization::{
-    generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
-    proof::{ExtraBlockData, TrieRoots},
-};
 use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
@@ -21,6 +17,7 @@ use mpt_trie::{
 use thiserror::Error;
 
 use crate::{
+    aliased_crate_types::{AccountRlp, ExtraBlockData, GenerationInputs, TrieInputs, TrieRoots},
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
     },

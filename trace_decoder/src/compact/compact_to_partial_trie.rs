@@ -6,7 +6,6 @@ use std::{
     fmt::{self, Display},
 };
 
-use evm_arithmetization::generation::mpt::AccountRlp;
 use log::trace;
 use mpt_trie::{
     nibbles::{Nibble, Nibbles},
@@ -18,6 +17,7 @@ use super::compact_prestate_processing::{
     NodeEntry, WitnessEntry,
 };
 use crate::{
+    aliased_crate_types::AccountRlp,
     decoding::TrieType,
     types::{
         CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH,

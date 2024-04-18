@@ -1,10 +1,8 @@
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::{
-    generation::GenerationInputs,
-    proof::{BlockHashes, BlockMetadata},
-};
 use mpt_trie::{nibbles::Nibbles, partial_trie::HashedPartialTrie};
 use serde::{Deserialize, Serialize};
+
+use crate::aliased_crate_types::{BlockHashes, BlockMetadata, GenerationInputs};
 
 // TODO: Make these types in the doc comments point to the actual types...
 /// A type alias for `[U256; 8]` of a bloom filter.
