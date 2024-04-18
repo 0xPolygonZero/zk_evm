@@ -312,9 +312,9 @@ extcodecopy_contd:
     MSTORE_GENERAL
     // stack: curr_ctx, stale_ctx
     POP
-    %set_ctx_pruning_flag
     SET_CONTEXT
     // We're now in stale_ctx, with stack: curr_ctx
+    %set_ctx_pruning_flag
     SET_CONTEXT
     // We're now in curr_ctx, with an empty stack.
 %endmacro
