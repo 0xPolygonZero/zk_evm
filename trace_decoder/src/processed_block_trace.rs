@@ -3,15 +3,11 @@ use std::fmt::Debug;
 use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
-use evm_arithmetization::GenerationInputs;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
-use crate::compact::compact_prestate_processing::{
-    process_compact_prestate_debug, CompactParsingError, CompactParsingResult,
-    PartialTriePreImages, ProcessedCompactOutput,
-};
+use crate::aliased_crate_types::GenerationInputs;
+use crate::compact::compact_prestate_processing::{CompactParsingError, CompactParsingResult};
 use crate::decoding::{TraceParsingError, TraceParsingResult};
 use crate::trace_protocol::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
@@ -24,6 +20,12 @@ use crate::types::{
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
+};
+use crate::{
+    aliased_crate_types::{AccountRlp, LegacyReceiptRlp},
+    compact::compact_prestate_processing::{
+        process_compact_prestate_debug, PartialTriePreImages, ProcessedCompactOutput,
+    },
 };
 
 #[derive(Debug)]

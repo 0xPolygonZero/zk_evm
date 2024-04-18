@@ -1,4 +1,3 @@
-use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::PartialTrie;
 
 use super::{
@@ -9,6 +8,7 @@ use super::{
     compact_to_partial_trie::StateTrieExtractionOutput,
 };
 use crate::{
+    aliased_crate_types::AccountRlp,
     trace_protocol::TrieCompact,
     types::{HashedAccountAddr, TrieRootHash, EMPTY_TRIE_HASH},
     utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie},

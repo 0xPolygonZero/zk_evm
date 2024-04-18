@@ -1,6 +1,6 @@
 use std::iter::{empty, once};
 
-use evm_arithmetization::GenerationInputs;
+use crate::aliased_crate_types::GenerationInputs;
 
 pub(crate) trait PrestateCompact {
     fn process() -> impl IrMutableState;
@@ -22,7 +22,7 @@ pub(crate) trait IrMutableState {
 pub(crate) struct TxnIrMutableState {}
 
 impl IrMutableState for TxnIrMutableState {
-    type Ir = GenerationInputs; // TODO: Swap this out with an alias...
+    type Ir = GenerationInputs;
 
     fn produce_ir(
         self,
