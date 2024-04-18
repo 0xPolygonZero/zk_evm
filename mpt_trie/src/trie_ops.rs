@@ -397,7 +397,7 @@ impl<T: PartialTrie> Node<T> {
         K: Into<Nibbles>,
     {
         let k = k.into();
-        self.trie_items().find(|(key, _)| key == &k).is_some()
+        self.trie_items().any(|(key, _)| key == k)
     }
 }
 
