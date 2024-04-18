@@ -42,18 +42,19 @@ pub(crate) const VIRTUAL_FIRST_CHANGE: usize = SEGMENT_FIRST_CHANGE + 1;
 // Contains `next_segment * addr_changed * next_is_read`.
 pub(crate) const INITIALIZE_AUX: usize = VIRTUAL_FIRST_CHANGE + 1;
 
-// Contains `row_index` if and only if context `row_index` is stale,
+// Contains `row_index` + 1 if and only if context `row_index` is stale,
 // and zero if not.
 pub(crate) const STALE_CONTEXTS: usize = INITIALIZE_AUX + 1;
 
-// Pseudo-inverse of `STALE_CONTEXTS`. Used to ascertain it's nonzero.
-pub(crate) const IS_PRUNING: usize = STALE_CONTEXTS + 1;
+// Flag indicating whether the current context needs to be pruned. It is set to
+// 1 when the value in `STALE_CONTEXTS` is non-zero.
+pub(crate) const IS_PRUNED: usize = STALE_CONTEXTS + 1;
 
 // Used for the context pruning lookup.
-pub(crate) const STALE_CONTEXTS_FREQUENCIES: usize = IS_PRUNING + 1;
+pub(crate) const STALE_CONTEXTS_FREQUENCIES: usize = IS_PRUNED + 1;
 
 // Flag indicating whether the row should be pruned, i.e. whether its
-// `ADDR_CONTEXT` is in `STALE_CONTEXTS`.
+// `ADDR_CONTEXT` + 1 is in `STALE_CONTEXTS`.
 pub(crate) const IS_STALE: usize = STALE_CONTEXTS_FREQUENCIES + 1;
 
 // Filter for the `MemAfter` CTL.

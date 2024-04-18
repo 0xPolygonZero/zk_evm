@@ -287,6 +287,8 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
     // The popped value needs to be scaled down.
     let new_ctx_with_flag = u256_to_usize(ctx >> CONTEXT_SCALING_FACTOR)?;
     let new_ctx = new_ctx_with_flag & 0xFFFF;
+
+    // Flag indicating whether the old context should be pruned.
     let flag = ctx & 1.into();
 
     let sp_field = ContextMetadata::StackSize.unscale();

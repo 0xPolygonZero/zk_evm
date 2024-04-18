@@ -23,7 +23,7 @@ use super::segments::Segment;
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::memory::columns::{
     value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, CONTEXT_FIRST_CHANGE, COUNTER, FILTER,
-    FREQUENCIES, INITIALIZE_AUX, IS_PRUNING, IS_READ, IS_STALE, NUM_COLUMNS, RANGE_CHECK,
+    FREQUENCIES, INITIALIZE_AUX, IS_PRUNED, IS_READ, IS_STALE, NUM_COLUMNS, RANGE_CHECK,
     SEGMENT_FIRST_CHANGE, TIMESTAMP, TIMESTAMP_INV, VIRTUAL_FIRST_CHANGE,
 };
 use crate::memory::VALUE_LIMBS;
@@ -65,7 +65,7 @@ pub(crate) fn ctl_context_pruning_looking<F: Field>() -> TableWithColumns<F> {
             vec![(STALE_CONTEXTS, F::ONE)],
             F::NEG_ONE,
         )],
-        Some(Filter::new(vec![], vec![Column::single(IS_PRUNING)])),
+        Some(Filter::new(vec![], vec![Column::single(IS_PRUNED)])),
     )
 }
 
@@ -354,8 +354,10 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
 
         for ctx in stale_contexts {
             let ctx_field = F::from_canonical_usize(ctx);
+            // We store `ctx_field+1` so that 0 can be the default value for non-stale
+            // context.
             trace_rows[ctx][STALE_CONTEXTS] = ctx_field + F::ONE;
-            trace_rows[ctx][IS_PRUNING] = F::ONE;
+            trace_rows[ctx][IS_PRUNED] = F::ONE;
         }
     }
 

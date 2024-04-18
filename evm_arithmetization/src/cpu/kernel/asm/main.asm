@@ -162,7 +162,7 @@ global check_receipt_trie:
     // We don't need the trie data length here.
     POP
 
-    // CONTEXT_SCALING_FACTOR is 64, and the context is only 32 bits.
+    // We have reached the end of the execution, so we set the pruning flag to 1 for context 0.
     PUSH 1
     SET_CONTEXT
     

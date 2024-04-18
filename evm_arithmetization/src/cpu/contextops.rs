@@ -125,6 +125,7 @@ fn eval_ext_circuit_get<F: RichField + Extendable<D>, const D: usize>(
         yield_constr.constraint(builder, constr);
     }
 
+    // We cannot prune a context in GET_CONTEXT.
     let constr = builder.mul_extension(filter, lv.general.context_pruning().pruning_flag);
     yield_constr.constraint(builder, constr);
 
