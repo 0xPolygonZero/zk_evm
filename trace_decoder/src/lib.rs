@@ -119,6 +119,9 @@
 #![allow(unused)]
 #![allow(private_interfaces)]
 
+#[cfg(not(any(feature = "mpt", feature = "smt")))]
+compile_error! {"Either the \"mpt\" or \"smt\" feature (but not both) must be enabled"}
+
 #[cfg(all(feature = "mpt", feature = "smt"))]
 compile_error! {"The features \"mpt\" and \"smt\" are mutually exclusive and can not be enabled at the same time"}
 

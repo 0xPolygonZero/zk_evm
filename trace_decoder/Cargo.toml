@@ -37,6 +37,5 @@ evm_arithmetization_smt = { package = "evm_arithmetization", version = "0.1.2", 
 pretty_env_logger = "0.5.0"
 
 [features]
-default = ["mpt"]
 mpt = ["evm_arithmetization_mpt"]
 smt = ["evm_arithmetization_smt"]
