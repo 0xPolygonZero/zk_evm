@@ -14,6 +14,10 @@ serde = { workspace = true }
 evm_arithmetization = { workspace = true, optional = true}
 proof_gen = { workspace = true }
 trace_decoder = { workspace = true }
+tracing = { workspace = true }
+rlp = { workspace = true }
+ethereum-types = { workspace = true }
+keccak-hash = { workspace = true }
 
 common = { path = "../common" }
 
