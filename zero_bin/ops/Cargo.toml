@@ -11,7 +11,7 @@ categories.workspace = true
 [dependencies]
 paladin-core = { workspace = true }
 serde = { workspace = true }
-evm_arithmetization = { workspace = true, optional = true}
+evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
 trace_decoder = { workspace = true }
 tracing = { workspace = true }
@@ -23,4 +23,4 @@ common = { path = "../common" }
 
 [features]
 default = []
-test_only = ["evm_arithmetization"]
+test_only = []
