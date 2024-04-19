@@ -156,6 +156,9 @@ fn eval_packed_set<P: PackedField>(
 
     // The next row's context is read from stack_top.
     yield_constr.constraint(filter * (stack_top[2] - nv.context));
+    // The stack top contains the new context in the third limb, and a flag
+    // indicating whether the old context should be pruned in the first limb. The
+    // other limbs should be 0.
     for (_, &limb) in stack_top[1..].iter().enumerate().filter(|(i, _)| *i != 1) {
         yield_constr.constraint(filter * limb);
     }
