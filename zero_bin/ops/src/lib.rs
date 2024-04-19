@@ -28,12 +28,7 @@ where
 
     let proof = f()?;
 
-    event!(
-        Level::INFO,
-        "txn proof {:.4} took {:?}",
-        ident,
-        start.elapsed()
-    );
+    event!(Level::INFO, "txn proof took {:?}", start.elapsed());
     Ok(proof)
 }
 
