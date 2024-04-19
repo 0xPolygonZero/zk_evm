@@ -2104,11 +2104,15 @@ name = "ops"
 version = "0.1.0"
 dependencies = [
  "common",
+ "ethereum-types",
  "evm_arithmetization",
+ "keccak-hash 0.10.0",
  "paladin-core",
  "proof_gen",
+ "rlp",
  "serde",
  "trace_decoder",
+ "tracing",
 ]
 
 [[package]]
