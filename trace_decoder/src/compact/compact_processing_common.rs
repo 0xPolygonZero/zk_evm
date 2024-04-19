@@ -1036,9 +1036,11 @@ mod tests {
             MPT_TEST_PAYLOAD_1, MPT_TEST_PAYLOAD_2, MPT_TEST_PAYLOAD_3, MPT_TEST_PAYLOAD_4,
             MPT_TEST_PAYLOAD_5, MPT_TEST_PAYLOAD_6, SMT_TEST_PAYLOAD_1, SMT_TEST_PAYLOAD_10,
             SMT_TEST_PAYLOAD_11, SMT_TEST_PAYLOAD_12, SMT_TEST_PAYLOAD_13, SMT_TEST_PAYLOAD_14,
-            SMT_TEST_PAYLOAD_15, SMT_TEST_PAYLOAD_2, SMT_TEST_PAYLOAD_3, SMT_TEST_PAYLOAD_4,
-            SMT_TEST_PAYLOAD_5, SMT_TEST_PAYLOAD_6, SMT_TEST_PAYLOAD_7, SMT_TEST_PAYLOAD_8,
-            SMT_TEST_PAYLOAD_9,
+            SMT_TEST_PAYLOAD_15, SMT_TEST_PAYLOAD_16, SMT_TEST_PAYLOAD_17, SMT_TEST_PAYLOAD_18,
+            SMT_TEST_PAYLOAD_19, SMT_TEST_PAYLOAD_2, SMT_TEST_PAYLOAD_20, SMT_TEST_PAYLOAD_21,
+            SMT_TEST_PAYLOAD_22, SMT_TEST_PAYLOAD_23, SMT_TEST_PAYLOAD_24, SMT_TEST_PAYLOAD_25,
+            SMT_TEST_PAYLOAD_3, SMT_TEST_PAYLOAD_4, SMT_TEST_PAYLOAD_5, SMT_TEST_PAYLOAD_6,
+            SMT_TEST_PAYLOAD_7, SMT_TEST_PAYLOAD_8, SMT_TEST_PAYLOAD_9,
         },
     };
 
@@ -1209,5 +1211,65 @@ mod tests {
     fn smt_complex_payload_15() {
         init();
         SMT_TEST_PAYLOAD_15.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_16() {
+        init();
+        SMT_TEST_PAYLOAD_16.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_17() {
+        init();
+        SMT_TEST_PAYLOAD_17.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_18() {
+        init();
+        SMT_TEST_PAYLOAD_18.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_19() {
+        init();
+        SMT_TEST_PAYLOAD_19.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_20() {
+        init();
+        SMT_TEST_PAYLOAD_20.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_21() {
+        init();
+        SMT_TEST_PAYLOAD_21.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_22() {
+        init();
+        SMT_TEST_PAYLOAD_22.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_23() {
+        init();
+        SMT_TEST_PAYLOAD_23.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_24() {
+        init();
+        SMT_TEST_PAYLOAD_24.parse_and_check_hash_matches_with_debug_smt();
+    }
+
+    #[test]
+    fn smt_complex_payload_25() {
+        init();
+        SMT_TEST_PAYLOAD_25.parse_and_check_hash_matches_with_debug_smt();
     }
 }

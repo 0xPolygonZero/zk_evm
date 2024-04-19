@@ -105,6 +105,66 @@ pub(crate) const SMT_TEST_PAYLOAD_15: TestProtocolInputAndRoot = TestProtocolInp
     root_str: "355baf018ce42aae0df4605ff6274da1c2cd650bee756412dd12e60667794049",
 };
 
+// 2407440
+pub(crate) const SMT_TEST_PAYLOAD_16: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_16.txt"),
+    root_str: "76aea30744667aa3cd19c4334dc2712faad7b2f172bac7b7c28dfcbebc478ebd",
+};
+
+// 2407441
+pub(crate) const SMT_TEST_PAYLOAD_17: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_17.txt"),
+    root_str: "92f67ab1267a150e4cffa902b1c320cf981faeb912f6555238ef9b74eb239740",
+};
+
+// 2407442
+pub(crate) const SMT_TEST_PAYLOAD_18: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_18.txt"),
+    root_str: "0db217a91709087ad310506b8cc3aa50792b64aac30fd6b25b8c16e6737ae903",
+};
+
+// 2407443
+pub(crate) const SMT_TEST_PAYLOAD_19: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_19.txt"),
+    root_str: "6bd5c187eedbc3243daa823c5388eb1cf07bd0ed4145a0b093f246f8999b257d",
+};
+
+// 2407444
+pub(crate) const SMT_TEST_PAYLOAD_20: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_20.txt"),
+    root_str: "c881e24833744cc8c627e59b3541da7d3b6b63c869b50a0978e21d0eea0e436f",
+};
+
+// 2407445
+pub(crate) const SMT_TEST_PAYLOAD_21: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_21.txt"),
+    root_str: "b39c00ddb244617afcc4b11696ad8dbccad125cceb820278d7e75a5074f4e32f",
+};
+
+// 2407446
+pub(crate) const SMT_TEST_PAYLOAD_22: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_22.txt"),
+    root_str: "659335a0a85a3337f48591ae6e0494d09352d84a7f76f788ad81f20881bbb598",
+};
+
+// 2407447
+pub(crate) const SMT_TEST_PAYLOAD_23: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_23.txt"),
+    root_str: "787fb7e084b8d93a77147c837c6ef6e8688a550d7a05db28a3cddeb078049f0a",
+};
+
+// 2407448
+pub(crate) const SMT_TEST_PAYLOAD_24: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_24.txt"),
+    root_str: "fe8ac2c08a3cec9909fc975534a68479807ce6e617fff2103051ad60b4b52f15",
+};
+
+// 2407449
+pub(crate) const SMT_TEST_PAYLOAD_25: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+    byte_str: include_str!("large_test_payloads/smt_test_payload_25.txt"),
+    root_str: "24047e78097271a4a9d0e3cf69dd9f5273dc050ae866f2bc5c9450b6f99fe049",
+};
+
 type ProcessMptCompactPrestateFn =
     ProcessedCompactPrestateFn<MptTrieCompact, StateTrieExtractionOutput>;
 
