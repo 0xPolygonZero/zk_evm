@@ -34,7 +34,7 @@ impl Display for TrieStats {
 
 impl TrieStats {
     /// Compares with the statistics of another trie.
-    pub fn compare(&self, other: &Self) -> TrieComparison {
+    pub const fn compare(&self, other: &Self) -> TrieComparison {
         TrieComparison {
             node_comp: self.counts.compare(&other.counts),
             depth_comp: self.depth_stats.compare(&other.depth_stats),
@@ -77,19 +77,19 @@ impl NodeCounts {
 }
 
 impl NodeCounts {
-    fn total_nodes(&self) -> usize {
+    const fn total_nodes(&self) -> usize {
         self.empty + self.total_node_non_empty()
     }
 
-    fn total_node_non_empty(&self) -> usize {
+    const fn total_node_non_empty(&self) -> usize {
         self.branch + self.extension + self.hash_and_leaf_node_count()
     }
 
-    fn hash_and_leaf_node_count(&self) -> usize {
+    const fn hash_and_leaf_node_count(&self) -> usize {
         self.hash + self.leaf
     }
 
-    fn compare(&self, other: &Self) -> NodeComparison {
+    const fn compare(&self, other: &Self) -> NodeComparison {
         NodeComparison {
             tot_node_rat: RatioStat::new(self.total_nodes(), other.total_nodes()),
             non_empty_rat: RatioStat::new(
@@ -184,7 +184,7 @@ impl<T: Display + ToPrimitive> Display for RatioStat<T> {
 impl<T: ToPrimitive> RatioStat<T> {
     /// `new` doesn't have any logic, but this will reduce a lot of line lengths
     /// since this is called so many times.
-    fn new(a: T, b: T) -> Self {
+    const fn new(a: T, b: T) -> Self {
         Self { a, b }
     }
 
@@ -234,7 +234,7 @@ impl Display for DepthStats {
 }
 
 impl DepthStats {
-    fn compare(&self, other: &Self) -> DepthComparison {
+    const fn compare(&self, other: &Self) -> DepthComparison {
         DepthComparison {
             lowest_depth_rat: RatioStat::new(self.lowest_depth, other.lowest_depth),
             avg_leaf_depth_rat: RatioStat::new(self.avg_leaf_depth, other.avg_leaf_depth),
@@ -317,13 +317,14 @@ mod tests {
             generate_n_random_fixed_trie_hash_entries, generate_n_random_fixed_trie_value_entries,
             handmade_trie_1,
         },
+        trie_ops::TrieOpResult,
     };
 
     const MASSIVE_TRIE_SIZE: usize = 100_000;
 
     #[test]
-    fn hand_made_trie_has_correct_node_stats() {
-        let (trie, _) = handmade_trie_1();
+    fn hand_made_trie_has_correct_node_stats() -> TrieOpResult<()> {
+        let (trie, _) = handmade_trie_1()?;
         let stats = get_trie_stats(&trie);
 
         assert_eq!(stats.counts.leaf, 4);
@@ -333,6 +334,8 @@ mod tests {
 
         // empty = (n_branch * 4) - n_leaf - (n_branch - 1)
         assert_eq!(stats.counts.empty, 57);
+
+        Ok(())
     }
 
     // TODO: Low-priority. Finish later.
@@ -343,40 +346,42 @@ mod tests {
     }
 
     #[test]
-    fn massive_leaf_trie_has_correct_leaf_node_stats() {
-        create_trie_and_stats_from_entries_and_assert(MASSIVE_TRIE_SIZE, 0, 9522);
+    fn massive_leaf_trie_has_correct_leaf_node_stats() -> TrieOpResult<()> {
+        create_trie_and_stats_from_entries_and_assert(MASSIVE_TRIE_SIZE, 0, 9522)
     }
 
     #[test]
-    fn massive_hash_trie_has_correct_hash_node_stats() {
-        create_trie_and_stats_from_entries_and_assert(0, MASSIVE_TRIE_SIZE, 9855);
+    fn massive_hash_trie_has_correct_hash_node_stats() -> TrieOpResult<()> {
+        create_trie_and_stats_from_entries_and_assert(0, MASSIVE_TRIE_SIZE, 9855)
     }
 
     #[test]
-    fn massive_mixed_trie_has_correct_hash_node_stats() {
+    fn massive_mixed_trie_has_correct_hash_node_stats() -> TrieOpResult<()> {
         create_trie_and_stats_from_entries_and_assert(
             MASSIVE_TRIE_SIZE / 2,
             MASSIVE_TRIE_SIZE / 2,
             1992,
-        );
+        )
     }
 
     fn create_trie_and_stats_from_entries_and_assert(
         n_leaf_nodes: usize,
         n_hash_nodes: usize,
         seed: u64,
-    ) {
+    ) -> TrieOpResult<()> {
         let val_entries = generate_n_random_fixed_trie_value_entries(n_leaf_nodes, seed);
         let hash_entries = generate_n_random_fixed_trie_hash_entries(n_hash_nodes, seed + 1);
 
         let mut trie = HashedPartialTrie::default();
-        trie.extend(val_entries);
-        trie.extend(hash_entries);
+        trie.extend(val_entries)?;
+        trie.extend(hash_entries)?;
 
         let stats = get_trie_stats(&trie);
 
         assert_eq!(stats.counts.leaf, n_leaf_nodes);
         assert_eq!(stats.counts.hash, n_hash_nodes);
+
+        Ok(())
     }
 
     // TODO: Low-priority. Finish later.

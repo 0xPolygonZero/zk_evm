@@ -100,9 +100,7 @@ pub(crate) fn ctl_arithmetic_rows<F: Field>() -> TableWithColumns<F> {
     let mut filter_cols = COMBINED_OPS.to_vec();
     filter_cols.push((columns::IS_RANGE_CHECK, 0x01));
 
-    let filter = Some(Filter::new_simple(Column::sum(
-        filter_cols.iter().map(|(c, _v)| *c),
-    )));
+    let filter = Filter::new_simple(Column::sum(filter_cols.iter().map(|(c, _v)| *c)));
 
     let mut all_combined_cols = COMBINED_OPS.to_vec();
     all_combined_cols.push((columns::OPCODE_COL, 0x01));
@@ -323,7 +321,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for ArithmeticSta
             columns: Column::singles(SHARED_COLS).collect(),
             table_column: Column::single(RANGE_COUNTER),
             frequencies_column: Column::single(RC_FREQUENCIES),
-            filter_columns: vec![None; NUM_SHARED_COLS],
+            filter_columns: vec![Default::default(); NUM_SHARED_COLS],
         }]
     }
 
