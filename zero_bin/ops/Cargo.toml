@@ -16,7 +16,7 @@ proof_gen = { workspace = true }
 trace_decoder = { workspace = true }
 tracing = { workspace = true }
 rlp = { workspace = true }
-ethereum-types = "0.14.1"
+ethereum-types = { workspace = true }
 keccak-hash = { workspace = true }
 
 common = { path = "../common" }
