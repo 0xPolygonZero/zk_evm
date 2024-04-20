@@ -557,14 +557,26 @@ impl ProcessedBlockTrace {
                 .map(|(addr, v)| (*addr, hash(addr.as_bytes()), *v))
         };
 
+        let last_inputs = txn_ir
+            .last_mut()
+            .expect("We cannot have an empty list of payloads.");
+
+        if last_inputs.signed_txn.is_none() {
+            // This is a dummy payload, hence it does not contain yet
+            // state accesses to the withdrawal addresses.
+            let withdrawal_addrs =
+                withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
+            last_inputs.tries.state_trie = create_minimal_state_partial_trie(
+                &last_inputs.tries.state_trie,
+                withdrawal_addrs,
+                iter::empty(),
+            )?;
+        }
+
         Self::update_trie_state_from_withdrawals(
             withdrawals_with_hashed_addrs_iter(),
             &mut final_trie_state.state,
         )?;
-
-        let last_inputs = txn_ir
-            .last_mut()
-            .expect("We cannot have an empty list of payloads.");
 
         last_inputs.withdrawals = withdrawals;
         last_inputs.trie_roots_after.state_root = final_trie_state.state.hash();

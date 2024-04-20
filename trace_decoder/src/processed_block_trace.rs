@@ -89,31 +89,29 @@ impl BlockTrace {
             extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
         };
 
-        let last_tx_idx = self.txn_info.len() - 1;
+        let last_tx_idx = self.txn_info.len().saturating_sub(1);
 
         let txn_info = self
             .txn_info
             .into_iter()
             .enumerate()
             .map(|(i, t)| {
-                // If this is the last transaction, we mark the withdrawal addresses
-                // as accessed in the state trie.
-                if i == last_tx_idx {
-                    t.into_processed_txn_info(
-                        &all_accounts_in_pre_image,
-                        &withdrawals
-                            .iter()
-                            .map(|(addr, _)| hash(addr.as_bytes()))
-                            .collect::<Vec<_>>(),
-                        &mut code_hash_resolver,
-                    )
+                let extra_state_accesses = if last_tx_idx == i {
+                    // If this is the last transaction, we mark the withdrawal addresses
+                    // as accessed in the state trie.
+                    withdrawals
+                        .iter()
+                        .map(|(addr, _)| hash(addr.as_bytes()))
+                        .collect::<Vec<_>>()
                 } else {
-                    t.into_processed_txn_info(
-                        &all_accounts_in_pre_image,
-                        &[],
-                        &mut code_hash_resolver,
-                    )
-                }
+                    Vec::new()
+                };
+
+                t.into_processed_txn_info(
+                    &all_accounts_in_pre_image,
+                    &extra_state_accesses,
+                    &mut code_hash_resolver,
+                )
             })
             .collect::<Vec<_>>();
 
