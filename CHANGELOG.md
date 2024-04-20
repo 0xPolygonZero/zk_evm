@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Revert "Simplify withdrawals logic (#175)" ([#168](https://github.com/0xPolygonZero/zk_evm/pull/175))
 
 ## [0.3.0] - 2024-04-19
 
