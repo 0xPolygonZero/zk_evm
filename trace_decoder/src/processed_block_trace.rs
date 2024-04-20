@@ -89,10 +89,32 @@ impl BlockTrace {
             extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
         };
 
+        let last_tx_idx = self.txn_info.len() - 1;
+
         let txn_info = self
             .txn_info
             .into_iter()
-            .map(|t| t.into_processed_txn_info(&all_accounts_in_pre_image, &mut code_hash_resolver))
+            .enumerate()
+            .map(|(i, t)| {
+                // If this is the last transaction, we mark the withdrawal addresses
+                // as accessed in the state trie.
+                if i == last_tx_idx {
+                    t.into_processed_txn_info(
+                        &all_accounts_in_pre_image,
+                        &withdrawals
+                            .iter()
+                            .map(|(addr, _)| hash(addr.as_bytes()))
+                            .collect::<Vec<_>>(),
+                        &mut code_hash_resolver,
+                    )
+                } else {
+                    t.into_processed_txn_info(
+                        &all_accounts_in_pre_image,
+                        &[],
+                        &mut code_hash_resolver,
+                    )
+                }
+            })
             .collect::<Vec<_>>();
 
         ProcessedBlockTrace {
@@ -245,6 +267,7 @@ impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
+        extra_state_accesses: &[HashedAccountAddr],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
@@ -323,6 +346,10 @@ impl TxnInfo {
             {
                 nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
             }
+        }
+
+        for &hashed_addr in extra_state_accesses {
+            nodes_used_by_txn.state_accesses.push(hashed_addr);
         }
 
         let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
