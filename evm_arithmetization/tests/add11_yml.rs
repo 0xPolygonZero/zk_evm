@@ -55,12 +55,18 @@ fn get_generation_inputs() -> GenerationInputs {
     };
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    state_trie_before
+        .insert(
+            beneficiary_nibbles,
+            rlp::encode(&beneficiary_account_before).to_vec(),
+        )
+        .unwrap();
+    state_trie_before
+        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+        .unwrap();
+    state_trie_before
+        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+        .unwrap();
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
@@ -111,13 +117,18 @@ fn get_generation_inputs() -> GenerationInputs {
         };
 
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after.insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_after).to_vec(),
-        );
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+            .insert(
+                beneficiary_nibbles,
+                rlp::encode(&beneficiary_account_after).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .unwrap();
         expected_state_trie_after
     };
 
@@ -128,10 +139,12 @@ fn get_generation_inputs() -> GenerationInputs {
         logs: vec![],
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    );
+    receipts_trie
+        .insert(
+            Nibbles::from_str("0x80").unwrap(),
+            rlp::encode(&receipt_0).to_vec(),
+        )
+        .unwrap();
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),

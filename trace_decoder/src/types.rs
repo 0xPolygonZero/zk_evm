@@ -7,8 +7,6 @@ use mpt_trie::{nibbles::Nibbles, partial_trie::HashedPartialTrie};
 use serde::{Deserialize, Serialize};
 
 // TODO: Make these types in the doc comments point to the actual types...
-/// A type alias for `u64` of a block height.
-pub type BlockHeight = u64;
 /// A type alias for `[U256; 8]` of a bloom filter.
 pub type Bloom = [U256; 8];
 /// A type alias for `H256` of a code hash.
@@ -60,10 +58,6 @@ pub(crate) const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
 
 // This is just `rlp(0)`.
 pub(crate) const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
-
-/// An `IR` (Intermediate Representation) for a given txn in a block that we can
-/// use to generate a proof for that txn.
-pub type TxnProofGenIR = GenerationInputs;
 
 /// Other data that is needed for proof gen.
 #[derive(Clone, Debug, Deserialize, Serialize)]

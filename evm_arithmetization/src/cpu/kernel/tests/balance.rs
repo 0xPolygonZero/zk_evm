@@ -67,7 +67,7 @@ fn prepare_interpreter<F: Field>(
         .push(value_ptr.into())
         .expect("The stack should not overflow"); // value_ptr
     interpreter
-        .push(k.try_into_u256().unwrap())
+        .push(k.try_into().unwrap())
         .expect("The stack should not overflow"); // key
 
     interpreter.run()?;

@@ -3,14 +3,16 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{prover::GenerationSegmentData, AllStark, StarkConfig};
+use evm_arithmetization::{
+    prover::{GenerationSegmentData, Registers},
+    AllStark, GenerationInputs, StarkConfig,
+};
 use plonky2::{
     gates::noop::NoopGate,
     iop::witness::PartialWitness,
     plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
     util::timing::TimingTree,
 };
-use trace_decoder::types::TxnProofGenIR;
 
 use crate::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
@@ -42,14 +44,16 @@ impl From<String> for ProofGenError {
 }
 
 /// Generates a transaction proof from some IR data.
-pub fn generate_segment_proof(
+pub fn generate_txn_proof(
     p_state: &ProverState,
-    gen_inputs: TxnProofGenIR,
+    gen_inputs: GenerationInputs,
     segment_data: &mut GenerationSegmentData,
+    registers_after: Registers,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {
-    // TODO: change the `max_cpu_len_log` argument once we can
-    // automatically determine it.
+    let _ = registers_after;
+    // TODO: change the `max_cpu_len_log` and `segment_index` arguments once we can
+    // automatically determine them.
     let output_data = p_state
         .state
         .prove_segment(
@@ -58,6 +62,7 @@ pub fn generate_segment_proof(
             gen_inputs,
             32,
             segment_data,
+            registers_after,
             &mut TimingTree::default(),
             abort_signal,
         )
