@@ -5,14 +5,6 @@ use crate::cpu::kernel::aggregator::KERNEL;
 
 const KERNEL_CONTEXT: usize = 0;
 
-/// Structure for the state of the registers before and after
-/// the current execution.
-#[derive(Copy, Clone, Default)]
-pub struct PublicRegisterStates {
-    registers_before: RegistersState,
-    registers_after: RegistersState,
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct RegistersState {
     pub program_counter: usize,

@@ -924,20 +924,6 @@ impl<F: Field> State<F> for Interpreter<F> {
         }
     }
 
-    /// Inserts a preinitialized segment, given as a [Segment],
-    /// into the `preinitialized_segments` memory field.
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        self.generation_state
-            .memory
-            .insert_preinitialized_segment(segment, values);
-    }
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool {
-        self.generation_state
-            .memory
-            .is_preinitialized_segment(segment)
-    }
-
     fn incr_gas(&mut self, n: u64) {
         self.generation_state.incr_gas(n);
     }
