@@ -3,10 +3,7 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{
-    prover::{GenerationSegmentData, Registers},
-    AllStark, GenerationInputs, StarkConfig,
-};
+use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
 use plonky2::{
     gates::noop::NoopGate,
     iop::witness::PartialWitness,
@@ -48,10 +45,8 @@ pub fn generate_txn_proof(
     p_state: &ProverState,
     gen_inputs: GenerationInputs,
     segment_data: &mut GenerationSegmentData,
-    registers_after: Registers,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {
-    let _ = registers_after;
     // TODO: change the `max_cpu_len_log` and `segment_index` arguments once we can
     // automatically determine them.
     let output_data = p_state
@@ -62,7 +57,6 @@ pub fn generate_txn_proof(
             gen_inputs,
             32,
             segment_data,
-            registers_after,
             &mut TimingTree::default(),
             abort_signal,
         )
