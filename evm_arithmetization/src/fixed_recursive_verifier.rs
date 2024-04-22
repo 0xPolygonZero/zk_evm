@@ -58,6 +58,7 @@ use crate::recursive_verifier::{
     StarkWrapperCircuit,
 };
 use crate::util::{h160_limbs, h256_limbs, u256_limbs};
+use crate::verifier::initial_memory_merkle_cap;
 use crate::witness::memory::MemoryAddress;
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
@@ -1024,16 +1025,10 @@ where
             .map(|column| PolynomialValues::new(column))
             .collect::<Vec<_>>();
 
-        let cap = PolynomialBatch::<F, C, D>::from_values(
-            polys,
+        let cap = initial_memory_merkle_cap::<F, C, D>(
             stark_config.fri_config.rate_bits,
-            false,
             stark_config.fri_config.cap_height,
-            &mut TimingTree::default(),
-            None,
-        )
-        .merkle_tree
-        .cap;
+        );
 
         let init_cap_target = MemCapTarget {
             mem_cap: MerkleCapTarget(
