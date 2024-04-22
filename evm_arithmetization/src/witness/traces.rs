@@ -126,7 +126,7 @@ impl<T: Copy> Traces<T> {
         mut trace_lengths: TraceCheckpoint,
         config: &StarkConfig,
         timing: &mut TimingTree,
-    ) -> ([Vec<PolynomialValues<T>>; NUM_TABLES], Vec<Vec<T>>)
+    ) -> [Vec<PolynomialValues<T>>; NUM_TABLES]
     where
         T: RichField + Extendable<D>,
     {
@@ -210,20 +210,17 @@ impl<T: Copy> Traces<T> {
             final_values.len()
         );
 
-        (
-            [
-                arithmetic_trace,
-                byte_packing_trace,
-                cpu_trace,
-                keccak_trace,
-                keccak_sponge_trace,
-                logic_trace,
-                memory_trace,
-                mem_before_trace,
-                mem_after_trace,
-            ],
-            final_values,
-        )
+        [
+            arithmetic_trace,
+            byte_packing_trace,
+            cpu_trace,
+            keccak_trace,
+            keccak_sponge_trace,
+            logic_trace,
+            memory_trace,
+            mem_before_trace,
+            mem_after_trace,
+        ]
     }
 }
 

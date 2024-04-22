@@ -329,11 +329,7 @@ pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }
 
-type TablesWithPVsAndFinalMem<F> = (
-    [Vec<PolynomialValues<F>>; NUM_TABLES],
-    PublicValues,
-    Vec<Vec<F>>,
-);
+type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues);
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
@@ -410,7 +406,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         mem_after: MemCap::default(),
     };
 
-    let (tables, final_values) = timed!(
+    let tables = timed!(
         timing,
         "convert trace data to tables",
         state.traces.into_tables(
@@ -422,7 +418,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
             timing
         )
     );
-    Ok((tables, public_values, final_values))
+    Ok((tables, public_values))
 }
 
 fn simulate_cpu<F: Field>(

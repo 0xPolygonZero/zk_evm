@@ -131,7 +131,7 @@ where
             registers_after: registers_data_after,
         };
 
-        let (traces, mut public_values, _final_values) = timed!(
+        let (traces, mut public_values) = timed!(
             timing,
             "generate all traces",
             generate_traces(all_stark, inputs, config, segment_data, timing)?
