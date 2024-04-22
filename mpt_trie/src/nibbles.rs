@@ -118,6 +118,7 @@ macro_rules! impl_as_u64s_for_primitive {
     };
 }
 
+impl_as_u64s_for_primitive!(usize);
 impl_as_u64s_for_primitive!(u8);
 impl_as_u64s_for_primitive!(u16);
 impl_as_u64s_for_primitive!(u32);
@@ -178,6 +179,7 @@ macro_rules! impl_to_nibbles {
     };
 }
 
+impl_to_nibbles!(usize);
 impl_to_nibbles!(u8);
 impl_to_nibbles!(u16);
 impl_to_nibbles!(u32);
@@ -1604,6 +1606,12 @@ mod tests {
         assert_eq!(format!("{:x}", 0x1234_u64.to_nibbles()), "0x1234");
         assert_eq!(
             format!("{:x}", 0x1234_u64.to_nibbles_byte_padded()),
+            "0x1234"
+        );
+
+        assert_eq!(format!("{:x}", 0x1234_usize.to_nibbles()), "0x1234");
+        assert_eq!(
+            format!("{:x}", 0x1234_usize.to_nibbles_byte_padded()),
             "0x1234"
         );
     }
