@@ -135,7 +135,7 @@ mod decoding_traits;
 mod deserializers;
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
-pub mod processed_block_trace;
+pub mod processed_block_trace_mpt;
 pub mod trace_protocol;
 /// Defines multiple types used in the other modules.
 pub mod types;

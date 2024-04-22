@@ -18,7 +18,7 @@ use thiserror::Error;
 
 use crate::{
     aliased_crate_types::{AccountRlp, ExtraBlockData, GenerationInputs, TrieInputs, TrieRoots},
-    processed_block_trace::{
+    processed_block_trace_mpt::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
     },
     types::{
