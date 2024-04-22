@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+## [0.3.1] - 2024-04-22
+
+### Changed
+- Fix withdrawals accesses in state trie ([#176](https://github.com/0xPolygonZero/zk_evm/pull/176))
+
 ## [0.3.0] - 2024-04-19
 
 ### Changed
