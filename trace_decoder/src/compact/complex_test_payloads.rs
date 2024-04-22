@@ -1,12 +1,9 @@
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::PartialTrie;
 
-use super::{
-    compact_prestate_processing::{
-        process_compact_prestate, process_compact_prestate_debug, CompactParsingResult,
-        PartialTriePreImages, ProcessedCompactOutput,
-    },
-    compact_to_partial_trie::StateTrieExtractionOutput,
+use super::compact_prestate_processing::{
+    process_compact_prestate, process_compact_prestate_debug, CompactParsingResult,
+    PartialTriePreImages, ProcessedCompactOutput,
 };
 use crate::{
     trace_protocol::TrieCompact,
@@ -59,23 +56,23 @@ impl TestProtocolInputAndRoot {
             Ok(x) => x,
             Err(err) => panic!("{}", err.to_string()),
         };
-        let trie_hash = out.witness_out.state_trie.hash();
+        let trie_hash = out.witness_out.tries.state.hash();
 
-        print_value_and_hash_nodes_of_trie(&out.witness_out.state_trie);
+        print_value_and_hash_nodes_of_trie(&out.witness_out.tries.state);
 
-        for (hashed_addr, s_trie) in out.witness_out.storage_tries.iter() {
+        for (hashed_addr, s_trie) in out.witness_out.tries.storage.iter() {
             print_value_and_hash_nodes_of_storage_trie(hashed_addr, s_trie);
         }
 
         assert!(out.header.version_is_compatible(1));
         assert_eq!(trie_hash, expected_hash);
 
-        Self::assert_non_all_storage_roots_exist_in_storage_trie_map(&out.witness_out);
+        Self::assert_non_all_storage_roots_exist_in_storage_trie_map(&out.witness_out.tries);
     }
 
-    fn assert_non_all_storage_roots_exist_in_storage_trie_map(out: &StateTrieExtractionOutput) {
-        let non_empty_account_s_roots = out
-            .state_trie
+    fn assert_non_all_storage_roots_exist_in_storage_trie_map(images: &PartialTriePreImages) {
+        let non_empty_account_s_roots = images
+            .state
             .items()
             .filter_map(|(addr, data)| {
                 data.as_val().map(|data| {
@@ -89,7 +86,7 @@ impl TestProtocolInputAndRoot {
             .map(|(addr, _)| addr);
 
         for account_with_non_empty_root in non_empty_account_s_roots {
-            assert!(out.storage_tries.contains_key(&account_with_non_empty_root));
+            assert!(images.storage.contains_key(&account_with_non_empty_root));
         }
     }
 }

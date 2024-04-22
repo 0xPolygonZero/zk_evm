@@ -7,13 +7,12 @@ use std::{
     sync::Arc,
 };
 
-use ethereum_types::H256;
+use ethereum_types::{H256, U512};
 use num_traits::PrimInt;
 
 use crate::{
-    nibbles::{Nibble, Nibbles, NibblesIntern},
+    nibbles::{Nibble, Nibbles},
     partial_trie::{Node, PartialTrie},
-    trie_ops::TrieOpResult,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -71,8 +70,8 @@ pub(crate) fn is_even<T: PrimInt + BitAnd<Output = T>>(num: T) -> bool {
     (num & T::one()) == T::zero()
 }
 
-pub(crate) fn create_mask_of_1s(amt: usize) -> NibblesIntern {
-    (NibblesIntern::one() << amt) - 1
+pub(crate) fn create_mask_of_1s(amt: usize) -> U512 {
+    (U512::one() << amt) - 1
 }
 
 pub(crate) fn bytes_to_h256(b: &[u8; 32]) -> H256 {
@@ -206,7 +205,7 @@ impl Display for TrieSegment {
 
 impl TrieSegment {
     /// Get the node type of the [`TrieSegment`].
-    pub const fn node_type(&self) -> TrieNodeType {
+    pub fn node_type(&self) -> TrieNodeType {
         match self {
             TrieSegment::Empty => TrieNodeType::Empty,
             TrieSegment::Hash => TrieNodeType::Hash,
@@ -242,16 +241,6 @@ pub(crate) fn get_segment_from_node_and_key_piece<T: PartialTrie>(
         TrieNodeType::Extension => TrieSegment::Extension(*k_piece),
         TrieNodeType::Leaf => TrieSegment::Leaf(*k_piece),
     }
-}
-
-/// Conversion from an [`Iterator`] within an allocator.
-///
-/// By implementing `TryFromIteratorIn` for a type, you define how it will be
-/// created from an iterator. This is common for types which describe a
-/// collection of some kind.
-pub trait TryFromIterator<A>: Sized {
-    /// Creates a value from an iterator within an allocator.
-    fn try_from_iter<T: IntoIterator<Item = A>>(iter: T) -> TrieOpResult<Self>;
 }
 
 #[cfg(test)]
