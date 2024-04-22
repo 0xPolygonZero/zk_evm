@@ -9,13 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Remove interpreter-specific preinialization logic from State trait ([#139](https://github.com/0xPolygonZero/zk_evm/pull/139))
-- Make some more functions constant ([#154](https://github.com/0xPolygonZero/zk_evm/pull/154))
-- fix(keccak-sponge): properly constrain padding bytes ([#158](https://github.com/0xPolygonZero/zk_evm/pull/158))
-- Reduce verbosity in logs ([#160](https://github.com/0xPolygonZero/zk_evm/pull/160))
-- Bump with latest starky ([#161](https://github.com/0xPolygonZero/zk_evm/pull/161))
 
-## [0.3.0] - 2024-04-03
+## [0.3.0] - 2024-04-19
 
 ### Changed
 - Update plonky2 dependencies ([#119](https://github.com/0xPolygonZero/zk_evm/pull/119))
@@ -28,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - chore: add debug function for better logging in development ([#134](https://github.com/0xPolygonZero/zk_evm/pull/134))
 - Make test_receipt_encoding more meaningful. ([#131](https://github.com/0xPolygonZero/zk_evm/pull/131))
 - Add a getter for the KERNEL codehash ([#136](https://github.com/0xPolygonZero/zk_evm/pull/136))
+- Remove interpreter-specific preinialization logic from State trait ([#139](https://github.com/0xPolygonZero/zk_evm/pull/139))
+- Make some more functions constant ([#154](https://github.com/0xPolygonZero/zk_evm/pull/154))
+- fix(keccak-sponge): properly constrain padding bytes ([#158](https://github.com/0xPolygonZero/zk_evm/pull/158))
+- Reduce verbosity in logs ([#160](https://github.com/0xPolygonZero/zk_evm/pull/160))
+- Bump with latest starky ([#161](https://github.com/0xPolygonZero/zk_evm/pull/161))
+- Decouple trace_decoder and proof_gen ([#163](https://github.com/0xPolygonZero/zk_evm/pull/163))
+- Extend trace decoder err info ([#148](https://github.com/0xPolygonZero/zk_evm/pull/148))
+- Add debug function for better public values logging in development ([#134](https://github.com/0xPolygonZero/zk_evm/pull/134))
+- Simplify withdrawals logic ([#168](https://github.com/0xPolygonZero/zk_evm/pull/168))
 
 ## [0.2.0] - 2024-03-19
 

@@ -45,3 +45,11 @@ fn print_value_and_hash_nodes_of_trie_common(trie: &HashedPartialTrie) -> Vec<St
         })
         .collect()
 }
+
+pub(crate) fn optional_field<T: std::fmt::Debug>(label: &str, value: Option<T>) -> String {
+    value.map_or(String::new(), |v| format!("{}: {:?}\n", label, v))
+}
+
+pub(crate) fn optional_field_hex<T: std::fmt::UpperHex>(label: &str, value: Option<T>) -> String {
+    value.map_or(String::new(), |v| format!("{}: 0x{:064X}\n", label, v))
+}
