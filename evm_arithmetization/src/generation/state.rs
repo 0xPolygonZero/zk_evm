@@ -316,7 +316,7 @@ pub(crate) trait State<F: Field> {
     }
 
     /// Logs `msg` in `debug` mode, in the interpreter.
-    fn log_debug(&self, msg: String) {}
+    fn log_debug(&self, _msg: String) {}
 
     /// Logs `msg` in `info` mode, in the interpreter.
     fn log_info(&self, msg: String) {
@@ -324,7 +324,7 @@ pub(crate) trait State<F: Field> {
     }
 
     /// Logs `msg` at `level`, during witness generation.
-    fn log_log(&self, level: Level, msg: String) {}
+    fn log_log(&self, _level: Level, _msg: String) {}
 }
 
 #[derive(Debug)]
@@ -499,13 +499,13 @@ impl<F: Field> State<F> for GenerationState<F> {
         }
     }
 
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
+    fn insert_preinitialized_segment(&mut self, _segment: Segment, _values: MemorySegmentState) {
         panic!(
             "A `GenerationState` cannot have a nonempty `preinitialized_segment` field in memory."
         )
     }
 
-    fn is_preinitialized_segment(&self, segment: usize) -> bool {
+    fn is_preinitialized_segment(&self, _segment: usize) -> bool {
         false
     }
 
@@ -587,7 +587,7 @@ impl<F: Field> State<F> for GenerationState<F> {
                 row.general.stack_mut().stack_inv = inv;
                 row.general.stack_mut().stack_inv_aux = F::ONE;
                 self.registers.is_stack_top_read = true;
-            } else if (self.stack().len() != special_len) {
+            } else if self.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 self.registers.is_stack_top_read = true;
@@ -606,7 +606,7 @@ impl<F: Field> Transition<F> for GenerationState<F> {
         Ok(op)
     }
 
-    fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool {
+    fn generate_jumpdest_analysis(&mut self, _dst: usize) -> bool {
         false
     }
 

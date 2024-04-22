@@ -31,7 +31,7 @@ use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
     MemoryAddress, MemoryContextState, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
 };
-use crate::witness::operation::{Operation, CONTEXT_SCALING_FACTOR};
+use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
 use crate::witness::transition::{
     decode, fill_op_flag, get_op_special_length, log_kernel_instruction, Transition,
@@ -1067,9 +1067,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         // Might write in general CPU columns when it shouldn't, but the correct values
         // will overwrite these ones during the op generation.
         if let Some(special_len) = get_op_special_length(op) {
-            let special_len_f = F::from_canonical_usize(special_len);
-            let diff = row.stack_len - special_len_f;
-            if (generation_state.stack().len() != special_len) {
+            if generation_state.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 generation_state.registers.is_stack_top_read = true;
@@ -1086,7 +1084,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         log::debug!("{}", msg);
     }
 
-    fn log_info(&self, msg: String) {}
+    fn log_info(&self, _msg: String) {}
 
     fn log_log(&self, level: Level, msg: String) {
         log::log!(level, "{}", msg);

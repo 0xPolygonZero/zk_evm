@@ -15,8 +15,7 @@ use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField};
-use plonky2::hash::merkle_tree::MerkleCap;
+use plonky2::hash::hash_types::{MerkleCapTarget, RichField};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -42,12 +41,11 @@ use starky::stark::Stark;
 
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::state::GenerationState;
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
-    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget, MemCap,
+    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
     MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget, TrieRoots,
     TrieRootsTarget,
 };
@@ -57,8 +55,7 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
     StarkWrapperCircuit,
 };
-use crate::util::{h160_limbs, h256_limbs, u256_limbs};
-use crate::witness::memory::MemoryAddress;
+use crate::util::{h256_limbs, u256_limbs};
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
 /// this size.
@@ -945,7 +942,7 @@ where
         // Check the initial and final register values.
         Self::connect_initial_final_segment(&mut builder, &public_values);
 
-        // Check the initial `MemBefore` `MerklCap` value.
+        // Check the initial `MemBefore` `MerkleCap` value.
         Self::check_init_merkle_cap(&mut builder, &agg_pv, stark_config);
 
         let cyclic_vk = builder.add_verifier_data_public_inputs();

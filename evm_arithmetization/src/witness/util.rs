@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ethereum_types::U256;
 use plonky2::field::types::Field;
 

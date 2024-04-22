@@ -2,7 +2,7 @@ use core::ops::Deref;
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
+use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
