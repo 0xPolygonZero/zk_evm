@@ -91,6 +91,12 @@ where
             shift_val <<= 1;
         }
 
+        let mut code_addr = MemoryAddress::new(0, Segment::Code, 0);
+        for &byte in &KERNEL.code {
+            memory_before.set(code_addr, U256::from(byte));
+            code_addr.increment();
+        }
+
         let actual_mem_before = {
             let mut res = vec![];
             for (ctx_idx, ctx) in memory_before.contexts.iter().enumerate() {

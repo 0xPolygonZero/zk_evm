@@ -982,6 +982,18 @@ where
         // constant and the `ShiftTable`.
         let mut trace = vec![];
 
+        // TODO: put it in a dedicated function.
+        // Push kernel code.
+        for (i, &byte) in KERNEL.code.iter().enumerate() {
+            let mut row = vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS];
+            row[crate::memory_continuation::columns::FILTER] = F::ONE;
+            row[crate::memory_continuation::columns::ADDR_CONTEXT] = F::ZERO;
+            row[crate::memory_continuation::columns::ADDR_SEGMENT] =
+                F::from_canonical_usize(Segment::Code.unscale());
+            row[crate::memory_continuation::columns::ADDR_VIRTUAL] = F::from_canonical_usize(i);
+            row[crate::memory_continuation::columns::value_limb(0)] = F::from_canonical_u8(byte);
+            trace.push(row);
+        }
         // Push shift table.
         for i in 0..256 {
             let mut row = vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS];
