@@ -20,11 +20,11 @@ use crate::keccak::keccak_stark::KeccakStark;
 use crate::keccak_sponge::columns::KECCAK_RATE_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeStark;
+use crate::logic;
 use crate::logic::LogicStark;
 use crate::memory::memory_stark::MemoryStark;
 use crate::memory::memory_stark::{self, ctl_context_pruning_looking};
 use crate::memory_continuation::memory_continuation_stark::{self, MemoryContinuationStark};
-use crate::{logic, memory_continuation};
 
 /// Structure containing all STARKs and the cross-table lookups.
 #[derive(Clone)]
@@ -346,7 +346,7 @@ fn ctl_mem_before<F: Field>() -> CrossTableLookup<F> {
         memory_stark::ctl_looking_mem(),
         memory_stark::ctl_filter_mem_before(),
     );
-    let mut all_lookers = vec![memory_looking];
+    let all_lookers = vec![memory_looking];
     let mem_before_looked = TableWithColumns::new(
         *Table::MemBefore,
         memory_continuation_stark::ctl_data(),
@@ -363,7 +363,7 @@ fn ctl_mem_after<F: Field>() -> CrossTableLookup<F> {
         memory_stark::ctl_looking_mem(),
         memory_stark::ctl_filter_mem_after(),
     );
-    let mut all_lookers = vec![memory_looking];
+    let all_lookers = vec![memory_looking];
     let mem_after_looked = TableWithColumns::new(
         *Table::MemAfter,
         memory_continuation_stark::ctl_data(),

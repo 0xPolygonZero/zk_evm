@@ -23,8 +23,8 @@ use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
+use crate::witness::memory::MemoryOpKind;
 use crate::witness::memory::{MemoryAddress, MemoryContextState, MemoryOp, MemoryState};
-use crate::witness::memory::{MemoryOpKind, MemorySegmentState};
 use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::{TraceCheckpoint, Traces};
@@ -85,8 +85,11 @@ pub(crate) trait State<F: Field> {
 
     /// Checks whether we have reached the `halt` label in kernel mode.
     fn at_halt(&self) -> bool {
+        let halt = KERNEL.global_labels["halt"];
+        let halt_final = KERNEL.global_labels["halt_final"];
         let registers = self.get_registers();
-        registers.is_kernel && registers.program_counter == KERNEL.global_labels["halt"]
+        registers.is_kernel
+            && (registers.program_counter == halt || registers.program_counter == halt_final)
     }
 
     /// Returns the context in which the jumpdest analysis should end.
@@ -153,13 +156,7 @@ pub(crate) trait State<F: Field> {
     /// Return the offsets at which execution must halt
     fn get_halt_offsets(&self) -> Vec<usize>;
 
-    /// Inserts a preinitialized segment, given as a [Segment],
-    /// into the `preinitialized_segments` memory field.
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState);
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool;
-
-    fn update_interpreter_final_registers(&mut self, final_registers: RegistersState) {}
+    fn update_interpreter_final_registers(&mut self, _final_registers: RegistersState) {}
 
     fn get_full_memory(&self) -> Option<MemoryState> {
         None
@@ -176,10 +173,8 @@ pub(crate) trait State<F: Field> {
     {
         let halt_offsets = self.get_halt_offsets();
 
-        let halt_pc = KERNEL.global_labels["halt"];
-        let halt_final_pc = KERNEL.global_labels["halt_final"];
         let mut final_registers = RegistersState::default();
-        let mut final_mem = self.get_mut_generation_state().memory.clone();
+        let final_mem = self.get_generation_state().memory.clone();
         let mut running = true;
         let mut final_clock = 0;
         loop {
@@ -316,7 +311,7 @@ pub(crate) trait State<F: Field> {
     }
 
     /// Logs `msg` in `debug` mode, in the interpreter.
-    fn log_debug(&self, msg: String) {}
+    fn log_debug(&self, _msg: String) {}
 
     /// Logs `msg` in `info` mode, in the interpreter.
     fn log_info(&self, msg: String) {
@@ -324,7 +319,7 @@ pub(crate) trait State<F: Field> {
     }
 
     /// Logs `msg` at `level`, during witness generation.
-    fn log_log(&self, level: Level, msg: String) {}
+    fn log_log(&self, _level: Level, _msg: String) {}
 }
 
 #[derive(Debug)]
@@ -499,16 +494,6 @@ impl<F: Field> State<F> for GenerationState<F> {
         }
     }
 
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        panic!(
-            "A `GenerationState` cannot have a nonempty `preinitialized_segment` field in memory."
-        )
-    }
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool {
-        false
-    }
-
     fn incr_gas(&mut self, n: u64) {
         self.registers.gas_used += n;
     }
@@ -587,7 +572,7 @@ impl<F: Field> State<F> for GenerationState<F> {
                 row.general.stack_mut().stack_inv = inv;
                 row.general.stack_mut().stack_inv_aux = F::ONE;
                 self.registers.is_stack_top_read = true;
-            } else if (self.stack().len() != special_len) {
+            } else if self.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 self.registers.is_stack_top_read = true;
@@ -606,7 +591,7 @@ impl<F: Field> Transition<F> for GenerationState<F> {
         Ok(op)
     }
 
-    fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool {
+    fn generate_jumpdest_analysis(&mut self, _dst: usize) -> bool {
         false
     }
 

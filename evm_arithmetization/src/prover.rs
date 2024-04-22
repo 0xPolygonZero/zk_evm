@@ -1,18 +1,14 @@
-use std::any::type_name;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{anyhow, Result};
 use ethereum_types::U256;
 use hashbrown::HashMap;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
-use plonky2::field::packable::Packable;
-use plonky2::field::packed::PackedField;
-use plonky2::field::polynomial::{PolynomialCoeffs, PolynomialValues};
-use plonky2::field::types::{Field, PrimeField64};
-use plonky2::field::zero_poly_coset::ZeroPolyOnCoset;
+use plonky2::field::polynomial::PolynomialValues;
+use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
@@ -22,8 +18,7 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
-use starky::evaluation_frame::StarkEvaluationFrame;
-use starky::lookup::{get_grand_product_challenge_set, GrandProductChallengeSet, Lookup};
+use starky::lookup::GrandProductChallengeSet;
 use starky::proof::{MultiProof, StarkProofWithMetadata};
 use starky::prover::prove_with_commitment;
 use starky::stark::Stark;
@@ -32,7 +27,7 @@ use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{generate_segment, ExtraSegmentData};
 use crate::generation::state::GenerationState;
-use crate::generation::{generate_traces, GenerationInputs, MemBeforeValues, SegmentData};
+use crate::generation::{generate_traces, GenerationInputs, SegmentData};
 use crate::get_challenges::observe_public_values;
 use crate::memory::segments::Segment;
 use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
@@ -136,7 +131,7 @@ where
             registers_after: registers_data_after,
         };
 
-        let (traces, mut public_values, final_values) = timed!(
+        let (traces, mut public_values) = timed!(
             timing,
             "generate all traces",
             generate_traces(all_stark, inputs, config, segment_data, timing)?
@@ -323,12 +318,12 @@ fn prove_with_commitments<F, C, const D: usize>(
     ctl_challenges: &GrandProductChallengeSet<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<(ProofWithMemCaps<F, C, C::Hasher, D>)>
+) -> Result<ProofWithMemCaps<F, C, C::Hasher, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    let (arithmetic_proof, arithmetic_cap) = timed!(
+    let (arithmetic_proof, _) = timed!(
         timing,
         "prove Arithmetic STARK",
         prove_single_table(
@@ -343,7 +338,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let (byte_packing_proof, bp_cap) = timed!(
+    let (byte_packing_proof, _) = timed!(
         timing,
         "prove byte packing STARK",
         prove_single_table(
@@ -358,7 +353,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let (cpu_proof, cpu_cap) = timed!(
+    let (cpu_proof, _) = timed!(
         timing,
         "prove CPU STARK",
         prove_single_table(
@@ -373,7 +368,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let (keccak_proof, keccak_cap) = timed!(
+    let (keccak_proof, _) = timed!(
         timing,
         "prove Keccak STARK",
         prove_single_table(
@@ -388,7 +383,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let (keccak_sponge_proof, keccak_sponge_cap) = timed!(
+    let (keccak_sponge_proof, _) = timed!(
         timing,
         "prove Keccak sponge STARK",
         prove_single_table(
@@ -403,7 +398,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let (logic_proof, logic_cap) = timed!(
+    let (logic_proof, _) = timed!(
         timing,
         "prove logic STARK",
         prove_single_table(
@@ -418,7 +413,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let (memory_proof, mem_cap) = timed!(
+    let (memory_proof, _) = timed!(
         timing,
         "prove memory STARK",
         prove_single_table(
@@ -479,24 +474,6 @@ where
         mem_before_cap,
         mem_after_cap,
     ))
-}
-
-/// Returns a memory value in the form `(MemoryAddress, U256)`,
-/// taken from a row in `MemAfterStark`.
-pub(crate) fn get_mem_after_value_from_row<F: RichField>(row: &[F]) -> (MemoryAddress, U256) {
-    // The row has shape (1, context, segment, virt, [values]) where [values] are 8
-    // 32-bit elements representing one U256 word.
-    let mem_address = MemoryAddress {
-        context: row[1].to_canonical_u64() as usize,
-        segment: row[2].to_canonical_u64() as usize,
-        virt: row[3].to_canonical_u64() as usize,
-    };
-
-    let value: U256 = row[4..]
-        .iter()
-        .rev()
-        .fold(0.into(), |acc, v| (acc << 32) + v.to_canonical_u64());
-    (mem_address, value)
 }
 
 type ProofSingleWithCap<F, C, H, const D: usize> =
