@@ -223,6 +223,8 @@ static GLOBAL: Jemalloc = Jemalloc;
 // Public definitions and re-exports
 
 pub type Node = mpt_trie::partial_trie::Node<HashedPartialTrie>;
+/// A type alias for `u64` of a block height.
+pub type BlockHeight = u64;
 
 pub use all_stark::AllStark;
 pub use fixed_recursive_verifier::AllRecursiveCircuits;

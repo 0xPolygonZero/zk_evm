@@ -1,9 +1,8 @@
 //! This module defines the various proof types used throughout the block proof
 //! generation process.
 
-use evm_arithmetization::proof::PublicValues;
+use evm_arithmetization::{proof::PublicValues, BlockHeight};
 use serde::{Deserialize, Serialize};
-use trace_decoder::types::BlockHeight;
 
 use crate::types::PlonkyProofIntern;
 
@@ -59,14 +58,14 @@ impl AggregatableProof {
         }
     }
 
-    pub(crate) fn is_agg(&self) -> bool {
+    pub(crate) const fn is_agg(&self) -> bool {
         match self {
             AggregatableProof::Txn(_) => false,
             AggregatableProof::Agg(_) => true,
         }
     }
 
-    pub(crate) fn intern(&self) -> &PlonkyProofIntern {
+    pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
         match self {
             AggregatableProof::Txn(info) => &info.intern,
             AggregatableProof::Agg(info) => &info.intern,

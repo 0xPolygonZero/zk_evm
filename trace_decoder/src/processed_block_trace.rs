@@ -4,11 +4,12 @@ use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::GenerationInputs;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
 use crate::compact::compact_prestate_processing::{
-    process_compact_prestate_debug, PartialTriePreImages,
+    process_compact_prestate_debug, PartialTriePreImages, ProcessedCompactOutput,
 };
 use crate::decoding::TraceParsingResult;
 use crate::trace_protocol::{
@@ -18,8 +19,7 @@ use crate::trace_protocol::{
 };
 use crate::types::{
     CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
-    HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, TxnProofGenIR, EMPTY_CODE_HASH,
-    EMPTY_TRIE_HASH,
+    HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,
@@ -42,7 +42,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> TraceParsingResult<Vec<TxnProofGenIR>>
+    ) -> TraceParsingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
@@ -89,10 +89,30 @@ impl BlockTrace {
             extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
         };
 
+        let last_tx_idx = self.txn_info.len().saturating_sub(1);
+
         let txn_info = self
             .txn_info
             .into_iter()
-            .map(|t| t.into_processed_txn_info(&all_accounts_in_pre_image, &mut code_hash_resolver))
+            .enumerate()
+            .map(|(i, t)| {
+                let extra_state_accesses = if last_tx_idx == i {
+                    // If this is the last transaction, we mark the withdrawal addresses
+                    // as accessed in the state trie.
+                    withdrawals
+                        .iter()
+                        .map(|(addr, _)| hash(addr.as_bytes()))
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+
+                t.into_processed_txn_info(
+                    &all_accounts_in_pre_image,
+                    &extra_state_accesses,
+                    &mut code_hash_resolver,
+                )
+            })
             .collect::<Vec<_>>();
 
         ProcessedBlockTrace {
@@ -107,6 +127,21 @@ impl BlockTrace {
 struct ProcessedBlockTracePreImages {
     tries: PartialTriePreImages,
     extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
+}
+
+impl From<ProcessedCompactOutput> for ProcessedBlockTracePreImages {
+    fn from(v: ProcessedCompactOutput) -> Self {
+        let tries = PartialTriePreImages {
+            state: v.witness_out.state_trie,
+            storage: v.witness_out.storage_tries,
+        };
+
+        Self {
+            tries,
+            extra_code_hash_mappings: (!v.witness_out.code.is_empty())
+                .then_some(v.witness_out.code),
+        }
+    }
 }
 
 fn process_block_trace_trie_pre_images(
@@ -169,10 +204,7 @@ fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
     // TODO: Make this into a result...
     assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
 
-    ProcessedBlockTracePreImages {
-        tries: out.witness_out.tries,
-        extra_code_hash_mappings: out.witness_out.code,
-    }
+    out.into()
 }
 
 /// Structure storing a function turning a `CodeHash` into bytes.
@@ -190,7 +222,7 @@ where
 {
     /// Returns a `ProcessingMeta` given the provided code hash resolving
     /// function.
-    pub fn new(resolve_code_hash_fn: F) -> Self {
+    pub const fn new(resolve_code_hash_fn: F) -> Self {
         Self {
             resolve_code_hash_fn,
         }
@@ -233,6 +265,7 @@ impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
+        extra_state_accesses: &[HashedAccountAddr],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
@@ -311,6 +344,10 @@ impl TxnInfo {
             {
                 nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
             }
+        }
+
+        for &hashed_addr in extra_state_accesses {
+            nodes_used_by_txn.state_accesses.push(hashed_addr);
         }
 
         let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
