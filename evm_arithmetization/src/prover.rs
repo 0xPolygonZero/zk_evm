@@ -85,6 +85,7 @@ where
         let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
         let mut shift_val = U256::one();
 
+        // TODO: move to `generate_traces`.
         for _ in 0..256 {
             memory_before.set(shift_addr, shift_val);
             shift_addr.increment();

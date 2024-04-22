@@ -982,7 +982,6 @@ where
         // constant and the `ShiftTable`.
         let mut trace = vec![];
 
-        // TODO: put it in a dedicated function.
         // Push kernel code.
         for (i, &byte) in KERNEL.code.iter().enumerate() {
             let mut row = vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS];
