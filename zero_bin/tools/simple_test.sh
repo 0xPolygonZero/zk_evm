@@ -23,7 +23,7 @@ export RUST_LOG=info
 export RUSTFLAGS='-C target-cpu=native'
 
 # This sizes are configured specifically for this witness. Don't use this in other scenarios
-export ARITHMETIC_CIRCUIT_SIZE="15..19"
+export ARITHMETIC_CIRCUIT_SIZE="16..19"
 export BYTE_PACKING_CIRCUIT_SIZE="9..19"
 export CPU_CIRCUIT_SIZE="12..21"
 export KECCAK_CIRCUIT_SIZE="14..18"
