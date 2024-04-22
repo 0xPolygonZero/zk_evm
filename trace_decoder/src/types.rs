@@ -2,7 +2,7 @@ use ethereum_types::{Address, H256, U256};
 use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
-use crate::aliased_crate_types::{BlockHashes, BlockMetadata, GenerationInputs};
+use crate::aliased_crate_types::{BlockHashes, BlockMetadata};
 
 /// A type alias for `[`[`U256`]`; 8]` of a bloom filter.
 pub type Bloom = [U256; 8];

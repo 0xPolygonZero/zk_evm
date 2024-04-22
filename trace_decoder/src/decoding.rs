@@ -19,7 +19,7 @@ use thiserror::Error;
 use crate::{
     aliased_crate_types::{AccountRlp, ExtraBlockData, GenerationInputs, TrieInputs, TrieRoots},
     compact::compact_prestate_processing::CompactParsingError,
-    processed_block_trace::{
+    processed_block_trace_mpt::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
     },
     types::{
