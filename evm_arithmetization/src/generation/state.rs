@@ -138,6 +138,12 @@ pub(crate) trait State<F: Field> {
     /// Return the offsets at which execution must halt
     fn get_halt_offsets(&self) -> Vec<usize>;
 
+    /// Inserts a preinitialized segment, given as a [Segment],
+    /// into the `preinitialized_segments` memory field.
+    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState);
+
+    fn is_preinitialized_segment(&self, segment: usize) -> bool;
+
     /// Simulates the CPU. It only generates the traces if the `State` is a
     /// `GenerationState`.
     fn run_cpu(&mut self) -> anyhow::Result<()>
@@ -420,6 +426,16 @@ impl<F: Field> State<F> for GenerationState<F> {
             traces: self.traces.checkpoint(),
             clock: self.get_clock(),
         }
+    }
+
+    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
+        panic!(
+            "A `GenerationState` cannot have a nonempty `preinitialized_segment` field in memory."
+        )
+    }
+
+    fn is_preinitialized_segment(&self, segment: usize) -> bool {
+        false
     }
 
     fn incr_gas(&mut self, n: u64) {

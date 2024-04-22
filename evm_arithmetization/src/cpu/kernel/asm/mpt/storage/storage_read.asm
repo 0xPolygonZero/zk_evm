@@ -39,25 +39,18 @@ global sys_sload:
     SWAP1
     DUP1
     // stack: slot, slot, kexit_info
+    %sload_current
+
+    %stack (value, slot, kexit_info) -> (slot, value, kexit_info, value)
     %address
-    // stack: address, slot, slot, kexit_info
+    // stack: addr, slot, value, kexit_info, value
     %insert_accessed_storage_keys
-    // stack: cold_access, value_ptr, slot, kexit_info
-    DUP1
+    // stack: cold_access, old_value, kexit_info, value
+    SWAP1 POP
+    // stack: cold_access, kexit_info, value
     %mul_const(@GAS_COLDSLOAD_MINUS_WARMACCESS)
     %add_const(@GAS_WARMACCESS)
-    %stack (gas, cold_access, value_ptr, slot, kexit_info) -> (gas, kexit_info, cold_access, value_ptr, slot)
     %charge_gas
-
-    %stack (kexit_info, cold_access, value_ptr, slot) -> (slot, cold_access, value_ptr, kexit_info)
-    %sload_current
-    // stack: value, cold_access, value_ptr, kexit_info
-    SWAP1 %jumpi(sload_cold_access)
-    %stack (value, value_ptr, kexit_info) -> (kexit_info, value)
+    // stack: kexit_info, value
     EXIT_KERNEL
 
-sload_cold_access:
-    // stack: value, value_ptr, kexit_info
-    %stack (value, value_ptr, kexit_info) -> (value, value_ptr, kexit_info, value)
-    MSTORE_GENERAL
-    EXIT_KERNEL

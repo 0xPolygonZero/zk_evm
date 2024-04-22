@@ -560,7 +560,7 @@ struct CodeIterator<'a> {
 }
 
 impl<'a> CodeIterator<'a> {
-    const fn new(code: &'a [u8]) -> Self {
+    fn new(code: &'a [u8]) -> Self {
         CodeIterator {
             end: code.len(),
             code,
@@ -609,7 +609,7 @@ pub(crate) struct AccList<'a> {
 }
 
 impl<'a> AccList<'a> {
-    const fn from_mem_and_segment(
+    fn from_mem_and_segment(
         access_list_mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {

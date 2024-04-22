@@ -80,7 +80,7 @@
 //!     p_meta: &ProcessingMeta<F>,
 //!     // Extra data needed for proof generation.
 //!     other_data: OtherBlockData,
-//! ) -> TraceParsingResult<Vec<GenerationInputs>>
+//! ) -> TraceParsingResult<Vec<TxnProofGenIR>>
 //! ```
 //!
 //! It first preprocesses the [BlockTrace] to provide transaction,
