@@ -322,7 +322,13 @@ pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
     log::debug!("Input contract_code: {:?}", &inputs.contract_code);
 }
 
-fn initialize_shift_table(memory: &mut MemoryState) {
+fn initialize_kernel_code_and_shift_table(memory: &mut MemoryState) {
+    let mut code_addr = MemoryAddress::new(0, Segment::Code, 0);
+    for &byte in &KERNEL.code {
+        memory.set(code_addr, U256::from(byte));
+        code_addr.increment();
+    }
+
     let mut shift_addr = MemoryAddress::new(0, Segment::ShiftTable, 0);
     let mut shift_val = U256::one();
     for _ in 0..256 {
@@ -373,7 +379,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     state.set_segment_data(segment_data);
 
-    initialize_shift_table(&mut segment_data.memory);
+    initialize_kernel_code_and_shift_table(&mut segment_data.memory);
 
     // Retrieve initial memory addresses and values.
     let actual_mem_before = get_all_memory_address_and_values(&segment_data.memory, &mut state);
