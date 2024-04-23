@@ -26,6 +26,7 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::prover::GenerationSegmentData;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
@@ -212,29 +213,6 @@ pub(crate) fn generate_segment<F: Field>(
         if registers_after.program_counter == KERNEL.global_labels["halt"] {
             return Ok(None);
         }
-        [
-            registers_after.program_counter.into(),
-            (registers_after.is_kernel as usize).into(),
-            registers_after.stack_len.into(),
-            registers_after.stack_top,
-            registers_after.context.into(),
-            registers_after.gas_used.into(),
-        ]
-        .iter()
-        .enumerate()
-        .map(|(i, reg_content)| {
-            let (addr, val) = (
-                MemoryAddress::new_u256s(
-                    0.into(),
-                    (Segment::RegistersStates.unscale()).into(),
-                    i.into(),
-                )
-                .expect("All input values are known to be valid for MemoryAddress"),
-                *reg_content,
-            );
-            interpreter.generation_state.memory.set(addr, val);
-        })
-        .collect::<Vec<_>>();
 
         (registers_before, before_mem_values) = (registers_after, after_mem_values);
         interpreter.generation_state.registers = registers_before;
@@ -242,7 +220,9 @@ pub(crate) fn generate_segment<F: Field>(
         interpreter.generation_state.registers.is_kernel = true;
         interpreter.clock = 0;
 
-        let (updated_registers_after, opt_after_mem_values) = interpreter.run()?;
+        let (updated_registers_after, opt_after_mem_values) =
+            set_registers_and_run(registers_after, &mut interpreter)?;
+
         registers_after = updated_registers_after;
         after_mem_values = opt_after_mem_values.expect(
             "We are in the interpreter: the run should return a memory
@@ -256,6 +236,41 @@ pub(crate) fn generate_segment<F: Field>(
         before_mem_values,
         extra_data,
     )))
+}
+
+pub(crate) fn set_registers_and_run<F: Field>(
+    registers: RegistersState,
+    interpreter: &mut Interpreter<F>,
+) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
+    // Write initial registers.
+    [
+        registers.program_counter.into(),
+        (registers.is_kernel as usize).into(),
+        registers.stack_len.into(),
+        registers.stack_top,
+        registers.context.into(),
+        registers.gas_used.into(),
+    ]
+    .iter()
+    .enumerate()
+    .map(|(i, reg_content)| {
+        let (addr, val) = (
+            MemoryAddress::new_u256s(
+                0.into(),
+                (Segment::RegistersStates.unscale()).into(),
+                i.into(),
+            )
+            .expect(
+                "All input values are known to be valid for
+MemoryAddress",
+            ),
+            *reg_content,
+        );
+        interpreter.generation_state.memory.set(addr, val);
+    })
+    .collect::<Vec<_>>();
+
+    interpreter.run()
 }
 
 impl<F: Field> Interpreter<F> {
@@ -327,8 +342,6 @@ impl<F: Field> Interpreter<F> {
 
     /// Initializes the interpreter state given `GenerationInputs`.
     pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs) {
-        let kernel_hash = KERNEL.code_hash;
-        let kernel_code_len = KERNEL.code.len();
         // Initialize registers.
         let registers_before = RegistersState::new();
         self.generation_state.registers = RegistersState {
@@ -414,8 +427,8 @@ impl<F: Field> Interpreter<F> {
                 GlobalMetadata::ReceiptTrieRootDigestAfter,
                 h2u(trie_roots_after.receipts_root),
             ),
-            (GlobalMetadata::KernelHash, h2u(kernel_hash)),
-            (GlobalMetadata::KernelLen, kernel_code_len.into()),
+            (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
+            (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
         ];
 
         self.set_global_metadata_multi_fields(&global_metadata_to_set);

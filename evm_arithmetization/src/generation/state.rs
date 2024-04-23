@@ -20,6 +20,7 @@ use crate::generation::GenerationInputs;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::prover::GenerationSegmentData;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
@@ -482,6 +483,28 @@ impl<F: Field> GenerationState<F> {
             },
             jumpdest_table: None,
         }
+    }
+
+    pub(crate) fn set_segment_data(&mut self, segment_data: &GenerationSegmentData) {
+        self.inputs
+            .clone_from(&segment_data.extra_data.trimmed_inputs);
+        self.bignum_modmul_result_limbs
+            .clone_from(&segment_data.extra_data.bignum_modmul_result_limbs);
+        self.rlp_prover_inputs
+            .clone_from(&segment_data.extra_data.rlp_prover_inputs);
+        self.withdrawal_prover_inputs
+            .clone_from(&segment_data.extra_data.withdrawal_prover_inputs);
+        self.trie_root_ptrs
+            .clone_from(&segment_data.extra_data.trie_root_ptrs);
+        self.jumpdest_table
+            .clone_from(&segment_data.extra_data.jumpdest_table);
+        self.registers = RegistersState {
+            program_counter: self.registers.program_counter,
+            is_kernel: self.registers.is_kernel,
+            is_stack_top_read: false,
+            check_overflow: false,
+            ..segment_data.registers_before
+        };
     }
 }
 
