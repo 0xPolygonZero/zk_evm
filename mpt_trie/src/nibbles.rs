@@ -1566,6 +1566,20 @@ mod tests {
     }
 
     #[test]
+    fn nibbles_into_h256_works() {
+        let nibbles: Nibbles = Nibbles::from(0x0);
+        let h256_value: H256 = nibbles.into();
+        assert_eq!(format!("0x{:x}", h256_value), ZERO_NIBS_64);
+
+        let nibbles: Nibbles = Nibbles::from(2048);
+        let h256_value: H256 = nibbles.into();
+        assert_eq!(
+            format!("0x{:x}", h256_value),
+            "0x0000000000000000000000000000000000000000000000000000000000000800",
+        );
+    }
+
+    #[test]
     fn nibbles_from_str_works() {
         assert_eq!(format!("{:x}", Nibbles::from_str("0x0").unwrap()), "0x0");
         assert_eq!(format!("{:x}", Nibbles::from_str("0").unwrap()), "0x0");
