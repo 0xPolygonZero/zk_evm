@@ -20,10 +20,10 @@ serde_json = "1.0.96"
 thiserror = "1.0.49"
 
 # plonky2-related dependencies
-plonky2 = "0.2.2"
-plonky2_maybe_rayon = "0.2.0"
-plonky2_util = "0.2.0"
-starky = "0.4.0"
+plonky2 = "0.2"
+plonky2_maybe_rayon = "0.2"
+plonky2_util = "0.2"
+starky = "0.4"
 
 
 [workspace.package]
@@ -32,3 +32,10 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/0xPolygonZero/zk_evm"
 homepage = "https://github.com/0xPolygonZero/zk_evm"
 keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
+
+# Remove the patch, once the new plonky2 related dependencies are properly released.
+[patch.crates-io]
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", branch = "main" }
+plonky2_maybe_rayon = { git = "https://github.com/0xPolygonZero/plonky2.git", branch = "main" }
+plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", branch = "main" }
+starky = { git = "https://github.com/0xPolygonZero/plonky2.git", branch = "main" }
