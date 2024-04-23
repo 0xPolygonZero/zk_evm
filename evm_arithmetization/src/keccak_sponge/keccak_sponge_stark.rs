@@ -1,5 +1,5 @@
 use core::borrow::Borrow;
-use core::iter::{self, once, repeat};
+use core::iter::{self, repeat};
 use core::marker::PhantomData;
 use core::mem::size_of;
 

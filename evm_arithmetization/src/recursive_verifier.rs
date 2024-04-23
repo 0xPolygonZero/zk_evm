@@ -7,9 +7,8 @@ use plonky2::field::extension::Extendable;
 use plonky2::gates::exponentiation::ExponentiationGate;
 use plonky2::gates::gate::GateRef;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{HashOut, HashOutTarget, MerkleCapTarget, RichField};
+use plonky2::hash::hash_types::{HashOut, MerkleCapTarget, RichField};
 use plonky2::hash::hashing::PlonkyPermutation;
-use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, Witness, WitnessWrite};
@@ -40,7 +39,7 @@ use crate::proof::{
     ExtraBlockDataTarget, MemCap, MemCapTarget, PublicValues, PublicValuesTarget, RegistersData,
     RegistersDataTarget, TrieRoots, TrieRootsTarget,
 };
-use crate::util::{h256_limbs, h2u, u256_limbs, u256_to_u32, u256_to_u64};
+use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
 
 pub(crate) struct PublicInputs<T: Copy + Default + Eq + PartialEq + Debug, P: PlonkyPermutation<T>>

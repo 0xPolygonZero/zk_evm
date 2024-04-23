@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ethereum_types::U256;
 use plonky2::field::types::Field;
 
@@ -146,15 +144,6 @@ pub(crate) fn mem_write_log<F: Field>(
         MemoryOpKind::Write,
         val,
     )
-}
-
-pub(crate) fn mem_write_log_timestamp_zero<F: Field>(
-    address: MemoryAddress,
-    state: &GenerationState<F>,
-    val: U256,
-) -> MemoryOp {
-    // `Code` corresponds to channel number 0.
-    MemoryOp::new(MemoryChannel::Code, 0, address, MemoryOpKind::Write, val)
 }
 
 pub(crate) fn mem_read_code_with_log_and_fill<F: Field>(

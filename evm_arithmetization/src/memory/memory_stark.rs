@@ -225,7 +225,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
     /// a trace in column-major form.
     /// Also generates the `STALE_CONTEXTS`, `STALE_CONTEXTS_FREQUENCIES` and
     /// `MEM_AFTER_FILTER` columns.
-    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>], stale_contexts: Vec<usize>) {
+    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>]) {
         let height = trace_col_vecs[0].len();
         trace_col_vecs[COUNTER] = (0..height).map(|i| F::from_canonical_usize(i)).collect();
 
@@ -397,7 +397,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         let mut trace_col_vecs = transpose(&trace_row_vecs);
 
         // A few final generation steps, which work better in column-major form.
-        Self::generate_trace_col_major(&mut trace_col_vecs, stale_contexts);
+        Self::generate_trace_col_major(&mut trace_col_vecs);
 
         let final_rows = transpose(&trace_col_vecs);
 
