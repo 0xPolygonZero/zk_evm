@@ -4,7 +4,7 @@ use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::fri::oracle::PolynomialBatch;
-use plonky2::hash::hash_types::{HashOut, RichField};
+use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::util::timing::TimingTree;
@@ -20,7 +20,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
-use crate::proof::{AllProof, AllProofChallenges, MemCap, PublicValues};
+use crate::proof::{AllProof, AllProofChallenges, PublicValues};
 use crate::util::h2u;
 
 pub(crate) fn initial_memory_merkle_cap<
@@ -31,8 +31,8 @@ pub(crate) fn initial_memory_merkle_cap<
     rate_bits: usize,
     cap_height: usize,
 ) -> MerkleCap<F, C::Hasher> {
-    // At the start of a transaction proof, `MemBefore` only contains the RLP
-    // constant and the `ShiftTable`.
+    // At the start of a transaction proof, `MemBefore` only contains the kernel
+    // `Code` segment and the `ShiftTable`.
     let mut trace = Vec::with_capacity((KERNEL.code.len() + 256).next_power_of_two());
 
     // Push kernel code.
@@ -46,10 +46,11 @@ pub(crate) fn initial_memory_merkle_cap<
         row[crate::memory_continuation::columns::value_limb(0)] = F::from_canonical_u8(byte);
         trace.push(row);
     }
+    let mut val = U256::one();
     // Push shift table.
     for i in 0..256 {
         let mut row = vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS];
-        let val = U256::from(1) << i;
+
         row[crate::memory_continuation::columns::FILTER] = F::ONE;
         row[crate::memory_continuation::columns::ADDR_CONTEXT] = F::ZERO;
         row[crate::memory_continuation::columns::ADDR_SEGMENT] =
@@ -59,17 +60,16 @@ pub(crate) fn initial_memory_merkle_cap<
             row[j + 4] = F::from_canonical_u32((val >> (j * 32)).low_u32());
         }
         trace.push(row);
+        val <<= 1;
     }
 
     // Padding.
     let num_rows = trace.len();
     let num_rows_padded = num_rows.next_power_of_two();
-    for _ in num_rows..num_rows_padded {
-        trace.push(vec![
-            F::ZERO;
-            crate::memory_continuation::columns::NUM_COLUMNS
-        ]);
-    }
+    trace.resize(
+        num_rows_padded,
+        vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS],
+    );
 
     let cols = transpose(&trace);
     let polys = cols
@@ -87,6 +87,33 @@ pub(crate) fn initial_memory_merkle_cap<
     )
     .merkle_tree
     .cap
+}
+
+fn verify_initial_memory<
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    const D: usize,
+>(
+    public_values: &PublicValues,
+    config: &StarkConfig,
+) -> Result<()> {
+    for (hash1, hash2) in initial_memory_merkle_cap::<F, C, D>(
+        config.fri_config.rate_bits,
+        config.fri_config.cap_height,
+    )
+    .0
+    .iter()
+    .zip(public_values.mem_before.mem_cap.iter())
+    {
+        for (&limb1, limb2) in hash1.to_vec().iter().zip(hash2) {
+            ensure!(
+                limb1 == F::from_canonical_u64(limb2.as_u64()),
+                anyhow::Error::msg("Invalid initial MemBefore Merkle cap.")
+            );
+        }
+    }
+
+    Ok(())
 }
 
 pub fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
@@ -205,21 +232,7 @@ where
     let public_values = all_proof.public_values;
 
     // Verify shift table and kernel code.
-    for (hash1, hash2) in initial_memory_merkle_cap::<F, C, D>(
-        config.fri_config.rate_bits,
-        config.fri_config.cap_height,
-    )
-    .0
-    .iter()
-    .zip(public_values.mem_before.mem_cap.iter())
-    {
-        for (&limb1, limb2) in hash1.to_vec().iter().zip(hash2) {
-            ensure!(
-                limb1 == F::from_canonical_u64(limb2.as_u64()),
-                anyhow::Error::msg("Invalid initial MemBefore Merkle cap.")
-            );
-        }
-    }
+    verify_initial_memory::<F, C, D>(&public_values, config)?;
 
     // Extra sums to add to the looked last value.
     // Only necessary for the Memory values.
