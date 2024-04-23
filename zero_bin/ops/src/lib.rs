@@ -25,14 +25,10 @@ impl Operation for TxProof {
     type Output = proof_gen::proof_types::AggregatableProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let proof = Self::run_and_wrap_txn_proof_in_elapsed_span(
-            || {
-                common::prover_state::p_manager()
-                    .generate_txn_proof(input.clone())
-                    .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate).into())
-            },
-            &input,
-        )?;
+        let _span = TxProofSpan::new(&input);
+        let proof = common::prover_state::p_manager()
+            .generate_txn_proof(input)
+            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
 
         Ok(proof.into())
     }
@@ -44,48 +40,68 @@ impl Operation for TxProof {
     type Output = ();
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        Self::run_and_wrap_txn_proof_in_elapsed_span(
-            || {
-                evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                    input.clone(),
-                )
-                .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate).into())
-            },
-            &input,
-        )?;
+        let _span = TxProofSpan::new(&input);
+        evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(input)
+            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
 
         Ok(())
     }
 }
 
-impl TxProof {
-    fn run_and_wrap_txn_proof_in_elapsed_span<F, O>(f: F, ir: &GenerationInputs) -> Result<O>
-    where
-        F: Fn() -> Result<O>,
-    {
-        let id = format!(
+/// RAII struct to measure the time taken by a transaction proof.
+///
+/// - When created, it starts a span with the transaction proof id.
+/// - When dropped, it logs the time taken by the transaction proof.
+struct TxProofSpan {
+    _span: tracing::span::EnteredSpan,
+    start: Instant,
+    descriptor: String,
+}
+
+impl TxProofSpan {
+    /// Get a unique id for the transaction proof.
+    fn get_id(ir: &GenerationInputs) -> String {
+        format!(
             "b{} - {}",
             ir.block_metadata.block_number, ir.txn_number_before
-        );
+        )
+    }
 
-        let _span = info_span!("p_gen", id).entered();
-        let start = Instant::now();
-
-        let proof = f()?;
-
-        let txn_hash_str = ir
-            .signed_txn
+    /// Get a textual descriptor for the transaction proof.
+    ///
+    /// Either the hex-encoded hash of the transaction or "Dummy" if the
+    /// transaction is not present.
+    fn get_descriptor(ir: &GenerationInputs) -> String {
+        ir.signed_txn
             .as_ref()
             .map(|txn| format!("{:x}", keccak(txn)))
-            .unwrap_or_else(|| "Dummy".to_string());
+            .unwrap_or_else(|| "Dummy".to_string())
+    }
 
+    /// Create a new transaction proof span.
+    ///
+    /// When dropped, it logs the time taken by the transaction proof.
+    fn new(ir: &GenerationInputs) -> Self {
+        let id = Self::get_id(ir);
+        let span = info_span!("p_gen", id).entered();
+        let start = Instant::now();
+        let descriptor = Self::get_descriptor(ir);
+        Self {
+            _span: span,
+            start,
+            descriptor,
+        }
+    }
+}
+
+impl Drop for TxProofSpan {
+    fn drop(&mut self) {
         event!(
             Level::INFO,
             "txn proof ({}) took {:?}",
-            txn_hash_str,
-            start.elapsed()
+            self.descriptor,
+            self.start.elapsed()
         );
-        Ok(proof)
     }
 }
 
