@@ -33,7 +33,7 @@ pub(crate) fn initial_memory_merkle_cap<
 ) -> MerkleCap<F, C::Hasher> {
     // At the start of a transaction proof, `MemBefore` only contains the RLP
     // constant and the `ShiftTable`.
-    let mut trace = vec![];
+    let mut trace = Vec::with_capacity((KERNEL.code.len() + 256).next_power_of_two());
 
     // Push kernel code.
     for (i, &byte) in KERNEL.code.iter().enumerate() {
