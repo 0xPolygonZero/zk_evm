@@ -3,14 +3,13 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{prover::GenerationSegmentData, AllStark, StarkConfig};
+use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
 use plonky2::{
     gates::noop::NoopGate,
     iop::witness::PartialWitness,
     plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
     util::timing::TimingTree,
 };
-use trace_decoder::types::TxnProofGenIR;
 
 use crate::{
     proof_types::{
@@ -47,7 +46,7 @@ impl From<String> for ProofGenError {
 /// Generates a transaction proof from some IR data.
 pub fn generate_segment_proof(
     p_state: &ProverState,
-    gen_inputs: TxnProofGenIR,
+    gen_inputs: GenerationInputs,
     segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedSegmentProof> {

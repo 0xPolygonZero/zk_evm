@@ -1,21 +1,9 @@
-use std::hash::Hash;
-
-use ethereum_types::{Address, H160, H256, U256};
-use itertools::Itertools;
-use plonky2::field::extension::{Extendable, FieldExtension};
-use plonky2::fri::oracle::PolynomialBatch;
-use plonky2::fri::proof::{FriChallenges, FriChallengesTarget, FriProof, FriProofTarget};
-use plonky2::fri::structure::{
-    FriOpeningBatch, FriOpeningBatchTarget, FriOpenings, FriOpeningsTarget,
-};
-use plonky2::hash::hash_types::{
-    HashOut, HashOutTarget, MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS,
-};
-use plonky2::hash::merkle_tree::MerkleCap;
-use plonky2::iop::ext_target::ExtensionTarget;
+use ethereum_types::{Address, H256, U256};
+use plonky2::field::extension::Extendable;
+use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut, Hasher};
+use plonky2::plonk::config::GenericConfig;
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
@@ -23,10 +11,7 @@ use starky::lookup::GrandProductChallengeSet;
 use starky::proof::{MultiProof, StarkProofChallenges};
 
 use crate::all_stark::NUM_TABLES;
-use crate::generation::mpt::TrieRootPtrs;
-use crate::generation::MemBeforeValues;
 use crate::util::{get_h160, get_h256, get_u256, h2u};
-use crate::witness::memory::MemoryAddress;
 use crate::witness::state::RegistersState;
 
 /// A STARK proof for each table, plus some metadata used to create recursive

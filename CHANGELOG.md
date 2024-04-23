@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - fix(keccak-sponge): properly constrain padding bytes ([#158](https://github.com/0xPolygonZero/zk_evm/pull/158))
 - Reduce verbosity in logs ([#160](https://github.com/0xPolygonZero/zk_evm/pull/160))
 - Bump with latest starky ([#161](https://github.com/0xPolygonZero/zk_evm/pull/161))
+- Extend trace decoder err info ([#148](https://github.com/0xPolygonZero/zk_evm/pull/148))
+- Add debug function for better public values logging in development ([#134](https://github.com/0xPolygonZero/zk_evm/pull/134))
+- Simplify withdrawals logic ([#168](https://github.com/0xPolygonZero/zk_evm/pull/168))
 
 ## [0.3.0] - 2024-04-03
 
@@ -40,13 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduce state trie size for dummy payloads ([#88](https://github.com/0xPolygonZero/zk_evm/pull/88))
 - Fix post-txn trie debugging output for multi-logs receipts ([#86](https://github.com/0xPolygonZero/zk_evm/pull/86))
 - Fixed *most* failing blocks caused by the merged in aggressive pruning changes ([#97](https://github.com/0xPolygonZero/zk_evm/pull/97))
-<<<<<<< HEAD
-- Fixed trie hash collision issue when constructing storage tries [#75](https://github.com/0xPolygonZero/zk_evm/pull/75)
-- Fix interpreter rollback by adding the clock to generation state checkpoints ([#109] https://github.com/0xPolygonZero/zk_evm/pull/109)
-=======
 - Fixed trie hash collision issue when constructing storage tries ([#75](https://github.com/0xPolygonZero/zk_evm/pull/75))
 - Fix interpreter rollback by adding the clock to generation state checkpoints ([#109](https://github.com/0xPolygonZero/zk_evm/pull/109))
->>>>>>> origin/develop
 
 ## [0.1.1] - 2024-03-01
 

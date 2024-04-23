@@ -58,3 +58,11 @@ pub(crate) fn h_addr_nibs_to_h256(h_addr_nibs: &Nibbles) -> H256 {
 
     H256::from_slice(&nib_bytes)
 }
+
+pub(crate) fn optional_field<T: std::fmt::Debug>(label: &str, value: Option<T>) -> String {
+    value.map_or(String::new(), |v| format!("{}: {:?}\n", label, v))
+}
+
+pub(crate) fn optional_field_hex<T: std::fmt::UpperHex>(label: &str, value: Option<T>) -> String {
+    value.map_or(String::new(), |v| format!("{}: 0x{:064X}\n", label, v))
+}

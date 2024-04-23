@@ -53,7 +53,8 @@
 //! ```compile_fail
 //!  pub fn generate_txn_proof(
 //!     p_state: &ProverState,
-//!     start_info: TxnProofGenIR,
+//!     gen_inputs: GenerationInputs,
+//!     abort_signal: Option<Arc<AtomicBool>>,
 //! ) -> ProofGenResult<GeneratedTxnProof> { ... }
 //! ```
 //!

@@ -20,8 +20,6 @@ use GlobalMetadata::{
 use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::assembler::Kernel;
-use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::state::{GenerationState, State};
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
@@ -29,12 +27,10 @@ use crate::memory::segments::Segment;
 use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
 };
-use crate::prover::{check_abort_signal, get_mem_after_value_from_row, GenerationSegmentData};
+use crate::prover::GenerationSegmentData;
 use crate::util::{h2u, u256_to_usize};
-use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
-use crate::witness::traces::Traces;
 
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -42,8 +38,7 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
-use self::mpt::{load_all_mpts, TrieRootPtrs};
-use crate::witness::util::{mem_write_log, mem_write_log_timestamp_zero};
+use crate::witness::util::mem_write_log;
 
 /// Number of cycles to go after having reached the halting state. It is
 /// equal to the number of cycles in `exc_stop` + 1.
@@ -363,11 +358,7 @@ fn get_all_memory_address_and_values<F: RichField + Extendable<D>, const D: usiz
     res
 }
 
-type TablesWithPVsAndFinalMem<F> = (
-    [Vec<PolynomialValues<F>>; NUM_TABLES],
-    PublicValues,
-    Vec<Vec<F>>,
-);
+type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues);
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
     inputs: GenerationInputs,
@@ -410,16 +401,12 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         "simulate CPU",
         simulate_cpu(&mut state, *max_cpu_len_log)
     );
-    let (final_registers, mem_after) = if let Ok(res) = cpu_res {
-        res
-    } else {
-        output_debug_tries(&state);
-
+    if cpu_res.is_err() {
+        output_debug_tries(&state)?;
         cpu_res?;
-        (RegistersState::default(), None)
     };
 
-    let mut trace_lengths = state.traces.get_lengths();
+    let trace_lengths = state.traces.get_lengths();
 
     let read_metadata = |field| state.memory.read_global_metadata(field);
     let trie_roots_before = TrieRoots {
@@ -459,7 +446,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         mem_after: MemCap::default(),
     };
 
-    let (tables, final_values) = timed!(
+    let tables = timed!(
         timing,
         "convert trace data to tables",
         state.traces.into_tables(
@@ -471,7 +458,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
             timing
         )
     );
-    Ok((tables, public_values, final_values))
+    Ok((tables, public_values))
 }
 
 fn simulate_cpu<F: Field>(

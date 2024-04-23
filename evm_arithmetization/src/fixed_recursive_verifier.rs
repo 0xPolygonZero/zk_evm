@@ -15,8 +15,7 @@ use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField};
-use plonky2::hash::merkle_tree::MerkleCap;
+use plonky2::hash::hash_types::{MerkleCapTarget, RichField};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -42,12 +41,11 @@ use starky::stark::Stark;
 
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::state::GenerationState;
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
-    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget, MemCap,
+    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
     MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget, TrieRoots,
     TrieRootsTarget,
 };
@@ -57,8 +55,7 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
     StarkWrapperCircuit,
 };
-use crate::util::{h160_limbs, h256_limbs, u256_limbs};
-use crate::witness::memory::MemoryAddress;
+use crate::util::{h256_limbs, u256_limbs};
 use crate::witness::state::RegistersState;
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
@@ -1509,8 +1506,10 @@ where
             check_abort_signal(abort_signal.clone())?;
         }
 
-        root_inputs
-            .set_verifier_data_target(&self.root.cyclic_vk, &self.root.circuit.verifier_only);
+        root_inputs.set_verifier_data_target(
+            &self.root.cyclic_vk,
+            &self.segment_aggregation.circuit.verifier_only,
+        );
 
         set_public_value_targets(
             &mut root_inputs,
