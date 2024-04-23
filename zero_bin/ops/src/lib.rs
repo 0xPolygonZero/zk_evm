@@ -12,7 +12,6 @@ use proof_gen::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
 };
 use serde::{Deserialize, Serialize};
-use trace_decoder::types::TxnProofGenIR;
 use tracing::{event, info_span, Level};
 
 registry!();
@@ -22,7 +21,7 @@ pub struct TxProof;
 
 #[cfg(not(feature = "test_only"))]
 impl Operation for TxProof {
-    type Input = TxnProofGenIR;
+    type Input = GenerationInputs;
     type Output = proof_gen::proof_types::AggregatableProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
@@ -41,7 +40,7 @@ impl Operation for TxProof {
 
 #[cfg(feature = "test_only")]
 impl Operation for TxProof {
-    type Input = TxnProofGenIR;
+    type Input = GenerationInputs;
     type Output = ();
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {

@@ -1035,7 +1035,7 @@ dependencies = [
 [[package]]
 name = "evm_arithmetization"
 version = "0.1.3"
-source = "git+https://github.com/0xPolygonZero/zk_evm.git?tag=v0.3.0#423e2614d31d323e950b4a461a27ef565a820b75"
+source = "git+https://github.com/0xPolygonZero/zk_evm.git?tag=v0.3.1#c55f9e05f571b1b8658315e6de83427fe1d4efa3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1321,9 +1321,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51ee2dd2e4f378392eeff5d51618cd9a63166a2513846bbc55f21cfacd9199d4"
+checksum = "816ec7294445779408f36fe57bc5b7fc1cf59664059096c65f905c1c61f58069"
 dependencies = [
  "bytes",
  "fnv",
@@ -1519,7 +1519,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.6",
  "tokio",
  "tower-service",
  "tracing",
@@ -1535,7 +1535,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "h2 0.4.3",
+ "h2 0.4.4",
  "http 1.1.0",
  "http-body 1.0.0",
  "httparse",
@@ -1625,6 +1625,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "impl-num-traits"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "951641f13f873bff03d4bf19ae8bec531935ac0ac2cc775f84d7edfdcfed3f17"
+dependencies = [
+ "integer-sqrt",
+ "num-traits",
+ "uint",
+]
+
+[[package]]
 name = "impl-rlp"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1692,6 +1703,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "integer-sqrt"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "276ec31bcb4a9ee45f58bec6f9ec700ae4cf4f4f8f2fa7e06cb406bd5ffdd770"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]
@@ -1948,12 +1968,16 @@ dependencies = [
 [[package]]
 name = "mpt_trie"
 version = "0.2.1"
-source = "git+https://github.com/0xPolygonZero/zk_evm.git?tag=v0.3.0#423e2614d31d323e950b4a461a27ef565a820b75"
+source = "git+https://github.com/0xPolygonZero/zk_evm.git?tag=v0.3.1#c55f9e05f571b1b8658315e6de83427fe1d4efa3"
 dependencies = [
  "bytes",
  "enum-as-inner",
  "ethereum-types",
  "hex",
+ "impl-codec",
+ "impl-num-traits",
+ "impl-rlp",
+ "impl-serde",
  "keccak-hash 0.10.0",
  "log",
  "num",
@@ -2350,9 +2374,9 @@ dependencies = [
 
 [[package]]
 name = "plonky2"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d04c7dfa293cd62a8e1e3f21157dba8508ab2de6078b0e5fae202a4fc98ef224"
+checksum = "85f26b090b989aebdeaf6a4eed748c1fbcabf67e7273a22e4e0c877b63846d0f"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2375,9 +2399,9 @@ dependencies = [
 
 [[package]]
 name = "plonky2_field"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e27aab0723672905a49e4771232d7fcf71b97dd0e57634f1dfb5492635f765fc"
+checksum = "3a1dca60ad900d81b1fe2df3d0b88d43345988e2935e6709176e96573f4bcf5d"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2502,7 +2526,7 @@ dependencies = [
 [[package]]
 name = "proof_gen"
 version = "0.1.3"
-source = "git+https://github.com/0xPolygonZero/zk_evm.git?tag=v0.3.0#423e2614d31d323e950b4a461a27ef565a820b75"
+source = "git+https://github.com/0xPolygonZero/zk_evm.git?tag=v0.3.1#c55f9e05f571b1b8658315e6de83427fe1d4efa3"
 dependencies = [
  "ethereum-types",
  "evm_arithmetization",
@@ -2510,7 +2534,6 @@ dependencies = [
  "paste",
  "plonky2",
  "serde",
- "trace_decoder",
 ]
 
 [[package]]
@@ -2817,9 +2840,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.21.10"
+version = "0.21.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9d5a6813c0759e4609cd494e8e725babae6a2ca7b62a5536a13daaec6fcb7ba"
+checksum = "7fecbfb7b1444f477b345853b1fce097a2c6fb637b2bfb87e6bc5db0f043fae4"
 dependencies = [
  "log",
  "ring",
@@ -3117,9 +3140,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "starky"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acf2fe03f53197fbd5e2f2e5fbb809f8e953881cc729261b55f71134323bbfd6"
+checksum = "8a8480ca5b8eedf83ad070a780783b4e21a56c6ef66b4c0d1b7520b72bdfda1b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3454,8 +3477,8 @@ checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 
 [[package]]
 name = "trace_decoder"
-version = "0.3.0"
-source = "git+https://github.com/0xPolygonZero/zk_evm.git?tag=v0.3.0#423e2614d31d323e950b4a461a27ef565a820b75"
+version = "0.3.1"
+source = "git+https://github.com/0xPolygonZero/zk_evm.git?tag=v0.3.1#c55f9e05f571b1b8658315e6de83427fe1d4efa3"
 dependencies = [
  "bytes",
  "ciborium",
