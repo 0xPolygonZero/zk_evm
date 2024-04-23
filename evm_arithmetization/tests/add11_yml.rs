@@ -183,8 +183,8 @@ fn add11_yml() -> anyhow::Result<()> {
     let config = StarkConfig::standard_fast_config();
     let inputs = get_generation_inputs();
 
-    let max_cpu_len_log = 20;
-    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
+    let max_cpu_len = 1 << 20;
+    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len), inputs.clone())?;
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
@@ -213,25 +213,25 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
         &[
             16..17,
             8..15,
-            8..16,
+            8..17,
             4..15,
             7..11,
             4..13,
-            16..19,
+            10..20,
             7..18,
-            11..18,
+            10..18,
         ], // Minimal ranges to prove an empty list
         &config,
     );
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len_log = 14;
+    let max_cpu_len = 1 << 14;
 
     let all_segment_proofs = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
-        inputs,
-        max_cpu_len_log,
+        inputs.clone(),
+        max_cpu_len,
         &mut timing,
         None,
     )?;

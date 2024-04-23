@@ -60,7 +60,7 @@ pub(crate) struct Interpreter<F: Field> {
     /// in the execution.
     pub(crate) clock: usize,
     /// Log of the maximal number of CPU cycles in one segment execution.
-    max_cpu_len_log: Option<usize>,
+    max_cpu_len: Option<usize>,
 }
 
 /// Structure storing the state of the interpreter's registers.
@@ -162,7 +162,7 @@ pub(crate) struct ExtraSegmentData {
 /// execution stops at segment `index`. These can then be passed to the
 /// prover for initialization.
 pub(crate) fn generate_segment<F: Field>(
-    max_cpu_len_log: usize,
+    max_cpu_len: usize,
     index: usize,
     inputs: &GenerationInputs,
 ) -> anyhow::Result<
@@ -175,12 +175,8 @@ pub(crate) fn generate_segment<F: Field>(
 > {
     let init_label = KERNEL.global_labels["init"];
     let initial_registers = RegistersState::new();
-    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
-        init_label,
-        vec![],
-        inputs,
-        Some(max_cpu_len_log),
-    );
+    let mut interpreter =
+        Interpreter::<F>::new_with_generation_inputs(init_label, vec![], inputs, Some(max_cpu_len));
 
     let (mut registers_before, mut registers_after, mut before_mem_values, mut after_mem_values) = (
         initial_registers,
@@ -280,11 +276,11 @@ impl<F: Field> Interpreter<F> {
         initial_offset: usize,
         initial_stack: Vec<U256>,
         inputs: &GenerationInputs,
-        max_cpu_len_log: Option<usize>,
+        max_cpu_len: Option<usize>,
     ) -> Self {
         debug_inputs(inputs);
 
-        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
+        let mut result = Self::new(initial_offset, initial_stack, max_cpu_len);
         result.initialize_interpreter_state(inputs);
         result
     }
@@ -292,7 +288,7 @@ impl<F: Field> Interpreter<F> {
     pub(crate) fn new(
         initial_offset: usize,
         initial_stack: Vec<U256>,
-        max_cpu_len_log: Option<usize>,
+        max_cpu_len: Option<usize>,
     ) -> Self {
         let mut interpreter = Self {
             generation_state: GenerationState::new(&GenerationInputs::default(), &KERNEL.code)
@@ -305,7 +301,7 @@ impl<F: Field> Interpreter<F> {
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: false,
             clock: 0,
-            max_cpu_len_log,
+            max_cpu_len,
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -326,7 +322,7 @@ impl<F: Field> Interpreter<F> {
         state: &GenerationState<F>,
         halt_offset: usize,
         halt_context: usize,
-        max_cpu_len_log: Option<usize>,
+        max_cpu_len: Option<usize>,
     ) -> Self {
         Self {
             generation_state: state.soft_clone(),
@@ -336,7 +332,7 @@ impl<F: Field> Interpreter<F> {
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: true,
             clock: 0,
-            max_cpu_len_log,
+            max_cpu_len,
         }
     }
 
@@ -520,7 +516,7 @@ impl<F: Field> Interpreter<F> {
     }
 
     pub(crate) fn run(&mut self) -> Result<(RegistersState, Option<MemoryState>), anyhow::Error> {
-        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log)?;
+        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len)?;
 
         #[cfg(debug_assertions)]
         {

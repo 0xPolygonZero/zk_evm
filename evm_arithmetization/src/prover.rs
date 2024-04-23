@@ -29,7 +29,9 @@ use crate::cpu::kernel::interpreter::{
     generate_segment, set_registers_and_run, ExtraSegmentData, Interpreter,
 };
 use crate::generation::state::GenerationState;
-use crate::generation::{generate_traces, GenerationInputs};
+use crate::generation::{
+    generate_traces, GenerationInputs, NUM_EXTRA_CYCLES_AFTER, NUM_EXTRA_CYCLES_BEFORE,
+};
 use crate::get_challenges::observe_public_values;
 use crate::memory::segments::Segment;
 use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
@@ -48,9 +50,10 @@ pub struct GenerationSegmentData {
     /// Extra data required to initialize a segment.
     pub(crate) extra_data: ExtraSegmentData,
     /// Log of the maximal cpu length.
-    pub(crate) max_cpu_len_log: Option<usize>,
+    pub(crate) max_cpu_len: Option<usize>,
 }
 
+/// Generate traces, then create all STARK proofs.
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
@@ -473,7 +476,7 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 /// Returns a vector containing the data required to generate all the segments
 /// of a transaction.
 pub fn generate_all_data_segments<F: RichField>(
-    max_cpu_len_log: Option<usize>,
+    max_cpu_len: Option<usize>,
     inputs: GenerationInputs,
 ) -> anyhow::Result<Vec<GenerationSegmentData>> {
     let mut all_seg_data = vec![];
@@ -482,14 +485,14 @@ pub fn generate_all_data_segments<F: RichField>(
         KERNEL.global_labels["init"],
         vec![],
         &inputs,
-        max_cpu_len_log,
+        max_cpu_len,
     );
 
     let mut segment_data = GenerationSegmentData {
         registers_before: RegistersState::new(),
         registers_after: RegistersState::new(),
         memory: MemoryState::default(),
-        max_cpu_len_log,
+        max_cpu_len,
         extra_data: ExtraSegmentData {
             trimmed_inputs: interpreter.generation_state.inputs.clone(),
             bignum_modmul_result_limbs: interpreter
@@ -523,7 +526,7 @@ pub fn generate_all_data_segments<F: RichField>(
             registers_before: updated_registers,
             // `registers_after` will be set correctly at the next iteration.`
             registers_after: updated_registers,
-            max_cpu_len_log,
+            max_cpu_len,
             memory: mem_after
                 .expect("The interpreter was running, so it should have returned a MemoryState"),
             extra_data: ExtraSegmentData {
@@ -541,6 +544,39 @@ pub fn generate_all_data_segments<F: RichField>(
                 jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             },
         };
+    }
+
+    // We need at least two segments to prove a segment aggregation.
+    if all_seg_data.len() == 1 {
+        let new_max_cpu_len = Some(NUM_EXTRA_CYCLES_AFTER + NUM_EXTRA_CYCLES_BEFORE);
+        let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+            KERNEL.global_labels["init"],
+            vec![],
+            &inputs,
+            new_max_cpu_len,
+        );
+
+        let dummy_seg = GenerationSegmentData {
+            registers_before: RegistersState::new(),
+            registers_after: RegistersState::new(),
+            max_cpu_len: new_max_cpu_len,
+            ..all_seg_data[0].clone()
+        };
+        let (updated_registers, mem_after) =
+            set_registers_and_run(dummy_seg.registers_after, &mut interpreter)?;
+        let mut mem_after = mem_after
+            .expect("The interpreter was running, so it should have returned a MemoryState");
+        // During the interpreter initialization, we set the trie data and initialize
+        // `RlpRaw`. But we do not want to pass this information to the first actual
+        // segment in `MemBefore` since the values are not actually accesesed in the
+        // dummy generation.
+        mem_after.contexts[0].segments[Segment::RlpRaw.unscale()].content = vec![];
+        mem_after.contexts[0].segments[Segment::TrieData.unscale()].content = vec![];
+        all_seg_data[0].memory = mem_after;
+
+        all_seg_data.reverse();
+        all_seg_data.push(dummy_seg);
+        all_seg_data.reverse();
     }
 
     Ok(all_seg_data)
@@ -603,13 +639,13 @@ pub mod testing {
 
     pub fn simulate_all_segments_interpreter<F>(
         inputs: GenerationInputs,
-        max_cpu_len_log: usize,
+        max_cpu_len: usize,
     ) -> anyhow::Result<()>
     where
         F: Field,
     {
         let mut index = 0;
-        while generate_segment::<F>(max_cpu_len_log, index, &inputs)?.is_some() {
+        while generate_segment::<F>(max_cpu_len, index, &inputs)?.is_some() {
             index += 1;
         }
         Ok(())
