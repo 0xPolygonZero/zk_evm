@@ -16,6 +16,7 @@ pub(crate) async fn jerigon_main(
     checkpoint_block_number: u64,
     previous: Option<PlonkyProofIntern>,
     proof_output_path_opt: Option<PathBuf>,
+    save_inputs_on_error: bool,
 ) -> Result<()> {
     let prover_input = rpc::fetch_prover_input(rpc::FetchProverInputRequest {
         rpc_url,
@@ -24,7 +25,9 @@ pub(crate) async fn jerigon_main(
     })
     .await?;
 
-    let proof = prover_input.prove(&runtime, previous).await;
+    let proof = prover_input
+        .prove(&runtime, previous, save_inputs_on_error)
+        .await;
     runtime.close().await?;
 
     let proof = serde_json::to_vec(&proof?.intern)?;

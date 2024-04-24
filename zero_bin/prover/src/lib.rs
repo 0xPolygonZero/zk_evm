@@ -35,6 +35,7 @@ impl ProverInput {
         self,
         runtime: &Runtime,
         previous: Option<PlonkyProofIntern>,
+        save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
         let block_number = self.get_block_number();
         info!("Proving block {block_number}");
@@ -46,8 +47,12 @@ impl ProverInput {
         )?;
 
         let agg_proof = IndexedStream::from(txs)
-            .map(&TxProof)
-            .fold(&ops::AggProof)
+            .map(&TxProof {
+                save_inputs_on_error,
+            })
+            .fold(&ops::AggProof {
+                save_inputs_on_error,
+            })
             .run(runtime)
             .await?;
 
@@ -58,7 +63,10 @@ impl ProverInput {
             });
 
             let block_proof = paladin::directive::Literal(proof)
-                .map(&ops::BlockProof { prev })
+                .map(&ops::BlockProof {
+                    prev,
+                    save_inputs_on_error,
+                })
                 .run(runtime)
                 .await?;
 
@@ -74,6 +82,7 @@ impl ProverInput {
         self,
         runtime: &Runtime,
         _previous: Option<PlonkyProofIntern>,
+        save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
@@ -85,7 +94,9 @@ impl ProverInput {
         )?;
 
         IndexedStream::from(txs)
-            .map(&TxProof)
+            .map(&TxProof {
+                save_inputs_on_error,
+            })
             .run(runtime)
             .await?
             .try_collect::<Vec<_>>()

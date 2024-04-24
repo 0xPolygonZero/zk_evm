@@ -11,7 +11,12 @@ use serde_json::to_writer;
 use tracing::{debug, error, info};
 
 /// The main function for the HTTP mode.
-pub(crate) async fn http_main(runtime: Runtime, port: u16, output_dir: PathBuf) -> Result<()> {
+pub(crate) async fn http_main(
+    runtime: Runtime,
+    port: u16,
+    output_dir: PathBuf,
+    save_inputs_on_error: bool,
+) -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     debug!("listening on {}", addr);
 
@@ -20,7 +25,7 @@ pub(crate) async fn http_main(runtime: Runtime, port: u16, output_dir: PathBuf) 
         "/prove",
         post({
             let runtime = runtime.clone();
-            move |body| prove(body, runtime, output_dir.clone())
+            move |body| prove(body, runtime, output_dir.clone(), save_inputs_on_error)
         }),
     );
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -60,12 +65,17 @@ async fn prove(
     Json(payload): Json<HttpProverInput>,
     runtime: Arc<Runtime>,
     output_dir: PathBuf,
+    save_inputs_on_error: bool,
 ) -> StatusCode {
     debug!("Received payload: {:#?}", payload);
 
     let block_number = payload.prover_input.get_block_number();
 
-    match payload.prover_input.prove(&runtime, payload.previous).await {
+    match payload
+        .prover_input
+        .prove(&runtime, payload.previous, save_inputs_on_error)
+        .await
+    {
         Ok(b_proof) => match write_to_file(output_dir, block_number, &b_proof) {
             Ok(file) => {
                 info!("Successfully wrote proof to {}", file.display());

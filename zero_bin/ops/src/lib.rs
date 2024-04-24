@@ -1,7 +1,7 @@
 use std::time::Instant;
 
-use common::prover_state::p_state;
-use evm_arithmetization::GenerationInputs;
+use common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
+use evm_arithmetization::{proof::PublicValues, GenerationInputs};
 use keccak_hash::keccak;
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
@@ -12,12 +12,14 @@ use proof_gen::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
 };
 use serde::{Deserialize, Serialize};
-use tracing::{event, info_span, Level};
+use tracing::{error, event, info_span, Level};
 
 registry!();
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct TxProof;
+pub struct TxProof {
+    pub save_inputs_on_error: bool,
+}
 
 #[cfg(not(feature = "test_only"))]
 impl Operation for TxProof {
@@ -26,9 +28,27 @@ impl Operation for TxProof {
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         let _span = TxProofSpan::new(&input);
-        let proof = common::prover_state::p_manager()
-            .generate_txn_proof(input)
-            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
+        let proof = if self.save_inputs_on_error {
+            common::prover_state::p_manager()
+                .generate_txn_proof(input.clone())
+                .map_err(|err| {
+                    if let Err(write_err) = save_inputs_to_disk(
+                        format!(
+                            "b{}_txn_{}_input.log",
+                            input.block_metadata.block_number, input.txn_number_before
+                        ),
+                        input,
+                    ) {
+                        error!("Failed to save txn proof input to disk: {:?}", write_err);
+                    }
+
+                    FatalError::from_anyhow(err, FatalStrategy::Terminate)
+                })?
+        } else {
+            common::prover_state::p_manager()
+                .generate_txn_proof(input)
+                .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?
+        };
 
         Ok(proof.into())
     }
@@ -41,8 +61,30 @@ impl Operation for TxProof {
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         let _span = TxProofSpan::new(&input);
-        evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(input)
+
+        if self.save_inputs_on_error {
+            evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
+                input.clone(),
+            )
+            .map_err(|err| {
+                if let Err(write_err) = save_inputs_to_disk(
+                    format!(
+                        "b{}_txn_{}_input.log",
+                        input.block_metadata.block_number, input.txn_number_before
+                    ),
+                    input,
+                ) {
+                    error!("Failed to save txn proof input to disk: {:?}", write_err);
+                }
+
+                FatalError::from_anyhow(err, FatalStrategy::Terminate)
+            })?;
+        } else {
+            evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
+                input,
+            )
             .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
+        }
 
         Ok(())
     }
@@ -106,13 +148,40 @@ impl Drop for TxProofSpan {
 }
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct AggProof;
+pub struct AggProof {
+    pub save_inputs_on_error: bool,
+}
+
+fn get_agg_proof_public_values(elem: AggregatableProof) -> PublicValues {
+    match elem {
+        AggregatableProof::Txn(info) => info.p_vals,
+        AggregatableProof::Agg(info) => info.p_vals,
+    }
+}
 
 impl Monoid for AggProof {
     type Elem = AggregatableProof;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
-        let result = generate_agg_proof(p_state(), &a, &b).map_err(FatalError::from)?;
+        let result = generate_agg_proof(p_state(), &a, &b).map_err(|e| {
+            if self.save_inputs_on_error {
+                let pv = vec![
+                    get_agg_proof_public_values(a),
+                    get_agg_proof_public_values(b),
+                ];
+                if let Err(write_err) = save_inputs_to_disk(
+                    format!(
+                        "b{}_agg_lhs_rhs_inputs.log",
+                        pv[0].block_metadata.block_number
+                    ),
+                    pv,
+                ) {
+                    error!("Failed to save agg proof inputs to disk: {:?}", write_err);
+                }
+            }
+
+            FatalError::from(e)
+        })?;
 
         Ok(result.into())
     }
@@ -126,6 +195,7 @@ impl Monoid for AggProof {
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct BlockProof {
     pub prev: Option<GeneratedBlockProof>,
+    pub save_inputs_on_error: bool,
 }
 
 impl Operation for BlockProof {
@@ -134,8 +204,21 @@ impl Operation for BlockProof {
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         Ok(
-            generate_block_proof(p_state(), self.prev.as_ref(), &input)
-                .map_err(FatalError::from)?,
+            generate_block_proof(p_state(), self.prev.as_ref(), &input).map_err(|e| {
+                if self.save_inputs_on_error {
+                    if let Err(write_err) = save_inputs_to_disk(
+                        format!(
+                            "b{}_block_input.log",
+                            input.p_vals.block_metadata.block_number
+                        ),
+                        input.p_vals,
+                    ) {
+                        error!("Failed to save block proof input to disk: {:?}", write_err);
+                    }
+                }
+
+                FatalError::from(e)
+            })?,
         )
     }
 }

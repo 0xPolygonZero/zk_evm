@@ -47,11 +47,18 @@ async fn main() -> Result<()> {
     let runtime = Runtime::from_config(&args.paladin, register()).await?;
 
     match args.command {
-        Command::Stdio { previous_proof } => {
+        Command::Stdio {
+            previous_proof,
+            save_inputs_on_error,
+        } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(runtime, previous_proof).await?;
+            stdio::stdio_main(runtime, previous_proof, save_inputs_on_error).await?;
         }
-        Command::Http { port, output_dir } => {
+        Command::Http {
+            port,
+            output_dir,
+            save_inputs_on_error,
+        } => {
             // check if output_dir exists, is a directory, and is writable
             let output_dir_metadata = std::fs::metadata(&output_dir);
             if output_dir_metadata.is_err() {
@@ -61,7 +68,7 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(runtime, port, output_dir).await?;
+            http::http_main(runtime, port, output_dir, save_inputs_on_error).await?;
         }
         Command::Jerigon {
             rpc_url,
@@ -69,6 +76,7 @@ async fn main() -> Result<()> {
             checkpoint_block_number,
             previous_proof,
             proof_output_path,
+            save_inputs_on_error,
         } => {
             let previous_proof = get_previous_proof(previous_proof)?;
 
@@ -79,6 +87,7 @@ async fn main() -> Result<()> {
                 checkpoint_block_number,
                 previous_proof,
                 proof_output_path,
+                save_inputs_on_error,
             )
             .await?;
         }
