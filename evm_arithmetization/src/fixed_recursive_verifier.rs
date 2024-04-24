@@ -1609,22 +1609,18 @@ where
         let mut agg_inputs = PartialWitness::new();
 
         Self::set_dummy_if_necessary(
-            self.segment_aggregation.lhs.is_agg,
             lhs_is_agg,
+            &self.segment_aggregation.lhs,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
-            &self.segment_aggregation.lhs.proof,
-            &self.segment_aggregation.lhs.agg_proof,
             lhs_proof,
         );
 
         Self::set_dummy_if_necessary(
-            self.segment_aggregation.rhs.is_agg,
             rhs_is_agg,
+            &self.segment_aggregation.rhs,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
-            &self.segment_aggregation.rhs.proof,
-            &self.segment_aggregation.rhs.agg_proof,
             rhs_proof,
         );
 
@@ -1714,22 +1710,18 @@ where
         let mut txn_inputs = PartialWitness::new();
 
         Self::set_dummy_if_necessary(
-            self.txn_aggregation.lhs.is_agg,
             lhs_is_agg,
+            &self.txn_aggregation.lhs,
             &self.txn_aggregation.circuit,
             &mut txn_inputs,
-            &self.txn_aggregation.lhs.proof,
-            &self.txn_aggregation.lhs.agg_proof,
             lhs_proof,
         );
 
         Self::set_dummy_if_necessary(
-            self.txn_aggregation.rhs.is_agg,
             rhs_is_agg,
+            &self.txn_aggregation.rhs,
             &self.txn_aggregation.circuit,
             &mut txn_inputs,
-            &self.txn_aggregation.rhs.proof,
-            &self.txn_aggregation.rhs.agg_proof,
             rhs_proof,
         );
 
@@ -1816,21 +1808,24 @@ where
     /// If the lhs is not an aggregation, we set the cyclic vk to a dummy value,
     /// so that it corresponds to the aggregation cyclic vk.
     fn set_dummy_if_necessary(
-        is_agg_target: BoolTarget,
         is_agg: bool,
+        agg_child: &AggregationChildTarget<D>,
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
-        proof_target: &ProofWithPublicInputsTarget<D>,
-        agg_proof_target: &ProofWithPublicInputsTarget<D>,
         proof: &ProofWithPublicInputs<F, C, D>,
     ) {
-        agg_inputs.set_bool_target(is_agg_target, is_agg);
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
         if is_agg {
-            agg_inputs.set_proof_with_pis_target(agg_proof_target, proof);
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
         } else {
-            Self::set_dummy_proof_with_cyclic_vk_pis(circuit, agg_inputs, agg_proof_target, proof)
+            Self::set_dummy_proof_with_cyclic_vk_pis(
+                circuit,
+                agg_inputs,
+                &agg_child.agg_proof,
+                proof,
+            )
         }
-        agg_inputs.set_proof_with_pis_target(proof_target, proof);
+        agg_inputs.set_proof_with_pis_target(&agg_child.proof, proof);
     }
 
     /// Create a final block proof, once all transactions of a given block have
