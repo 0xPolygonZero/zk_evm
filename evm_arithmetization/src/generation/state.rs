@@ -505,7 +505,7 @@ impl<F: Field> State<F> for GenerationState<F> {
                 row.general.stack_mut().stack_inv = inv;
                 row.general.stack_mut().stack_inv_aux = F::ONE;
                 self.registers.is_stack_top_read = true;
-            } else if (self.stack().len() != special_len) {
+            } else if self.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 self.registers.is_stack_top_read = true;
@@ -524,7 +524,7 @@ impl<F: Field> Transition<F> for GenerationState<F> {
         Ok(op)
     }
 
-    fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool {
+    fn generate_jumpdest_analysis(&mut self, _dst: usize) -> bool {
         false
     }
 
