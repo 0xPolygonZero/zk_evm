@@ -50,8 +50,6 @@ pub fn generate_segment_proof(
     segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedSegmentProof> {
-    // TODO: change the `max_cpu_len_log` argument once we can
-    // automatically determine it.
     let output_data = p_state
         .state
         .prove_segment(

@@ -57,7 +57,7 @@ pub struct GeneratedBlockProof {
 /// away whether or not the proof was a txn or agg proof.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum SegmentAggregatableProof {
-    /// The underlying proof is a transaction proof.
+    /// The underlying proof is a segment proof.
     Txn(GeneratedSegmentProof),
     /// The underlying proof is an aggregation proof.
     Agg(GeneratedSegmentAggProof),
@@ -148,7 +148,9 @@ impl From<SegmentAggregatableProof> for TxnAggregatableProof {
     fn from(v: SegmentAggregatableProof) -> Self {
         match v {
             SegmentAggregatableProof::Agg(agg) => TxnAggregatableProof::Txn(agg),
-            SegmentAggregatableProof::Txn(_) => panic!("Should be aggregation by now"),
+            SegmentAggregatableProof::Txn(_) => {
+                panic!("Should be an aggregation by now. Missing segment?")
+            }
         }
     }
 }

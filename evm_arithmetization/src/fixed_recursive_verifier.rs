@@ -1714,6 +1714,8 @@ where
             .set_proof_with_pis_target(&self.segment_aggregation.lhs.segment_proof, lhs_proof);
 
         agg_inputs.set_bool_target(self.segment_aggregation.rhs.is_agg, rhs_is_agg);
+        // If the rhs is not an aggregation, we set the cyclic vk to a dummy value, so
+        // that it corresponds to the aggregation cyclic vk.
         if rhs_is_agg {
             agg_inputs
                 .set_proof_with_pis_target(&self.segment_aggregation.rhs.agg_proof, rhs_proof);
