@@ -469,12 +469,25 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &config,
         inputs_first,
-        max_cpu_len_log,
+        // We want only one segment.
+        20,
         &mut timing,
         None,
     )?;
 
-    assert_eq!(segment_proofs_data_first.len(), 2);
+    assert_eq!(segment_proofs_data_first.len(), 1);
+
+    let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
+        .prove_segment_aggregation(
+            false,
+            &segment_proofs_data_first[0].proof_with_pis,
+            segment_proofs_data_first[0].public_values.clone(),
+            false,
+            true,
+            &segment_proofs_data_first[0].proof_with_pis,
+            segment_proofs_data_first[0].public_values.clone(),
+        )?;
+    all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
 
     // The gas used and transaction number are fed to the next transaction, so the
     // two proofs can be correctly aggregated.
@@ -614,22 +627,12 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         all_circuits.verify_root(proof.clone())?;
     }
 
-    let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
-        .prove_segment_aggregation(
-            false,
-            &segment_proofs_data_first[0].proof_with_pis,
-            segment_proofs_data_first[0].public_values.clone(),
-            false,
-            &segment_proofs_data_first[1].proof_with_pis,
-            segment_proofs_data_first[1].public_values.clone(),
-        )?;
-    all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
-
     let (segment_agg_proof_second, updated_agg_public_values_second) = all_circuits
         .prove_segment_aggregation(
             false,
             &segment_proofs_data_second[0].proof_with_pis,
             segment_proofs_data_second[0].public_values.clone(),
+            false,
             false,
             &segment_proofs_data_second[1].proof_with_pis,
             segment_proofs_data_second[1].public_values.clone(),
@@ -718,6 +721,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         false,
         &segment_proofs_data[0].proof_with_pis,
         segment_proofs_data[0].public_values.clone(),
+        false,
         false,
         &segment_proofs_data[1].proof_with_pis,
         segment_proofs_data[1].public_values.clone(),

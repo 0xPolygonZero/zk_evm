@@ -563,39 +563,6 @@ pub fn generate_all_data_segments<F: RichField>(
         };
     }
 
-    // We need at least two segments to prove a segment aggregation.
-    if all_seg_data.len() == 1 {
-        let mut interpreter = Interpreter::<F>::new_dummy_with_generation_inputs(
-            KERNEL.global_labels["init"],
-            vec![],
-            inputs,
-        );
-
-        let dummy_seg = GenerationSegmentData {
-            is_dummy: true,
-            registers_before: RegistersState::new(),
-            registers_after: RegistersState::new(),
-            max_cpu_len_log: interpreter.get_max_cpu_len_log(),
-            ..all_seg_data[0].clone()
-        };
-        let (updated_registers, mem_after) =
-            set_registers_and_run(dummy_seg.registers_after, &mut interpreter)?;
-        let mut mem_after = mem_after
-            .expect("The interpreter was running, so it should have returned a MemoryState");
-        // During the interpreter initialization, we set the trie data and initialize
-        // `RlpRaw`. But we do not want to pass this information to the first actual
-        // segment in `MemBefore` since the values are not actually accessed in the
-        // dummy generation.
-        mem_after.contexts[0].segments[Segment::RlpRaw.unscale()].content = vec![];
-        mem_after.contexts[0].segments[Segment::TrieData.unscale()].content = vec![];
-        all_seg_data[0].memory = mem_after;
-
-        all_seg_data.insert(0, dummy_seg);
-
-        // We need to update the index of the non-dummy segment, now at position 1.
-        all_seg_data[1].segment_index += 1;
-    }
-
     Ok(all_seg_data)
 }
 

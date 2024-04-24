@@ -15,7 +15,7 @@ use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{MerkleCapTarget, RichField};
+use plonky2::hash::hash_types::{MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -26,7 +26,7 @@ use plonky2::plonk::circuit_data::{
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::cyclic_base_proof;
+use plonky2::recursion::dummy_circuit::{self, cyclic_base_proof, dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
@@ -187,7 +187,7 @@ where
 {
     pub circuit: CircuitData<F, C, D>,
     lhs: AggregationChildTarget<D>,
-    rhs: AggregationChildTarget<D>,
+    rhs: AggregationChildWithDummyTarget<D>,
     public_values: PublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
 }
@@ -220,7 +220,7 @@ where
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let lhs = AggregationChildTarget::from_buffer(buffer)?;
-        let rhs = AggregationChildTarget::from_buffer(buffer)?;
+        let rhs = AggregationChildWithDummyTarget::from_buffer(buffer)?;
         Ok(Self {
             circuit,
             lhs,
@@ -268,6 +268,58 @@ impl<const D: usize> AggregationChildTarget<D> {
             PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs, len_mem_cap);
         let segment_pv =
             PublicValuesTarget::from_public_inputs(&self.proof.public_inputs, len_mem_cap);
+        PublicValuesTarget::select(builder, self.is_agg, agg_pv, segment_pv)
+    }
+}
+
+#[derive(Eq, PartialEq, Debug)]
+struct AggregationChildWithDummyTarget<const D: usize> {
+    is_agg: BoolTarget,
+    is_dummy: BoolTarget,
+    agg_proof: ProofWithPublicInputsTarget<D>,
+    real_proof: ProofWithPublicInputsTarget<D>,
+    dummy_proof: ProofWithPublicInputsTarget<D>,
+}
+
+impl<const D: usize> AggregationChildWithDummyTarget<D> {
+    fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        buffer.write_target_bool(self.is_agg)?;
+        buffer.write_target_bool(self.is_dummy)?;
+        buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
+        buffer.write_target_proof_with_public_inputs(&self.real_proof)?;
+        buffer.write_target_proof_with_public_inputs(&self.dummy_proof)?;
+        Ok(())
+    }
+
+    fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let is_agg = buffer.read_target_bool()?;
+        let is_dummy = buffer.read_target_bool()?;
+        let agg_proof = buffer.read_target_proof_with_public_inputs()?;
+        let real_proof = buffer.read_target_proof_with_public_inputs()?;
+        let dummy_proof = buffer.read_target_proof_with_public_inputs()?;
+        Ok(Self {
+            is_agg,
+            is_dummy,
+            agg_proof,
+            real_proof,
+            dummy_proof,
+        })
+    }
+
+    // `len_mem_cap` is the length of the Merkle
+    // caps for `MemBefore` and `MemAfter`.
+    fn public_values<F: RichField + Extendable<D>>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        len_mem_cap: usize,
+    ) -> PublicValuesTarget {
+        let agg_pv =
+            PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs, len_mem_cap);
+        let real_pv =
+            PublicValuesTarget::from_public_inputs(&self.real_proof.public_inputs, len_mem_cap);
+        let dummy_pv =
+            PublicValuesTarget::from_public_inputs(&self.dummy_proof.public_inputs, len_mem_cap);
+        let segment_pv = PublicValuesTarget::select(builder, self.is_dummy, dummy_pv, real_pv);
         PublicValuesTarget::select(builder, self.is_agg, agg_pv, segment_pv)
     }
 }
@@ -810,7 +862,7 @@ where
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         let lhs_segment = Self::add_segment_agg_child(&mut builder, root);
-        let rhs_segment = Self::add_segment_agg_child(&mut builder, root);
+        let rhs_segment = Self::add_segment_agg_child_with_dummy(&mut builder, root);
 
         let lhs_pv = lhs_segment.public_values(&mut builder, cap_before_len);
         let rhs_pv = rhs_segment.public_values(&mut builder, cap_before_len);
@@ -824,18 +876,13 @@ where
         );
         TrieRootsTarget::connect(
             &mut builder,
-            public_values.trie_roots_after,
+            lhs_pv.trie_roots_after,
             rhs_pv.trie_roots_after,
         );
         TrieRootsTarget::connect(
             &mut builder,
-            public_values.trie_roots_before,
-            rhs_pv.trie_roots_before,
-        );
-        TrieRootsTarget::connect(
-            &mut builder,
             public_values.trie_roots_after,
-            lhs_pv.trie_roots_after,
+            rhs_pv.trie_roots_after,
         );
         BlockMetadataTarget::connect(
             &mut builder,
@@ -892,9 +939,36 @@ where
         MemCapTarget::connect(
             &mut builder,
             public_values.mem_after.clone(),
+            rhs_pv.mem_after.clone(),
+        );
+        MemCapTarget::connect(&mut builder, lhs_pv.mem_after, rhs_pv.mem_before.clone());
+
+        // If the rhs is a dummy, then the lhs must be a segment.
+        builder.mul_sub(
+            rhs_segment.is_dummy.target,
+            lhs_segment.is_agg.target,
+            rhs_segment.is_dummy.target,
+        );
+
+        // If the rhs is a dummy, then its PV after must be equal to its PV before.
+        TrieRootsTarget::assert_equal_if(
+            &mut builder,
+            rhs_segment.is_dummy,
+            rhs_pv.trie_roots_before,
+            rhs_pv.trie_roots_after,
+        );
+        RegistersDataTarget::assert_equal_if(
+            &mut builder,
+            rhs_segment.is_dummy,
+            rhs_pv.registers_before,
+            rhs_pv.registers_after,
+        );
+        MemCapTarget::assert_equal_if(
+            &mut builder,
+            rhs_segment.is_dummy,
+            rhs_pv.mem_before,
             rhs_pv.mem_after,
         );
-        MemCapTarget::connect(&mut builder, lhs_pv.mem_after, rhs_pv.mem_before);
 
         // Pad to match the root circuit's degree.
         while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
@@ -1190,6 +1264,40 @@ where
             is_agg,
             agg_proof,
             proof,
+        }
+    }
+
+    fn add_segment_agg_child_with_dummy(
+        builder: &mut CircuitBuilder<F, D>,
+        root: &RootCircuitData<F, C, D>,
+    ) -> AggregationChildWithDummyTarget<D> {
+        let common = &root.circuit.common;
+        let root_vk = builder.constant_verifier_data(&root.circuit.verifier_only);
+        let is_agg = builder.add_virtual_bool_target_safe();
+        let agg_proof = builder.add_virtual_proof_with_pis(common);
+        let is_dummy = builder.add_virtual_bool_target_safe();
+        let real_proof = builder.add_virtual_proof_with_pis(common);
+        let (dummy_proof, dummy_vk) = builder
+            .dummy_proof_and_constant_vk_no_generator::<C>(common)
+            .expect("Failed to build dummy proof.");
+
+        let segment_proof = builder.select_proof_with_pis(is_dummy, &dummy_proof, &real_proof);
+        let segment_vk = builder.select_verifier_data(is_dummy, &dummy_vk, &root_vk);
+        builder
+            .conditionally_verify_cyclic_proof::<C>(
+                is_agg,
+                &agg_proof,
+                &segment_proof,
+                &segment_vk,
+                common,
+            )
+            .expect("Failed to build cyclic recursion circuit");
+        AggregationChildWithDummyTarget {
+            is_agg,
+            is_dummy,
+            agg_proof,
+            real_proof,
+            dummy_proof,
         }
     }
 
@@ -1603,6 +1711,7 @@ where
         lhs_public_values: PublicValues,
 
         rhs_is_agg: bool,
+        rhs_is_dummy: bool,
         rhs_proof: &ProofWithPublicInputs<F, C, D>,
         rhs_public_values: PublicValues,
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
@@ -1616,12 +1725,24 @@ where
             lhs_proof,
         );
 
-        Self::set_dummy_if_necessary(
+        let len_mem_cap = self
+            .segment_aggregation
+            .public_values
+            .mem_before
+            .mem_cap
+            .0
+            .len();
+
+        let real_rhs_proof = if rhs_is_dummy { lhs_proof } else { rhs_proof };
+
+        Self::set_dummy_if_necessary_with_dummy(
             &self.segment_aggregation.rhs,
             rhs_is_agg,
+            rhs_is_dummy,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
-            rhs_proof,
+            real_rhs_proof,
+            len_mem_cap,
         );
 
         agg_inputs.set_verifier_data_target(
@@ -1826,6 +1947,87 @@ where
             )
         }
         agg_inputs.set_proof_with_pis_target(&agg_child.proof, proof);
+    }
+
+    /// TODO: Better comment. This function also takes care of the dummy PIs.
+    fn set_dummy_if_necessary_with_dummy(
+        agg_child: &AggregationChildWithDummyTarget<D>,
+        is_agg: bool,
+        is_dummy: bool,
+        circuit: &CircuitData<F, C, D>,
+        agg_inputs: &mut PartialWitness<F>,
+        proof: &ProofWithPublicInputs<F, C, D>,
+        len_mem_cap: usize,
+    ) {
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
+        agg_inputs.set_bool_target(agg_child.is_dummy, is_dummy);
+        if is_agg {
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
+        } else {
+            Self::set_dummy_proof_with_cyclic_vk_pis(
+                circuit,
+                agg_inputs,
+                &agg_child.agg_proof,
+                proof,
+            );
+            if is_dummy {
+                let mut dummy_pis = proof.public_inputs.clone();
+                // We must change trie roots before, registers before and memory before.
+                // Trie roots before := Trie roots after
+                dummy_pis.copy_within(TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2, 0);
+                // Registers before := Registers after
+                dummy_pis.copy_within(
+                    TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE
+                        + RegistersDataTarget::SIZE
+                        ..TrieRootsTarget::SIZE * 2
+                            + BlockMetadataTarget::SIZE
+                            + BlockHashesTarget::SIZE
+                            + ExtraBlockDataTarget::SIZE
+                            + RegistersDataTarget::SIZE * 2,
+                    TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE,
+                );
+                // Mem before := Mem after
+                dummy_pis.copy_within(
+                    TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE
+                        + RegistersDataTarget::SIZE * 2
+                        + len_mem_cap * NUM_HASH_OUT_ELTS
+                        ..TrieRootsTarget::SIZE * 2
+                            + BlockMetadataTarget::SIZE
+                            + BlockHashesTarget::SIZE
+                            + ExtraBlockDataTarget::SIZE
+                            + RegistersDataTarget::SIZE * 2
+                            + 2 * len_mem_cap * NUM_HASH_OUT_ELTS,
+                    TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE
+                        + RegistersDataTarget::SIZE * 2,
+                );
+
+                let mut dummy_pis_map = HashMap::new();
+                for (idx, &pi) in dummy_pis.iter().enumerate() {
+                    dummy_pis_map.insert(idx, pi);
+                }
+
+                let dummy_circuit = dummy_circuit::<F, C, D>(&circuit.common);
+                let dummy_proof = dummy_proof::<F, C, D>(&dummy_circuit, dummy_pis_map)
+                    .expect("Cannot generate dummy proof.");
+
+                agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof, &dummy_proof);
+            } else {
+                agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof, proof);
+            }
+        }
+        agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof);
     }
 
     /// Create a final block proof, once all transactions of a given block have
