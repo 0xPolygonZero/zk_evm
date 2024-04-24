@@ -256,6 +256,10 @@ impl<F: Field> Interpreter<F> {
                 GlobalMetadata::BlockExcessBlobGas,
                 metadata.block_excess_blob_gas,
             ),
+            (
+                GlobalMetadata::ParentBeaconBlockRoot,
+                h2u(metadata.parent_beacon_block_root),
+            ),
             (GlobalMetadata::BlockGasUsedBefore, inputs.gas_used_before),
             (GlobalMetadata::BlockGasUsedAfter, inputs.gas_used_after),
             (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),

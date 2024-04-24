@@ -71,6 +71,7 @@ pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     let txn_type = match rlp.first().ok_or(ProgramError::InvalidRlp)? {
         1 => 1,
         2 => 2,
+        3 => 3,
         _ => 0,
     };
 

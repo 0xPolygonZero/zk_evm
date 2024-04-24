@@ -1,6 +1,6 @@
 /// At the top of the block, the global exit roots (if any) are written to storage.
 /// Global exit roots (GER) are of the form `(timestamp, root)` and are loaded from prover inputs.
-/// The timestamp is written to the storage of address `ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2` in the slot `keccak256(abi.encodePacked(root, GLOBAL_EXIT_ROOT_STORAGE_POS))`.
+/// The timestamp is written to the storage of address `GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY` in the slot `keccak256(abi.encodePacked(root, GLOBAL_EXIT_ROOT_STORAGE_POS))`.
 /// See https://github.com/0xPolygonHermez/cdk-erigon/blob/zkevm/zk/utils/global_exit_root.go for reference.
 ///
 /// *NOTE*: This will panic if one of the provided timestamps is zero.
@@ -48,7 +48,7 @@ write_timestamp_to_storage:
     %slot_to_storage_key
     // stack: storage_key, value_ptr, after_timestamp_storage_insert
     PUSH 64 // storage_key has 64 nibbles
-    %get_storage_trie(@ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2)
+    %get_storage_trie(@GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY)
     // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
     %stack (storage_root_ptr, num_nibbles, storage_key) -> (storage_root_ptr, num_nibbles, storage_key, after_read, storage_root_ptr, num_nibbles, storage_key)
     %jump(mpt_read)
@@ -61,7 +61,7 @@ after_read:
 
 after_timestamp_storage_insert:
     // stack: new_storage_root_ptr, i, num_ger, retdest
-    %get_account_data(@ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2)
+    %get_account_data(@GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY)
     // stack: account_ptr, new_storage_root_ptr
     // Update the copied account with our new storage root pointer.
     %add_const(2)
