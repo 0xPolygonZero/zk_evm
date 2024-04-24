@@ -6,12 +6,16 @@ use ethereum_types::{Address, H256, U256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
-use crate::aliased_crate_types::GenerationInputs;
-use crate::decoding::TraceParsingResult;
+use crate::decoding_mpt::{MptTraceParsingResult, TxnMetaState};
+use crate::decoding_traits::ProcessableBlockTrace;
+use crate::processed_block_trace::ProcessedBlockTrace;
+use crate::protocol_processing::{
+    process_block_trace_trie_pre_images, process_mpt_block_trace_trie_pre_images,
+};
 use crate::trace_protocol::{
-    BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
-    SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages, TrieCompact,
-    TrieUncompressed, TxnInfo,
+    AtomicUnitInfo, BlockTrace, ContractCodeUsage, MptBlockTraceTriePreImages,
+    MptCombinedPreImages, MptSeparateStorageTriesPreImage, MptSeparateTriePreImage,
+    MptSeparateTriePreImages, MptTrieCompact, MptTrieUncompressed, TriePreImage, TxnInfo,
 };
 use crate::types::{
     CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
@@ -21,50 +25,53 @@ use crate::utils::{
     h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,
     print_value_and_hash_nodes_of_trie,
 };
+use crate::{aliased_crate_types::GenerationInputs, protocol_processing::process_mpt_trie_images};
 use crate::{
     aliased_crate_types::{AccountRlp, LegacyReceiptRlp},
     compact::compact_prestate_processing::{
-        process_compact_prestate_debug, PartialTriePreImages, ProcessedCompactOutput,
+        process_compact_prestate_debug, MptPartialTriePreImages, ProcessedCompactOutput,
     },
 };
 
-#[derive(Debug)]
-pub(crate) struct ProcessedBlockTrace {
-    pub(crate) tries: PartialTriePreImages,
-    pub(crate) txn_info: Vec<ProcessedTxnInfo>,
-    pub(crate) withdrawals: Vec<(Address, U256)>,
-}
+pub(crate) type MptProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceMptSpec>;
 
-const COMPATIBLE_HEADER_VERSION: u8 = 1;
+pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
+pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
+
+#[derive(Debug)]
+pub(crate) struct ProcedBlockTraceMptSpec {
+    pub(crate) tries: MptPartialTriePreImages,
+    pub(crate) sect_info: ProcessedSectionInfo,
+}
 
 impl BlockTrace {
     /// Processes and returns the [GenerationInputs] for all transactions in the
     /// block.
-    pub fn into_txn_proof_gen_ir<F>(
+    pub fn mpt_into_proof_gen_ir<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> TraceParsingResult<Vec<GenerationInputs>>
+    ) -> MptTraceParsingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
         let processed_block_trace =
-            self.into_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone());
+            self.into_mpt_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
 
-        processed_block_trace.into_txn_proof_gen_ir(other_data)
+        processed_block_trace.into_proof_gen_ir(other_data)
     }
 
-    fn into_processed_block_trace<F>(
+    fn into_mpt_processed_block_trace<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> ProcessedBlockTrace
+    ) -> MptTraceParsingResult<MptProcessedBlockTrace>
     where
         F: CodeHashResolveFunc,
     {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
-        let pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images);
+        let pre_image_data = process_mpt_trie_images(self.trie_pre_images)?;
 
         print_value_and_hash_nodes_of_trie(&pre_image_data.tries.state);
 
@@ -91,49 +98,71 @@ impl BlockTrace {
             extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
         };
 
-        let last_tx_idx = self.txn_info.len().saturating_sub(1);
+        let sect_info = Self::process_atomic_units(
+            self.atomic_info,
+            &all_accounts_in_pre_image,
+            &mut code_hash_resolver,
+            &withdrawals
+        );
 
-        let txn_info = self
-            .txn_info
-            .into_iter()
-            .enumerate()
-            .map(|(i, t)| {
-                let extra_state_accesses = if last_tx_idx == i {
-                    // If this is the last transaction, we mark the withdrawal addresses
-                    // as accessed in the state trie.
-                    withdrawals
-                        .iter()
-                        .map(|(addr, _)| hash(addr.as_bytes()))
-                        .collect::<Vec<_>>()
-                } else {
-                    Vec::new()
-                };
-
-                t.into_processed_txn_info(
-                    &all_accounts_in_pre_image,
-                    &extra_state_accesses,
-                    &mut code_hash_resolver,
-                )
-            })
-            .collect::<Vec<_>>();
-
-        ProcessedBlockTrace {
+        let spec = ProcedBlockTraceMptSpec {
             tries: pre_image_data.tries,
-            txn_info,
-            withdrawals,
+            sect_info,
+        };
+
+        Ok(ProcessedBlockTrace { spec, withdrawals })
+    }
+
+    fn process_atomic_units<F>(
+        atomic_info: AtomicUnitInfo,
+        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
+        code_hash_resolver: &mut CodeHashResolving<F>,
+        withdrawals: &[(Address, U256)],
+    ) -> ProcessedSectionInfo
+    where
+        F: CodeHashResolveFunc,
+    {
+        match atomic_info {
+            AtomicUnitInfo::Txn(txn_info) => {
+                let last_tx_idx = txn_info.len().saturating_sub(1);
+
+                let proced_txn_info = txn_info
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, t)| {
+                        let extra_state_accesses = if last_tx_idx == i {
+                            // If this is the last transaction, we mark the withdrawal addresses
+                            // as accessed in the state trie.
+                            withdrawals
+                                .iter()
+                                .map(|(addr, _)| hash(addr.as_bytes()))
+                                .collect::<Vec<_>>()
+                        } else {
+                            Vec::new()
+                        };
+
+                        t.into_processed_txn_info(all_accounts_in_pre_image, &extra_state_accesses, code_hash_resolver)
+                    })
+                    .collect::<Vec<_>>();
+
+                ProcessedSectionInfo::Txns(proced_txn_info)
+            }
+            AtomicUnitInfo::Continuations(cont_info) => {
+                todo!("Continuation support with MPT not yet implemented!")
+            }
         }
     }
 }
 
-#[derive(Debug)]
-struct ProcessedBlockTracePreImages {
-    tries: PartialTriePreImages,
-    extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
+#[derive(Clone, Debug)]
+pub(crate) struct MptProcessedBlockTracePreImages {
+    pub(crate) tries: MptPartialTriePreImages,
+    pub(crate) extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
 }
 
-impl From<ProcessedCompactOutput> for ProcessedBlockTracePreImages {
+impl From<ProcessedCompactOutput> for MptProcessedBlockTracePreImages {
     fn from(v: ProcessedCompactOutput) -> Self {
-        let tries = PartialTriePreImages {
+        let tries = MptPartialTriePreImages {
             state: v.witness_out.state_trie,
             storage: v.witness_out.storage_tries,
         };
@@ -144,69 +173,6 @@ impl From<ProcessedCompactOutput> for ProcessedBlockTracePreImages {
                 .then_some(v.witness_out.code),
         }
     }
-}
-
-fn process_block_trace_trie_pre_images(
-    block_trace_pre_images: BlockTraceTriePreImages,
-) -> ProcessedBlockTracePreImages {
-    match block_trace_pre_images {
-        BlockTraceTriePreImages::Separate(t) => process_separate_trie_pre_images(t),
-        BlockTraceTriePreImages::Combined(t) => process_combined_trie_pre_images(t),
-    }
-}
-
-fn process_combined_trie_pre_images(tries: CombinedPreImages) -> ProcessedBlockTracePreImages {
-    process_compact_trie(tries.compact)
-}
-
-fn process_separate_trie_pre_images(tries: SeparateTriePreImages) -> ProcessedBlockTracePreImages {
-    let tries = PartialTriePreImages {
-        state: process_state_trie(tries.state),
-        storage: process_storage_tries(tries.storage),
-    };
-
-    ProcessedBlockTracePreImages {
-        tries,
-        extra_code_hash_mappings: None,
-    }
-}
-
-fn process_state_trie(trie: SeparateTriePreImage) -> HashedPartialTrie {
-    match trie {
-        SeparateTriePreImage::Uncompressed(_) => todo!(),
-        SeparateTriePreImage::Direct(t) => t.0,
-    }
-}
-
-fn process_storage_tries(
-    trie: SeparateStorageTriesPreImage,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
-    match trie {
-        SeparateStorageTriesPreImage::SingleTrie(t) => process_single_combined_storage_tries(t),
-        SeparateStorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
-    }
-}
-
-fn process_single_combined_storage_tries(
-    _trie: TrieUncompressed,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
-    todo!()
-}
-
-fn process_multiple_storage_tries(
-    _tries: HashMap<HashedAccountAddr, SeparateTriePreImage>,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
-    todo!()
-}
-
-fn process_compact_trie(trie: TrieCompact) -> ProcessedBlockTracePreImages {
-    // TODO: Wrap in proper result type...
-    let out = process_compact_prestate_debug(trie).unwrap();
-
-    // TODO: Make this into a result...
-    assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
-
-    out.into()
 }
 
 /// Structure storing a function turning a `CodeHash` into bytes.
@@ -232,11 +198,20 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) struct ProcessedTxnInfo {
+pub(crate) enum ProcessedSectionInfo {
+    Continuations(Vec<ProcessedContinuationInfo>),
+    Txns(Vec<ProcessedSectionTxnInfo>),
+}
+
+#[derive(Debug)]
+pub(crate) struct ProcessedSectionTxnInfo {
     pub(crate) nodes_used_by_txn: NodesUsedByTxn,
     pub(crate) contract_code_accessed: HashMap<CodeHash, Vec<u8>>,
     pub(crate) meta: TxnMetaState,
 }
+
+#[derive(Debug)]
+pub(crate) struct ProcessedContinuationInfo {}
 
 struct CodeHashResolving<F> {
     /// If we have not seen this code hash before, use the resolve function that
@@ -269,7 +244,7 @@ impl TxnInfo {
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
         code_hash_resolver: &mut CodeHashResolving<F>,
-    ) -> ProcessedTxnInfo {
+    ) -> ProcessedSectionTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
 
@@ -386,7 +361,7 @@ impl TxnInfo {
             gas_used: self.meta.gas_used,
         };
 
-        ProcessedTxnInfo {
+        ProcessedSectionTxnInfo {
             nodes_used_by_txn,
             contract_code_accessed,
             meta: new_meta_state,
@@ -408,9 +383,6 @@ fn create_empty_code_access_map() -> HashMap<CodeHash, Vec<u8>> {
     HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
-pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
-pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
-
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
@@ -431,11 +403,4 @@ pub(crate) struct StateTrieWrites {
     pub(crate) nonce: Option<U256>,
     pub(crate) storage_trie_change: bool,
     pub(crate) code_hash: Option<CodeHash>,
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct TxnMetaState {
-    pub(crate) txn_bytes: Option<Vec<u8>>,
-    pub(crate) receipt_node_bytes: Vec<u8>,
-    pub(crate) gas_used: u64,
 }

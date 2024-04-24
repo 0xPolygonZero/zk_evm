@@ -25,7 +25,7 @@ use super::compact_to_partial_trie::{
 };
 use crate::{
     decoding::TrieType,
-    trace_protocol::TrieCompact,
+    trace_protocol::MptTrieCompact,
     types::{CodeHash, HashedAccountAddr, TrieRootHash},
 };
 
@@ -1228,8 +1228,8 @@ enum TraverserDirection {
     Both,
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct PartialTriePreImages {
+#[derive(Clone, Debug, Default)]
+pub(crate) struct MptPartialTriePreImages {
     pub state: HashedPartialTrie,
     pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
 }
@@ -1253,7 +1253,7 @@ pub struct ProcessedCompactOutput {
 
 /// Processes the compact prestate into the trie format of `mpt_trie`.
 pub fn process_compact_prestate(
-    state: TrieCompact,
+    state: MptTrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header)
 }
@@ -1262,13 +1262,13 @@ pub fn process_compact_prestate(
 /// enables heavy debug traces during processing.
 // TODO: Move behind a feature flag...
 pub fn process_compact_prestate_debug(
-    state: TrieCompact,
+    state: MptTrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
 }
 
 fn process_compact_prestate_common(
-    state: TrieCompact,
+    state: MptTrieCompact,
     create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     let (header, parser) = create_and_extract_header_f(state.0)?;

@@ -14,8 +14,6 @@ macro_rules! include_feature_gated_zero_deps {
     };
 }
 
-// proof::{BlockHashes, BlockMetadata}
-
 cfg_if! {
     if #[cfg(feature = "mpt")] {
         include_feature_gated_zero_deps!(evm_arithmetization_mpt);

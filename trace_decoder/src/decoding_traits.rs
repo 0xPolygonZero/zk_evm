@@ -1,50 +1,21 @@
 use std::iter::{empty, once};
 
-use crate::aliased_crate_types::GenerationInputs;
-
-pub(crate) trait PrestateCompact {
-    fn process() -> impl IrMutableState;
-}
+use crate::{aliased_crate_types::GenerationInputs, types::OtherBlockData};
 
 /// The smallest "chunk" that we can break a block into.
 pub(crate) trait AtomicBlockUnit {}
 
-pub(crate) trait IrMutableState {
-    type Ir: ProofGenIr;
+// pub(crate) trait BlockTrace {
 
-    fn produce_ir(
-        self,
-        block_atomic_units: impl Iterator<Item = impl AtomicBlockUnit>,
-    ) -> impl Iterator<Item = Self::Ir>;
-}
+//     fn into_processable_block_trace(self) -> impl ProcessableBlockTrace;
+// }
 
-#[derive(Debug)]
-pub(crate) struct TxnIrMutableState {}
+pub(crate) trait ProcessableBlockTrace {
+    type Ir;
+    type Error;
 
-impl IrMutableState for TxnIrMutableState {
-    type Ir = GenerationInputs;
-
-    fn produce_ir(
-        self,
-        block_atomic_units: impl Iterator<Item = impl AtomicBlockUnit>,
-    ) -> impl Iterator<Item = Self::Ir> {
-        // TODO
-        once(todo!())
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ContinuationIrMutableState {}
-
-impl IrMutableState for ContinuationIrMutableState {
-    type Ir = GenerationInputs; // TODO: Swap this out with an alias...
-
-    fn produce_ir(
-        self,
-        block_atomic_units: impl Iterator<Item = impl AtomicBlockUnit>,
-    ) -> impl Iterator<Item = Self::Ir> {
-        once(todo!())
-    }
+    // TODO: Consider having this return an iterator instead?
+    fn into_proof_gen_ir(self, other_data: OtherBlockData) -> Result<Vec<Self::Ir>, Self::Error>;
 }
 
 pub(crate) trait ProofGenIr {}
@@ -59,5 +30,5 @@ pub(crate) struct ContinuationUnit {}
 
 impl AtomicBlockUnit for ContinuationUnit {}
 
-// TODO: Wrap or use alias, don't do this...
+// TODO: Wrap or use alias, don't do this... (?)
 impl ProofGenIr for GenerationInputs {}
