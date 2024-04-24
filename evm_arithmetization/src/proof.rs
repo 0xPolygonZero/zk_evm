@@ -821,6 +821,24 @@ impl TrieRootsTarget {
             builder.connect(tr0.receipts_root[i], tr1.receipts_root[i]);
         }
     }
+
+    /// If `condition`, asserts that `tr0 == tr1`.
+    pub(crate) fn assert_equal_if<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        tr0: Self,
+        tr1: Self,
+    ) {
+        for i in 0..8 {
+            builder.assert_equal_if(condition.target, tr0.state_root[i], tr1.state_root[i]);
+            builder.assert_equal_if(
+                condition.target,
+                tr0.transactions_root[i],
+                tr1.transactions_root[i],
+            );
+            builder.assert_equal_if(condition.target, tr0.receipts_root[i], tr1.receipts_root[i]);
+        }
+    }
 }
 
 /// Circuit version of `BlockMetadata`.
@@ -1178,6 +1196,23 @@ impl RegistersDataTarget {
         builder.connect(rd0.context, rd1.context);
         builder.connect(rd0.gas_used, rd1.gas_used);
     }
+
+    /// If `condition`, asserts that `rd0 == rd1`.
+    pub(crate) fn assert_equal_if<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        rd0: Self,
+        rd1: Self,
+    ) {
+        builder.assert_equal_if(condition.target, rd0.program_counter, rd1.program_counter);
+        builder.assert_equal_if(condition.target, rd0.is_kernel, rd1.is_kernel);
+        builder.assert_equal_if(condition.target, rd0.stack_len, rd1.stack_len);
+        for i in 0..8 {
+            builder.assert_equal_if(condition.target, rd0.stack_top[i], rd1.stack_top[i]);
+        }
+        builder.assert_equal_if(condition.target, rd0.context, rd1.context);
+        builder.assert_equal_if(condition.target, rd0.gas_used, rd1.gas_used);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1242,6 +1277,24 @@ impl MemCapTarget {
         for i in 0..mc0.mem_cap.0.len() {
             for j in 0..NUM_HASH_OUT_ELTS {
                 builder.connect(mc0.mem_cap.0[i].elements[j], mc1.mem_cap.0[i].elements[j]);
+            }
+        }
+    }
+
+    /// If `condition`, asserts that `mc0 == mc1`.
+    pub(crate) fn assert_equal_if<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        mc0: Self,
+        mc1: Self,
+    ) {
+        for i in 0..mc0.mem_cap.0.len() {
+            for j in 0..NUM_HASH_OUT_ELTS {
+                builder.assert_equal_if(
+                    condition.target,
+                    mc0.mem_cap.0[i].elements[j],
+                    mc1.mem_cap.0[i].elements[j],
+                );
             }
         }
     }

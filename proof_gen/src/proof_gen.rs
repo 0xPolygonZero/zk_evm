@@ -70,11 +70,22 @@ pub fn generate_segment_proof(
 /// Generates an aggregation proof from two child proofs.
 ///
 /// Note that the child proofs may be either transaction or aggregation proofs.
+///
+/// If a transaction only contains a single segment, this function must still be
+/// called to generate a `GeneratedSegmentAggProof`. In that case, you can set
+/// `has_dummy` to `true`, and provide an arbitrary proof for the right child.
 pub fn generate_segment_agg_proof(
     p_state: &ProverState,
     lhs_child: &SegmentAggregatableProof,
     rhs_child: &SegmentAggregatableProof,
+    has_dummy: bool,
 ) -> ProofGenResult<GeneratedSegmentAggProof> {
+    if has_dummy {
+        assert!(
+            !lhs_child.is_agg(),
+            "Cannot have a dummy segment with an aggregation."
+        );
+    }
     let (intern, p_vals) = p_state
         .state
         .prove_segment_aggregation(
@@ -82,6 +93,7 @@ pub fn generate_segment_agg_proof(
             lhs_child.intern(),
             lhs_child.public_values(),
             rhs_child.is_agg(),
+            has_dummy,
             rhs_child.intern(),
             rhs_child.public_values(),
         )
