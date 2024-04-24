@@ -1609,16 +1609,16 @@ where
         let mut agg_inputs = PartialWitness::new();
 
         Self::set_dummy_if_necessary(
-            lhs_is_agg,
             &self.segment_aggregation.lhs,
+            lhs_is_agg,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
             lhs_proof,
         );
 
         Self::set_dummy_if_necessary(
-            rhs_is_agg,
             &self.segment_aggregation.rhs,
+            rhs_is_agg,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
             rhs_proof,
@@ -1710,16 +1710,16 @@ where
         let mut txn_inputs = PartialWitness::new();
 
         Self::set_dummy_if_necessary(
-            lhs_is_agg,
             &self.txn_aggregation.lhs,
+            lhs_is_agg,
             &self.txn_aggregation.circuit,
             &mut txn_inputs,
             lhs_proof,
         );
 
         Self::set_dummy_if_necessary(
-            rhs_is_agg,
             &self.txn_aggregation.rhs,
+            rhs_is_agg,
             &self.txn_aggregation.circuit,
             &mut txn_inputs,
             rhs_proof,
@@ -1808,8 +1808,8 @@ where
     /// If the lhs is not an aggregation, we set the cyclic vk to a dummy value,
     /// so that it corresponds to the aggregation cyclic vk.
     fn set_dummy_if_necessary(
-        is_agg: bool,
         agg_child: &AggregationChildTarget<D>,
+        is_agg: bool,
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
         proof: &ProofWithPublicInputs<F, C, D>,
