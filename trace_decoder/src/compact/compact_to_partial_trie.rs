@@ -91,7 +91,7 @@ trait CompactToPartialTrieExtractionOutput {
 }
 
 /// An error that occurs when we encounter a node type that we did not expect.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum UnexpectedCompactNodeType {
     /// We expected a storage node, but got account leaf instead.
     AccountLeaf,

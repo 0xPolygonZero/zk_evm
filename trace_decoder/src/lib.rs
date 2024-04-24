@@ -128,11 +128,25 @@ mod aliased_crate_types;
 pub mod compact;
 /// Defines the main functions used to generate the IR.
 pub mod decoding;
+mod decoding_mpt;
+mod decoding_smt;
 mod decoding_traits;
 mod deserializers;
-/// Defines functions that processes a [BlockTrace] so that it is easier to turn
-/// the block transactions into IRs.
+
+/// Core logic shared between mpt/smt versions of processing block traces.
+mod processed_block_trace;
+
+/// Defines functions that processes a [BlockTrace] into the mpt format so that
+/// it is easier to turn the block transactions into IRs.
 pub mod processed_block_trace_mpt;
+
+/// Defines functions that processes a [BlockTrace] into the smt format so that
+/// it is easier to turn the block transactions into IRs.
+pub mod processed_block_trace_smt;
+
+/// Logic for high-level processing of protocol payloads.
+mod protocol_processing;
+
 pub mod trace_protocol;
 /// Defines multiple types used in the other modules.
 pub mod types;

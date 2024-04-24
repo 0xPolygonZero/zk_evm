@@ -26,7 +26,7 @@ use super::compact_to_partial_trie::{
 };
 use crate::{
     decoding::TrieType,
-    trace_protocol::TrieCompact,
+    trace_protocol::MptTrieCompact,
     types::{HashedAccountAddr, TrieRootHash},
 };
 
@@ -50,7 +50,7 @@ const BRANCH_MAX_CHILDREN: usize = 16;
 const CURSOR_ERROR_BYTES_MAX_LEN: usize = 10;
 
 /// An error from processing Erigon's compact witness format.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum CompactParsingError {
     /// The header in the compact payload was missing. This is just a single
     /// byte that is used for versioning.
@@ -139,7 +139,7 @@ impl From<TrieOpError> for CompactParsingError {
 
 /// Represents detailed error information about issues encountered
 /// while processing byte streams with a cursor.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CursorBytesErrorInfo {
     error_start_pos: usize,
     bad_bytes_hex: String,
@@ -1127,7 +1127,7 @@ impl CompactCursor for DebugCompactCursor {
 
 /// We kind of want a wrapper around the actual data structure I think since
 /// there's a good chance this will change a few times in the future.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct WitnessEntries {
     // Yeah a LL is actually (unfortunately) a very good choice here. We will be doing a ton of
     // inserts mid-list, and the list can get very large. There might be a better choice for a data
@@ -1237,8 +1237,8 @@ const fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&
     }
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct PartialTriePreImages {
+#[derive(Clone, Debug, Default)]
+pub(crate) struct MptPartialTriePreImages {
     pub state: HashedPartialTrie,
     pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
 }
@@ -1262,7 +1262,7 @@ pub struct ProcessedCompactOutput {
 
 /// Processes the compact prestate into the trie format of `mpt_trie`.
 pub fn process_compact_prestate(
-    state: TrieCompact,
+    state: MptTrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header)
 }
@@ -1271,13 +1271,13 @@ pub fn process_compact_prestate(
 /// enables heavy debug traces during processing.
 // TODO: Move behind a feature flag...
 pub fn process_compact_prestate_debug(
-    state: TrieCompact,
+    state: MptTrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
 }
 
 fn process_compact_prestate_common(
-    state: TrieCompact,
+    state: MptTrieCompact,
     create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
     let (header, parser) = create_and_extract_header_f(state.0)?;

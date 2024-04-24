@@ -8,13 +8,10 @@ macro_rules! include_feature_gated_zero_deps {
         pub(crate) type ExtraBlockData = $crate_name::proof::ExtraBlockData;
         pub(crate) type GenerationInputs = $crate_name::generation::GenerationInputs;
         pub(crate) type LegacyReceiptRlp = $crate_name::generation::mpt::LegacyReceiptRlp;
-        pub(crate) type ProofGenIR = $crate_name::GenerationInputs;
         pub(crate) type TrieInputs = $crate_name::generation::TrieInputs;
         pub(crate) type TrieRoots = $crate_name::proof::TrieRoots;
     };
 }
-
-// proof::{BlockHashes, BlockMetadata}
 
 cfg_if! {
     if #[cfg(feature = "mpt")] {
