@@ -574,9 +574,7 @@ pub fn generate_all_data_segments<F: RichField>(
         mem_after.contexts[0].segments[Segment::TrieData.unscale()].content = vec![];
         all_seg_data[0].memory = mem_after;
 
-        all_seg_data.reverse();
-        all_seg_data.push(dummy_seg);
-        all_seg_data.reverse();
+        all_seg_data.insert(0, dummy_seg);
     }
 
     Ok(all_seg_data)
