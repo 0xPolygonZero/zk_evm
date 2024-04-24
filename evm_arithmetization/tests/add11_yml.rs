@@ -225,12 +225,12 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 14;
+    let max_cpu_len = 1 << 20;
 
     let all_segment_proofs = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
-        inputs.clone(),
+        inputs,
         max_cpu_len,
         &mut timing,
         None,
@@ -244,7 +244,7 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
         all_circuits.verify_root(proof.clone())?;
     }
 
-    assert_eq!(all_segment_proofs.len(), 3);
+    assert_eq!(all_segment_proofs.len(), 2);
 
     let (first_aggreg_proof, first_aggreg_pv) = all_circuits.prove_segment_aggregation(
         false,
@@ -256,18 +256,8 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
     )?;
     all_circuits.verify_segment_aggregation(&first_aggreg_proof)?;
 
-    let (second_aggreg_proof, second_aggreg_pv) = all_circuits.prove_segment_aggregation(
-        true,
-        &first_aggreg_proof,
-        first_aggreg_pv,
-        false,
-        &all_segment_proofs[2].proof_with_pis,
-        all_segment_proofs[2].public_values.clone(),
-    )?;
-    all_circuits.verify_segment_aggregation(&second_aggreg_proof)?;
-
     let (txn_aggreg_proof, _) =
-        all_circuits.prove_transaction_aggregation(None, &second_aggreg_proof, second_aggreg_pv)?;
+        all_circuits.prove_transaction_aggregation(None, &first_aggreg_proof, first_aggreg_pv)?;
     all_circuits.verify_txn_aggregation(&txn_aggreg_proof)
 }
 

@@ -236,9 +236,6 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             if (trace_col_vecs[CONTEXT_FIRST_CHANGE][i] == F::ONE)
                 || (trace_col_vecs[SEGMENT_FIRST_CHANGE][i] == F::ONE)
             {
-                // CONTEXT_FIRST_CHANGE and SEGMENT_FIRST_CHANGE should be 0 at
-                // the last row, so the index should never be
-                // out of bounds.
                 if i < trace_col_vecs[ADDR_VIRTUAL].len() - 1 {
                     let x_val = trace_col_vecs[ADDR_VIRTUAL][i + 1].to_canonical_u64() as usize;
                     trace_col_vecs[FREQUENCIES][x_val] += F::ONE;
