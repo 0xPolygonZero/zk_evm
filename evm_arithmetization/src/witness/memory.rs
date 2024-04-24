@@ -163,7 +163,7 @@ impl MemoryOp {
 #[derive(Clone, Debug)]
 pub(crate) struct MemoryState {
     pub(crate) contexts: Vec<MemoryContextState>,
-    preinitialized_segments: HashMap<Segment, MemorySegmentState>,
+    pub(crate) preinitialized_segments: HashMap<Segment, MemorySegmentState>,
 }
 
 impl MemoryState {
@@ -280,13 +280,6 @@ impl MemoryState {
         } else {
             false
         }
-    }
-
-    pub(crate) fn get_preinitialized_segment(
-        &self,
-        segment: Segment,
-    ) -> Option<&MemorySegmentState> {
-        self.preinitialized_segments.get(&segment)
     }
 }
 

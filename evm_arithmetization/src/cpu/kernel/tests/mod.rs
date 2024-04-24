@@ -30,6 +30,7 @@ use ethereum_types::U256;
 use plonky2::field::types::Field;
 
 use super::{
+    aggregator::KERNEL,
     constants::{
         context_metadata::ContextMetadata, global_metadata::GlobalMetadata,
         txn_fields::NormalizedTxnField,
@@ -49,6 +50,49 @@ pub(crate) fn u256ify<'a>(hexes: impl IntoIterator<Item = &'a str>) -> Result<Ve
         .into_iter()
         .map(U256::from_str)
         .collect::<Result<Vec<_>, _>>()?)
+}
+
+pub(crate) fn run_interpreter<F: Field>(
+    initial_offset: usize,
+    initial_stack: Vec<U256>,
+) -> anyhow::Result<Interpreter<F>> {
+    run(initial_offset, initial_stack)
+}
+
+#[derive(Clone)]
+pub(crate) struct InterpreterMemoryInitialization {
+    pub label: String,
+    pub stack: Vec<U256>,
+    pub segment: Segment,
+    pub memory: Vec<(usize, Vec<U256>)>,
+}
+
+pub(crate) fn run_interpreter_with_memory<F: Field>(
+    memory_init: InterpreterMemoryInitialization,
+) -> anyhow::Result<Interpreter<F>> {
+    let label = KERNEL.global_labels[&memory_init.label];
+    let mut stack = memory_init.stack;
+    stack.reverse();
+    let mut interpreter = Interpreter::new(label, stack);
+    for (pointer, data) in memory_init.memory {
+        for (i, term) in data.iter().enumerate() {
+            interpreter.generation_state.memory.set(
+                MemoryAddress::new(0, memory_init.segment, pointer + i),
+                *term,
+            )
+        }
+    }
+    interpreter.run()?;
+    Ok(interpreter)
+}
+
+pub(crate) fn run<F: Field>(
+    initial_offset: usize,
+    initial_stack: Vec<U256>,
+) -> anyhow::Result<Interpreter<F>> {
+    let mut interpreter = Interpreter::new(initial_offset, initial_stack);
+    interpreter.run()?;
+    Ok(interpreter)
 }
 
 impl<F: Field> Interpreter<F> {
@@ -120,7 +164,8 @@ impl<F: Field> Interpreter<F> {
                 &self
                     .generation_state
                     .memory
-                    .get_preinitialized_segment(segment)
+                    .preinitialized_segments
+                    .get(&segment)
                     .expect("The segment should be in the preinitialized segments.")
                     .content,
             );

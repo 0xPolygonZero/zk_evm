@@ -54,56 +54,6 @@ pub(crate) struct Interpreter<F: Field> {
     pub(crate) clock: usize,
 }
 
-/// Structure storing the state of the interpreter's registers.
-struct InterpreterRegistersState {
-    kernel_mode: bool,
-    context: usize,
-    registers: RegistersState,
-}
-
-pub(crate) fn run_interpreter<F: Field>(
-    initial_offset: usize,
-    initial_stack: Vec<U256>,
-) -> anyhow::Result<Interpreter<F>> {
-    run(initial_offset, initial_stack)
-}
-
-#[derive(Clone)]
-pub(crate) struct InterpreterMemoryInitialization {
-    pub label: String,
-    pub stack: Vec<U256>,
-    pub segment: Segment,
-    pub memory: Vec<(usize, Vec<U256>)>,
-}
-
-pub(crate) fn run_interpreter_with_memory<F: Field>(
-    memory_init: InterpreterMemoryInitialization,
-) -> anyhow::Result<Interpreter<F>> {
-    let label = KERNEL.global_labels[&memory_init.label];
-    let mut stack = memory_init.stack;
-    stack.reverse();
-    let mut interpreter = Interpreter::new(label, stack);
-    for (pointer, data) in memory_init.memory {
-        for (i, term) in data.iter().enumerate() {
-            interpreter.generation_state.memory.set(
-                MemoryAddress::new(0, memory_init.segment, pointer + i),
-                *term,
-            )
-        }
-    }
-    interpreter.run()?;
-    Ok(interpreter)
-}
-
-pub(crate) fn run<F: Field>(
-    initial_offset: usize,
-    initial_stack: Vec<U256>,
-) -> anyhow::Result<Interpreter<F>> {
-    let mut interpreter = Interpreter::new(initial_offset, initial_stack);
-    interpreter.run()?;
-    Ok(interpreter)
-}
-
 /// Simulates the CPU execution from `state` until the program counter reaches
 /// `final_label` in the current context.
 pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
@@ -120,7 +70,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 
             log::debug!("Simulating CPU for jumpdest analysis.");
 
-            interpreter.run();
+            let _ = interpreter.run();
 
             log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);
 
@@ -547,8 +497,9 @@ impl<F: Field> State<F> for Interpreter<F> {
             .clone()
     }
 
-    fn apply_ops(&mut self, checkpoint: GenerationStateCheckpoint) {
-        self.apply_memops();
+    fn apply_ops(&mut self, _checkpoint: GenerationStateCheckpoint) {
+        self.apply_memops()
+            .expect("We should not have nonzero initial values in non-preinitialized segments");
     }
 
     fn get_stack(&self) -> Vec<U256> {
@@ -579,8 +530,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         // Might write in general CPU columns when it shouldn't, but the correct values
         // will overwrite these ones during the op generation.
         if let Some(special_len) = get_op_special_length(op) {
-            let special_len_f = F::from_canonical_usize(special_len);
-            if (generation_state.stack().len() != special_len) {
+            if generation_state.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 generation_state.registers.is_stack_top_read = true;
@@ -627,7 +577,7 @@ impl<F: Field> Transition<F> for Interpreter<F> {
 
     fn fill_stack_fields(
         &mut self,
-        row: &mut crate::cpu::columns::CpuColumnsView<F>,
+        _row: &mut crate::cpu::columns::CpuColumnsView<F>,
     ) -> Result<(), ProgramError> {
         self.generation_state.registers.is_stack_top_read = false;
         self.generation_state.registers.check_overflow = false;
