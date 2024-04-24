@@ -184,7 +184,7 @@ fn add11_yml() -> anyhow::Result<()> {
     let inputs = get_generation_inputs();
 
     let max_cpu_len_log = 20;
-    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
+    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
