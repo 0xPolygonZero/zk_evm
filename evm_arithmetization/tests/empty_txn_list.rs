@@ -215,8 +215,25 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     );
     assert_eq!(retrieved_public_values, segmented_agg_public_values);
 
+    let (txn_proof, txn_public_values) = all_circuits.prove_transaction_aggregation(
+        false,
+        &segmented_agg_proof,
+        segmented_agg_public_values.clone(),
+        false,
+        &segmented_agg_proof,
+        segmented_agg_public_values,
+    )?;
+    all_circuits.verify_txn_aggregation(&txn_proof)?;
+
+    // Test retrieved public values from the proof public inputs.
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &txn_proof.public_inputs,
+        txn_public_values.mem_before.mem_cap.len(),
+    );
+    assert_eq!(retrieved_public_values, txn_public_values);
+
     let (block_proof, block_public_values) =
-        all_circuits.prove_block(None, &segmented_agg_proof, segmented_agg_public_values)?;
+        all_circuits.prove_block(None, &segmented_agg_proof, txn_public_values)?;
     all_circuits.verify_block(&block_proof)?;
 
     // Test retrieved public values from the proof public inputs.

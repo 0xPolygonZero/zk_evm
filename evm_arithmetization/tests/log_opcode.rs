@@ -11,7 +11,7 @@ use evm_arithmetization::generation::mpt::transaction_testing::{
 };
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::{generate_all_data_segments, prove};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
@@ -58,7 +58,6 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         0x60, 99, 0x60, 98, 0x60, 5, 0x60, 27, 0xA2, // LOG2(27, 5, 98, 99)
         0x00,
     ];
-    println!("contract: {:02x?}", code);
     let code_gas = 3 + 3 + 3 // PUSHs and MSTORE
                  + 3 + 3 + 375 // PUSHs and LOG0
                  + 3 + 3 + 3 + 3 + 375 + 375*2 + 8*5 + 3// PUSHs, LOG2 and memory expansion
@@ -340,8 +339,6 @@ fn initialize_mpts(
         block_random: Default::default(),
     };
 
-    // In the first transaction, the sender account sends `txn_value` to
-    // `to_account`.
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
     state_trie_before.insert(
         beneficiary_nibbles,
@@ -373,6 +370,7 @@ fn initialize_mpts(
 fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
     init_logger();
 
+    // Initialize the MPTs.
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
     let sender_first = hex!("af1276cbb260bb13deddb4209ae99ae6e497f446");
     let to_first = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
@@ -399,7 +397,10 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
     let code_hash = keccak(code);
     let checkpoint_state_trie_root = tries_before.state_trie.hash();
 
+    //In the first transaction, the sender account sends `txn_value` to
+    // `to_account`.
     let txn = hex!("f85f800a82520894095e7baea6a6c7c4c2dfeb977efac326af552d870a8026a0122f370ed4023a6c253350c6bfb87d7d7eb2cd86447befee99e0a26b70baec20a07100ab1b3977f2b4571202b9f4b68850858caf5469222794600b5ce1cfb348ad");
+    // In the second transaction, there are two logs.
     let txn_2 = hex!("f860010a830186a094095e7baea6a6c7c4c2dfeb977efac326af552e89808025a04a223955b0bd3827e3740a9a427d0ea43beb5bafa44a0204bf0a3306c8219f7ba0502c32d78f233e9e7ce9f5df3b576556d5d49731e0678fd5a068cdf359557b5b");
 
     let mut contract_code = HashMap::new();
@@ -492,6 +493,7 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
         rlp::encode(&to_account_second_after).to_vec(),
     )?;
 
+    // Update the transaction trie.
     let mut transactions_trie: HashedPartialTrie = Node::Empty.into();
 
     transactions_trie.insert(Nibbles::from_str("0x80").unwrap(), txn.to_vec())?;
@@ -530,7 +532,7 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
 
-    // Preprocess all circuits.
+    // Preprocess all circuits and start proving the first block.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
         &[
@@ -549,10 +551,11 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
 
     let max_cpu_len_log: usize = 15;
     let mut timing = TimingTree::new("prove root second", log::Level::Info);
+    // Prove all segments for the two trasactions.
     let segment_proofs_data = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
-        inputs,
+        inputs.clone(),
         max_cpu_len_log,
         &mut timing,
         None,
@@ -578,9 +581,65 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
     )?;
     all_circuits.verify_segment_aggregation(&segment_aggreg)?;
 
-    let (block_proof, block_aggreg) =
-        all_circuits.prove_block(None, &segment_aggreg, aggreg_pvs.clone())?;
-    all_circuits.verify_block(&block_proof)?;
+    // We need two batch transactions to carry out a batch transaction aggregation.
+    // So we create a dummy segment aggregation.
+    let trie_roots_before = TrieRoots {
+        state_root: inputs.tries.state_trie.hash(),
+        transactions_root: inputs.tries.transactions_trie.hash(),
+        receipts_root: inputs.tries.receipts_trie.hash(),
+    };
+
+    let dummy_inputs = GenerationInputs {
+        txn_number_before: 0.into(),
+        gas_used_before: inputs.gas_used_before,
+        gas_used_after: inputs.gas_used_before,
+        signed_txns: vec![],
+        withdrawals: vec![],
+        tries: inputs.tries,
+        trie_roots_after: trie_roots_before,
+        checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
+        contract_code: inputs.contract_code,
+        block_metadata: inputs.block_metadata,
+        block_hashes: inputs.block_hashes,
+    };
+
+    let max_cpu_len_log = 13;
+
+    let dummy_segs = all_circuits.prove_all_segments(
+        &all_stark,
+        &config,
+        dummy_inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
+
+    assert_eq!(dummy_segs.len(), 2);
+
+    let dummy_aggreg = all_circuits.prove_segment_aggregation(
+        false,
+        &dummy_segs[0].proof_with_pis,
+        dummy_segs[0].public_values.clone(),
+        false,
+        &dummy_segs[1].proof_with_pis,
+        dummy_segs[1].public_values.clone(),
+    )?;
+
+    // Aggregate the dummy batch transaction with the actual batch transaction.
+    let (txn_aggreg_proof, txn_aggreg_pv) = all_circuits.prove_transaction_aggregation(
+        false,
+        &dummy_aggreg.0,
+        dummy_aggreg.1,
+        false,
+        &segment_aggreg,
+        aggreg_pvs,
+    )?;
+    all_circuits.verify_txn_aggregation(&txn_aggreg_proof)?;
+
+    // We can now prove this first block.
+    let (first_block_proof, _block_public_values) =
+        all_circuits.prove_block(None, &txn_aggreg_proof, txn_aggreg_pv)?;
+    all_circuits.verify_block(&first_block_proof)?;
 
     // Second empty block, to test block aggregation.
     let mut prev_hashes = vec![H256::default(); 256];
@@ -633,6 +692,7 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
         &all_segment_proofs[1].proof_with_pis,
         all_segment_proofs[1].public_values.clone(),
     )?;
+    all_circuits.verify_segment_aggregation(&aggreg_proof)?;
 
     if all_segment_proofs.len() > 2 {
         for seg in &all_segment_proofs[2..] {
@@ -651,14 +711,19 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
         }
     }
 
-    all_circuits.verify_segment_aggregation(&segment_aggreg)?;
+    // We can aggregate the dummy proof with itself, as it is empty.
+    let (second_txn_proof, second_txn_pvs) = all_circuits.prove_transaction_aggregation(
+        false,
+        &aggreg_proof,
+        second_aggreg_pv.clone(),
+        false,
+        &aggreg_proof,
+        second_aggreg_pv,
+    )?;
 
-    let block_pvs = PublicValues {
-        trie_roots_before: block_aggreg.trie_roots_before,
-        ..second_aggreg_pv.clone()
-    };
-    let (second_block_proof, _second_block_pvs) =
-        all_circuits.prove_block(Some(&block_proof), &aggreg_proof, block_pvs)?;
+    // Aggregate the first real block with the dummy block.
+    let (second_block_proof, _block_public_values) =
+        all_circuits.prove_block(Some(&first_block_proof), &second_txn_proof, second_txn_pvs)?;
     all_circuits.verify_block(&second_block_proof)
 }
 
