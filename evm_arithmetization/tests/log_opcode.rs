@@ -12,7 +12,7 @@ use evm_arithmetization::generation::mpt::transaction_testing::{
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
-use evm_arithmetization::prover::prove;
+use evm_arithmetization::prover::{generate_all_data_segments, prove};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -89,9 +89,9 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     state_trie_before.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    )?;
+    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
+    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
     // We now add two receipts with logs and data. This updates the receipt trie as
     // well.
@@ -120,7 +120,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     receipts_trie.insert(
         Nibbles::from_str("0x1337").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
@@ -194,16 +194,17 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 
     let receipt_nibbles = Nibbles::from_str("0x80").unwrap(); // RLP(0) = 0x80
 
-    receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec());
+    receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
 
     // Update the state trie.
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
     expected_state_trie_after.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_after).to_vec(),
-    );
-    expected_state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+    )?;
+    expected_state_trie_after
+        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
 
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
@@ -235,18 +236,11 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         },
     };
 
-    let mut timing = TimingTree::new("prove", log::Level::Debug);
     let max_cpu_len_log = 20;
-    let proof = prove::<F, C, D>(
-        &all_stark,
-        &config,
-        inputs,
-        max_cpu_len_log,
-        0,
-        &mut timing,
-        None,
-    )?
-    .expect("The initial registers should not be at the halt label.");
+    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
+
+    let mut timing = TimingTree::new("prove", log::Level::Debug);
+    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut data[0], &mut timing, None)?;
     timing.filter(Duration::from_millis(100)).print();
 
     // Assert that the proof leads to the correct state and receipt roots.
@@ -482,16 +476,17 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
 
     let receipt_nibbles = Nibbles::from_str("0x01").unwrap(); // RLP(1) = 0x1
 
-    receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec());
+    receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
 
     // Update the state trie.
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
     expected_state_trie_after.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_after).to_vec(),
-    );
-    expected_state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+    )?;
+    expected_state_trie_after
+        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
     expected_state_trie_after.insert(
         to_second_nibbles,
         rlp::encode(&to_account_second_after).to_vec(),
@@ -501,7 +496,7 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
 
     transactions_trie.insert(Nibbles::from_str("0x80").unwrap(), txn.to_vec());
 
-    transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec());
+    transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec())?;
 
     let block_state_root = expected_state_trie_after.hash();
 
@@ -693,7 +688,7 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     example_txn_trie.insert(
         Nibbles::from_str("0x80").unwrap(), // RLP(0) = 0x80
         rlp::encode(&transaction_0).to_vec(),
-    );
+    )?;
 
     let transaction_1 = LegacyTransactionRlp {
         nonce: 157824u64.into(),
@@ -713,7 +708,7 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     example_txn_trie.insert(
         Nibbles::from_str("0x01").unwrap(),
         rlp::encode(&transaction_1).to_vec(),
-    );
+    )?;
 
     // Receipts:
     let mut example_receipt_trie = HashedPartialTrie::from(Node::Empty);
@@ -741,7 +736,7 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     example_receipt_trie.insert(
         Nibbles::from_str("0x80").unwrap(), // RLP(0) is 0x80
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
 
     let log_1 = LogRlp {
         address: hex!("7ef66b77759e12Caf3dDB3E4AFF524E577C59D8D").into(),
@@ -766,7 +761,7 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     example_receipt_trie.insert(
         Nibbles::from_str("0x01").unwrap(),
         rlp::encode(&receipt_1).to_vec(),
-    );
+    )?;
 
     // Check that the trie hashes are correct.
     assert_eq!(

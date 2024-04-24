@@ -20,11 +20,12 @@ use crate::generation::GenerationInputs;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::prover::GenerationSegmentData;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
-use crate::witness::memory::{MemoryAddress, MemoryOp, MemoryState};
-use crate::witness::memory::{MemoryOpKind, MemorySegmentState};
+use crate::witness::memory::MemoryOpKind;
+use crate::witness::memory::{MemoryAddress, MemoryContextState, MemoryOp, MemoryState};
 use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::{TraceCheckpoint, Traces};
@@ -85,8 +86,11 @@ pub(crate) trait State<F: Field> {
 
     /// Checks whether we have reached the `halt` label in kernel mode.
     fn at_halt(&self) -> bool {
+        let halt = KERNEL.global_labels["halt"];
+        let halt_final = KERNEL.global_labels["halt_final"];
         let registers = self.get_registers();
-        registers.is_kernel && registers.program_counter == KERNEL.global_labels["halt"]
+        registers.is_kernel
+            && (registers.program_counter == halt || registers.program_counter == halt_final)
     }
 
     /// Returns the context in which the jumpdest analysis should end.
@@ -153,13 +157,7 @@ pub(crate) trait State<F: Field> {
     /// Return the offsets at which execution must halt
     fn get_halt_offsets(&self) -> Vec<usize>;
 
-    /// Inserts a preinitialized segment, given as a [Segment],
-    /// into the `preinitialized_segments` memory field.
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState);
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool;
-
-    fn update_interpreter_final_registers(&mut self, final_registers: RegistersState) {}
+    fn update_interpreter_final_registers(&mut self, _final_registers: RegistersState) {}
 
     fn get_full_memory(&self) -> Option<MemoryState> {
         None
@@ -176,10 +174,8 @@ pub(crate) trait State<F: Field> {
     {
         let halt_offsets = self.get_halt_offsets();
 
-        let halt_pc = KERNEL.global_labels["halt"];
-        let halt_final_pc = KERNEL.global_labels["halt_final"];
         let mut final_registers = RegistersState::default();
-        let mut final_mem = self.get_mut_generation_state().memory.clone();
+        let final_mem = self.get_generation_state().memory.clone();
         let mut running = true;
         let mut final_clock = 0;
         loop {
@@ -212,7 +208,15 @@ pub(crate) trait State<F: Field> {
                     if !running {
                         assert_eq!(self.get_clock() - final_clock, NUM_EXTRA_CYCLES_AFTER - 1);
                     }
-                    let final_mem = self.get_full_memory();
+                    let final_mem = if let Some(mut mem) = self.get_full_memory() {
+                        // Clear memory we will not use again.
+                        for &ctx in &self.get_generation_state().stale_contexts {
+                            mem.contexts[ctx] = MemoryContextState::default();
+                        }
+                        Some(mem)
+                    } else {
+                        None
+                    };
                     #[cfg(not(test))]
                     self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
                     return Ok((final_registers, final_mem));
@@ -308,7 +312,7 @@ pub(crate) trait State<F: Field> {
     }
 
     /// Logs `msg` in `debug` mode, in the interpreter.
-    fn log_debug(&self, msg: String) {}
+    fn log_debug(&self, _msg: String) {}
 
     /// Logs `msg` in `info` mode, in the interpreter.
     fn log_info(&self, msg: String) {
@@ -316,7 +320,7 @@ pub(crate) trait State<F: Field> {
     }
 
     /// Logs `msg` at `level`, during witness generation.
-    fn log_log(&self, level: Level, msg: String) {}
+    fn log_log(&self, _level: Level, _msg: String) {}
 }
 
 #[derive(Debug)]
@@ -327,6 +331,10 @@ pub struct GenerationState<F: Field> {
     pub(crate) traces: Traces<F>,
 
     pub(crate) next_txn_index: usize,
+
+    /// Memory used by stale contexts can be pruned so proving segments can be
+    /// smaller.
+    pub(crate) stale_contexts: Vec<usize>,
 
     /// Prover inputs containing RLP data, in reverse order so that the next
     /// input can be obtained via `pop()`.
@@ -377,6 +385,7 @@ impl<F: Field> GenerationState<F> {
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
             next_txn_index: 0,
+            stale_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
             state_key_to_address: HashMap::new(),
@@ -465,6 +474,7 @@ impl<F: Field> GenerationState<F> {
             memory: self.memory.clone(),
             traces: Traces::default(),
             next_txn_index: 0,
+            stale_contexts: Vec::new(),
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),
             state_key_to_address: self.state_key_to_address.clone(),
             bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),
@@ -477,6 +487,29 @@ impl<F: Field> GenerationState<F> {
             jumpdest_table: None,
         }
     }
+
+    pub(crate) fn set_segment_data(&mut self, segment_data: &GenerationSegmentData) {
+        self.inputs
+            .clone_from(&segment_data.extra_data.trimmed_inputs);
+        self.bignum_modmul_result_limbs
+            .clone_from(&segment_data.extra_data.bignum_modmul_result_limbs);
+        self.rlp_prover_inputs
+            .clone_from(&segment_data.extra_data.rlp_prover_inputs);
+        self.withdrawal_prover_inputs
+            .clone_from(&segment_data.extra_data.withdrawal_prover_inputs);
+        self.trie_root_ptrs
+            .clone_from(&segment_data.extra_data.trie_root_ptrs);
+        self.jumpdest_table
+            .clone_from(&segment_data.extra_data.jumpdest_table);
+        self.next_txn_index = segment_data.extra_data.next_txn_index;
+        self.registers = RegistersState {
+            program_counter: self.registers.program_counter,
+            is_kernel: self.registers.is_kernel,
+            is_stack_top_read: false,
+            check_overflow: false,
+            ..segment_data.registers_before
+        };
+    }
 }
 
 impl<F: Field> State<F> for GenerationState<F> {
@@ -486,16 +519,6 @@ impl<F: Field> State<F> for GenerationState<F> {
             traces: self.traces.checkpoint(),
             clock: self.get_clock(),
         }
-    }
-
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        panic!(
-            "A `GenerationState` cannot have a nonempty `preinitialized_segment` field in memory."
-        )
-    }
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool {
-        false
     }
 
     fn incr_gas(&mut self, n: u64) {
@@ -576,7 +599,7 @@ impl<F: Field> State<F> for GenerationState<F> {
                 row.general.stack_mut().stack_inv = inv;
                 row.general.stack_mut().stack_inv_aux = F::ONE;
                 self.registers.is_stack_top_read = true;
-            } else if (self.stack().len() != special_len) {
+            } else if self.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 self.registers.is_stack_top_read = true;
@@ -595,7 +618,7 @@ impl<F: Field> Transition<F> for GenerationState<F> {
         Ok(op)
     }
 
-    fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool {
+    fn generate_jumpdest_analysis(&mut self, _dst: usize) -> bool {
         false
     }
 

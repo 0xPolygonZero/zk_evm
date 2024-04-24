@@ -12,19 +12,19 @@ use starky::stark::Stark;
 use crate::arithmetic::arithmetic_stark;
 use crate::arithmetic::arithmetic_stark::ArithmeticStark;
 use crate::byte_packing::byte_packing_stark::{self, BytePackingStark};
-use crate::cpu::cpu_stark;
 use crate::cpu::cpu_stark::CpuStark;
+use crate::cpu::cpu_stark::{self, ctl_context_pruning_looked};
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::keccak::keccak_stark;
 use crate::keccak::keccak_stark::KeccakStark;
 use crate::keccak_sponge::columns::KECCAK_RATE_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeStark;
+use crate::logic;
 use crate::logic::LogicStark;
-use crate::memory::memory_stark;
 use crate::memory::memory_stark::MemoryStark;
+use crate::memory::memory_stark::{self, ctl_context_pruning_looking};
 use crate::memory_continuation::memory_continuation_stark::{self, MemoryContinuationStark};
-use crate::{logic, memory_continuation};
 
 /// Structure containing all STARKs and the cross-table lookups.
 #[derive(Clone)]
@@ -134,6 +134,7 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
         ctl_memory(),
         ctl_mem_before(),
         ctl_mem_after(),
+        ctl_context_pruning(),
     ]
 }
 
@@ -141,7 +142,10 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
 /// module.
 fn ctl_arithmetic<F: Field>() -> CrossTableLookup<F> {
     CrossTableLookup::new(
-        vec![cpu_stark::ctl_arithmetic_base_rows()],
+        vec![
+            cpu_stark::ctl_arithmetic_base_rows(),
+            cpu_stark::ctl_arithmetic_context_pruning(),
+        ],
         arithmetic_stark::ctl_arithmetic_rows(),
     )
 }
@@ -152,27 +156,27 @@ fn ctl_byte_packing<F: Field>() -> CrossTableLookup<F> {
     let cpu_packing_looking = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_byte_packing(),
-        Some(cpu_stark::ctl_filter_byte_packing()),
+        cpu_stark::ctl_filter_byte_packing(),
     );
     let cpu_unpacking_looking = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_byte_unpacking(),
-        Some(cpu_stark::ctl_filter_byte_unpacking()),
+        cpu_stark::ctl_filter_byte_unpacking(),
     );
     let cpu_push_packing_looking = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_byte_packing_push(),
-        Some(cpu_stark::ctl_filter_byte_packing_push()),
+        cpu_stark::ctl_filter_byte_packing_push(),
     );
     let cpu_jumptable_read_looking = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_jumptable_read(),
-        Some(cpu_stark::ctl_filter_syscall_exceptions()),
+        cpu_stark::ctl_filter_syscall_exceptions(),
     );
     let byte_packing_looked = TableWithColumns::new(
         *Table::BytePacking,
         byte_packing_stark::ctl_looked_data(),
-        Some(byte_packing_stark::ctl_looked_filter()),
+        byte_packing_stark::ctl_looked_filter(),
     );
     CrossTableLookup::new(
         vec![
@@ -193,12 +197,12 @@ fn ctl_keccak_inputs<F: Field>() -> CrossTableLookup<F> {
     let keccak_sponge_looking = TableWithColumns::new(
         *Table::KeccakSponge,
         keccak_sponge_stark::ctl_looking_keccak_inputs(),
-        Some(keccak_sponge_stark::ctl_looking_keccak_filter()),
+        keccak_sponge_stark::ctl_looking_keccak_filter(),
     );
     let keccak_looked = TableWithColumns::new(
         *Table::Keccak,
         keccak_stark::ctl_data_inputs(),
-        Some(keccak_stark::ctl_filter_inputs()),
+        keccak_stark::ctl_filter_inputs(),
     );
     CrossTableLookup::new(vec![keccak_sponge_looking], keccak_looked)
 }
@@ -210,12 +214,12 @@ fn ctl_keccak_outputs<F: Field>() -> CrossTableLookup<F> {
     let keccak_sponge_looking = TableWithColumns::new(
         *Table::KeccakSponge,
         keccak_sponge_stark::ctl_looking_keccak_outputs(),
-        Some(keccak_sponge_stark::ctl_looking_keccak_filter()),
+        keccak_sponge_stark::ctl_looking_keccak_filter(),
     );
     let keccak_looked = TableWithColumns::new(
         *Table::Keccak,
         keccak_stark::ctl_data_outputs(),
-        Some(keccak_stark::ctl_filter_outputs()),
+        keccak_stark::ctl_filter_outputs(),
     );
     CrossTableLookup::new(vec![keccak_sponge_looking], keccak_looked)
 }
@@ -226,12 +230,12 @@ fn ctl_keccak_sponge<F: Field>() -> CrossTableLookup<F> {
     let cpu_looking = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_keccak_sponge(),
-        Some(cpu_stark::ctl_filter_keccak_sponge()),
+        cpu_stark::ctl_filter_keccak_sponge(),
     );
     let keccak_sponge_looked = TableWithColumns::new(
         *Table::KeccakSponge,
         keccak_sponge_stark::ctl_looked_data(),
-        Some(keccak_sponge_stark::ctl_looked_filter()),
+        keccak_sponge_stark::ctl_looked_filter(),
     );
     CrossTableLookup::new(vec![cpu_looking], keccak_sponge_looked)
 }
@@ -242,19 +246,18 @@ fn ctl_logic<F: Field>() -> CrossTableLookup<F> {
     let cpu_looking = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_logic(),
-        Some(cpu_stark::ctl_filter_logic()),
+        cpu_stark::ctl_filter_logic(),
     );
     let mut all_lookers = vec![cpu_looking];
     for i in 0..keccak_sponge_stark::num_logic_ctls() {
         let keccak_sponge_looking = TableWithColumns::new(
             *Table::KeccakSponge,
             keccak_sponge_stark::ctl_looking_logic(i),
-            Some(keccak_sponge_stark::ctl_looking_logic_filter()),
+            keccak_sponge_stark::ctl_looking_logic_filter(),
         );
         all_lookers.push(keccak_sponge_looking);
     }
-    let logic_looked =
-        TableWithColumns::new(*Table::Logic, logic::ctl_data(), Some(logic::ctl_filter()));
+    let logic_looked = TableWithColumns::new(*Table::Logic, logic::ctl_data(), logic::ctl_filter());
     CrossTableLookup::new(all_lookers, logic_looked)
 }
 
@@ -264,48 +267,48 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
     let cpu_memory_code_read = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_code_memory(),
-        Some(cpu_stark::ctl_filter_code_memory()),
+        cpu_stark::ctl_filter_code_memory(),
     );
     let cpu_memory_gp_ops = (0..NUM_GP_CHANNELS).map(|channel| {
         TableWithColumns::new(
             *Table::Cpu,
             cpu_stark::ctl_data_gp_memory(channel),
-            Some(cpu_stark::ctl_filter_gp_memory(channel)),
+            cpu_stark::ctl_filter_gp_memory(channel),
         )
     });
     let cpu_push_write_ops = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_partial_memory::<F>(),
-        Some(cpu_stark::ctl_filter_partial_memory()),
+        cpu_stark::ctl_filter_partial_memory(),
     );
     let cpu_set_context_write = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_memory_old_sp_write_set_context::<F>(),
-        Some(cpu_stark::ctl_filter_set_context()),
+        cpu_stark::ctl_filter_set_context(),
     );
     let cpu_set_context_read = TableWithColumns::new(
         *Table::Cpu,
         cpu_stark::ctl_data_memory_new_sp_read_set_context::<F>(),
-        Some(cpu_stark::ctl_filter_set_context()),
+        cpu_stark::ctl_filter_set_context(),
     );
     let keccak_sponge_reads = (0..KECCAK_RATE_BYTES).map(|i| {
         TableWithColumns::new(
             *Table::KeccakSponge,
             keccak_sponge_stark::ctl_looking_memory(i),
-            Some(keccak_sponge_stark::ctl_looking_memory_filter(i)),
+            keccak_sponge_stark::ctl_looking_memory_filter(i),
         )
     });
     let byte_packing_ops = (0..32).map(|i| {
         TableWithColumns::new(
             *Table::BytePacking,
             byte_packing_stark::ctl_looking_memory(i),
-            Some(byte_packing_stark::ctl_looking_memory_filter(i)),
+            byte_packing_stark::ctl_looking_memory_filter(i),
         )
     });
     let mem_before_ops = TableWithColumns::new(
         *Table::MemBefore,
         memory_continuation_stark::ctl_data_memory(),
-        Some(memory_continuation_stark::ctl_filter()),
+        memory_continuation_stark::ctl_filter(),
     );
     let all_lookers = vec![
         cpu_memory_code_read,
@@ -322,9 +325,17 @@ fn ctl_memory<F: Field>() -> CrossTableLookup<F> {
     let memory_looked = TableWithColumns::new(
         *Table::Memory,
         memory_stark::ctl_data(),
-        Some(memory_stark::ctl_filter()),
+        memory_stark::ctl_filter(),
     );
     CrossTableLookup::new(all_lookers, memory_looked)
+}
+
+/// `CrossTableLookup` for `Cpu` to propagate stale contexts to `Memory`.
+fn ctl_context_pruning<F: Field>() -> CrossTableLookup<F> {
+    CrossTableLookup::new(
+        vec![ctl_context_pruning_looking()],
+        ctl_context_pruning_looked(),
+    )
 }
 
 /// `CrossTableLookup` for `MemBefore` table to connect it with the `Memory`
@@ -333,13 +344,13 @@ fn ctl_mem_before<F: Field>() -> CrossTableLookup<F> {
     let memory_looking = TableWithColumns::new(
         *Table::Memory,
         memory_stark::ctl_looking_mem(),
-        Some(memory_stark::ctl_filter_mem_before()),
+        memory_stark::ctl_filter_mem_before(),
     );
-    let mut all_lookers = vec![memory_looking];
+    let all_lookers = vec![memory_looking];
     let mem_before_looked = TableWithColumns::new(
         *Table::MemBefore,
         memory_continuation_stark::ctl_data(),
-        Some(memory_continuation_stark::ctl_filter()),
+        memory_continuation_stark::ctl_filter(),
     );
     CrossTableLookup::new(all_lookers, mem_before_looked)
 }
@@ -350,13 +361,13 @@ fn ctl_mem_after<F: Field>() -> CrossTableLookup<F> {
     let memory_looking = TableWithColumns::new(
         *Table::Memory,
         memory_stark::ctl_looking_mem(),
-        Some(memory_stark::ctl_filter_mem_after()),
+        memory_stark::ctl_filter_mem_after(),
     );
-    let mut all_lookers = vec![memory_looking];
+    let all_lookers = vec![memory_looking];
     let mem_after_looked = TableWithColumns::new(
         *Table::MemAfter,
         memory_continuation_stark::ctl_data(),
-        Some(memory_continuation_stark::ctl_filter()),
+        memory_continuation_stark::ctl_filter(),
     );
     CrossTableLookup::new(all_lookers, mem_after_looked)
 }

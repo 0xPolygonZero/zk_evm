@@ -26,12 +26,13 @@ use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::prover::GenerationSegmentData;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
     MemoryAddress, MemoryContextState, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
 };
-use crate::witness::operation::{Operation, CONTEXT_SCALING_FACTOR};
+use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
 use crate::witness::transition::{
     decode, fill_op_flag, get_op_special_length, log_kernel_instruction, Transition,
@@ -214,29 +215,6 @@ pub(crate) fn generate_segment<F: Field>(
         if registers_after.program_counter == KERNEL.global_labels["halt"] {
             return Ok(None);
         }
-        [
-            registers_after.program_counter.into(),
-            (registers_after.is_kernel as usize).into(),
-            registers_after.stack_len.into(),
-            registers_after.stack_top,
-            registers_after.context.into(),
-            registers_after.gas_used.into(),
-        ]
-        .iter()
-        .enumerate()
-        .map(|(i, reg_content)| {
-            let (addr, val) = (
-                MemoryAddress::new_u256s(
-                    0.into(),
-                    (Segment::RegistersStates.unscale()).into(),
-                    i.into(),
-                )
-                .expect("All input values are known to be valid for MemoryAddress"),
-                *reg_content,
-            );
-            interpreter.generation_state.memory.set(addr, val);
-        })
-        .collect::<Vec<_>>();
 
         (registers_before, before_mem_values) = (registers_after, after_mem_values);
         interpreter.generation_state.registers = registers_before;
@@ -244,7 +222,9 @@ pub(crate) fn generate_segment<F: Field>(
         interpreter.generation_state.registers.is_kernel = true;
         interpreter.clock = 0;
 
-        let (updated_registers_after, opt_after_mem_values) = interpreter.run()?;
+        let (updated_registers_after, opt_after_mem_values) =
+            set_registers_and_run(registers_after, &mut interpreter)?;
+
         registers_after = updated_registers_after;
         after_mem_values = opt_after_mem_values.expect(
             "We are in the interpreter: the run should return a memory
@@ -258,6 +238,41 @@ pub(crate) fn generate_segment<F: Field>(
         before_mem_values,
         extra_data,
     )))
+}
+
+pub(crate) fn set_registers_and_run<F: Field>(
+    registers: RegistersState,
+    interpreter: &mut Interpreter<F>,
+) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
+    // Write initial registers.
+    [
+        registers.program_counter.into(),
+        (registers.is_kernel as usize).into(),
+        registers.stack_len.into(),
+        registers.stack_top,
+        registers.context.into(),
+        registers.gas_used.into(),
+    ]
+    .iter()
+    .enumerate()
+    .map(|(i, reg_content)| {
+        let (addr, val) = (
+            MemoryAddress::new_u256s(
+                0.into(),
+                (Segment::RegistersStates.unscale()).into(),
+                i.into(),
+            )
+            .expect(
+                "All input values are known to be valid for
+MemoryAddress",
+            ),
+            *reg_content,
+        );
+        interpreter.generation_state.memory.set(addr, val);
+    })
+    .collect::<Vec<_>>();
+
+    interpreter.run()
 }
 
 impl<F: Field> Interpreter<F> {
@@ -329,8 +344,6 @@ impl<F: Field> Interpreter<F> {
 
     /// Initializes the interpreter state given `GenerationInputs`.
     pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs) {
-        let kernel_hash = KERNEL.code_hash;
-        let kernel_code_len = KERNEL.code.len();
         // Initialize registers.
         let registers_before = RegistersState::new();
         self.generation_state.registers = RegistersState {
@@ -415,8 +428,8 @@ impl<F: Field> Interpreter<F> {
                 GlobalMetadata::ReceiptTrieRootDigestAfter,
                 h2u(trie_roots_after.receipts_root),
             ),
-            (GlobalMetadata::KernelHash, h2u(kernel_hash)),
-            (GlobalMetadata::KernelLen, kernel_code_len.into()),
+            (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
+            (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
         ];
 
         self.set_global_metadata_multi_fields(&global_metadata_to_set);
@@ -864,7 +877,7 @@ impl<F: Field> Interpreter<F> {
         self.generation_state.registers.stack_len
     }
 
-    pub(crate) fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
+    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
         if self.stack_len() > 0 {
             Ok(self.generation_state.registers.stack_top)
         } else {
@@ -897,6 +910,20 @@ impl<F: Field> Interpreter<F> {
             .memory
             .set(MemoryAddress::new(0, Segment::RlpRaw, 0), 0x80.into())
     }
+
+    /// Inserts a preinitialized segment, given as a [Segment],
+    /// into the `preinitialized_segments` memory field.
+    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
+        self.generation_state
+            .memory
+            .insert_preinitialized_segment(segment, values);
+    }
+
+    fn is_preinitialized_segment(&self, segment: usize) -> bool {
+        self.generation_state
+            .memory
+            .is_preinitialized_segment(segment)
+    }
 }
 
 impl<F: Field> State<F> for Interpreter<F> {
@@ -909,18 +936,6 @@ impl<F: Field> State<F> for Interpreter<F> {
             traces: self.generation_state.traces.checkpoint(),
             clock: self.get_clock(),
         }
-    }
-
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        self.generation_state
-            .memory
-            .insert_preinitialized_segment(segment, values);
-    }
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool {
-        self.generation_state
-            .memory
-            .is_preinitialized_segment(segment)
     }
 
     fn incr_gas(&mut self, n: u64) {
@@ -1052,9 +1067,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         // Might write in general CPU columns when it shouldn't, but the correct values
         // will overwrite these ones during the op generation.
         if let Some(special_len) = get_op_special_length(op) {
-            let special_len_f = F::from_canonical_usize(special_len);
-            let diff = row.stack_len - special_len_f;
-            if (generation_state.stack().len() != special_len) {
+            if generation_state.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 generation_state.registers.is_stack_top_read = true;
@@ -1071,7 +1084,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         log::debug!("{}", msg);
     }
 
-    fn log_info(&self, msg: String) {}
+    fn log_info(&self, _msg: String) {}
 
     fn log_log(&self, level: Level, msg: String) {
         log::log!(level, "{}", msg);

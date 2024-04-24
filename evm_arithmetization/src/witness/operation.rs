@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
@@ -339,6 +337,11 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
         None
     };
 
+    if new_ctx < old_ctx {
+        row.general.context_pruning_mut().pruning_flag = F::ONE;
+        generation_state.stale_contexts.push(old_ctx);
+    }
+
     generation_state.registers.context = new_ctx;
     generation_state.registers.stack_len = new_sp;
     if let Some(mem_op) = log_read_new_top {
@@ -346,6 +349,11 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
     }
     state.push_memory(log_write_old_sp);
     state.push_memory(log_read_new_sp);
+    state.push_arithmetic(arithmetic::Operation::binary(
+        BinaryOperator::Lt,
+        new_ctx.into(),
+        old_ctx.into(),
+    ));
     state.push_cpu(row);
 
     Ok(())

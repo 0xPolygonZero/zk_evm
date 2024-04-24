@@ -12,10 +12,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
-use crate::memory::segments::Segment;
-use crate::proof::{BlockHashes, BlockMetadata, MemCap, TrieRoots};
-use crate::util::h2u;
-use crate::witness::state::RegistersState;
+use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use crate::GenerationInputs;
 
 #[test]

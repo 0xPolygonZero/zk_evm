@@ -15,8 +15,7 @@ use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField};
-use plonky2::hash::merkle_tree::MerkleCap;
+use plonky2::hash::hash_types::{MerkleCapTarget, RichField};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -42,23 +41,24 @@ use starky::stark::Stark;
 
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::state::GenerationState;
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
-    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget, MemCap,
+    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
     MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget, TrieRoots,
     TrieRootsTarget,
 };
-use crate::prover::{check_abort_signal, prove};
+use crate::prover::{check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData};
 use crate::recursive_verifier::{
     add_common_recursion_gates, add_virtual_public_values, get_memory_extra_looking_sum_circuit,
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
     StarkWrapperCircuit,
 };
 use crate::util::{h160_limbs, h256_limbs, u256_limbs};
+use crate::verifier::initial_memory_merkle_cap;
 use crate::witness::memory::MemoryAddress;
+use crate::witness::state::RegistersState;
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
 /// this size.
@@ -424,7 +424,10 @@ where
                     *table = MaybeUninit::new(value);
                 }
                 unsafe {
-                    mem::transmute::<_, [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES]>(by_table)
+                    mem::transmute::<
+                        [std::mem::MaybeUninit<RecursiveCircuitsForTable<F, C, D>>; NUM_TABLES],
+                        [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
+                    >(by_table)
                 }
             }
         };
@@ -842,6 +845,122 @@ where
         }
     }
 
+    // We assume that transactions are always aggregated on the right.
+    fn create_transaction_circuit(
+        agg: &AggregationCircuitData<F, C, D>,
+        stark_config: &StarkConfig,
+    ) -> BlockCircuitData<F, C, D> {
+        // Create a circuit for the aggregation of two transactions.
+        let expected_common_data = CommonCircuitData {
+            fri_params: FriParams {
+                degree_bits: 14,
+                ..agg.circuit.common.fri_params.clone()
+            },
+            ..agg.circuit.common.clone()
+        };
+
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+
+        let len_before = agg.public_values.mem_before.mem_cap.0.len();
+        let public_values = add_virtual_public_values(&mut builder, len_before);
+        let has_parent_block = builder.add_virtual_bool_target_safe();
+        let parent_txn_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
+        let agg_root_proof = builder.add_virtual_proof_with_pis(&agg.circuit.common);
+
+        let parent_pv =
+            PublicValuesTarget::from_public_inputs(&parent_txn_proof.public_inputs, len_before);
+        let agg_pv =
+            PublicValuesTarget::from_public_inputs(&agg_root_proof.public_inputs, len_before);
+
+        // Connect all block hash values
+        BlockHashesTarget::connect(
+            &mut builder,
+            public_values.block_hashes,
+            agg_pv.block_hashes,
+        );
+        BlockHashesTarget::connect(
+            &mut builder,
+            public_values.block_hashes,
+            parent_pv.block_hashes,
+        );
+        // Connect all block metadata values.
+        BlockMetadataTarget::connect(
+            &mut builder,
+            public_values.block_metadata,
+            agg_pv.block_metadata,
+        );
+        BlockMetadataTarget::connect(
+            &mut builder,
+            public_values.block_metadata,
+            parent_pv.block_metadata,
+        );
+        // Connect aggregation `trie_roots_after` with rhs `trie_roots_after`.
+        TrieRootsTarget::connect(
+            &mut builder,
+            public_values.trie_roots_after,
+            agg_pv.trie_roots_after,
+        );
+        // Connect lhs `trie_roots_after` with rhs `trie_roots_before`.
+        TrieRootsTarget::connect(
+            &mut builder,
+            parent_pv.trie_roots_after,
+            agg_pv.trie_roots_before,
+        );
+        // Connect lhs `trie_roots_before` with public values `trie_roots_before`.
+        TrieRootsTarget::connect(
+            &mut builder,
+            public_values.trie_roots_before,
+            parent_pv.trie_roots_before,
+        );
+        Self::connect_extra_public_values(
+            &mut builder,
+            &public_values.extra_block_data,
+            &parent_pv.extra_block_data,
+            &agg_pv.extra_block_data,
+        );
+
+        // We check the registers before and after for the current aggregation.
+        RegistersDataTarget::connect(
+            &mut builder,
+            public_values.registers_after.clone(),
+            agg_pv.registers_after.clone(),
+        );
+
+        RegistersDataTarget::connect(
+            &mut builder,
+            public_values.registers_before.clone(),
+            agg_pv.registers_before.clone(),
+        );
+
+        // Check the initial and final register values.
+        Self::connect_initial_final_segment(&mut builder, &public_values);
+
+        // Check the initial `MemBefore` `MerkleCap` value.
+        Self::check_init_merkle_cap(&mut builder, &agg_pv, stark_config);
+
+        let cyclic_vk = builder.add_verifier_data_public_inputs();
+        builder
+            .conditionally_verify_cyclic_proof_or_dummy::<C>(
+                has_parent_block,
+                &parent_txn_proof,
+                &expected_common_data,
+            )
+            .expect("Failed to build cyclic recursion circuit");
+
+        let agg_verifier_data = builder.constant_verifier_data(&agg.circuit.verifier_only);
+        builder.verify_proof::<C>(&agg_root_proof, &agg_verifier_data, &agg.circuit.common);
+
+        let circuit = builder.build::<C>();
+        BlockCircuitData {
+            circuit,
+            has_parent_block,
+            parent_block_proof: parent_txn_proof,
+            agg_root_proof,
+            public_values,
+            cyclic_vk,
+        }
+    }
+
     fn check_init_merkle_cap(
         builder: &mut CircuitBuilder<F, D>,
         x: &PublicValuesTarget,
@@ -849,51 +968,10 @@ where
     ) where
         F: RichField + Extendable<D>,
     {
-        // At the start of a transaction proof, `MemBefore` only contains the RLP
-        // constant and the `ShiftTable`.
-        let mut trace = vec![];
-
-        // Push shift table.
-        for i in 0..256 {
-            let mut row = vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS];
-            let val = U256::from(1) << i;
-            row[crate::memory_continuation::columns::FILTER] = F::ONE;
-            row[crate::memory_continuation::columns::ADDR_CONTEXT] = F::ZERO;
-            row[crate::memory_continuation::columns::ADDR_SEGMENT] =
-                F::from_canonical_usize(Segment::ShiftTable.unscale());
-            row[crate::memory_continuation::columns::ADDR_VIRTUAL] = F::from_canonical_usize(i);
-            for j in 0..crate::memory::VALUE_LIMBS {
-                row[j + 4] = F::from_canonical_u32((val >> (j * 32)).low_u32());
-            }
-            trace.push(row);
-        }
-
-        // Padding.
-        let num_rows = trace.len();
-        let num_rows_padded = num_rows.next_power_of_two();
-        for _ in num_rows..num_rows_padded {
-            trace.push(vec![
-                F::ZERO;
-                crate::memory_continuation::columns::NUM_COLUMNS
-            ]);
-        }
-
-        let cols = transpose(&trace);
-        let polys = cols
-            .into_iter()
-            .map(|column| PolynomialValues::new(column))
-            .collect::<Vec<_>>();
-
-        let cap = PolynomialBatch::<F, C, D>::from_values(
-            polys,
+        let cap = initial_memory_merkle_cap::<F, C, D>(
             stark_config.fri_config.rate_bits,
-            false,
             stark_config.fri_config.cap_height,
-            &mut TimingTree::default(),
-            None,
-        )
-        .merkle_tree
-        .cap;
+        );
 
         let init_cap_target = MemCapTarget {
             mem_cap: MerkleCapTarget(
@@ -1251,97 +1329,95 @@ where
         config: &StarkConfig,
         generation_inputs: GenerationInputs,
         max_cpu_len_log: usize,
-        segment_index: usize,
+        segment_data: &mut GenerationSegmentData,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
-    ) -> anyhow::Result<Option<ProverOutputData<F, C, D>>> {
-        if let Some(all_proof) = prove::<F, C, D>(
+    ) -> anyhow::Result<ProverOutputData<F, C, D>> {
+        let all_proof = prove::<F, C, D>(
             all_stark,
             config,
             generation_inputs,
-            max_cpu_len_log,
-            segment_index,
+            segment_data,
             timing,
             abort_signal.clone(),
-        )? {
-            let mut root_inputs = PartialWitness::new();
+        )?;
+        let mut root_inputs = PartialWitness::new();
 
-            for table in 0..NUM_TABLES {
-                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-                let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
-                let table_circuits = &self.by_table[table];
-                let shrunk_proof = table_circuits
-                    .by_stark_size
-                    .get(&original_degree_bits)
-                    .ok_or_else(|| {
-                        anyhow!(format!(
-                            "Missing preprocessed circuits for {:?} table with size {}.",
-                            Table::all()[table],
-                            original_degree_bits,
-                        ))
-                    })?
-                    .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-                let index_verifier_data = table_circuits
-                    .by_stark_size
-                    .keys()
-                    .position(|&size| size == original_degree_bits)
-                    .unwrap();
-                root_inputs.set_target(
-                    self.root.index_verifier_data[table],
-                    F::from_canonical_usize(index_verifier_data),
-                );
-                root_inputs
-                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
-
-                check_abort_signal(abort_signal.clone())?;
-            }
-
-            root_inputs.set_verifier_data_target(
-                &self.root.cyclic_vk,
-                &self.segment_aggregation.circuit.verifier_only,
+        for table in 0..NUM_TABLES {
+            let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+            let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
+            let table_circuits = &self.by_table[table];
+            let shrunk_proof = table_circuits
+                .by_stark_size
+                .get(&original_degree_bits)
+                .ok_or_else(|| {
+                    anyhow!(format!(
+                        "Missing preprocessed circuits for {:?} table with size {}.",
+                        Table::all()[table],
+                        original_degree_bits,
+                    ))
+                })?
+                .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
+            let index_verifier_data = table_circuits
+                .by_stark_size
+                .keys()
+                .position(|&size| size == original_degree_bits)
+                .unwrap();
+            root_inputs.set_target(
+                self.root.index_verifier_data[table],
+                F::from_canonical_usize(index_verifier_data),
             );
+            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
 
-            set_public_value_targets(
-                &mut root_inputs,
-                &self.root.public_values,
-                &all_proof.public_values,
-            )
-            .map_err(|_| {
-                anyhow::Error::msg("Invalid conversion when setting public values targets.")
-            })?;
-
-            let root_proof = self.root.circuit.prove(root_inputs)?;
-
-            Ok(Some(ProverOutputData {
-                proof_with_pis: root_proof,
-                public_values: all_proof.public_values,
-            }))
-        } else {
-            Ok(None)
+            check_abort_signal(abort_signal.clone())?;
         }
+
+        root_inputs.set_verifier_data_target(
+            &self.root.cyclic_vk,
+            &self.segment_aggregation.circuit.verifier_only,
+        );
+
+        set_public_value_targets(
+            &mut root_inputs,
+            &self.root.public_values,
+            &all_proof.public_values,
+        )
+        .map_err(|_| {
+            anyhow::Error::msg("Invalid conversion when setting public values targets.")
+        })?;
+
+        let root_proof = self.root.circuit.prove(root_inputs)?;
+
+        Ok(ProverOutputData {
+            proof_with_pis: root_proof,
+            public_values: all_proof.public_values,
+        })
     }
 
+    /// Returns a proof for each segment that is part of a full transaction
+    /// proof.
     pub fn prove_all_segments(
         &self,
         all_stark: &AllStark<F, D>,
         config: &StarkConfig,
         generation_inputs: GenerationInputs,
-        max_cpu_len: usize,
+        max_cpu_len_log: usize,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
-        let mut segment_index = 0;
-        let mut proofs = vec![];
-        while let Some(proof) = self.prove_segment(
-            all_stark,
-            config,
-            generation_inputs.clone(),
-            max_cpu_len,
-            segment_index,
-            timing,
-            abort_signal.clone(),
-        )? {
-            segment_index += 1;
+        let mut all_data_segments =
+            generate_all_data_segments::<F>(Some(max_cpu_len_log), &generation_inputs)?;
+        let mut proofs = Vec::with_capacity(all_data_segments.len());
+        for mut data in all_data_segments {
+            let proof = self.prove_segment(
+                all_stark,
+                config,
+                generation_inputs.clone(),
+                max_cpu_len_log,
+                &mut data,
+                timing,
+                abort_signal.clone(),
+            )?;
             proofs.push(proof);
         }
 

@@ -61,17 +61,8 @@ global init:
     EXIT_KERNEL
 
 global main:
-    // First, hash the kernel code
-    // Start with PUSH0 to avoid having a BytePacking operation at timestamp 0.
-    // Timestamp 0 is reserved for memory initialization.
-    %mload_global_metadata(@GLOBAL_METADATA_KERNEL_LEN)
-    PUSH 0
-    // stack: addr, len
-    KECCAK_GENERAL
-    // stack: hash
-    %mload_global_metadata(@GLOBAL_METADATA_KERNEL_HASH)
-    // stack: expected_hash, hash
-    %assert_eq
+    // Initialize accessed addresses and storage keys lists
+    %init_access_lists
 
     // Initialize the RLP DATA pointer to its initial position, 
     // skipping over the preinitialized empty node.

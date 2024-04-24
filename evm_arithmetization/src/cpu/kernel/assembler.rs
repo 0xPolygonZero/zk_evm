@@ -27,7 +27,7 @@ pub(crate) const BYTES_PER_OFFSET: u8 = 3;
 pub struct Kernel {
     pub(crate) code: Vec<u8>,
 
-    /// Computed using `hash_kernel`.
+    /// Hash of the `Kernel` code.
     pub(crate) code_hash: H256,
 
     pub(crate) global_labels: HashMap<String, usize>,
@@ -57,6 +57,11 @@ impl Kernel {
             ordered_labels,
             prover_inputs,
         }
+    }
+
+    /// Outputs the Kernel code hash.
+    pub const fn hash(&self) -> H256 {
+        self.code_hash
     }
 
     pub fn to_file(&self, path: &str) {

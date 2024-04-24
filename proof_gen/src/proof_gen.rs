@@ -3,14 +3,13 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{AllStark, StarkConfig};
+use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
 use plonky2::{
     gates::noop::NoopGate,
     iop::witness::PartialWitness,
     plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
     util::timing::TimingTree,
 };
-use trace_decoder::types::TxnProofGenIR;
 
 use crate::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
@@ -44,30 +43,28 @@ impl From<String> for ProofGenError {
 /// Generates a transaction proof from some IR data.
 pub fn generate_txn_proof(
     p_state: &ProverState,
-    gen_inputs: TxnProofGenIR,
+    gen_inputs: GenerationInputs,
+    segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> ProofGenResult<Option<GeneratedTxnProof>> {
+) -> ProofGenResult<GeneratedTxnProof> {
     // TODO: change the `max_cpu_len_log` and `segment_index` arguments once we can
     // automatically determine them.
-    if let Some(output_data) = p_state
+    let output_data = p_state
         .state
         .prove_segment(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
             gen_inputs,
             32,
-            0,
+            segment_data,
             &mut TimingTree::default(),
             abort_signal,
         )
-        .map_err(|err| err.to_string())?
-    {
-        let p_vals = output_data.public_values;
-        let intern = output_data.proof_with_pis;
-        Ok(Some(GeneratedTxnProof { p_vals, intern }))
-    } else {
-        Ok(None)
-    }
+        .map_err(|err| err.to_string())?;
+
+    let p_vals = output_data.public_values;
+    let intern = output_data.proof_with_pis;
+    Ok(GeneratedTxnProof { p_vals, intern })
 }
 
 /// Generates an aggregation proof from two child proofs.

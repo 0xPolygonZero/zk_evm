@@ -10,7 +10,7 @@ use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::state::{GenerationState, State};
+use crate::generation::state::State;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
@@ -304,8 +304,6 @@ where
 
     fn final_exception(&mut self) -> anyhow::Result<()> {
         let checkpoint = self.checkpoint();
-
-        let gen_state = self.get_mut_generation_state();
 
         let (row, _) = self.base_row();
 

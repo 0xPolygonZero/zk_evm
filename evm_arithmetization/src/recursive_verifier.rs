@@ -7,9 +7,8 @@ use plonky2::field::extension::Extendable;
 use plonky2::gates::exponentiation::ExponentiationGate;
 use plonky2::gates::gate::GateRef;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{HashOut, HashOutTarget, MerkleCapTarget, RichField};
+use plonky2::hash::hash_types::{HashOut, MerkleCapTarget, RichField};
 use plonky2::hash::hashing::PlonkyPermutation;
-use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, Witness, WitnessWrite};
@@ -40,7 +39,7 @@ use crate::proof::{
     ExtraBlockDataTarget, MemCap, MemCapTarget, PublicValues, PublicValuesTarget, RegistersData,
     RegistersDataTarget, TrieRoots, TrieRootsTarget,
 };
-use crate::util::{h256_limbs, h2u, u256_limbs, u256_to_u32, u256_to_u64};
+use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
 
 pub(crate) struct PublicInputs<T: Copy + Default + Eq + PartialEq + Debug, P: PlonkyPermutation<T>>
@@ -715,6 +714,18 @@ pub(crate) fn add_virtual_registers_data<F: RichField + Extendable<D>, const D: 
     }
 }
 
+pub(crate) fn debug_public_values(public_values: &PublicValues) {
+    log::debug!("Public Values:");
+    log::debug!(
+        "  Trie Roots Before: {:?}",
+        &public_values.trie_roots_before
+    );
+    log::debug!("  Trie Roots After: {:?}", &public_values.trie_roots_after);
+    log::debug!("  Block Metadata: {:?}", &public_values.block_metadata);
+    log::debug!("  Block Hashes: {:?}", &public_values.block_hashes);
+    log::debug!("  Extra Block Data: {:?}", &public_values.extra_block_data);
+}
+
 pub fn set_public_value_targets<F, W, const D: usize>(
     witness: &mut W,
     public_values_target: &PublicValuesTarget,
@@ -724,6 +735,8 @@ where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
+    debug_public_values(public_values);
+
     set_trie_roots_target(
         witness,
         &public_values_target.trie_roots_before,
