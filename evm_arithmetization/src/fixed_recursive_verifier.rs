@@ -186,8 +186,8 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    lhs: SegmentAggregationChildTarget<D>,
-    rhs: SegmentAggregationChildTarget<D>,
+    lhs: AggregationChildTarget<D>,
+    rhs: AggregationChildTarget<D>,
     public_values: PublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
 }
@@ -219,8 +219,8 @@ where
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
-        let lhs = SegmentAggregationChildTarget::from_buffer(buffer)?;
-        let rhs = SegmentAggregationChildTarget::from_buffer(buffer)?;
+        let lhs = AggregationChildTarget::from_buffer(buffer)?;
+        let rhs = AggregationChildTarget::from_buffer(buffer)?;
         Ok(Self {
             circuit,
             lhs,
@@ -232,28 +232,28 @@ where
 }
 
 #[derive(Eq, PartialEq, Debug)]
-struct SegmentAggregationChildTarget<const D: usize> {
+struct AggregationChildTarget<const D: usize> {
     is_agg: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
-    segment_proof: ProofWithPublicInputsTarget<D>,
+    proof: ProofWithPublicInputsTarget<D>,
 }
 
-impl<const D: usize> SegmentAggregationChildTarget<D> {
+impl<const D: usize> AggregationChildTarget<D> {
     fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         buffer.write_target_bool(self.is_agg)?;
         buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
-        buffer.write_target_proof_with_public_inputs(&self.segment_proof)?;
+        buffer.write_target_proof_with_public_inputs(&self.proof)?;
         Ok(())
     }
 
     fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
         let is_agg = buffer.read_target_bool()?;
         let agg_proof = buffer.read_target_proof_with_public_inputs()?;
-        let segment_proof = buffer.read_target_proof_with_public_inputs()?;
+        let proof = buffer.read_target_proof_with_public_inputs()?;
         Ok(Self {
             is_agg,
             agg_proof,
-            segment_proof,
+            proof,
         })
     }
 
@@ -267,7 +267,7 @@ impl<const D: usize> SegmentAggregationChildTarget<D> {
         let agg_pv =
             PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs, len_mem_cap);
         let segment_pv =
-            PublicValuesTarget::from_public_inputs(&self.segment_proof.public_inputs, len_mem_cap);
+            PublicValuesTarget::from_public_inputs(&self.proof.public_inputs, len_mem_cap);
         PublicValuesTarget::select(builder, self.is_agg, agg_pv, segment_pv)
     }
 }
@@ -282,8 +282,8 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    lhs: TxnAggregationChildTarget<D>,
-    rhs: TxnAggregationChildTarget<D>,
+    lhs: AggregationChildTarget<D>,
+    rhs: AggregationChildTarget<D>,
     public_values: PublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
 }
@@ -315,8 +315,8 @@ where
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
-        let lhs = TxnAggregationChildTarget::from_buffer(buffer)?;
-        let rhs = TxnAggregationChildTarget::from_buffer(buffer)?;
+        let lhs = AggregationChildTarget::from_buffer(buffer)?;
+        let rhs = AggregationChildTarget::from_buffer(buffer)?;
         Ok(Self {
             circuit,
             lhs,
@@ -324,49 +324,6 @@ where
             public_values,
             cyclic_vk,
         })
-    }
-}
-
-#[derive(Eq, PartialEq, Debug)]
-struct TxnAggregationChildTarget<const D: usize> {
-    is_agg: BoolTarget,
-    txn_agg_proof: ProofWithPublicInputsTarget<D>,
-    segment_agg_proof: ProofWithPublicInputsTarget<D>,
-}
-
-impl<const D: usize> TxnAggregationChildTarget<D> {
-    fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
-        buffer.write_target_bool(self.is_agg)?;
-        buffer.write_target_proof_with_public_inputs(&self.txn_agg_proof)?;
-        buffer.write_target_proof_with_public_inputs(&self.segment_agg_proof)?;
-        Ok(())
-    }
-
-    fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
-        let is_agg = buffer.read_target_bool()?;
-        let txn_agg_proof = buffer.read_target_proof_with_public_inputs()?;
-        let segment_agg_proof = buffer.read_target_proof_with_public_inputs()?;
-        Ok(Self {
-            is_agg,
-            txn_agg_proof,
-            segment_agg_proof,
-        })
-    }
-
-    // `len_mem_cap` is the length of the Merkle
-    // caps for `MemBefore` and `MemAfter`.
-    fn public_values<F: RichField + Extendable<D>>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        len_mem_cap: usize,
-    ) -> PublicValuesTarget {
-        let txn_agg_pv =
-            PublicValuesTarget::from_public_inputs(&self.txn_agg_proof.public_inputs, len_mem_cap);
-        let segment_agg_pv = PublicValuesTarget::from_public_inputs(
-            &self.segment_agg_proof.public_inputs,
-            len_mem_cap,
-        );
-        PublicValuesTarget::select(builder, self.is_agg, txn_agg_pv, segment_agg_pv)
     }
 }
 
@@ -1220,51 +1177,45 @@ where
     fn add_segment_agg_child(
         builder: &mut CircuitBuilder<F, D>,
         root: &RootCircuitData<F, C, D>,
-    ) -> SegmentAggregationChildTarget<D> {
+    ) -> AggregationChildTarget<D> {
         let common = &root.circuit.common;
         let root_vk = builder.constant_verifier_data(&root.circuit.verifier_only);
         let is_agg = builder.add_virtual_bool_target_safe();
         let agg_proof = builder.add_virtual_proof_with_pis(common);
-        let segment_proof = builder.add_virtual_proof_with_pis(common);
+        let proof = builder.add_virtual_proof_with_pis(common);
         builder
-            .conditionally_verify_cyclic_proof::<C>(
-                is_agg,
-                &agg_proof,
-                &segment_proof,
-                &root_vk,
-                common,
-            )
+            .conditionally_verify_cyclic_proof::<C>(is_agg, &agg_proof, &proof, &root_vk, common)
             .expect("Failed to build cyclic recursion circuit");
-        SegmentAggregationChildTarget {
+        AggregationChildTarget {
             is_agg,
             agg_proof,
-            segment_proof,
+            proof,
         }
     }
 
     fn add_txn_agg_child(
         builder: &mut CircuitBuilder<F, D>,
         segment_agg: &SegmentAggregationCircuitData<F, C, D>,
-    ) -> TxnAggregationChildTarget<D> {
+    ) -> AggregationChildTarget<D> {
         let common = &segment_agg.circuit.common;
         let inner_segment_agg_vk =
             builder.constant_verifier_data(&segment_agg.circuit.verifier_only);
         let is_agg = builder.add_virtual_bool_target_safe();
-        let txn_agg_proof = builder.add_virtual_proof_with_pis(common);
-        let segment_agg_proof = builder.add_virtual_proof_with_pis(common);
+        let agg_proof = builder.add_virtual_proof_with_pis(common);
+        let proof = builder.add_virtual_proof_with_pis(common);
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg,
-                &txn_agg_proof,
-                &segment_agg_proof,
+                &agg_proof,
+                &proof,
                 &inner_segment_agg_vk,
                 common,
             )
             .expect("Failed to build cyclic recursion circuit");
-        TxnAggregationChildTarget {
+        AggregationChildTarget {
             is_agg,
-            txn_agg_proof,
-            segment_agg_proof,
+            agg_proof,
+            proof,
         }
     }
 
@@ -1662,7 +1613,7 @@ where
             lhs_is_agg,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
-            &self.segment_aggregation.lhs.segment_proof,
+            &self.segment_aggregation.lhs.proof,
             &self.segment_aggregation.lhs.agg_proof,
             lhs_proof,
         );
@@ -1672,7 +1623,7 @@ where
             rhs_is_agg,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
-            &self.segment_aggregation.rhs.segment_proof,
+            &self.segment_aggregation.rhs.proof,
             &self.segment_aggregation.rhs.agg_proof,
             rhs_proof,
         );
@@ -1741,8 +1692,8 @@ where
     ///   one will generate a proof of
     /// validity for both the transaction range covered by the previous proof
     /// and the current transaction.
-    /// - `agg_segment_proof`: the final aggregation proof containing all
-    ///   segments within the current transaction.
+    /// - `agg_proof`: the final aggregation proof containing all segments
+    ///   within the current transaction.
     /// - `public_values`: the public values associated to the aggregation
     ///   proof.
     ///
@@ -1767,8 +1718,8 @@ where
             lhs_is_agg,
             &self.txn_aggregation.circuit,
             &mut txn_inputs,
-            &self.txn_aggregation.lhs.segment_agg_proof,
-            &self.txn_aggregation.lhs.txn_agg_proof,
+            &self.txn_aggregation.lhs.proof,
+            &self.txn_aggregation.lhs.agg_proof,
             lhs_proof,
         );
 
@@ -1777,8 +1728,8 @@ where
             rhs_is_agg,
             &self.txn_aggregation.circuit,
             &mut txn_inputs,
-            &self.txn_aggregation.rhs.segment_agg_proof,
-            &self.txn_aggregation.rhs.txn_agg_proof,
+            &self.txn_aggregation.rhs.proof,
+            &self.txn_aggregation.rhs.agg_proof,
             rhs_proof,
         );
 
@@ -1869,7 +1820,7 @@ where
         is_agg: bool,
         circuit: &CircuitData<F, C, D>,
         agg_inputs: &mut PartialWitness<F>,
-        segment_proof_target: &ProofWithPublicInputsTarget<D>,
+        proof_target: &ProofWithPublicInputsTarget<D>,
         agg_proof_target: &ProofWithPublicInputsTarget<D>,
         proof: &ProofWithPublicInputs<F, C, D>,
     ) {
@@ -1879,7 +1830,7 @@ where
         } else {
             Self::set_dummy_proof_with_cyclic_vk_pis(circuit, agg_inputs, agg_proof_target, proof)
         }
-        agg_inputs.set_proof_with_pis_target(segment_proof_target, proof);
+        agg_inputs.set_proof_with_pis_target(proof_target, proof);
     }
 
     /// Create a final block proof, once all transactions of a given block have
