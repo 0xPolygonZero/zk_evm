@@ -299,14 +299,13 @@ pub(crate) trait Transition<F: Field>: State<F> {
     /// and program counter.
     fn perform_state_op(
         &mut self,
-        opcode: u8,
         op: Operation,
         row: CpuColumnsView<F>,
     ) -> Result<Operation, ProgramError>
     where
         Self: Sized,
     {
-        self.perform_op(op, opcode, row)?;
+        self.perform_op(op, row)?;
         self.incr_pc(match op {
             Operation::Syscall(_, _, _) | Operation::ExitKernel => 0,
             Operation::Push(n) => n as usize + 1,
@@ -457,12 +456,7 @@ pub(crate) trait Transition<F: Field>: State<F> {
     /// Skips the following instructions for some specific labels
     fn skip_if_necessary(&mut self, op: Operation) -> Result<Operation, ProgramError>;
 
-    fn perform_op(
-        &mut self,
-        op: Operation,
-        opcode: u8,
-        row: CpuColumnsView<F>,
-    ) -> Result<(), ProgramError>
+    fn perform_op(&mut self, op: Operation, row: CpuColumnsView<F>) -> Result<(), ProgramError>
     where
         Self: Sized,
     {

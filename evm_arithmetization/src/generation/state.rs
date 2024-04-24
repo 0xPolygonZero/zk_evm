@@ -515,7 +515,7 @@ impl<F: Field> State<F> for GenerationState<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(opcode, op, row)
+        self.perform_state_op(op, row)
     }
 }
 

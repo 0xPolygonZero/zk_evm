@@ -1,10 +1,9 @@
 //! An EVM interpreter, allowing to execute the zkEVM CPU without keeping track
 //! of co-processor operations to fill out their execution traces.
 //! This is useful for testing and debugging purposes, but also in the context
-//! of jumpdest analysis simulation, where it allows to prover to skim through
+//! of jumpdest analysis simulation, where it allows the prover to skim through
 //! the future execution and generate nondeterministically the corresponding
-//! jumpdest table, before the actual CPU carries on with the contract
-//! execution.
+//! jumpdest table, before the actual CPU carries on with contract execution.
 
 use core::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
@@ -546,7 +545,7 @@ impl<F: Field> State<F> for Interpreter<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(opcode, op, row)
+        self.perform_state_op(op, row)
     }
 }
 
