@@ -20,7 +20,7 @@ global mpt_read_state_trie_from_key:
 
 // Convenience macro to call mpt_read_state_trie_from_key and return where we left off.
 %macro mpt_read_state_trie_from_key
-    %stack (addr) -> (addr, %%after)
+    %stack (key) -> (key, %%after)
     %jump(mpt_read_state_trie_from_key)
 %%after:
 %endmacro
