@@ -10,7 +10,7 @@ use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::state::{GenerationState, State};
+use crate::generation::state::State;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
@@ -400,7 +400,6 @@ pub(crate) trait Transition<F: Field>: State<F> {
             let dst: u32 = dst
                 .try_into()
                 .map_err(|_| ProgramError::InvalidJumpiDestination)?;
-            let is_kernel = self.get_registers().is_kernel;
             if !self.generate_jumpdest_analysis(dst as usize) {
                 row.general.jumps_mut().should_jump = F::ONE;
                 let cond_sum_u64 = cond

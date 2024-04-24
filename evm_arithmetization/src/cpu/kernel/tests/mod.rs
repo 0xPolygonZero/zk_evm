@@ -19,9 +19,9 @@ mod rlp;
 mod signed_syscalls;
 mod transaction_parsing;
 
-use core::ops::Range;
 use std::{
     collections::{BTreeSet, HashMap},
+    ops::Range,
     str::FromStr,
 };
 
@@ -56,7 +56,9 @@ pub(crate) fn run_interpreter<F: Field>(
     initial_offset: usize,
     initial_stack: Vec<U256>,
 ) -> anyhow::Result<Interpreter<F>> {
-    run(initial_offset, initial_stack)
+    let mut interpreter = Interpreter::new(initial_offset, initial_stack);
+    interpreter.run()?;
+    Ok(interpreter)
 }
 
 #[derive(Clone)]
@@ -82,15 +84,6 @@ pub(crate) fn run_interpreter_with_memory<F: Field>(
             )
         }
     }
-    interpreter.run()?;
-    Ok(interpreter)
-}
-
-pub(crate) fn run<F: Field>(
-    initial_offset: usize,
-    initial_stack: Vec<U256>,
-) -> anyhow::Result<Interpreter<F>> {
-    let mut interpreter = Interpreter::new(initial_offset, initial_stack);
     interpreter.run()?;
     Ok(interpreter)
 }

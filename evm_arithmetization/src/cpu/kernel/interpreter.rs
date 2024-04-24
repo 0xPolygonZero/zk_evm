@@ -1,4 +1,10 @@
-//! An EVM interpreter for testing and debugging purposes.
+//! An EVM interpreter, allowing to execute the zkEVM CPU without keeping track
+//! of co-processor operations to fill out their execution traces.
+//! This is useful for testing and debugging purposes, but also in the context
+//! of jumpdest analysis simulation, where it allows to prover to skim through
+//! the future execution and generate nondeterministically the corresponding
+//! jumpdest table, before the actual CPU carries on with the contract
+//! execution.
 
 use core::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
