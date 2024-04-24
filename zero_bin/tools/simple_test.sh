@@ -22,14 +22,26 @@ export RUST_BACKTRACE=full
 export RUST_LOG=info
 export RUSTFLAGS='-C target-cpu=native'
 
-# This sizes are configured specifically for this witness. Don't use this in other scenarios
-export ARITHMETIC_CIRCUIT_SIZE="16..19"
-export BYTE_PACKING_CIRCUIT_SIZE="9..19"
-export CPU_CIRCUIT_SIZE="12..21"
-export KECCAK_CIRCUIT_SIZE="14..18"
-export KECCAK_SPONGE_CIRCUIT_SIZE="9..13"
-export LOGIC_CIRCUIT_SIZE="12..17"
-export MEMORY_CIRCUIT_SIZE="17..23"
+if [[ $1 == "test_only" ]]; then
+    # Circuit sizes don't matter in test_only mode, so we keep them minimal.
+    export ARITHMETIC_CIRCUIT_SIZE="16..17"
+    export BYTE_PACKING_CIRCUIT_SIZE="9..10"
+    export CPU_CIRCUIT_SIZE="12..13"
+    export KECCAK_CIRCUIT_SIZE="14..15"
+    export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
+    export LOGIC_CIRCUIT_SIZE="12..13"
+    export MEMORY_CIRCUIT_SIZE="17..18"
+else
+    # These sizes are configured specifically for this witness. Don't use this in other scenarios
+    export ARITHMETIC_CIRCUIT_SIZE="16..19"
+    export BYTE_PACKING_CIRCUIT_SIZE="16..19"
+    export CPU_CIRCUIT_SIZE="18..21"
+    export KECCAK_CIRCUIT_SIZE="15..18"
+    export KECCAK_SPONGE_CIRCUIT_SIZE="10..13"
+    export LOGIC_CIRCUIT_SIZE="13..17"
+    export MEMORY_CIRCUIT_SIZE="20..23"
+fi
+
 
 # If we run ./simple_test test_only, we'll generate a dummy
 # proof. This is useful for quickly testing decoding and all of the
