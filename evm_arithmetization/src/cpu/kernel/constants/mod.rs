@@ -58,8 +58,8 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c.insert(MAX_NONCE.0.into(), U256::from(MAX_NONCE.1));
     c.insert(CALL_STACK_LIMIT.0.into(), U256::from(CALL_STACK_LIMIT.1));
     c.insert(
-        cancun_constants::BEACON_ROOTS_ADDRESS.0.into(),
-        U256::from_big_endian(&cancun_constants::BEACON_ROOTS_ADDRESS.1),
+        cancun_constants::BEACON_ROOTS_CONTRACT_STATE_KEY.0.into(),
+        U256::from_big_endian(&cancun_constants::BEACON_ROOTS_CONTRACT_STATE_KEY.1),
     );
     c.insert(
         cancun_constants::HISTORY_BUFFER_LENGTH.0.into(),
@@ -67,10 +67,10 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     );
 
     c.insert(
-        global_exit_root::ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2
+        global_exit_root::GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY
             .0
             .into(),
-        U256::from_big_endian(&global_exit_root::ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2.1),
+        U256::from_big_endian(&global_exit_root::GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY.1),
     );
     c.insert(
         global_exit_root::GLOBAL_EXIT_ROOT_STORAGE_POS.0.into(),
@@ -350,8 +350,8 @@ pub mod cancun_constants {
         hex!("000000000000000000000000000000001666c54b0a32529503432fcae0181b4bef79de09fc63671fda5ed1ba9bfa07899495346f3d7ac9cd23048ef30d0a154f"), // y_im
     ];
 
-    pub const BEACON_ROOTS_ADDRESS: (&str, [u8; 20]) = (
-        "BEACON_ROOTS_ADDRESS",
+    pub const BEACON_ROOTS_CONTRACT_STATE_KEY: (&str, [u8; 20]) = (
+        "BEACON_ROOTS_CONTRACT_STATE_KEY",
         hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"),
     );
 
@@ -379,8 +379,8 @@ pub mod global_exit_root {
     use super::*;
 
     /// Taken from https://github.com/0xPolygonHermez/cdk-erigon/blob/61f0b6912055c73f6879ea7e9b5bac22ea5fc85c/zk/utils/global_exit_root.go#L16.
-    pub const ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2: (&str, [u8; 20]) = (
-        "ADDRESS_GLOBAL_EXIT_ROOT_MANAGER_L2",
+    pub const GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY: (&str, [u8; 20]) = (
+        "GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY",
         hex!("a40D5f56745a118D0906a34E69aeC8C0Db1cB8fA"),
     );
     /// Taken from https://github.com/0xPolygonHermez/cdk-erigon/blob/61f0b6912055c73f6879ea7e9b5bac22ea5fc85c/zk/utils/global_exit_root.go#L17.

@@ -32,9 +32,9 @@
 %endmacro
 
 // Returns a pointer to the root of the storage trie associated with the provided account.
-%macro get_storage_trie(addr)
+%macro get_storage_trie(key)
     // stack: (empty)
-    %get_account_data($addr)
+    %get_account_data($key)
     // stack: account_ptr
     %add_const(2)
     // stack: storage_root_ptr_ptr

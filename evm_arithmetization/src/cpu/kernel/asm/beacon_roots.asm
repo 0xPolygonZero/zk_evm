@@ -37,13 +37,13 @@ write_beacon_roots_to_storage:
     %slot_to_storage_key
     // stack: storage_key, value_ptr, after_beacon_roots_storage_insert, retdest
     PUSH 64 // storage_key has 64 nibbles
-    %get_storage_trie(@BEACON_ROOTS_ADDRESS)
+    %get_storage_trie(@BEACON_ROOTS_CONTRACT_STATE_KEY)
     // stack: storage_root_ptr, 64, storage_key, value_ptr, after_beacon_roots_storage_insert, retdest
     %jump(mpt_insert)
 
 after_beacon_roots_storage_insert:
     // stack: new_storage_root_ptr, retdest
-    %get_account_data(@BEACON_ROOTS_ADDRESS)
+    %get_account_data(@BEACON_ROOTS_CONTRACT_STATE_KEY)
     // stack: account_ptr, new_storage_root_ptr, retdest
 
     // Update the copied account with our new storage root pointer.
@@ -60,7 +60,7 @@ delete_root_idx_slot:
     %slot_to_storage_key
     // stack: storage_key, after_root_idx_slot_delete, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
     PUSH 64 // storage_key has 64 nibbles
-    %get_storage_trie(@BEACON_ROOTS_ADDRESS)
+    %get_storage_trie(@BEACON_ROOTS_CONTRACT_STATE_KEY)
     // stack: storage_root_ptr, 64, storage_key, after_root_idx_slot_delete, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
 
     // If the slot is empty (i.e. ptr defaulting to 0), skip the deletion.
@@ -79,7 +79,7 @@ checkpoint_delete_root_idx:
 
 after_root_idx_slot_delete:
     // stack: new_storage_root_ptr, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
-    %get_account_data(@BEACON_ROOTS_ADDRESS)
+    %get_account_data(@BEACON_ROOTS_CONTRACT_STATE_KEY)
     // stack: account_ptr, new_storage_root_ptr, write_beacon_roots_to_storage, timestamp_idx, timestamp, retdest
 
     // Update the copied account with our new storage root pointer.
