@@ -29,8 +29,8 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{
     generate_segment, set_registers_and_run, ExtraSegmentData, Interpreter,
 };
-use crate::generation::state::{GenerationState, State};
-use crate::generation::{generate_traces, GenerationInputs, MemBeforeValues};
+use crate::generation::state::GenerationState;
+use crate::generation::{generate_traces, GenerationInputs};
 use crate::get_challenges::observe_public_values;
 use crate::memory::segments::Segment;
 use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};

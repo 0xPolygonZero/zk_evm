@@ -1657,39 +1657,25 @@ where
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
         let mut agg_inputs = PartialWitness::new();
 
-        agg_inputs.set_bool_target(self.segment_aggregation.lhs.is_agg, lhs_is_agg);
-        // If the lhs is not an aggregation, we set the cyclic vk to a dummy value, so
-        // that it corresponds to the aggregation cyclic vk.
-        if lhs_is_agg {
-            agg_inputs
-                .set_proof_with_pis_target(&self.segment_aggregation.lhs.agg_proof, lhs_proof);
-        } else {
-            Self::set_dummy_proof_with_cyclic_vk_pis(
-                &self.segment_aggregation.circuit,
-                &mut agg_inputs,
-                &self.segment_aggregation.lhs.agg_proof,
-                lhs_proof,
-            )
-        }
-        agg_inputs
-            .set_proof_with_pis_target(&self.segment_aggregation.lhs.segment_proof, lhs_proof);
+        Self::set_dummy_if_necessary(
+            self.segment_aggregation.lhs.is_agg,
+            lhs_is_agg,
+            &self.segment_aggregation.circuit,
+            &mut agg_inputs,
+            &self.segment_aggregation.lhs.segment_proof,
+            &self.segment_aggregation.lhs.agg_proof,
+            lhs_proof,
+        );
 
-        agg_inputs.set_bool_target(self.segment_aggregation.rhs.is_agg, rhs_is_agg);
-        // If the rhs is not an aggregation, we set the cyclic vk to a dummy value, so
-        // that it corresponds to the aggregation cyclic vk.
-        if rhs_is_agg {
-            agg_inputs
-                .set_proof_with_pis_target(&self.segment_aggregation.rhs.agg_proof, rhs_proof);
-        } else {
-            Self::set_dummy_proof_with_cyclic_vk_pis(
-                &self.segment_aggregation.circuit,
-                &mut agg_inputs,
-                &self.segment_aggregation.rhs.agg_proof,
-                rhs_proof,
-            )
-        }
-        agg_inputs
-            .set_proof_with_pis_target(&self.segment_aggregation.rhs.segment_proof, rhs_proof);
+        Self::set_dummy_if_necessary(
+            self.segment_aggregation.rhs.is_agg,
+            rhs_is_agg,
+            &self.segment_aggregation.circuit,
+            &mut agg_inputs,
+            &self.segment_aggregation.rhs.segment_proof,
+            &self.segment_aggregation.rhs.agg_proof,
+            rhs_proof,
+        );
 
         agg_inputs.set_verifier_data_target(
             &self.segment_aggregation.cyclic_vk,
@@ -1776,40 +1762,25 @@ where
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
         let mut txn_inputs = PartialWitness::new();
 
-        txn_inputs.set_bool_target(self.txn_aggregation.lhs.is_agg, lhs_is_agg);
+        Self::set_dummy_if_necessary(
+            self.txn_aggregation.lhs.is_agg,
+            lhs_is_agg,
+            &self.txn_aggregation.circuit,
+            &mut txn_inputs,
+            &self.txn_aggregation.lhs.segment_agg_proof,
+            &self.txn_aggregation.lhs.txn_agg_proof,
+            lhs_proof,
+        );
 
-        // If the lhs is not an aggregation, we set the cyclic vk to a dummy value, so
-        // that it corresponds to the aggregation cyclic vk.
-        if lhs_is_agg {
-            txn_inputs
-                .set_proof_with_pis_target(&self.txn_aggregation.lhs.txn_agg_proof, lhs_proof);
-        } else {
-            Self::set_dummy_proof_with_cyclic_vk_pis(
-                &self.txn_aggregation.circuit,
-                &mut txn_inputs,
-                &self.txn_aggregation.lhs.txn_agg_proof,
-                lhs_proof,
-            );
-        }
-        txn_inputs
-            .set_proof_with_pis_target(&self.txn_aggregation.lhs.segment_agg_proof, lhs_proof);
-
-        txn_inputs.set_bool_target(self.txn_aggregation.rhs.is_agg, rhs_is_agg);
-        // If the rhs is not an aggregation, we set the cyclic vk to a dummy value, so
-        // that it corresponds to the aggregation cyclic vk.
-        if rhs_is_agg {
-            txn_inputs
-                .set_proof_with_pis_target(&self.txn_aggregation.rhs.txn_agg_proof, rhs_proof);
-        } else {
-            Self::set_dummy_proof_with_cyclic_vk_pis(
-                &self.txn_aggregation.circuit,
-                &mut txn_inputs,
-                &self.txn_aggregation.rhs.txn_agg_proof,
-                rhs_proof,
-            );
-        }
-        txn_inputs
-            .set_proof_with_pis_target(&self.txn_aggregation.rhs.segment_agg_proof, rhs_proof);
+        Self::set_dummy_if_necessary(
+            self.txn_aggregation.rhs.is_agg,
+            rhs_is_agg,
+            &self.txn_aggregation.circuit,
+            &mut txn_inputs,
+            &self.txn_aggregation.rhs.segment_agg_proof,
+            &self.txn_aggregation.rhs.txn_agg_proof,
+            rhs_proof,
+        );
 
         txn_inputs.set_verifier_data_target(
             &self.txn_aggregation.cyclic_vk,
@@ -1889,6 +1860,26 @@ where
         for (&pi_t, pi) in pi_targets.iter().zip_eq(dummy_pis) {
             witness.set_target(pi_t, pi);
         }
+    }
+
+    /// If the lhs is not an aggregation, we set the cyclic vk to a dummy value,
+    /// so that it corresponds to the aggregation cyclic vk.
+    fn set_dummy_if_necessary(
+        is_agg_target: BoolTarget,
+        is_agg: bool,
+        circuit: &CircuitData<F, C, D>,
+        agg_inputs: &mut PartialWitness<F>,
+        segment_proof_target: &ProofWithPublicInputsTarget<D>,
+        agg_proof_target: &ProofWithPublicInputsTarget<D>,
+        proof: &ProofWithPublicInputs<F, C, D>,
+    ) {
+        agg_inputs.set_bool_target(is_agg_target, is_agg);
+        if is_agg {
+            agg_inputs.set_proof_with_pis_target(agg_proof_target, proof);
+        } else {
+            Self::set_dummy_proof_with_cyclic_vk_pis(circuit, agg_inputs, agg_proof_target, proof)
+        }
+        agg_inputs.set_proof_with_pis_target(segment_proof_target, proof);
     }
 
     /// Create a final block proof, once all transactions of a given block have
