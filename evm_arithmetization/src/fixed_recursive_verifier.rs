@@ -1452,7 +1452,7 @@ where
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
         let mut all_data_segments =
-            generate_all_data_segments::<F>(Some(max_cpu_len_log), generation_inputs.clone())?;
+            generate_all_data_segments::<F>(Some(max_cpu_len_log), &generation_inputs)?;
         let mut proofs = Vec::with_capacity(all_data_segments.len());
         for mut data in all_data_segments {
             let proof = self.prove_segment(
