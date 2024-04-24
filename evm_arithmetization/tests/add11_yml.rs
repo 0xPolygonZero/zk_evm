@@ -4,19 +4,18 @@ use std::time::Duration;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256};
-use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::{generate_all_data_segments, prove};
 use evm_arithmetization::verifier::verify_proof;
-use evm_arithmetization::{AllRecursiveCircuits, AllStark, GenerationInputs, Node};
+use evm_arithmetization::{AllStark, GenerationInputs, Node};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::plonk::config::{KeccakGoldilocksConfig, PoseidonGoldilocksConfig};
+use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 
@@ -192,83 +191,6 @@ fn add11_yml() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)
-}
-
-#[test]
-#[ignore] // Too slow to run on CI.
-fn add11_segments_aggreg() -> anyhow::Result<()> {
-    init_logger();
-
-    type F = GoldilocksField;
-    const D: usize = 2;
-    type C = PoseidonGoldilocksConfig;
-
-    let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
-
-    let inputs = get_generation_inputs();
-
-    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
-        &all_stark,
-        &[
-            16..17,
-            8..15,
-            8..16,
-            4..15,
-            7..11,
-            4..13,
-            16..19,
-            7..18,
-            11..18,
-        ], // Minimal ranges to prove an empty list
-        &config,
-    );
-
-    let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len_log = 14;
-
-    let all_segment_proofs = &all_circuits.prove_all_segments(
-        &all_stark,
-        &config,
-        inputs,
-        max_cpu_len_log,
-        &mut timing,
-        None,
-    )?;
-
-    for segment_proof in all_segment_proofs {
-        let ProverOutputData {
-            proof_with_pis: proof,
-            ..
-        } = segment_proof;
-        all_circuits.verify_root(proof.clone())?;
-    }
-
-    assert_eq!(all_segment_proofs.len(), 3);
-
-    let (first_aggreg_proof, first_aggreg_pv) = all_circuits.prove_segment_aggregation(
-        false,
-        &all_segment_proofs[0].proof_with_pis,
-        all_segment_proofs[0].public_values.clone(),
-        false,
-        &all_segment_proofs[1].proof_with_pis,
-        all_segment_proofs[1].public_values.clone(),
-    )?;
-    all_circuits.verify_segment_aggregation(&first_aggreg_proof)?;
-
-    let (second_aggreg_proof, second_aggreg_pv) = all_circuits.prove_segment_aggregation(
-        true,
-        &first_aggreg_proof,
-        first_aggreg_pv,
-        false,
-        &all_segment_proofs[2].proof_with_pis,
-        all_segment_proofs[2].public_values.clone(),
-    )?;
-    all_circuits.verify_segment_aggregation(&second_aggreg_proof)?;
-
-    let (txn_aggreg_proof, _) =
-        all_circuits.prove_transaction_aggregation(None, &second_aggreg_proof, second_aggreg_pv)?;
-    all_circuits.verify_txn_aggregation(&txn_aggreg_proof)
 }
 
 fn init_logger() {

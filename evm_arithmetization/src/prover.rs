@@ -16,6 +16,7 @@ use plonky2::iop::challenger::Challenger;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
 use starky::lookup::GrandProductChallengeSet;
@@ -37,7 +38,7 @@ use crate::witness::memory::{MemoryAddress, MemoryState};
 use crate::witness::state::RegistersState;
 
 /// Structure holding the data needed to initialize a segment.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct GenerationSegmentData {
     /// Registers at the start of the segment execution.
     pub(crate) registers_before: RegistersState,
@@ -541,6 +542,15 @@ pub fn generate_all_data_segments<F: RichField>(
                 jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             },
         };
+    }
+
+    // We need at least two segments to prove a segment aggregation.
+    if all_seg_data.len() == 1 {
+        let dummy_seg = GenerationSegmentData {
+            registers_before: segment_data.registers_after,
+            ..segment_data
+        };
+        all_seg_data.push(dummy_seg);
     }
 
     Ok(all_seg_data)
