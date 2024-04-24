@@ -334,16 +334,16 @@ fn test_two_reverts_with_exception() -> anyhow::Result<()> {
     state_trie_before.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
+    )?;
+    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(
         to_first_nibbles,
         rlp::encode(&to_first_account_before).to_vec(),
-    );
+    )?;
     state_trie_before.insert(
         to_second_nibbles,
         rlp::encode(&to_second_account_before).to_vec(),
-    );
+    )?;
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before.clone(),
@@ -374,17 +374,17 @@ fn test_two_reverts_with_exception() -> anyhow::Result<()> {
         expected_state_trie_after.insert(
             beneficiary_nibbles,
             rlp::encode(&beneficiary_account_after).to_vec(),
-        );
+        )?;
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
         expected_state_trie_after.insert(
             to_first_nibbles,
             rlp::encode(&to_first_account_after).to_vec(),
-        );
+        )?;
         expected_state_trie_after.insert(
             to_second_nibbles,
             rlp::encode(&to_second_account_before).to_vec(),
-        );
+        )?;
         expected_state_trie_after
     };
 
@@ -405,11 +405,11 @@ fn test_two_reverts_with_exception() -> anyhow::Result<()> {
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
     receipts_trie.insert(
         Nibbles::from_str("0x01").unwrap(),
         rlp::encode(&receipt_1).to_vec(),
-    );
+    )?;
 
     // Update expected transactions trie.
     let mut transactions_trie: HashedPartialTrie = Node::Leaf {
@@ -417,7 +417,7 @@ fn test_two_reverts_with_exception() -> anyhow::Result<()> {
         value: txn.to_vec(),
     }
     .into();
-    transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec());
+    transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec())?;
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),

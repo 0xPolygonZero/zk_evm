@@ -261,7 +261,7 @@ fn initialize_mpts(
     sender_balance_before: U256,
     to_account_balance_before: U256,
     to_account_second_balance_before: U256,
-) -> (TrieInputs, [u8; 24], i32, BlockMetadata) {
+) -> anyhow::Result<(TrieInputs, [u8; 24], i32, BlockMetadata)> {
     let code = [
         0x64, 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0x60, 0x0, 0x52, // MSTORE(0x0, 0xA1B2C3D4E5)
         0x60, 0x0, 0x60, 0x0, 0xA0, // LOG0(0x0, 0x0)
@@ -346,13 +346,13 @@ fn initialize_mpts(
     state_trie_before.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    )?;
+    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
+    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
     state_trie_before.insert(
         to_second_nibbles,
         rlp::encode(&to_account_second_before).to_vec(),
-    );
+    )?;
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
@@ -364,7 +364,7 @@ fn initialize_mpts(
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
-    (tries_before, code, code_gas, block_metadata)
+    Ok((tries_before, code, code_gas, block_metadata))
 }
 
 // Tests proving two transactions in one run.
@@ -395,7 +395,7 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
         sender_balance_before,
         to_account_balance_before,
         to_account_second_balance_before,
-    );
+    )?;
     let code_hash = keccak(code);
     let checkpoint_state_trie_root = tries_before.state_trie.hash();
 
@@ -472,7 +472,7 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
-    );
+    )?;
 
     let receipt_nibbles = Nibbles::from_str("0x01").unwrap(); // RLP(1) = 0x1
 
@@ -490,11 +490,11 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
     expected_state_trie_after.insert(
         to_second_nibbles,
         rlp::encode(&to_account_second_after).to_vec(),
-    );
+    )?;
 
     let mut transactions_trie: HashedPartialTrie = Node::Empty.into();
 
-    transactions_trie.insert(Nibbles::from_str("0x80").unwrap(), txn.to_vec());
+    transactions_trie.insert(Nibbles::from_str("0x80").unwrap(), txn.to_vec())?;
 
     transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec())?;
 
