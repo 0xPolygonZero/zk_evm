@@ -1,3 +1,4 @@
+use std::env;
 use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
@@ -9,11 +10,14 @@ use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::types::PlonkyProofIntern;
 
+use crate::utils::get_package_version;
+
 mod cli;
 mod http;
 mod init;
 mod jerigon;
 mod stdio;
+mod utils;
 
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<PlonkyProofIntern>> {
     if path.is_none() {
@@ -31,6 +35,19 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<PlonkyProofIntern>
 async fn main() -> Result<()> {
     dotenv().ok();
     init::tracing();
+
+    if env::var("EVM_ARITHMETIZATION_PKG_VER").is_err() {
+        let pkg_ver = get_package_version("evm_arithmetization")?;
+        // Extract the major and minor version parts and append 'x' as the patch version
+        if let Some((major_minor, _)) = pkg_ver.as_ref().and_then(|s| s.rsplit_once('.')) {
+            let circuits_version = format!("{}.x", major_minor);
+            // Set the environment variable for the evm_arithmetization package version
+            env::set_var("EVM_ARITHMETIZATION_PKG_VER", circuits_version);
+        } else {
+            // Set to "NA" if version extraction fails
+            env::set_var("EVM_ARITHMETIZATION_PKG_VER", "NA");
+        }
+    }
 
     let args = cli::Cli::parse();
     if let paladin::config::Runtime::InMemory = args.paladin.runtime {

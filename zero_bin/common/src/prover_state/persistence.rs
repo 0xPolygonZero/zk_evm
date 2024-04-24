@@ -1,3 +1,4 @@
+use std::env;
 use std::{
     fmt::{Debug, Display},
     fs::{self, OpenOptions},
@@ -16,7 +17,7 @@ use super::{
     Config, RecursiveCircuitsForTableSize, SIZE,
 };
 
-pub(crate) const CIRCUITS_FOLDER: &str = "./circuits";
+const CIRCUITS_FOLDER: &str = "./circuits";
 const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
 
@@ -102,9 +103,10 @@ impl DiskResource for BaseProverResource {
 
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
-            "{}/{}_base_{}",
+            "{}/{}_base_{}_{}",
             CIRCUITS_FOLDER,
             PROVER_STATE_FILE_PREFIX,
+            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
             p.get_configuration_digest()
         )
     }
@@ -137,9 +139,10 @@ impl DiskResource for MonolithicProverResource {
 
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
-            "{}/{}_monolithic_{}",
+            "{}/{}_monolithic_{}_{}",
             CIRCUITS_FOLDER,
             PROVER_STATE_FILE_PREFIX,
+            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
             p.get_configuration_digest()
         )
     }
@@ -171,9 +174,10 @@ impl DiskResource for RecursiveCircuitResource {
 
     fn path((circuit_type, size): &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
-            "{}/{}_{}_{}",
+            "{}/{}_{}_{}_{}",
             CIRCUITS_FOLDER,
             PROVER_STATE_FILE_PREFIX,
+            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
             circuit_type.as_short_str(),
             size
         )
@@ -214,9 +218,10 @@ impl DiskResource for VerifierResource {
 
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
-            "{}/{}_{}",
+            "{}/{}_{}_{}",
             CIRCUITS_FOLDER,
             VERIFIER_STATE_FILE_PREFIX,
+            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
             p.get_configuration_digest()
         )
     }
