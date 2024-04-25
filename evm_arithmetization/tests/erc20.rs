@@ -6,7 +6,7 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use evm_arithmetization::prover::prove;
+use evm_arithmetization::prover::{generate_all_data_segments, prove};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -174,18 +174,11 @@ fn test_erc20() -> anyhow::Result<()> {
         },
     };
 
-    let mut timing = TimingTree::new("prove", log::Level::Debug);
     let max_cpu_len_log = 20;
-    let proof = prove::<F, C, D>(
-        &all_stark,
-        &config,
-        inputs,
-        max_cpu_len_log,
-        0,
-        &mut timing,
-        None,
-    )?
-    .expect("The initial registers should not be at the halt label.");
+    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
+
+    let mut timing = TimingTree::new("prove", log::Level::Debug);
+    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut data[1], &mut timing, None)?;
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)

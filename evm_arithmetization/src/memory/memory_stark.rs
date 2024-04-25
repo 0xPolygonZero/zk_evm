@@ -1,4 +1,5 @@
 use core::marker::PhantomData;
+use std::cmp::max;
 
 use ethereum_types::U256;
 use itertools::Itertools;
@@ -27,7 +28,7 @@ use crate::memory::columns::{
     SEGMENT_FIRST_CHANGE, TIMESTAMP, TIMESTAMP_INV, VIRTUAL_FIRST_CHANGE,
 };
 use crate::memory::VALUE_LIMBS;
-use crate::witness::memory::MemoryOpKind::Read;
+use crate::witness::memory::MemoryOpKind::{self, Read};
 use crate::witness::memory::{MemoryAddress, MemoryOp};
 
 /// Creates the vector of `Columns` corresponding to:
@@ -220,7 +221,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
     /// a trace in column-major form.
     /// Also generates the `STALE_CONTEXTS`, `STALE_CONTEXTS_FREQUENCIES` and
     /// `MEM_AFTER_FILTER` columns.
-    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>], stale_contexts: Vec<usize>) {
+    fn generate_trace_col_major(trace_col_vecs: &mut [Vec<F>]) {
         let height = trace_col_vecs[0].len();
         trace_col_vecs[COUNTER] = (0..height).map(|i| F::from_canonical_usize(i)).collect();
 
@@ -230,8 +231,6 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             if (trace_col_vecs[CONTEXT_FIRST_CHANGE][i] == F::ONE)
                 || (trace_col_vecs[SEGMENT_FIRST_CHANGE][i] == F::ONE)
             {
-                // CONTEXT_FIRST_CHANGE and SEGMENT_FIRST_CHANGE should be 0 at the last row, so
-                // the index should never be out of bounds.
                 if i < trace_col_vecs[ADDR_VIRTUAL].len() - 1 {
                     let x_val = trace_col_vecs[ADDR_VIRTUAL][i + 1].to_canonical_u64() as usize;
                     trace_col_vecs[FREQUENCIES][x_val] += F::ONE;
@@ -270,6 +269,25 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
     /// range check, so this method would add two dummy reads to the same
     /// address, say at timestamps 50 and 80.
     fn fill_gaps(memory_ops: &mut Vec<MemoryOp>) {
+        // First, insert padding row at address (0, 0, 0) if the first row doesn't
+        // have a first virtual address at 0.
+        if memory_ops[0].address.virt != 0 {
+            let dummy_addr = MemoryAddress {
+                context: 0,
+                segment: 0,
+                virt: 0,
+            };
+            memory_ops.insert(
+                0,
+                MemoryOp {
+                    filter: false,
+                    timestamp: 1,
+                    address: dummy_addr,
+                    kind: MemoryOpKind::Read,
+                    value: 0.into(),
+                },
+            );
+        }
         let max_rc = memory_ops.len().next_power_of_two() - 1;
         for (mut curr, mut next) in memory_ops.clone().into_iter().tuple_windows() {
             if curr.address.context != next.address.context
@@ -393,7 +411,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         let mut trace_col_vecs = transpose(&trace_row_vecs);
 
         // A few final generation steps, which work better in column-major form.
-        Self::generate_trace_col_major(&mut trace_col_vecs, stale_contexts);
+        Self::generate_trace_col_major(&mut trace_col_vecs);
 
         let final_rows = transpose(&trace_col_vecs);
 

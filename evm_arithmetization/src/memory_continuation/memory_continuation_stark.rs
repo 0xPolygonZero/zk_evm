@@ -3,11 +3,8 @@
 //! This is used to ensure a continuation of the memory when proving
 //! multiple segments of a single full transaction proof.
 //! As such, `ContinuationMemoryStark` doesn't have any constraints.
-use std::borrow::Borrow;
 use std::cmp::max;
-use std::iter::{self, once, repeat};
 use std::marker::PhantomData;
-use std::mem::size_of;
 
 use itertools::Itertools;
 use plonky2::field::extension::{Extendable, FieldExtension};
@@ -16,22 +13,16 @@ use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::timed;
-use plonky2::util::timing::TimingTree;
 use plonky2::util::transpose;
-use plonky2_util::ceil_div_usize;
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
-use starky::evaluation_frame::{StarkEvaluationFrame, StarkFrame};
+use starky::evaluation_frame::StarkEvaluationFrame;
 use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
 use super::columns::{value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, FILTER, NUM_COLUMNS};
 use crate::all_stark::EvmStarkFrame;
-use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::keccak_util::keccakf_u32s;
 use crate::generation::MemBeforeValues;
 use crate::memory::VALUE_LIMBS;
-use crate::witness::memory::MemoryAddress;
 
 /// Creates the vector of `Columns` corresponding to:
 /// - the propagated address (context, segment, virt),
@@ -88,7 +79,6 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D>
     pub(crate) fn generate_trace(
         &self,
         propagated_values: Vec<Vec<F>>,
-        timing: &mut TimingTree,
     ) -> Vec<PolynomialValues<F>> {
         // Set the trace to the `propagated_values` provided either by `MemoryStark`
         // (for final values) or the previous segment (for initial values).
@@ -159,21 +149,11 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryContinu
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Borrow;
-
     use anyhow::Result;
-    use itertools::Itertools;
-    use keccak_hash::keccak;
-    use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::field::types::PrimeField64;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use starky::stark_testing::{test_stark_circuit_constraints, test_stark_low_degree};
 
-    use crate::keccak_sponge::columns::KeccakSpongeColumnsView;
-    use crate::keccak_sponge::keccak_sponge_stark::{KeccakSpongeOp, KeccakSpongeStark};
-    use crate::memory::segments::Segment;
     use crate::memory_continuation::memory_continuation_stark::MemoryContinuationStark;
-    use crate::witness::memory::MemoryAddress;
 
     #[test]
     fn test_stark_degree() -> Result<()> {

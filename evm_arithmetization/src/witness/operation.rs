@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;

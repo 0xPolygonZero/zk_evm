@@ -9,6 +9,7 @@ use ethereum_types::{BigEndianHash, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
+use serde::{Deserialize, Serialize};
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
@@ -21,17 +22,20 @@ use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
 };
-use crate::generation::{debug_inputs, TrimmedGenerationInputs};
+use crate::generation::{
+    debug_inputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER, NUM_EXTRA_CYCLES_BEFORE,
+};
 use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+use crate::prover::GenerationSegmentData;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
     MemoryAddress, MemoryContextState, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
 };
-use crate::witness::operation::{Operation, CONTEXT_SCALING_FACTOR};
+use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
 use crate::witness::transition::{
     decode, fill_op_flag, get_op_special_length, log_kernel_instruction, Transition,
@@ -60,6 +64,8 @@ pub(crate) struct Interpreter<F: Field> {
     pub(crate) clock: usize,
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
+    /// Indicates whethere this is a dummy run.
+    is_dummy: bool,
 }
 
 /// Structure storing the state of the interpreter's registers.
@@ -146,7 +152,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 }
 
 /// State data required to initialize the state passed to the prover.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ExtraSegmentData {
     pub(crate) trimmed_inputs: TrimmedGenerationInputs,
     pub(crate) bignum_modmul_result_limbs: Vec<U256>,
@@ -212,29 +218,6 @@ pub(crate) fn generate_segment<F: Field>(
         if registers_after.program_counter == KERNEL.global_labels["halt"] {
             return Ok(None);
         }
-        [
-            registers_after.program_counter.into(),
-            (registers_after.is_kernel as usize).into(),
-            registers_after.stack_len.into(),
-            registers_after.stack_top,
-            registers_after.context.into(),
-            registers_after.gas_used.into(),
-        ]
-        .iter()
-        .enumerate()
-        .map(|(i, reg_content)| {
-            let (addr, val) = (
-                MemoryAddress::new_u256s(
-                    0.into(),
-                    (Segment::RegistersStates.unscale()).into(),
-                    i.into(),
-                )
-                .expect("All input values are known to be valid for MemoryAddress"),
-                *reg_content,
-            );
-            interpreter.generation_state.memory.set(addr, val);
-        })
-        .collect::<Vec<_>>();
 
         (registers_before, before_mem_values) = (registers_after, after_mem_values);
         interpreter.generation_state.registers = registers_before;
@@ -242,7 +225,9 @@ pub(crate) fn generate_segment<F: Field>(
         interpreter.generation_state.registers.is_kernel = true;
         interpreter.clock = 0;
 
-        let (updated_registers_after, opt_after_mem_values) = interpreter.run()?;
+        let (updated_registers_after, opt_after_mem_values) =
+            set_registers_and_run(registers_after, &mut interpreter)?;
+
         registers_after = updated_registers_after;
         after_mem_values = opt_after_mem_values.expect(
             "We are in the interpreter: the run should return a memory
@@ -258,6 +243,41 @@ pub(crate) fn generate_segment<F: Field>(
     )))
 }
 
+pub(crate) fn set_registers_and_run<F: Field>(
+    registers: RegistersState,
+    interpreter: &mut Interpreter<F>,
+) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
+    // Write initial registers.
+    [
+        registers.program_counter.into(),
+        (registers.is_kernel as usize).into(),
+        registers.stack_len.into(),
+        registers.stack_top,
+        registers.context.into(),
+        registers.gas_used.into(),
+    ]
+    .iter()
+    .enumerate()
+    .map(|(i, reg_content)| {
+        let (addr, val) = (
+            MemoryAddress::new_u256s(
+                0.into(),
+                (Segment::RegistersStates.unscale()).into(),
+                i.into(),
+            )
+            .expect(
+                "All input values are known to be valid for
+MemoryAddress",
+            ),
+            *reg_content,
+        );
+        interpreter.generation_state.memory.set(addr, val);
+    })
+    .collect::<Vec<_>>();
+
+    interpreter.run()
+}
+
 impl<F: Field> Interpreter<F> {
     /// Returns an instance of `Interpreter` given `GenerationInputs`, and
     /// assuming we are initializing with the `KERNEL` code.
@@ -271,6 +291,22 @@ impl<F: Field> Interpreter<F> {
 
         let mut result = Self::new(initial_offset, initial_stack, max_cpu_len_log);
         result.initialize_interpreter_state(inputs);
+        result
+    }
+
+    /// Returns an instance of `Interpreter` given `GenerationInputs`, and
+    /// assuming we are initializing with the `KERNEL` code.
+    pub(crate) fn new_dummy_with_generation_inputs(
+        initial_offset: usize,
+        initial_stack: Vec<U256>,
+        inputs: &GenerationInputs,
+    ) -> Self {
+        debug_inputs(inputs);
+
+        let max_cpu_len = Some(NUM_EXTRA_CYCLES_BEFORE + NUM_EXTRA_CYCLES_AFTER);
+        let mut result =
+            Self::new_with_generation_inputs(initial_offset, initial_stack, inputs, max_cpu_len);
+        result.is_dummy = true;
         result
     }
 
@@ -291,6 +327,7 @@ impl<F: Field> Interpreter<F> {
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
+            is_dummy: false,
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -322,13 +359,12 @@ impl<F: Field> Interpreter<F> {
             is_jumpdest_analysis: true,
             clock: 0,
             max_cpu_len_log,
+            is_dummy: false,
         }
     }
 
     /// Initializes the interpreter state given `GenerationInputs`.
     pub(crate) fn initialize_interpreter_state(&mut self, inputs: &GenerationInputs) {
-        let kernel_hash = KERNEL.code_hash;
-        let kernel_code_len = KERNEL.code.len();
         // Initialize registers.
         let registers_before = RegistersState::new();
         self.generation_state.registers = RegistersState {
@@ -414,8 +450,8 @@ impl<F: Field> Interpreter<F> {
                 GlobalMetadata::ReceiptTrieRootDigestAfter,
                 h2u(trie_roots_after.receipts_root),
             ),
-            (GlobalMetadata::KernelHash, h2u(kernel_hash)),
-            (GlobalMetadata::KernelLen, kernel_code_len.into()),
+            (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
+            (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
         ];
 
         self.set_global_metadata_multi_fields(&global_metadata_to_set);
@@ -507,7 +543,7 @@ impl<F: Field> Interpreter<F> {
     }
 
     pub(crate) fn run(&mut self) -> Result<(RegistersState, Option<MemoryState>), anyhow::Error> {
-        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log)?;
+        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log, self.is_dummy)?;
 
         #[cfg(debug_assertions)]
         {
@@ -535,6 +571,11 @@ impl<F: Field> Interpreter<F> {
             .iter()
             .map(|u256| u256.unwrap_or_default().byte(0))
             .collect::<Vec<_>>()
+    }
+
+    /// Returns the max number of CPU cycles.
+    pub(crate) fn get_max_cpu_len_log(&self) -> Option<usize> {
+        self.max_cpu_len_log
     }
 
     pub(crate) fn get_txn_field(&self, field: NormalizedTxnField) -> U256 {
@@ -924,20 +965,6 @@ impl<F: Field> State<F> for Interpreter<F> {
         }
     }
 
-    /// Inserts a preinitialized segment, given as a [Segment],
-    /// into the `preinitialized_segments` memory field.
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        self.generation_state
-            .memory
-            .insert_preinitialized_segment(segment, values);
-    }
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool {
-        self.generation_state
-            .memory
-            .is_preinitialized_segment(segment)
-    }
-
     fn incr_gas(&mut self, n: u64) {
         self.generation_state.incr_gas(n);
     }
@@ -1067,9 +1094,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         // Might write in general CPU columns when it shouldn't, but the correct values
         // will overwrite these ones during the op generation.
         if let Some(special_len) = get_op_special_length(op) {
-            let special_len_f = F::from_canonical_usize(special_len);
-            let diff = row.stack_len - special_len_f;
-            if (generation_state.stack().len() != special_len) {
+            if generation_state.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 generation_state.registers.is_stack_top_read = true;
@@ -1086,7 +1111,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         log::debug!("{}", msg);
     }
 
-    fn log_info(&self, msg: String) {}
+    fn log_info(&self, _msg: String) {}
 
     fn log_log(&self, level: Level, msg: String) {
         log::log!(level, "{}", msg);

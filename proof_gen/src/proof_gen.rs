@@ -3,7 +3,7 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{AllStark, GenerationInputs, StarkConfig};
+use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
 use plonky2::{
     gates::noop::NoopGate,
     iop::witness::PartialWitness,
@@ -12,7 +12,10 @@ use plonky2::{
 };
 
 use crate::{
-    proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
+    proof_types::{
+        GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedSegmentProof, GeneratedTxnAggProof,
+        SegmentAggregatableProof, TxnAggregatableProof,
+    },
     prover_state::ProverState,
     types::{Config, Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
@@ -41,42 +44,37 @@ impl From<String> for ProofGenError {
 }
 
 /// Generates a transaction proof from some IR data.
-pub fn generate_txn_proof(
+pub fn generate_segment_proof(
     p_state: &ProverState,
     gen_inputs: GenerationInputs,
+    segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> ProofGenResult<Option<GeneratedTxnProof>> {
-    // TODO: change the `max_cpu_len_log` and `segment_index` arguments once we can
-    // automatically determine them.
-    if let Some(output_data) = p_state
+) -> ProofGenResult<GeneratedSegmentProof> {
+    let output_data = p_state
         .state
         .prove_segment(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
             gen_inputs,
-            32,
-            0,
+            segment_data,
             &mut TimingTree::default(),
             abort_signal,
         )
-        .map_err(|err| err.to_string())?
-    {
-        let p_vals = output_data.public_values;
-        let intern = output_data.proof_with_pis;
-        Ok(Some(GeneratedTxnProof { p_vals, intern }))
-    } else {
-        Ok(None)
-    }
+        .map_err(|err| err.to_string())?;
+
+    let p_vals = output_data.public_values;
+    let intern = output_data.proof_with_pis;
+    Ok(GeneratedSegmentProof { p_vals, intern })
 }
 
 /// Generates an aggregation proof from two child proofs.
 ///
 /// Note that the child proofs may be either transaction or aggregation proofs.
-pub fn generate_agg_proof(
+pub fn generate_segment_agg_proof(
     p_state: &ProverState,
-    lhs_child: &AggregatableProof,
-    rhs_child: &AggregatableProof,
-) -> ProofGenResult<GeneratedAggProof> {
+    lhs_child: &SegmentAggregatableProof,
+    rhs_child: &SegmentAggregatableProof,
+) -> ProofGenResult<GeneratedSegmentAggProof> {
     let (intern, p_vals) = p_state
         .state
         .prove_segment_aggregation(
@@ -89,7 +87,7 @@ pub fn generate_agg_proof(
         )
         .map_err(|err| err.to_string())?;
 
-    Ok(GeneratedAggProof { p_vals, intern })
+    Ok(GeneratedSegmentAggProof { p_vals, intern })
 }
 
 /// Generates a transaction aggregation proof from two child proofs.
@@ -97,27 +95,23 @@ pub fn generate_agg_proof(
 /// Note that the child proofs may be either transaction or aggregation proofs.
 pub fn generate_transaction_agg_proof(
     p_state: &ProverState,
-    prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
-    curr_block_agg_proof: &GeneratedAggProof,
-) -> ProofGenResult<GeneratedBlockProof> {
-    let b_height = curr_block_agg_proof
-        .p_vals
-        .block_metadata
-        .block_number
-        .low_u64();
-    let parent_intern = prev_opt_parent_b_proof.map(|p| &p.intern);
-
-    let (b_proof_intern, _) = p_state
+    lhs_child: &TxnAggregatableProof,
+    rhs_child: &TxnAggregatableProof,
+) -> ProofGenResult<GeneratedTxnAggProof> {
+    let (b_proof_intern, p_vals) = p_state
         .state
-        .prove_block(
-            parent_intern,
-            &curr_block_agg_proof.intern,
-            curr_block_agg_proof.p_vals.clone(),
+        .prove_transaction_aggregation(
+            lhs_child.is_agg(),
+            lhs_child.intern(),
+            lhs_child.public_values(),
+            rhs_child.is_agg(),
+            rhs_child.intern(),
+            rhs_child.public_values(),
         )
         .map_err(|err| err.to_string())?;
 
-    Ok(GeneratedBlockProof {
-        b_height,
+    Ok(GeneratedTxnAggProof {
+        p_vals,
         intern: b_proof_intern,
     })
 }
@@ -129,7 +123,7 @@ pub fn generate_transaction_agg_proof(
 pub fn generate_block_proof(
     p_state: &ProverState,
     prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
-    curr_block_agg_proof: &GeneratedAggProof,
+    curr_block_agg_proof: &GeneratedTxnAggProof,
 ) -> ProofGenResult<GeneratedBlockProof> {
     let b_height = curr_block_agg_proof
         .p_vals
