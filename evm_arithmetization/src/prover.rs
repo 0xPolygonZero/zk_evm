@@ -57,6 +57,13 @@ pub struct GenerationSegmentData {
     pub(crate) max_cpu_len_log: Option<usize>,
 }
 
+impl GenerationSegmentData {
+    /// Retrieves the index of this segment.
+    pub fn segment_index(&self) -> usize {
+        self.segment_index
+    }
+}
+
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
