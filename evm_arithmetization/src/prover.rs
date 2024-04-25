@@ -16,6 +16,7 @@ use plonky2::iop::challenger::Challenger;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
 use starky::lookup::GrandProductChallengeSet;
@@ -37,7 +38,7 @@ use crate::witness::memory::{MemoryAddress, MemoryState};
 use crate::witness::state::RegistersState;
 
 /// Structure holding the data needed to initialize a segment.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct GenerationSegmentData {
     /// Indicates whether this corresponds to a dummy segment.
     pub(crate) is_dummy: bool,
@@ -71,7 +72,7 @@ where
     let (traces, mut public_values) = timed!(
         timing,
         "generate all traces",
-        generate_traces(all_stark, inputs, config, segment_data, timing)?
+        generate_traces(all_stark, &inputs, config, segment_data, timing)?
     );
 
     check_abort_signal(abort_signal.clone())?;
@@ -476,14 +477,14 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 /// of a transaction.
 pub fn generate_all_data_segments<F: RichField>(
     max_cpu_len_log: Option<usize>,
-    inputs: GenerationInputs,
+    inputs: &GenerationInputs,
 ) -> anyhow::Result<Vec<GenerationSegmentData>> {
     let mut all_seg_data = vec![];
 
     let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
         KERNEL.global_labels["init"],
         vec![],
-        &inputs,
+        inputs,
         max_cpu_len_log,
     );
 
@@ -617,7 +618,7 @@ pub mod testing {
         C: GenericConfig<D, F = F>,
     {
         let mut segment_idx = 0;
-        let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
+        let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
 
         let mut proofs = Vec::with_capacity(data.len());
         for mut d in data {

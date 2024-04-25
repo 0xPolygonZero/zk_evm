@@ -11,9 +11,7 @@ use evm_arithmetization::generation::mpt::transaction_testing::{
 };
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{
-    BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots,
-};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::{generate_all_data_segments, prove};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
@@ -239,7 +237,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let max_cpu_len_log = 20;
-    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
+    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut data[0], &mut timing, None)?;
@@ -642,27 +640,17 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         )?;
     all_circuits.verify_segment_aggregation(&segment_agg_proof_second)?;
 
-    let (txn_proof_first, txn_pv_first) = all_circuits.prove_transaction_aggregation(
-        None,
+    let (txn_proof, txn_pv) = all_circuits.prove_transaction_aggregation(
+        false,
         &segment_agg_proof_first,
         updated_agg_public_values_first,
-    )?;
-    let txn_pvs = PublicValues {
-        trie_roots_before: txn_pv_first.trie_roots_before,
-        extra_block_data: ExtraBlockData {
-            txn_number_before: txn_pv_first.extra_block_data.txn_number_before,
-            gas_used_before: txn_pv_first.extra_block_data.txn_number_before,
-            ..updated_agg_public_values_second.extra_block_data
-        },
-        ..updated_agg_public_values_second
-    };
-    let (txn_proof_second, txn_pv_second) = all_circuits.prove_transaction_aggregation(
-        Some(&txn_proof_first),
+        false,
         &segment_agg_proof_second,
-        txn_pvs,
+        updated_agg_public_values_second,
     )?;
+
     let (first_block_proof, _block_public_values) =
-        all_circuits.prove_block(None, &txn_proof_second, txn_pv_second)?;
+        all_circuits.prove_block(None, &txn_proof, txn_pv)?;
     all_circuits.verify_block(&first_block_proof)?;
 
     // Prove the next, empty block.
@@ -741,7 +729,10 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     all_circuits.verify_segment_aggregation(&segment_agg_proof)?;
 
     let (second_txn_proof, second_txn_pvs) = all_circuits.prove_transaction_aggregation(
-        None,
+        false,
+        &segment_agg_proof,
+        updated_agg_public_values.clone(),
+        false,
         &segment_agg_proof,
         updated_agg_public_values,
     )?;

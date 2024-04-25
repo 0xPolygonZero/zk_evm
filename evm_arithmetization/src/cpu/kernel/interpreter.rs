@@ -9,6 +9,7 @@ use ethereum_types::{BigEndianHash, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
+use serde::{Deserialize, Serialize};
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
@@ -151,7 +152,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 }
 
 /// State data required to initialize the state passed to the prover.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ExtraSegmentData {
     pub(crate) trimmed_inputs: TrimmedGenerationInputs,
     pub(crate) bignum_modmul_result_limbs: Vec<U256>,

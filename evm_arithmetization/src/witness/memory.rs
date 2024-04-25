@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use ethereum_types::U256;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 use crate::cpu::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 
@@ -162,7 +164,7 @@ impl MemoryOp {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct MemoryState {
     pub(crate) contexts: Vec<MemoryContextState>,
     preinitialized_segments: HashMap<Segment, MemorySegmentState>,
@@ -302,8 +304,9 @@ impl Default for MemoryState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct MemoryContextState {
+    #[serde(with = "BigArray")]
     /// The content of each memory segment.
     pub(crate) segments: [MemorySegmentState; Segment::COUNT],
 }
@@ -316,7 +319,7 @@ impl Default for MemoryContextState {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub(crate) struct MemorySegmentState {
     pub(crate) content: Vec<Option<U256>>,
 }

@@ -370,14 +370,14 @@ fn get_all_memory_address_and_values<F: RichField + Extendable<D>, const D: usiz
 type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues);
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
-    inputs: GenerationInputs,
+    inputs: &GenerationInputs,
     config: &StarkConfig,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
 ) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
-    debug_inputs(&inputs);
+    debug_inputs(inputs);
 
-    let mut state = GenerationState::<F>::new(&inputs, &KERNEL.code)
+    let mut state = GenerationState::<F>::new(inputs, &KERNEL.code)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
     state.set_segment_data(segment_data);
@@ -404,7 +404,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     let registers_before: RegistersData = RegistersData::from(*registers_before);
     let registers_after: RegistersData = RegistersData::from(*registers_after);
-    apply_metadata_and_tries_memops(&mut state, &inputs, &registers_before, &registers_after);
+    apply_metadata_and_tries_memops(&mut state, inputs, &registers_before, &registers_after);
 
     let cpu_res = timed!(
         timing,
@@ -447,8 +447,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let public_values = PublicValues {
         trie_roots_before,
         trie_roots_after,
-        block_metadata: inputs.block_metadata,
-        block_hashes: inputs.block_hashes,
+        block_metadata: inputs.block_metadata.clone(),
+        block_hashes: inputs.block_hashes.clone(),
         extra_block_data,
         registers_before,
         registers_after,
