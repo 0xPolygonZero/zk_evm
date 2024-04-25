@@ -212,8 +212,7 @@ global terminate_common:
 
     // Go back to the parent context.
     %mload_context_metadata(@CTX_METADATA_PARENT_CONTEXT)
-    // Set the pruning flag.
-    PUSH 1 ADD
+    %set_ctx_pruning_flag
     SET_CONTEXT
     %decrement_call_depth
     // stack: (empty)
