@@ -72,6 +72,7 @@ where
     /// The aggregation circuit, which verifies two proofs that can either be
     /// root or aggregation proofs.
     pub aggregation: AggregationCircuitData<F, C, D>,
+    /// The two-to-one aggregation circuit, which verifies two unrelated aggregation proofs.
     pub two_to_one_aggregation: TwoToOneAggCircuitData<F, C, D>,
     /// The block circuit, which verifies an aggregation root proof and an
     /// optional previous block proof.
@@ -302,8 +303,8 @@ where
     }
 }
 
-/// Data for the block circuit, which is used to generate a final block proof,
-/// and compress it with an optional parent proof if present.
+/// Data for the two-to-one aggregation circuit, which is used to generate a proof of two
+/// unrelated aggregation proofs.
 #[derive(Eq, PartialEq, Debug)]
 pub struct TwoToOneAggCircuitData<F, C, const D: usize>
 where
@@ -1334,38 +1335,19 @@ where
         )
     }
 
-    /// Create an aggregation proof, combining two contiguous proofs into a
-    /// single one. The combined proofs can either be transaction (aka root)
-    /// proofs, or other aggregation proofs, as long as their states are
-    /// contiguous, meaning that the final state of the left child proof is the
-    /// initial state of the right child proof.
-    ///
-    /// While regular transaction proofs can only assert validity of a single
-    /// transaction, aggregation proofs can cover an arbitrary range, up to
-    /// an entire block with all its transactions.
+    /// Create a two-to-one aggregation proof, combining two unrelated aggregation proofs
+    /// into a single one.
     ///
     /// # Arguments
     ///
-    /// - `lhs_is_agg`: a boolean indicating whether the left child proof is an
-    ///   aggregation proof or
-    /// a regular transaction proof.
-    /// - `lhs_proof`: the left child proof.
-    /// - `lhs_public_values`: the public values associated to the right child
-    ///   proof.
-    /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
-    ///   aggregation proof or
-    /// a regular transaction proof.
-    /// - `rhs_proof`: the right child proof.
-    /// - `rhs_public_values`: the public values associated to the right child
-    ///   proof.
+    /// - `proof0`: the first aggregation proof.
+    /// - `proof1`: the second aggregation proof.
+    /// - `pv0`: the public values associated to first proof.
+    /// - `pv1`: the public values associated to second proof.
     ///
     /// # Outputs
     ///
-    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
-    /// its [`PublicValues`]. Only the proof with public inputs is necessary
-    /// for a verifier to assert correctness of the computation,
-    /// but the public values are output for the prover convenience, as these
-    /// are necessary during proof aggregation.
+    /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
     pub fn prove_two_to_one_aggregation(
         &self,
         proof0: &ProofWithPublicInputs<F, C, D>,
