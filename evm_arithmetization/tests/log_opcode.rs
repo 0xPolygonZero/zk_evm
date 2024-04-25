@@ -238,8 +238,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         },
     };
 
-    let max_cpu_len = 1 << 20;
-    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len), inputs.clone())?;
+    let max_cpu_len_log = 20;
+    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut data[0], &mut timing, None)?;
@@ -469,13 +469,13 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
-    let max_cpu_len = 1 << 15;
+    let max_cpu_len_log = 15;
 
     let segment_proofs_data_first = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs_first,
-        max_cpu_len,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;
@@ -606,7 +606,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;
@@ -685,7 +685,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
 
-    let max_cpu_len = 1 << 13;
+    let max_cpu_len_log = 13;
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
@@ -716,7 +716,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;

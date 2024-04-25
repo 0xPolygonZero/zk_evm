@@ -47,7 +47,7 @@ pub fn generate_txn_proof(
     segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {
-    // TODO: change the `max_cpu_len` argument once we can
+    // TODO: change the `max_cpu_len_log` argument once we can
     // automatically determine it.
     let output_data = p_state
         .state

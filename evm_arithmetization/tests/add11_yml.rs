@@ -183,8 +183,8 @@ fn add11_yml() -> anyhow::Result<()> {
     let config = StarkConfig::standard_fast_config();
     let inputs = get_generation_inputs();
 
-    let max_cpu_len = 1 << 20;
-    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len), inputs.clone())?;
+    let max_cpu_len_log = 20;
+    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), inputs.clone())?;
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
@@ -225,13 +225,13 @@ fn add11_segments_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let max_cpu_len = 1 << 20;
+    let max_cpu_len_log = 20;
 
     let all_segment_proofs = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs,
-        max_cpu_len,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;

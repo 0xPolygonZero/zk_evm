@@ -1384,19 +1384,19 @@ where
         all_stark: &AllStark<F, D>,
         config: &StarkConfig,
         generation_inputs: GenerationInputs,
-        max_cpu_len: usize,
+        max_cpu_len_log: usize,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
         let mut all_data_segments =
-            generate_all_data_segments::<F>(Some(max_cpu_len), generation_inputs.clone())?;
+            generate_all_data_segments::<F>(Some(max_cpu_len_log), generation_inputs.clone())?;
         let mut proofs = Vec::with_capacity(all_data_segments.len());
         for mut data in all_data_segments {
             let proof = self.prove_segment(
                 all_stark,
                 config,
                 generation_inputs.clone(),
-                max_cpu_len,
+                max_cpu_len_log,
                 &mut data,
                 timing,
                 abort_signal.clone(),

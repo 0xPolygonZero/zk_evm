@@ -274,7 +274,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
     /// range check, so this method would add two dummy reads to the same
     /// address, say at timestamps 50 and 80.
     fn fill_gaps(memory_ops: &mut Vec<MemoryOp>) {
-        // First, insert padding row at at address (0 0, 0) if the first row doesn't
+        // First, insert padding row at address (0, 0, 0) if the first row doesn't
         // have a first virtual address at 0.
         if memory_ops[0].address.virt != 0 {
             let dummy_addr = MemoryAddress {
@@ -282,15 +282,16 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
                 segment: 0,
                 virt: 0,
             };
-            memory_ops.reverse();
-            memory_ops.push(MemoryOp {
-                filter: false,
-                timestamp: 1,
-                address: dummy_addr,
-                kind: MemoryOpKind::Read,
-                value: 0.into(),
-            });
-            memory_ops.reverse();
+            memory_ops.insert(
+                0,
+                MemoryOp {
+                    filter: false,
+                    timestamp: 1,
+                    address: dummy_addr,
+                    kind: MemoryOpKind::Read,
+                    value: 0.into(),
+                },
+            );
         }
         let max_rc = memory_ops.len().next_power_of_two() - 1;
         for (mut curr, mut next) in memory_ops.clone().into_iter().tuple_windows() {
