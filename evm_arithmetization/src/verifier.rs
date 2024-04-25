@@ -116,13 +116,32 @@ fn verify_initial_memory<
     Ok(())
 }
 
-pub fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
+pub fn verify_all_proofs<
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    const D: usize,
+>(
+    all_stark: &AllStark<F, D>,
+    all_proofs: &[AllProof<F, C, D>],
+    config: &StarkConfig,
+) -> Result<()> {
+    assert!(!all_proofs.is_empty());
+
+    verify_proof(all_stark, all_proofs[0].clone(), config, true)?;
+
+    for all_proof in &all_proofs[1..] {
+        verify_proof(all_stark, all_proof.clone(), config, false)?;
+    }
+
+    Ok(())
+}
+
+fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
     all_stark: &AllStark<F, D>,
     all_proof: AllProof<F, C, D>,
     config: &StarkConfig,
-) -> Result<()>
-where
-{
+    is_initial: bool,
+) -> Result<()> {
     let AllProofChallenges {
         stark_challenges,
         ctl_challenges,
@@ -232,7 +251,9 @@ where
     let public_values = all_proof.public_values;
 
     // Verify shift table and kernel code.
-    verify_initial_memory::<F, C, D>(&public_values, config)?;
+    if is_initial {
+        verify_initial_memory::<F, C, D>(&public_values, config)?;
+    }
 
     // Extra sums to add to the looked last value.
     // Only necessary for the Memory values.
