@@ -474,7 +474,7 @@ impl ParserState {
                         traverser,
                         NodeEntry::Extension(k, Box::new(node.clone())),
                     ),
-                    _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+                    _ => Self::invalid_witness_err(2, traverser),
                 }
             }
             WitnessEntry::Instruction(Instruction::Code(c)) => {
@@ -597,7 +597,7 @@ impl ParserState {
             WitnessEntry::Node(node) => {
                 Self::try_create_and_insert_partial_trie_from_node(&node, None, 2, traverser)
             }
-            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(2, traverser),
         }
     }
 
@@ -614,7 +614,7 @@ impl ParserState {
             WitnessEntry::Node(NodeEntry::Hash(h)) => {
                 Ok((2, Some(AccountNodeCode::HashNode(h)), None))
             }
-            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(2, traverser),
         }
     }
 
@@ -641,7 +641,7 @@ impl ParserState {
                     traverser,
                 )
             }
-            _ => Self::invalid_witness_err(3, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(3, traverser),
         }
     }
 
@@ -656,7 +656,7 @@ impl ParserState {
                 let s_trie_out = create_storage_partial_trie_from_compact_node(storage_root_node)?;
                 Ok((n, account_node_code, Some(s_trie_out.trie)))
             }
-            None => Self::invalid_witness_err(n, TraverserDirection::Backwards, traverser),
+            None => Self::invalid_witness_err(n, traverser),
         }
     }
 
@@ -669,24 +669,9 @@ impl ParserState {
 
     fn invalid_witness_err<T>(
         n: usize,
-        t_dir: TraverserDirection,
         traverser: &mut CollapsableWitnessEntryTraverser,
     ) -> CompactParsingResult<T> {
-        let adjacent_elems_buf = match t_dir {
-            TraverserDirection::Forwards => traverser.get_next_n_elems(n).cloned().collect(),
-            TraverserDirection::Backwards => traverser.get_prev_n_elems(n).cloned().collect(),
-            TraverserDirection::Both => {
-                let prev_elems = traverser.get_prev_n_elems(n);
-                let next_elems_including_curr = traverser.get_next_n_elems(n + 1);
-                let prev_elems_vec: Vec<_> = prev_elems.collect();
-
-                prev_elems_vec
-                    .into_iter()
-                    .chain(next_elems_including_curr)
-                    .cloned()
-                    .collect()
-            }
-        };
+        let adjacent_elems_buf = traverser.get_prev_n_elems(n).cloned().collect();
 
         Err(CompactParsingError::InvalidWitnessFormat(
             adjacent_elems_buf,
@@ -1226,16 +1211,6 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
     }
 
     // Inclusive.
-    #[allow(dead_code)]
-    fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
-        for _ in 0..n {
-            self.entry_cursor.remove_current();
-        }
-
-        self.entry_cursor.insert_after(entry)
-    }
-
-    // Inclusive.
     fn replace_prev_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
         for _ in 0..n {
             self.entry_cursor.remove_current();
@@ -1260,14 +1235,6 @@ const fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&
         WitnessEntry::Node(n_entry) => Some(n_entry),
         _ => None,
     }
-}
-
-#[allow(dead_code)]
-#[derive(Debug)]
-enum TraverserDirection {
-    Forwards,
-    Backwards,
-    Both,
 }
 
 #[derive(Debug, Default)]

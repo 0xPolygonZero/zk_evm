@@ -768,26 +768,6 @@ fn create_dummy_gen_input(
     create_dummy_gen_input_common(other_data, extra_data, sub_tries)
 }
 
-#[allow(dead_code)]
-fn create_dummy_gen_input_with_state_addrs_accessed(
-    other_data: &OtherBlockData,
-    extra_data: &ExtraBlockData,
-    final_tries: &PartialTrieState,
-    account_addrs_accessed: impl Iterator<Item = HashedAccountAddr>,
-) -> TraceParsingResult<GenerationInputs> {
-    let sub_tries = create_dummy_proof_trie_inputs(
-        final_tries,
-        create_minimal_state_partial_trie(
-            &final_tries.state,
-            account_addrs_accessed,
-            iter::empty(),
-        )?,
-    );
-    Ok(create_dummy_gen_input_common(
-        other_data, extra_data, sub_tries,
-    ))
-}
-
 fn create_dummy_gen_input_common(
     other_data: &OtherBlockData,
     extra_data: &ExtraBlockData,
