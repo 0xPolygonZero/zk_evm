@@ -89,192 +89,6 @@ pub(crate) fn initial_memory_merkle_cap<
     .cap
 }
 
-fn verify_initial_memory<
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    const D: usize,
->(
-    public_values: &PublicValues,
-    config: &StarkConfig,
-) -> Result<()> {
-    for (hash1, hash2) in initial_memory_merkle_cap::<F, C, D>(
-        config.fri_config.rate_bits,
-        config.fri_config.cap_height,
-    )
-    .0
-    .iter()
-    .zip(public_values.mem_before.mem_cap.iter())
-    {
-        for (&limb1, limb2) in hash1.to_vec().iter().zip(hash2) {
-            ensure!(
-                limb1 == F::from_canonical_u64(limb2.as_u64()),
-                anyhow::Error::msg("Invalid initial MemBefore Merkle cap.")
-            );
-        }
-    }
-
-    Ok(())
-}
-
-pub fn verify_all_proofs<
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    const D: usize,
->(
-    all_stark: &AllStark<F, D>,
-    all_proofs: &[AllProof<F, C, D>],
-    config: &StarkConfig,
-) -> Result<()> {
-    assert!(!all_proofs.is_empty());
-
-    verify_proof(all_stark, all_proofs[0].clone(), config, true)?;
-
-    for all_proof in &all_proofs[1..] {
-        verify_proof(all_stark, all_proof.clone(), config, false)?;
-    }
-
-    Ok(())
-}
-
-fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
-    all_stark: &AllStark<F, D>,
-    all_proof: AllProof<F, C, D>,
-    config: &StarkConfig,
-    is_initial: bool,
-) -> Result<()> {
-    let AllProofChallenges {
-        stark_challenges,
-        ctl_challenges,
-    } = all_proof
-        .get_challenges(config)
-        .map_err(|_| anyhow::Error::msg("Invalid sampling of proof challenges."))?;
-
-    let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
-
-    let AllStark {
-        arithmetic_stark,
-        byte_packing_stark,
-        cpu_stark,
-        keccak_stark,
-        keccak_sponge_stark,
-        logic_stark,
-        memory_stark,
-        mem_before_stark,
-        mem_after_stark,
-        cross_table_lookups,
-    } = all_stark;
-
-    let ctl_vars_per_table = get_ctl_vars_from_proofs(
-        &all_proof.multi_proof,
-        cross_table_lookups,
-        &ctl_challenges,
-        &num_lookup_columns,
-        all_stark.arithmetic_stark.constraint_degree(),
-    );
-
-    let stark_proofs = &all_proof.multi_proof.stark_proofs;
-
-    verify_stark_proof_with_challenges(
-        arithmetic_stark,
-        &stark_proofs[Table::Arithmetic as usize].proof,
-        &stark_challenges[Table::Arithmetic as usize],
-        Some(&ctl_vars_per_table[Table::Arithmetic as usize]),
-        &[],
-        config,
-    )?;
-
-    verify_stark_proof_with_challenges(
-        byte_packing_stark,
-        &stark_proofs[Table::BytePacking as usize].proof,
-        &stark_challenges[Table::BytePacking as usize],
-        Some(&ctl_vars_per_table[Table::BytePacking as usize]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        cpu_stark,
-        &stark_proofs[Table::Cpu as usize].proof,
-        &stark_challenges[Table::Cpu as usize],
-        Some(&ctl_vars_per_table[Table::Cpu as usize]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        keccak_stark,
-        &stark_proofs[Table::Keccak as usize].proof,
-        &stark_challenges[Table::Keccak as usize],
-        Some(&ctl_vars_per_table[Table::Keccak as usize]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        keccak_sponge_stark,
-        &stark_proofs[Table::KeccakSponge as usize].proof,
-        &stark_challenges[Table::KeccakSponge as usize],
-        Some(&ctl_vars_per_table[Table::KeccakSponge as usize]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        logic_stark,
-        &stark_proofs[Table::Logic as usize].proof,
-        &stark_challenges[Table::Logic as usize],
-        Some(&ctl_vars_per_table[Table::Logic as usize]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        memory_stark,
-        &stark_proofs[Table::Memory as usize].proof,
-        &stark_challenges[Table::Memory as usize],
-        Some(&ctl_vars_per_table[Table::Memory as usize]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        mem_before_stark,
-        &stark_proofs[Table::MemBefore as usize].proof,
-        &stark_challenges[Table::MemBefore as usize],
-        Some(&ctl_vars_per_table[Table::MemBefore as usize]),
-        &[],
-        config,
-    )?;
-    verify_stark_proof_with_challenges(
-        mem_after_stark,
-        &stark_proofs[Table::MemAfter as usize].proof,
-        &stark_challenges[Table::MemAfter as usize],
-        Some(&ctl_vars_per_table[Table::MemAfter as usize]),
-        &[],
-        config,
-    )?;
-
-    let public_values = all_proof.public_values;
-
-    // Verify shift table and kernel code.
-    if is_initial {
-        verify_initial_memory::<F, C, D>(&public_values, config)?;
-    }
-
-    // Extra sums to add to the looked last value.
-    // Only necessary for the Memory values.
-    let mut extra_looking_sums = vec![vec![F::ZERO; config.num_challenges]; NUM_TABLES];
-
-    // Memory
-    extra_looking_sums[Table::Memory as usize] = (0..config.num_challenges)
-        .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
-        .collect_vec();
-
-    verify_cross_table_lookups::<F, D, NUM_TABLES>(
-        cross_table_lookups,
-        all_proof
-            .multi_proof
-            .stark_proofs
-            .map(|p| p.proof.openings.ctl_zs_first.unwrap()),
-        Some(&extra_looking_sums),
-        config,
-    )
-}
-
 /// Computes the extra product to multiply to the looked value. It contains
 /// memory operations not in the CPU trace:
 /// - block metadata writes,
@@ -452,6 +266,196 @@ where
     running_sum + challenge.combine(row.iter()).inverse()
 }
 
+/// A utility module designed to verify proofs.
+pub mod testing {
+    use super::*;
+
+    fn verify_initial_memory<
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >(
+        public_values: &PublicValues,
+        config: &StarkConfig,
+    ) -> Result<()> {
+        for (hash1, hash2) in initial_memory_merkle_cap::<F, C, D>(
+            config.fri_config.rate_bits,
+            config.fri_config.cap_height,
+        )
+        .0
+        .iter()
+        .zip(public_values.mem_before.mem_cap.iter())
+        {
+            for (&limb1, limb2) in hash1.to_vec().iter().zip(hash2) {
+                ensure!(
+                    limb1 == F::from_canonical_u64(limb2.as_u64()),
+                    anyhow::Error::msg("Invalid initial MemBefore Merkle cap.")
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn verify_all_proofs<
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >(
+        all_stark: &AllStark<F, D>,
+        all_proofs: &[AllProof<F, C, D>],
+        config: &StarkConfig,
+    ) -> Result<()> {
+        assert!(!all_proofs.is_empty());
+
+        verify_proof(all_stark, all_proofs[0].clone(), config, true)?;
+
+        for all_proof in &all_proofs[1..] {
+            verify_proof(all_stark, all_proof.clone(), config, false)?;
+        }
+
+        Ok(())
+    }
+
+    fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
+        all_stark: &AllStark<F, D>,
+        all_proof: AllProof<F, C, D>,
+        config: &StarkConfig,
+        is_initial: bool,
+    ) -> Result<()> {
+        let AllProofChallenges {
+            stark_challenges,
+            ctl_challenges,
+        } = all_proof
+            .get_challenges(config)
+            .map_err(|_| anyhow::Error::msg("Invalid sampling of proof challenges."))?;
+
+        let num_lookup_columns = all_stark.num_lookups_helper_columns(config);
+
+        let AllStark {
+            arithmetic_stark,
+            byte_packing_stark,
+            cpu_stark,
+            keccak_stark,
+            keccak_sponge_stark,
+            logic_stark,
+            memory_stark,
+            mem_before_stark,
+            mem_after_stark,
+            cross_table_lookups,
+        } = all_stark;
+
+        let ctl_vars_per_table = get_ctl_vars_from_proofs(
+            &all_proof.multi_proof,
+            cross_table_lookups,
+            &ctl_challenges,
+            &num_lookup_columns,
+            all_stark.arithmetic_stark.constraint_degree(),
+        );
+
+        let stark_proofs = &all_proof.multi_proof.stark_proofs;
+
+        verify_stark_proof_with_challenges(
+            arithmetic_stark,
+            &stark_proofs[Table::Arithmetic as usize].proof,
+            &stark_challenges[Table::Arithmetic as usize],
+            Some(&ctl_vars_per_table[Table::Arithmetic as usize]),
+            &[],
+            config,
+        )?;
+
+        verify_stark_proof_with_challenges(
+            byte_packing_stark,
+            &stark_proofs[Table::BytePacking as usize].proof,
+            &stark_challenges[Table::BytePacking as usize],
+            Some(&ctl_vars_per_table[Table::BytePacking as usize]),
+            &[],
+            config,
+        )?;
+        verify_stark_proof_with_challenges(
+            cpu_stark,
+            &stark_proofs[Table::Cpu as usize].proof,
+            &stark_challenges[Table::Cpu as usize],
+            Some(&ctl_vars_per_table[Table::Cpu as usize]),
+            &[],
+            config,
+        )?;
+        verify_stark_proof_with_challenges(
+            keccak_stark,
+            &stark_proofs[Table::Keccak as usize].proof,
+            &stark_challenges[Table::Keccak as usize],
+            Some(&ctl_vars_per_table[Table::Keccak as usize]),
+            &[],
+            config,
+        )?;
+        verify_stark_proof_with_challenges(
+            keccak_sponge_stark,
+            &stark_proofs[Table::KeccakSponge as usize].proof,
+            &stark_challenges[Table::KeccakSponge as usize],
+            Some(&ctl_vars_per_table[Table::KeccakSponge as usize]),
+            &[],
+            config,
+        )?;
+        verify_stark_proof_with_challenges(
+            logic_stark,
+            &stark_proofs[Table::Logic as usize].proof,
+            &stark_challenges[Table::Logic as usize],
+            Some(&ctl_vars_per_table[Table::Logic as usize]),
+            &[],
+            config,
+        )?;
+        verify_stark_proof_with_challenges(
+            memory_stark,
+            &stark_proofs[Table::Memory as usize].proof,
+            &stark_challenges[Table::Memory as usize],
+            Some(&ctl_vars_per_table[Table::Memory as usize]),
+            &[],
+            config,
+        )?;
+        verify_stark_proof_with_challenges(
+            mem_before_stark,
+            &stark_proofs[Table::MemBefore as usize].proof,
+            &stark_challenges[Table::MemBefore as usize],
+            Some(&ctl_vars_per_table[Table::MemBefore as usize]),
+            &[],
+            config,
+        )?;
+        verify_stark_proof_with_challenges(
+            mem_after_stark,
+            &stark_proofs[Table::MemAfter as usize].proof,
+            &stark_challenges[Table::MemAfter as usize],
+            Some(&ctl_vars_per_table[Table::MemAfter as usize]),
+            &[],
+            config,
+        )?;
+
+        let public_values = all_proof.public_values;
+
+        // Verify shift table and kernel code.
+        if is_initial {
+            verify_initial_memory::<F, C, D>(&public_values, config)?;
+        }
+
+        // Extra sums to add to the looked last value.
+        // Only necessary for the Memory values.
+        let mut extra_looking_sums = vec![vec![F::ZERO; config.num_challenges]; NUM_TABLES];
+
+        // Memory
+        extra_looking_sums[Table::Memory as usize] = (0..config.num_challenges)
+            .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
+            .collect_vec();
+
+        verify_cross_table_lookups::<F, D, NUM_TABLES>(
+            cross_table_lookups,
+            all_proof
+                .multi_proof
+                .stark_proofs
+                .map(|p| p.proof.openings.ctl_zs_first.unwrap()),
+            Some(&extra_looking_sums),
+            config,
+        )
+    }
+}
 pub(crate) mod debug_utils {
     use super::*;
 
