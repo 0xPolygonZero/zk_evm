@@ -87,7 +87,9 @@
     // stack: stack_length
 %endmacro
 
-%macro set_ctx_pruning_flag
+%macro set_and_prune_ctx
     // stack: context
     PUSH 1 ADD
+    SET_CONTEXT
+    // stack: (empty)
 %endmacro
