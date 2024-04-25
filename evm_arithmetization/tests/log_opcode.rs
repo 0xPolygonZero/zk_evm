@@ -473,12 +473,13 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &config,
         inputs_first,
-        max_cpu_len_log,
+        // We want only one segment.
+        20,
         &mut timing,
         None,
     )?;
 
-    assert_eq!(segment_proofs_data_first.len(), 2);
+    assert_eq!(segment_proofs_data_first.len(), 1);
 
     // The gas used and transaction number are fed to the next transaction, so the
     // two proofs can be correctly aggregated.
@@ -624,9 +625,9 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             &segment_proofs_data_first[0].proof_with_pis,
             segment_proofs_data_first[0].public_values.clone(),
             false,
-            false,
-            &segment_proofs_data_first[1].proof_with_pis,
-            segment_proofs_data_first[1].public_values.clone(),
+            true,
+            &segment_proofs_data_first[0].proof_with_pis,
+            segment_proofs_data_first[0].public_values.clone(),
         )?;
     all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
 
