@@ -116,26 +116,6 @@ fn verify_initial_memory<
     Ok(())
 }
 
-pub fn verify_all_proofs<
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    const D: usize,
->(
-    all_stark: &AllStark<F, D>,
-    all_proofs: &[AllProof<F, C, D>],
-    config: &StarkConfig,
-) -> Result<()> {
-    assert!(!all_proofs.is_empty());
-
-    verify_proof(all_stark, all_proofs[0].clone(), config, true)?;
-
-    for all_proof in &all_proofs[1..] {
-        verify_proof(all_stark, all_proof.clone(), config, false)?;
-    }
-
-    Ok(())
-}
-
 fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
     all_stark: &AllStark<F, D>,
     all_proof: AllProof<F, C, D>,
@@ -450,6 +430,31 @@ where
     }
     row[12] = F::TWO; // timestamp
     running_sum + challenge.combine(row.iter()).inverse()
+}
+
+/// A utility module designed to verify proofs.
+pub mod testing {
+    use super::*;
+
+    pub fn verify_all_proofs<
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >(
+        all_stark: &AllStark<F, D>,
+        all_proofs: &[AllProof<F, C, D>],
+        config: &StarkConfig,
+    ) -> Result<()> {
+        assert!(!all_proofs.is_empty());
+
+        verify_proof(all_stark, all_proofs[0].clone(), config, true)?;
+
+        for all_proof in &all_proofs[1..] {
+            verify_proof(all_stark, all_proof.clone(), config, false)?;
+        }
+
+        Ok(())
+    }
 }
 
 pub(crate) mod debug_utils {
