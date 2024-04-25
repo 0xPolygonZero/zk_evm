@@ -8,8 +8,8 @@ use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use evm_arithmetization::prover::{generate_all_data_segments, prove};
-use evm_arithmetization::verifier::verify_proof;
+use evm_arithmetization::prover::testing::prove_all_segments;
+use evm_arithmetization::verifier::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -199,13 +199,21 @@ fn test_basic_smart_contract() -> anyhow::Result<()> {
     };
 
     let max_cpu_len_log = 20;
-    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut data[0], &mut timing, None)?;
+
+    let proofs = prove_all_segments::<F, C, D>(
+        &all_stark,
+        &config,
+        inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
+
     timing.filter(Duration::from_millis(100)).print();
 
-    verify_proof(&all_stark, proof, &config)
+    verify_all_proofs(&all_stark, &proofs, &config)
 }
 
 fn eth_to_wei(eth: U256) -> U256 {
