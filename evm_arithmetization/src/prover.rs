@@ -42,6 +42,9 @@ use crate::witness::state::RegistersState;
 pub struct GenerationSegmentData {
     /// Indicates whether this corresponds to a dummy segment.
     pub(crate) is_dummy: bool,
+    /// Indicates the position of this segment in a sequence of
+    /// executions for a larger payload.
+    pub(crate) segment_index: usize,
     /// Registers at the start of the segment execution.
     pub(crate) registers_before: RegistersState,
     /// Registers at the end of the segment execution.
@@ -488,8 +491,11 @@ pub fn generate_all_data_segments<F: RichField>(
         max_cpu_len_log,
     );
 
+    let mut segment_index = 0;
+
     let mut segment_data = GenerationSegmentData {
         is_dummy: false,
+        segment_index,
         registers_before: RegistersState::new(),
         registers_after: RegistersState::new(),
         memory: MemoryState::default(),
@@ -523,8 +529,11 @@ pub fn generate_all_data_segments<F: RichField>(
         segment_data.registers_after = updated_registers;
         all_seg_data.push(segment_data);
 
+        segment_index += 1;
+
         segment_data = GenerationSegmentData {
             is_dummy: false,
+            segment_index,
             registers_before: updated_registers,
             // `registers_after` will be set correctly at the next iteration.`
             registers_after: updated_registers,
@@ -576,6 +585,9 @@ pub fn generate_all_data_segments<F: RichField>(
         all_seg_data[0].memory = mem_after;
 
         all_seg_data.insert(0, dummy_seg);
+
+        // We need to update the index of the non-dummy segment, now at position 1.
+        all_seg_data[1].segment_index += 1;
     }
 
     Ok(all_seg_data)
