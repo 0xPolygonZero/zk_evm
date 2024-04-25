@@ -469,6 +469,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
     let max_cpu_len_log = 15;
 
+    println!("Prove first txn segment...");
     let segment_proofs_data_first = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
@@ -480,6 +481,19 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     )?;
 
     assert_eq!(segment_proofs_data_first.len(), 1);
+
+    println!("Prove first aggreg...");
+    let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
+        .prove_segment_aggregation(
+            false,
+            &segment_proofs_data_first[0].proof_with_pis,
+            segment_proofs_data_first[0].public_values.clone(),
+            false,
+            true,
+            &segment_proofs_data_first[0].proof_with_pis,
+            segment_proofs_data_first[0].public_values.clone(),
+        )?;
+    all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
 
     // The gas used and transaction number are fed to the next transaction, so the
     // two proofs can be correctly aggregated.
@@ -618,18 +632,6 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         } = proof_data;
         all_circuits.verify_root(proof.clone())?;
     }
-
-    let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
-        .prove_segment_aggregation(
-            false,
-            &segment_proofs_data_first[0].proof_with_pis,
-            segment_proofs_data_first[0].public_values.clone(),
-            false,
-            true,
-            &segment_proofs_data_first[0].proof_with_pis,
-            segment_proofs_data_first[0].public_values.clone(),
-        )?;
-    all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
 
     let (segment_agg_proof_second, updated_agg_public_values_second) = all_circuits
         .prove_segment_aggregation(
