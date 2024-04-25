@@ -15,7 +15,7 @@ use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{MerkleCapTarget, RichField};
+use plonky2::hash::hash_types::{MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -1283,7 +1283,7 @@ where
         let is_dummy = builder.add_virtual_bool_target_safe();
         let real_proof = builder.add_virtual_proof_with_pis(common);
         let (dummy_proof, dummy_vk) = builder
-            .dummy_proof_and_vk::<C>(common)
+            .dummy_proof_and_vk_no_generator::<C>(common)
             .expect("Failed to build dummy proof.");
 
         let segment_proof = builder.select_proof_with_pis(is_dummy, &dummy_proof, &real_proof);
@@ -1738,13 +1738,15 @@ where
             .0
             .len();
 
+        let real_rhs_proof = if rhs_is_dummy { lhs_proof } else { rhs_proof };
+
         Self::set_dummy_if_necessary_with_dummy(
             &self.segment_aggregation.rhs,
             rhs_is_agg,
             rhs_is_dummy,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
-            rhs_proof,
+            real_rhs_proof,
             len_mem_cap,
         );
 
@@ -1974,19 +1976,75 @@ where
                 proof,
             );
             if is_dummy {
-                let lhs_pv = PublicValues::from_public_inputs(&proof.public_inputs, len_mem_cap);
-                let mut dummy_pv = lhs_pv.clone();
-                dummy_pv.trie_roots_before = dummy_pv.trie_roots_after.clone();
-                dummy_pv.registers_before = dummy_pv.registers_after.clone();
-                dummy_pv.mem_before = dummy_pv.mem_after.clone();
-
-                let dummy_pv_targets = PublicValuesTarget::from_public_inputs(
-                    &agg_child.dummy_proof.public_inputs,
-                    len_mem_cap,
+                let mut dummy_pis = proof.public_inputs.clone();
+                // We must change trie roots before, registers before and memory before.
+                // Trie roots before := Trie roots after
+                dummy_pis.copy_within(TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2, 0);
+                // Registers before := Registers after
+                dummy_pis.copy_within(
+                    TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE
+                        + RegistersDataTarget::SIZE
+                        ..TrieRootsTarget::SIZE * 2
+                            + BlockMetadataTarget::SIZE
+                            + BlockHashesTarget::SIZE
+                            + ExtraBlockDataTarget::SIZE
+                            + RegistersDataTarget::SIZE * 2,
+                    TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE,
                 );
+                // Mem before := Mem after
+                dummy_pis.copy_within(
+                    TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE
+                        + RegistersDataTarget::SIZE * 2
+                        + len_mem_cap * NUM_HASH_OUT_ELTS
+                        ..TrieRootsTarget::SIZE * 2
+                            + BlockMetadataTarget::SIZE
+                            + BlockHashesTarget::SIZE
+                            + ExtraBlockDataTarget::SIZE
+                            + RegistersDataTarget::SIZE * 2
+                            + 2 * len_mem_cap * NUM_HASH_OUT_ELTS,
+                    TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE
+                        + RegistersDataTarget::SIZE * 2,
+                );
+                // dummy_pis[0..TrieRootsTarget::SIZE] =
+                //     dummy_pis[TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2];
 
-                agg_inputs.set_proof_target(&agg_child.dummy_proof.proof, &proof.proof);
-                set_public_value_targets(agg_inputs, &dummy_pv_targets, &dummy_pv);
+                // let lhs_pv = PublicValues::from_public_inputs(&proof.public_inputs,
+                // len_mem_cap); let mut dummy_pv = lhs_pv.clone();
+                // dummy_pv.trie_roots_before = dummy_pv.trie_roots_after.clone();
+                // dummy_pv.registers_before = dummy_pv.registers_after.clone();
+                // dummy_pv.mem_before = dummy_pv.mem_after.clone();
+
+                // let dummy_pv_targets = PublicValuesTarget::from_public_inputs(
+                //     &agg_child.dummy_proof.public_inputs,
+                //     len_mem_cap,
+                // );
+
+                let mut pw = PartialWitness::<F>::new();
+                for (i, &pi) in dummy_pis.iter().enumerate() {
+                    pw.set_target(circuit.prover_only.public_inputs[i], pi);
+                }
+                let dummy_proof = circuit.prove(pw).expect("Cannot generate dummy proof.");
+                // let mut dummy_pis = vec![F::ZERO; circuit.common.num_public_inputs];
+
+                // let mut dummy_proof_with_pis = ProofWithPublicInputs {
+                //     proof: dummy_proof,
+                //     public_inputs: dummy_pis,
+                // }
+                agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof, &dummy_proof);
+                // set_public_value_targets(agg_inputs, &dummy_pv_targets,
+                // &dummy_pv);
             } else {
                 agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof, proof);
             }

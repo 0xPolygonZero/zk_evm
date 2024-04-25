@@ -1050,7 +1050,7 @@ pub struct ExtraBlockDataTarget {
 
 impl ExtraBlockDataTarget {
     /// Number of `Target`s required for the extra block data.
-    const SIZE: usize = 12;
+    pub const SIZE: usize = 12;
 
     /// Extracts the extra block data `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.
@@ -1138,7 +1138,7 @@ pub struct RegistersDataTarget {
 
 impl RegistersDataTarget {
     /// Number of `Target`s required for the extra block data.
-    const SIZE: usize = 13;
+    pub const SIZE: usize = 13;
 
     /// Extracts the extra block data `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.
