@@ -22,7 +22,9 @@ use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
 };
-use crate::generation::{debug_inputs, TrimmedGenerationInputs};
+use crate::generation::{
+    debug_inputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER, NUM_EXTRA_CYCLES_BEFORE,
+};
 use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
@@ -62,6 +64,8 @@ pub(crate) struct Interpreter<F: Field> {
     pub(crate) clock: usize,
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
+    /// Indicates whethere this is a dummy run.
+    is_dummy: bool,
 }
 
 /// Structure storing the state of the interpreter's registers.
@@ -290,6 +294,22 @@ impl<F: Field> Interpreter<F> {
         result
     }
 
+    /// Returns an instance of `Interpreter` given `GenerationInputs`, and
+    /// assuming we are initializing with the `KERNEL` code.
+    pub(crate) fn new_dummy_with_generation_inputs(
+        initial_offset: usize,
+        initial_stack: Vec<U256>,
+        inputs: &GenerationInputs,
+    ) -> Self {
+        debug_inputs(inputs);
+
+        let max_cpu_len = Some(NUM_EXTRA_CYCLES_BEFORE + NUM_EXTRA_CYCLES_AFTER);
+        let mut result =
+            Self::new_with_generation_inputs(initial_offset, initial_stack, inputs, max_cpu_len);
+        result.is_dummy = true;
+        result
+    }
+
     pub(crate) fn new(
         initial_offset: usize,
         initial_stack: Vec<U256>,
@@ -307,6 +327,7 @@ impl<F: Field> Interpreter<F> {
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
+            is_dummy: false,
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -338,6 +359,7 @@ impl<F: Field> Interpreter<F> {
             is_jumpdest_analysis: true,
             clock: 0,
             max_cpu_len_log,
+            is_dummy: false,
         }
     }
 
@@ -521,7 +543,7 @@ impl<F: Field> Interpreter<F> {
     }
 
     pub(crate) fn run(&mut self) -> Result<(RegistersState, Option<MemoryState>), anyhow::Error> {
-        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log)?;
+        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log, self.is_dummy)?;
 
         #[cfg(debug_assertions)]
         {
@@ -549,6 +571,11 @@ impl<F: Field> Interpreter<F> {
             .iter()
             .map(|u256| u256.unwrap_or_default().byte(0))
             .collect::<Vec<_>>()
+    }
+
+    /// Returns the max number of CPU cycles.
+    pub(crate) fn get_max_cpu_len_log(&self) -> Option<usize> {
+        self.max_cpu_len_log
     }
 
     pub(crate) fn get_txn_field(&self, field: NormalizedTxnField) -> U256 {

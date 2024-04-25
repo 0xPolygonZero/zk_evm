@@ -20,7 +20,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
-use crate::proof::{AllProof, AllProofChallenges, PublicValues};
+use crate::proof::{AllProof, AllProofChallenges, MemCap, PublicValues};
 use crate::util::h2u;
 
 pub(crate) fn initial_memory_merkle_cap<

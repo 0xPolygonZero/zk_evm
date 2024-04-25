@@ -40,6 +40,8 @@ use crate::witness::state::RegistersState;
 /// Structure holding the data needed to initialize a segment.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct GenerationSegmentData {
+    /// Indicates whether this corresponds to a dummy segment.
+    pub(crate) is_dummy: bool,
     /// Registers at the start of the segment execution.
     pub(crate) registers_before: RegistersState,
     /// Registers at the end of the segment execution.
@@ -487,6 +489,7 @@ pub fn generate_all_data_segments<F: RichField>(
     );
 
     let mut segment_data = GenerationSegmentData {
+        is_dummy: false,
         registers_before: RegistersState::new(),
         registers_after: RegistersState::new(),
         memory: MemoryState::default(),
@@ -521,6 +524,7 @@ pub fn generate_all_data_segments<F: RichField>(
         all_seg_data.push(segment_data);
 
         segment_data = GenerationSegmentData {
+            is_dummy: false,
             registers_before: updated_registers,
             // `registers_after` will be set correctly at the next iteration.`
             registers_after: updated_registers,
@@ -546,11 +550,32 @@ pub fn generate_all_data_segments<F: RichField>(
 
     // We need at least two segments to prove a segment aggregation.
     if all_seg_data.len() == 1 {
+        let mut interpreter = Interpreter::<F>::new_dummy_with_generation_inputs(
+            KERNEL.global_labels["init"],
+            vec![],
+            inputs,
+        );
+
         let dummy_seg = GenerationSegmentData {
-            registers_before: segment_data.registers_after,
-            ..segment_data
+            is_dummy: true,
+            registers_before: RegistersState::new(),
+            registers_after: RegistersState::new(),
+            max_cpu_len_log: interpreter.get_max_cpu_len_log(),
+            ..all_seg_data[0].clone()
         };
-        all_seg_data.push(dummy_seg);
+        let (updated_registers, mem_after) =
+            set_registers_and_run(dummy_seg.registers_after, &mut interpreter)?;
+        let mut mem_after = mem_after
+            .expect("The interpreter was running, so it should have returned a MemoryState");
+        // During the interpreter initialization, we set the trie data and initialize
+        // `RlpRaw`. But we do not want to pass this information to the first actual
+        // segment in `MemBefore` since the values are not actually accessed in the
+        // dummy generation.
+        mem_after.contexts[0].segments[Segment::RlpRaw.unscale()].content = vec![];
+        mem_after.contexts[0].segments[Segment::TrieData.unscale()].content = vec![];
+        all_seg_data[0].memory = mem_after;
+
+        all_seg_data.insert(0, dummy_seg);
     }
 
     Ok(all_seg_data)

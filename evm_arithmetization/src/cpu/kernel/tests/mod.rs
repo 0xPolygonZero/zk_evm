@@ -10,6 +10,7 @@ mod core;
 mod ecc;
 mod exp;
 mod hash;
+mod init_exc_stop;
 mod kernel_consistency;
 mod log;
 mod mpt;
