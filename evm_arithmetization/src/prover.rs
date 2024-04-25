@@ -553,7 +553,7 @@ pub fn generate_all_data_segments<F: RichField>(
         let mut interpreter = Interpreter::<F>::new_dummy_with_generation_inputs(
             KERNEL.global_labels["init"],
             vec![],
-            &inputs,
+            inputs,
         );
 
         let dummy_seg = GenerationSegmentData {
