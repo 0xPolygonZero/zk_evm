@@ -149,4 +149,9 @@ global check_receipt_trie:
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_AFTER)   %assert_eq
     // We don't need the trie data length here.
     POP
+
+    // We have reached the end of the execution, so we set the pruning flag to 1 for context 0.
+    PUSH 1
+    SET_CONTEXT
+    
     %jump(halt)

@@ -116,7 +116,7 @@ fn verify_initial_memory<
     Ok(())
 }
 
-pub fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
+fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
     all_stark: &AllStark<F, D>,
     all_proof: AllProof<F, C, D>,
     config: &StarkConfig,
@@ -456,6 +456,7 @@ pub mod testing {
         Ok(())
     }
 }
+
 pub(crate) mod debug_utils {
     use super::*;
 
