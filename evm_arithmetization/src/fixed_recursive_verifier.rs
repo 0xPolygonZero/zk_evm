@@ -26,7 +26,7 @@ use plonky2::plonk::circuit_data::{
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::{self, cyclic_base_proof, dummy_circuit};
+use plonky2::recursion::dummy_circuit::{self, cyclic_base_proof, dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
@@ -2038,7 +2038,8 @@ where
 
                 let dummy_circuit = dummy_circuit::<F, C, D>(&circuit.common);
                 println!("Generating dummy proof...");
-                let dummy_proof = dummy_proof::<F, C, D>(&dummy_circuit, HashMap::new())?;
+                let dummy_proof = dummy_proof::<F, C, D>(&dummy_circuit, HashMap::new())
+                    .expect("Cannot generate dummy proof.");
 
                 //let dummy_proof = circuit.prove(pw).expect("Cannot generate dummy proof.");
 
