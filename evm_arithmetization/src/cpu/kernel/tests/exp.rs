@@ -3,8 +3,9 @@ use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::{thread_rng, Rng};
 
+use super::run_interpreter;
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::interpreter::{run_interpreter, Interpreter};
+use crate::cpu::kernel::interpreter::Interpreter;
 
 #[test]
 fn test_exp() -> Result<()> {

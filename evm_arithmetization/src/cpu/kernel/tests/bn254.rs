@@ -3,9 +3,8 @@ use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::Rng;
 
-use crate::cpu::kernel::interpreter::{
-    run_interpreter_with_memory, Interpreter, InterpreterMemoryInitialization,
-};
+use super::{run_interpreter_with_memory, InterpreterMemoryInitialization};
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::curve_pairings::{
     bn_final_exponent, bn_miller_loop, gen_bn_fp12_sparse, Curve, CyclicGroup,
 };
