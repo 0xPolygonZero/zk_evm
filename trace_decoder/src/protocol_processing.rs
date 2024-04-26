@@ -1,3 +1,7 @@
+//! Logic to processes the "outer" structure of the protocol payload. All
+//! "inner" complex logic (eg. compact decoding) is handled in separate
+//! dedicated modules.
+
 use std::collections::HashMap;
 
 use enum_as_inner::EnumAsInner;
@@ -47,15 +51,18 @@ pub enum ProcessedPreImage {
     Smt(SmtProcessedBlockTracePreImages),
 }
 
+/// Processes any type of pre-image
 pub(crate) fn process_block_trace_trie_pre_images(
     image: TriePreImage,
 ) -> TraceParsingResult<Box<ProcessedPreImage>> {
     Ok(Box::new(match image {
-        TriePreImage::Mpt(image) => ProcessedPreImage::Mpt(process_mpt_trie_images(image)?),
-        TriePreImage::Smt(image) => todo!(),
+        TriePreImage::Mpt(images) => ProcessedPreImage::Mpt(process_mpt_trie_images(images)?),
+        TriePreImage::Smt(images) => ProcessedPreImage::Smt(process_smt_trie_images(images)?),
     }))
 }
 
+/// Process a block trace pre-image compact into an MPT payload. Will return an
+/// error if given an SMT payload.
 pub(crate) fn process_mpt_block_trace_trie_pre_images(
     image: TriePreImage,
 ) -> TraceParsingResult<MptProcessedBlockTracePreImages> {
@@ -68,6 +75,8 @@ pub(crate) fn process_mpt_block_trace_trie_pre_images(
     Ok(res)
 }
 
+/// Process a block trace pre-image compact into an SMT payload. Will return an
+/// error if given an MPT payload.
 pub(crate) fn process_smt_block_trace_trie_pre_images(
     image: TriePreImage,
 ) -> TraceParsingResult<SmtProcessedBlockTracePreImages> {

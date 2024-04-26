@@ -1,3 +1,5 @@
+//! Logic that is common between decoding MPT & SMT payloads.
+
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
@@ -21,7 +23,6 @@ use crate::{
         MptAccountRlp, MptExtraBlockData, MptGenerationInputs, MptTrieInputs, MptTrieRoots,
     },
     decoding_mpt::{MptTraceParsingError, MptTraceParsingResult},
-    decoding_traits::ProcessableBlockTrace,
     processed_block_trace::ProcessedBlockTrace,
     processed_block_trace_mpt::{NodesUsedByTxn, ProcessedSectionTxnInfo, StateTrieWrites},
     types::{
