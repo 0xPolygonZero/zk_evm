@@ -24,8 +24,8 @@ use crate::prover::GenerationSegmentData;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
-use crate::witness::memory::MemoryOpKind;
-use crate::witness::memory::{MemoryAddress, MemoryContextState, MemoryOp, MemoryState};
+use crate::witness::memory::{MemoryAddress, MemoryOp, MemoryState};
+use crate::witness::memory::{MemoryContextState, MemoryOpKind};
 use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::{TraceCheckpoint, Traces};
@@ -76,9 +76,13 @@ pub(crate) trait State<F: Field> {
     fn get_context(&self) -> usize;
 
     /// Checks whether we have reached the maximal cpu length.
-    fn at_end_segment(&self, opt_max_cpu_len_log: Option<usize>) -> bool {
-        if let Some(max_cpu_len_log) = opt_max_cpu_len_log {
-            self.get_clock() == (1 << max_cpu_len_log) - NUM_EXTRA_CYCLES_AFTER
+    fn at_end_segment(&self, opt_max_cpu_len: Option<usize>, is_dummy: bool) -> bool {
+        if let Some(max_cpu_len_log) = opt_max_cpu_len {
+            if is_dummy {
+                self.get_clock() == max_cpu_len_log - NUM_EXTRA_CYCLES_AFTER
+            } else {
+                self.get_clock() == (1 << max_cpu_len_log) - NUM_EXTRA_CYCLES_AFTER
+            }
         } else {
             false
         }
@@ -168,6 +172,7 @@ pub(crate) trait State<F: Field> {
     fn run_cpu(
         &mut self,
         max_cpu_len_log: Option<usize>,
+        is_dummy: bool,
     ) -> anyhow::Result<(RegistersState, Option<MemoryState>)>
     where
         Self: Transition<F>,
@@ -183,7 +188,7 @@ pub(crate) trait State<F: Field> {
             let pc = registers.program_counter;
 
             let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
-            if running && (self.at_halt() || self.at_end_segment(max_cpu_len_log)) {
+            if running && (self.at_halt() || self.at_end_segment(max_cpu_len_log, is_dummy)) {
                 running = false;
                 final_registers = registers;
 
@@ -206,7 +211,7 @@ pub(crate) trait State<F: Field> {
                     }
                 } else {
                     if !running {
-                        assert_eq!(self.get_clock() - final_clock, NUM_EXTRA_CYCLES_AFTER - 1);
+                        debug_assert!(self.get_clock() - final_clock == NUM_EXTRA_CYCLES_AFTER - 1);
                     }
                     let final_mem = if let Some(mut mem) = self.get_full_memory() {
                         // Clear memory we will not use again.
@@ -609,7 +614,7 @@ impl<F: Field> State<F> for GenerationState<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(opcode, op, row)
+        self.perform_state_op(op, row)
     }
 }
 

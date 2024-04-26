@@ -285,6 +285,9 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
     // The popped value needs to be scaled down.
     let new_ctx = u256_to_usize(ctx >> CONTEXT_SCALING_FACTOR)?;
 
+    // Flag indicating whether the old context should be pruned.
+    let flag = ctx & 1.into();
+
     let sp_field = ContextMetadata::StackSize.unscale();
     let old_sp_addr = MemoryAddress::new(old_ctx, Segment::ContextMetadata, sp_field);
     let new_sp_addr = MemoryAddress::new(new_ctx, Segment::ContextMetadata, sp_field);
@@ -337,7 +340,7 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
         None
     };
 
-    if new_ctx < old_ctx {
+    if flag == 1.into() {
         row.general.context_pruning_mut().pruning_flag = F::ONE;
         generation_state.stale_contexts.push(old_ctx);
     }
@@ -349,11 +352,6 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
     }
     state.push_memory(log_write_old_sp);
     state.push_memory(log_read_new_sp);
-    state.push_arithmetic(arithmetic::Operation::binary(
-        BinaryOperator::Lt,
-        new_ctx.into(),
-        old_ctx.into(),
-    ));
     state.push_cpu(row);
 
     Ok(())

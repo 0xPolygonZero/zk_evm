@@ -12,8 +12,8 @@ use evm_arithmetization::generation::mpt::transaction_testing::{
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use evm_arithmetization::prover::{generate_all_data_segments, prove};
-use evm_arithmetization::verifier::verify_proof;
+use evm_arithmetization::prover::testing::prove_all_segments;
+use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -236,24 +236,20 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let max_cpu_len_log = 20;
-    let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
-
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut data[0], &mut timing, None)?;
+
+    let proofs = prove_all_segments::<F, C, D>(
+        &all_stark,
+        &config,
+        inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
+
     timing.filter(Duration::from_millis(100)).print();
 
-    // Assert that the proof leads to the correct state and receipt roots.
-    assert_eq!(
-        proof.public_values.trie_roots_after.state_root,
-        expected_state_trie_after.hash()
-    );
-
-    assert_eq!(
-        proof.public_values.trie_roots_after.receipts_root,
-        receipts_trie.hash()
-    );
-
-    verify_proof(&all_stark, proof, &config)
+    verify_all_proofs(&all_stark, &proofs, &config)
 }
 
 fn initialize_mpts(
@@ -544,7 +540,7 @@ fn test_two_logs_with_aggreg() -> anyhow::Result<()> {
             4..14,
             16..20,
             8..18,
-            10..17,
+            7..17,
         ],
         &config,
     );

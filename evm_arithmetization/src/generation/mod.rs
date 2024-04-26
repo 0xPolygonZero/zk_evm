@@ -43,6 +43,9 @@ use crate::witness::util::mem_write_log;
 /// Number of cycles to go after having reached the halting state. It is
 /// equal to the number of cycles in `exc_stop` + 1.
 pub const NUM_EXTRA_CYCLES_AFTER: usize = 81;
+/// Number of cycles to go before starting the execution: it is the number of
+/// cycles in `init`.
+pub const NUM_EXTRA_CYCLES_BEFORE: usize = 64;
 /// Memory values used to initialize `MemBefore`.
 pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
 
@@ -387,6 +390,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     // Initialize the state with the one at the end of the
     // previous segment execution, if any.
     let GenerationSegmentData {
+        is_dummy,
+        segment_index,
         max_cpu_len_log,
         memory,
         registers_before,
@@ -405,10 +410,10 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let cpu_res = timed!(
         timing,
         "simulate CPU",
-        simulate_cpu(&mut state, *max_cpu_len_log)
+        simulate_cpu(&mut state, *max_cpu_len_log, *is_dummy)
     );
     if cpu_res.is_err() {
-        output_debug_tries(&state)?;
+        let _ = output_debug_tries(&state)?;
         cpu_res?;
     };
 
@@ -470,8 +475,9 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 fn simulate_cpu<F: Field>(
     state: &mut GenerationState<F>,
     max_cpu_len_log: Option<usize>,
+    is_dummy: bool,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
-    let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log)?;
+    let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log, is_dummy)?;
 
     let pc = state.registers.program_counter;
     // Setting the values of padding rows.

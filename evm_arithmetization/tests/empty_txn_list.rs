@@ -86,7 +86,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
             4..13,
             11..18,
             8..18,
-            10..18,
+            7..17,
         ],
         &config,
     );

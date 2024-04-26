@@ -461,10 +461,6 @@ impl<F: Field> GenerationState<F> {
         Ok(code_len)
     }
 
-    fn get_current_code_len(&self) -> Result<usize, ProgramError> {
-        self.get_code_len(self.registers.context)
-    }
-
     pub(crate) fn set_jumpdest_bits(&mut self, code: &[u8]) {
         const JUMPDEST_OPCODE: u8 = 0x5b;
         for (pos, opcode) in CodeIterator::new(code) {
@@ -532,7 +528,7 @@ fn get_proofs_and_jumpdests(
     const PUSH32_OPCODE: u8 = 0x7f;
     let (proofs, _) = CodeIterator::until(code, largest_address + 1).fold(
         (vec![], 0),
-        |(mut proofs, last_proof), (addr, opcode)| {
+        |(mut proofs, last_proof), (addr, _opcode)| {
             let has_prefix = if let Some(prefix_start) = addr.checked_sub(32) {
                 code[prefix_start..addr]
                     .iter()

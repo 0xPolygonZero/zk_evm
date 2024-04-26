@@ -134,38 +134,6 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
     )
 }
 
-/// Returns the `TableWithColumns` for the context pruning inequality. It's a LT
-/// operation on `new_ctx` and `old_ctx`.
-pub(crate) fn ctl_arithmetic_context_pruning<F: Field>() -> TableWithColumns<F> {
-    // Opcode is LT.
-    let mut columns = vec![Column::constant(F::from_canonical_usize(0x10))];
-    // `input0` = `new_ctx`. Context is shifted; higher limbs are all zero.
-    columns.push(Column::single(COL_MAP.mem_channels[0].value[2]));
-    columns.extend(repeat(Column::constant(F::ZERO)).take(VALUE_LIMBS - 1));
-    // `input1` = `old_ctx`. Higher limbs are all zero.
-    columns.push(Column::single(COL_MAP.context));
-    columns.extend(repeat(Column::constant(F::ZERO)).take(VALUE_LIMBS - 1));
-    // `input2` doesn't matter.
-    columns.extend(repeat(Column::constant(F::ZERO)).take(VALUE_LIMBS));
-    // `res` is the first general column. Higher limbs are all zero.
-    columns.push(Column::single(
-        COL_MAP.general.context_pruning().pruning_flag,
-    ));
-    columns.extend(repeat(Column::constant(F::ZERO)).take(VALUE_LIMBS - 1));
-
-    TableWithColumns::new(
-        *Table::Cpu,
-        columns,
-        Filter::new(
-            vec![(
-                Column::single(COL_MAP.op.context_op),
-                Column::single(COL_MAP.opcode_bits[0]),
-            )],
-            vec![],
-        ),
-    )
-}
-
 /// Returns a column containing stale contexts.
 pub(crate) fn ctl_context_pruning_looked<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
