@@ -2031,12 +2031,17 @@ where
                 //     len_mem_cap,
                 // );
 
-                let mut pw = PartialWitness::<F>::new();
-                for (i, &pi) in dummy_pis.iter().enumerate() {
-                    pw.set_target(circuit.prover_only.public_inputs[i], pi);
-                }
+                // let mut pw = PartialWitness::<F>::new();
+                // for (i, &pi) in dummy_pis.iter().enumerate() {
+                //     pw.set_target(circuit.prover_only.public_inputs[i], pi);
+                // }
+
                 let dummy_circuit = dummy_circuit::<F, C, D>(&circuit.common);
-                let dummy_proof = circuit.prove(pw).expect("Cannot generate dummy proof.");
+                println!("Generating dummy proof...");
+                let dummy_proof = dummy_proof::<F, C, D>(&dummy_circuit, HashMap::new())?;
+
+                //let dummy_proof = circuit.prove(pw).expect("Cannot generate dummy proof.");
+
                 // let mut dummy_pis = vec![F::ZERO; circuit.common.num_public_inputs];
 
                 // let mut dummy_proof_with_pis = ProofWithPublicInputs {
