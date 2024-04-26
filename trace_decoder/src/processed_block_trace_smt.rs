@@ -2,10 +2,8 @@ use ethereum_types::{Address, U256};
 use thiserror::Error;
 
 use crate::{
-    aliased_crate_types::MptGenerationInputs,
-    decoding_mpt::MptTraceParsingResult,
+    aliased_crate_types::{MptGenerationInputs, SmtGenerationInputs},
     decoding_smt::{SmtTraceParsingError, SmtTraceParsingResult},
-    decoding_traits::{ProcessableBlockTrace, ProofGenIr},
     processed_block_trace::ProcessedBlockTrace,
     processed_block_trace_mpt::{MptProcessedBlockTrace, ProcessingMeta},
     trace_protocol::BlockTrace,
@@ -20,23 +18,21 @@ pub(crate) struct SmtProcessedBlockTracePreImages {}
 #[derive(Debug)]
 pub(crate) struct ProcedBlockTraceSmtSpec {}
 
-impl ProcessableBlockTrace for SmtProcessedBlockTrace {
-    type Ir = MptGenerationInputs;
-    type Error = SmtTraceParsingError;
-
-    fn into_proof_gen_ir(self, other_data: OtherBlockData) -> Result<Vec<Self::Ir>, Self::Error> {
+impl BlockTrace {
+    pub(crate) fn into_proof_gen_ir(
+        self,
+        other_data: OtherBlockData,
+    ) -> SmtTraceParsingResult<Vec<SmtGenerationInputs>> {
         todo!()
     }
-}
 
-impl BlockTrace {
     /// Processes and returns the [GenerationInputs] for all transactions in the
     /// block.
     pub fn smt_into_proof_gen_ir<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> SmtTraceParsingResult<Vec<MptGenerationInputs>>
+    ) -> SmtTraceParsingResult<Vec<SmtGenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {

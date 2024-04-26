@@ -7,7 +7,6 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 
 use crate::decoding_mpt::{MptTraceParsingResult, TxnMetaState};
-use crate::decoding_traits::ProcessableBlockTrace;
 use crate::processed_block_trace::ProcessedBlockTrace;
 use crate::protocol_processing::{
     process_block_trace_trie_pre_images, process_mpt_block_trace_trie_pre_images,
