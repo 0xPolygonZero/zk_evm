@@ -17,7 +17,9 @@ use mpt_trie::{
 use thiserror::Error;
 
 use crate::{
-    aliased_crate_types::{AccountRlp, ExtraBlockData, GenerationInputs, TrieInputs, TrieRoots},
+    aliased_crate_types::{
+        MptAccountRlp, MptExtraBlockData, MptGenerationInputs, MptTrieInputs, MptTrieRoots,
+    },
     decoding_mpt::{MptTraceParsingError, MptTraceParsingResult},
     decoding_traits::ProcessableBlockTrace,
     processed_block_trace::ProcessedBlockTrace,

@@ -25,9 +25,11 @@ use crate::utils::{
     h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,
     print_value_and_hash_nodes_of_trie,
 };
-use crate::{aliased_crate_types::GenerationInputs, protocol_processing::process_mpt_trie_images};
 use crate::{
-    aliased_crate_types::{AccountRlp, LegacyReceiptRlp},
+    aliased_crate_types::MptGenerationInputs, protocol_processing::process_mpt_trie_images,
+};
+use crate::{
+    aliased_crate_types::{MptAccountRlp, MptLegacyReceiptRlp},
     compact::compact_prestate_processing::{
         process_compact_prestate_debug, MptPartialTriePreImages, ProcessedCompactOutput,
     },
@@ -51,7 +53,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> MptTraceParsingResult<Vec<GenerationInputs>>
+    ) -> MptTraceParsingResult<Vec<MptGenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
@@ -87,7 +89,7 @@ impl BlockTrace {
                 data.as_val().map(|data| {
                     (
                         h_addr_nibs_to_h256(&addr),
-                        rlp::decode::<AccountRlp>(data).unwrap(),
+                        rlp::decode::<MptAccountRlp>(data).unwrap(),
                     )
                 })
             })
@@ -102,7 +104,7 @@ impl BlockTrace {
             self.atomic_info,
             &all_accounts_in_pre_image,
             &mut code_hash_resolver,
-            &withdrawals
+            &withdrawals,
         );
 
         let spec = ProcedBlockTraceMptSpec {
@@ -115,7 +117,7 @@ impl BlockTrace {
 
     fn process_atomic_units<F>(
         atomic_info: AtomicUnitInfo,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
+        all_accounts_in_pre_image: &[(HashedAccountAddr, MptAccountRlp)],
         code_hash_resolver: &mut CodeHashResolving<F>,
         withdrawals: &[(Address, U256)],
     ) -> ProcessedSectionInfo
@@ -141,7 +143,11 @@ impl BlockTrace {
                             Vec::new()
                         };
 
-                        t.into_processed_txn_info(all_accounts_in_pre_image, &extra_state_accesses, code_hash_resolver)
+                        t.into_processed_txn_info(
+                            all_accounts_in_pre_image,
+                            &extra_state_accesses,
+                            code_hash_resolver,
+                        )
                     })
                     .collect::<Vec<_>>();
 
@@ -241,7 +247,7 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
+        all_accounts_in_pre_image: &[(HashedAccountAddr, MptAccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedSectionTxnInfo {
@@ -370,7 +376,7 @@ impl TxnInfo {
 }
 
 fn process_rlped_receipt_node_bytes(raw_bytes: Vec<u8>) -> Vec<u8> {
-    match rlp::decode::<LegacyReceiptRlp>(&raw_bytes) {
+    match rlp::decode::<MptLegacyReceiptRlp>(&raw_bytes) {
         Ok(_) => raw_bytes,
         Err(_) => {
             // Must be non-legacy.

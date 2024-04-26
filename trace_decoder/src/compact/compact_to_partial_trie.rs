@@ -17,7 +17,7 @@ use super::compact_prestate_processing::{
     NodeEntry, WitnessEntry,
 };
 use crate::{
-    aliased_crate_types::AccountRlp,
+    aliased_crate_types::MptAccountRlp,
     decoding::TrieType,
     types::{
         CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH,
@@ -281,7 +281,7 @@ fn process_account_node(
 
     h_addr_to_storage_trie.insert(h_addr, s_trie);
 
-    let account = AccountRlp {
+    let account = MptAccountRlp {
         nonce: acc_data.nonce,
         balance: acc_data.balance,
         storage_root,
