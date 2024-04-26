@@ -10,6 +10,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
+use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
 
@@ -528,7 +529,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         if registers.is_kernel {
             log_kernel_instruction(self, op);
         } else {
-            log::debug!("User instruction: {:?}", op);
+            self.log_debug(format!("User instruction: {:?}", op));
         }
 
         let generation_state = self.get_mut_generation_state();
@@ -546,6 +547,20 @@ impl<F: Field> State<F> for Interpreter<F> {
         }
 
         self.perform_state_op(op, row)
+    }
+
+    fn log_debug(&self, msg: String) {
+        if !self.is_jumpdest_analysis {
+            log::debug!("{}", msg);
+        }
+    }
+
+    fn log_info(&self, _msg: String) {}
+
+    fn log(&self, level: Level, msg: String) {
+        if !self.is_jumpdest_analysis {
+            log::log!(level, "{}", msg);
+        }
     }
 }
 
