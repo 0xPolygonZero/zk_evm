@@ -18,10 +18,11 @@ use mpt_trie::{
 use thiserror::Error;
 
 use crate::{
-    aliased_crate_types::{MptAccountRlp, MptExtraBlockData, MptTrieInputs, MptTrieRoots},
+    aliased_crate_types::{
+        MptAccountRlp, MptExtraBlockData, MptGenerationInputs, MptTrieInputs, MptTrieRoots,
+    },
     compact::compact_prestate_processing::{CompactParsingError, MptPartialTriePreImages},
     decoding::TrieType,
-    decoding_traits::ProcessableBlockTrace,
     processed_block_trace_mpt::{
         MptProcessedBlockTrace, NodesUsedByTxn, ProcessedSectionInfo, ProcessedSectionTxnInfo,
         StateTrieWrites,
@@ -188,11 +189,11 @@ impl From<CompactParsingError> for MptTraceParsingError {
     }
 }
 
-impl ProcessableBlockTrace for MptProcessedBlockTrace {
-    type Ir = GenerationInputs;
-    type Error = Box<MptTraceParsingError>;
-
-    fn into_proof_gen_ir(self, other_data: OtherBlockData) -> Result<Vec<Self::Ir>, Self::Error> {
+impl MptProcessedBlockTrace {
+    pub(crate) fn into_proof_gen_ir(
+        self,
+        other_data: OtherBlockData,
+    ) -> MptTraceParsingResult<Vec<MptGenerationInputs>> {
         match self.spec.sect_info {
             ProcessedSectionInfo::Continuations(_) => {
                 todo!("MPT continuations are not implemented yet!")
@@ -202,9 +203,7 @@ impl ProcessableBlockTrace for MptProcessedBlockTrace {
             }
         }
     }
-}
 
-impl MptProcessedBlockTrace {
     fn process_txns(
         txns: Vec<ProcessedSectionTxnInfo>,
         tries: MptPartialTriePreImages,

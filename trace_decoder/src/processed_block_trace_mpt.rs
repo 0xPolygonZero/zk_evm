@@ -12,7 +12,6 @@ use crate::compact::compact_prestate_processing::{
     MptPartialTriePreImages, ProcessedCompactOutput,
 };
 use crate::decoding_mpt::TxnMetaState;
-use crate::decoding_traits::ProcessableBlockTrace;
 use crate::processed_block_trace::ProcessedBlockTrace;
 use crate::protocol_processing::{process_mpt_block_trace_trie_pre_images, TraceParsingResult};
 use crate::trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TxnInfo};

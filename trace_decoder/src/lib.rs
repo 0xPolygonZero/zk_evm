@@ -74,7 +74,7 @@
 //! vector of IRs, one must call the method
 //! [into_txn_proof_gen_ir](BlockTrace::into_txn_proof_gen_ir):
 //! ```ignore
-//! pub fn into_txn_proof_gen_ir<F>(
+//! pub fn mpt_into_txn_proof_gen_ir<F>(
 //!     self,
 //!     // Specifies the way code hashes should be dealt with.
 //!     p_meta: &ProcessingMeta<F>,
@@ -124,7 +124,6 @@ pub mod compact;
 pub mod decoding;
 mod decoding_mpt;
 mod decoding_smt;
-mod decoding_traits;
 mod deserializers;
 
 /// Core logic shared between mpt/smt versions of processing block traces.
@@ -138,7 +137,6 @@ pub mod processed_block_trace_mpt;
 /// it is easier to turn the block transactions into IRs.
 pub mod processed_block_trace_smt;
 
-/// Logic for high-level processing of protocol payloads.
 mod protocol_processing;
 
 pub mod trace_protocol;
