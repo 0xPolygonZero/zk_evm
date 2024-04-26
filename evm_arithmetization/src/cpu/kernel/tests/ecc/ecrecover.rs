@@ -5,8 +5,7 @@ use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::interpreter::run_interpreter;
-use crate::cpu::kernel::tests::u256ify;
+use crate::cpu::kernel::tests::{run_interpreter, u256ify};
 
 fn test_valid_ecrecover(hash: &str, v: &str, r: &str, s: &str, expected: &str) -> Result<()> {
     let ecrecover = KERNEL.global_labels["ecrecover"];
