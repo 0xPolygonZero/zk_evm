@@ -1,9 +1,7 @@
 use anyhow::Result;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
-use crate::cpu::kernel::interpreter::{
-    run_interpreter_with_memory, InterpreterMemoryInitialization,
-};
+use super::{run_interpreter_with_memory, InterpreterMemoryInitialization};
 use crate::memory::segments::Segment::KernelGeneral;
 
 type ConvertedBlakeInputs = (u32, [u64; 8], [u64; 16], u64, u64, bool);

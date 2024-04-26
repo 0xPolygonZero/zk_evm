@@ -116,7 +116,7 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Cpu,
         columns,
-        Some(Filter::new(
+        Filter::new(
             vec![(Column::single(COL_MAP.op.push_prover_input), col_bit)],
             vec![Column::sum([
                 COL_MAP.op.binary_op,
@@ -126,7 +126,7 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
                 COL_MAP.op.syscall,
                 COL_MAP.op.exception,
             ])],
-        )),
+        ),
     )
 }
 
@@ -467,24 +467,24 @@ pub(crate) fn ctl_poseidon_general_input<F: Field>() -> TableWithColumns<F> {
     )
 }
 
-pub(crate) fn ctl_poseidon_simple_filter<F: Field>() -> Option<Filter<F>> {
-    Some(Filter::new(
+pub(crate) fn ctl_poseidon_simple_filter<F: Field>() -> Filter<F> {
+    Filter::new(
         vec![(
             Column::single(COL_MAP.op.poseidon),
             Column::linear_combination_with_constant([(COL_MAP.opcode_bits[0], -F::ONE)], F::ONE),
         )],
         vec![],
-    ))
+    )
 }
 
-pub(crate) fn ctl_poseidon_general_filter<F: Field>() -> Option<Filter<F>> {
-    Some(Filter::new(
+pub(crate) fn ctl_poseidon_general_filter<F: Field>() -> Filter<F> {
+    Filter::new(
         vec![(
             Column::single(COL_MAP.op.poseidon),
             Column::single(COL_MAP.opcode_bits[0]),
         )],
         vec![],
-    ))
+    )
 }
 
 /// Returns the `TableWithColumns` for the CPU rows calling POSEIDON_GENERAL.

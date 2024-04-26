@@ -41,9 +41,7 @@ pub(crate) fn ctl_looked_simple_op<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Poseidon,
         columns,
-        Some(Filter::new_simple(Column::single(
-            POSEIDON_COL_MAP.is_simple_op,
-        ))),
+        Filter::new_simple(Column::single(POSEIDON_COL_MAP.is_simple_op)),
     )
 }
 
@@ -53,7 +51,7 @@ pub(crate) fn ctl_looked_general_output<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Poseidon,
         columns,
-        Some(Filter::new(
+        Filter::new(
             vec![(
                 Column::sum(POSEIDON_COL_MAP.is_final_input_len),
                 Column::linear_combination_with_constant(
@@ -62,7 +60,7 @@ pub(crate) fn ctl_looked_general_output<F: Field>() -> TableWithColumns<F> {
                 ),
             )],
             vec![],
-        )),
+        ),
     )
 }
 
@@ -77,9 +75,7 @@ pub(crate) fn ctl_looked_general_input<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Poseidon,
         vec![context, segment, virt, len, timestamp],
-        Some(Filter::new_simple(Column::single(
-            POSEIDON_COL_MAP.is_first_row_general_op,
-        ))),
+        Filter::new_simple(Column::single(POSEIDON_COL_MAP.is_first_row_general_op)),
     )
 }
 

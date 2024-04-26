@@ -6,9 +6,8 @@ use rand::{thread_rng, Rng};
 use ripemd::{Digest, Ripemd160};
 use sha2::Sha256;
 
-use crate::cpu::kernel::interpreter::{
-    run_interpreter_with_memory, Interpreter, InterpreterMemoryInitialization,
-};
+use super::{run_interpreter_with_memory, InterpreterMemoryInitialization};
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::memory::segments::Segment::KernelGeneral;
 
 /// Standard RipeMD implementation.

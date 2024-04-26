@@ -581,11 +581,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             table_column: Column::single(COUNTER),
             frequencies_column: Column::single(FREQUENCIES),
             filter_columns: vec![
-                None,
-                Some(Filter::new_simple(Column::sum([
-                    CONTEXT_FIRST_CHANGE,
-                    SEGMENT_FIRST_CHANGE,
-                ]))),
+                Default::default(),
+                Filter::new_simple(Column::sum([CONTEXT_FIRST_CHANGE, SEGMENT_FIRST_CHANGE])),
             ],
         }]
     }

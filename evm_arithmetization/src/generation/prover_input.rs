@@ -478,10 +478,6 @@ impl<F: RichField> GenerationState<F> {
         Ok(code_len)
     }
 
-    fn get_current_code_len(&self) -> Result<usize, ProgramError> {
-        self.get_code_len(self.registers.context)
-    }
-
     pub(crate) fn set_jumpdest_bits(&mut self, code: &[u8]) {
         const JUMPDEST_OPCODE: u8 = 0x5b;
         for (pos, opcode) in CodeIterator::new(code) {
@@ -549,7 +545,7 @@ fn get_proofs_and_jumpdests(
     const PUSH32_OPCODE: u8 = 0x7f;
     let (proofs, _) = CodeIterator::until(code, largest_address + 1).fold(
         (vec![], 0),
-        |(mut proofs, last_proof), (addr, opcode)| {
+        |(mut proofs, last_proof), (addr, _opcode)| {
             let has_prefix = if let Some(prefix_start) = addr.checked_sub(32) {
                 code[prefix_start..addr]
                     .iter()
@@ -590,7 +586,7 @@ struct CodeIterator<'a> {
 }
 
 impl<'a> CodeIterator<'a> {
-    fn new(code: &'a [u8]) -> Self {
+    const fn new(code: &'a [u8]) -> Self {
         CodeIterator {
             end: code.len(),
             code,
@@ -639,7 +635,7 @@ pub(crate) struct AccList<'a> {
 }
 
 impl<'a> AccList<'a> {
-    fn from_mem_and_segment(
+    const fn from_mem_and_segment(
         access_list_mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {

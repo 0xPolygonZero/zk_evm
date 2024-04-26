@@ -45,8 +45,6 @@ impl From<String> for ProofGenError {
 /// Generates a transaction proof from some IR data.
 pub fn generate_txn_proof(
     p_state: &ProverState,
-    // gen_inputs: TxnProofGenIR, // TODO: bring back import from trace_decoder once SMT logic is
-    // implemented
     gen_inputs: GenerationInputs,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedTxnProof> {

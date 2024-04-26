@@ -26,8 +26,8 @@ use crate::poseidon::poseidon_stark::PoseidonOp;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
+use crate::witness::memory::MemoryOpKind;
 use crate::witness::memory::{MemoryAddress, MemoryOp, MemoryState};
-use crate::witness::memory::{MemoryOpKind, MemorySegmentState};
 use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::{TraceCheckpoint, Traces};
@@ -145,12 +145,6 @@ pub(crate) trait State<F: RichField> {
 
     /// Return the offsets at which execution must halt
     fn get_halt_offsets(&self) -> Vec<usize>;
-
-    /// Inserts a preinitialized segment, given as a [Segment],
-    /// into the `preinitialized_segments` memory field.
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState);
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool;
 
     /// Simulates the CPU. It only generates the traces if the `State` is a
     /// `GenerationState`.
@@ -439,16 +433,6 @@ impl<F: RichField> State<F> for GenerationState<F> {
         }
     }
 
-    fn insert_preinitialized_segment(&mut self, segment: Segment, values: MemorySegmentState) {
-        panic!(
-            "A `GenerationState` cannot have a nonempty `preinitialized_segment` field in memory."
-        )
-    }
-
-    fn is_preinitialized_segment(&self, segment: usize) -> bool {
-        false
-    }
-
     fn incr_gas(&mut self, n: u64) {
         self.registers.gas_used += n;
     }
@@ -532,7 +516,7 @@ impl<F: RichField> State<F> for GenerationState<F> {
                 row.general.stack_mut().stack_inv = inv;
                 row.general.stack_mut().stack_inv_aux = F::ONE;
                 self.registers.is_stack_top_read = true;
-            } else if (self.stack().len() != special_len) {
+            } else if self.stack().len() != special_len {
                 // If the `State` is an interpreter, we cannot rely on the row to carry out the
                 // check.
                 self.registers.is_stack_top_read = true;
@@ -542,7 +526,7 @@ impl<F: RichField> State<F> for GenerationState<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(opcode, op, row)
+        self.perform_state_op(op, row)
     }
 }
 
@@ -551,7 +535,7 @@ impl<F: RichField> Transition<F> for GenerationState<F> {
         Ok(op)
     }
 
-    fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool {
+    fn generate_jumpdest_analysis(&mut self, _dst: usize) -> bool {
         false
     }
 

@@ -187,7 +187,7 @@ mod tests {
     }
 
     impl PyEvmTrueValEntry {
-        fn account_entry(&self) -> AccountEntry {
+        const fn account_entry(&self) -> AccountEntry {
             AccountEntry {
                 nonce: self.nonce,
                 balance: self.balance,
