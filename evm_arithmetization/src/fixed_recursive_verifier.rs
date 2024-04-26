@@ -2017,8 +2017,6 @@ where
                         + ExtraBlockDataTarget::SIZE
                         + RegistersDataTarget::SIZE * 2,
                 );
-                // dummy_pis[0..TrieRootsTarget::SIZE] =
-                //     dummy_pis[TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2];
 
                 // let lhs_pv = PublicValues::from_public_inputs(&proof.public_inputs,
                 // len_mem_cap); let mut dummy_pv = lhs_pv.clone();
@@ -2036,10 +2034,16 @@ where
                 //     pw.set_target(circuit.prover_only.public_inputs[i], pi);
                 // }
 
+                let mut dummy_pis_map = HashMap::new();
+                for (idx, &pi) in dummy_pis.iter().enumerate() {
+                    dummy_pis_map.insert(idx, pi);
+                }
+
                 let dummy_circuit = dummy_circuit::<F, C, D>(&circuit.common);
                 println!("Generating dummy proof...");
-                let dummy_proof = dummy_proof::<F, C, D>(&dummy_circuit, HashMap::new())
+                let dummy_proof = dummy_proof::<F, C, D>(&dummy_circuit, dummy_pis_map)
                     .expect("Cannot generate dummy proof.");
+                println!("Dummy proof generated!");
 
                 //let dummy_proof = circuit.prove(pw).expect("Cannot generate dummy proof.");
 
