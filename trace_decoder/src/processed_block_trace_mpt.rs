@@ -3,10 +3,14 @@ use std::fmt::Debug;
 use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
+use evm_arithmetization_mpt::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization_mpt::GenerationInputs;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::PartialTrie;
 
-use crate::aliased_crate_types::GenerationInputs;
+use crate::compact::compact_prestate_processing::{
+    MptPartialTriePreImages, ProcessedCompactOutput,
+};
 use crate::decoding_mpt::TxnMetaState;
 use crate::decoding_traits::ProcessableBlockTrace;
 use crate::processed_block_trace::ProcessedBlockTrace;
@@ -18,10 +22,6 @@ use crate::types::{
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
-};
-use crate::{
-    aliased_crate_types::{AccountRlp, LegacyReceiptRlp},
-    compact::compact_prestate_processing::{MptPartialTriePreImages, ProcessedCompactOutput},
 };
 
 pub(crate) type MptProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceMptSpec>;

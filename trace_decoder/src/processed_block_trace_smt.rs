@@ -1,7 +1,7 @@
 use ethereum_types::{Address, U256};
 
 use crate::{
-    aliased_crate_types::GenerationInputs,
+    aliased_crate_types::MptGenerationInputs,
     decoding_smt::{SmtTraceParsingError, SmtTraceParsingResult},
     decoding_traits::ProcessableBlockTrace,
     processed_block_trace::ProcessedBlockTrace,
@@ -19,7 +19,7 @@ pub(crate) struct SmtProcessedBlockTracePreImages {}
 pub(crate) struct ProcedBlockTraceSmtSpec {}
 
 impl ProcessableBlockTrace for SmtProcessedBlockTrace {
-    type Ir = GenerationInputs;
+    type Ir = MptGenerationInputs;
     type Error = SmtTraceParsingError;
 
     fn into_proof_gen_ir(self, _other_data: OtherBlockData) -> Result<Vec<Self::Ir>, Self::Error> {
@@ -34,7 +34,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> SmtTraceParsingResult<Vec<GenerationInputs>>
+    ) -> SmtTraceParsingResult<Vec<MptGenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {

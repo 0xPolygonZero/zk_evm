@@ -1,12 +1,7 @@
-use crate::{aliased_crate_types::GenerationInputs, types::OtherBlockData};
+use crate::{aliased_crate_types::MptGenerationInputs, types::OtherBlockData};
 
 /// The smallest "chunk" that we can break a block into.
 pub(crate) trait AtomicBlockUnit {}
-
-// pub(crate) trait BlockTrace {
-
-//     fn into_processable_block_trace(self) -> impl ProcessableBlockTrace;
-// }
 
 pub(crate) trait ProcessableBlockTrace {
     type Ir;
@@ -29,4 +24,4 @@ pub(crate) struct ContinuationUnit {}
 impl AtomicBlockUnit for ContinuationUnit {}
 
 // TODO: Wrap or use alias, don't do this... (?)
-impl ProofGenIr for GenerationInputs {}
+impl ProofGenIr for MptGenerationInputs {}

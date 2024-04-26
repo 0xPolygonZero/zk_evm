@@ -18,7 +18,7 @@ use mpt_trie::{
 use thiserror::Error;
 
 use crate::{
-    aliased_crate_types::{AccountRlp, ExtraBlockData, TrieInputs, TrieRoots},
+    aliased_crate_types::{MptAccountRlp, MptExtraBlockData, MptTrieInputs, MptTrieRoots},
     compact::compact_prestate_processing::{CompactParsingError, MptPartialTriePreImages},
     decoding::TrieType,
     decoding_traits::ProcessableBlockTrace,
@@ -225,7 +225,7 @@ impl MptProcessedBlockTrace {
             ..Default::default()
         };
 
-        let mut extra_data = ExtraBlockData {
+        let mut extra_data = MptExtraBlockData {
             checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
             txn_number_before: U256::zero(),
             txn_number_after: U256::zero(),
@@ -318,7 +318,7 @@ impl MptProcessedBlockTrace {
         txn_idx: TxnIdx,
         delta_application_out: TrieDeltaApplicationOutput,
         _coin_base_addr: &Address,
-    ) -> MptTraceParsingResult<TrieInputs> {
+    ) -> MptTraceParsingResult<MptTrieInputs> {
         let state_trie = create_minimal_state_partial_trie(
             &curr_block_tries.state,
             nodes_used_by_txn.state_accesses.iter().cloned(),
@@ -341,7 +341,7 @@ impl MptProcessedBlockTrace {
             &delta_application_out.additional_storage_trie_paths_to_not_hash,
         )?;
 
-        Ok(TrieInputs {
+        Ok(MptTrieInputs {
             state_trie,
             transactions_trie,
             receipts_trie,
@@ -506,8 +506,8 @@ impl MptProcessedBlockTrace {
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<GenerationInputs>,
         other_data: &OtherBlockData,
-        final_extra_data: &ExtraBlockData,
-        initial_extra_data: &ExtraBlockData,
+        final_extra_data: &MptExtraBlockData,
+        initial_extra_data: &MptExtraBlockData,
         initial_tries: &PartialTrieState,
         final_tries: &PartialTrieState,
     ) {
@@ -606,7 +606,7 @@ impl MptProcessedBlockTrace {
         txn_idx: usize,
         txn_info: ProcessedSectionTxnInfo,
         curr_block_tries: &mut PartialTrieState,
-        extra_data: &mut ExtraBlockData,
+        extra_data: &mut MptExtraBlockData,
         other_data: &OtherBlockData,
     ) -> MptTraceParsingResult<GenerationInputs> {
         trace!("Generating proof IR for txn {}...", txn_idx);
@@ -675,7 +675,7 @@ impl MptProcessedBlockTrace {
 impl StateTrieWrites {
     fn apply_writes_to_state_node(
         &self,
-        state_node: &mut AccountRlp,
+        state_node: &mut MptAccountRlp,
         h_addr: &HashedAccountAddr,
         acc_storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
     ) -> MptTraceParsingResult<()> {
@@ -704,8 +704,8 @@ impl StateTrieWrites {
     }
 }
 
-fn calculate_trie_input_hashes(t_inputs: &PartialTrieState) -> TrieRoots {
-    TrieRoots {
+fn calculate_trie_input_hashes(t_inputs: &PartialTrieState) -> MptTrieRoots {
+    MptTrieRoots {
         state_root: t_inputs.state.hash(),
         transactions_root: t_inputs.txn.hash(),
         receipts_root: t_inputs.receipt.hash(),
@@ -721,7 +721,7 @@ fn create_fully_hashed_out_sub_partial_trie(trie: &HashedPartialTrie) -> HashedP
 
 fn create_dummy_txn_pair_for_empty_block(
     other_data: &OtherBlockData,
-    extra_data: &ExtraBlockData,
+    extra_data: &MptExtraBlockData,
     final_tries: &PartialTrieState,
 ) -> [GenerationInputs; 2] {
     [
@@ -732,7 +732,7 @@ fn create_dummy_txn_pair_for_empty_block(
 
 fn create_dummy_gen_input(
     other_data: &OtherBlockData,
-    extra_data: &ExtraBlockData,
+    extra_data: &MptExtraBlockData,
     final_tries: &PartialTrieState,
 ) -> GenerationInputs {
     let sub_tries = create_dummy_proof_trie_inputs(
@@ -744,10 +744,10 @@ fn create_dummy_gen_input(
 
 fn create_dummy_gen_input_common(
     other_data: &OtherBlockData,
-    extra_data: &ExtraBlockData,
-    sub_tries: TrieInputs,
+    extra_data: &MptExtraBlockData,
+    sub_tries: MptTrieInputs,
 ) -> GenerationInputs {
-    let trie_roots_after = TrieRoots {
+    let trie_roots_after = MptTrieRoots {
         state_root: sub_tries.state_trie.hash(),
         transactions_root: sub_tries.transactions_trie.hash(),
         receipts_root: sub_tries.receipts_trie.hash(),
@@ -781,7 +781,7 @@ fn create_dummy_gen_input_common(
 fn create_dummy_proof_trie_inputs(
     final_tries_at_end_of_block: &PartialTrieState,
     state_trie: HashedPartialTrie,
-) -> TrieInputs {
+) -> MptTrieInputs {
     let partial_sub_storage_tries: Vec<_> = final_tries_at_end_of_block
         .storage
         .iter()
@@ -793,7 +793,7 @@ fn create_dummy_proof_trie_inputs(
         })
         .collect();
 
-    TrieInputs {
+    MptTrieInputs {
         state_trie,
         transactions_trie: create_fully_hashed_out_sub_partial_trie(
             &final_tries_at_end_of_block.txn,
@@ -867,7 +867,7 @@ fn create_trie_subset_wrapped(
     })
 }
 
-fn account_from_rlped_bytes(bytes: &[u8]) -> MptTraceParsingResult<AccountRlp> {
+fn account_from_rlped_bytes(bytes: &[u8]) -> MptTraceParsingResult<MptAccountRlp> {
     rlp::decode(bytes).map_err(|err| {
         Box::new(MptTraceParsingError::new(
             MptTraceParsingErrorReason::AccountDecode(hex::encode(bytes), err.to_string()),
