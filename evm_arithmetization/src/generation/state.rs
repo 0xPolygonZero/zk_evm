@@ -24,8 +24,8 @@ use crate::prover::GenerationSegmentData;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
-use crate::witness::memory::MemoryOpKind;
-use crate::witness::memory::{MemoryAddress, MemoryContextState, MemoryOp, MemoryState};
+use crate::witness::memory::{MemoryAddress, MemoryOp, MemoryState};
+use crate::witness::memory::{MemoryContextState, MemoryOpKind};
 use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::{TraceCheckpoint, Traces};
@@ -610,7 +610,7 @@ impl<F: Field> State<F> for GenerationState<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(opcode, op, row)
+        self.perform_state_op(op, row)
     }
 }
 

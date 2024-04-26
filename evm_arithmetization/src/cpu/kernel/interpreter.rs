@@ -1,7 +1,11 @@
-//! An EVM interpreter for testing and debugging purposes.
+//! An EVM interpreter, allowing to execute the zkEVM CPU without keeping track
+//! of co-processor operations to fill out their execution traces.
+//! This is useful for testing and debugging purposes, but also in the context
+//! of jumpdest analysis simulation, where it allows the prover to skim through
+//! the future execution and generate nondeterministically the corresponding
+//! jumpdest table, before the actual CPU carries on with contract execution.
 
 use core::cmp::Ordering;
-use core::ops::Range;
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
@@ -14,7 +18,6 @@ use serde::{Deserialize, Serialize};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::generation::mpt::{load_all_mpts, TrieRootPtrs};
@@ -33,7 +36,7 @@ use crate::prover::GenerationSegmentData;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
-    MemoryAddress, MemoryContextState, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
+    MemoryAddress, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
 };
 use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
@@ -68,56 +71,6 @@ pub(crate) struct Interpreter<F: Field> {
     is_dummy: bool,
 }
 
-/// Structure storing the state of the interpreter's registers.
-struct InterpreterRegistersState {
-    kernel_mode: bool,
-    context: usize,
-    registers: RegistersState,
-}
-
-pub(crate) fn run_interpreter<F: Field>(
-    initial_offset: usize,
-    initial_stack: Vec<U256>,
-) -> anyhow::Result<Interpreter<F>> {
-    run(initial_offset, initial_stack)
-}
-
-#[derive(Clone)]
-pub(crate) struct InterpreterMemoryInitialization {
-    pub label: String,
-    pub stack: Vec<U256>,
-    pub segment: Segment,
-    pub memory: Vec<(usize, Vec<U256>)>,
-}
-
-pub(crate) fn run_interpreter_with_memory<F: Field>(
-    memory_init: InterpreterMemoryInitialization,
-) -> anyhow::Result<Interpreter<F>> {
-    let label = KERNEL.global_labels[&memory_init.label];
-    let mut stack = memory_init.stack;
-    stack.reverse();
-    let mut interpreter = Interpreter::new(label, stack, None);
-    for (pointer, data) in memory_init.memory {
-        for (i, term) in data.iter().enumerate() {
-            interpreter.generation_state.memory.set(
-                MemoryAddress::new(0, memory_init.segment, pointer + i),
-                *term,
-            )
-        }
-    }
-    interpreter.run()?;
-    Ok(interpreter)
-}
-
-pub(crate) fn run<F: Field>(
-    initial_offset: usize,
-    initial_stack: Vec<U256>,
-) -> anyhow::Result<Interpreter<F>> {
-    let mut interpreter = Interpreter::new(initial_offset, initial_stack, None);
-    interpreter.run()?;
-    Ok(interpreter)
-}
-
 /// Simulates the CPU execution from `state` until the program counter reaches
 /// `final_label` in the current context.
 pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
@@ -138,7 +91,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 
             log::debug!("Simulating CPU for jumpdest analysis.");
 
-            interpreter.run();
+            let _ = interpreter.run();
 
             log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);
 
@@ -559,70 +512,15 @@ impl<F: Field> Interpreter<F> {
         Ok((final_registers, final_mem))
     }
 
-    pub(crate) fn code(&self) -> &MemorySegmentState {
-        // The context is 0 if we are in kernel mode.
-        &self.generation_state.memory.contexts[(1 - self.is_kernel() as usize) * self.context()]
-            .segments[Segment::Code.unscale()]
-    }
-
-    fn code_slice(&self, n: usize) -> Vec<u8> {
-        let pc = self.generation_state.registers.program_counter;
-        self.code().content[pc + 1..pc + n + 1]
-            .iter()
-            .map(|u256| u256.unwrap_or_default().byte(0))
-            .collect::<Vec<_>>()
-    }
-
     /// Returns the max number of CPU cycles.
     pub(crate) fn get_max_cpu_len_log(&self) -> Option<usize> {
         self.max_cpu_len_log
     }
 
-    pub(crate) fn get_txn_field(&self, field: NormalizedTxnField) -> U256 {
-        // These fields are already scaled by their respective segment.
-        self.generation_state.memory.contexts[0].segments[Segment::TxnFields.unscale()]
-            .get(field.unscale())
-    }
-
-    pub(crate) fn set_txn_field(&mut self, field: NormalizedTxnField, value: U256) {
-        // These fields are already scaled by their respective segment.
-        self.generation_state.memory.contexts[0].segments[Segment::TxnFields.unscale()]
-            .set(field.unscale(), value);
-    }
-
-    pub(crate) fn get_txn_data(&self) -> Vec<U256> {
-        self.generation_state.memory.contexts[0].segments[Segment::TxnData.unscale()].content()
-    }
-
-    pub(crate) fn get_context_metadata_field(&self, ctx: usize, field: ContextMetadata) -> U256 {
-        // These fields are already scaled by their respective segment.
-        self.generation_state.memory.contexts[ctx].segments[Segment::ContextMetadata.unscale()]
-            .get(field.unscale())
-    }
-
-    pub(crate) fn set_context_metadata_field(
-        &mut self,
-        ctx: usize,
-        field: ContextMetadata,
-        value: U256,
-    ) {
-        // These fields are already scaled by their respective segment.
-        self.generation_state.memory.contexts[ctx].segments[Segment::ContextMetadata.unscale()]
-            .set(field.unscale(), value)
-    }
-
-    pub(crate) fn get_global_metadata_field(&self, field: GlobalMetadata) -> U256 {
-        // These fields are already scaled by their respective segment.
-        let field = field.unscale();
-        self.generation_state.memory.contexts[0].segments[Segment::GlobalMetadata.unscale()]
-            .get(field)
-    }
-
-    pub(crate) fn set_global_metadata_field(&mut self, field: GlobalMetadata, value: U256) {
-        // These fields are already scaled by their respective segment.
-        let field = field.unscale();
-        self.generation_state.memory.contexts[0].segments[Segment::GlobalMetadata.unscale()]
-            .set(field, value)
+    pub(crate) fn code(&self) -> &MemorySegmentState {
+        // The context is 0 if we are in kernel mode.
+        &self.generation_state.memory.contexts[(1 - self.is_kernel() as usize) * self.context()]
+            .segments[Segment::Code.unscale()]
     }
 
     pub(crate) fn set_global_metadata_multi_fields(&mut self, metadata: &[(GlobalMetadata, U256)]) {
@@ -633,141 +531,10 @@ impl<F: Field> Interpreter<F> {
         }
     }
 
-    pub(crate) fn get_trie_data(&self) -> Vec<U256> {
-        self.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()]
-            .content
-            .iter()
-            .filter_map(|&elt| elt)
-            .collect::<Vec<_>>()
-    }
-
-    pub(crate) fn get_trie_data_mut(&mut self) -> &mut Vec<Option<U256>> {
-        &mut self.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content
-    }
-
-    pub(crate) fn get_memory_segment(&self, segment: Segment) -> Vec<U256> {
-        if self.is_preinitialized_segment(segment.unscale()) {
-            let total_len = self.generation_state.memory.contexts[0].segments[segment.unscale()]
-                .content
-                .len();
-            let get_vals = |opt_vals: &[Option<U256>]| {
-                opt_vals
-                    .iter()
-                    .map(|&elt| match elt {
-                        Some(val) => val,
-                        None => U256::zero(),
-                    })
-                    .collect::<Vec<U256>>()
-            };
-            let mut res = get_vals(
-                &self
-                    .generation_state
-                    .memory
-                    .get_preinitialized_segment(segment)
-                    .expect("The segment should be in the preinitialized segments.")
-                    .content,
-            );
-            let init_len = res.len();
-            res.extend(&get_vals(
-                &self.generation_state.memory.contexts[0].segments[segment.unscale()].content
-                    [init_len..],
-            ));
-            res
-        } else {
-            self.generation_state.memory.contexts[0].segments[segment.unscale()].content()
-        }
-    }
-
-    pub(crate) fn get_memory_segment_bytes(&self, segment: Segment) -> Vec<u8> {
-        let content = self.get_memory_segment(segment);
-        content.iter().map(|x| x.low_u32() as u8).collect()
-    }
-
-    pub(crate) fn get_current_general_memory(&self) -> Vec<U256> {
-        self.generation_state.memory.contexts[self.context()].segments
-            [Segment::KernelGeneral.unscale()]
-        .content()
-    }
-
-    pub(crate) fn get_kernel_general_memory(&self) -> Vec<U256> {
-        self.get_memory_segment(Segment::KernelGeneral)
-    }
-
-    pub(crate) fn get_rlp_memory(&self) -> Vec<u8> {
-        self.get_memory_segment_bytes(Segment::RlpRaw)
-    }
-
-    pub(crate) fn set_current_general_memory(&mut self, memory: Vec<U256>) {
-        let context = self.context();
-        self.generation_state.memory.contexts[context].segments[Segment::KernelGeneral.unscale()]
-            .content = memory.iter().map(|&val| Some(val)).collect();
-    }
-
-    pub(crate) fn set_memory_segment(&mut self, segment: Segment, memory: Vec<U256>) {
-        self.generation_state.memory.contexts[0].segments[segment.unscale()].content =
-            memory.iter().map(|&val| Some(val)).collect();
-    }
-
-    pub(crate) fn set_memory_segment_bytes(&mut self, segment: Segment, memory: Vec<u8>) {
-        self.generation_state.memory.contexts[0].segments[segment.unscale()].content = memory
-            .into_iter()
-            .map(|val| Some(U256::from(val)))
-            .collect();
-    }
-
-    pub(crate) fn extend_memory_segment(&mut self, segment: Segment, memory: &[Option<U256>]) {
-        self.generation_state.memory.contexts[0].segments[segment.unscale()]
-            .content
-            .extend(memory);
-    }
-
-    pub(crate) fn extend_memory_segment_bytes(&mut self, segment: Segment, memory: Vec<u8>) {
-        self.generation_state.memory.contexts[0].segments[segment.unscale()]
-            .content
-            .extend(
-                memory
-                    .into_iter()
-                    .map(|elt| Some(U256::from(elt)))
-                    .collect::<Vec<_>>(),
-            );
-    }
-
-    pub(crate) fn set_rlp_memory(&mut self, rlp: Vec<u8>) {
-        self.set_memory_segment_bytes(Segment::RlpRaw, rlp)
-    }
-
-    pub(crate) fn set_code(&mut self, context: usize, code: Vec<u8>) {
-        assert_ne!(context, 0, "Can't modify kernel code.");
-        while self.generation_state.memory.contexts.len() <= context {
-            self.generation_state
-                .memory
-                .contexts
-                .push(MemoryContextState::default());
-        }
-        self.generation_state.memory.set(
-            MemoryAddress::new(
-                context,
-                Segment::ContextMetadata,
-                ContextMetadata::CodeSize.unscale(),
-            ),
-            code.len().into(),
-        );
-        self.generation_state.memory.contexts[context].segments[Segment::Code.unscale()].content =
-            code.into_iter().map(|val| Some(U256::from(val))).collect();
-    }
-
     pub(crate) fn set_memory_multi_addresses(&mut self, addrs: &[(MemoryAddress, U256)]) {
         for &(addr, val) in addrs {
             self.generation_state.memory.set(addr, val);
         }
-    }
-
-    pub(crate) fn set_jumpdest_analysis_inputs(&mut self, jumps: HashMap<usize, BTreeSet<usize>>) {
-        self.generation_state.set_jumpdest_analysis_inputs(jumps);
-    }
-
-    pub(crate) fn incr(&mut self, n: usize) {
-        self.generation_state.registers.program_counter += n;
     }
 
     pub(crate) fn stack(&self) -> Vec<U256> {
@@ -803,89 +570,6 @@ impl<F: Field> Interpreter<F> {
             .content
     }
 
-    pub(crate) fn extract_kernel_memory(self, segment: Segment, range: Range<usize>) -> Vec<U256> {
-        let mut output: Vec<U256> = Vec::with_capacity(range.end);
-        for i in range {
-            let term = self
-                .generation_state
-                .memory
-                .get_with_init(MemoryAddress::new(0, segment, i));
-            output.push(term);
-        }
-        output
-    }
-
-    // Actually pushes in memory. Only used for tests.
-    #[cfg(test)]
-    pub(crate) fn push(&mut self, x: U256) -> Result<(), ProgramError> {
-        use crate::cpu::stack::MAX_USER_STACK_SIZE;
-
-        if !self.is_kernel() && self.stack_len() >= MAX_USER_STACK_SIZE {
-            return Err(ProgramError::StackOverflow);
-        }
-        if self.stack_len() > 0 {
-            let top = self
-                .stack_top()
-                .expect("The stack is checked to be nonempty");
-            let cur_len = self.stack_len();
-            let stack_addr = MemoryAddress::new(self.context(), Segment::Stack, cur_len - 1);
-            self.generation_state.memory.set(stack_addr, top);
-        }
-        self.generation_state.registers.stack_top = x;
-        self.generation_state.registers.stack_len += 1;
-
-        Ok(())
-    }
-
-    /// Actually popping the memory. Only used in tests.
-    #[cfg(test)]
-    pub(crate) fn pop(&mut self) -> Result<U256, ProgramError> {
-        use crate::witness::util::stack_peek;
-
-        let result = stack_peek(&self.generation_state, 0);
-
-        if self.stack_len() > 1 {
-            let top = stack_peek(&self.generation_state, 1)?;
-            self.generation_state.registers.stack_top = top;
-        }
-        self.generation_state.registers.stack_len -= 1;
-
-        result
-    }
-
-    fn offset_name(&self) -> String {
-        KERNEL.offset_name(self.generation_state.registers.program_counter)
-    }
-
-    fn offset_label(&self) -> Option<String> {
-        KERNEL.offset_label(self.generation_state.registers.program_counter)
-    }
-
-    pub(crate) fn get_jumpdest_bit(&self, offset: usize) -> U256 {
-        if self.generation_state.memory.contexts[self.context()].segments
-            [Segment::JumpdestBits.unscale()]
-        .content
-        .len()
-            > offset
-        {
-            self.generation_state.memory.get_with_init(MemoryAddress {
-                context: self.context(),
-                segment: Segment::JumpdestBits.unscale(),
-                virt: offset,
-            })
-        } else {
-            0.into()
-        }
-    }
-
-    pub(crate) fn get_jumpdest_bits(&self, context: usize) -> Vec<bool> {
-        self.generation_state.memory.contexts[context].segments[Segment::JumpdestBits.unscale()]
-            .content
-            .iter()
-            .map(|x| x.unwrap_or_default().bit(0))
-            .collect()
-    }
-
     pub(crate) fn add_jumpdest_offset(&mut self, offset: usize) {
         if let Some(jumpdest_table) = self
             .jumpdest_table
@@ -916,19 +600,8 @@ impl<F: Field> Interpreter<F> {
         self.generation_state.registers.is_kernel
     }
 
-    pub(crate) fn set_is_kernel(&mut self, is_kernel: bool) {
-        self.generation_state.registers.is_kernel = is_kernel
-    }
-
     pub(crate) const fn context(&self) -> usize {
         self.generation_state.registers.context
-    }
-
-    pub(crate) fn set_context(&mut self, context: usize) {
-        if context == 0 {
-            assert!(self.is_kernel());
-        }
-        self.generation_state.registers.context = context;
     }
 
     /// Writes the encoding of 0 at @ENCODED_EMPTY_NODE_ADDR.
@@ -946,7 +619,7 @@ impl<F: Field> Interpreter<F> {
             .insert_preinitialized_segment(segment, values);
     }
 
-    fn is_preinitialized_segment(&self, segment: usize) -> bool {
+    pub(crate) fn is_preinitialized_segment(&self, segment: usize) -> bool {
         self.generation_state
             .memory
             .is_preinitialized_segment(segment)
@@ -1034,8 +707,9 @@ impl<F: Field> State<F> for Interpreter<F> {
             .clone()
     }
 
-    fn apply_ops(&mut self, checkpoint: GenerationStateCheckpoint) {
-        self.apply_memops();
+    fn apply_ops(&mut self, _checkpoint: GenerationStateCheckpoint) {
+        self.apply_memops()
+            .expect("We should not have nonzero initial values in non-preinitialized segments");
     }
 
     fn get_stack(&self) -> Vec<U256> {
@@ -1104,7 +778,7 @@ impl<F: Field> State<F> for Interpreter<F> {
             row.general.stack_mut().stack_inv_aux = F::ONE;
         }
 
-        self.perform_state_op(opcode, op, row)
+        self.perform_state_op(op, row)
     }
 
     fn log_debug(&self, msg: String) {
@@ -1151,7 +825,7 @@ impl<F: Field> Transition<F> for Interpreter<F> {
 
     fn fill_stack_fields(
         &mut self,
-        row: &mut crate::cpu::columns::CpuColumnsView<F>,
+        _row: &mut crate::cpu::columns::CpuColumnsView<F>,
     ) -> Result<(), ProgramError> {
         self.generation_state.registers.is_stack_top_read = false;
         self.generation_state.registers.check_overflow = false;
@@ -1356,7 +1030,6 @@ fn get_mnemonic(opcode: u8) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-
     use ethereum_types::U256;
     use plonky2::field::goldilocks_field::GoldilocksField as F;
 

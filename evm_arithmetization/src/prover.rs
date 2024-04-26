@@ -2,8 +2,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use ethereum_types::U256;
-use hashbrown::HashMap;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
@@ -215,6 +213,7 @@ where
     // enabled.
     #[cfg(debug_assertions)]
     {
+        use hashbrown::HashMap;
         use starky::cross_table_lookup::debug_utils::check_ctls;
 
         use crate::verifier::debug_utils::get_memory_extra_looking_values;

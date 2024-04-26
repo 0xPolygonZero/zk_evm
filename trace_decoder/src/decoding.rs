@@ -270,14 +270,13 @@ impl ProcessedBlockTrace {
                 e
             })?;
 
-        let dummies_added = Self::pad_gen_inputs_with_dummy_inputs_if_needed(
+        Self::pad_gen_inputs_with_dummy_inputs_if_needed(
             &mut txn_gen_inputs,
             &other_data,
             &extra_data,
             &extra_data_for_dummies,
             &initial_tries_for_dummies,
             &curr_block_tries,
-            !self.withdrawals.is_empty(),
         );
 
         if !self.withdrawals.is_empty() {
@@ -515,10 +514,7 @@ impl ProcessedBlockTrace {
     /// that we have two entries in total. These dummy entries serve only to
     /// allow the proof generation process to finish. Specifically, we need
     /// at least two entries to generate an agg proof, and we need an agg
-    /// proof to generate a block proof. These entries do not mutate state
-    /// (unless there are withdrawals in the block (see
-    /// `[add_withdrawals_to_txns]`), where the final one will mutate the
-    /// state trie.
+    /// proof to generate a block proof. These entries do not mutate state.
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<GenerationInputs>,
         other_data: &OtherBlockData,
@@ -526,8 +522,7 @@ impl ProcessedBlockTrace {
         initial_extra_data: &ExtraBlockData,
         initial_tries: &PartialTrieState,
         final_tries: &PartialTrieState,
-        has_withdrawals: bool,
-    ) -> bool {
+    ) {
         match gen_inputs.len() {
             0 => {
                 debug_assert!(initial_tries.state == final_tries.state);
@@ -538,42 +533,19 @@ impl ProcessedBlockTrace {
                     final_extra_data,
                     initial_tries,
                 ));
-
-                true
             }
             1 => {
                 // We just need one dummy entry.
-                // If there are withdrawals, we will need to append them at the end of the block
-                // execution, in which case we directly append the dummy proof
-                // after the only txn of this block.
-                // If there are no withdrawals, then the dummy proof will be prepended to the
-                // actual txn.
-                match has_withdrawals {
-                    false => {
-                        let dummy_txn =
-                            create_dummy_gen_input(other_data, initial_extra_data, initial_tries);
-                        gen_inputs.insert(0, dummy_txn)
-                    }
-                    true => {
-                        let dummy_txn =
-                            create_dummy_gen_input(other_data, final_extra_data, final_tries);
-                        gen_inputs.push(dummy_txn)
-                    }
-                };
-
-                true
+                // The dummy proof will be prepended to the actual txn.
+                let dummy_txn =
+                    create_dummy_gen_input(other_data, initial_extra_data, initial_tries);
+                gen_inputs.insert(0, dummy_txn)
             }
-            _ => false,
+            _ => (),
         }
     }
 
-    /// The withdrawals are always in the final ir payload. How they are placed
-    /// differs based on whether or not there are already dummy proofs present
-    /// in the IR. The rules for adding withdrawals to the IR list are:
-    /// - If dummy proofs are already present, then the withdrawals are added to
-    ///   the last dummy proof (always index `1`).
-    /// - If no dummy proofs are already present, then a dummy proof that just
-    ///   contains the withdrawals is appended to the end of the IR vec.
+    /// The withdrawals are always in the final ir payload.
     fn add_withdrawals_to_txns(
         txn_ir: &mut [GenerationInputs],
         final_trie_state: &mut PartialTrieState,
@@ -585,14 +557,26 @@ impl ProcessedBlockTrace {
                 .map(|(addr, v)| (*addr, hash(addr.as_bytes()), *v))
         };
 
+        let last_inputs = txn_ir
+            .last_mut()
+            .expect("We cannot have an empty list of payloads.");
+
+        if last_inputs.signed_txn.is_none() {
+            // This is a dummy payload, hence it does not contain yet
+            // state accesses to the withdrawal addresses.
+            let withdrawal_addrs =
+                withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
+            last_inputs.tries.state_trie = create_minimal_state_partial_trie(
+                &last_inputs.tries.state_trie,
+                withdrawal_addrs,
+                iter::empty(),
+            )?;
+        }
+
         Self::update_trie_state_from_withdrawals(
             withdrawals_with_hashed_addrs_iter(),
             &mut final_trie_state.state,
         )?;
-
-        let last_inputs = txn_ir
-            .last_mut()
-            .expect("We cannot have an empty list of payloads.");
 
         last_inputs.withdrawals = withdrawals;
         last_inputs.trie_roots_after.state_root = final_trie_state.state.hash();
