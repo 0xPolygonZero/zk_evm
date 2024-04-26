@@ -1283,7 +1283,7 @@ where
         let is_dummy = builder.add_virtual_bool_target_safe();
         let real_proof = builder.add_virtual_proof_with_pis(common);
         let (dummy_proof, dummy_vk) = builder
-            .dummy_proof_and_vk_no_generator::<C>(common)
+            .dummy_proof_and_constant_vk_no_generator::<C>(common)
             .expect("Failed to build dummy proof.");
 
         let segment_proof = builder.select_proof_with_pis(is_dummy, &dummy_proof, &real_proof);
