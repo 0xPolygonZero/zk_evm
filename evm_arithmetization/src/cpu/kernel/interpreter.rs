@@ -555,8 +555,6 @@ impl<F: Field> State<F> for Interpreter<F> {
         }
     }
 
-    fn log_info(&self, _msg: String) {}
-
     fn log(&self, level: Level, msg: String) {
         if !self.is_jumpdest_analysis {
             log::log!(level, "{}", msg);

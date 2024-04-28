@@ -256,17 +256,20 @@ pub(crate) trait State<F: Field> {
         (row, opcode)
     }
 
-    /// Logs `msg` in `debug` mode, in the interpreter.
+    /// Logs `msg` in `debug` mode.
+    #[inline]
     fn log_debug(&self, msg: String) {
         log::debug!("{}", msg);
     }
 
-    /// Logs `msg` in `info` mode, in the interpreter.
+    /// Logs `msg` in `info` mode.
+    #[inline]
     fn log_info(&self, msg: String) {
         log::info!("{}", msg);
     }
 
-    /// Logs `msg` at `level`, during witness generation.
+    /// Logs `msg` at `level`.
+    #[inline]
     fn log(&self, level: Level, msg: String) {
         log::log!(level, "{}", msg);
     }
