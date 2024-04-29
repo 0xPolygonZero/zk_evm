@@ -877,7 +877,7 @@ where
         TrieRootsTarget::connect(
             &mut builder,
             lhs_pv.trie_roots_after,
-            rhs_pv.trie_roots_before,
+            rhs_pv.trie_roots_after,
         );
         TrieRootsTarget::connect(
             &mut builder,
