@@ -876,18 +876,13 @@ where
         );
         TrieRootsTarget::connect(
             &mut builder,
-            public_values.trie_roots_after,
-            rhs_pv.trie_roots_after,
-        );
-        TrieRootsTarget::connect(
-            &mut builder,
-            public_values.trie_roots_before,
+            lhs_pv.trie_roots_after,
             rhs_pv.trie_roots_before,
         );
         TrieRootsTarget::connect(
             &mut builder,
             public_values.trie_roots_after,
-            lhs_pv.trie_roots_after,
+            rhs_pv.trie_roots_after,
         );
         BlockMetadataTarget::connect(
             &mut builder,
