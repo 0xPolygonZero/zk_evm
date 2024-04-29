@@ -2,8 +2,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use ethereum_types::U256;
-use hashbrown::HashMap;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
@@ -40,6 +38,11 @@ use crate::witness::state::RegistersState;
 /// Structure holding the data needed to initialize a segment.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct GenerationSegmentData {
+    /// Indicates whether this corresponds to a dummy segment.
+    pub(crate) is_dummy: bool,
+    /// Indicates the position of this segment in a sequence of
+    /// executions for a larger payload.
+    pub(crate) segment_index: usize,
     /// Registers at the start of the segment execution.
     pub(crate) registers_before: RegistersState,
     /// Registers at the end of the segment execution.
@@ -50,6 +53,13 @@ pub struct GenerationSegmentData {
     pub(crate) extra_data: ExtraSegmentData,
     /// Log of the maximal cpu length.
     pub(crate) max_cpu_len_log: Option<usize>,
+}
+
+impl GenerationSegmentData {
+    /// Retrieves the index of this segment.
+    pub fn segment_index(&self) -> usize {
+        self.segment_index
+    }
 }
 
 /// Generate traces, then create all STARK proofs.
@@ -203,6 +213,7 @@ where
     // enabled.
     #[cfg(debug_assertions)]
     {
+        use hashbrown::HashMap;
         use starky::cross_table_lookup::debug_utils::check_ctls;
 
         use crate::verifier::debug_utils::get_memory_extra_looking_values;
@@ -486,7 +497,11 @@ pub fn generate_all_data_segments<F: RichField>(
         max_cpu_len_log,
     );
 
+    let mut segment_index = 0;
+
     let mut segment_data = GenerationSegmentData {
+        is_dummy: false,
+        segment_index,
         registers_before: RegistersState::new(),
         registers_after: RegistersState::new(),
         memory: MemoryState::default(),
@@ -520,7 +535,11 @@ pub fn generate_all_data_segments<F: RichField>(
         segment_data.registers_after = updated_registers;
         all_seg_data.push(segment_data);
 
+        segment_index += 1;
+
         segment_data = GenerationSegmentData {
+            is_dummy: false,
+            segment_index,
             registers_before: updated_registers,
             // `registers_after` will be set correctly at the next iteration.`
             registers_after: updated_registers,
@@ -543,15 +562,6 @@ pub fn generate_all_data_segments<F: RichField>(
             },
         };
     }
-
-    // We need at least two segments to prove a segment aggregation.
-    // if all_seg_data.len() == 1 {
-    //     let dummy_seg = GenerationSegmentData {
-    //         registers_before: segment_data.registers_after,
-    //         ..segment_data
-    //     };
-    //     all_seg_data.push(dummy_seg);
-    // }
 
     Ok(all_seg_data)
 }

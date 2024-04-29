@@ -11,7 +11,7 @@ use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::generation::mpt::{LegacyReceiptRlp, LogRlp};
-use crate::memory::segments::{Segment, SEGMENT_SCALING_FACTOR};
+use crate::memory::segments::Segment;
 
 #[test]
 fn test_process_receipt() -> Result<()> {
