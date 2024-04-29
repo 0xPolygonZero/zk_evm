@@ -79,14 +79,14 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         // Minimal ranges to prove an empty list
         &[
             16..17,
+            8..9,
             8..10,
-            7..11,
-            4..15,
-            8..11,
-            4..13,
-            11..18,
-            8..18,
-            10..18,
+            5..8,
+            8..9,
+            4..6,
+            16..17,
+            16..17,
+            16..17,
         ],
         &config,
     );
