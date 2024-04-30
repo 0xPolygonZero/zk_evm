@@ -78,14 +78,7 @@ pub fn generate_segment_agg_proof(
     p_state: &ProverState,
     lhs_child: &SegmentAggregatableProof,
     rhs_child: &SegmentAggregatableProof,
-    has_dummy: bool,
 ) -> ProofGenResult<GeneratedSegmentAggProof> {
-    if has_dummy {
-        assert!(
-            !lhs_child.is_agg(),
-            "Cannot have a dummy segment with an aggregation."
-        );
-    }
     let (intern, p_vals) = p_state
         .state
         .prove_segment_aggregation(
@@ -93,7 +86,6 @@ pub fn generate_segment_agg_proof(
             lhs_child.intern(),
             lhs_child.public_values(),
             rhs_child.is_agg(),
-            has_dummy,
             rhs_child.intern(),
             rhs_child.public_values(),
         )

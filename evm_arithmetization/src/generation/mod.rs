@@ -455,6 +455,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         registers_after,
         mem_before: MemCap::default(),
         mem_after: MemCap::default(),
+        is_dummy: U256::from(*is_dummy as u64),
     };
 
     let tables = timed!(

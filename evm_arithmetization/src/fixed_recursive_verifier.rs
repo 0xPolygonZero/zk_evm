@@ -25,6 +25,7 @@ use plonky2::plonk::circuit_data::{
 };
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
+use plonky2::plonk::prover::prove as prove_plonky2;
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::recursion::dummy_circuit::{self, cyclic_base_proof, dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
@@ -45,7 +46,7 @@ use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
-    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
+    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget, MemCap,
     MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget, TrieRoots,
     TrieRootsTarget,
 };
@@ -944,11 +945,8 @@ where
         MemCapTarget::connect(&mut builder, lhs_pv.mem_after, rhs_pv.mem_before.clone());
 
         // If the rhs is a dummy, then the lhs must be a segment.
-        builder.mul_sub(
-            rhs_segment.is_dummy.target,
-            lhs_segment.is_agg.target,
-            rhs_segment.is_dummy.target,
-        );
+        let segment_assert = builder.mul(rhs_segment.is_dummy.target, lhs_segment.is_agg.target);
+        builder.assert_zero(segment_assert);
 
         // If the rhs is a dummy, then its PV after must be equal to its PV before.
         TrieRootsTarget::assert_equal_if(
@@ -1487,65 +1485,116 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProverOutputData<F, C, D>> {
-        let all_proof = prove::<F, C, D>(
-            all_stark,
-            config,
-            generation_inputs,
-            segment_data,
-            timing,
-            abort_signal.clone(),
-        )?;
-        let mut root_inputs = PartialWitness::new();
+        let proof = if segment_data.is_dummy() {
+            let dummy_proof = Self::dummy_dummy_proof()?;
+            let trie_roots_before = TrieRoots {
+                state_root: generation_inputs.tries.state_trie.hash(),
+                receipts_root: generation_inputs.tries.receipts_trie.hash(),
+                transactions_root: generation_inputs.tries.transactions_trie.hash(),
+            };
+            let nb_txn = match generation_inputs.signed_txn {
+                Some(_) => 1,
+                None => 0,
+            };
+            ProverOutputData {
+                proof_with_pis: dummy_proof,
+                public_values: PublicValues {
+                    is_dummy: U256::one(),
+                    trie_roots_before,
+                    trie_roots_after: generation_inputs.trie_roots_after.clone(),
+                    block_hashes: generation_inputs.block_hashes.clone(),
+                    block_metadata: generation_inputs.block_metadata.clone(),
+                    registers_before: segment_data.registers_before.into(),
+                    registers_after: segment_data.registers_after.into(),
+                    mem_before: MemCap::default(),
+                    mem_after: MemCap::default(),
+                    extra_block_data: ExtraBlockData {
+                        checkpoint_state_trie_root: generation_inputs.checkpoint_state_trie_root,
+                        txn_number_before: generation_inputs.txn_number_before,
+                        txn_number_after: generation_inputs.txn_number_before + nb_txn,
+                        gas_used_before: generation_inputs.gas_used_before,
+                        gas_used_after: generation_inputs.gas_used_after,
+                    },
+                },
+            }
+        } else {
+            let all_proof = prove::<F, C, D>(
+                all_stark,
+                config,
+                generation_inputs,
+                segment_data,
+                timing,
+                abort_signal.clone(),
+            )?;
+            let mut root_inputs = PartialWitness::new();
 
-        for table in 0..NUM_TABLES {
-            let stark_proof = &all_proof.multi_proof.stark_proofs[table];
-            let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
-            let table_circuits = &self.by_table[table];
-            let shrunk_proof = table_circuits
-                .by_stark_size
-                .get(&original_degree_bits)
-                .ok_or_else(|| {
-                    anyhow!(format!(
-                        "Missing preprocessed circuits for {:?} table with size {}.",
-                        Table::all()[table],
-                        original_degree_bits,
-                    ))
-                })?
-                .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
-            let index_verifier_data = table_circuits
-                .by_stark_size
-                .keys()
-                .position(|&size| size == original_degree_bits)
-                .unwrap();
-            root_inputs.set_target(
-                self.root.index_verifier_data[table],
-                F::from_canonical_usize(index_verifier_data),
+            for table in 0..NUM_TABLES {
+                let stark_proof = &all_proof.multi_proof.stark_proofs[table];
+                let original_degree_bits = stark_proof.proof.recover_degree_bits(config);
+                let table_circuits = &self.by_table[table];
+                let shrunk_proof = table_circuits
+                    .by_stark_size
+                    .get(&original_degree_bits)
+                    .ok_or_else(|| {
+                        anyhow!(format!(
+                            "Missing preprocessed circuits for {:?} table with size {}.",
+                            Table::all()[table],
+                            original_degree_bits,
+                        ))
+                    })?
+                    .shrink(stark_proof, &all_proof.multi_proof.ctl_challenges)?;
+                let index_verifier_data = table_circuits
+                    .by_stark_size
+                    .keys()
+                    .position(|&size| size == original_degree_bits)
+                    .unwrap();
+                root_inputs.set_target(
+                    self.root.index_verifier_data[table],
+                    F::from_canonical_usize(index_verifier_data),
+                );
+                root_inputs
+                    .set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
+
+                check_abort_signal(abort_signal.clone())?;
+            }
+
+            root_inputs.set_verifier_data_target(
+                &self.root.cyclic_vk,
+                &self.segment_aggregation.circuit.verifier_only,
             );
-            root_inputs.set_proof_with_pis_target(&self.root.proof_with_pis[table], &shrunk_proof);
 
-            check_abort_signal(abort_signal.clone())?;
-        }
+            set_public_value_targets(
+                &mut root_inputs,
+                &self.root.public_values,
+                &all_proof.public_values,
+            )
+            .map_err(|_| {
+                anyhow::Error::msg("Invalid conversion when setting public values targets.")
+            })?;
 
-        root_inputs.set_verifier_data_target(
-            &self.root.cyclic_vk,
-            &self.segment_aggregation.circuit.verifier_only,
-        );
+            let root_proof = self.root.circuit.prove(root_inputs)?;
 
-        set_public_value_targets(
-            &mut root_inputs,
-            &self.root.public_values,
-            &all_proof.public_values,
+            ProverOutputData {
+                proof_with_pis: root_proof,
+                public_values: all_proof.public_values,
+            }
+        };
+        Ok(proof)
+    }
+
+    fn dummy_dummy_proof() -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+        let mut builder = CircuitBuilder::new(CircuitConfig::default());
+        builder.add_gate(NoopGate, vec![]);
+        let circuit_data = builder.build::<_>();
+
+        let inputs = PartialWitness::new();
+
+        prove_plonky2(
+            &circuit_data.prover_only,
+            &circuit_data.common,
+            inputs,
+            &mut TimingTree::default(),
         )
-        .map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
-
-        let root_proof = self.root.circuit.prove(root_inputs)?;
-
-        Ok(ProverOutputData {
-            proof_with_pis: root_proof,
-            public_values: all_proof.public_values,
-        })
     }
 
     /// Returns a proof for each segment that is part of a full transaction
@@ -1711,7 +1760,6 @@ where
         lhs_public_values: PublicValues,
 
         rhs_is_agg: bool,
-        rhs_is_dummy: bool,
         rhs_proof: &ProofWithPublicInputs<F, C, D>,
         rhs_public_values: PublicValues,
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
@@ -1733,6 +1781,7 @@ where
             .0
             .len();
 
+        let rhs_is_dummy = !rhs_public_values.is_dummy.is_zero();
         let real_rhs_proof = if rhs_is_dummy { lhs_proof } else { rhs_proof };
 
         Self::set_dummy_if_necessary_with_dummy(
@@ -1769,6 +1818,7 @@ where
             registers_after: rhs_public_values.registers_after,
             mem_before: lhs_public_values.mem_before,
             mem_after: rhs_public_values.mem_after,
+            is_dummy: U256::zero(),
         };
 
         set_public_value_targets(

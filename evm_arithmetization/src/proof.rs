@@ -60,6 +60,8 @@ pub struct PublicValues {
 
     pub mem_before: MemCap,
     pub mem_after: MemCap,
+    /// Indicates whether the proof is dummy.
+    pub is_dummy: U256,
 }
 
 impl PublicValues {
@@ -148,6 +150,16 @@ impl PublicValues {
                     + 2 * len_mem_cap * NUM_HASH_OUT_ELTS],
             len_mem_cap,
         );
+
+        let is_dummy = U256::from(
+            pis[TrieRootsTarget::SIZE * 2
+                + BlockMetadataTarget::SIZE
+                + BlockHashesTarget::SIZE
+                + ExtraBlockDataTarget::SIZE
+                + RegistersDataTarget::SIZE * 2
+                + 2 * len_mem_cap * NUM_HASH_OUT_ELTS]
+                .to_canonical_u64(),
+        );
         // There are 3 elements per address, + 1 U256 for the memory value.
         Self {
             trie_roots_before,
@@ -159,6 +171,7 @@ impl PublicValues {
             registers_after,
             mem_before,
             mem_after,
+            is_dummy,
         }
     }
 }
@@ -423,6 +436,8 @@ pub struct PublicValuesTarget {
     pub mem_before: MemCapTarget,
     /// Memory after.
     pub mem_after: MemCapTarget,
+    /// Indicates whether the current proof is dummy.
+    pub is_dummy: BoolTarget,
 }
 
 impl PublicValuesTarget {
@@ -523,6 +538,8 @@ impl PublicValuesTarget {
         buffer.write_target_merkle_cap(&self.mem_before.mem_cap)?;
         buffer.write_target_merkle_cap(&self.mem_after.mem_cap)?;
 
+        buffer.write_target_bool(self.is_dummy)?;
+
         Ok(())
     }
 
@@ -590,6 +607,8 @@ impl PublicValuesTarget {
             mem_cap: buffer.read_target_merkle_cap()?,
         };
 
+        let is_dummy = buffer.read_target_bool()?;
+
         Ok(Self {
             trie_roots_before,
             trie_roots_after,
@@ -600,6 +619,7 @@ impl PublicValuesTarget {
             registers_after,
             mem_before,
             mem_after,
+            is_dummy,
         })
     }
 
@@ -691,6 +711,14 @@ impl PublicValuesTarget {
                         + 2 * len_mem_cap * NUM_HASH_OUT_ELTS],
                 len_mem_cap,
             ),
+            is_dummy: BoolTarget::new_unsafe(
+                pis[TrieRootsTarget::SIZE * 2
+                    + BlockMetadataTarget::SIZE
+                    + BlockHashesTarget::SIZE
+                    + ExtraBlockDataTarget::SIZE
+                    + RegistersDataTarget::SIZE * 2
+                    + 2 * len_mem_cap * NUM_HASH_OUT_ELTS],
+            ),
         }
     }
 
@@ -747,6 +775,12 @@ impl PublicValuesTarget {
             mem_before: MemCapTarget::select(builder, condition, pv0.mem_before, pv1.mem_before),
 
             mem_after: MemCapTarget::select(builder, condition, pv0.mem_after, pv1.mem_after),
+
+            is_dummy: BoolTarget::new_unsafe(builder.select(
+                condition,
+                pv0.is_dummy.target,
+                pv1.is_dummy.target,
+            )),
         }
     }
 }

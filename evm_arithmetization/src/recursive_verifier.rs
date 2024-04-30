@@ -615,6 +615,8 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
         mem_cap: MerkleCapTarget(builder.add_virtual_hashes_public_input(len_mem_cap)),
     };
 
+    let is_dummy = builder.add_virtual_bool_target_safe();
+
     PublicValuesTarget {
         trie_roots_before,
         trie_roots_after,
@@ -625,6 +627,7 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
         registers_after,
         mem_before,
         mem_after,
+        is_dummy,
     }
 }
 
@@ -783,7 +786,10 @@ where
         &public_values_target.mem_after,
         &public_values.mem_after,
     )?;
-
+    witness.set_bool_target(
+        public_values_target.is_dummy,
+        !public_values.is_dummy.is_zero(),
+    );
     Ok(())
 }
 
