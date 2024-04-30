@@ -122,91 +122,15 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 }
 
-/// Given a segment `index`, returns the initial and final registers, as well
-/// as the initial memory of segment `index`, and returns `None` if the
-/// execution stops at segment `index`. These can then be passed to the
-/// prover for initialization.
-pub(crate) fn generate_segment<F: Field>(
-    max_cpu_len_log: usize,
-    index: usize,
-    inputs: &GenerationInputs,
-) -> anyhow::Result<
-    Option<(
-        RegistersState,
-        RegistersState,
-        MemoryState,
-        ExtraSegmentData,
-    )>,
-> {
-    let init_label = KERNEL.global_labels["init"];
-    let initial_registers = RegistersState::new();
-    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
-        init_label,
-        vec![],
-        inputs,
-        Some(max_cpu_len_log),
-    );
-
-    let (mut registers_before, mut registers_after, mut before_mem_values, mut after_mem_values) = (
-        initial_registers,
-        initial_registers,
-        MemoryState::default(),
-        MemoryState::default(),
-    );
-
-    let mut extra_data = ExtraSegmentData::default();
-
-    for i in 0..=index {
-        if i == index {
-            extra_data = ExtraSegmentData {
-                trimmed_inputs: interpreter.generation_state.inputs.clone(),
-                bignum_modmul_result_limbs: interpreter
-                    .generation_state
-                    .bignum_modmul_result_limbs
-                    .clone(),
-                rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
-                withdrawal_prover_inputs: interpreter
-                    .generation_state
-                    .withdrawal_prover_inputs
-                    .clone(),
-                trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
-                jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
-            };
-        }
-
-        // Write initial registers.
-        if registers_after.program_counter == KERNEL.global_labels["halt"] {
-            return Ok(None);
-        }
-
-        (registers_before, before_mem_values) = (registers_after, after_mem_values);
-        interpreter.generation_state.registers = registers_before;
-        interpreter.generation_state.registers.program_counter = init_label;
-        interpreter.generation_state.registers.is_kernel = true;
-        interpreter.clock = 0;
-
-        let (updated_registers_after, opt_after_mem_values) =
-            set_registers_and_run(registers_after, &mut interpreter)?;
-
-        registers_after = updated_registers_after;
-        after_mem_values = opt_after_mem_values.expect(
-            "We are in the interpreter: the run should return a memory
-        state",
-        );
-    }
-
-    Ok(Some((
-        registers_before,
-        registers_after,
-        before_mem_values,
-        extra_data,
-    )))
-}
-
 pub(crate) fn set_registers_and_run<F: Field>(
     registers: RegistersState,
     interpreter: &mut Interpreter<F>,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
+    interpreter.generation_state.registers = registers;
+    interpreter.generation_state.registers.program_counter = KERNEL.global_labels["init"];
+    interpreter.generation_state.registers.is_kernel = true;
+    interpreter.clock = 0;
+
     // Write initial registers.
     [
         registers.program_counter.into(),
@@ -225,10 +149,7 @@ pub(crate) fn set_registers_and_run<F: Field>(
                 (Segment::RegistersStates.unscale()).into(),
                 i.into(),
             )
-            .expect(
-                "All input values are known to be valid for
-MemoryAddress",
-            ),
+            .expect("All input values are known to be valid for MemoryAddress"),
             *reg_content,
         );
         interpreter.generation_state.memory.set(addr, val);

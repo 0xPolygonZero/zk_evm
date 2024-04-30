@@ -36,13 +36,7 @@ impl RegistersState {
     pub(crate) fn new() -> Self {
         Self {
             program_counter: KERNEL.global_labels["main"],
-            is_kernel: true,
-            stack_len: 0,
-            stack_top: U256::zero(),
-            is_stack_top_read: false,
-            check_overflow: false,
-            context: 0,
-            gas_used: 0,
+            ..Self::default()
         }
     }
 }
