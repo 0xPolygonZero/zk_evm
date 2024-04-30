@@ -78,11 +78,7 @@ pub(crate) trait State<F: Field> {
     /// Checks whether we have reached the maximal cpu length.
     fn at_end_segment(&self, opt_max_cpu_len: Option<usize>, is_dummy: bool) -> bool {
         if let Some(max_cpu_len_log) = opt_max_cpu_len {
-            if is_dummy {
-                self.get_clock() == max_cpu_len_log - NUM_EXTRA_CYCLES_AFTER
-            } else {
-                self.get_clock() == (1 << max_cpu_len_log) - NUM_EXTRA_CYCLES_AFTER
-            }
+            self.get_clock() == (1 << max_cpu_len_log) - NUM_EXTRA_CYCLES_AFTER
         } else {
             false
         }
