@@ -537,8 +537,6 @@ pub fn generate_all_data_segments<F: RichField>(
         let (updated_registers, mem_after) =
             set_registers_and_run(segment_data.registers_after, &mut interpreter)?;
 
-        // Set `registers_after` correctly and push the data.
-        segment_data.registers_after = updated_registers;
         all_seg_data.push(segment_data);
 
         segment_index += 1;
@@ -665,13 +663,10 @@ pub mod testing {
         let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
 
         while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
+            segment_index += 1;
+
             let (updated_registers, mem_after) =
                 set_registers_and_run(segment_data.registers_after, &mut interpreter)?;
-
-            // Set `registers_after` correctly and push the data.
-            segment_data.registers_after = updated_registers;
-
-            segment_index += 1;
 
             segment_data = build_segment_data(
                 segment_index,
