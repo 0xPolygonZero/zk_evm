@@ -56,6 +56,11 @@ pub struct GenerationSegmentData {
 }
 
 impl GenerationSegmentData {
+    /// Indicates if this segment is a dummy one.
+    pub fn is_dummy(&self) -> bool {
+        self.is_dummy
+    }
+
     /// Retrieves the index of this segment.
     pub fn segment_index(&self) -> usize {
         self.segment_index
@@ -561,6 +566,12 @@ pub fn generate_all_data_segments<F: RichField>(
                 jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             },
         };
+    }
+
+    // Handle single-segment case
+    if all_seg_data.len() == 1 {
+        segment_data.is_dummy = true;
+        all_seg_data.push(segment_data);
     }
 
     Ok(all_seg_data)
