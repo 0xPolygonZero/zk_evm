@@ -590,8 +590,6 @@ pub fn generate_all_data_segments<F: RichField>(
 
 /// A utility module designed to test witness generation externally.
 pub mod testing {
-    use log::info;
-
     use super::*;
     use crate::{
         cpu::kernel::interpreter::Interpreter,
