@@ -483,6 +483,7 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 /// Builds a new `GenerationSegmentData`.
 /// This new segment's `is_dummy` field must be updated manually
 /// in case it corresponds to a dummy segment.
+#[allow(clippy::unwrap_or_default)]
 fn build_segment_data<F: RichField>(
     segment_index: usize,
     registers_before: Option<RegistersState>,
