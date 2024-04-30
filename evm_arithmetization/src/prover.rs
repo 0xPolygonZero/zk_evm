@@ -601,6 +601,8 @@ pub fn generate_all_data_segments<F: RichField>(
 
 /// A utility module designed to test witness generation externally.
 pub mod testing {
+    use log::info;
+
     use super::*;
     use crate::{
         cpu::kernel::interpreter::Interpreter,
@@ -662,9 +664,15 @@ pub mod testing {
         F: Field,
     {
         let mut index = 0;
-        while generate_segment::<F>(max_cpu_len_log, index, &inputs)?.is_some() {
+        while let Some((_, final_registers, _, _)) =
+            generate_segment::<F>(max_cpu_len_log, index, &inputs)?
+        {
+            if final_registers.program_counter == KERNEL.global_labels["halt"] {
+                return Ok(());
+            }
             index += 1;
         }
+
         Ok(())
     }
 }
