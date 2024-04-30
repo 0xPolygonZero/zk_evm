@@ -24,9 +24,7 @@ use starky::stark::Stark;
 
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::interpreter::{
-    generate_segment, set_registers_and_run, ExtraSegmentData, Interpreter,
-};
+use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
 use crate::generation::state::GenerationState;
 use crate::generation::{generate_traces, GenerationInputs};
 use crate::get_challenges::observe_public_values;
@@ -482,6 +480,40 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     Ok(())
 }
 
+/// Builds a new `GenerationSegmentData`.
+/// This new segment's `is_dummy` field must be updated manually
+/// in case it corresponds to a dummy segment.
+fn build_segment_data<F: RichField>(
+    segment_index: usize,
+    registers_before: Option<RegistersState>,
+    registers_after: Option<RegistersState>,
+    memory: Option<MemoryState>,
+    interpreter: &Interpreter<F>,
+) -> GenerationSegmentData {
+    GenerationSegmentData {
+        is_dummy: false,
+        segment_index,
+        registers_before: registers_before.unwrap_or(RegistersState::new()),
+        registers_after: registers_after.unwrap_or(RegistersState::new()),
+        memory: memory.unwrap_or_default(),
+        max_cpu_len_log: interpreter.get_max_cpu_len_log(),
+        extra_data: ExtraSegmentData {
+            trimmed_inputs: interpreter.generation_state.inputs.clone(),
+            bignum_modmul_result_limbs: interpreter
+                .generation_state
+                .bignum_modmul_result_limbs
+                .clone(),
+            rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+            withdrawal_prover_inputs: interpreter
+                .generation_state
+                .withdrawal_prover_inputs
+                .clone(),
+            trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+            jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+        },
+    }
+}
+
 /// Returns a vector containing the data required to generate all the segments
 /// of a transaction.
 pub fn generate_all_data_segments<F: RichField>(
@@ -499,35 +531,9 @@ pub fn generate_all_data_segments<F: RichField>(
 
     let mut segment_index = 0;
 
-    let mut segment_data = GenerationSegmentData {
-        is_dummy: false,
-        segment_index,
-        registers_before: RegistersState::new(),
-        registers_after: RegistersState::new(),
-        memory: MemoryState::default(),
-        max_cpu_len_log,
-        extra_data: ExtraSegmentData {
-            trimmed_inputs: interpreter.generation_state.inputs.clone(),
-            bignum_modmul_result_limbs: interpreter
-                .generation_state
-                .bignum_modmul_result_limbs
-                .clone(),
-            rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
-            withdrawal_prover_inputs: interpreter
-                .generation_state
-                .withdrawal_prover_inputs
-                .clone(),
-            trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
-            jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
-        },
-    };
+    let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
 
     while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
-        interpreter.generation_state.registers = segment_data.registers_after;
-        interpreter.generation_state.registers.program_counter = KERNEL.global_labels["init"];
-        interpreter.generation_state.registers.is_kernel = true;
-        interpreter.clock = 0;
-
         let (updated_registers, mem_after) =
             set_registers_and_run(segment_data.registers_after, &mut interpreter)?;
 
@@ -537,30 +543,13 @@ pub fn generate_all_data_segments<F: RichField>(
 
         segment_index += 1;
 
-        segment_data = GenerationSegmentData {
-            is_dummy: false,
+        segment_data = build_segment_data(
             segment_index,
-            registers_before: updated_registers,
-            // `registers_after` will be set correctly at the next iteration.`
-            registers_after: updated_registers,
-            max_cpu_len_log,
-            memory: mem_after
-                .expect("The interpreter was running, so it should have returned a MemoryState"),
-            extra_data: ExtraSegmentData {
-                trimmed_inputs: interpreter.generation_state.inputs.clone(),
-                bignum_modmul_result_limbs: interpreter
-                    .generation_state
-                    .bignum_modmul_result_limbs
-                    .clone(),
-                rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
-                withdrawal_prover_inputs: interpreter
-                    .generation_state
-                    .withdrawal_prover_inputs
-                    .clone(),
-                trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
-                jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
-            },
-        };
+            Some(updated_registers),
+            Some(updated_registers),
+            mem_after,
+            &interpreter,
+        );
     }
 
     // We need at least two segments to prove a segment aggregation.
@@ -661,16 +650,36 @@ pub mod testing {
         max_cpu_len_log: usize,
     ) -> anyhow::Result<()>
     where
-        F: Field,
+        F: RichField,
     {
-        let mut index = 0;
-        while let Some((_, final_registers, _, _)) =
-            generate_segment::<F>(max_cpu_len_log, index, &inputs)?
-        {
-            if final_registers.program_counter == KERNEL.global_labels["halt"] {
-                return Ok(());
-            }
-            index += 1;
+        let max_cpu_len_log = Some(max_cpu_len_log);
+        let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+            KERNEL.global_labels["init"],
+            vec![],
+            &inputs,
+            max_cpu_len_log,
+        );
+
+        let mut segment_index = 0;
+
+        let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
+
+        while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
+            let (updated_registers, mem_after) =
+                set_registers_and_run(segment_data.registers_after, &mut interpreter)?;
+
+            // Set `registers_after` correctly and push the data.
+            segment_data.registers_after = updated_registers;
+
+            segment_index += 1;
+
+            segment_data = build_segment_data(
+                segment_index,
+                Some(updated_registers),
+                Some(updated_registers),
+                mem_after,
+                &interpreter,
+            );
         }
 
         Ok(())
