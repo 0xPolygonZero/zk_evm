@@ -95,9 +95,16 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 
             log::trace!("jumpdest table = {:?}", interpreter.jumpdest_table);
 
+            let clock = interpreter.get_clock();
+
             interpreter
                 .generation_state
                 .set_jumpdest_analysis_inputs(interpreter.jumpdest_table);
+
+            log::debug!(
+                "Simulated CPU for jumpdest analysis halted after {:?} cycles.",
+                clock
+            );
 
             interpreter.generation_state.jumpdest_table
         }
