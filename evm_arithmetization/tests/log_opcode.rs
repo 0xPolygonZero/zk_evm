@@ -17,6 +17,7 @@ use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
+use log::info;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -463,19 +464,28 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
-    let max_cpu_len_log = 15;
+    // We want only one segment.
+    let max_cpu_len_log = 20;
 
     let segment_proofs_data_first = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
         inputs_first,
-        // We want only one segment.
-        20,
+        max_cpu_len_log,
         &mut timing,
         None,
     )?;
 
     assert_eq!(segment_proofs_data_first.len(), 2); // second one is a dummy segment
+    for proof_data in segment_proofs_data_first.iter().take(1) {
+        // We skip the dummy segment here, as it can't be verified.
+        // It will be properly accumulated during segment aggregation.
+        let ProverOutputData {
+            proof_with_pis: proof,
+            ..
+        } = proof_data;
+        all_circuits.verify_root(proof.clone())?;
+    }
 
     let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
         .prove_segment_aggregation(
@@ -617,8 +627,10 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         None,
     )?;
 
-    assert_eq!(segment_proofs_data_second.len(), 2);
-    for proof_data in segment_proofs_data_second {
+    assert_eq!(segment_proofs_data_first.len(), 2); // second one is a dummy segment
+    for proof_data in segment_proofs_data_second.iter().take(1) {
+        // We skip the dummy segment here, as it can't be verified.
+        // It will be properly accumulated during segment aggregation.
         let ProverOutputData {
             proof_with_pis: proof,
             ..
