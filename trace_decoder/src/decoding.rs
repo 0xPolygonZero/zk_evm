@@ -4,14 +4,15 @@ use std::{
     iter::{self, empty, once},
 };
 
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H256, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
-    proof::{ExtraBlockData, TrieRoots},
+    proof::{BlockMetadata, ExtraBlockData, TrieRoots},
+    testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH},
 };
 use log::trace;
 use mpt_trie::{
-    nibbles::Nibbles,
+    nibbles::{Nibbles, NibblesIntern, ToNibbles},
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
     trie_ops::TrieOpError,
@@ -172,15 +173,29 @@ impl ProcessedBlockTrace {
 
                 Self::update_txn_and_receipt_tries(&mut curr_block_tries, &txn_info.meta, txn_idx);
 
-                let delta_out = Self::apply_deltas_to_trie_state(
+                let mut delta_out = Self::apply_deltas_to_trie_state(
                     &mut curr_block_tries,
                     &txn_info.nodes_used_by_txn,
                     &txn_info.meta,
                 )?;
 
+                let nodes_used_by_txn = if txn_idx == 0 {
+                    let mut nodes_used = txn_info.nodes_used_by_txn;
+                    Self::update_beacon_block_root_contract_storage(
+                        &mut curr_block_tries,
+                        &mut delta_out,
+                        &mut nodes_used,
+                        &other_data.b_data.b_meta,
+                    );
+
+                    nodes_used
+                } else {
+                    txn_info.nodes_used_by_txn
+                };
+
                 let tries = Self::create_minimal_partial_tries_needed_by_txn(
                     &tries_at_start_of_txn,
-                    &txn_info.nodes_used_by_txn,
+                    &nodes_used_by_txn,
                     txn_idx,
                     delta_out,
                     &other_data.b_data.b_meta.block_beneficiary,
@@ -235,6 +250,93 @@ impl ProcessedBlockTrace {
         }
 
         Ok(txn_gen_inputs)
+    }
+
+    /// Cancun HF specific: At the start of a block, prior txn execution, we
+    /// need to update the storage of the beacon block root contract.
+    // See <https://eips.ethereum.org/EIPS/eip-4788>.
+    fn update_beacon_block_root_contract_storage(
+        trie_state: &mut PartialTrieState,
+        delta_out: &mut TrieDeltaApplicationOutput,
+        nodes_used: &mut NodesUsedByTxn,
+        block_data: &BlockMetadata,
+    ) -> TraceParsingResult<()> {
+        const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
+        const ADDRESS: H256 = H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED);
+
+        let timestamp_idx = block_data.block_timestamp % HISTORY_BUFFER_LENGTH_MOD;
+        let timestamp = rlp::encode(&block_data.block_timestamp).to_vec();
+
+        let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH_MOD;
+        let calldata = rlp::encode(&block_data.parent_beacon_block_root).to_vec();
+
+        let mut storage_trie = trie_state
+            .storage
+            .get_mut(&ADDRESS)
+            .ok_or(TraceParsingError::MissingAccountStorageTrie(ADDRESS))?;
+
+        let mut slots_nibbles = vec![];
+
+        for (slot, val) in [(timestamp_idx, timestamp), (root_idx, calldata)]
+            .iter()
+            .map(|(k, v)| {
+                (
+                    Nibbles::from_h256_be(hash(
+                        &Nibbles::from_h256_be(H256::from_uint(k)).bytes_be(),
+                    )),
+                    v,
+                )
+            })
+        {
+            slots_nibbles.push(slot);
+
+            // If we are writing a zero, then we actually need to perform a delete.
+            match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
+                false => {
+                    storage_trie.insert(slot, val.clone())?;
+
+                    delta_out
+                        .additional_storage_trie_paths_to_not_hash
+                        .entry(ADDRESS)
+                        .or_default()
+                        .push(slot);
+                }
+                true => {
+                    if let Some(remaining_slot_key) =
+                        Self::delete_node_and_report_remaining_key_if_branch_collapsed(
+                            storage_trie,
+                            &slot,
+                        )
+                    {
+                        delta_out
+                            .additional_storage_trie_paths_to_not_hash
+                            .entry(ADDRESS)
+                            .or_default()
+                            .push(remaining_slot_key);
+                    }
+                }
+            };
+        }
+
+        nodes_used.storage_accesses.push((ADDRESS, slots_nibbles));
+
+        let addr_nibbles = Nibbles::from_h256_be(ADDRESS);
+        delta_out
+            .additional_state_trie_paths_to_not_hash
+            .push(addr_nibbles);
+        let addr_bytes = trie_state.state.get(addr_nibbles).ok_or(
+            TraceParsingError::MissingKeysCreatingSubPartialTrie(addr_nibbles, TrieType::State),
+        )?;
+        let mut account = account_from_rlped_bytes(addr_bytes)?;
+
+        account.storage_root = storage_trie.hash();
+
+        let updated_account_bytes = rlp::encode(&account);
+        trie_state
+            .state
+            .insert(addr_nibbles, updated_account_bytes.to_vec())?;
+
+        Ok(())
     }
 
     fn update_txn_and_receipt_tries(
