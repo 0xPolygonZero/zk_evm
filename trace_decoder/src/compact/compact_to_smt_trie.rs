@@ -6,7 +6,13 @@ use std::collections::HashMap;
 use ethereum_types::{Address, BigEndianHash, U256};
 use keccak_hash::H256;
 use mpt_trie::nibbles::Nibbles;
-use plonky2::plonk::config::GenericHashOut;
+use plonky2::{field::types::Field, plonk::config::GenericHashOut};
+use smt_trie::{
+    bits::Bits,
+    db::MemoryDb,
+    keys::{key_balance, key_code, key_code_length, key_nonce, key_storage},
+    smt::{HashOut, Key, Smt, F},
+};
 
 use super::{
     compact_processing_common::{
@@ -15,13 +21,6 @@ use super::{
     },
     compact_smt_processing::SmtNodeType,
     compact_to_mpt_trie::{create_mpt_trie_from_remaining_witness_elem, StateTrieExtractionOutput},
-    tmp::{
-        bits::Bits,
-        db::MemoryDb,
-        keys::{key_balance, key_code, key_code_length, key_nonce, key_storage},
-        smt::{HashOut, Key, Smt},
-        utils::u2h,
-    },
 };
 use crate::{
     compact::compact_processing_common::Opcode,
@@ -86,7 +85,11 @@ impl SmtStateTrieExtractionIntermediateOutput {
     }
 
     fn process_hash_node(&mut self, curr_key: Bits, h: &TrieRootHash) {
-        self.hash_inserts.push((curr_key, u2h(h.into_uint())));
+        let hash_v = HashOut {
+            elements: h.into_uint().0.map(F::from_canonical_u64),
+        };
+
+        self.hash_inserts.push((curr_key, hash_v));
     }
 
     fn process_smt_leaf(

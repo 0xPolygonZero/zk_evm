@@ -3,6 +3,7 @@ use std::hash::Hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::plonk::config::GenericHashOut;
+use smt_trie::utils::hashout2u;
 
 use super::{
     compact_mpt_processing::{
@@ -12,7 +13,6 @@ use super::{
     compact_smt_processing::process_compact_smt_prestate_debug,
     compact_to_mpt_trie::StateTrieExtractionOutput,
     compact_to_smt_trie::SmtStateTrieExtractionOutput,
-    tmp::utils::hashout2u,
 };
 use crate::{
     aliased_crate_types::MptAccountRlp,

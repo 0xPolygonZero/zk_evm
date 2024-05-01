@@ -22,21 +22,15 @@ use thiserror::Error;
 
 use super::{
     compact_processing_common::{
-        get_bytes_from_cursor, process_compact_prestate_common,
-        try_get_node_entry_from_witness_entry, AccountNodeCode, Balance, BranchMask,
-        CollapsableWitnessEntryTraverser, CompactCursor, CompactCursorFast, CompactParsingError,
-        CompactParsingResult, CursorBytesErrorInfo, DebugCompactCursor, Header, Instruction,
-        LeafNodeData, NodeEntry, Nonce, Opcode, ParserState, TraverserDirection, WitnessBytes,
-        WitnessEntries, WitnessEntry, BRANCH_MAX_CHILDREN,
-        MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
+        process_compact_prestate_common, try_get_node_entry_from_witness_entry, AccountNodeCode,
+        Balance, BranchMask, CollapsableWitnessEntryTraverser, CompactCursorFast,
+        CompactParsingError, CompactParsingResult, DebugCompactCursor, Header, Instruction,
+        LeafNodeData, NodeEntry, Nonce, ParserState, TraverserDirection, WitnessBytes,
+        WitnessEntry, BRANCH_MAX_CHILDREN, MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
     },
-    compact_smt_processing::SmtNodeType,
     compact_to_mpt_trie::{
         create_mpt_trie_from_remaining_witness_elem, create_storage_mpt_trie_from_compact_node,
-        StateTrieExtractionOutput, UnexpectedCompactNodeType,
-    },
-    compact_to_smt_trie::{
-        create_smt_trie_from_remaining_witness_elem, SmtStateTrieExtractionOutput,
+        StateTrieExtractionOutput,
     },
 };
 use crate::{

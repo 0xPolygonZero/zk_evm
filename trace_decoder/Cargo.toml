@@ -29,6 +29,7 @@ thiserror = { workspace = true }
 
 # Local dependencies
 mpt_trie = { version = "0.2.1", path = "../mpt_trie" }
+smt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "smt_insert_hash" }
 
 evm_arithmetization_mpt = { package = "evm_arithmetization", version = "0.1.3", path = "../evm_arithmetization" }
 evm_arithmetization_smt = { package = "evm_arithmetization", version = "0.1.2", git = "https://github.com/0xPolygonZero/zk_evm.git", branch = "feat_type2_hack" }
