@@ -10,8 +10,10 @@ use mpt_trie::partial_trie::HashedPartialTrie;
 use thiserror::Error;
 
 use crate::{
-    compact::compact_mpt_processing::{
-        process_compact_mpt_prestate_debug, MptPartialTriePreImages,
+    compact::{
+        compact_mpt_processing::{process_compact_mpt_prestate_debug, MptPartialTriePreImages},
+        compact_processing_common::{CompactParsingError, CompactParsingResult},
+        compact_smt_processing::process_compact_smt_prestate_debug,
     },
     decoding_mpt::{MptTraceParsingError, MptTraceParsingResult},
     decoding_smt::{SmtTraceParsingError, SmtTraceParsingResult},
@@ -40,6 +42,9 @@ pub enum TraceParsingError {
 
     #[error(transparent)]
     Smt(#[from] SmtTraceParsingError),
+
+    #[error(transparent)]
+    Compact(#[from] CompactParsingError),
 
     #[error("Got a trace format that was not expected!")]
     UnexpectedTraceFormat,
@@ -91,7 +96,7 @@ pub(crate) fn process_smt_block_trace_trie_pre_images(
 
 pub(crate) fn process_mpt_trie_images(
     images: MptBlockTraceTriePreImages,
-) -> MptTraceParsingResult<MptProcessedBlockTracePreImages> {
+) -> CompactParsingResult<MptProcessedBlockTracePreImages> {
     match images {
         MptBlockTraceTriePreImages::Separate(t) => process_separate_trie_pre_images(t),
         MptBlockTraceTriePreImages::Combined(t) => process_combined_trie_pre_images(t),
@@ -100,13 +105,13 @@ pub(crate) fn process_mpt_trie_images(
 
 fn process_combined_trie_pre_images(
     tries: MptCombinedPreImages,
-) -> MptTraceParsingResult<MptProcessedBlockTracePreImages> {
+) -> CompactParsingResult<MptProcessedBlockTracePreImages> {
     process_compact_trie(tries.compact)
 }
 
 fn process_separate_trie_pre_images(
     tries: MptSeparateTriePreImages,
-) -> MptTraceParsingResult<MptProcessedBlockTracePreImages> {
+) -> CompactParsingResult<MptProcessedBlockTracePreImages> {
     let tries = MptPartialTriePreImages {
         state: process_state_trie(tries.state),
         storage: process_storage_tries(tries.storage),
@@ -148,9 +153,8 @@ fn process_multiple_storage_tries(
 
 fn process_compact_trie(
     trie: MptTrieCompact,
-) -> MptTraceParsingResult<MptProcessedBlockTracePreImages> {
-    // TODO: Wrap in proper result type...
-    let out = process_compact_mpt_prestate_debug(trie).unwrap();
+) -> CompactParsingResult<MptProcessedBlockTracePreImages> {
+    let out = process_compact_mpt_prestate_debug(trie)?;
 
     // TODO: Make this into a result...
     assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
@@ -160,7 +164,7 @@ fn process_compact_trie(
 
 fn process_smt_trie_images(
     images: SmtBlockTraceTriePreImages,
-) -> SmtTraceParsingResult<SmtProcessedBlockTracePreImages> {
+) -> CompactParsingResult<SmtProcessedBlockTracePreImages> {
     match images {
         SmtBlockTraceTriePreImages::Single(image) => process_smt_single_trie_image(image),
     }
@@ -168,6 +172,11 @@ fn process_smt_trie_images(
 
 fn process_smt_single_trie_image(
     image: SingleSmtPreImage,
-) -> SmtTraceParsingResult<SmtProcessedBlockTracePreImages> {
-    todo!()
+) -> CompactParsingResult<SmtProcessedBlockTracePreImages> {
+    let out = process_compact_smt_prestate_debug(image)?;
+
+    // TODO: Make this into a result...
+    assert!(out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION));
+
+    Ok(out.into())
 }

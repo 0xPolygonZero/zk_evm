@@ -47,7 +47,7 @@ pub(super) const CURSOR_ERROR_BYTES_MAX_LEN: usize = 10;
 pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
 
 /// An error from processing Erigon's compact witness format.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum CompactParsingError {
     /// The header in the compact payload was missing. This is just a single
     /// byte that is used for versioning.
@@ -124,7 +124,7 @@ pub enum CompactParsingError {
     UnknownSmtNodeType(u8),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct CursorBytesErrorInfo {
     error_start_pos: usize,
     bad_bytes_hex: String,
@@ -868,7 +868,7 @@ impl From<u8> for AccountLeafFlags {
 
 /// We kind of want a wrapper around the actual data structure I think since
 /// there's a good chance this will change a few times in the future.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct WitnessEntries {
     // Yeah a LL is actually (unfortunately) a very good choice here. We will be doing a ton of
     // inserts mid-list, and the list can get very large. There might be a better choice for a data

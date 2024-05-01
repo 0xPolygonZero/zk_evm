@@ -3,9 +3,17 @@ use thiserror::Error;
 
 use crate::{
     aliased_crate_types::{MptGenerationInputs, SmtGenerationInputs},
+    compact::{
+        compact_mpt_processing::ProcessedCompactOutput,
+        compact_to_mpt_trie::StateTrieExtractionOutput,
+        compact_to_smt_trie::SmtStateTrieExtractionOutput,
+    },
     decoding_smt::{SmtTraceParsingError, SmtTraceParsingResult},
     processed_block_trace::ProcessedBlockTrace,
-    processed_block_trace_mpt::{MptProcessedBlockTrace, ProcessingMeta},
+    processed_block_trace_mpt::{
+        MptProcessedBlockTrace, MptProcessedBlockTracePreImages, ProcessingMeta,
+    },
+    protocol_processing::process_smt_block_trace_trie_pre_images,
     trace_protocol::BlockTrace,
     types::{CodeHashResolveFunc, OtherBlockData},
 };
@@ -15,17 +23,18 @@ pub(crate) type SmtProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceSmt
 #[derive(Clone, Debug)]
 pub(crate) struct SmtProcessedBlockTracePreImages {}
 
+impl From<ProcessedCompactOutput<SmtStateTrieExtractionOutput>>
+    for SmtProcessedBlockTracePreImages
+{
+    fn from(v: ProcessedCompactOutput<SmtStateTrieExtractionOutput>) -> Self {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ProcedBlockTraceSmtSpec {}
 
 impl BlockTrace {
-    pub(crate) fn into_proof_gen_ir(
-        self,
-        other_data: OtherBlockData,
-    ) -> SmtTraceParsingResult<Vec<SmtGenerationInputs>> {
-        todo!()
-    }
-
     /// Processes and returns the [GenerationInputs] for all transactions in the
     /// block.
     pub fn smt_into_proof_gen_ir<F>(
@@ -50,6 +59,8 @@ impl BlockTrace {
     where
         F: CodeHashResolveFunc,
     {
+        let pre_image_data = process_smt_block_trace_trie_pre_images(self.trie_pre_images);
+
         todo!()
     }
 }

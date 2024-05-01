@@ -203,7 +203,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 }
 
-/// Processes the compact prestate into the trie format of `mpt_trie`. Also
+/// Processes the compact prestate into the trie format of `smt_trie`. Also
 /// enables heavy debug traces during processing.
 // TODO: Move behind a feature flag...
 pub fn process_compact_smt_prestate_debug(
