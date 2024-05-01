@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ethereum_types::{BigEndianHash, H256, U512};
+use ethereum_types::{BigEndianHash, H256};
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
