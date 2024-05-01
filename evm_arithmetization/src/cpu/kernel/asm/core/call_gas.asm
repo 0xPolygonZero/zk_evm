@@ -71,7 +71,13 @@ global xfer_cost:
     %jump(after_xfer_cost)
 xfer_cost_nonzero:
     // stack: cost, is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
-    %add_const(@GAS_CALLVALUE)
+    SWAP5
+    // stack: kexit_info, is_call_or_staticcall, is_call_or_callcode, address, gas, cost, value, retdest
+    PUSH @GAS_CALLVALUE
+    // stack: call_value_gas, kexit_info, is_call_or_staticcall, is_call_or_callcode, address, gas, cost, value, retdest
+    %charge_gas
+    // stack: kexit_info, is_call_or_staticcall, is_call_or_callcode, address, gas, cost, value, retdest
+    SWAP5
     // stack: cost, is_call_or_staticcall, is_call_or_callcode, address, gas, kexit_info, value, retdest
     %jump(after_xfer_cost)
 

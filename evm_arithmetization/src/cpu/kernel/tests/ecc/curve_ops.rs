@@ -6,8 +6,8 @@ mod bn {
     use plonky2::field::goldilocks_field::GoldilocksField as F;
 
     use crate::cpu::kernel::aggregator::KERNEL;
-    use crate::cpu::kernel::interpreter::{run_interpreter, Interpreter};
-    use crate::cpu::kernel::tests::u256ify;
+    use crate::cpu::kernel::interpreter::Interpreter;
+    use crate::cpu::kernel::tests::{run_interpreter, u256ify};
     use crate::memory::segments::Segment;
     use crate::witness::memory::MemoryAddress;
 
@@ -264,8 +264,8 @@ mod secp {
     use plonky2::field::goldilocks_field::GoldilocksField as F;
 
     use crate::cpu::kernel::aggregator::{combined_kernel, KERNEL};
-    use crate::cpu::kernel::interpreter::{run, run_interpreter, Interpreter};
-    use crate::cpu::kernel::tests::u256ify;
+    use crate::cpu::kernel::interpreter::Interpreter;
+    use crate::cpu::kernel::tests::{run_interpreter, u256ify};
 
     #[test]
     fn test_ec_ops() -> Result<()> {
@@ -301,7 +301,9 @@ mod secp {
         assert_eq!(stack, u256ify([point2.1, point2.0])?);
         // Standard addition #2
         let initial_stack = u256ify(["0xdeadbeef", point1.1, point1.0, point0.1, point0.0])?;
-        let stack = run::<F>(ec_add, initial_stack)?.stack().to_vec();
+        let stack = run_interpreter::<F>(ec_add, initial_stack)?
+            .stack()
+            .to_vec();
         assert_eq!(stack, u256ify([point2.1, point2.0])?);
 
         // Standard doubling #1

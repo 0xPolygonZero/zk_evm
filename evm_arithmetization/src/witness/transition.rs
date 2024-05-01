@@ -10,7 +10,7 @@ use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::state::{GenerationState, State};
+use crate::generation::state::State;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
@@ -276,14 +276,16 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     } else {
         log::Level::Trace
     };
-    log::log!(
+    state.log(
         level,
-        "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
-        state.get_clock(),
-        state.get_context(),
-        KERNEL.offset_name(pc),
-        op,
-        state.get_generation_state().stack(),
+        format!(
+            "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
+            state.get_clock(),
+            state.get_context(),
+            KERNEL.offset_name(pc),
+            op,
+            state.get_generation_state().stack(),
+        ),
     );
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
@@ -299,14 +301,13 @@ pub(crate) trait Transition<F: Field>: State<F> {
     /// and program counter.
     fn perform_state_op(
         &mut self,
-        opcode: u8,
         op: Operation,
         row: CpuColumnsView<F>,
     ) -> Result<Operation, ProgramError>
     where
         Self: Sized,
     {
-        self.perform_op(op, opcode, row)?;
+        self.perform_op(op, row)?;
         self.incr_pc(match op {
             Operation::Syscall(_, _, _) | Operation::ExitKernel => 0,
             Operation::Push(n) => n as usize + 1,
@@ -400,7 +401,6 @@ pub(crate) trait Transition<F: Field>: State<F> {
             let dst: u32 = dst
                 .try_into()
                 .map_err(|_| ProgramError::InvalidJumpiDestination)?;
-            let is_kernel = self.get_registers().is_kernel;
             if !self.generate_jumpdest_analysis(dst as usize) {
                 row.general.jumps_mut().should_jump = F::ONE;
                 let cond_sum_u64 = cond
@@ -458,69 +458,44 @@ pub(crate) trait Transition<F: Field>: State<F> {
     /// Skips the following instructions for some specific labels
     fn skip_if_necessary(&mut self, op: Operation) -> Result<Operation, ProgramError>;
 
-    fn perform_op(
-        &mut self,
-        op: Operation,
-        opcode: u8,
-        row: CpuColumnsView<F>,
-    ) -> Result<(), ProgramError>
+    fn perform_op(&mut self, op: Operation, row: CpuColumnsView<F>) -> Result<(), ProgramError>
     where
         Self: Sized,
     {
         let op = self.skip_if_necessary(op)?;
 
-        #[cfg(debug_assertions)]
-        if !self.get_registers().is_kernel {
-            log::debug!(
-                "User instruction {:?}, stack = {:?}, ctx = {}",
-                op,
-                {
-                    let mut stack = self.get_stack();
-                    stack.reverse();
-                    stack
-                },
-                self.get_registers().context
-            );
-        }
-
         match op {
-            Operation::Push(n) => generate_push(n, self, row)?,
-            Operation::Dup(n) => generate_dup(n, self, row)?,
-            Operation::Swap(n) => generate_swap(n, self, row)?,
-            Operation::Iszero => generate_iszero(self, row)?,
-            Operation::Not => generate_not(self, row)?,
-            Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shl) => {
-                generate_shl(self, row)?
-            }
-            Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shr) => {
-                generate_shr(self, row)?
-            }
+            Operation::Push(n) => generate_push(n, self, row),
+            Operation::Dup(n) => generate_dup(n, self, row),
+            Operation::Swap(n) => generate_swap(n, self, row),
+            Operation::Iszero => generate_iszero(self, row),
+            Operation::Not => generate_not(self, row),
+            Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shl) => generate_shl(self, row),
+            Operation::BinaryArithmetic(arithmetic::BinaryOperator::Shr) => generate_shr(self, row),
             Operation::Syscall(opcode, stack_values_read, stack_len_increased) => {
-                generate_syscall(opcode, stack_values_read, stack_len_increased, self, row)?
+                generate_syscall(opcode, stack_values_read, stack_len_increased, self, row)
             }
-            Operation::Eq => generate_eq(self, row)?,
+            Operation::Eq => generate_eq(self, row),
             Operation::BinaryLogic(binary_logic_op) => {
-                generate_binary_logic_op(binary_logic_op, self, row)?
+                generate_binary_logic_op(binary_logic_op, self, row)
             }
-            Operation::BinaryArithmetic(op) => generate_binary_arithmetic_op(op, self, row)?,
-            Operation::TernaryArithmetic(op) => generate_ternary_arithmetic_op(op, self, row)?,
-            Operation::KeccakGeneral => generate_keccak_general(self, row)?,
-            Operation::ProverInput => generate_prover_input(self, row)?,
-            Operation::Pop => generate_pop(self, row)?,
-            Operation::Jump => self.generate_jump(row)?,
-            Operation::Jumpi => self.generate_jumpi(row)?,
-            Operation::Pc => generate_pc(self, row)?,
-            Operation::Jumpdest => generate_jumpdest(self, row)?,
-            Operation::GetContext => generate_get_context(self, row)?,
-            Operation::SetContext => generate_set_context(self, row)?,
-            Operation::Mload32Bytes => generate_mload_32bytes(self, row)?,
-            Operation::Mstore32Bytes(n) => generate_mstore_32bytes(n, self, row)?,
-            Operation::ExitKernel => generate_exit_kernel(self, row)?,
-            Operation::MloadGeneral => generate_mload_general(self, row)?,
-            Operation::MstoreGeneral => generate_mstore_general(self, row)?,
-        };
-
-        Ok(())
+            Operation::BinaryArithmetic(op) => generate_binary_arithmetic_op(op, self, row),
+            Operation::TernaryArithmetic(op) => generate_ternary_arithmetic_op(op, self, row),
+            Operation::KeccakGeneral => generate_keccak_general(self, row),
+            Operation::ProverInput => generate_prover_input(self, row),
+            Operation::Pop => generate_pop(self, row),
+            Operation::Jump => self.generate_jump(row),
+            Operation::Jumpi => self.generate_jumpi(row),
+            Operation::Pc => generate_pc(self, row),
+            Operation::Jumpdest => generate_jumpdest(self, row),
+            Operation::GetContext => generate_get_context(self, row),
+            Operation::SetContext => generate_set_context(self, row),
+            Operation::Mload32Bytes => generate_mload_32bytes(self, row),
+            Operation::Mstore32Bytes(n) => generate_mstore_32bytes(n, self, row),
+            Operation::ExitKernel => generate_exit_kernel(self, row),
+            Operation::MloadGeneral => generate_mload_general(self, row),
+            Operation::MstoreGeneral => generate_mstore_general(self, row),
+        }
     }
 
     fn fill_stack_fields(&mut self, row: &mut CpuColumnsView<F>) -> Result<(), ProgramError>;
