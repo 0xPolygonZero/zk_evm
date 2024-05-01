@@ -17,7 +17,7 @@ use starky::stark::Stark;
 use super::columns::CpuColumnsView;
 use super::halt;
 use super::kernel::constants::context_metadata::ContextMetadata;
-use super::membus::NUM_GP_CHANNELS;
+use super::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::cpu::columns::{COL_MAP, NUM_CPU_COLUMNS};
 use crate::cpu::{
@@ -25,7 +25,7 @@ use crate::cpu::{
     modfp254, pc, push0, shift, simple_logic, stack, syscalls_exceptions,
 };
 use crate::memory::segments::Segment;
-use crate::memory::{NUM_CHANNELS, VALUE_LIMBS};
+use crate::memory::VALUE_LIMBS;
 
 /// Creates the vector of `Columns` corresponding to the General Purpose
 /// channels when calling the Keccak sponge: the CPU reads the output of the
@@ -113,7 +113,7 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
     TableWithColumns::new(
         *Table::Cpu,
         columns,
-        Some(Filter::new(
+        Filter::new(
             vec![(Column::single(COL_MAP.op.push_prover_input), col_bit)],
             vec![Column::sum([
                 COL_MAP.op.binary_op,
@@ -123,7 +123,7 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
                 COL_MAP.op.syscall,
                 COL_MAP.op.exception,
             ])],
-        )),
+        ),
     )
 }
 

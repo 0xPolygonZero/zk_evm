@@ -78,7 +78,7 @@ fn test_list_iterator() -> Result<()> {
     };
     assert_eq!(pos_0, 0);
     assert_eq!(next_val_0, U256::MAX);
-    let Some((pos_0, next_val_0, _)) = list.next() else {
+    let Some((pos_0, _, _)) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(pos_0, 0);
@@ -98,7 +98,7 @@ fn test_insert_address() -> Result<()> {
 
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
-    let mut address: H160 = rng.gen();
+    let address: H160 = rng.gen();
 
     assert!(address != H160::zero(), "Cosmic luck or bad RNG?");
 
@@ -132,7 +132,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
     let n = 10;
-    let mut addresses = (0..n)
+    let addresses = (0..n)
         .map(|_| rng.gen::<Address>())
         .collect::<HashSet<_>>()
         .into_iter()
@@ -207,12 +207,11 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
     let n = 10;
-    let mut storage_keys = (0..n)
+    let storage_keys = (0..n)
         .map(|_| (rng.gen::<Address>(), U256(rng.gen())))
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<(Address, U256)>>();
-    let storage_key_in_list = storage_keys[rng.gen_range(0..n)];
     let storage_key_not_in_list = (rng.gen::<Address>(), U256(rng.gen()));
     assert!(
         !storage_keys.contains(&storage_key_not_in_list),

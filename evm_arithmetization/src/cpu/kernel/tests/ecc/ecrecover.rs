@@ -1,12 +1,12 @@
+use std::collections::HashMap;
 use std::str::FromStr;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::interpreter::run_interpreter;
-use crate::cpu::kernel::tests::u256ify;
+use crate::cpu::kernel::tests::{run_interpreter, u256ify};
 
 fn test_valid_ecrecover(hash: &str, v: &str, r: &str, s: &str, expected: &str) -> Result<()> {
     let ecrecover = KERNEL.global_labels["ecrecover"];
@@ -33,17 +33,18 @@ fn test_invalid_ecrecover(hash: &str, v: &str, r: &str, s: &str) -> Result<()> {
 #[test]
 fn test_ecrecover_real_block() -> Result<()> {
     let f = include_str!("ecrecover_test_data");
-    let convert_v = |v| match v {
-        // TODO: do this properly.
-        "0" => "0x1b",
-        "1" => "0x1c",
-        "37" => "0x1b",
-        "38" => "0x1c",
-        _ => panic!("Invalid v."),
+    let convert_v = {
+        let mut map = HashMap::new();
+        map.insert("0", "0x1b");
+        map.insert("1", "0x1c");
+        map.insert("37", "0x1b");
+        map.insert("38", "0x1c");
+
+        move |v: &str| map.get(v).copied().ok_or_else(|| anyhow!("Invalid v."))
     };
     for line in f.lines().filter(|s| !s.starts_with("//")) {
         let line = line.split_whitespace().collect::<Vec<_>>();
-        test_valid_ecrecover(line[4], convert_v(line[0]), line[1], line[2], line[3])?;
+        test_valid_ecrecover(line[4], convert_v(line[0])?, line[1], line[2], line[3])?;
     }
     Ok(())
 }

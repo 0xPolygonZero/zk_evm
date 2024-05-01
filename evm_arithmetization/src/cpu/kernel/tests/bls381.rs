@@ -5,13 +5,12 @@ use keccak_hash::keccak;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::Rng;
 
+use super::{run_interpreter_with_memory, InterpreterMemoryInitialization};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::cancun_constants::POINT_EVALUATION_PRECOMPILE_RETURN_VALUE;
 use crate::cpu::kernel::constants::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::kernel::interpreter::{
-    self, run_interpreter_with_memory, Interpreter, InterpreterMemoryInitialization,
-};
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::extension_tower::{Fp2, Stack, BLS381};
 use crate::memory::segments::Segment::{self, KernelGeneral};
 use crate::witness::errors::ProgramError;
