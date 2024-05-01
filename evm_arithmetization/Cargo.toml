@@ -56,6 +56,7 @@ sha2 = "0.10.6"
 [features]
 default = ["parallel"]
 asmtools = ["hex"]
+disable_jemalloc = []
 parallel = [
     "plonky2/parallel",
     "plonky2_maybe_rayon/parallel",
