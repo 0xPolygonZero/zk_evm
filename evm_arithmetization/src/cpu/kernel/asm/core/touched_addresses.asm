@@ -47,7 +47,6 @@ insert_touched_addresses_found:
 
 /// Remove the address from the list.
 /// Panics if the address is not in the list.
-/// TODO: Unused?
 global remove_touched_addresses:
     // stack: addr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_TOUCHED_ADDRESSES_LEN)

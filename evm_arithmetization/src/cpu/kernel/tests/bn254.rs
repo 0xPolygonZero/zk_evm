@@ -3,13 +3,11 @@ use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::Rng;
 
-use crate::cpu::kernel::interpreter::{
-    run_interpreter_with_memory, Interpreter, InterpreterMemoryInitialization,
-};
-use crate::curve_pairings::CurveAff;
+use super::{run_interpreter_with_memory, InterpreterMemoryInitialization};
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::curve_pairings::{
     bn254::{final_exponent, miller_loop},
-    gen_fp12_sparse, CyclicGroup,
+    gen_fp12_sparse, CurveAff, CyclicGroup,
 };
 use crate::extension_tower::{FieldExt, Fp12, Fp2, Fp6, Stack, BN254};
 use crate::memory::segments::Segment::BnPairing;

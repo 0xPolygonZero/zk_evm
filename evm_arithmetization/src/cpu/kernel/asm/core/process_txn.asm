@@ -1,8 +1,6 @@
 // After the transaction data has been parsed into a normalized set of fields
 // (see NormalizedTxnField), this routine processes the transaction.
 
-// TODO: Save checkpoints in @CTX_METADATA_STATE_TRIE_CHECKPOINT_PTR and @SEGMENT_STORAGE_TRIE_CHECKPOINT_PTRS.
-
 // Pre stack: retdest
 // Post stack: success, leftover_gas
 global process_normalized_txn:

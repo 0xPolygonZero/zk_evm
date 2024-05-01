@@ -4,7 +4,7 @@ use mpt_trie::partial_trie::PartialTrie;
 use super::{
     compact_prestate_processing::{
         process_compact_prestate, process_compact_prestate_debug, CompactParsingResult,
-        PartialTriePreImages, ProcessedCompactOutput,
+        ProcessedCompactOutput,
     },
     compact_to_partial_trie::StateTrieExtractionOutput,
 };
@@ -40,6 +40,7 @@ pub(crate) struct TestProtocolInputAndRoot {
 }
 
 impl TestProtocolInputAndRoot {
+    #[allow(dead_code)]
     pub(crate) fn parse_and_check_hash_matches(self) {
         self.parse_and_check_hash_matches_common(process_compact_prestate);
     }

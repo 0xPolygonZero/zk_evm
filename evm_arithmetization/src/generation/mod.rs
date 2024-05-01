@@ -244,7 +244,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     let cpu_res = timed!(timing, "simulate CPU", simulate_cpu(&mut state));
     if cpu_res.is_err() {
-        output_debug_tries(&state);
+        let _ = output_debug_tries(&state);
 
         cpu_res?;
     }

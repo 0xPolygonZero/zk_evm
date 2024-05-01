@@ -1,5 +1,4 @@
 /// Division modulo 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f, the Secp256k1 base field order
-/// To replace with more efficient method using non-determinism later.
 
 // Returns y * (x^-1) where the inverse is taken modulo N
 %macro moddiv_secp_base

@@ -296,7 +296,6 @@ impl<F: Field> GenerationState<F> {
 
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
-            log::debug!("jdt  = {:?}", self.jumpdest_table);
         }
 
         let Some(jumpdest_table) = &mut self.jumpdest_table else {
@@ -310,11 +309,6 @@ impl<F: Field> GenerationState<F> {
         if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
-            log::debug!(
-                "jumpdest_table_len = {:?}, ctx_jumpdest_table.len = {:?}",
-                jd_len,
-                ctx_jumpdest_table.len()
-            );
             Ok((next_jumpdest_address + 1).into())
         } else {
             jumpdest_table.remove(&context);
@@ -336,11 +330,6 @@ impl<F: Field> GenerationState<F> {
         if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
         {
-            log::debug!(
-                "jumpdest_table_len = {:?}, ctx_jumpdest_table.len = {:?}",
-                jd_len,
-                ctx_jumpdest_table.len()
-            );
             Ok(next_jumpdest_proof.into())
         } else {
             Err(ProgramError::ProverInputError(
@@ -635,10 +624,6 @@ impl<F: Field> GenerationState<F> {
         Ok(code_len)
     }
 
-    fn get_current_code_len(&self) -> Result<usize, ProgramError> {
-        self.get_code_len(self.registers.context)
-    }
-
     pub(crate) fn set_jumpdest_bits(&mut self, code: &[u8]) {
         const JUMPDEST_OPCODE: u8 = 0x5b;
         for (pos, opcode) in CodeIterator::new(code) {
@@ -706,7 +691,7 @@ fn get_proofs_and_jumpdests(
     const PUSH32_OPCODE: u8 = 0x7f;
     let (proofs, _) = CodeIterator::until(code, largest_address + 1).fold(
         (vec![], 0),
-        |(mut proofs, last_proof), (addr, opcode)| {
+        |(mut proofs, last_proof), (addr, _opcode)| {
             let has_prefix = if let Some(prefix_start) = addr.checked_sub(32) {
                 code[prefix_start..addr]
                     .iter()
