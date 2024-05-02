@@ -1,5 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 
+use std::collections::HashMap;
+
 use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
@@ -82,6 +84,7 @@ impl Node {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Smt<D: Db> {
     pub db: D,
+    pub kv_store: HashMap<Key, U256>,
     pub root: HashOut,
 }
 
@@ -128,11 +131,21 @@ impl<D: Db> Smt<D> {
                 let found_rem_key = Key(sibling.0[0..4].try_into().unwrap());
                 let found_val = limbs2f(found_val_a);
                 let found_key = Key::join(acc_key, found_rem_key);
-                if found_key == key {
-                    return found_val;
+                return if found_key == key {
+                    assert_eq!(
+                        found_val,
+                        self.kv_store.get(&key).copied().unwrap_or_default()
+                    );
+                    found_val
                 } else {
-                    return U256::zero();
-                }
+                    assert!(self
+                        .kv_store
+                        .get(&key)
+                        .copied()
+                        .unwrap_or_default()
+                        .is_zero());
+                    U256::zero()
+                };
             } else {
                 let b = keys.get_bit(level as usize);
                 r = Key(sibling.0[b as usize * 4..(b as usize + 1) * 4]
@@ -149,6 +162,11 @@ impl<D: Db> Smt<D> {
     /// If the value is 0 and the key is in the SMT, the key is removed from the
     /// SMT. Reference implementation in https://github.com/0xPolygonHermez/zkevm-commonjs/blob/main/src/smt.js.
     pub fn set(&mut self, key: Key, value: U256) {
+        if value.is_zero() {
+            self.kv_store.remove(&key);
+        } else {
+            self.kv_store.insert(key, value);
+        }
         let mut r = Key(self.root.elements);
         let mut new_root = self.root;
         let keys = key.split();
@@ -323,6 +341,12 @@ impl<D: Db> Smt<D> {
             }
         }
         self.root = new_root;
+    }
+
+    /// Delete the key in the SMT.
+    pub fn delete(&mut self, key: Key) {
+        self.kv_store.remove(&key);
+        self.set(key, U256::zero());
     }
 
     /// Set the key to the hash in the SMT.

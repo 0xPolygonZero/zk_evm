@@ -1,5 +1,5 @@
 use core::borrow::Borrow;
-use core::iter::{self, once, repeat};
+use core::iter::{self, repeat};
 use core::marker::PhantomData;
 use core::mem::size_of;
 
@@ -45,14 +45,12 @@ pub(crate) fn ctl_looked_data<F: Field>() -> Vec<Column<F>> {
         outputs.push(cur_col);
     }
 
-    // The length of the inputs is `already_absorbed_bytes + is_final_input_len`.
-    let len_col = Column::linear_combination(
-        iter::once((cols.already_absorbed_bytes, F::ONE)).chain(
-            cols.is_final_input_len
-                .iter()
-                .enumerate()
-                .map(|(i, &elt)| (elt, F::from_canonical_usize(i))),
-        ),
+    // The length of the inputs is
+    // `already_absorbed_bytes + (RATE - Σi is_padding_byte[i])`.
+    let len_col = Column::linear_combination_with_constant(
+        iter::once((cols.already_absorbed_bytes, F::ONE))
+            .chain((0..KECCAK_RATE_BYTES).map(|i| (cols.is_padding_byte[i], -F::ONE))),
+        F::from_canonical_usize(KECCAK_RATE_BYTES),
     );
 
     let mut res: Vec<Column<F>> =
@@ -191,7 +189,9 @@ pub(crate) fn ctl_looking_logic<F: Field>(i: usize) -> Vec<Column<F>> {
 pub(crate) fn ctl_looked_filter<F: Field>() -> Filter<F> {
     // The CPU table is only interested in our final-block rows, since those contain
     // the final sponge output.
-    Filter::new_simple(Column::sum(KECCAK_SPONGE_COL_MAP.is_final_input_len))
+    Filter::new_simple(Column::single(
+        KECCAK_SPONGE_COL_MAP.is_padding_byte[KECCAK_RATE_BYTES - 1],
+    ))
 }
 
 /// CTL filter for reading the `i`th byte of input from memory.
@@ -203,26 +203,30 @@ pub(crate) fn ctl_looking_memory_filter<F: Field>(i: usize) -> Filter<F> {
     if i == KECCAK_RATE_BYTES - 1 {
         Filter::new_simple(Column::single(cols.is_full_input_block))
     } else {
-        Filter::new_simple(Column::sum(
-            once(&cols.is_full_input_block).chain(&cols.is_final_input_len[i + 1..]),
-        ))
+        Filter::new_simple(Column::linear_combination([
+            (cols.is_full_input_block, F::ONE),
+            (cols.is_padding_byte[KECCAK_RATE_BYTES - 1], F::ONE),
+            (cols.is_padding_byte[i], -F::ONE),
+        ]))
     }
 }
 
 /// CTL filter for looking at XORs in the logic table.
 pub(crate) fn ctl_looking_logic_filter<F: Field>() -> Filter<F> {
     let cols = KECCAK_SPONGE_COL_MAP;
-    Filter::new_simple(Column::sum(
-        once(&cols.is_full_input_block).chain(&cols.is_final_input_len),
-    ))
+    Filter::new_simple(Column::sum([
+        cols.is_full_input_block,
+        cols.is_padding_byte[KECCAK_RATE_BYTES - 1],
+    ]))
 }
 
 /// CTL filter for looking at the input and output in the Keccak table.
 pub(crate) fn ctl_looking_keccak_filter<F: Field>() -> Filter<F> {
     let cols = KECCAK_SPONGE_COL_MAP;
-    Filter::new_simple(Column::sum(
-        once(&cols.is_full_input_block).chain(&cols.is_final_input_len),
-    ))
+    Filter::new_simple(Column::sum([
+        cols.is_full_input_block,
+        cols.is_padding_byte[KECCAK_RATE_BYTES - 1],
+    ]))
 }
 
 /// Information about a Keccak sponge operation needed for witness generation.
@@ -373,8 +377,8 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
 
     /// Generates a row containing the last input bytes.
     /// On top of computing one absorption and padding the input,
-    /// we indicate the last non-padding input byte by setting
-    /// `row.is_final_input_len[final_inputs.len()]` to 1.
+    /// we indicate all the padding input bytes by setting the
+    /// corresponding indices in `row.is_padding_byte` to 1.
     fn generate_final_row(
         &self,
         op: &KeccakSpongeOp,
@@ -399,7 +403,9 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
             row.block_bytes[KECCAK_RATE_BYTES - 1] = F::from_canonical_u8(0b10000000);
         }
 
-        row.is_final_input_len[final_inputs.len()] = F::ONE;
+        for i in final_inputs.len()..KECCAK_RATE_BYTES {
+            row.is_padding_byte[i] = F::ONE;
+        }
 
         Self::generate_common_fields(&mut row, op, already_absorbed_bytes, sponge_state);
         row
@@ -561,16 +567,21 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let range_max = P::Scalar::from_canonical_u64((BYTE_RANGE_MAX - 1) as u64);
         yield_constr.constraint_last_row(rc1 - range_max);
 
-        // Each flag (full-input block, final block or implied dummy flag) must be
+        // Each flag (full-input block, padding byte or implied dummy flag) must be
         // boolean.
         let is_full_input_block = local_values.is_full_input_block;
         yield_constr.constraint(is_full_input_block * (is_full_input_block - P::ONES));
 
-        let is_final_block: P = local_values.is_final_input_len.iter().copied().sum();
-        yield_constr.constraint(is_final_block * (is_final_block - P::ONES));
+        for &is_padding_byte in local_values.is_padding_byte.iter() {
+            yield_constr.constraint(is_padding_byte * (is_padding_byte - P::ONES));
+        }
+        let is_final_block: P = local_values.is_padding_byte[KECCAK_RATE_BYTES - 1];
 
-        for &is_final_len in local_values.is_final_input_len.iter() {
-            yield_constr.constraint(is_final_len * (is_final_len - P::ONES));
+        // A padding byte is always followed by another padding byte.
+        for i in 1..KECCAK_RATE_BYTES {
+            yield_constr.constraint(
+                local_values.is_padding_byte[i - 1] * (local_values.is_padding_byte[i] - P::ONES),
+            );
         }
 
         // Ensure that full-input block and final block flags are not set to 1 at the
@@ -651,10 +662,51 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
                     - next_values.already_absorbed_bytes),
         );
 
+        // If the first padding byte is at the end of the block, then the block has a
+        // single padding byte.
+        let has_single_padding_byte = local_values.is_padding_byte[KECCAK_RATE_BYTES - 1]
+            - local_values.is_padding_byte[KECCAK_RATE_BYTES - 2];
+
+        // If the row has a single padding byte, then it must be the last byte with
+        // value 0b10000001.
+        yield_constr.constraint_transition(
+            has_single_padding_byte
+                * (local_values.block_bytes[KECCAK_RATE_BYTES - 1]
+                    - P::from(FE::from_canonical_u8(0b10000001))),
+        );
+
+        for i in 0..KECCAK_RATE_BYTES - 1 {
+            let is_first_padding_byte = {
+                if i > 0 {
+                    local_values.is_padding_byte[i] - local_values.is_padding_byte[i - 1]
+                } else {
+                    local_values.is_padding_byte[i]
+                }
+            };
+            // If the row has multiple padding bytes, the first padding byte must be 1.
+            yield_constr.constraint_transition(
+                is_first_padding_byte * (local_values.block_bytes[i] - P::ONES),
+            );
+            // If the row has multiple padding bytes, the other padding bytes
+            // except the last one must be 0.
+            yield_constr.constraint_transition(
+                local_values.is_padding_byte[i]
+                    * (is_first_padding_byte - P::ONES)
+                    * local_values.block_bytes[i],
+            );
+        }
+        // If the row has multiple padding bytes, then the last byte must be 0b10000000.
+        yield_constr.constraint_transition(
+            is_final_block
+                * (has_single_padding_byte - P::ONES)
+                * (local_values.block_bytes[KECCAK_RATE_BYTES - 1]
+                    - P::from(FE::from_canonical_u8(0b10000000))),
+        );
+
         // A dummy row is always followed by another dummy row, so the prover can't put
         // dummy rows "in between" to avoid the above checks.
         let is_dummy = P::ONES - is_full_input_block - is_final_block;
-        let next_is_final_block: P = next_values.is_final_input_len.iter().copied().sum();
+        let next_is_final_block: P = next_values.is_padding_byte[KECCAK_RATE_BYTES - 1];
         yield_constr.constraint_transition(
             is_dummy * (next_values.is_full_input_block + next_is_final_block),
         );
@@ -689,8 +741,8 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let t = builder.sub_extension(rc1, range_max);
         yield_constr.constraint_last_row(builder, t);
 
-        // Each flag (full-input block, final block or implied dummy flag) must be
-        // boolean.
+        // Each flag (full-input block, final block, padding byte or implied dummy flag)
+        // must be boolean.
         let is_full_input_block = local_values.is_full_input_block;
         let constraint = builder.mul_sub_extension(
             is_full_input_block,
@@ -699,12 +751,20 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         );
         yield_constr.constraint(builder, constraint);
 
-        let is_final_block = builder.add_many_extension(local_values.is_final_input_len);
-        let constraint = builder.mul_sub_extension(is_final_block, is_final_block, is_final_block);
-        yield_constr.constraint(builder, constraint);
+        for &is_padding_byte in local_values.is_padding_byte.iter() {
+            let constraint =
+                builder.mul_sub_extension(is_padding_byte, is_padding_byte, is_padding_byte);
+            yield_constr.constraint(builder, constraint);
+        }
+        let is_final_block = local_values.is_padding_byte[KECCAK_RATE_BYTES - 1];
 
-        for &is_final_len in local_values.is_final_input_len.iter() {
-            let constraint = builder.mul_sub_extension(is_final_len, is_final_len, is_final_len);
+        // A padding byte is always followed by another padding byte.
+        for i in 1..KECCAK_RATE_BYTES {
+            let constraint = builder.mul_sub_extension(
+                local_values.is_padding_byte[i - 1],
+                local_values.is_padding_byte[i],
+                local_values.is_padding_byte[i - 1],
+            );
             yield_constr.constraint(builder, constraint);
         }
 
@@ -805,13 +865,71 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
         let constraint = builder.mul_extension(is_full_input_block, absorbed_diff);
         yield_constr.constraint_transition(builder, constraint);
 
+        // If the first padding byte is at the end of the block, then the block has a
+        // single padding byte.
+        let has_single_padding_byte = builder.sub_extension(
+            local_values.is_padding_byte[KECCAK_RATE_BYTES - 1],
+            local_values.is_padding_byte[KECCAK_RATE_BYTES - 2],
+        );
+
+        // If the row has a single padding byte, then it must be the last byte with
+        // value 0b10000001.
+        let padding_byte = builder.constant_extension(F::Extension::from_canonical_u8(0b10000001));
+        let diff = builder.sub_extension(
+            local_values.block_bytes[KECCAK_RATE_BYTES - 1],
+            padding_byte,
+        );
+        let constraint = builder.mul_extension(has_single_padding_byte, diff);
+        yield_constr.constraint_transition(builder, constraint);
+
+        for i in 0..KECCAK_RATE_BYTES - 1 {
+            let is_first_padding_byte = {
+                if i > 0 {
+                    builder.sub_extension(
+                        local_values.is_padding_byte[i],
+                        local_values.is_padding_byte[i - 1],
+                    )
+                } else {
+                    local_values.is_padding_byte[i]
+                }
+            };
+            // If the row has multiple padding bytes, the first padding byte must be 1.
+            let constraint = builder.mul_sub_extension(
+                is_first_padding_byte,
+                local_values.block_bytes[i],
+                is_first_padding_byte,
+            );
+            yield_constr.constraint_transition(builder, constraint);
+
+            // If the row has multiple padding bytes, the other padding bytes
+            // except the last one must be 0.
+            let sel = builder.mul_sub_extension(
+                local_values.is_padding_byte[i],
+                is_first_padding_byte,
+                local_values.is_padding_byte[i],
+            );
+            let constraint = builder.mul_extension(sel, local_values.block_bytes[i]);
+            yield_constr.constraint_transition(builder, constraint);
+        }
+
+        // If the row has multiple padding bytes, then the last byte must be 0b10000000.
+        let sel =
+            builder.mul_sub_extension(is_final_block, has_single_padding_byte, is_final_block);
+        let padding_byte = builder.constant_extension(F::Extension::from_canonical_u8(0b10000000));
+        let diff = builder.sub_extension(
+            local_values.block_bytes[KECCAK_RATE_BYTES - 1],
+            padding_byte,
+        );
+        let constraint = builder.mul_extension(sel, diff);
+        yield_constr.constraint_transition(builder, constraint);
+
         // A dummy row is always followed by another dummy row, so the prover can't put
         // dummy rows "in between" to avoid the above checks.
         let is_dummy = {
             let tmp = builder.sub_extension(one, is_final_block);
             builder.sub_extension(tmp, is_full_input_block)
         };
-        let next_is_final_block = builder.add_many_extension(next_values.is_final_input_len);
+        let next_is_final_block = next_values.is_padding_byte[KECCAK_RATE_BYTES - 1];
         let constraint = {
             let tmp = builder.add_extension(next_is_final_block, next_values.is_full_input_block);
             builder.mul_extension(is_dummy, tmp)
@@ -828,7 +946,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
             columns: Column::singles(get_block_bytes_range()).collect(),
             table_column: Column::single(RANGE_COUNTER),
             frequencies_column: Column::single(RC_FREQUENCIES),
-            filter_columns: vec![None; KECCAK_RATE_BYTES],
+            filter_columns: vec![Default::default(); KECCAK_RATE_BYTES],
         }]
     }
 

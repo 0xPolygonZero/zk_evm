@@ -217,13 +217,20 @@ pub mod util;
 use jemallocator::Jemalloc;
 use mpt_trie::partial_trie::HashedPartialTrie;
 
-#[cfg(not(target_env = "msvc"))]
+// TODO: We are currently re-evaluating if jemalloc brings better performance
+// overall, and we might switch back to the default allocator down the road. For
+// the time being, it will be able to be disabled with a feature flag
+// (`disable_jemalloc`) in order to allow users to use their own allocator if
+// needed.
+#[cfg(not(any(target_env = "msvc", disable_jemalloc)))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
 // Public definitions and re-exports
 
 pub type Node = mpt_trie::partial_trie::Node<HashedPartialTrie>;
+/// A type alias for `u64` of a block height.
+pub type BlockHeight = u64;
 
 pub use all_stark::AllStark;
 pub use fixed_recursive_verifier::AllRecursiveCircuits;

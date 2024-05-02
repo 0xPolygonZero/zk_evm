@@ -29,10 +29,10 @@ thiserror = "1.0.49"
 uint = "0.9.5"
 
 # plonky2-related dependencies
-plonky2 = "0.2.1"
+plonky2 = "0.2.2"
 plonky2_maybe_rayon = "0.2.0"
 plonky2_util = "0.2.0"
-starky = "0.3.0"
+starky = "0.4.0"
 
 
 [workspace.package]

@@ -47,12 +47,14 @@ pub(crate) struct KeccakSpongeColumnsView<T: Copy> {
     /// block.
     pub already_absorbed_bytes: T,
 
-    /// If this row represents a final block row, the `i`th entry should be 1 if
-    /// the final chunk of input has length `i` (in other words if `len -
-    /// already_absorbed == i`), otherwise 0.
+    /// Indicates whether the byte at position `i` is a padding byte.
+    ///
+    /// For a final block, the `i`th entry should be 1 for all bytes that have
+    /// been padded, including the first `1` byte, all subsequent `0` bytes
+    /// and the last byte as per the 10*1 padding scheme.
     ///
     /// If this row represents a full input block, this should contain all 0s.
-    pub is_final_input_len: [T; KECCAK_RATE_BYTES],
+    pub is_padding_byte: [T; KECCAK_RATE_BYTES],
 
     /// The initial rate part of the sponge, at the start of this step.
     pub original_rate_u32s: [T; KECCAK_RATE_U32S],
