@@ -77,6 +77,8 @@ where
     /// The block circuit, which verifies an aggregation root proof and an
     /// optional previous block proof.
     pub block: BlockCircuitData<F, C, D>,
+    /// The two-to-one block aggregation circuit, which verifies two unrelated block proofs.
+    pub two_to_one_block: TwoToOneAggCircuitData<F, C, D>,
     /// Holds chains of circuits for each table and for each initial
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
@@ -312,8 +314,8 @@ where
     C: GenericConfig<D, F = F>,
 {
     pub circuit: CircuitData<F, C, D>,
-    agg_proof0: ProofWithPublicInputsTarget<D>,
-    agg_proof1: ProofWithPublicInputsTarget<D>,
+    proof0: ProofWithPublicInputsTarget<D>,
+    proof1: ProofWithPublicInputsTarget<D>,
     pv0: PublicValuesTarget,
     pv1: PublicValuesTarget,
 }
@@ -330,8 +332,8 @@ where
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<()> {
         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
-        buffer.write_target_proof_with_public_inputs(&self.agg_proof0)?;
-        buffer.write_target_proof_with_public_inputs(&self.agg_proof1)?;
+        buffer.write_target_proof_with_public_inputs(&self.proof0)?;
+        buffer.write_target_proof_with_public_inputs(&self.proof1)?;
         self.pv0.to_buffer(buffer)?;
         self.pv1.to_buffer(buffer)?;
         Ok(())
@@ -349,8 +351,8 @@ where
         let pv1 = PublicValuesTarget::from_buffer(buffer)?;
         Ok(Self {
             circuit,
-            agg_proof0,
-            agg_proof1,
+            proof0: agg_proof0,
+            proof1: agg_proof1,
             pv0,
             pv1,
         })
@@ -431,6 +433,11 @@ where
         )?;
         let block =
             BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
+        let two_to_one_block = TwoToOneAggCircuitData::from_buffer(
+            &mut buffer,
+            gate_serializer,
+            generator_serializer,
+        )?;
 
         let by_table = match skip_tables {
             true => (0..NUM_TABLES)
@@ -467,6 +474,7 @@ where
             aggregation,
             two_to_one_aggregation,
             block,
+            two_to_one_block,
             by_table,
         })
     }
@@ -557,11 +565,13 @@ where
         let aggregation = Self::create_aggregation_circuit(&root);
         let two_to_one_aggregation = Self::create_two_to_one_agg_circuit(&aggregation);
         let block = Self::create_block_circuit(&aggregation);
+        let two_to_one_block = Self::create_two_to_one_block_circuit(&block);
         Self {
             root,
             aggregation,
             two_to_one_aggregation,
             block,
+            two_to_one_block,
             by_table,
         }
     }
@@ -1357,8 +1367,8 @@ where
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
         let mut inputs = PartialWitness::new();
 
-        inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.agg_proof0, proof0);
-        inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.agg_proof1, proof1);
+        inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.proof0, proof0);
+        inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.proof1, proof1);
 
         set_public_value_targets(&mut inputs, &self.two_to_one_aggregation.pv0, &pv0).map_err(
             |_| anyhow::Error::msg("Invalid conversion when setting public values targets."),
@@ -1548,6 +1558,49 @@ where
         )
     }
 
+    /// Create a two-to-one block aggregation proof, combining two unrelated block proofs
+    /// into a single one.
+    ///
+    /// # Arguments
+    ///
+    /// - `proof0`: the first block proof.
+    /// - `proof1`: the second block proof.
+    /// - `pv0`: the public values associated to first proof.
+    /// - `pv1`: the public values associated to second proof.
+    ///
+    /// # Outputs
+    ///
+    /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
+    pub fn prove_two_to_one_block(
+        &self,
+        proof0: &ProofWithPublicInputs<F, C, D>,
+        proof1: &ProofWithPublicInputs<F, C, D>,
+        pv0: PublicValues,
+        pv1: PublicValues,
+    ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+        let mut inputs = PartialWitness::new();
+
+        inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
+        inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
+
+        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0, &pv0).map_err(
+            |_| anyhow::Error::msg("Invalid conversion when setting public values targets."),
+        )?;
+        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1, &pv1).map_err(
+            |_| anyhow::Error::msg("Invalid conversion when setting public values targets."),
+        )?;
+
+        let proof = self.two_to_one_block.circuit.prove(inputs)?;
+        Ok(proof)
+    }
+
+    pub fn verify_two_to_one_block(
+        &self,
+        proof: &ProofWithPublicInputs<F, C, D>,
+    ) -> anyhow::Result<()> {
+        self.two_to_one_block.circuit.verify(proof.clone())
+    }
+
     fn create_two_to_one_agg_circuit(
         agg: &AggregationCircuitData<F, C, D>,
     ) -> TwoToOneAggCircuitData<F, C, D> {
@@ -1564,8 +1617,31 @@ where
 
         TwoToOneAggCircuitData {
             circuit,
-            agg_proof0,
-            agg_proof1,
+            proof0: agg_proof0,
+            proof1: agg_proof1,
+            pv0,
+            pv1,
+        }
+    }
+
+    fn create_two_to_one_block_circuit(
+        block: &BlockCircuitData<F, C, D>,
+    ) -> TwoToOneAggCircuitData<F, C, D> {
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+        let pv0 = add_virtual_public_values(&mut builder);
+        let pv1 = add_virtual_public_values(&mut builder);
+        let block_proof0 = builder.add_virtual_proof_with_pis(&block.circuit.common);
+        let block_proof1 = builder.add_virtual_proof_with_pis(&block.circuit.common);
+        let block_verifier_data = builder.constant_verifier_data(&block.circuit.verifier_only);
+        builder.verify_proof::<C>(&block_proof0, &block_verifier_data, &block.circuit.common);
+        builder.verify_proof::<C>(&block_proof1, &block_verifier_data, &block.circuit.common);
+
+        let circuit = builder.build::<C>();
+
+        TwoToOneAggCircuitData {
+            circuit,
+            proof0: block_proof0,
+            proof1: block_proof1,
             pv0,
             pv1,
         }
