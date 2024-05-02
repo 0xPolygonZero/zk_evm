@@ -22,10 +22,10 @@ use crate::{
     },
     compact::compact_mpt_processing::MptPartialTriePreImages,
     decoding::{TraceDecodingError, TraceDecodingResult, TraceParsingErrorReason, TrieType},
-    processed_block_trace_mpt::{
-        MptProcessedBlockTrace, NodesUsedByTxn, ProcessedSectionInfo, ProcessedSectionTxnInfo,
-        StateTrieWrites,
+    processed_block_trace::{
+        NodesUsedByTxn, ProcessedSectionInfo, ProcessedSectionTxnInfo, StateTrieWrites,
     },
+    processed_block_trace_mpt::MptProcessedBlockTrace,
     types::{
         HashedAccountAddr, HashedNodeAddr, HashedStorageAddr, HashedStorageAddrNibbles,
         OtherBlockData, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
