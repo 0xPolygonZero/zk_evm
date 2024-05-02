@@ -1,15 +1,15 @@
 use ethereum_types::U256;
 use plonky2::field::types::{Field, Sample};
 use plonky2::hash::hash_types::HashOut;
-use rand::{thread_rng, Rng, random};
 use rand::seq::SliceRandom;
+use rand::{random, thread_rng, Rng};
 
+use crate::bits::Bits;
+use crate::db::Db;
 use crate::{
     db::MemoryDb,
     smt::{hash_serialize, Key, Smt, F},
 };
-use crate::bits::Bits;
-use crate::db::Db;
 
 #[test]
 fn test_add_and_rem() {
@@ -303,12 +303,18 @@ fn test_set_hash_first_level() {
         count: 1,
         packed: U256::one(),
     };
-    hash_smt.set_hash(zero, HashOut {
-        elements: first_level.0[0..4].try_into().unwrap(),
-    });
-    hash_smt.set_hash(one, HashOut {
-        elements: first_level.0[4..8].try_into().unwrap(),
-    });
+    hash_smt.set_hash(
+        zero,
+        HashOut {
+            elements: first_level.0[0..4].try_into().unwrap(),
+        },
+    );
+    hash_smt.set_hash(
+        one,
+        HashOut {
+            elements: first_level.0[4..8].try_into().unwrap(),
+        },
+    );
 
     assert_eq!(smt.root, hash_smt.root);
 
@@ -322,9 +328,12 @@ fn test_set_hash_order() {
 
     let level = 4;
 
-    let mut khs = (1..1<<level)
+    let mut khs = (1..1 << level)
         .map(|i| {
-            let k = Bits { count: level, packed: i.into() };
+            let k = Bits {
+                count: level,
+                packed: i.into(),
+            };
             let hash = HashOut {
                 elements: F::rand_array(),
             };
@@ -334,7 +343,8 @@ fn test_set_hash_order() {
     for &(k, v) in &khs {
         smt.set_hash(k, v);
     }
-    let key = loop { // Forgive my laziness
+    let key = loop {
+        // Forgive my laziness
         let key = Key(F::rand_array());
         let keys = key.split();
         if (0..level).all(|i| !keys.get_bit(i)) {

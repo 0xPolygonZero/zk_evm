@@ -371,7 +371,11 @@ impl<D: Db> Smt<D> {
             }
         }
         level -= 1;
-        assert_eq!(r, Key([F::ZERO; 4]), "Tried to insert a hash node in a non-empty node.");
+        assert_eq!(
+            r,
+            Key([F::ZERO; 4]),
+            "Tried to insert a hash node in a non-empty node."
+        );
 
         if level >= 0 {
             let b = key.get_bit(level as usize) as usize * 4;
