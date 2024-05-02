@@ -1,6 +1,6 @@
 global precompile_kzg_peval:
-    // stack: address, retdest, new_ctx, (old stack)
-    %pop2
+    // stack: retdest, new_ctx, (old stack)
+    POP
     // stack: new_ctx, (old stack)
     %set_new_ctx_parent_pc(after_precompile)
     // stack: new_ctx, (old stack)
