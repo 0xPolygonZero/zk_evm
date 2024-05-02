@@ -342,6 +342,7 @@ impl<D: Db> Smt<D> {
         }
         self.root = new_root;
     }
+
     /// Delete the key in the SMT.
     pub fn delete(&mut self, key: Key) {
         self.kv_store.remove(&key);
