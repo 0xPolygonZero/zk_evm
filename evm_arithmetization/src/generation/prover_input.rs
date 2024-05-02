@@ -429,15 +429,29 @@ impl<F: Field> GenerationState<F> {
             ));
         }
 
-        let mut comm_bytes = [0u8; 64];
+        let mut comm_bytes = [0u8; 48];
+        comm_lo.to_big_endian(&mut comm_bytes[16..48]); // only actually 16 bytes
+        if comm_bytes[16..32] != [0; 16] {
+            // Commitments must fit in 48 bytes.
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "Commitment does not fit in 48 bytes.".to_string(),
+                ),
+            ));
+        }
         comm_hi.to_big_endian(&mut comm_bytes[0..32]);
-        comm_lo.to_big_endian(&mut comm_bytes[32..64]); // only actually 16 bits
 
-        let mut proof_bytes = [0u8; 64];
+        let mut proof_bytes = [0u8; 48];
+        proof_lo.to_big_endian(&mut proof_bytes[16..48]); // only actually 16 bytes
+        if proof_bytes[16..32] != [0; 16] {
+            // Proofs must fit in 48 bytes.
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure("Proof does not fit in 48 bytes.".to_string()),
+            ));
+        }
         proof_hi.to_big_endian(&mut proof_bytes[0..32]);
-        proof_lo.to_big_endian(&mut proof_bytes[32..64]); // only actually 16 bits
 
-        let mut expected_versioned_hash = keccak(&comm_bytes[16..64]).0;
+        let mut expected_versioned_hash = keccak(&comm_bytes).0;
         expected_versioned_hash[0] = KZG_VERSIONED_HASH;
 
         if versioned_hash != U256::from_big_endian(&expected_versioned_hash) {
@@ -475,21 +489,12 @@ impl<F: Field> GenerationState<F> {
     /// Verifies a KZG proof, i.e. that the commitment opens to y at z.
     fn verify_kzg_proof(
         &self,
-        comm_bytes: &[u8; 64],
+        comm_bytes: &[u8; 48],
         z: U256,
         y: U256,
-        proof_bytes: &[u8; 64],
+        proof_bytes: &[u8; 48],
     ) -> Result<U256, ProgramError> {
-        if comm_bytes[0..16] != [0; 16] || proof_bytes[0..16] != [0; 16] {
-            // Proofs and commitments must fit in 48 bytes to be deserializable.
-            return Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure(
-                    "Proof or commitment do not fit in 48 bytes.".to_string(),
-                ),
-            ));
-        }
-
-        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes[16..64].try_into().unwrap()) {
+        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes.try_into().unwrap()) {
             c
         } else {
             return Err(ProgramError::ProverInputError(
@@ -499,7 +504,7 @@ impl<F: Field> GenerationState<F> {
             ));
         };
 
-        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes[16..64].try_into().unwrap()) {
+        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes.try_into().unwrap()) {
             p
         } else {
             return Err(ProgramError::ProverInputError(

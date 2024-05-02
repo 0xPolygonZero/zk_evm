@@ -116,16 +116,16 @@ const KZG_PRECOMPILE_TEST_SEQUENCES: [TestSequence; 10] = [
 fn test_kzg_peval_precompile() -> Result<()> {
     for (bytes, is_correct) in KZG_PRECOMPILE_TEST_SEQUENCES.iter() {
         let commitment_bytes = bytes.0;
-        let comm_hi = U256::from_big_endian(&commitment_bytes[0..16]);
-        let comm_lo = U256::from_big_endian(&commitment_bytes[16..48]);
+        let comm_hi = U256::from_big_endian(&commitment_bytes[0..32]);
+        let comm_lo = U256::from_big_endian(&commitment_bytes[32..48]);
         let mut versioned_hash = keccak(commitment_bytes).0;
         versioned_hash[0] = KZG_VERSIONED_HASH;
         let versioned_hash = U256::from_big_endian(&versioned_hash);
         let z = U256::from_big_endian(&bytes.1);
         let y = U256::from_big_endian(&bytes.2);
         let proof_bytes = bytes.3;
-        let proof_hi = U256::from_big_endian(&proof_bytes[0..16]);
-        let proof_lo = U256::from_big_endian(&proof_bytes[16..48]);
+        let proof_hi = U256::from_big_endian(&proof_bytes[0..32]);
+        let proof_lo = U256::from_big_endian(&proof_bytes[32..48]);
 
         let mut stack = vec![
             versioned_hash,
