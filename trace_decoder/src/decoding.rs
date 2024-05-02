@@ -7,9 +7,24 @@ use thiserror::Error;
 
 use crate::{
     compact::compact_processing_common::CompactParsingError,
-    types::{HashedAccountAddr, TrieRootHash},
+    types::{HashedAccountAddr, StorageVal, TrieRootHash},
     utils::{hash, optional_field, optional_field_hex},
 };
+
+pub(crate) trait ProcessedBlockTraceDecode {
+    type CurrBlockTries;
+    type TrieInputs;
+    type AccountRlp;
+
+    fn delete_node(h_addr: &Nibbles);
+
+    fn write_account_data(h_addr: HashedAccountAddr, data: Self::AccountRlp);
+    fn delete_account(h_addr: HashedAccountAddr);
+
+    fn set_storage_slot(h_addr: HashedAccountAddr, h_slot: HashedAccountAddr, val: StorageVal);
+
+    fn create_trie_subsets(tries: &Self::CurrBlockTries) -> Self::TrieInputs;
+}
 
 pub(crate) type TraceDecodingResult<T> = Result<T, Box<TraceDecodingError>>;
 
