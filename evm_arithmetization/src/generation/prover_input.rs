@@ -451,7 +451,7 @@ impl<F: Field> GenerationState<F> {
         }
         proof_hi.to_big_endian(&mut proof_bytes[0..32]);
 
-        let mut expected_versioned_hash = keccak(&comm_bytes).0;
+        let mut expected_versioned_hash = keccak(comm_bytes).0;
         expected_versioned_hash[0] = KZG_VERSIONED_HASH;
 
         if versioned_hash != U256::from_big_endian(&expected_versioned_hash) {
@@ -494,7 +494,7 @@ impl<F: Field> GenerationState<F> {
         y: U256,
         proof_bytes: &[u8; 48],
     ) -> Result<U256, ProgramError> {
-        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes.try_into().unwrap()) {
+        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes) {
             c
         } else {
             return Err(ProgramError::ProverInputError(
@@ -504,7 +504,7 @@ impl<F: Field> GenerationState<F> {
             ));
         };
 
-        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes.try_into().unwrap()) {
+        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes) {
             p
         } else {
             return Err(ProgramError::ProverInputError(
