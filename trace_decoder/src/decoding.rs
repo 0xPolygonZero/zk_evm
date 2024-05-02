@@ -26,6 +26,163 @@ pub(crate) trait ProcessedBlockTraceDecode {
     fn create_trie_subsets(tries: &Self::CurrBlockTries) -> Self::TrieInputs;
 }
 
+// TODO: Make this also work with SMT decoding...
+/// Represents errors that can occur during the processing of a block trace.
+///
+/// This struct is intended to encapsulate various kinds of errors that might
+/// arise when parsing, validating, or otherwise processing the trace data of
+/// blockchain blocks. It could include issues like malformed trace data,
+/// inconsistencies found during processing, or any other condition that
+/// prevents successful completion of the trace processing task.
+#[derive(Clone, Debug)]
+pub struct TraceParsingError {
+    block_num: Option<U256>,
+    block_chain_id: Option<U256>,
+    txn_idx: Option<usize>,
+    addr: Option<Address>,
+    h_addr: Option<H256>,
+    slot: Option<U512>,
+    slot_value: Option<U512>,
+    reason: TraceParsingErrorReason, // The original error type
+}
+
+impl Display for TraceParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let h_slot = self.slot.map(|slot| {
+            let mut buf = [0u8; 64];
+            slot.to_big_endian(&mut buf);
+            hash(&buf)
+        });
+        write!(
+            f,
+            "Error processing trace: {}\n{}{}{}{}{}{}{}{}",
+            self.reason,
+            optional_field("Block num", self.block_num),
+            optional_field("Block chain id", self.block_chain_id),
+            optional_field("Txn idx", self.txn_idx),
+            optional_field("Address", self.addr.as_ref()),
+            optional_field("Hashed address", self.h_addr.as_ref()),
+            optional_field_hex("Slot", self.slot),
+            optional_field("Hashed Slot", h_slot),
+            optional_field_hex("Slot value", self.slot_value),
+        )
+    }
+}
+
+impl std::error::Error for TraceParsingError {}
+
+impl TraceParsingError {
+    /// Function to create a new TraceParsingError with mandatory fields
+    pub(crate) fn new(reason: TraceParsingErrorReason) -> Self {
+        Self {
+            block_num: None,
+            block_chain_id: None,
+            txn_idx: None,
+            addr: None,
+            h_addr: None,
+            slot: None,
+            slot_value: None,
+            reason,
+        }
+    }
+
+    /// Builder method to set block_num
+    pub(crate) fn block_num(&mut self, block_num: U256) -> &mut Self {
+        self.block_num = Some(block_num);
+        self
+    }
+
+    /// Builder method to set block_chain_id
+    pub(crate) fn block_chain_id(&mut self, block_chain_id: U256) -> &mut Self {
+        self.block_chain_id = Some(block_chain_id);
+        self
+    }
+
+    /// Builder method to set txn_idx
+    pub fn txn_idx(&mut self, txn_idx: usize) -> &mut Self {
+        self.txn_idx = Some(txn_idx);
+        self
+    }
+
+    /// Builder method to set addr
+    pub fn addr(&mut self, addr: Address) -> &mut Self {
+        self.addr = Some(addr);
+        self
+    }
+
+    /// Builder method to set h_addr
+    pub fn h_addr(&mut self, h_addr: H256) -> &mut Self {
+        self.h_addr = Some(h_addr);
+        self
+    }
+
+    /// Builder method to set slot
+    pub fn slot(&mut self, slot: U512) -> &mut Self {
+        self.slot = Some(slot);
+        self
+    }
+
+    /// Builder method to set slot_value
+    pub fn slot_value(&mut self, slot_value: U512) -> &mut Self {
+        self.slot_value = Some(slot_value);
+        self
+    }
+}
+
+/// An error reason for trie parsing.
+#[derive(Clone, Debug, Error)]
+pub enum TraceParsingErrorReason {
+    /// Failure to decode an Ethereum [Account].
+    #[error("Failed to decode RLP bytes ({0}) as an Ethereum account due to the error: {1}")]
+    AccountDecode(String, String),
+
+    /// Failure due to trying to access or delete a storage trie missing
+    /// from the base trie.
+    #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
+    MissingAccountStorageTrie(HashedAccountAddr),
+
+    /// Failure due to trying to access a non-existent key in the trie.
+    #[error("Tried accessing a non-existent key ({1:x}) in the {0} trie (root hash: {2:x})")]
+    NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
+
+    /// Failure due to missing keys when creating a sub-partial trie.
+    #[error("Missing key {0:x} when creating sub-partial tries (Trie type: {1})")]
+    MissingKeysCreatingSubPartialTrie(Nibbles, TrieType),
+
+    /// Failure due to trying to withdraw from a missing account
+    #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
+    MissingWithdrawalAccount(Address, HashedAccountAddr, U256),
+
+    /// Failure due to a trie operation error.
+    #[error("Trie operation error: {0}")]
+    TrieOpError(TrieOpError),
+
+    /// Failure due to a compact parsing error.
+    #[error("Compact parsing error: {0}")]
+    CompactParsingError(CompactParsingError),
+}
+
+impl From<TrieOpError> for TraceDecodingError {
+    fn from(err: TrieOpError) -> Self {
+        // Convert TrieOpError into TraceParsingError
+        TraceDecodingError::new(TraceParsingErrorReason::TrieOpError(err))
+    }
+}
+
+impl From<CompactParsingError> for TraceDecodingError {
+    fn from(err: CompactParsingError) -> Self {
+        // Convert CompactParsingError into TraceParsingError
+        TraceDecodingError::new(TraceParsingErrorReason::CompactParsingError(err))
+    }
+}
+
+impl From<TrieOpError> for TraceParsingError {
+    fn from(err: TrieOpError) -> Self {
+        // Convert TrieOpError into TraceParsingError
+        TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err))
+    }
+}
+
 pub(crate) type TraceDecodingResult<T> = Result<T, Box<TraceDecodingError>>;
 
 /// An enum to cover all Ethereum trie types (see https://ethereum.github.io/yellowpaper/paper.pdf for details).
@@ -153,52 +310,5 @@ impl TraceDecodingError {
     pub(crate) fn slot_value(&mut self, slot_value: U512) -> &mut Self {
         self.slot_value = Some(slot_value);
         self
-    }
-}
-
-/// An error reason for trie parsing.
-#[derive(Clone, Debug, Error)]
-pub enum TraceParsingErrorReason {
-    /// Failure to decode an Ethereum [Account].
-    #[error("Failed to decode RLP bytes ({0}) as an Ethereum account due to the error: {1}")]
-    AccountDecode(String, String),
-
-    /// Failure due to trying to access or delete a storage trie missing
-    /// from the base trie.
-    #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
-    MissingAccountStorageTrie(HashedAccountAddr),
-
-    /// Failure due to trying to access a non-existent key in the trie.
-    #[error("Tried accessing a non-existent key ({1:x}) in the {0} trie (root hash: {2:x})")]
-    NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
-
-    /// Failure due to missing keys when creating a sub-partial trie.
-    #[error("Missing key {0:x} when creating sub-partial tries (Trie type: {1})")]
-    MissingKeysCreatingSubPartialTrie(Nibbles, TrieType),
-
-    /// Failure due to trying to withdraw from a missing account
-    #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
-    MissingWithdrawalAccount(Address, HashedAccountAddr, U256),
-
-    /// Failure due to a trie operation error.
-    #[error("Trie operation error: {0}")]
-    TrieOpError(TrieOpError),
-
-    /// Failure due to a compact parsing error.
-    #[error("Compact parsing error: {0}")]
-    CompactParsingError(CompactParsingError),
-}
-
-impl From<TrieOpError> for TraceDecodingError {
-    fn from(err: TrieOpError) -> Self {
-        // Convert TrieOpError into TraceParsingError
-        TraceDecodingError::new(TraceParsingErrorReason::TrieOpError(err))
-    }
-}
-
-impl From<CompactParsingError> for TraceDecodingError {
-    fn from(err: CompactParsingError) -> Self {
-        // Convert CompactParsingError into TraceParsingError
-        TraceDecodingError::new(TraceParsingErrorReason::CompactParsingError(err))
     }
 }

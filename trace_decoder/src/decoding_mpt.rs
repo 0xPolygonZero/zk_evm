@@ -21,7 +21,10 @@ use crate::{
         MptAccountRlp, MptExtraBlockData, MptGenerationInputs, MptTrieInputs, MptTrieRoots,
     },
     compact::compact_mpt_processing::MptPartialTriePreImages,
-    decoding::{TraceDecodingError, TraceDecodingResult, TraceParsingErrorReason, TrieType},
+    decoding::{
+        TraceDecodingError, TraceDecodingResult, TraceParsingError, TraceParsingErrorReason,
+        TrieType,
+    },
     processed_block_trace::{
         NodesUsedByTxn, ProcessedSectionInfo, ProcessedSectionTxnInfo, StateTrieWrites,
     },
@@ -33,6 +36,9 @@ use crate::{
     },
     utils::{hash, update_val_if_some},
 };
+
+// TODO: Make a final decision if we need a separate error for MPT...
+pub(crate) type MptTraceParsingError = TraceParsingError;
 
 impl MptProcessedBlockTrace {
     pub(crate) fn into_proof_gen_ir(
