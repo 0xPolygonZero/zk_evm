@@ -78,6 +78,7 @@ pub fn generate_segment_agg_proof(
     p_state: &ProverState,
     lhs_child: &SegmentAggregatableProof,
     rhs_child: &SegmentAggregatableProof,
+    rhs_is_dummy: bool,
 ) -> ProofGenResult<GeneratedSegmentAggProof> {
     let (intern, p_vals) = p_state
         .state
@@ -85,6 +86,7 @@ pub fn generate_segment_agg_proof(
             lhs_child.is_agg(),
             lhs_child.intern(),
             lhs_child.public_values(),
+            rhs_is_dummy,
             rhs_child.is_agg(),
             rhs_child.intern(),
             rhs_child.public_values(),

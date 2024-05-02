@@ -17,7 +17,6 @@ use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
-use log::info;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
@@ -492,6 +491,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             false,
             &segment_proofs_data_first[0].proof_with_pis,
             segment_proofs_data_first[0].public_values.clone(),
+            true,
             false,
             &segment_proofs_data_first[1].proof_with_pis,
             segment_proofs_data_first[1].public_values.clone(),
@@ -643,6 +643,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             false,
             &segment_proofs_data_second[0].proof_with_pis,
             segment_proofs_data_second[0].public_values.clone(),
+            true,
             false,
             &segment_proofs_data_second[1].proof_with_pis,
             segment_proofs_data_second[1].public_values.clone(),
@@ -731,6 +732,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         false,
         &segment_proofs_data[0].proof_with_pis,
         segment_proofs_data[0].public_values.clone(),
+        false,
         false,
         &segment_proofs_data[1].proof_with_pis,
         segment_proofs_data[1].public_values.clone(),
