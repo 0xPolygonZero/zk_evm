@@ -1,6 +1,6 @@
 global precompile_blake2_f:
-    // stack: retdest, new_ctx, (old stack)
-    POP
+    // stack: address, retdest, new_ctx, (old stack)
+    %pop2
     // stack: new_ctx, (old stack)
     %set_new_ctx_parent_pc(after_precompile)
     // stack: new_ctx, (old stack)

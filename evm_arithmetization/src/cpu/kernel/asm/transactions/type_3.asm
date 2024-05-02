@@ -119,6 +119,9 @@ after_serializing_access_list:
             rlp_addr, rlp_start, retdest)
     %jump(memcpy_bytes)
 after_serializing_blob_versioned_hashes:
+    // stack: rlp_addr, rlp_start, retdest
+    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN) ADD
+    // stack: rlp_addr, rlp_start, retdest
     %prepend_rlp_list_prefix
     // stack: prefix_start_pos, rlp_len, retdest
 
