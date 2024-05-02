@@ -1,6 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use std::collections::HashMap;
+
 use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::types::{Field, PrimeField64};
@@ -8,7 +9,7 @@ use plonky2::hash::poseidon::{Poseidon, PoseidonHash};
 use plonky2::plonk::config::Hasher;
 
 use crate::bits::Bits;
-use crate::db::{Db};
+use crate::db::Db;
 use crate::utils::{
     f2limbs, get_unique_sibling, hash0, hash_key_hash, hashout2u, key2u, limbs2f, u2h, u2k,
 };
@@ -131,12 +132,20 @@ impl<D: Db> Smt<D> {
                 let found_val = limbs2f(found_val_a);
                 let found_key = Key::join(acc_key, found_rem_key);
                 return if found_key == key {
-                    assert_eq!(found_val, self.kv_store.get(&key).copied().unwrap_or_default());
+                    assert_eq!(
+                        found_val,
+                        self.kv_store.get(&key).copied().unwrap_or_default()
+                    );
                     found_val
                 } else {
-                    assert!(self.kv_store.get(&key).copied().unwrap_or_default().is_zero());
+                    assert!(self
+                        .kv_store
+                        .get(&key)
+                        .copied()
+                        .unwrap_or_default()
+                        .is_zero());
                     U256::zero()
-                }
+                };
             } else {
                 let b = keys.get_bit(level as usize);
                 r = Key(sibling.0[b as usize * 4..(b as usize + 1) * 4]
@@ -156,7 +165,7 @@ impl<D: Db> Smt<D> {
         if value.is_zero() {
             self.kv_store.remove(&key);
         } else {
-            self.kv_store.insert(key,value);
+            self.kv_store.insert(key, value);
         }
         let mut r = Key(self.root.elements);
         let mut new_root = self.root;
