@@ -1486,41 +1486,6 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<ProverOutputData<F, C, D>> {
-        // let proof =
-        // if segment_data.is_dummy() {
-        //     let dummy_proof = Self::dummy_dummy_proof()?;
-        //     let trie_roots_before = TrieRoots {
-        //         state_root: generation_inputs.tries.state_trie.hash(),
-        //         receipts_root: generation_inputs.tries.receipts_trie.hash(),
-        //         transactions_root: generation_inputs.tries.transactions_trie.hash(),
-        //     };
-        //     let nb_txn = match generation_inputs.signed_txn {
-        //         Some(_) => 1,
-        //         None => 0,
-        //     };
-        //     ProverOutputData {
-        //         proof_with_pis: dummy_proof,
-        //         public_values: PublicValues {
-        //             is_dummy: U256::one(),
-        //             trie_roots_before,
-        //             trie_roots_after: generation_inputs.trie_roots_after.clone(),
-        //             block_hashes: generation_inputs.block_hashes.clone(),
-        //             block_metadata: generation_inputs.block_metadata.clone(),
-        //             registers_before: segment_data.registers_before.into(),
-        //             registers_after: segment_data.registers_after.into(),
-        //             mem_before: MemCap::default(),
-        //             mem_after: MemCap::default(),
-        //             extra_block_data: ExtraBlockData {
-        //                 checkpoint_state_trie_root:
-        // generation_inputs.checkpoint_state_trie_root,
-        // txn_number_before: generation_inputs.txn_number_before,
-        // txn_number_after: generation_inputs.txn_number_before + nb_txn,
-        //                 gas_used_before: generation_inputs.gas_used_before,
-        //                 gas_used_after: generation_inputs.gas_used_after,
-        //             },
-        //         },
-        //     }
-        // } else {
         let all_proof = prove::<F, C, D>(
             all_stark,
             config,
