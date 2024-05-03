@@ -375,7 +375,7 @@ fn test_serialize_and_prune() {
 
     for _ in 0..128 {
         let k = Key(F::rand_array());
-        let v = U256(thread_rng().gen());
+        let v = U256(random());
         smt.set(k, v);
     }
 
@@ -393,7 +393,6 @@ fn test_serialize_and_prune() {
 
     let pruned_ser = smt.serialize_and_prune(&subset);
     assert_eq!(hash_serialize(&pruned_ser), smt.root);
-
     assert!(pruned_ser.len() <= ser.len());
 
     let trivial_ser = smt.serialize_and_prune::<Key, Vec<_>>(vec![]);
