@@ -102,7 +102,7 @@ fn test_init_exc_stop() {
     interpreter.clock = 0;
 
     // Set the program counter and `is_kernel` at the end of the execution. They
-    // have offsets 6 and 7 resepectively in segment `RegistersStates`.
+    // have offsets 6 and 7 respectively in segment `RegistersStates`.
     let regs_to_set = [
         (
             MemoryAddress {
@@ -125,11 +125,13 @@ fn test_init_exc_stop() {
 
     interpreter.run().expect("Running dummy exc_stop failed.");
 
-    // The "-1" comes from the fact that we stop 1 cycle before the max, to allow
-    // for one padding row, which is needed for CPU STARK.
+    // The "-2" comes from the fact that:
+    // - we stop 1 cycle before the max, to allow for one padding row, which is
+    //   needed for CPU STARK.
+    // - we normally need one additional cycle to enter `exc_stop`.
     assert_eq!(
         interpreter.get_clock(),
-        NUM_EXTRA_CYCLES_AFTER - 1,
+        NUM_EXTRA_CYCLES_AFTER - 2,
         "NUM_EXTRA_CYCLES_AFTER is set incorrectly."
     );
 }

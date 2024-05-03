@@ -87,10 +87,8 @@ pub(crate) trait State<F: Field> {
     /// Checks whether we have reached the `halt` label in kernel mode.
     fn at_halt(&self) -> bool {
         let halt = KERNEL.global_labels["halt"];
-        let halt_final = KERNEL.global_labels["halt_final"];
         let registers = self.get_registers();
-        registers.is_kernel
-            && (registers.program_counter == halt || registers.program_counter == halt_final)
+        registers.is_kernel && registers.program_counter == halt
     }
 
     /// Returns the context in which the jumpdest analysis should end.

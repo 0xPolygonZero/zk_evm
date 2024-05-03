@@ -4,7 +4,12 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
-use plonky2::util::timing::TimingTree;
+use hashbrown::HashMap;
+use plonky2::{
+    gates::noop::NoopGate,
+    plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
+    util::timing::TimingTree,
+};
 
 use crate::{
     proof_types::{
@@ -12,6 +17,7 @@ use crate::{
         SegmentAggregatableProof, TxnAggregatableProof,
     },
     prover_state::ProverState,
+    types::{Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
 
 /// A type alias for `Result<T, ProofGenError>`.
@@ -147,4 +153,13 @@ pub fn generate_block_proof(
     })
 }
 
-pub use plonky2::recursion::dummy_circuit::dummy_proof;
+/// Generates a dummy proof for a dummy circuit doing nothing.
+/// This is useful for testing purposes only.
+pub fn dummy_proof() -> ProofGenResult<PlonkyProofIntern> {
+    let mut builder = CircuitBuilder::<Field, EXTENSION_DEGREE>::new(CircuitConfig::default());
+    builder.add_gate(NoopGate, vec![]);
+    let circuit_data = builder.build::<_>();
+
+    plonky2::recursion::dummy_circuit::dummy_proof(&circuit_data, HashMap::default())
+        .map_err(|e| ProofGenError(e.to_string()))
+}
