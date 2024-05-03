@@ -11,16 +11,18 @@ use crate::{
 
 pub(crate) type SmtProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceSmtSpec>;
 
+/// Smt processed pre-image.
 #[derive(Clone, Debug)]
-pub(crate) struct SmtProcessedBlockTracePreImages {}
+pub struct SmtProcessedBlockTracePreImage {}
 
 #[derive(Debug)]
 pub(crate) struct ProcedBlockTraceSmtSpec {}
 
 impl BlockTrace {
-    pub(crate) fn into_proof_gen_ir(
+    /// Process the block trace into SMT IR.
+    pub fn into_proof_gen_smt_ir(
         self,
-        other_data: OtherBlockData,
+        _other_data: OtherBlockData,
     ) -> SmtTraceParsingResult<Vec<SmtGenerationInputs>> {
         todo!()
     }

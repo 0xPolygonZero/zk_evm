@@ -137,7 +137,7 @@ pub mod processed_block_trace_mpt;
 /// it is easier to turn the block transactions into IRs.
 pub mod processed_block_trace_smt;
 
-mod protocol_processing;
+pub mod protocol_processing;
 
 pub mod trace_protocol;
 /// Defines multiple types used in the other modules.

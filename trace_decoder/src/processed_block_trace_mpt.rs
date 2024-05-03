@@ -39,7 +39,7 @@ pub(crate) struct ProcedBlockTraceMptSpec {
 impl BlockTrace {
     /// Processes and returns the [GenerationInputs] for all transactions in the
     /// block.
-    pub fn mpt_into_proof_gen_ir<F>(
+    pub fn into_proof_gen_mpt_ir<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
@@ -148,8 +148,9 @@ impl BlockTrace {
     }
 }
 
+/// Mpt processed pre-image.
 #[derive(Clone, Debug)]
-pub(crate) struct MptProcessedBlockTracePreImages {
+pub struct MptProcessedBlockTracePreImages {
     pub(crate) tries: MptPartialTriePreImages,
     pub(crate) extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
 }
@@ -193,6 +194,7 @@ where
 
 #[derive(Debug)]
 pub(crate) enum ProcessedSectionInfo {
+    #[allow(dead_code)]
     Continuations(Vec<ProcessedContinuationInfo>),
     Txns(Vec<ProcessedSectionTxnInfo>),
 }

@@ -36,11 +36,6 @@ create_aliased_type!(
     evm_arithmetization_mpt::generation::GenerationInputs
 );
 create_aliased_type!(
-    MptLegacyReceiptRlp,
-    evm_arithmetization_mpt::generation::mpt::LegacyReceiptRlp
-);
-create_aliased_type!(MptProofGenIR, evm_arithmetization_mpt::GenerationInputs);
-create_aliased_type!(
     MptTrieInputs,
     evm_arithmetization_mpt::generation::TrieInputs
 );

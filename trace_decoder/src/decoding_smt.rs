@@ -16,7 +16,7 @@ pub enum SmtTraceParsingError {}
 impl SmtProcessedBlockTrace {
     pub(crate) fn into_proof_gen_ir(
         self,
-        other_data: OtherBlockData,
+        _other_data: OtherBlockData,
     ) -> SmtTraceParsingResult<Vec<SmtGenerationInputs>> {
         todo!()
     }
