@@ -27,7 +27,7 @@ use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::plonk::prover::prove as prove_plonky2;
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::{self, cyclic_base_proof, dummy_circuit, dummy_proof};
+use plonky2::recursion::dummy_circuit::{cyclic_base_proof, dummy_circuit, dummy_proof};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
@@ -878,6 +878,11 @@ where
         );
         TrieRootsTarget::connect(
             &mut builder,
+            public_values.trie_roots_before,
+            rhs_pv.trie_roots_before,
+        );
+        TrieRootsTarget::connect(
+            &mut builder,
             lhs_pv.trie_roots_after,
             rhs_pv.trie_roots_after,
         );
@@ -950,12 +955,6 @@ where
         builder.assert_zero(segment_assert);
 
         // If the rhs is a dummy, then its PV after must be equal to its PV before.
-        TrieRootsTarget::assert_equal_if(
-            &mut builder,
-            rhs_segment.is_dummy,
-            rhs_pv.trie_roots_before,
-            rhs_pv.trie_roots_after,
-        );
         RegistersDataTarget::assert_equal_if(
             &mut builder,
             rhs_segment.is_dummy,
@@ -1541,27 +1540,10 @@ where
 
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
-        let proof = ProverOutputData {
+        Ok(ProverOutputData {
             proof_with_pis: root_proof,
             public_values: all_proof.public_values,
-            // }
-        };
-        Ok(proof)
-    }
-
-    fn dummy_dummy_proof() -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
-        let mut builder = CircuitBuilder::new(CircuitConfig::default());
-        builder.add_gate(NoopGate, vec![]);
-        let circuit_data = builder.build::<_>();
-
-        let inputs = PartialWitness::new();
-
-        prove_plonky2(
-            &circuit_data.prover_only,
-            &circuit_data.common,
-            inputs,
-            &mut TimingTree::default(),
-        )
+        })
     }
 
     /// Returns a proof for each segment that is part of a full transaction
@@ -1992,10 +1974,7 @@ where
             );
             if is_dummy {
                 let mut dummy_pis = proof.public_inputs.clone();
-                // We must change trie roots before, registers before and memory before.
-                // Trie roots before := Trie roots after
-                dummy_pis.copy_within(TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2, 0);
-                // Registers before := Registers after
+                // We must change the registers before and memory before.
                 dummy_pis.copy_within(
                     TrieRootsTarget::SIZE * 2
                         + BlockMetadataTarget::SIZE
