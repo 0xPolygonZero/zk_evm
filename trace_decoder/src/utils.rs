@@ -1,6 +1,6 @@
 use ethereum_types::H256;
 use keccak_hash::keccak;
-use log::debug;
+use log::trace;
 use mpt_trie::{
     partial_trie::{HashedPartialTrie, PartialTrie},
     trie_ops::ValOrHash,
@@ -21,7 +21,7 @@ pub(crate) fn update_val_if_some<T>(target: &mut T, opt: Option<T>) {
 // TODO: Move under a feature flag...
 pub(crate) fn print_value_and_hash_nodes_of_trie(trie: &HashedPartialTrie) {
     let trie_elems = print_value_and_hash_nodes_of_trie_common(trie);
-    println!("State trie {:#?}", trie_elems);
+    trace!("State trie {:#?}", trie_elems);
 }
 
 // TODO: Move under a feature flag...
@@ -30,7 +30,7 @@ pub(crate) fn print_value_and_hash_nodes_of_storage_trie(
     trie: &HashedPartialTrie,
 ) {
     let trie_elems = print_value_and_hash_nodes_of_trie_common(trie);
-    debug!("Storage trie for {:x}: {:#?}", s_trie_addr, trie_elems);
+    trace!("Storage trie for {:x}: {:#?}", s_trie_addr, trie_elems);
 }
 
 // TODO: Move under a feature flag...
