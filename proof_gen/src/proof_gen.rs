@@ -4,12 +4,7 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
-use plonky2::{
-    gates::noop::NoopGate,
-    iop::witness::PartialWitness,
-    plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
-    util::timing::TimingTree,
-};
+use plonky2::util::timing::TimingTree;
 
 use crate::{
     proof_types::{
@@ -17,7 +12,6 @@ use crate::{
         SegmentAggregatableProof, TxnAggregatableProof,
     },
     prover_state::ProverState,
-    types::{Config, Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
 
 /// A type alias for `Result<T, ProofGenError>`.
@@ -153,20 +147,4 @@ pub fn generate_block_proof(
     })
 }
 
-/// Generates a dummy proof for a dummy circuit doing nothing.
-/// This is useful for testing purposes only.
-pub fn dummy_proof() -> ProofGenResult<PlonkyProofIntern> {
-    let mut builder = CircuitBuilder::<Field, EXTENSION_DEGREE>::new(CircuitConfig::default());
-    builder.add_gate(NoopGate, vec![]);
-    let circuit_data = builder.build::<_>();
-
-    let inputs = PartialWitness::new();
-
-    plonky2::plonk::prover::prove::<Field, Config, EXTENSION_DEGREE>(
-        &circuit_data.prover_only,
-        &circuit_data.common,
-        inputs,
-        &mut TimingTree::default(),
-    )
-    .map_err(|e| ProofGenError(e.to_string()))
-}
+pub use plonky2::recursion::dummy_circuit::dummy_proof;
