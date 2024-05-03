@@ -998,14 +998,19 @@ fn modexp(x: U256, e: U256, n: U256) -> Result<U256, ProgramError> {
 
 /// See EIP-4844: <https://eips.ethereum.org/EIPS/eip-4844#helpers>.
 fn fake_exponential(factor: U256, numerator: U256, denominator: U256) -> U256 {
+    if factor.is_zero() || numerator.is_zero() {
+        return factor;
+    }
+
     let mut i = 1;
     let mut output = U256::zero();
     let mut numerator_accum = factor * denominator;
     while !numerator_accum.is_zero() {
+        println!("{:?} - {:?} - {:?}", output, numerator_accum, numerator);
         output += numerator_accum;
-        numerator_accum *= numerator; // (denominator * i)
+        numerator_accum *= numerator / (denominator * i);
         i += 1;
     }
 
-    output // denominator
+    output / denominator
 }
