@@ -1006,7 +1006,6 @@ fn fake_exponential(factor: U256, numerator: U256, denominator: U256) -> U256 {
     let mut output = U256::zero();
     let mut numerator_accum = factor * denominator;
     while !numerator_accum.is_zero() {
-        println!("{:?} - {:?} - {:?}", output, numerator_accum, numerator);
         output += numerator_accum;
         numerator_accum *= numerator / (denominator * i);
         i += 1;
