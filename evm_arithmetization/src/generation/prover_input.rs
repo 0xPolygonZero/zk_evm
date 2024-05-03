@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
-    BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BLOB_BASE_FEE,
+    BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BASE_FEE_PER_BLOB_GAS,
     POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
@@ -151,7 +151,7 @@ impl<F: Field> GenerationState<F> {
     fn run_blobbasefee(&mut self) -> Result<U256, ProgramError> {
         let excess_blob_gas = self.inputs.block_metadata.block_excess_blob_gas;
         Ok(fake_exponential(
-            MIN_BLOB_BASE_FEE,
+            MIN_BASE_FEE_PER_BLOB_GAS,
             excess_blob_gas,
             BLOB_BASE_FEE_UPDATE_FRACTION,
         ))
@@ -998,14 +998,18 @@ fn modexp(x: U256, e: U256, n: U256) -> Result<U256, ProgramError> {
 
 /// See EIP-4844: <https://eips.ethereum.org/EIPS/eip-4844#helpers>.
 fn fake_exponential(factor: U256, numerator: U256, denominator: U256) -> U256 {
+    if factor.is_zero() || numerator.is_zero() {
+        return factor;
+    }
+
     let mut i = 1;
     let mut output = U256::zero();
     let mut numerator_accum = factor * denominator;
     while !numerator_accum.is_zero() {
         output += numerator_accum;
-        numerator_accum *= numerator; // (denominator * i)
+        numerator_accum *= numerator / (denominator * i);
         i += 1;
     }
 
-    output // denominator
+    output / denominator
 }
