@@ -401,10 +401,11 @@ impl<D: Db> Smt<D> {
         self.root = new_root;
     }
 
-    /// Serialize the SMT into a vector of U256.
+    /// Serialize and prune the SMT into a vector of U256.
     /// Starts with a [0, 0] for convenience, that way `ptr=0` is a canonical
     /// empty node. Therefore the root of the SMT is at `ptr=2`.
-    /// Serialization rules:
+    /// `keys` is a list of keys whose prefixes will not be hashed-out in the
+    /// serialization. Serialization rules:
     /// ```pseudocode
     /// serialize( HashNode { h } ) = [HASH_TYPE, h]
     /// serialize( InternalNode { left, right } ) = [INTERNAL_TYPE, serialize(left).ptr, serialize(right).ptr]
@@ -416,7 +417,7 @@ impl<D: Db> Smt<D> {
     ) -> Vec<U256> {
         let mut v = vec![U256::zero(); 2]; // For empty hash node.
         let key = Key(self.root.elements);
-        // Include all keys in the SMT.
+
         let mut keys_to_include = HashSet::new();
         for key in keys.into_iter() {
             let mut bits = key.borrow().split();
@@ -428,13 +429,16 @@ impl<D: Db> Smt<D> {
                 bits.pop_next_bit();
             }
         }
+
         serialize(self, key, &mut v, Bits::empty(), &keys_to_include);
         if v.len() == 2 {
             v.extend([U256::zero(); 2]);
         }
         v
     }
+
     pub fn serialize(&self) -> Vec<U256> {
+        // Include all keys.
         self.serialize_and_prune(self.kv_store.keys())
     }
 }
