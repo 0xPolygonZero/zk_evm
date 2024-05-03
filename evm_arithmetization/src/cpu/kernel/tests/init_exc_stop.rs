@@ -101,6 +101,8 @@ fn test_init_exc_stop() {
     interpreter.set_is_kernel(true);
     interpreter.clock = 0;
 
+    // Set the program counter and `is_kernel` at the end of the execution. They
+    // have offsets 6 and 7 resepectively in segment `RegistersStates`.
     let regs_to_set = [
         (
             MemoryAddress {

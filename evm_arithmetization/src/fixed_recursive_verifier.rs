@@ -1977,44 +1977,7 @@ where
                 proof,
             );
             if is_dummy {
-                let mut dummy_pis = proof.public_inputs.clone();
-                // We must change the registers before and memory before.
-                dummy_pis.copy_within(
-                    TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE
-                        ..TrieRootsTarget::SIZE * 2
-                            + BlockMetadataTarget::SIZE
-                            + BlockHashesTarget::SIZE
-                            + ExtraBlockDataTarget::SIZE
-                            + RegistersDataTarget::SIZE * 2,
-                    TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE,
-                );
-                // Mem before := Mem after
-                dummy_pis.copy_within(
-                    TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE * 2
-                        + len_mem_cap * NUM_HASH_OUT_ELTS
-                        ..TrieRootsTarget::SIZE * 2
-                            + BlockMetadataTarget::SIZE
-                            + BlockHashesTarget::SIZE
-                            + ExtraBlockDataTarget::SIZE
-                            + RegistersDataTarget::SIZE * 2
-                            + 2 * len_mem_cap * NUM_HASH_OUT_ELTS,
-                    TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE * 2,
-                );
+                let dummy_pis = Self::get_dummy_pis(&proof.public_inputs, len_mem_cap);
 
                 let mut dummy_pis_map = HashMap::new();
                 for (idx, &pi) in dummy_pis.iter().enumerate() {
@@ -2031,6 +1994,48 @@ where
             }
         }
         agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof);
+    }
+
+    fn get_dummy_pis(pis: &[F], len_mem_cap: usize) -> Vec<F> {
+        let mut dummy_pis = pis.to_vec();
+        // We must change the registers before and memory before.
+        dummy_pis.copy_within(
+            TrieRootsTarget::SIZE * 2
+                + BlockMetadataTarget::SIZE
+                + BlockHashesTarget::SIZE
+                + ExtraBlockDataTarget::SIZE
+                + RegistersDataTarget::SIZE
+                ..TrieRootsTarget::SIZE * 2
+                    + BlockMetadataTarget::SIZE
+                    + BlockHashesTarget::SIZE
+                    + ExtraBlockDataTarget::SIZE
+                    + RegistersDataTarget::SIZE * 2,
+            TrieRootsTarget::SIZE * 2
+                + BlockMetadataTarget::SIZE
+                + BlockHashesTarget::SIZE
+                + ExtraBlockDataTarget::SIZE,
+        );
+        // Mem before := Mem after
+        dummy_pis.copy_within(
+            TrieRootsTarget::SIZE * 2
+                + BlockMetadataTarget::SIZE
+                + BlockHashesTarget::SIZE
+                + ExtraBlockDataTarget::SIZE
+                + RegistersDataTarget::SIZE * 2
+                + len_mem_cap * NUM_HASH_OUT_ELTS
+                ..TrieRootsTarget::SIZE * 2
+                    + BlockMetadataTarget::SIZE
+                    + BlockHashesTarget::SIZE
+                    + ExtraBlockDataTarget::SIZE
+                    + RegistersDataTarget::SIZE * 2
+                    + 2 * len_mem_cap * NUM_HASH_OUT_ELTS,
+            TrieRootsTarget::SIZE * 2
+                + BlockMetadataTarget::SIZE
+                + BlockHashesTarget::SIZE
+                + ExtraBlockDataTarget::SIZE
+                + RegistersDataTarget::SIZE * 2,
+        );
+        dummy_pis
     }
 
     /// Create a final block proof, once all transactions of a given block have
