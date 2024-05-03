@@ -155,6 +155,32 @@ store_origin:
     %jumpi(panic)
 
     // stack: address, retdest
+
+    // EIP-4844: Deduct blob_gas_fee from the sender and burn it
+    %compute_blob_gas_fee
+    DUP2
+    // stack: address, blob_gas_fee, address, retdest
+    %deduct_eth
+    // stack: deduct_eth_status, address, retdest
+    %jumpi(transfer_eth_failure)
+
+    // stack: address, retdest
     %mstore_txn_field(@TXN_FIELD_ORIGIN)
     // stack: retdest
     %jump(process_normalized_txn)
+
+%macro compute_blob_gas_fee
+    PUSH @GAS_PER_BLOB
+    %get_blob_versioned_hashes_list_length
+    MUL
+    PROVER_INPUT(blobbasefee)
+    MUL
+%endmacro
+
+%macro get_blob_versioned_hashes_list_length
+    // stack: (empty)
+    PUSH 33 // encoded length of each blob versioned hash
+    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN)
+    DIV
+    // stack: len
+%endmacro

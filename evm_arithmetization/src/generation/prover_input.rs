@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
-    BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BLOB_BASE_FEE,
+    BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BASE_FEE_PER_BLOB_GAS,
     POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
@@ -151,7 +151,7 @@ impl<F: Field> GenerationState<F> {
     fn run_blobbasefee(&mut self) -> Result<U256, ProgramError> {
         let excess_blob_gas = self.inputs.block_metadata.block_excess_blob_gas;
         Ok(fake_exponential(
-            MIN_BLOB_BASE_FEE,
+            MIN_BASE_FEE_PER_BLOB_GAS,
             excess_blob_gas,
             BLOB_BASE_FEE_UPDATE_FRACTION,
         ))
