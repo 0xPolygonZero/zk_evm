@@ -56,10 +56,8 @@ global panic:
 %endmacro
 
 %macro assert_gt
-    // %assert_zero is cheaper than %assert_nonzero, so we will leverage the
-    // fact that (x > y) == !(x <= y).
-    LE
-    %assert_zero
+    GT
+    %assert_nonzero
 %endmacro
 
 %macro assert_gt(ret)
