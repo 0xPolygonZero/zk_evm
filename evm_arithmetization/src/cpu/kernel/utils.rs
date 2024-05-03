@@ -1,7 +1,6 @@
 use core::fmt::Debug;
 
 use ethereum_types::U256;
-use plonky2_util::ceil_div_usize;
 
 /// Enumerate the length `W` windows of `vec`, and run `maybe_replace` on each
 /// one.
@@ -28,7 +27,7 @@ where
 }
 
 pub(crate) fn u256_to_trimmed_be_bytes(u256: &U256) -> Vec<u8> {
-    let num_bytes = ceil_div_usize(u256.bits(), 8);
+    let num_bytes = u256.bits().div_ceil(8);
     // `byte` is little-endian, so we manually reverse it.
     (0..num_bytes).rev().map(|i| u256.byte(i)).collect()
 }

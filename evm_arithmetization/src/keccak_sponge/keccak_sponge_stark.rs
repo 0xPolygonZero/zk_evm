@@ -13,7 +13,6 @@ use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use plonky2::util::transpose;
-use plonky2_util::ceil_div_usize;
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use starky::evaluation_frame::StarkEvaluationFrame;
 use starky::lookup::{Column, Filter, Lookup};
@@ -137,7 +136,7 @@ pub(crate) fn ctl_looking_memory<F: Field>(i: usize) -> Vec<Column<F>> {
 /// Returns the number of `KeccakSponge` tables looking into the `LogicStark`.
 pub(crate) const fn num_logic_ctls() -> usize {
     const U8S_PER_CTL: usize = 32;
-    ceil_div_usize(KECCAK_RATE_BYTES, U8S_PER_CTL)
+    KECCAK_RATE_BYTES.div_ceil(U8S_PER_CTL)
 }
 
 /// Creates the vector of `Columns` required to perform the `i`th logic CTL.

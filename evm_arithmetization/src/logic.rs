@@ -10,7 +10,6 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
-use plonky2_util::ceil_div_usize;
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use starky::evaluation_frame::StarkEvaluationFrame;
 use starky::lookup::{Column, Filter};
@@ -28,7 +27,7 @@ const VAL_BITS: usize = 256;
 pub(crate) const PACKED_LIMB_BITS: usize = 32;
 /// Number of field elements needed to store each input/output at the specified
 /// packing.
-const PACKED_LEN: usize = ceil_div_usize(VAL_BITS, PACKED_LIMB_BITS);
+const PACKED_LEN: usize = VAL_BITS.div_ceil(PACKED_LIMB_BITS);
 
 /// `LogicStark` columns.
 pub(crate) mod columns {
