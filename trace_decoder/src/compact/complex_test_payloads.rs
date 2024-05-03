@@ -2,7 +2,7 @@ use mpt_trie::partial_trie::PartialTrie;
 
 use super::{
     compact_prestate_processing::{
-        process_compact_prestate, process_compact_prestate_debug, CompactParsingResult,
+        process_compact_prestate, process_compact_prestate_debug, CompactDecodingResult,
         ProcessedCompactOutput,
     },
     compact_to_partial_trie::StateTrieExtractionOutput,
@@ -32,7 +32,7 @@ pub(crate) const TEST_PAYLOAD_6: TestProtocolInputAndRoot = TestProtocolInputAnd
     root_str: "135a0c66146c60d7f78049b3a3486aae3e155015db041a4650966e001f9ba301",
 };
 
-type ProcessCompactPrestateFn = fn(MptTrieCompact) -> CompactParsingResult<ProcessedCompactOutput>;
+type ProcessCompactPrestateFn = fn(MptTrieCompact) -> CompactDecodingResult<ProcessedCompactOutput>;
 
 pub(crate) struct TestProtocolInputAndRoot {
     pub(crate) byte_str: &'static str,

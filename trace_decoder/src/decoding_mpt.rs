@@ -15,14 +15,13 @@ use mpt_trie::{
     trie_subsets::{create_trie_subset, SubsetTrieError},
     utils::{IntoTrieKey, TriePath},
 };
-use thiserror::Error;
 
 use crate::{
     aliased_crate_types::{
         MptAccountRlp, MptExtraBlockData, MptGenerationInputs, MptTrieInputs, MptTrieRoots,
     },
-    compact::compact_prestate_processing::{CompactParsingError, MptPartialTriePreImages},
-    decoding::TrieType,
+    compact::compact_prestate_processing::MptPartialTriePreImages,
+    decoding::{TraceDecodingError, TraceDecodingResult, TraceParsingErrorReason, TrieType},
     processed_block_trace_mpt::{
         MptProcessedBlockTrace, NodesUsedByTxn, ProcessedSectionInfo, ProcessedSectionTxnInfo,
         StateTrieWrites,
@@ -32,168 +31,14 @@ use crate::{
         OtherBlockData, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
         ZERO_STORAGE_SLOT_VAL_RLPED,
     },
-    utils::{hash, optional_field, optional_field_hex, update_val_if_some},
+    utils::{hash, update_val_if_some},
 };
-
-/// Stores the result of parsing tries. Returns a [TraceParsingError] upon
-/// failure.
-pub type MptTraceParsingResult<T> = Result<T, Box<MptTraceParsingError>>;
-
-// TODO: Make this also work with SMT decoding...
-/// Represents errors that can occur during the processing of a block trace.
-///
-/// This struct is intended to encapsulate various kinds of errors that might
-/// arise when parsing, validating, or otherwise processing the trace data of
-/// blockchain blocks. It could include issues like malformed trace data,
-/// inconsistencies found during processing, or any other condition that
-/// prevents successful completion of the trace processing task.
-#[derive(Clone, Debug)]
-pub struct MptTraceParsingError {
-    block_num: Option<U256>,
-    block_chain_id: Option<U256>,
-    txn_idx: Option<usize>,
-    addr: Option<Address>,
-    h_addr: Option<H256>,
-    slot: Option<U512>,
-    slot_value: Option<U512>,
-    reason: MptTraceParsingErrorReason, // The original error type
-}
-
-impl std::fmt::Display for MptTraceParsingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let h_slot = self.slot.map(|slot| {
-            let mut buf = [0u8; 64];
-            slot.to_big_endian(&mut buf);
-            hash(&buf)
-        });
-        write!(
-            f,
-            "Error processing trace: {}\n{}{}{}{}{}{}{}{}",
-            self.reason,
-            optional_field("Block num", self.block_num),
-            optional_field("Block chain id", self.block_chain_id),
-            optional_field("Txn idx", self.txn_idx),
-            optional_field("Address", self.addr.as_ref()),
-            optional_field("Hashed address", self.h_addr.as_ref()),
-            optional_field_hex("Slot", self.slot),
-            optional_field("Hashed Slot", h_slot),
-            optional_field_hex("Slot value", self.slot_value),
-        )
-    }
-}
-
-impl std::error::Error for MptTraceParsingError {}
-
-impl MptTraceParsingError {
-    /// Function to create a new TraceParsingError with mandatory fields
-    pub(crate) fn new(reason: MptTraceParsingErrorReason) -> Self {
-        Self {
-            block_num: None,
-            block_chain_id: None,
-            txn_idx: None,
-            addr: None,
-            h_addr: None,
-            slot: None,
-            slot_value: None,
-            reason,
-        }
-    }
-
-    /// Builder method to set block_num
-    pub(crate) fn block_num(&mut self, block_num: U256) -> &mut Self {
-        self.block_num = Some(block_num);
-        self
-    }
-
-    /// Builder method to set block_chain_id
-    pub(crate) fn block_chain_id(&mut self, block_chain_id: U256) -> &mut Self {
-        self.block_chain_id = Some(block_chain_id);
-        self
-    }
-
-    /// Builder method to set txn_idx
-    pub fn txn_idx(&mut self, txn_idx: usize) -> &mut Self {
-        self.txn_idx = Some(txn_idx);
-        self
-    }
-
-    /// Builder method to set addr
-    pub fn addr(&mut self, addr: Address) -> &mut Self {
-        self.addr = Some(addr);
-        self
-    }
-
-    /// Builder method to set h_addr
-    pub fn h_addr(&mut self, h_addr: H256) -> &mut Self {
-        self.h_addr = Some(h_addr);
-        self
-    }
-
-    /// Builder method to set slot
-    pub fn slot(&mut self, slot: U512) -> &mut Self {
-        self.slot = Some(slot);
-        self
-    }
-
-    /// Builder method to set slot_value
-    pub fn slot_value(&mut self, slot_value: U512) -> &mut Self {
-        self.slot_value = Some(slot_value);
-        self
-    }
-}
-
-/// An error reason for trie parsing.
-#[derive(Clone, Debug, Error)]
-pub enum MptTraceParsingErrorReason {
-    /// Failure to decode an Ethereum [Account].
-    #[error("Failed to decode RLP bytes ({0}) as an Ethereum account due to the error: {1}")]
-    AccountDecode(String, String),
-
-    /// Failure due to trying to access or delete a storage trie missing
-    /// from the base trie.
-    #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
-    MissingAccountStorageTrie(HashedAccountAddr),
-
-    /// Failure due to trying to access a non-existent key in the trie.
-    #[error("Tried accessing a non-existent key ({1:x}) in the {0} trie (root hash: {2:x})")]
-    NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
-
-    /// Failure due to missing keys when creating a sub-partial trie.
-    #[error("Missing key {0:x} when creating sub-partial tries (Trie type: {1})")]
-    MissingKeysCreatingSubPartialTrie(Nibbles, TrieType),
-
-    /// Failure due to trying to withdraw from a missing account
-    #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
-    MissingWithdrawalAccount(Address, HashedAccountAddr, U256),
-
-    /// Failure due to a trie operation error.
-    #[error("Trie operation error: {0}")]
-    TrieOpError(TrieOpError),
-
-    /// Failure due to a compact parsing error.
-    #[error("Compact parsing error: {0}")]
-    CompactParsingError(CompactParsingError),
-}
-
-impl From<TrieOpError> for MptTraceParsingError {
-    fn from(err: TrieOpError) -> Self {
-        // Convert TrieOpError into TraceParsingError
-        MptTraceParsingError::new(MptTraceParsingErrorReason::TrieOpError(err))
-    }
-}
-
-impl From<CompactParsingError> for MptTraceParsingError {
-    fn from(err: CompactParsingError) -> Self {
-        // Convert CompactParsingError into TraceParsingError
-        MptTraceParsingError::new(MptTraceParsingErrorReason::CompactParsingError(err))
-    }
-}
 
 impl MptProcessedBlockTrace {
     pub(crate) fn into_proof_gen_ir(
         self,
         other_data: OtherBlockData,
-    ) -> MptTraceParsingResult<Vec<MptGenerationInputs>> {
+    ) -> TraceDecodingResult<Vec<MptGenerationInputs>> {
         match self.spec.sect_info {
             ProcessedSectionInfo::Continuations(_) => {
                 todo!("MPT continuations are not implemented yet!")
@@ -209,7 +54,7 @@ impl MptProcessedBlockTrace {
         tries: MptPartialTriePreImages,
         withdrawals: Vec<(Address, U256)>,
         other_data: &OtherBlockData,
-    ) -> MptTraceParsingResult<Vec<GenerationInputs>> {
+    ) -> TraceDecodingResult<Vec<GenerationInputs>> {
         let mut curr_block_tries = PartialTrieState {
             state: tries.state.clone(),
             storage: tries.storage.clone(),
@@ -217,7 +62,6 @@ impl MptProcessedBlockTrace {
         };
 
         // This is just a copy of `curr_block_tries`.
-        // TODO: Check if we can remove these clones before PR merge...
         let initial_tries_for_dummies = PartialTrieState {
             state: tries.state.clone(),
             storage: tries.storage.clone(),
@@ -251,7 +95,7 @@ impl MptProcessedBlockTrace {
                     e
                 })
             })
-            .collect::<MptTraceParsingResult<Vec<_>>>()
+            .collect::<TraceDecodingResult<_>>()
             .map_err(|mut e| {
                 e.block_num(other_data.b_data.b_meta.block_number);
                 e.block_chain_id(other_data.b_data.b_meta.block_chain_id);
@@ -317,7 +161,7 @@ impl MptProcessedBlockTrace {
         txn_idx: TxnIdx,
         delta_application_out: TrieDeltaApplicationOutput,
         _coin_base_addr: &Address,
-    ) -> MptTraceParsingResult<MptTrieInputs> {
+    ) -> TraceDecodingResult<MptTrieInputs> {
         let state_trie = create_minimal_state_partial_trie(
             &curr_block_tries.state,
             nodes_used_by_txn.state_accesses.iter().cloned(),
@@ -351,14 +195,14 @@ impl MptProcessedBlockTrace {
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
         deltas: &NodesUsedByTxn,
-    ) -> MptTraceParsingResult<TrieDeltaApplicationOutput> {
+    ) -> TraceDecodingResult<TrieDeltaApplicationOutput> {
         let mut out: TrieDeltaApplicationOutput = TrieDeltaApplicationOutput::default();
 
         for (hashed_acc_addr, storage_writes) in deltas.storage_writes.iter() {
             let storage_trie = trie_state.storage.get_mut(hashed_acc_addr).ok_or_else(|| {
                 let hashed_acc_addr = *hashed_acc_addr;
-                let mut e = MptTraceParsingError::new(
-                    MptTraceParsingErrorReason::MissingAccountStorageTrie(hashed_acc_addr),
+                let mut e = TraceDecodingError::new(
+                    TraceParsingErrorReason::MissingAccountStorageTrie(hashed_acc_addr),
                 );
                 e.h_addr(hashed_acc_addr);
                 e
@@ -372,7 +216,7 @@ impl MptProcessedBlockTrace {
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
                     false => storage_trie.insert(slot, val.clone()).map_err(|err| {
                         let mut e =
-                            MptTraceParsingError::new(MptTraceParsingErrorReason::TrieOpError(err));
+                            TraceDecodingError::new(TraceParsingErrorReason::TrieOpError(err));
                         e.slot(U512::from_big_endian(slot.bytes_be().as_slice()));
                         e.slot_value(U512::from_big_endian(val.as_slice()));
                         e
@@ -383,7 +227,7 @@ impl MptProcessedBlockTrace {
                                 storage_trie,
                                 &slot,
                             )
-                            .map_err(MptTraceParsingError::from)?
+                            .map_err(TraceDecodingError::from)?
                         {
                             out.additional_storage_trie_paths_to_not_hash
                                 .entry(*hashed_acc_addr)
@@ -416,7 +260,7 @@ impl MptProcessedBlockTrace {
             trie_state
                 .state
                 .insert(val_k, updated_account_bytes.to_vec())
-                .map_err(MptTraceParsingError::from)?;
+                .map_err(TraceDecodingError::from)?;
         }
 
         // Remove any accounts that self-destructed.
@@ -425,8 +269,8 @@ impl MptProcessedBlockTrace {
 
             trie_state.storage.remove(hashed_addr).ok_or_else(|| {
                 let hashed_addr = *hashed_addr;
-                let mut e = MptTraceParsingError::new(
-                    MptTraceParsingErrorReason::MissingAccountStorageTrie(hashed_addr),
+                let mut e = TraceDecodingError::new(
+                    TraceParsingErrorReason::MissingAccountStorageTrie(hashed_addr),
                 );
                 e.h_addr(hashed_addr);
                 e
@@ -440,7 +284,7 @@ impl MptProcessedBlockTrace {
                     &mut trie_state.state,
                     &k,
                 )
-                .map_err(MptTraceParsingError::from)?
+                .map_err(TraceDecodingError::from)?
             {
                 out.additional_state_trie_paths_to_not_hash
                     .push(remaining_account_key);
@@ -537,7 +381,7 @@ impl MptProcessedBlockTrace {
         txn_ir: &mut [GenerationInputs],
         final_trie_state: &mut PartialTrieState,
         withdrawals: Vec<(Address, U256)>,
-    ) -> MptTraceParsingResult<()> {
+    ) -> TraceDecodingResult<()> {
         let withdrawals_with_hashed_addrs_iter = || {
             withdrawals
                 .iter()
@@ -576,13 +420,13 @@ impl MptProcessedBlockTrace {
     fn update_trie_state_from_withdrawals<'a>(
         withdrawals: impl IntoIterator<Item = (Address, HashedAccountAddr, U256)> + 'a,
         state: &mut HashedPartialTrie,
-    ) -> MptTraceParsingResult<()> {
+    ) -> TraceDecodingResult<()> {
         for (addr, h_addr, amt) in withdrawals {
             let h_addr_nibs = Nibbles::from_h256_be(h_addr);
 
             let acc_bytes = state.get(h_addr_nibs).ok_or_else(|| {
-                let mut e = MptTraceParsingError::new(
-                    MptTraceParsingErrorReason::MissingWithdrawalAccount(addr, h_addr, amt),
+                let mut e = TraceDecodingError::new(
+                    TraceParsingErrorReason::MissingWithdrawalAccount(addr, h_addr, amt),
                 );
                 e.addr(addr);
                 e.h_addr(h_addr);
@@ -594,7 +438,7 @@ impl MptProcessedBlockTrace {
 
             state
                 .insert(h_addr_nibs, rlp::encode(&acc_data).to_vec())
-                .map_err(MptTraceParsingError::from)?;
+                .map_err(TraceDecodingError::from)?;
         }
 
         Ok(())
@@ -607,7 +451,7 @@ impl MptProcessedBlockTrace {
         curr_block_tries: &mut PartialTrieState,
         extra_data: &mut MptExtraBlockData,
         other_data: &OtherBlockData,
-    ) -> MptTraceParsingResult<GenerationInputs> {
+    ) -> TraceDecodingResult<GenerationInputs> {
         trace!("Generating proof IR for txn {}...", txn_idx);
 
         Self::init_any_needed_empty_storage_tries(
@@ -632,7 +476,7 @@ impl MptProcessedBlockTrace {
         let tries_at_start_of_txn = curr_block_tries.clone();
 
         Self::update_txn_and_receipt_tries(curr_block_tries, &txn_info.meta, txn_idx)
-            .map_err(MptTraceParsingError::from)?;
+            .map_err(TraceDecodingError::from)?;
 
         let delta_out =
             Self::apply_deltas_to_trie_state(curr_block_tries, &txn_info.nodes_used_by_txn)?;
@@ -677,14 +521,14 @@ impl StateTrieWrites {
         state_node: &mut MptAccountRlp,
         h_addr: &HashedAccountAddr,
         acc_storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
-    ) -> MptTraceParsingResult<()> {
+    ) -> TraceDecodingResult<()> {
         let storage_root_hash_change = match self.storage_trie_change {
             false => None,
             true => {
                 let storage_trie = acc_storage_tries.get(h_addr).ok_or_else(|| {
                     let h_addr = *h_addr;
-                    let mut e = MptTraceParsingError::new(
-                        MptTraceParsingErrorReason::MissingAccountStorageTrie(h_addr),
+                    let mut e = TraceDecodingError::new(
+                        TraceParsingErrorReason::MissingAccountStorageTrie(h_addr),
                     );
                     e.h_addr(h_addr);
                     e
@@ -808,7 +652,7 @@ fn create_minimal_state_partial_trie(
     state_trie: &HashedPartialTrie,
     state_accesses: impl Iterator<Item = HashedNodeAddr>,
     additional_state_trie_paths_to_not_hash: impl Iterator<Item = Nibbles>,
-) -> MptTraceParsingResult<HashedPartialTrie> {
+) -> TraceDecodingResult<HashedPartialTrie> {
     create_trie_subset_wrapped(
         state_trie,
         state_accesses
@@ -825,7 +669,7 @@ fn create_minimal_storage_partial_tries<'a>(
     storage_tries: &HashMap<HashedAccountAddr, HashedPartialTrie>,
     accesses_per_account: impl Iterator<Item = &'a (HashedAccountAddr, Vec<HashedStorageAddrNibbles>)>,
     additional_storage_trie_paths_to_not_hash: &HashMap<HashedAccountAddr, Vec<Nibbles>>,
-) -> MptTraceParsingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {
+) -> TraceDecodingResult<Vec<(HashedAccountAddr, HashedPartialTrie)>> {
     accesses_per_account
         .map(|(h_addr, mem_accesses)| {
             // Guaranteed to exist due to calling `init_any_needed_empty_storage_tries`
@@ -847,29 +691,29 @@ fn create_minimal_storage_partial_tries<'a>(
 
             Ok((*h_addr, partial_storage_trie))
         })
-        .collect::<MptTraceParsingResult<_>>()
+        .collect::<TraceDecodingResult<_>>()
 }
 
 fn create_trie_subset_wrapped(
     trie: &HashedPartialTrie,
     accesses: impl Iterator<Item = Nibbles>,
     trie_type: TrieType,
-) -> MptTraceParsingResult<HashedPartialTrie> {
+) -> TraceDecodingResult<HashedPartialTrie> {
     create_trie_subset(trie, accesses).map_err(|trie_err| {
         let key = match trie_err {
             SubsetTrieError::UnexpectedKey(key, _) => key,
         };
 
-        Box::new(MptTraceParsingError::new(
-            MptTraceParsingErrorReason::MissingKeysCreatingSubPartialTrie(key, trie_type),
+        Box::new(TraceDecodingError::new(
+            TraceParsingErrorReason::MissingKeysCreatingSubPartialTrie(key, trie_type),
         ))
     })
 }
 
-fn account_from_rlped_bytes(bytes: &[u8]) -> MptTraceParsingResult<MptAccountRlp> {
+fn account_from_rlped_bytes(bytes: &[u8]) -> TraceDecodingResult<MptAccountRlp> {
     rlp::decode(bytes).map_err(|err| {
-        Box::new(MptTraceParsingError::new(
-            MptTraceParsingErrorReason::AccountDecode(hex::encode(bytes), err.to_string()),
+        Box::new(TraceDecodingError::new(
+            TraceParsingErrorReason::AccountDecode(hex::encode(bytes), err.to_string()),
         ))
     })
 }

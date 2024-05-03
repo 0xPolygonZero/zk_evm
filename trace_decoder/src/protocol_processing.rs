@@ -2,7 +2,11 @@
 //! "inner" complex logic (eg. compact decoding) is handled in separate
 //! dedicated modules.
 
-use std::collections::HashMap;
+use std::{
+    borrow::Borrow,
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 
 use enum_as_inner::EnumAsInner;
 use mpt_trie::partial_trie::HashedPartialTrie;
@@ -10,10 +14,10 @@ use thiserror::Error;
 
 use crate::{
     compact::compact_prestate_processing::{
-        process_compact_prestate_debug, CompactParsingError, MptPartialTriePreImages,
+        process_compact_prestate_debug, CompactDecodingResult, CompactParsingError,
+        MptPartialTriePreImages,
     },
-    decoding_mpt::MptTraceParsingError,
-    decoding_smt::{SmtTraceParsingError, SmtTraceParsingResult},
+    decoding::TraceDecodingError,
     processed_block_trace_mpt::MptProcessedBlockTracePreImages,
     processed_block_trace_smt::SmtProcessedBlockTracePreImages,
     trace_protocol::{
@@ -26,23 +30,44 @@ use crate::{
 
 const COMPATIBLE_HEADER_VERSION: u8 = 1;
 
-pub type TraceParsingResult<T> = Result<T, TraceParsingError>;
+pub type TraceProtocolDecodingResult<T> = Result<T, TraceProtocolDecodingError>;
 
 // TODO: Split into two error types based on if `UnexpectedTraceFormat` can
 // occur or not...
 #[derive(Clone, Debug, Error)]
-pub enum TraceParsingError {
+pub enum TraceProtocolDecodingError {
     #[error(transparent)]
-    Compact(#[from] CompactParsingError),
+    CompactParsing(#[from] CompactParsingError),
 
     #[error(transparent)]
-    Mpt(#[from] Box<MptTraceParsingError>),
+    TraceDecoding(#[from] Box<TraceDecodingError>),
 
-    #[error(transparent)]
-    Smt(#[from] SmtTraceParsingError),
+    #[error("Got an {found} trace format but expected one in the format of {expected}!")]
+    UnexpectedCompactFormat {
+        found: CompactFormatType,
+        expected: CompactFormatType,
+    },
+}
 
-    #[error("Got a trace format that was not expected!")]
-    UnexpectedTraceFormat,
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CompactFormatType {
+    Mpt,
+    Smt,
+}
+
+impl<T: Borrow<TriePreImage>> From<T> for CompactFormatType {
+    fn from(v: T) -> Self {
+        match v.borrow() {
+            TriePreImage::Mpt(_) => CompactFormatType::Mpt,
+            TriePreImage::Smt(_) => CompactFormatType::Smt,
+        }
+    }
+}
+
+impl Display for CompactFormatType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 #[derive(Clone, Debug, EnumAsInner)]
@@ -54,7 +79,7 @@ pub enum ProcessedPreImage {
 /// Processes any type of pre-image
 pub(crate) fn process_block_trace_trie_pre_images(
     image: TriePreImage,
-) -> TraceParsingResult<Box<ProcessedPreImage>> {
+) -> TraceProtocolDecodingResult<Box<ProcessedPreImage>> {
     Ok(Box::new(match image {
         TriePreImage::Mpt(images) => ProcessedPreImage::Mpt(process_mpt_trie_images(images)?),
         TriePreImage::Smt(images) => ProcessedPreImage::Smt(process_smt_trie_images(images)?),
@@ -65,11 +90,11 @@ pub(crate) fn process_block_trace_trie_pre_images(
 /// error if given an SMT payload.
 pub(crate) fn process_mpt_block_trace_trie_pre_images(
     image: TriePreImage,
-) -> TraceParsingResult<MptProcessedBlockTracePreImages> {
+) -> TraceProtocolDecodingResult<MptProcessedBlockTracePreImages> {
     let res = process_mpt_trie_images(
         image
             .into_mpt()
-            .map_err(|_| TraceParsingError::UnexpectedTraceFormat)?,
+            .map_err(|e| handle_unexpected_compact_type_error(e, CompactFormatType::Mpt))?,
     )?;
 
     Ok(res)
@@ -79,11 +104,11 @@ pub(crate) fn process_mpt_block_trace_trie_pre_images(
 /// error if given an MPT payload.
 pub(crate) fn process_smt_block_trace_trie_pre_images(
     image: TriePreImage,
-) -> TraceParsingResult<SmtProcessedBlockTracePreImages> {
+) -> TraceProtocolDecodingResult<SmtProcessedBlockTracePreImages> {
     let res = process_smt_trie_images(
         image
             .into_smt()
-            .map_err(|_| TraceParsingError::UnexpectedTraceFormat)?,
+            .map_err(|e| handle_unexpected_compact_type_error(e, CompactFormatType::Smt))?,
     )?;
 
     Ok(res)
@@ -91,7 +116,7 @@ pub(crate) fn process_smt_block_trace_trie_pre_images(
 
 pub(crate) fn process_mpt_trie_images(
     images: MptBlockTraceTriePreImages,
-) -> TraceParsingResult<MptProcessedBlockTracePreImages> {
+) -> TraceProtocolDecodingResult<MptProcessedBlockTracePreImages> {
     match images {
         MptBlockTraceTriePreImages::Separate(t) => process_separate_trie_pre_images(t),
         MptBlockTraceTriePreImages::Combined(t) => process_combined_trie_pre_images(t),
@@ -100,13 +125,13 @@ pub(crate) fn process_mpt_trie_images(
 
 fn process_combined_trie_pre_images(
     tries: MptCombinedPreImages,
-) -> TraceParsingResult<MptProcessedBlockTracePreImages> {
+) -> TraceProtocolDecodingResult<MptProcessedBlockTracePreImages> {
     process_compact_trie(tries.compact)
 }
 
 fn process_separate_trie_pre_images(
     tries: MptSeparateTriePreImages,
-) -> TraceParsingResult<MptProcessedBlockTracePreImages> {
+) -> TraceProtocolDecodingResult<MptProcessedBlockTracePreImages> {
     let tries = MptPartialTriePreImages {
         state: process_state_trie(tries.state),
         storage: process_storage_tries(tries.storage),
@@ -148,9 +173,8 @@ fn process_multiple_storage_tries(
 
 fn process_compact_trie(
     trie: MptTrieCompact,
-) -> TraceParsingResult<MptProcessedBlockTracePreImages> {
-    // TODO: Wrap in proper result type...
-    let out = process_compact_prestate_debug(trie).unwrap();
+) -> TraceProtocolDecodingResult<MptProcessedBlockTracePreImages> {
+    let out = process_compact_prestate_debug(trie)?;
 
     if !out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION) {
         return Err(CompactParsingError::IncompatibleVersion(
@@ -165,7 +189,7 @@ fn process_compact_trie(
 
 fn process_smt_trie_images(
     images: SmtBlockTraceTriePreImages,
-) -> SmtTraceParsingResult<SmtProcessedBlockTracePreImages> {
+) -> CompactDecodingResult<SmtProcessedBlockTracePreImages> {
     match images {
         SmtBlockTraceTriePreImages::Single(image) => process_smt_single_trie_image(image),
     }
@@ -173,6 +197,16 @@ fn process_smt_trie_images(
 
 fn process_smt_single_trie_image(
     _image: SingleSmtPreImage,
-) -> SmtTraceParsingResult<SmtProcessedBlockTracePreImages> {
+) -> CompactDecodingResult<SmtProcessedBlockTracePreImages> {
     todo!()
+}
+
+fn handle_unexpected_compact_type_error(
+    found: TriePreImage,
+    expected: CompactFormatType,
+) -> TraceProtocolDecodingError {
+    TraceProtocolDecodingError::UnexpectedCompactFormat {
+        found: found.into(),
+        expected,
+    }
 }

@@ -13,7 +13,9 @@ use crate::compact::compact_prestate_processing::{
 };
 use crate::decoding_mpt::TxnMetaState;
 use crate::processed_block_trace::ProcessedBlockTrace;
-use crate::protocol_processing::{process_mpt_block_trace_trie_pre_images, TraceParsingResult};
+use crate::protocol_processing::{
+    process_mpt_block_trace_trie_pre_images, TraceProtocolDecodingResult,
+};
 use crate::trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TxnInfo};
 use crate::types::{
     CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
@@ -41,7 +43,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> TraceParsingResult<Vec<GenerationInputs>>
+    ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
@@ -57,7 +59,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> TraceParsingResult<MptProcessedBlockTrace>
+    ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
     where
         F: CodeHashResolveFunc,
     {
