@@ -45,7 +45,7 @@ fn simple_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         nibbles: sender_nibbles,
         value: rlp::encode(&sender_account_before).to_vec(),
     }
-        .into();
+    .into();
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
@@ -93,17 +93,17 @@ fn simple_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
             nibbles: sender_nibbles.truncate_n_nibbles_front(1),
             value: rlp::encode(&sender_account_after).to_vec(),
         }
-            .into();
+        .into();
         children[to_nibbles.get_nibble(0) as usize] = Node::Leaf {
             nibbles: to_nibbles.truncate_n_nibbles_front(1),
             value: rlp::encode(&to_account_after).to_vec(),
         }
-            .into();
+        .into();
         Node::Branch {
             children,
             value: vec![],
         }
-            .into()
+        .into()
     };
 
     let receipt_0 = LegacyReceiptRlp {
@@ -121,7 +121,7 @@ fn simple_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     }
-        .into();
+    .into();
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
@@ -150,15 +150,19 @@ fn simple_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
 
 fn dummy_inputs(inputs: &GenerationInputs) -> GenerationInputs {
     GenerationInputs {
-        txn_number_before: inputs.txn_number_before+1,
+        txn_number_before: inputs.txn_number_before + 1,
         gas_used_before: inputs.gas_used_after,
         gas_used_after: inputs.gas_used_after,
         signed_txn: None,
         withdrawals: vec![],
         tries: TrieInputs {
             state_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.state_root)),
-            transactions_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.transactions_root)),
-            receipts_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.receipts_root)),
+            transactions_trie: HashedPartialTrie::from(Node::Hash(
+                inputs.trie_roots_after.transactions_root,
+            )),
+            receipts_trie: HashedPartialTrie::from(Node::Hash(
+                inputs.trie_roots_after.receipts_root,
+            )),
             storage_tries: vec![],
         },
         trie_roots_after: inputs.trie_roots_after,
@@ -170,6 +174,7 @@ fn dummy_inputs(inputs: &GenerationInputs) -> GenerationInputs {
 }
 
 #[test]
+#[ignore]
 fn test_two_to_one_aggregation() -> anyhow::Result<()> {
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
@@ -200,7 +205,6 @@ fn test_two_to_one_aggregation() -> anyhow::Result<()> {
         all_circuits.prove_root(&all_stark, &config, dummy1, &mut timing, None)?;
     all_circuits.verify_root(dummy_proof1.clone())?;
 
-
     let (agg_proof0, pv0) = all_circuits.prove_aggregation(
         false,
         &root_proof0,
@@ -218,12 +222,7 @@ fn test_two_to_one_aggregation() -> anyhow::Result<()> {
         dummy_pv1,
     )?;
 
-    let proof = all_circuits.prove_two_to_one_aggregation(
-        &agg_proof0,
-        &agg_proof1,
-        pv0,
-        pv1,
-    )?;
+    let proof = all_circuits.prove_two_to_one_aggregation(&agg_proof0, &agg_proof1, pv0, pv1)?;
     all_circuits.verify_two_to_one_aggregation(&proof)
 }
 

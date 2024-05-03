@@ -72,12 +72,14 @@ where
     /// The aggregation circuit, which verifies two proofs that can either be
     /// root or aggregation proofs.
     pub aggregation: AggregationCircuitData<F, C, D>,
-    /// The two-to-one aggregation circuit, which verifies two unrelated aggregation proofs.
+    /// The two-to-one aggregation circuit, which verifies two unrelated
+    /// aggregation proofs.
     pub two_to_one_aggregation: TwoToOneAggCircuitData<F, C, D>,
     /// The block circuit, which verifies an aggregation root proof and an
     /// optional previous block proof.
     pub block: BlockCircuitData<F, C, D>,
-    /// The two-to-one block aggregation circuit, which verifies two unrelated block proofs.
+    /// The two-to-one block aggregation circuit, which verifies two unrelated
+    /// block proofs.
     pub two_to_one_block: TwoToOneAggCircuitData<F, C, D>,
     /// Holds chains of circuits for each table and for each initial
     /// `degree_bits`.
@@ -305,8 +307,8 @@ where
     }
 }
 
-/// Data for the two-to-one aggregation circuit, which is used to generate a proof of two
-/// unrelated aggregation proofs.
+/// Data for the two-to-one aggregation circuit, which is used to generate a
+/// proof of two unrelated aggregation proofs.
 #[derive(Eq, PartialEq, Debug)]
 pub struct TwoToOneAggCircuitData<F, C, const D: usize>
 where
@@ -1345,8 +1347,8 @@ where
         )
     }
 
-    /// Create a two-to-one aggregation proof, combining two unrelated aggregation proofs
-    /// into a single one.
+    /// Create a two-to-one aggregation proof, combining two unrelated
+    /// aggregation proofs into a single one.
     ///
     /// # Arguments
     ///
@@ -1558,8 +1560,8 @@ where
         )
     }
 
-    /// Create a two-to-one block aggregation proof, combining two unrelated block proofs
-    /// into a single one.
+    /// Create a two-to-one block aggregation proof, combining two unrelated
+    /// block proofs into a single one.
     ///
     /// # Arguments
     ///
@@ -1583,12 +1585,12 @@ where
         inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
         inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
 
-        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0, &pv0).map_err(
-            |_| anyhow::Error::msg("Invalid conversion when setting public values targets."),
-        )?;
-        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1, &pv1).map_err(
-            |_| anyhow::Error::msg("Invalid conversion when setting public values targets."),
-        )?;
+        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0, &pv0).map_err(|_| {
+            anyhow::Error::msg("Invalid conversion when setting public values targets.")
+        })?;
+        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1, &pv1).map_err(|_| {
+            anyhow::Error::msg("Invalid conversion when setting public values targets.")
+        })?;
 
         let proof = self.two_to_one_block.circuit.prove(inputs)?;
         Ok(proof)
