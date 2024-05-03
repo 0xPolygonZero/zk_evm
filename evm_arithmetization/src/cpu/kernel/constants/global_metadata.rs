@@ -94,10 +94,14 @@ pub(crate) enum GlobalMetadata {
 
     KernelHash,
     KernelLen,
+
+    /// Then address of the next available address in
+    /// Segment::AccountsLinkedList
+    AccountsLinkedListLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 47;
+    pub(crate) const COUNT: usize = 48;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -153,6 +157,7 @@ impl GlobalMetadata {
             Self::TxnNumberAfter,
             Self::KernelHash,
             Self::KernelLen,
+            Self::AccountsLinkedListLen,
         ]
     }
 
@@ -206,6 +211,7 @@ impl GlobalMetadata {
             Self::TxnNumberAfter => "GLOBAL_METADATA_TXN_NUMBER_AFTER",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
+            Self::AccountsLinkedListLen => "GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN",
         }
     }
 }

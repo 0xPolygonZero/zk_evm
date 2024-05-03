@@ -55,6 +55,7 @@ impl<F: Field> GenerationState<F> {
             "num_bits" => self.run_num_bits(),
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
+            "linked_list" => self.run_linked_list(input_fn),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
         }
     }
@@ -262,6 +263,16 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
+    /// Generates either the next used jump address or the proof for the last
+    /// jump address.
+    fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
+        match input_fn.0[1].as_str() {
+            "insert_account" => self.run_next_insert_account(),
+            "remove_account" => self.run_next_remove_account(),
+            _ => Err(ProgramError::ProverInputError(InvalidInput)),
+        }
+    }
+
     /// Returns the next used jump address.
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
@@ -378,6 +389,33 @@ impl<F: Field> GenerationState<F> {
         }
         Ok((Segment::AccessedStorageKeys as usize).into())
     }
+
+    /// Returns a pointer to an element in the list whose value is such that
+    /// `value <= addr < next_value` and `addr` is the top of the stack.
+    fn run_next_insert_account(&mut self) -> Result<U256, ProgramError> {
+        let addr = stack_peek(self, 0)?;
+        for (curr_ptr, next_addr, _) in self.get_accounts_linked_list()? {
+            if next_addr > addr {
+                // In order to avoid pointers to the next ptr, we use the fact
+                // that valid pointers and Segment::AccessedAddresses are always even
+                return Ok(((Segment::AccountsLinkedList as usize + curr_ptr) / 4usize).into());
+            }
+        }
+        Ok((Segment::AccessedAddresses as usize).into())
+    }
+
+    /// Returns a pointer to an element in the list whose value is such that
+    /// `value < addr == next_value` and addr is the top of the stack.
+    /// If the element is not in the list loops forever
+    fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
+        let addr = stack_peek(self, 0)?;
+        for (curr_ptr, next_addr, _) in self.get_accounts_linked_list()? {
+            if next_addr == addr {
+                return Ok(((Segment::AccountsLinkedList as usize + curr_ptr) / 2usize).into());
+            }
+        }
+        Ok((Segment::AccessedAddresses as usize).into())
+    }
 }
 
 impl<F: Field> GenerationState<F> {
@@ -460,6 +498,20 @@ impl<F: Field> GenerationState<F> {
             &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content
                 [..acc_addr_len],
             Segment::AccessedAddresses,
+        )
+    }
+
+    pub(crate) fn get_accounts_linked_list(&self) -> Result<AccList, ProgramError> {
+        // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
+        // available virtual address in the segment. In order to get the length
+        // we need to substract `Segment::AccountsLinkedList` as usize.
+        let acc_list_len =
+            u256_to_usize(self.get_global_metadata(GlobalMetadata::AccountsLinkedListLen))?
+                - Segment::AccountsLinkedList as usize;
+        AccList::from_mem_and_segment(
+            &self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()].content
+                [..acc_list_len],
+            Segment::AccountsLinkedList,
         )
     }
 
@@ -606,6 +658,7 @@ impl<'a> AccList<'a> {
             node_size: match segment {
                 Segment::AccessedAddresses => 2,
                 Segment::AccessedStorageKeys => 4,
+                Segment::AccountsLinkedList => 4,
                 _ => return Err(ProgramError::ProverInputError(InvalidInput)),
             },
             offset: segment as usize,
@@ -631,7 +684,7 @@ impl<'a> Iterator for AccList<'a> {
                     U256::zero(),
                 ))
             } else {
-                // storage_keys
+                // storage_keys or accounts linked list
                 Some((
                     old_pos,
                     self.access_list_mem[self.pos].unwrap_or_default(),

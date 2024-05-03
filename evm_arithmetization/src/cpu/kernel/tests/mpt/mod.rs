@@ -9,6 +9,7 @@ mod delete;
 mod hash;
 mod hex_prefix;
 mod insert;
+mod linked_list;
 mod load;
 mod read;
 

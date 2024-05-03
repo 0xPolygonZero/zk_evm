@@ -51,17 +51,20 @@ global init_accounts_linked_list:
     POP
 %endmacro
 
-// Multiply the ptr at the top of the stack by 4
-// and abort if 4*ptr - SEGMENT_ACCOUNTS_LINKED_LIST >= @GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN
-// In this way ptr must be poiting to the begining of a node.
+// Multiply the value at the top of the stack, denoted by ptr/4, by 4
+// and abort if ptr/4 >= mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN]/4
+// In this way 4*ptr/4 must be pointing to the beginning of a node.
+// TODO: Maybe we should check here if the node have been deleted.
 %macro get_valid_account_ptr
-    // stack: ptr
+     // stack: ptr/4
+    DUP1
+    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
+    // By construction, both @SEGMENT_ACCESSED_STORAGE_KEYS and the unscaled list len
+    // must be multiples of 4
+    %div_const(4)
+    // stack: @SEGMENT_ACCESSED_STORAGE_KEYS/4 + accessed_strg_keys_len/4, ptr/4, ptr/4
+    %assert_gt
     %mul_const(4)
-    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
-    DUP2
-    SUB
-    %assert_lt_const(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
-    // stack: 2*ptr
 %endmacro
 
 /// Inserts the account addr and payload otr into the linked list if it is not already present.
@@ -70,7 +73,7 @@ global init_accounts_linked_list:
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 global insert_account:
     // stack: addr, payload_ptr, retdest
-    PROVER_INPUT(linked_lists::insert_account)
+    PROVER_INPUT(linked_list::insert_account)
     // stack: pred_ptr/4, addr, payload_ptr, retdest
     %get_valid_account_ptr
     // stack: pred_ptr, addr, payload_ptr, retdest
@@ -120,47 +123,93 @@ account_found:
     // stack: access_ctr, orig_payload_ptr, addr, payload_ptr, retdest
     // If access_ctr == 1 then this it's a cold access 
     %eq_const(0)
-    %stack (cold_access, orig_payload_ptr, addr, payload_ptr) -> (retdest, cold_access, orig_payload_ptr)
+    %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
 
+insert_new_account:
+    // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
+    POP
+    // get the value of the next address
+    %add_const(3)
+    // stack: next_ptr_ptr, addr, payload_ptr, retdest
+    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
+    DUP2
+    MLOAD_GENERAL
+    // stack: next_ptr, new_ptr, next_ptr_ptr, addr, payload_ptr, retdest
+    // Check that this is not a deleted node
+    DUP1
+    %eq_const(@U256_MAX)
+    %assert_zero
+    DUP1
+    MLOAD_GENERAL
+    // stack: next_addr, next_ptr, new_ptr, next_ptr_ptr, addr, payload_ptr, retdest
+    DUP5
+    // Here, (addr > pred_addr) || (pred_ptr == @SEGMENT_ACCOUNTS_LINKED_LIST).
+    // We should have (addr < next_addr), meaning the new value can be inserted between pred_ptr and next_ptr.
+    %assert_lt
+    // stack: next_ptr, new_ptr, next_ptr_ptr, addr, payload_ptr, retdest
+    SWAP2
+    DUP2
+    // stack: new_ptr, next_ptr_ptr, new_ptr, next_ptr, addr, payload_ptr, retdest
+    MSTORE_GENERAL
+    // stack: new_ptr, next_ptr, addr, payload_ptr, retdest
+    DUP1
+    DUP4
+    MSTORE_GENERAL
+    // stack: new_ptr, next_ptr, addr, payload_ptr, retdest
+    %increment
+    DUP1
+    DUP4
+    MSTORE_GENERAL
+    // stack: new_ptr + 1, next_ptr, addr, payload_ptr, retdest
+    %increment
+    DUP1
+    PUSH 0
+    MSTORE_GENERAL
+    %increment
+    DUP1
+    // stack: new_next_ptr, new_next_ptr, next_ptr, addr, payload_ptr, retdest
+    SWAP2
+    MSTORE_GENERAL
+    // stack: new_next_ptr, addr, payload_ptr, retdest
+    %increment
+    %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
+    // stack: addr, payload_ptr, retdest
+    // TODO: Don't for get to %journal_add_account_loaded
+    %pop2
+    PUSH 1
+    SWAP1
+    JUMP
 
 /// Remove the storage key and its value from the access list.
 /// Panics if the key is not in the list.
 global remove_account:
-    // stack: addr, key, retdest
-    PROVER_INPUT(access_lists::remove_account)
-    // stack: pred_ptr/4, addr, key, retdest
-    %get_valid_storage_ptr
-    // stack: pred_ptr, addr, key, retdest
+    // stack: addr, retdest
+    PROVER_INPUT(linked_list::remove_account)
+    // stack: pred_ptr/4, addr, retdest
+    %get_valid_account_ptr
+    // stack: pred_ptr, addr, retdest
     %add_const(3)
-    // stack: next_ptr_ptr, addr, key, retdest
+    // stack: next_ptr_ptr, addr, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: next_ptr, next_ptr_ptr, addr, key, retdest
+    // stack: next_ptr, next_ptr_ptr, addr, retdest
     DUP1
     %increment
     MLOAD_GENERAL
-    // stack: next_key, next_ptr, next_ptr_ptr, addr, key, retdest
-    DUP5
-    EQ
-    DUP2
-    MLOAD_GENERAL
-    // stack: next_addr, next_key == key, next_ptr, next_ptr_ptr, addr, key, retdest
-    DUP5
-    EQ
-    MUL // AND
-    // stack: next_addr == addr AND next_key == key, next_ptr, next_ptr_ptr, addr, key, retdest
-    %assert_nonzero
-    // stack: next_ptr, next_ptr_ptr, addr, key, retdest
+    // stack: next_addr, next_ptr, next_ptr_ptr, addr, retdest
+    DUP4
+    %assert_eq
+    // stack: next_ptr, next_ptr_ptr, addr, retdest
     %add_const(3)
     // stack: next_next_ptr_ptr, next_ptr_ptr, addr, key, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, addr, key, retdest
+    // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, addr, retdest
     SWAP1
     PUSH @U256_MAX
     MSTORE_GENERAL
-    // stack: next_next_ptr, next_ptr_ptr, addr, key, retdest
+    // stack: next_next_ptr, next_ptr_ptr, addr, retdest
     MSTORE_GENERAL
-    %pop2
+    POP
     JUMP
