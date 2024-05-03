@@ -72,6 +72,7 @@ where
     C: GenericConfig<D, F = F>,
     C::Hasher: AlgebraicHasher<F>,
 {
+    pub is_dummy: bool,
     pub proof_with_pis: ProofWithPublicInputs<F, C, D>,
     pub public_values: PublicValues,
 }
@@ -1541,6 +1542,7 @@ where
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
         Ok(ProverOutputData {
+            is_dummy: false,
             proof_with_pis: root_proof,
             public_values: all_proof.public_values,
         })
@@ -1573,7 +1575,8 @@ where
         }
 
         if proofs.len() == 1 {
-            let first_proof = proofs[0].clone();
+            let mut first_proof = proofs[0].clone();
+            first_proof.is_dummy = true;
             proofs.push(first_proof);
         }
 
