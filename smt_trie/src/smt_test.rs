@@ -6,6 +6,8 @@ use rand::{random, thread_rng, Rng};
 
 use crate::bits::Bits;
 use crate::db::Db;
+use crate::smt::HASH_TYPE;
+use crate::utils::hashout2u;
 use crate::{
     db::MemoryDb,
     smt::{hash_serialize, Key, Smt, F},
@@ -365,4 +367,44 @@ fn test_set_hash_order() {
 
     let ser = second_smt.serialize();
     assert_eq!(hash_serialize(&ser), second_smt.root);
+}
+
+#[test]
+fn test_serialize_and_prune() {
+    let mut smt = Smt::<MemoryDb>::default();
+
+    for _ in 0..128 {
+        let k = Key(F::rand_array());
+        let v = U256(thread_rng().gen());
+        smt.set(k, v);
+    }
+
+    let ser = smt.serialize();
+    assert_eq!(hash_serialize(&ser), smt.root);
+
+    let subset = {
+        let r: u128 = random();
+        smt.kv_store
+            .keys()
+            .enumerate()
+            .filter_map(|(i, k)| if r & (1 << i) != 0 { Some(*k) } else { None })
+            .collect::<Vec<_>>()
+    };
+
+    let pruned_ser = smt.serialize_and_prune(&subset);
+    assert_eq!(hash_serialize(&pruned_ser), smt.root);
+
+    assert!(pruned_ser.len() <= ser.len());
+
+    let trivial_ser = smt.serialize_and_prune::<Key, Vec<_>>(vec![]);
+    assert_eq!(
+        trivial_ser,
+        vec![
+            U256::zero(),
+            U256::zero(),
+            HASH_TYPE.into(),
+            hashout2u(smt.root)
+        ]
+    );
+    assert_eq!(hash_serialize(&trivial_ser), smt.root);
 }
