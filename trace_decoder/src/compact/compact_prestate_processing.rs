@@ -26,13 +26,13 @@ use super::compact_to_partial_trie::{
 };
 use crate::{
     decoding::TrieType,
-    trace_protocol::TrieCompact,
+    trace_protocol::MptTrieCompact,
     types::{HashedAccountAddr, TrieRootHash},
 };
 
 /// Result alias for any error that can occur when processing encoded compact
 /// prestate.
-pub type CompactParsingResult<T> = Result<T, CompactParsingError>;
+pub type CompactDecodingResult<T> = Result<T, CompactParsingError>;
 
 type BranchMask = u32;
 
@@ -50,7 +50,7 @@ const BRANCH_MAX_CHILDREN: usize = 16;
 const CURSOR_ERROR_BYTES_MAX_LEN: usize = 10;
 
 /// An error from processing Erigon's compact witness format.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum CompactParsingError {
     /// The header in the compact payload was missing. This is just a single
     /// byte that is used for versioning.
@@ -139,7 +139,7 @@ impl From<TrieOpError> for CompactParsingError {
 
 /// Represents detailed error information about issues encountered
 /// while processing byte streams with a cursor.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CursorBytesErrorInfo {
     error_start_pos: usize,
     bad_bytes_hex: String,
@@ -379,7 +379,7 @@ struct ParserState {
 impl ParserState {
     fn create_and_extract_header(
         witness_bytes_raw: Vec<u8>,
-    ) -> CompactParsingResult<(Header, Self)> {
+    ) -> CompactDecodingResult<(Header, Self)> {
         let witness_bytes = WitnessBytes::<CompactCursorFast>::new(witness_bytes_raw);
         let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
 
@@ -391,7 +391,7 @@ impl ParserState {
     // TODO: Move behind a feature flag...
     fn create_and_extract_header_debug(
         witness_bytes_raw: Vec<u8>,
-    ) -> CompactParsingResult<(Header, Self)> {
+    ) -> CompactDecodingResult<(Header, Self)> {
         let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
         let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
 
@@ -400,7 +400,7 @@ impl ParserState {
         Ok((header, p_state))
     }
 
-    fn parse(mut self) -> CompactParsingResult<StateTrieExtractionOutput> {
+    fn parse(mut self) -> CompactDecodingResult<StateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();
 
         loop {
@@ -427,7 +427,7 @@ impl ParserState {
     fn apply_rules_to_witness_entries(
         &mut self,
         entry_buf: &mut Vec<WitnessEntry>,
-    ) -> CompactParsingResult<usize> {
+    ) -> CompactDecodingResult<usize> {
         let mut traverser = self.entries.create_collapsable_traverser();
 
         let mut tot_rules_applied = 0;
@@ -448,7 +448,7 @@ impl ParserState {
     fn try_apply_rules_to_curr_entry(
         traverser: &mut CollapsableWitnessEntryTraverser,
         buf: &mut Vec<WitnessEntry>,
-    ) -> CompactParsingResult<usize> {
+    ) -> CompactDecodingResult<usize> {
         traverser.get_next_n_elems_into_buf(MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE, buf);
 
         match buf[0].clone() {
@@ -513,7 +513,7 @@ impl ParserState {
         traverser: &mut CollapsableWitnessEntryTraverser,
         buf: &mut Vec<WitnessEntry>,
         mask: BranchMask,
-    ) -> CompactParsingResult<usize> {
+    ) -> CompactDecodingResult<usize> {
         let expected_number_of_preceding_nodes = mask.count_ones() as usize;
 
         traverser.get_prev_n_elems_into_buf(expected_number_of_preceding_nodes, buf);
@@ -583,14 +583,14 @@ impl ParserState {
     }
 
     const fn match_account_leaf_no_code_and_no_storage(
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+    ) -> CompactDecodingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         Ok((1, None, None))
     }
 
     fn match_account_leaf_no_code_but_has_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
         buf: &mut Vec<WitnessEntry>,
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+    ) -> CompactDecodingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         traverser.get_prev_n_elems_into_buf(1, buf);
 
         match buf[0].clone() {
@@ -604,7 +604,7 @@ impl ParserState {
     fn match_account_leaf_has_code_but_no_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
         buf: &mut Vec<WitnessEntry>,
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+    ) -> CompactDecodingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         traverser.get_prev_n_elems_into_buf(1, buf);
 
         match buf[0].clone() {
@@ -621,7 +621,7 @@ impl ParserState {
     fn match_account_leaf_has_code_and_storage(
         traverser: &mut CollapsableWitnessEntryTraverser,
         buf: &mut Vec<WitnessEntry>,
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+    ) -> CompactDecodingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         traverser.get_prev_n_elems_into_buf(2, buf);
 
         match &buf[0..=1] {
@@ -650,7 +650,7 @@ impl ParserState {
         account_node_code: Option<AccountNodeCode>,
         n: usize,
         traverser: &mut CollapsableWitnessEntryTraverser,
-    ) -> CompactParsingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
+    ) -> CompactDecodingResult<(usize, Option<AccountNodeCode>, Option<HashedPartialTrie>)> {
         match Self::try_get_storage_root_node(node) {
             Some(storage_root_node) => {
                 let s_trie_out = create_storage_partial_trie_from_compact_node(storage_root_node)?;
@@ -670,7 +670,7 @@ impl ParserState {
     fn invalid_witness_err<T>(
         n: usize,
         traverser: &mut CollapsableWitnessEntryTraverser,
-    ) -> CompactParsingResult<T> {
+    ) -> CompactDecodingResult<T> {
         let adjacent_elems_buf = traverser.get_prev_n_elems(n).cloned().collect();
 
         Err(CompactParsingError::InvalidWitnessFormat(
@@ -682,7 +682,7 @@ impl ParserState {
         n: usize,
         traverser: &mut CollapsableWitnessEntryTraverser,
         entry: NodeEntry,
-    ) -> CompactParsingResult<usize> {
+    ) -> CompactDecodingResult<usize> {
         traverser.replace_prev_n_entries_with_single_entry(n, WitnessEntry::Node(entry));
         Ok(1)
     }
@@ -703,7 +703,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
     fn process_into_instructions_and_header(
         mut self,
-    ) -> CompactParsingResult<(Header, WitnessEntries)> {
+    ) -> CompactDecodingResult<(Header, WitnessEntries)> {
         let header = self.parse_header()?;
 
         loop {
@@ -720,7 +720,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     #[allow(dead_code)]
     fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure(
         self,
-    ) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
+    ) -> (InstructionAndBytesParsedFromBuf, CompactDecodingResult<()>) {
         let mut instr_and_bytes_buf = Vec::new();
         let res = self.process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(&mut instr_and_bytes_buf);
 
@@ -731,7 +731,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
     fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(
         mut self,
         instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,
-    ) -> CompactParsingResult<()> {
+    ) -> CompactDecodingResult<()> {
         // Skip header.
         self.byte_cursor.intern().set_position(1);
 
@@ -760,7 +760,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         Ok(())
     }
 
-    fn process_operator(&mut self) -> CompactParsingResult<()> {
+    fn process_operator(&mut self) -> CompactDecodingResult<()> {
         let opcode_byte = self.byte_cursor.read_byte()?;
 
         let opcode =
@@ -771,7 +771,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         self.process_data_following_opcode(opcode)
     }
 
-    fn process_data_following_opcode(&mut self, opcode: Opcode) -> CompactParsingResult<()> {
+    fn process_data_following_opcode(&mut self, opcode: Opcode) -> CompactDecodingResult<()> {
         match opcode {
             Opcode::Leaf => self.process_leaf(),
             Opcode::Extension => self.process_extension(),
@@ -783,7 +783,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         }
     }
 
-    fn process_leaf(&mut self) -> CompactParsingResult<()> {
+    fn process_leaf(&mut self) -> CompactDecodingResult<()> {
         let key = key_bytes_to_nibbles(&self.byte_cursor.read_cbor_byte_array_to_vec("leaf key")?);
         let value_raw = self.byte_cursor.read_cbor_byte_array_to_vec("leaf value")?;
 
@@ -791,7 +791,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         Ok(())
     }
 
-    fn process_extension(&mut self) -> CompactParsingResult<()> {
+    fn process_extension(&mut self) -> CompactDecodingResult<()> {
         let key = key_bytes_to_nibbles(
             &self
                 .byte_cursor
@@ -802,28 +802,28 @@ impl<C: CompactCursor> WitnessBytes<C> {
         Ok(())
     }
 
-    fn process_branch(&mut self) -> CompactParsingResult<()> {
+    fn process_branch(&mut self) -> CompactDecodingResult<()> {
         let mask = self.byte_cursor.read_t("mask")?;
 
         self.push_entry(Instruction::Branch(mask));
         Ok(())
     }
 
-    fn process_hash(&mut self) -> CompactParsingResult<()> {
+    fn process_hash(&mut self) -> CompactDecodingResult<()> {
         let hash = self.byte_cursor.read_non_cbor_h256("hash")?;
 
         self.push_entry(Instruction::Hash(hash));
         Ok(())
     }
 
-    fn process_code(&mut self) -> CompactParsingResult<()> {
+    fn process_code(&mut self) -> CompactDecodingResult<()> {
         let code = self.byte_cursor.read_t("code")?;
 
         self.push_entry(Instruction::Code(code));
         Ok(())
     }
 
-    fn process_account_leaf(&mut self) -> CompactParsingResult<()> {
+    fn process_account_leaf(&mut self) -> CompactDecodingResult<()> {
         let key = key_bytes_to_nibbles(
             &self
                 .byte_cursor
@@ -860,9 +860,9 @@ impl<C: CompactCursor> WitnessBytes<C> {
     fn read_account_flag_field_if_present_or_default<F, T>(
         present_flag: bool,
         mut read_f: F,
-    ) -> CompactParsingResult<T>
+    ) -> CompactDecodingResult<T>
     where
-        F: FnMut() -> CompactParsingResult<T>,
+        F: FnMut() -> CompactDecodingResult<T>,
         T: Default,
     {
         Ok(match present_flag {
@@ -871,7 +871,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         })
     }
 
-    fn process_empty_root(&mut self) -> CompactParsingResult<()> {
+    fn process_empty_root(&mut self) -> CompactDecodingResult<()> {
         self.push_entry(Instruction::EmptyRoot);
         Ok(())
     }
@@ -880,7 +880,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         self.instrs.push(instr.into())
     }
 
-    fn parse_header(&mut self) -> CompactParsingResult<Header> {
+    fn parse_header(&mut self) -> CompactDecodingResult<Header> {
         let h_byte = self
             .byte_cursor
             .read_byte()
@@ -912,14 +912,15 @@ impl From<u8> for AccountLeafFlags {
 trait CompactCursor {
     fn new(bytes: Vec<u8>) -> Self;
     fn intern(&mut self) -> &mut Cursor<Vec<u8>>;
-    fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T>;
-    fn read_byte(&mut self) -> CompactParsingResult<u8>;
+    fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str)
+        -> CompactDecodingResult<T>;
+    fn read_byte(&mut self) -> CompactDecodingResult<u8>;
     fn read_cbor_byte_array_to_vec(
         &mut self,
         field_name: &'static str,
-    ) -> CompactParsingResult<Vec<u8>>;
-    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactParsingResult<U256>;
-    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256>;
+    ) -> CompactDecodingResult<Vec<u8>>;
+    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactDecodingResult<U256>;
+    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactDecodingResult<H256>;
     fn at_eof(&self) -> bool;
 }
 
@@ -939,7 +940,10 @@ impl CompactCursor for CompactCursorFast {
         &mut self.intern
     }
 
-    fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T> {
+    fn read_t<T: DeserializeOwned>(
+        &mut self,
+        field_name: &'static str,
+    ) -> CompactDecodingResult<T> {
         let starting_pos = self.intern.position();
 
         ciborium::from_reader(&mut self.intern).map_err(move |err| {
@@ -961,7 +965,7 @@ impl CompactCursor for CompactCursorFast {
         })
     }
 
-    fn read_byte(&mut self) -> CompactParsingResult<u8> {
+    fn read_byte(&mut self) -> CompactDecodingResult<u8> {
         let mut single_byte_buf = [0];
 
         // Assume this is always caused by hitting the end of the stream?
@@ -977,7 +981,7 @@ impl CompactCursor for CompactCursorFast {
     fn read_cbor_byte_array_to_vec(
         &mut self,
         field_name: &'static str,
-    ) -> CompactParsingResult<Vec<u8>> {
+    ) -> CompactDecodingResult<Vec<u8>> {
         let cursor_start_pos = self.intern.position();
 
         Self::ciborium_byte_vec_err_reader_res_to_parsing_res(
@@ -989,12 +993,12 @@ impl CompactCursor for CompactCursorFast {
     }
 
     // TODO: Clean up code duplication...
-    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactParsingResult<U256> {
+    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactDecodingResult<U256> {
         let b_array = self.read_cbor_byte_array_to_vec(field_name)?;
         Ok(U256::from_big_endian(&b_array))
     }
 
-    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256> {
+    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactDecodingResult<H256> {
         let cursor_start_pos = self.intern().position();
         let mut h256_bytes = [0; 32];
 
@@ -1026,7 +1030,7 @@ impl CompactCursorFast {
         cursor_start_pos: u64,
         cursor: &mut Cursor<Vec<u8>>,
         field_name: &'static str,
-    ) -> CompactParsingResult<T> {
+    ) -> CompactDecodingResult<T> {
         res.map_err(|err| {
             let cursor_err_info = CursorBytesErrorInfo::new(cursor, cursor_start_pos);
             CompactParsingError::InvalidByteVector(field_name, err.to_string(), cursor_err_info)
@@ -1046,7 +1050,10 @@ impl CompactCursor for DebugCompactCursor {
         self.0.intern()
     }
 
-    fn read_t<T: DeserializeOwned>(&mut self, field_name: &'static str) -> CompactParsingResult<T> {
+    fn read_t<T: DeserializeOwned>(
+        &mut self,
+        field_name: &'static str,
+    ) -> CompactDecodingResult<T> {
         let cursor_start_pos = self.0.intern.position();
         let res = self.0.read_t(field_name);
 
@@ -1058,7 +1065,7 @@ impl CompactCursor for DebugCompactCursor {
         res
     }
 
-    fn read_byte(&mut self) -> CompactParsingResult<u8> {
+    fn read_byte(&mut self) -> CompactDecodingResult<u8> {
         let res = self.0.read_byte();
 
         if let Ok(byte) = res.as_ref() {
@@ -1071,7 +1078,7 @@ impl CompactCursor for DebugCompactCursor {
     fn read_cbor_byte_array_to_vec(
         &mut self,
         field_name: &'static str,
-    ) -> CompactParsingResult<Vec<u8>> {
+    ) -> CompactDecodingResult<Vec<u8>> {
         let cursor_start_pos = self.0.intern.position();
         let res = self.0.read_cbor_byte_array_to_vec(field_name);
 
@@ -1084,7 +1091,7 @@ impl CompactCursor for DebugCompactCursor {
         res
     }
 
-    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactParsingResult<U256> {
+    fn read_cbor_u256(&mut self, field_name: &'static str) -> CompactDecodingResult<U256> {
         let cursor_start_pos = self.0.intern.position();
         let res = self.0.read_cbor_u256(field_name);
 
@@ -1097,7 +1104,7 @@ impl CompactCursor for DebugCompactCursor {
         res
     }
 
-    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactParsingResult<H256> {
+    fn read_non_cbor_h256(&mut self, field_name: &'static str) -> CompactDecodingResult<H256> {
         let cursor_start_pos = self.0.intern.position();
         let res = self.0.read_non_cbor_h256(field_name);
 
@@ -1127,7 +1134,7 @@ impl CompactCursor for DebugCompactCursor {
 
 /// We kind of want a wrapper around the actual data structure I think since
 /// there's a good chance this will change a few times in the future.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct WitnessEntries {
     // Yeah a LL is actually (unfortunately) a very good choice here. We will be doing a ton of
     // inserts mid-list, and the list can get very large. There might be a better choice for a data
@@ -1237,8 +1244,8 @@ const fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&
     }
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct PartialTriePreImages {
+#[derive(Clone, Debug, Default)]
+pub(crate) struct MptPartialTriePreImages {
     pub state: HashedPartialTrie,
     pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
 }
@@ -1262,8 +1269,8 @@ pub struct ProcessedCompactOutput {
 
 /// Processes the compact prestate into the trie format of `mpt_trie`.
 pub fn process_compact_prestate(
-    state: TrieCompact,
-) -> CompactParsingResult<ProcessedCompactOutput> {
+    state: MptTrieCompact,
+) -> CompactDecodingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header)
 }
 
@@ -1271,15 +1278,15 @@ pub fn process_compact_prestate(
 /// enables heavy debug traces during processing.
 // TODO: Move behind a feature flag...
 pub fn process_compact_prestate_debug(
-    state: TrieCompact,
-) -> CompactParsingResult<ProcessedCompactOutput> {
+    state: MptTrieCompact,
+) -> CompactDecodingResult<ProcessedCompactOutput> {
     process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
 }
 
 fn process_compact_prestate_common(
-    state: TrieCompact,
-    create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
-) -> CompactParsingResult<ProcessedCompactOutput> {
+    state: MptTrieCompact,
+    create_and_extract_header_f: fn(Vec<u8>) -> CompactDecodingResult<(Header, ParserState)>,
+) -> CompactDecodingResult<ProcessedCompactOutput> {
     let (header, parser) = create_and_extract_header_f(state.0)?;
     let witness_out = parser.parse()?;
 
@@ -1294,7 +1301,7 @@ fn process_compact_prestate_common(
 // TODO: Move behind a feature flag just used for debugging (but probably not
 // `debug`)...
 #[allow(dead_code)]
-fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
+fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactDecodingResult<Vec<Instruction>> {
     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
 
@@ -1341,7 +1348,7 @@ impl Display for InstructionAndBytesParsedFromBuf {
 #[allow(dead_code)]
 fn parse_to_instructions_and_bytes_for_instruction(
     bytes: Vec<u8>,
-) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
+) -> (InstructionAndBytesParsedFromBuf, CompactDecodingResult<()>) {
     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     witness_bytes
         .process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure()

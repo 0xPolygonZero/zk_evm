@@ -23,6 +23,7 @@
 
 use std::collections::HashMap;
 
+use enum_as_inner::EnumAsInner;
 use ethereum_types::{Address, U256};
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
@@ -40,80 +41,124 @@ use crate::{
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockTrace {
     /// The trie pre-images (state & storage) in multiple possible formats.
-    pub trie_pre_images: BlockTraceTriePreImages,
+    pub trie_pre_images: TriePreImage,
 
     /// Traces and other info per txn. The index of the txn corresponds to the
     /// slot in this vec.
-    pub txn_info: Vec<TxnInfo>,
+    pub atomic_info: AtomicUnitInfo,
+}
+
+/// Unprocessed payload of a trie pre-image.
+///
+/// The pre-image can be in either an MPT or SMT format.
+#[serde_as]
+#[derive(Debug, Deserialize, EnumAsInner, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TriePreImage {
+    /// MPT format.
+    Mpt(MptBlockTraceTriePreImages),
+
+    /// SMT format.
+    Smt(SmtBlockTraceTriePreImages),
 }
 
 /// Minimal hashed out tries needed by all txns in the block.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum BlockTraceTriePreImages {
+pub enum MptBlockTraceTriePreImages {
     /// The trie pre-image with separate state/storage tries.
-    Separate(SeparateTriePreImages),
+    Separate(MptSeparateTriePreImages),
     /// The trie pre-image with combined state/storage tries.
-    Combined(CombinedPreImages),
+    Combined(MptCombinedPreImages),
 }
 
 /// State/Storage trie pre-images that are separate.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct SeparateTriePreImages {
+pub struct MptSeparateTriePreImages {
     /// State trie.
-    pub state: SeparateTriePreImage,
+    pub state: MptSeparateTriePreImage,
     /// Storage trie.
-    pub storage: SeparateStorageTriesPreImage,
+    pub storage: MptSeparateStorageTriesPreImage,
 }
 
 /// A trie pre-image where state & storage are separate.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SeparateTriePreImage {
+pub enum MptSeparateTriePreImage {
     /// Storage or state trie in a bulkier format, that can be processed faster.
-    Uncompressed(TrieUncompressed),
+    Uncompressed(MptTrieUncompressed),
     /// Storage or state trie format that can be processed as is, as it
     /// corresponds to the internal format.
-    Direct(TrieDirect),
+    Direct(MptTrieDirect),
 }
 
 /// A trie pre-image where both state & storage are combined into one payload.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub struct CombinedPreImages {
+pub struct MptCombinedPreImages {
     /// Compact combined state and storage tries.
-    pub compact: TrieCompact,
+    pub compact: MptTrieCompact,
 }
 
 // TODO
 /// Bulkier format that is quicker to process.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct TrieUncompressed {}
+pub struct MptTrieUncompressed {}
 
 // TODO
 #[serde_as]
 /// Compact representation of a trie (will likely be very close to <https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md>)
 #[derive(Debug, Deserialize, Serialize)]
-pub struct TrieCompact(#[serde_as(as = "FromInto<ByteString>")] pub Vec<u8>);
+pub struct MptTrieCompact(#[serde_as(as = "FromInto<ByteString>")] pub Vec<u8>);
 
 // TODO
 /// Trie format that is in exactly the same format of our internal trie format.
 /// This is the fastest format for us to processes.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct TrieDirect(pub HashedPartialTrie);
+pub struct MptTrieDirect(pub HashedPartialTrie);
 
 /// A trie pre-image where state and storage are separate.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SeparateStorageTriesPreImage {
+pub enum MptSeparateStorageTriesPreImage {
     /// A single hash map that contains all node hashes from all storage tries
     /// involved in the block. We can reconstruct the individual storage tries
     /// by the storage root hash in the state entries.
-    SingleTrie(TrieUncompressed),
+    SingleTrie(MptTrieUncompressed),
 
     /// Each storage trie is sent over in a hashmap with the hashed account
     /// address as a key.
-    MultipleTries(HashMap<HashedAccountAddr, SeparateTriePreImage>),
+    MultipleTries(HashMap<HashedAccountAddr, MptSeparateTriePreImage>),
+}
+
+/// Variants on differing format for SMT.
+///
+/// Currently there is only one format, but will keep this open in case there
+/// are multiple in the future.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SmtBlockTraceTriePreImages {
+    /// Single trie containing all sub tries.
+    Single(SingleSmtPreImage),
+}
+
+/// Bytes for a single trie compact SMT.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[serde_as]
+pub struct SingleSmtPreImage(#[serde_as(as = "FromInto<ByteString>")] Vec<u8>);
+
+/// Information that is specific to the atomic unit used by the block. This may
+/// be information for each txn or for each continuation segment.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AtomicUnitInfo {
+    /// The block is broken into segments per each txn.
+    Txn(Vec<TxnInfo>),
+
+    /// The block is broken into segments based on arbitrary executed cycle
+    /// ranges.
+    Continuations(Vec<ContinuationInfo>),
 }
 
 /// Info specific to txns in the block.
@@ -213,3 +258,10 @@ impl ContractCodeUsage {
         }
     }
 }
+
+/// Information provided in the raw block trace needed to create IR
+/// ([evm_arithmetization_mpt::GenerationInputs](GenerationInputs)) for a given
+/// segment.
+// TODO: Fill in once we know what information we need per continuation...
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ContinuationInfo {}

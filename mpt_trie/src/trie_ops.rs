@@ -19,7 +19,7 @@ use crate::{
 pub type TrieOpResult<T> = Result<T, TrieOpError>;
 
 /// An error type for trie operation.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum TrieOpError {
     /// An error that occurs when a hash node is found during an insert
     /// operation.
