@@ -391,7 +391,7 @@ fn test_serialize_and_prune() {
             .collect::<Vec<_>>()
     };
 
-    let pruned_ser = smt.serialize_and_prune(&subset);
+    let pruned_ser = smt.serialize_and_prune(subset);
     assert_eq!(hash_serialize(&pruned_ser), smt.root);
     assert!(pruned_ser.len() <= ser.len());
 
