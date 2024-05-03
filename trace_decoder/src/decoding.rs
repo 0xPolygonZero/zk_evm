@@ -259,7 +259,7 @@ impl ProcessedBlockTrace {
             .enumerate()
             .map(|(idx, txn_info)| {
                 let current_idx = txn_idx;
-                if txn_info.meta.txn_bytes.is_some() {
+                if !txn_info.meta.is_dummy() {
                     txn_idx += 1;
                 }
                 let is_initial_payload = idx == 0;
@@ -375,15 +375,13 @@ impl ProcessedBlockTrace {
         delta_out
             .additional_state_trie_paths_to_not_hash
             .push(addr_nibbles);
-        let addr_bytes = trie_state
-            .state
-            .get(addr_nibbles)
-            .ok_or(TraceParsingError::new(
-                TraceParsingErrorReason::MissingKeysCreatingSubPartialTrie(
-                    addr_nibbles,
-                    TrieType::State,
-                ),
-            ))?;
+        let addr_bytes = trie_state.state.get(addr_nibbles).ok_or_else(|| {
+            TraceParsingError::new(TraceParsingErrorReason::NonExistentTrieEntry(
+                TrieType::State,
+                addr_nibbles,
+                trie_state.state.hash(),
+            ))
+        })?;
         let mut account = account_from_rlped_bytes(addr_bytes)?;
 
         account.storage_root = storage_trie.hash();
@@ -406,7 +404,7 @@ impl ProcessedBlockTrace {
         meta: &TxnMetaState,
         txn_idx: TxnIdx,
     ) -> TrieOpResult<()> {
-        if meta.txn_bytes.is_none() {
+        if meta.is_dummy() {
             // This is a dummy payload, that does not mutate these tries.
             return Ok(());
         }
@@ -892,6 +890,12 @@ fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {
 }
 
 impl TxnMetaState {
+    /// Outputs a boolean indicating whether this `TxnMetaState`
+    /// represents a dummy payload or an actual transaction.
+    fn is_dummy(&self) -> bool {
+        self.txn_bytes.is_none()
+    }
+
     fn txn_bytes(&self) -> Vec<u8> {
         match self.txn_bytes.as_ref() {
             Some(v) => v.clone(),
