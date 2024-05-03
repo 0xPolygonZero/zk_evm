@@ -892,7 +892,7 @@ fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {
 impl TxnMetaState {
     /// Outputs a boolean indicating whether this `TxnMetaState`
     /// represents a dummy payload or an actual transaction.
-    fn is_dummy(&self) -> bool {
+    const fn is_dummy(&self) -> bool {
         self.txn_bytes.is_none()
     }
 
