@@ -1954,7 +1954,8 @@ where
         agg_inputs.set_proof_with_pis_target(&agg_child.proof, proof);
     }
 
-    /// TODO: Better comment. This function also takes care of the dummy PIs.
+    /// Sets the dummy and aggregation proofs. In the dummy case, it sets a
+    /// dummy proof with the required PIs.
     fn set_dummy_if_necessary_with_dummy(
         agg_child: &AggregationChildWithDummyTarget<D>,
         is_agg: bool,
