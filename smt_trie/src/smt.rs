@@ -405,7 +405,8 @@ impl<D: Db> Smt<D> {
     /// Starts with a [0, 0] for convenience, that way `ptr=0` is a canonical
     /// empty node. Therefore the root of the SMT is at `ptr=2`.
     /// `keys` is a list of keys whose prefixes will not be hashed-out in the
-    /// serialization. Serialization rules:
+    /// serialization.
+    /// Serialization rules:
     /// ```pseudocode
     /// serialize( HashNode { h } ) = [HASH_TYPE, h]
     /// serialize( InternalNode { left, right } ) = [INTERNAL_TYPE, serialize(left).ptr, serialize(right).ptr]
