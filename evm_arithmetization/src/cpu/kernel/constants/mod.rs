@@ -240,7 +240,7 @@ const EC_CONSTANTS: [(&str, [u8; 32]); 20] = [
     ),
 ];
 
-const GAS_CONSTANTS: [(&str, u16); 37] = [
+const GAS_CONSTANTS: [(&str, u32); 38] = [
     ("GAS_ZERO", 0),
     ("GAS_JUMPDEST", 1),
     ("GAS_BASE", 2),
@@ -278,6 +278,7 @@ const GAS_CONSTANTS: [(&str, u16); 37] = [
     ("GAS_COPY", 3),
     ("GAS_BLOCKHASH", 20),
     ("GAS_HASH_OPCODE", 3),
+    ("GAS_PER_BLOB", 131_072),
 ];
 
 const REFUND_CONSTANTS: [(&str, u16); 2] = [("REFUND_SCLEAR", 4_800), ("MAX_REFUND_QUOTIENT", 5)];
@@ -331,7 +332,7 @@ pub mod cancun_constants {
 
     pub const BLOB_BASE_FEE_UPDATE_FRACTION: U256 = U256([0x32f0ed, 0, 0, 0]);
 
-    pub const MIN_BLOB_BASE_FEE: U256 = U256::one();
+    pub const MIN_BASE_FEE_PER_BLOB_GAS: U256 = U256::one();
 
     pub const KZG_VERSIONED_HASH: u8 = 0x01;
 
