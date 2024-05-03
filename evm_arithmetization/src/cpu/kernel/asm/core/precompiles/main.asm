@@ -52,7 +52,7 @@ global handle_precompiles_from_eoa:
     // stack: addr, retdest
     %create_context
     // stack: new_ctx, addr, retdest
-    %non_intrinisic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit
     // stack: new_ctx, addr, retdest
 
     // Set calldatasize and copy txn data to calldata.
