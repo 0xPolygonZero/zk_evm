@@ -19,7 +19,8 @@ type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
 
-/// Test a simple token transfer to a new address.
+/// Get `GenerationInputs` for a simple token transfer txn, where the block has
+/// the given timestamp.
 fn simple_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     init_logger();
 

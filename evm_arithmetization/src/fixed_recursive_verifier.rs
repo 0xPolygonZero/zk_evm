@@ -308,7 +308,7 @@ where
 }
 
 /// Data for the two-to-one aggregation circuit, which is used to generate a
-/// proof of two unrelated aggregation proofs.
+/// proof of two unrelated proofs.
 #[derive(Eq, PartialEq, Debug)]
 pub struct TwoToOneAggCircuitData<F, C, const D: usize>
 where
