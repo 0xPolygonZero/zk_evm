@@ -87,7 +87,7 @@ impl BlockTrace {
 
         let last_tx_idx = self.txn_info.len().saturating_sub(1);
 
-        let txn_info = self
+        let mut txn_info = self
             .txn_info
             .into_iter()
             .enumerate()
@@ -110,6 +110,10 @@ impl BlockTrace {
                 )
             })
             .collect::<Vec<_>>();
+
+        while txn_info.len() < 2 {
+            txn_info.insert(0, ProcessedTxnInfo::default());
+        }
 
         Ok(ProcessedBlockTrace {
             tries: pre_image_data.tries,
@@ -232,7 +236,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct ProcessedTxnInfo {
     pub(crate) nodes_used_by_txn: NodesUsedByTxn,
     pub(crate) contract_code_accessed: HashMap<CodeHash, Vec<u8>>,
