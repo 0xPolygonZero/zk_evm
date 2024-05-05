@@ -15,9 +15,10 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::util::timing::TimingTree;
 use pretty_env_logger::env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use serde::{Deserialize, Serialize};
-use trace_decoder::types::OtherBlockData;
 use trace_decoder::{
-    processed_block_trace::ProcessingMeta, trace_protocol::BlockTrace, types::CodeHash,
+    processed_block_trace::ProcessingMeta,
+    trace_protocol::BlockTrace,
+    types::{CodeHash, OtherBlockData},
 };
 
 fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
