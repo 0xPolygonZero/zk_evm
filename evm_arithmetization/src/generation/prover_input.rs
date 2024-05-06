@@ -29,7 +29,7 @@ use crate::generation::prover_input::FieldOp::{Inverse, Sqrt};
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::memory::segments::Segment::BnPairing;
-use crate::util::{biguint_to_mem_vec, h2u, mem_vec_to_biguint, u256_to_u8, u256_to_usize};
+use crate::util::{biguint_to_mem_vec, h2u, mem_vec_to_biguint, sha2, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProverInputError::*;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::MemoryAddress;
@@ -451,10 +451,18 @@ impl<F: Field> GenerationState<F> {
         }
         proof_hi.to_big_endian(&mut proof_bytes[0..32]);
 
-        let mut expected_versioned_hash = keccak(comm_bytes).0;
-        expected_versioned_hash[0] = KZG_VERSIONED_HASH;
+        let mut expected_versioned_hash = sha2(comm_bytes.to_vec());
 
-        if versioned_hash != U256::from_big_endian(&expected_versioned_hash) {
+        const KZG_HASH_MASK: U256 = U256([
+            0xffffffffffffffff,
+            0xffffffffffffffff,
+            0xffffffffffffffff,
+            0x00ffffffffffffff,
+        ]);
+        expected_versioned_hash &= KZG_HASH_MASK; // erase most significant byte
+        expected_versioned_hash |= U256::from(KZG_VERSIONED_HASH) << 248; // append 1
+
+        if versioned_hash != expected_versioned_hash {
             return Err(ProgramError::ProverInputError(
                 ProverInputError::KzgEvalFailure(
                     "Versioned hash does not match expected value.".to_string(),
