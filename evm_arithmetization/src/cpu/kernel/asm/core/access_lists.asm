@@ -65,7 +65,7 @@ global init_access_lists:
 
 // Multiply the value at the top of the stack, denoted by ptr/2, by 2
 // and abort if ptr/2 >= mem[@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN]/2
-// In this way 2*value must be pointing to the begining of a node.
+// In this way 2*ptr/2 must be pointing to the begining of a node.
 %macro get_valid_addr_ptr
     // stack: ptr/2
     DUP1
