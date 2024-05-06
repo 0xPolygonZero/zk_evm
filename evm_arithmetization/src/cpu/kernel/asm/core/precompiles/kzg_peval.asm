@@ -66,10 +66,8 @@ global store_kzg_verification:
     PUSH @SEGMENT_RETURNDATA
     %build_address_no_offset
     // stack: addr, res_lo, res_hi, kexit_info
-    DUP1 %add_const(32)
-    %stack (addr_hi, addr_lo, res_lo, res_hi)
-        -> (addr_lo, res_lo, addr_hi, res_hi)
     MSTORE_32BYTES_32
+    // stack: addr', res_hi, kexit_info
     MSTORE_32BYTES_32
     // stack: kexit_info
 
