@@ -339,7 +339,7 @@ impl<F: Field> GenerationState<F> {
     /// `value <= addr < next_value` and `addr` is the top of the stack.
     fn run_next_addresses_insert(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        for (curr_ptr, next_addr, _) in self.get_addresses_access_list()? {
+        for (curr_ptr, next_addr, _, _) in self.get_addresses_access_list()? {
             if next_addr > addr {
                 // In order to avoid pointers to the next ptr, we use the fact
                 // that valid pointers and Segment::AccessedAddresses are always even
@@ -354,7 +354,7 @@ impl<F: Field> GenerationState<F> {
     /// If the element is not in the list returns loops forever
     fn run_next_addresses_remove(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        for (curr_ptr, next_addr, _) in self.get_addresses_access_list()? {
+        for (curr_ptr, next_addr, _, _) in self.get_addresses_access_list()? {
             if next_addr == addr {
                 return Ok(((Segment::AccessedAddresses as usize + curr_ptr) / 2usize).into());
             }
@@ -367,7 +367,7 @@ impl<F: Field> GenerationState<F> {
     fn run_next_storage_insert(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        for (curr_ptr, next_addr, next_key) in self.get_storage_keys_access_list()? {
+        for (curr_ptr, next_addr, next_key, _) in self.get_storage_keys_access_list()? {
             if next_addr > addr || (next_addr == addr && next_key > key) {
                 // In order to avoid pointers to the key, value or next ptr, we use the fact
                 // that valid pointers and Segment::AccessedAddresses are always multiples of 4
@@ -382,7 +382,7 @@ impl<F: Field> GenerationState<F> {
     fn run_next_storage_remove(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        for (curr_ptr, next_addr, next_key) in self.get_storage_keys_access_list()? {
+        for (curr_ptr, next_addr, next_key, _) in self.get_storage_keys_access_list()? {
             if (next_addr == addr && next_key == key) || next_addr == U256::MAX {
                 return Ok(((Segment::AccessedStorageKeys as usize + curr_ptr) / 4usize).into());
             }
@@ -394,7 +394,7 @@ impl<F: Field> GenerationState<F> {
     /// `value <= addr < next_value` and `addr` is the top of the stack.
     fn run_next_insert_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        for (curr_ptr, next_addr, _) in self.get_accounts_linked_list()? {
+        for (curr_ptr, next_addr, _, _) in self.get_accounts_linked_list()? {
             if next_addr > addr {
                 // In order to avoid pointers to the next ptr, we use the fact
                 // that valid pointers and Segment::AccessedAddresses are always even
@@ -409,7 +409,7 @@ impl<F: Field> GenerationState<F> {
     /// If the element is not in the list loops forever
     fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        for (curr_ptr, next_addr, _) in self.get_accounts_linked_list()? {
+        for (curr_ptr, next_addr, _, _) in self.get_accounts_linked_list()? {
             if next_addr == addr {
                 return Ok(((Segment::AccountsLinkedList as usize + curr_ptr) / 2usize).into());
             }
@@ -668,7 +668,7 @@ impl<'a> AccList<'a> {
 }
 
 impl<'a> Iterator for AccList<'a> {
-    type Item = (usize, U256, U256);
+    type Item = (usize, U256, U256, U256);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(new_pos) =
@@ -682,6 +682,7 @@ impl<'a> Iterator for AccList<'a> {
                     old_pos,
                     self.access_list_mem[self.pos].unwrap_or_default(),
                     U256::zero(),
+                    U256::zero(),
                 ))
             } else {
                 // storage_keys or accounts linked list
@@ -689,6 +690,7 @@ impl<'a> Iterator for AccList<'a> {
                     old_pos,
                     self.access_list_mem[self.pos].unwrap_or_default(),
                     self.access_list_mem[self.pos + 1].unwrap_or_default(),
+                    self.access_list_mem[self.pos + 2].unwrap_or_default(),
                 ))
             }
         } else {

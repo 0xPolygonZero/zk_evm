@@ -67,15 +67,17 @@ global init_accounts_linked_list:
     %mul_const(4)
 %endmacro
 
-/// Inserts the account addr and payload otr into the linked list if it is not already present.
+/// Inserts the account addr and payload pinter into the linked list if it is not already present.
 /// `value` should be the current storage value at the slot `(addr, key)`.
-/// Return `0, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
+/// Return `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 global insert_account:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
     // stack: pred_ptr/4, addr, payload_ptr, retdest
+global debug_ptr_div_4:
     %get_valid_account_ptr
+global debug_ptr:
     // stack: pred_ptr, addr, payload_ptr, retdest
     DUP1
     MLOAD_GENERAL
@@ -87,6 +89,7 @@ global insert_account:
     // If the predesessor is strictly smaller or the predecessor is the special
     // node with key @U256_MAX (and hence we're inserting a new minimum), then
     // we need to insert a new node.
+global debug_before_jumpi:
     %jumpi(insert_new_account)
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
@@ -102,30 +105,36 @@ global insert_account:
     %jump_neq_const(@U256_MAX, account_found)
     // The storage key is not in the list.
     PANIC
+
+global debug_account_found:
 account_found:
     // The address was already in the list
     // stack: pred_ptr, addr, payload_ptr, retdest
     // Load the access counter
-    DUP1
     %increment
+    DUP1
     MLOAD_GENERAL
-    // stack: orig_payload_ptr, pred_ptr, addr, payload_ptr, retdest
+    // stack: orig_payload_ptr, pred_ptr + 1, addr, payload_ptr, retdest
     SWAP1
-    %add_const(2)
-    DUP1
-    MLOAD_GENERAL
     %increment
-    // stack: access_ctr, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest
+    DUP1
+global debug_before_load_ctr:
+    MLOAD_GENERAL
+global debug_after_load_ctr:
+    %increment
+    // stack: access_ctr + 1, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest
     SWAP1
     DUP2
-    // stack: access_ctr, access_ctr_ptr, access_ctr, orig_payload_ptr, addr, payload_ptr, retdest
+    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, orig_payload_ptr, addr, payload_ptr, retdest
+global debug_before_store_ctr:
     MSTORE_GENERAL
-    // stack: access_ctr, orig_payload_ptr, addr, payload_ptr, retdest
+    // stack: access_ctr + 1, orig_payload_ptr, addr, payload_ptr, retdest
     // If access_ctr == 1 then this it's a cold access 
-    %eq_const(0)
+    %eq_const(1)
     %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
 
+global debug_insert_new_account:
 insert_new_account:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     POP
@@ -155,11 +164,13 @@ insert_new_account:
     // stack: new_ptr, next_ptr, addr, payload_ptr, retdest
     DUP1
     DUP4
+global debug_store_addr:
     MSTORE_GENERAL
     // stack: new_ptr, next_ptr, addr, payload_ptr, retdest
     %increment
     DUP1
-    DUP4
+    DUP5
+global debug_store_ptr:
     MSTORE_GENERAL
     // stack: new_ptr + 1, next_ptr, addr, payload_ptr, retdest
     %increment
@@ -176,9 +187,11 @@ insert_new_account:
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_account_loaded
-    %pop2
-    PUSH 1
+    POP
+    PUSH 0
     SWAP1
+    SWAP2
+global debug_before_jump:
     JUMP
 
 /// Remove the storage key and its value from the access list.
