@@ -411,7 +411,7 @@ impl<F: Field> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
         for (curr_ptr, next_addr, _, _) in self.get_accounts_linked_list()? {
             if next_addr == addr {
-                return Ok(((Segment::AccountsLinkedList as usize + curr_ptr) / 2usize).into());
+                return Ok(((Segment::AccountsLinkedList as usize + curr_ptr) / 4usize).into());
             }
         }
         Ok((Segment::AccessedAddresses as usize).into())

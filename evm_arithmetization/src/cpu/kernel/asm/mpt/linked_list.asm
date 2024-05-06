@@ -200,7 +200,9 @@ global remove_account:
     // stack: addr, retdest
     PROVER_INPUT(linked_list::remove_account)
     // stack: pred_ptr/4, addr, retdest
+global debug_before_del_ptr:
     %get_valid_account_ptr
+global debug_after_del_ptr:
     // stack: pred_ptr, addr, retdest
     %add_const(3)
     // stack: next_ptr_ptr, addr, retdest
@@ -208,7 +210,6 @@ global remove_account:
     MLOAD_GENERAL
     // stack: next_ptr, next_ptr_ptr, addr, retdest
     DUP1
-    %increment
     MLOAD_GENERAL
     // stack: next_addr, next_ptr, next_ptr_ptr, addr, retdest
     DUP4
