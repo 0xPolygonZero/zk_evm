@@ -13,6 +13,7 @@ use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::extension_tower::{Fp2, Stack, BLS381};
 use crate::memory::segments::Segment::{self, KernelGeneral};
+use crate::util::sha2;
 use crate::witness::errors::ProgramError;
 
 #[test]
@@ -118,9 +119,15 @@ fn test_kzg_peval_precompile() -> Result<()> {
         let commitment_bytes = bytes.0;
         let comm_hi = U256::from_big_endian(&commitment_bytes[0..32]);
         let comm_lo = U256::from_big_endian(&commitment_bytes[32..48]);
-        let mut versioned_hash = keccak(commitment_bytes).0;
-        versioned_hash[0] = KZG_VERSIONED_HASH;
-        let versioned_hash = U256::from_big_endian(&versioned_hash);
+        let mut versioned_hash = sha2(commitment_bytes.to_vec());
+        const KZG_HASH_MASK: U256 = U256([
+            0xffffffffffffffff,
+            0xffffffffffffffff,
+            0xffffffffffffffff,
+            0x00ffffffffffffff,
+        ]);
+        versioned_hash &= KZG_HASH_MASK; // erase most significant byte
+        versioned_hash |= U256::from(KZG_VERSIONED_HASH) << 248; // append 1
         let z = U256::from_big_endian(&bytes.1);
         let y = U256::from_big_endian(&bytes.2);
         let proof_bytes = bytes.3;
