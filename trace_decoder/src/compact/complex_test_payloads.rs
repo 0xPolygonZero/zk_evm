@@ -1,15 +1,15 @@
-use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::partial_trie::PartialTrie;
 
 use super::{
     compact_prestate_processing::{
-        process_compact_prestate, process_compact_prestate_debug, CompactParsingResult,
-        PartialTriePreImages, ProcessedCompactOutput,
+        process_compact_prestate, process_compact_prestate_debug, CompactDecodingResult,
+        ProcessedCompactOutput,
     },
     compact_to_partial_trie::StateTrieExtractionOutput,
 };
 use crate::{
-    trace_protocol::TrieCompact,
+    aliased_crate_types::MptAccountRlp,
+    trace_protocol::MptTrieCompact,
     types::{HashedAccountAddr, TrieRootHash, EMPTY_TRIE_HASH},
     utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie},
 };
@@ -32,7 +32,7 @@ pub(crate) const TEST_PAYLOAD_6: TestProtocolInputAndRoot = TestProtocolInputAnd
     root_str: "135a0c66146c60d7f78049b3a3486aae3e155015db041a4650966e001f9ba301",
 };
 
-type ProcessCompactPrestateFn = fn(TrieCompact) -> CompactParsingResult<ProcessedCompactOutput>;
+type ProcessCompactPrestateFn = fn(MptTrieCompact) -> CompactDecodingResult<ProcessedCompactOutput>;
 
 pub(crate) struct TestProtocolInputAndRoot {
     pub(crate) byte_str: &'static str,
@@ -40,6 +40,7 @@ pub(crate) struct TestProtocolInputAndRoot {
 }
 
 impl TestProtocolInputAndRoot {
+    #[allow(dead_code)]
     pub(crate) fn parse_and_check_hash_matches(self) {
         self.parse_and_check_hash_matches_common(process_compact_prestate);
     }
@@ -55,7 +56,7 @@ impl TestProtocolInputAndRoot {
         let protocol_bytes = hex::decode(self.byte_str).unwrap();
         let expected_hash = TrieRootHash::from_slice(&hex::decode(self.root_str).unwrap());
 
-        let out = match process_compact_prestate_f(TrieCompact(protocol_bytes)) {
+        let out = match process_compact_prestate_f(MptTrieCompact(protocol_bytes)) {
             Ok(x) => x,
             Err(err) => panic!("{}", err.to_string()),
         };
@@ -81,7 +82,7 @@ impl TestProtocolInputAndRoot {
                 data.as_val().map(|data| {
                     (
                         HashedAccountAddr::from_slice(&addr.bytes_be()),
-                        rlp::decode::<AccountRlp>(data).unwrap().storage_root,
+                        rlp::decode::<MptAccountRlp>(data).unwrap().storage_root,
                     )
                 })
             })

@@ -1,38 +1,33 @@
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::{
-    generation::GenerationInputs,
-    proof::{BlockHashes, BlockMetadata},
-};
-use mpt_trie::{nibbles::Nibbles, partial_trie::HashedPartialTrie};
+use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
-// TODO: Make these types in the doc comments point to the actual types...
-/// A type alias for `[U256; 8]` of a bloom filter.
-pub type Bloom = [U256; 8];
-/// A type alias for `H256` of a code hash.
-pub type CodeHash = H256;
-/// A type alias for `H256` of an account address's hash.
-pub type HashedAccountAddr = H256;
-/// A type alias for `Nibbles` of an account address's hash.
-pub type HashedAccountAddrNibbles = Nibbles;
-/// A type alias for `H256` of a node address's hash.
-pub type HashedNodeAddr = H256;
-/// A type alias for `H256` of a storage address's hash.
-pub type HashedStorageAddr = H256;
-/// A type alias for `Nibbles` of a hashed storage address's nibbles.
-pub type HashedStorageAddrNibbles = Nibbles;
-/// A type alias for `H256` of a storage address.
-pub type StorageAddr = H256;
-/// A type alias for `H256` of a storage address's nibbles.
-pub type StorageAddrNibbles = H256;
-/// A type alias for `U256` of a storage value.
-pub type StorageVal = U256;
-/// A type alias for `H256` of a trie root hash.
-pub type TrieRootHash = H256;
-/// A type alias for `usize` of a transaction's index within a block.
-pub type TxnIdx = usize;
+use crate::aliased_crate_types::{MptBlockHashes, MptBlockMetadata};
 
-pub(crate) type TriePathIter = mpt_trie::special_query::TriePathIter<HashedPartialTrie>;
+/// A type alias for `[`[`U256`]`; 8]` of a bloom filter.
+pub type Bloom = [U256; 8];
+/// A type alias for [`H256`] of a code hash.
+pub type CodeHash = H256;
+/// A type alias for [`H256`] of an account address's hash.
+pub type HashedAccountAddr = H256;
+/// A type alias for [`Nibbles`] of an account address's hash.
+pub type HashedAccountAddrNibbles = Nibbles;
+/// A type alias for [`H256`] of a node address's hash.
+pub type HashedNodeAddr = H256;
+/// A type alias for [`H256`] of a storage address's hash.
+pub type HashedStorageAddr = H256;
+/// A type alias for [`Nibbles`] of a hashed storage address's nibbles.
+pub type HashedStorageAddrNibbles = Nibbles;
+/// A type alias for [`H256`] of a storage address.
+pub type StorageAddr = H256;
+/// A type alias for [`H256`] of a storage address's nibbles.
+pub type StorageAddrNibbles = H256;
+/// A type alias for [`U256`] of a storage value.
+pub type StorageVal = U256;
+/// A type alias for [`H256`] of a trie root hash.
+pub type TrieRootHash = H256;
+/// A type alias for [`usize`] of a transaction's index within a block.
+pub type TxnIdx = usize;
 
 /// A function which turns a code hash into bytes.
 pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;
@@ -73,9 +68,9 @@ pub struct OtherBlockData {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockLevelData {
     /// All block data excluding block hashes and withdrawals.
-    pub b_meta: BlockMetadata,
+    pub b_meta: MptBlockMetadata,
     /// Block hashes: the previous 256 block hashes and the current block hash.
-    pub b_hashes: BlockHashes,
+    pub b_hashes: MptBlockHashes,
     /// Block withdrawal addresses and values.
     pub withdrawals: Vec<(Address, U256)>,
 }
