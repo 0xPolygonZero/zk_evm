@@ -227,3 +227,8 @@ global debug_after_del_ptr:
     MSTORE_GENERAL
     POP
     JUMP
+
+// Polulates the state MPT with the nodes in the list plus non-deterministically guessed
+// hased nodes.
+global account_linked_list_to_state_trie:
+    

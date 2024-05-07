@@ -487,28 +487,28 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    pub(crate) fn get_addresses_access_list(&self) -> Result<AccList, ProgramError> {
+    pub(crate) fn get_addresses_access_list(&self) -> Result<LinkedList, ProgramError> {
         // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
         // virtual address in the segment. In order to get the length we need
         // to substract `Segment::AccessedAddresses` as usize.
         let acc_addr_len =
             u256_to_usize(self.get_global_metadata(GlobalMetadata::AccessedAddressesLen))?
                 - Segment::AccessedAddresses as usize;
-        AccList::from_mem_and_segment(
+        LinkedList::from_mem_and_segment(
             &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content
                 [..acc_addr_len],
             Segment::AccessedAddresses,
         )
     }
 
-    pub(crate) fn get_accounts_linked_list(&self) -> Result<AccList, ProgramError> {
+    pub(crate) fn get_accounts_linked_list(&self) -> Result<LinkedList, ProgramError> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
         // available virtual address in the segment. In order to get the length
         // we need to substract `Segment::AccountsLinkedList` as usize.
         let acc_list_len =
             u256_to_usize(self.get_global_metadata(GlobalMetadata::AccountsLinkedListLen))?
                 - Segment::AccountsLinkedList as usize;
-        AccList::from_mem_and_segment(
+        LinkedList::from_mem_and_segment(
             &self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()].content
                 [..acc_list_len],
             Segment::AccountsLinkedList,
@@ -523,7 +523,7 @@ impl<F: Field> GenerationState<F> {
         ))
     }
 
-    pub(crate) fn get_storage_keys_access_list(&self) -> Result<AccList, ProgramError> {
+    pub(crate) fn get_storage_keys_access_list(&self) -> Result<LinkedList, ProgramError> {
         // GlobalMetadata::AccessedStorageKeysLen stores the value of the next available
         // virtual address in the segment. In order to get the length we need
         // to substract Segment::AccessedStorageKeys as usize
@@ -534,7 +534,7 @@ impl<F: Field> GenerationState<F> {
                 GlobalMetadata::AccessedStorageKeysLen.unscale(),
             )) - Segment::AccessedStorageKeys as usize,
         )?;
-        AccList::from_mem_and_segment(
+        LinkedList::from_mem_and_segment(
             &self.memory.contexts[0].segments[Segment::AccessedStorageKeys.unscale()].content
                 [..acc_storage_len],
             Segment::AccessedStorageKeys,
@@ -638,14 +638,14 @@ impl<'a> Iterator for CodeIterator<'a> {
 // In this representation, the values of nodes are stored in the range
 // `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
 // 1]` holds the address of the next node, where i = node_size * j.
-pub(crate) struct AccList<'a> {
-    access_list_mem: &'a [Option<U256>],
+pub(crate) struct LinkedList<'a> {
+    linked_list_mem: &'a [Option<U256>],
     node_size: usize,
     offset: usize,
     pos: usize,
 }
 
-impl<'a> AccList<'a> {
+impl<'a> LinkedList<'a> {
     const fn from_mem_and_segment(
         access_list_mem: &'a [Option<U256>],
         segment: Segment,
@@ -654,7 +654,7 @@ impl<'a> AccList<'a> {
             return Err(ProgramError::ProverInputError(InvalidInput));
         }
         Ok(Self {
-            access_list_mem,
+            linked_list_mem: access_list_mem,
             node_size: match segment {
                 Segment::AccessedAddresses => 2,
                 Segment::AccessedStorageKeys => 4,
@@ -667,12 +667,12 @@ impl<'a> AccList<'a> {
     }
 }
 
-impl<'a> Iterator for AccList<'a> {
+impl<'a> Iterator for LinkedList<'a> {
     type Item = (usize, U256, U256, U256);
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Ok(new_pos) =
-            u256_to_usize(self.access_list_mem[self.pos + self.node_size - 1].unwrap_or_default())
+            u256_to_usize(self.linked_list_mem[self.pos + self.node_size - 1].unwrap_or_default())
         {
             let old_pos = self.pos;
             self.pos = new_pos - self.offset;
@@ -680,7 +680,7 @@ impl<'a> Iterator for AccList<'a> {
                 // addresses
                 Some((
                     old_pos,
-                    self.access_list_mem[self.pos].unwrap_or_default(),
+                    self.linked_list_mem[self.pos].unwrap_or_default(),
                     U256::zero(),
                     U256::zero(),
                 ))
@@ -688,9 +688,9 @@ impl<'a> Iterator for AccList<'a> {
                 // storage_keys or accounts linked list
                 Some((
                     old_pos,
-                    self.access_list_mem[self.pos].unwrap_or_default(),
-                    self.access_list_mem[self.pos + 1].unwrap_or_default(),
-                    self.access_list_mem[self.pos + 2].unwrap_or_default(),
+                    self.linked_list_mem[self.pos].unwrap_or_default(),
+                    self.linked_list_mem[self.pos + 1].unwrap_or_default(),
+                    self.linked_list_mem[self.pos + 2].unwrap_or_default(),
                 ))
             }
         } else {
