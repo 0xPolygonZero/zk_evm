@@ -1,15 +1,10 @@
-use std::hash::Hash;
-
 use keccak_hash::H256;
 use mpt_trie::partial_trie::PartialTrie;
-use plonky2::plonk::config::GenericHashOut;
 use smt_trie::utils::hashout2u;
 
 use super::{
-    compact_mpt_processing::{
-        process_compact_mpt_prestate, process_compact_mpt_prestate_debug, ProcessedCompactOutput,
-    },
-    compact_processing_common::{CompactParsingResult, Header},
+    compact_mpt_processing::{process_compact_mpt_prestate, process_compact_mpt_prestate_debug},
+    compact_processing_common::{CompactParsingResult, Header, ProcessedCompactOutput},
     compact_smt_processing::process_compact_smt_prestate_debug,
     compact_to_mpt_trie::StateTrieExtractionOutput,
     compact_to_smt_trie::SmtStateTrieExtractionOutput,
@@ -179,6 +174,7 @@ pub(crate) struct TestProtocolInputAndRoot {
 }
 
 impl TestProtocolInputAndRoot {
+    #[allow(dead_code)]
     pub(crate) fn parse_and_check_hash_matches(self) {
         self.parse_and_check_mpt_trie(process_compact_mpt_prestate);
     }
@@ -218,8 +214,6 @@ impl TestProtocolInputAndRoot {
                 .unwrap_or_else(|err| panic!("{}", err));
         let mut buf: [u8; 32] = [0; 32];
         hashout2u(out.witness_out.state_trie.root).to_big_endian(&mut buf);
-
-        let hash = hex::encode(buf);
 
         self.header_and_hash_checks(H256::from_slice(&buf), out.header);
     }

@@ -13,17 +13,18 @@ use ethereum_types::U256;
 use keccak_hash::H256;
 use log::trace;
 use mpt_trie::nibbles::{FromHexPrefixError, Nibbles};
+use mpt_trie::trie_ops::TrieOpError;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
 use super::{
-    compact_mpt_processing::{AccountNodeData, ProcessedCompactOutput},
-    compact_smt_processing::SmtNodeType,
+    compact_mpt_processing::AccountNodeData, compact_smt_processing::SmtLeafNodeType,
     compact_to_mpt_trie::UnexpectedCompactNodeType,
 };
-use crate::{decoding::TrieType, trace_protocol::MptTrieCompact, types::TrieRootHash};
+use crate::{decoding::TrieType, types::TrieRootHash};
 
 pub(super) type BranchMask = u32;
+pub type CompactDecodingResult<T> = Result<T, CompactParsingError>;
 
 pub(super) type Balance = U256;
 pub(super) type Nonce = U256;
@@ -119,13 +120,29 @@ pub enum CompactParsingError {
     #[error("Unable to create key nibbles from bytes {0}")]
     KeyError(#[from] FromHexPrefixError),
 
+    /// Failure due to an incompatible version.
+    #[error("Incompatible version, expected: {0}, actual: {1}")]
+    IncompatibleVersion(u8, u8),
+
     // TODO: Move behind smt feature flag...
     #[error("Encountered an unknown smt leaf node type byte ({0:x})")]
     UnknownSmtNodeType(u8),
+
+    /// Failure due to a trie operation error.
+    #[error("Trie operation error: {0}")]
+    TrieOpError(TrieOpError),
 }
 
+impl From<TrieOpError> for CompactParsingError {
+    fn from(err: TrieOpError) -> Self {
+        CompactParsingError::TrieOpError(err)
+    }
+}
+
+/// Represents detailed error information about issues encountered
+/// while processing byte streams with a cursor.
 #[derive(Clone, Debug)]
-pub(super) struct CursorBytesErrorInfo {
+pub struct CursorBytesErrorInfo {
     error_start_pos: usize,
     bad_bytes_hex: String,
 }
@@ -170,9 +187,12 @@ pub(super) enum Opcode {
     SMTLeaf = 0x07,
 }
 
+/// Compact witness entry.
 #[derive(Clone, Debug, EnumAsInner)]
-pub(super) enum WitnessEntry {
+pub enum WitnessEntry {
+    /// An instruction.
     Instruction(Instruction),
+    /// A node.
     Node(NodeEntry),
 }
 
@@ -185,18 +205,27 @@ impl Display for WitnessEntry {
     }
 }
 
-// TODO: Ignore `NEW_TRIE` for now...
+/// A type alias for a list of witness entries.
 #[derive(Clone, Debug, Eq, EnumAsInner, PartialEq)]
-pub(super) enum Instruction {
+pub enum Instruction {
+    /// A leaf node.
     Leaf(Nibbles, RawValue),
+    /// An extension node.
     Extension(Nibbles),
+    /// A branch node.
     Branch(BranchMask),
+    /// A hash node.
     Hash(HashValue),
+    /// A code node for MPT.
     Code(RawCode),
+    /// A code node for SMT.
     CodeSMT(Address, RawCode),
+    /// An account leaf node.
     AccountLeaf(Nibbles, Nonce, Balance, HasCode, HasStorage),
+    /// An empty root node.
     EmptyRoot,
-    SMTLeaf(SmtNodeType, Address, Slot, Value),
+    /// A leaf node for SMT.
+    SMTLeaf(SmtLeafNodeType, Address, Slot, Value),
 }
 
 impl Display for Instruction {
@@ -230,16 +259,23 @@ impl From<Instruction> for WitnessEntry {
 // TODO: It's probably better to use two separate types for both mpt and smt
 // nodes. Not urgent, but this is probably best for QoL...
 #[derive(Clone, Debug, EnumAsInner, PartialEq)]
-pub(super) enum NodeEntry {
+pub enum NodeEntry {
+    /// A MPT 16-ary branch node.
     Branch([Option<Box<NodeEntry>>; 16]),
+    /// A SMT binary branch node.
     BranchSMT([Option<Box<NodeEntry>>; 2]),
+    /// A code node.
     Code(Vec<u8>),
-    CodeSMT(Address, Vec<u8>),
+    /// An empty node.
     Empty,
+    /// A hash node.
     Hash(HashValue),
+    /// A leaf node.
     Leaf(Nibbles, LeafNodeData),
+    /// A extension node.
     Extension(Nibbles, Box<NodeEntry>),
-    SMTLeaf(SmtNodeType, Address, Slot, Value),
+    /// A SMT leaf node.
+    SMTLeaf(SmtLeafNodeType, Address, Slot, Value),
 }
 
 impl Display for NodeEntry {
@@ -248,7 +284,6 @@ impl Display for NodeEntry {
             NodeEntry::Branch(_) => write!(f, "Branch"),
             NodeEntry::BranchSMT(_) => write!(f, "BranchSMT"),
             NodeEntry::Code(_) => write!(f, "Code"),
-            NodeEntry::CodeSMT(_, _) => write!(f, "CodeSMT"),
             NodeEntry::Empty => write!(f, "Empty"),
             NodeEntry::Hash(_) => write!(f, "Hash"),
             NodeEntry::Leaf(_, _) => write!(f, "Leaf"),
@@ -258,8 +293,9 @@ impl Display for NodeEntry {
     }
 }
 
+/// A value of a node data.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct ValueNodeData(pub(super) Vec<u8>);
+pub struct ValueNodeData(pub(super) Vec<u8>);
 
 impl From<Vec<u8>> for ValueNodeData {
     fn from(v: Vec<u8>) -> Self {
@@ -267,15 +303,21 @@ impl From<Vec<u8>> for ValueNodeData {
     }
 }
 
+/// A leaf node data.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum LeafNodeData {
+pub enum LeafNodeData {
+    /// A value node.
     Value(ValueNodeData),
+    /// An account node.
     Account(AccountNodeData),
 }
 
+/// An account node code.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum AccountNodeCode {
+pub enum AccountNodeCode {
+    /// A code node.
     CodeNode(Vec<u8>),
+    /// A hash node.
     HashNode(TrieRootHash),
 }
 
@@ -290,27 +332,11 @@ impl From<TrieRootHash> for AccountNodeCode {
         Self::HashNode(v)
     }
 }
-
-#[derive(Clone, Debug, PartialEq)]
-pub(super) struct SMTLeafNode {
-    pub(super) address: Vec<u8>,
-    pub(super) storage_key: Vec<u8>,
-    pub(super) value: Vec<u8>,
-}
-
-impl SMTLeafNode {
-    fn new(address: Vec<u8>, storage_key: Vec<u8>, value: Vec<u8>) -> Self {
-        Self {
-            address,
-            storage_key,
-            value,
-        }
-    }
-}
-
+/// A witness header.
 #[derive(Debug)]
-pub(crate) struct Header {
-    pub(super) version: u8,
+pub struct Header {
+    /// The version of the witness.
+    pub version: u8,
 }
 
 impl Display for Header {
@@ -328,36 +354,6 @@ impl Header {
 #[derive(Debug)]
 pub(super) struct ParserState {
     pub(super) entries: WitnessEntries,
-}
-
-struct Stack<T> {
-    stack: Vec<T>,
-}
-
-impl<T> Stack<T> {
-    fn new() -> Self {
-        Stack { stack: Vec::new() }
-    }
-
-    fn length(&self) -> usize {
-        self.stack.len()
-    }
-
-    fn pop(&mut self) -> Option<T> {
-        self.stack.pop()
-    }
-
-    fn push(&mut self, item: T) {
-        self.stack.push(item)
-    }
-
-    fn is_empty(&self) -> bool {
-        self.stack.is_empty()
-    }
-
-    fn peek(&self) -> Option<&T> {
-        self.stack.last()
-    }
 }
 
 pub(super) trait CompactCursor {
@@ -526,7 +522,6 @@ impl CompactCursor for DebugCompactCursor {
     ) -> CompactParsingResult<Vec<u8>> {
         let cursor_start_pos = self.0.intern.position();
         let res = self.0.read_cbor_byte_array_to_vec(field_name);
-
         if let Ok(bytes) = res.as_ref() {
             let hex_bytes = hex::encode(bytes);
             let hex_start_pos = cursor_start_pos * 2;
@@ -616,7 +611,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         self.process_data_following_opcode(opcode)
     }
 
-    fn process_data_following_opcode(&mut self, opcode: Opcode) -> CompactParsingResult<()> {
+    fn process_data_following_opcode(&mut self, opcode: Opcode) -> CompactDecodingResult<()> {
         match opcode {
             Opcode::Leaf => self.process_leaf(),
             Opcode::Extension => self.process_extension(),
@@ -708,9 +703,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
             self.byte_cursor.read_t::<u64>("code size")
         })?;
 
-        // TODO: process actual storage trie probably? Wait until we know what is going
-        // on here.
-
         self.push_entry(Instruction::AccountLeaf(
             key,
             nonce,
@@ -725,9 +717,9 @@ impl<C: CompactCursor> WitnessBytes<C> {
     fn read_account_flag_field_if_present_or_default<F, T>(
         present_flag: bool,
         mut read_f: F,
-    ) -> CompactParsingResult<T>
+    ) -> CompactDecodingResult<T>
     where
-        F: FnMut() -> CompactParsingResult<T>,
+        F: FnMut() -> CompactDecodingResult<T>,
         T: Default,
     {
         Ok(match present_flag {
@@ -756,12 +748,12 @@ impl<C: CompactCursor> WitnessBytes<C> {
 
     pub(super) fn process_smt_leaf(&mut self) -> CompactParsingResult<()> {
         let node_type_byte: u8 = self.byte_cursor.read_t("nodeType")?;
-        let node_type = SmtNodeType::n(node_type_byte)
+        let node_type = SmtLeafNodeType::from_byte(node_type_byte)
             .ok_or_else(|| CompactParsingError::UnknownSmtNodeType(node_type_byte))?;
         let address: Vec<u8> = self.byte_cursor.read_cbor_byte_array_to_vec("address")?;
 
         let mut storage = Vec::new();
-        if matches!(node_type, SmtNodeType::Storage) {
+        if matches!(node_type, SmtLeafNodeType::Storage) {
             storage = self.byte_cursor.read_cbor_byte_array_to_vec("storage")?;
         }
 
@@ -904,8 +896,6 @@ pub(super) struct CollapsableWitnessEntryTraverser<'a> {
     entry_cursor: CursorMut<'a, WitnessEntry>,
 }
 
-// TODO: For now, lets just use pure values in the buffer, but we probably want
-// to switch over to references later...
 impl<'a> CollapsableWitnessEntryTraverser<'a> {
     pub(super) fn advance(&mut self) {
         self.entry_cursor.move_next();
@@ -954,19 +944,6 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
     }
 
     // Inclusive.
-    pub(super) fn replace_next_n_entries_with_single_entry(
-        &mut self,
-        n: usize,
-        entry: WitnessEntry,
-    ) {
-        for _ in 0..n {
-            self.entry_cursor.remove_current();
-        }
-
-        self.entry_cursor.insert_after(entry)
-    }
-
-    // Inclusive.
     pub(super) fn replace_prev_n_entries_with_single_entry(
         &mut self,
         n: usize,
@@ -997,22 +974,15 @@ pub(super) fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Opt
     }
 }
 
-#[derive(Debug)]
-pub(super) enum TraverserDirection {
-    Forwards,
-    Backwards,
-    Both,
-}
-
 pub(super) fn process_compact_prestate_common<T>(
     state_bytes: Vec<u8>,
-    create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
+    create_and_extract_header_f: fn(Vec<u8>) -> CompactDecodingResult<(Header, ParserState)>,
     parse_f: fn(ParserState) -> CompactParsingResult<T>,
 ) -> CompactParsingResult<ProcessedCompactOutput<T>>
 where
     T: Debug,
 {
-    let (header, mut parser) = create_and_extract_header_f(state_bytes)?;
+    let (header, parser) = create_and_extract_header_f(state_bytes)?;
     let witness_out: T = (parse_f(parser))?;
 
     let out = ProcessedCompactOutput {
@@ -1023,15 +993,31 @@ where
     Ok(out)
 }
 
+/// The output we get from processing prestate compact into the trie format of
+/// `mpt_trie`.
+///
+/// Note that this format contains storage tries embedded within the state trie,
+/// so there may be multiple tries inside this output. Also note that the
+/// bytecode (instead of just the code hash) may be embedded directly in this
+/// format.
+#[derive(Debug)]
+pub struct ProcessedCompactOutput<T> {
+    /// The header of the compact.
+    pub header: Header,
+
+    /// The actual processed `mpt_trie` tries and additional code hash mappings
+    /// from the compact.
+    pub witness_out: T,
+}
+
 #[cfg(test)]
 mod tests {
-    use mpt_trie::{nibbles::Nibbles, partial_trie::PartialTrie};
+    use mpt_trie::nibbles::Nibbles;
 
     use super::Instruction;
     use crate::compact::{
         compact_debug_tools::parse_just_to_instructions,
-        compact_mpt_processing::process_compact_mpt_prestate_debug,
-        compact_processing_common::{key_bytes_to_nibbles, ParserState},
+        compact_processing_common::key_bytes_to_nibbles,
         complex_test_payloads::{
             MPT_TEST_PAYLOAD_1, MPT_TEST_PAYLOAD_2, MPT_TEST_PAYLOAD_3, MPT_TEST_PAYLOAD_4,
             MPT_TEST_PAYLOAD_5, MPT_TEST_PAYLOAD_6, SMT_TEST_PAYLOAD_1, SMT_TEST_PAYLOAD_10,
@@ -1194,7 +1180,6 @@ mod tests {
         init();
         SMT_TEST_PAYLOAD_12.parse_and_check_hash_matches_with_debug_smt();
     }
-
     #[test]
     fn smt_complex_payload_13() {
         init();

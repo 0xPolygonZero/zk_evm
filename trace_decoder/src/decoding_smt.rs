@@ -1,8 +1,7 @@
 use thiserror::Error;
 
 use crate::{
-    aliased_crate_types::{MptGenerationInputs, SmtGenerationInputs},
-    processed_block_trace_smt::SmtProcessedBlockTrace,
+    aliased_crate_types::SmtGenerationInputs, processed_block_trace_smt::SmtProcessedBlockTrace,
     types::OtherBlockData,
 };
 
@@ -17,7 +16,7 @@ pub enum SmtTraceParsingError {}
 impl SmtProcessedBlockTrace {
     pub(crate) fn into_proof_gen_ir(
         self,
-        other_data: OtherBlockData,
+        _other_data: OtherBlockData,
     ) -> SmtTraceParsingResult<Vec<SmtGenerationInputs>> {
         todo!()
     }

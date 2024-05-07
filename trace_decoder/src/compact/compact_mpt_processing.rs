@@ -1,50 +1,39 @@
 //! Processing for the mpt compact format as specified here: <https://github.com/ledgerwatch/erigon/blob/devel/docs/programmers_guide/witness_formal_spec.md>
 
 use std::{
-    any::type_name,
-    collections::{linked_list::CursorMut, HashMap, LinkedList},
-    error::Error,
+    collections::HashMap,
     fmt::{self, Debug, Display},
-    io::{Cursor, Read},
-    iter,
 };
 
-use enum_as_inner::EnumAsInner;
-use enumn::N;
-use ethereum_types::{H256, U256};
-use log::{info, trace};
-use mpt_trie::{
-    nibbles::{FromHexPrefixError, Nibbles},
-    partial_trie::{HashedPartialTrie, PartialTrie},
-};
-use serde::de::DeserializeOwned;
-use thiserror::Error;
+use mpt_trie::partial_trie::HashedPartialTrie;
 
 use super::{
     compact_processing_common::{
         process_compact_prestate_common, try_get_node_entry_from_witness_entry, AccountNodeCode,
         Balance, BranchMask, CollapsableWitnessEntryTraverser, CompactCursorFast,
-        CompactParsingError, CompactParsingResult, DebugCompactCursor, Header, Instruction,
-        LeafNodeData, NodeEntry, Nonce, ParserState, TraverserDirection, WitnessBytes,
-        WitnessEntry, BRANCH_MAX_CHILDREN, MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
+        CompactDecodingResult, CompactParsingError, CompactParsingResult, DebugCompactCursor,
+        Header, Instruction, LeafNodeData, NodeEntry, Nonce, ParserState, ProcessedCompactOutput,
+        WitnessBytes, WitnessEntry, BRANCH_MAX_CHILDREN,
+        MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
     },
     compact_to_mpt_trie::{
         create_mpt_trie_from_remaining_witness_elem, create_storage_mpt_trie_from_compact_node,
         StateTrieExtractionOutput,
     },
 };
-use crate::{
-    decoding::TrieType,
-    trace_protocol::MptTrieCompact,
-    types::{CodeHash, HashedAccountAddr, TrieRootHash},
-};
+use crate::{trace_protocol::MptTrieCompact, types::HashedAccountAddr};
 
+/// Account node data.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct AccountNodeData {
-    pub(super) nonce: Nonce,
-    pub(super) balance: Balance,
-    pub(super) storage_trie: Option<HashedPartialTrie>,
-    pub(super) account_node_code: Option<AccountNodeCode>,
+pub struct AccountNodeData {
+    /// The nonce of the account.
+    pub nonce: Nonce,
+    /// The balance of the account.
+    pub balance: Balance,
+    /// The storage trie of the account.
+    pub storage_trie: Option<HashedPartialTrie>,
+    /// The code of the account.
+    pub account_node_code: Option<AccountNodeCode>,
 }
 
 impl AccountNodeData {
@@ -137,7 +126,7 @@ impl ParserState {
                         traverser,
                         NodeEntry::Extension(k, Box::new(node.clone())),
                     ),
-                    _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+                    _ => Self::invalid_witness_err(2, traverser),
                 }
             }
             WitnessEntry::Instruction(Instruction::Code(c)) => {
@@ -260,7 +249,7 @@ impl ParserState {
             WitnessEntry::Node(node) => {
                 Self::try_create_and_insert_partial_trie_from_node(&node, None, 2, traverser)
             }
-            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(2, traverser),
         }
     }
 
@@ -277,7 +266,7 @@ impl ParserState {
             WitnessEntry::Node(NodeEntry::Hash(h)) => {
                 Ok((2, Some(AccountNodeCode::HashNode(h)), None))
             }
-            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(2, traverser),
         }
     }
 
@@ -304,7 +293,7 @@ impl ParserState {
                     traverser,
                 )
             }
-            _ => Self::invalid_witness_err(3, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(3, traverser),
         }
     }
 
@@ -343,7 +332,7 @@ impl ParserState {
                 let s_trie_out = create_storage_mpt_trie_from_compact_node(storage_root_node)?;
                 Ok((n, account_node_code, Some(s_trie_out.trie)))
             }
-            None => Self::invalid_witness_err(n, TraverserDirection::Backwards, traverser),
+            None => Self::invalid_witness_err(n, traverser),
         }
     }
 
@@ -356,24 +345,9 @@ impl ParserState {
 
     fn invalid_witness_err<T>(
         n: usize,
-        t_dir: TraverserDirection,
         traverser: &mut CollapsableWitnessEntryTraverser,
-    ) -> CompactParsingResult<T> {
-        let adjacent_elems_buf = match t_dir {
-            TraverserDirection::Forwards => traverser.get_next_n_elems(n).cloned().collect(),
-            TraverserDirection::Backwards => traverser.get_prev_n_elems(n).cloned().collect(),
-            TraverserDirection::Both => {
-                let prev_elems = traverser.get_prev_n_elems(n);
-                let next_elems_including_curr = traverser.get_next_n_elems(n + 1);
-                let prev_elems_vec: Vec<_> = prev_elems.collect();
-
-                prev_elems_vec
-                    .into_iter()
-                    .chain(next_elems_including_curr)
-                    .cloned()
-                    .collect()
-            }
-        };
+    ) -> CompactDecodingResult<T> {
+        let adjacent_elems_buf = traverser.get_prev_n_elems(n).cloned().collect();
 
         Err(CompactParsingError::InvalidWitnessFormat(
             adjacent_elems_buf,
@@ -394,23 +368,6 @@ impl ParserState {
 pub(crate) struct MptPartialTriePreImages {
     pub state: HashedPartialTrie,
     pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
-}
-
-/// The output we get from processing prestate compact into the trie format of
-/// `mpt_trie`.
-///
-/// Note that this format contains storage tries embedded within the state trie,
-/// so there may be multiple tries inside this output. Also note that the
-/// bytecode (instead of just the code hash) may be embedded directly in this
-/// format.
-#[derive(Debug)]
-pub struct ProcessedCompactOutput<T> {
-    /// The header of the compact.
-    pub header: Header,
-
-    /// The actual processed `mpt_trie` tries and additional code hash mappings
-    /// from the compact.
-    pub witness_out: T,
 }
 
 /// Processes the compact prestate into the trie format of `mpt_trie`.
@@ -439,6 +396,7 @@ pub fn process_compact_mpt_prestate_debug(
 
 // TODO: Move behind a feature flag just used for debugging (but probably not
 // `debug`)...
+#[allow(dead_code)]
 fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     let (_, entries) = witness_bytes.process_into_instructions_and_header()?;

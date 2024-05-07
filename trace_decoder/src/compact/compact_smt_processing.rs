@@ -2,35 +2,48 @@
 
 use std::collections::HashMap;
 
-use enumn::N;
-use ethereum_types::Address;
-use keccak_hash::H256;
-use mpt_trie::partial_trie::HashedPartialTrie;
-
 use super::{
-    compact_mpt_processing::ProcessedCompactOutput,
     compact_processing_common::{
         process_compact_prestate_common, CollapsableWitnessEntryTraverser, CompactCursor,
         CompactParsingError, CompactParsingResult, DebugCompactCursor, Header, Instruction,
-        NodeEntry, Opcode, ParserState, WitnessBytes, WitnessEntries, WitnessEntry,
+        NodeEntry, Opcode, ParserState, ProcessedCompactOutput, WitnessBytes, WitnessEntries,
+        WitnessEntry,
     },
     compact_to_smt_trie::{
         create_smt_trie_from_remaining_witness_elem, SmtStateTrieExtractionOutput,
     },
 };
-use crate::{
-    trace_protocol::{MptTrieCompact, SingleSmtPreImage},
-    types::{CodeHash, HashedAccountAddr, TrieRootHash},
-    utils::hash,
-};
+use crate::{trace_protocol::SingleSmtPreImage, types::CodeHash, utils::hash};
 
-#[derive(Copy, Clone, Debug, Eq, N, PartialEq)]
-pub(super) enum SmtNodeType {
+/// Byte to encode the type of node the SMT leaf represents.
+// `enumn` (`N`) generates public functions that are missing documentation, so I think we need to
+// disable missing doc checks here.
+#[allow(missing_docs)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SmtLeafNodeType {
+    /// Node contains the balance for a account.
     Balance = 0,
+    /// Node contains the nonce for a account.
     Nonce = 1,
+    /// Node contains the contract code hash for a account.
     Code = 2,
+    /// Node contains the storage root for a account.
     Storage = 3,
+    /// Node contains the length of the contract bytecode for an account.
     CodeLength = 4,
+}
+
+impl SmtLeafNodeType {
+    pub(crate) fn from_byte(byte: u8) -> Option<Self> {
+        match byte {
+            0 => Some(Self::Balance),
+            1 => Some(Self::Nonce),
+            2 => Some(Self::Code),
+            3 => Some(Self::Storage),
+            4 => Some(Self::CodeLength),
+            _ => None,
+        }
+    }
 }
 
 impl ParserState {
@@ -51,16 +64,6 @@ impl ParserState {
         let p_state = Self { entries };
 
         Ok((header, p_state))
-    }
-
-    pub(crate) fn process_compact_prestate_debug_smt(
-        state: MptTrieCompact,
-    ) -> CompactParsingResult<ProcessedCompactOutput<SmtStateTrieExtractionOutput>> {
-        process_compact_prestate_common(
-            state.0,
-            ParserState::create_and_extract_header_debug_smt,
-            ParserState::parse_smt,
-        )
     }
 
     fn apply_rules_to_witness_entries_smt(
@@ -88,7 +91,7 @@ impl ParserState {
 
                 let node_entry = Self::try_apply_rules_to_curr_entry_smt(traverser, buf, code);
                 match node_entry.clone() {
-                    NodeEntry::SMTLeaf(n, a, s, v) => {
+                    NodeEntry::SMTLeaf(_, _, _, _) => {
                         if mask == 3 {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
@@ -104,7 +107,7 @@ impl ParserState {
                             branch_nodes[0] = Some(Box::new(node_entry));
                         }
                     }
-                    NodeEntry::Hash(h) => {
+                    NodeEntry::Hash(_) => {
                         if mask == 3 {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));
@@ -120,7 +123,7 @@ impl ParserState {
                             branch_nodes[0] = Some(Box::new(node_entry));
                         }
                     }
-                    NodeEntry::BranchSMT(n) => {
+                    NodeEntry::BranchSMT(_) => {
                         if mask == 3 {
                             if branch_nodes[0].is_none() {
                                 branch_nodes[0] = Some(Box::new(node_entry));

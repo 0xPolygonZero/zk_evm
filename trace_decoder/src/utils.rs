@@ -1,8 +1,7 @@
 use ethereum_types::H256;
 use keccak_hash::keccak;
-use log::debug;
+use log::trace;
 use mpt_trie::{
-    nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
     trie_ops::ValOrHash,
 };
@@ -22,7 +21,7 @@ pub(crate) fn update_val_if_some<T>(target: &mut T, opt: Option<T>) {
 // TODO: Move under a feature flag...
 pub(crate) fn print_value_and_hash_nodes_of_trie(trie: &HashedPartialTrie) {
     let trie_elems = print_value_and_hash_nodes_of_trie_common(trie);
-    println!("State trie {:#?}", trie_elems);
+    trace!("State trie {:#?}", trie_elems);
 }
 
 // TODO: Move under a feature flag...
@@ -31,7 +30,7 @@ pub(crate) fn print_value_and_hash_nodes_of_storage_trie(
     trie: &HashedPartialTrie,
 ) {
     let trie_elems = print_value_and_hash_nodes_of_trie_common(trie);
-    debug!("Storage trie for {:x}: {:#?}", s_trie_addr, trie_elems);
+    trace!("Storage trie for {:x}: {:#?}", s_trie_addr, trie_elems);
 }
 
 // TODO: Move under a feature flag...
@@ -45,18 +44,6 @@ fn print_value_and_hash_nodes_of_trie_common(trie: &HashedPartialTrie) -> Vec<St
             format!("{} - {:x}", v_or_h_char, k)
         })
         .collect()
-}
-
-pub(crate) fn h_addr_nibs_to_h256(h_addr_nibs: &Nibbles) -> H256 {
-    // TODO: HACK! This fix really needs to be in `mpt_trie`...
-    let mut nib_bytes = h_addr_nibs.bytes_be();
-    if nib_bytes.len() < 32 {
-        for _ in nib_bytes.len()..32 {
-            nib_bytes.insert(0, 0);
-        }
-    }
-
-    H256::from_slice(&nib_bytes)
 }
 
 pub(crate) fn optional_field<T: std::fmt::Debug>(label: &str, value: Option<T>) -> String {

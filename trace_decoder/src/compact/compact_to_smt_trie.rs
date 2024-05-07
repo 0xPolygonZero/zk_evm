@@ -4,9 +4,7 @@
 use std::collections::HashMap;
 
 use ethereum_types::{Address, BigEndianHash, U256};
-use keccak_hash::H256;
-use mpt_trie::nibbles::Nibbles;
-use plonky2::{field::types::Field, plonk::config::GenericHashOut};
+use plonky2::field::types::Field;
 use smt_trie::{
     bits::Bits,
     db::MemoryDb,
@@ -15,18 +13,10 @@ use smt_trie::{
 };
 
 use super::{
-    compact_processing_common::{
-        CompactCursor, CompactParsingError, CompactParsingResult, DebugCompactCursor, Header,
-        NodeEntry, ParserState, SMTLeafNode, WitnessBytes, WitnessEntries, WitnessEntry,
-    },
-    compact_smt_processing::SmtNodeType,
-    compact_to_mpt_trie::{create_mpt_trie_from_remaining_witness_elem, StateTrieExtractionOutput},
+    compact_processing_common::{CompactDecodingResult, CompactParsingResult, NodeEntry},
+    compact_smt_processing::SmtLeafNodeType,
 };
-use crate::{
-    compact::compact_processing_common::Opcode,
-    types::{CodeHash, TrieRootHash},
-    utils::hash,
-};
+use crate::types::{CodeHash, TrieRootHash};
 
 /// Currently, the smt library requires that all calls to [`set_hash`] must
 /// occur before any [`set`] calls, so we're using an intermediate type to
@@ -70,18 +60,20 @@ impl SmtStateTrieExtractionIntermediateOutput {
         curr_key: Bits,
         l_child: &Option<Box<NodeEntry>>,
         r_child: &Option<Box<NodeEntry>>,
-    ) {
+    ) -> CompactDecodingResult<()> {
         if let Some(l_child) = l_child {
             let mut lkey = curr_key;
             lkey.push_bit(false);
-            create_smt_trie_from_compact_node_rec(lkey, l_child, self);
+            create_smt_trie_from_compact_node_rec(lkey, l_child, self)?;
         }
 
         if let Some(r_child) = r_child {
             let mut rkey = curr_key;
             rkey.push_bit(true);
-            create_smt_trie_from_compact_node_rec(rkey, r_child, self);
+            create_smt_trie_from_compact_node_rec(rkey, r_child, self)?;
         }
+
+        Ok(())
     }
 
     fn process_hash_node(&mut self, curr_key: Bits, h: &TrieRootHash) {
@@ -94,7 +86,7 @@ impl SmtStateTrieExtractionIntermediateOutput {
 
     fn process_smt_leaf(
         &mut self,
-        n_type: SmtNodeType,
+        n_type: SmtLeafNodeType,
         addr: &[u8],
         slot_bytes: &[u8],
         val_bytes: &[u8],
@@ -103,16 +95,15 @@ impl SmtStateTrieExtractionIntermediateOutput {
         let val = U256::from_big_endian(val_bytes);
 
         let key = match n_type {
-            SmtNodeType::Balance => key_balance(addr),
-            SmtNodeType::Nonce => key_nonce(addr),
-            SmtNodeType::Code => key_code(addr),
-            SmtNodeType::Storage => {
+            SmtLeafNodeType::Balance => key_balance(addr),
+            SmtLeafNodeType::Nonce => key_nonce(addr),
+            SmtLeafNodeType::Code => key_code(addr),
+            SmtLeafNodeType::Storage => {
                 // Massive assumption: Is the slot unhashed?
                 let slot = U256::from_big_endian(slot_bytes);
-                let key = key_storage(addr, slot);
                 key_storage(addr, slot)
             }
-            SmtNodeType::CodeLength => key_code_length(addr),
+            SmtLeafNodeType::CodeLength => key_code_length(addr),
         };
 
         self.leaf_inserts.push((key, val))
@@ -143,7 +134,7 @@ fn create_smt_trie_from_compact_node_rec(
 ) -> CompactParsingResult<()> {
     match curr_node {
         NodeEntry::BranchSMT([l_child, r_child]) => {
-            output.process_branch_smt_node(curr_key, l_child, r_child)
+            output.process_branch_smt_node(curr_key, l_child, r_child)?
         }
         NodeEntry::Empty => (),
         NodeEntry::Hash(h) => output.process_hash_node(curr_key, h),

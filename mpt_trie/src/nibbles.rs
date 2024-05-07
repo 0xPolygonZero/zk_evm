@@ -227,6 +227,19 @@ impl TryInto<U256> for Nibbles {
     }
 }
 
+impl From<Nibbles> for H256 {
+    fn from(val: Nibbles) -> Self {
+        let mut nib_bytes = val.bytes_be();
+        if nib_bytes.len() < 32 {
+            for _ in nib_bytes.len()..32 {
+                nib_bytes.insert(0, 0);
+            }
+        }
+
+        H256::from_slice(&nib_bytes)
+    }
+}
+
 impl From<U256> for NibblesIntern {
     fn from(val: U256) -> Self {
         let arr = val.as_u64s();
@@ -1549,6 +1562,20 @@ mod tests {
         assert_eq!(
             format!("{:x}", Nibbles::from_h256_le(H256::from_low_u64_be(2048))),
             "0x0008000000000000000000000000000000000000000000000000000000000000"
+        );
+    }
+
+    #[test]
+    fn nibbles_into_h256_works() {
+        let nibbles: Nibbles = Nibbles::from(0x0);
+        let h256_value: H256 = nibbles.into();
+        assert_eq!(format!("0x{:x}", h256_value), ZERO_NIBS_64);
+
+        let nibbles: Nibbles = Nibbles::from(2048);
+        let h256_value: H256 = nibbles.into();
+        assert_eq!(
+            format!("0x{:x}", h256_value),
+            "0x0000000000000000000000000000000000000000000000000000000000000800",
         );
     }
 

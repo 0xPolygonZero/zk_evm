@@ -7,7 +7,7 @@ use super::compact_processing_common::{
 // Using struct to make printing this nicer easier.
 /// Helpful wrapper to help returned tuples from getting too big.
 #[derive(Debug)]
-pub struct InstructionAndBytesParsedFromBuf(Vec<(Instruction, Vec<u8>)>);
+pub struct InstructionAndBytesParsedFromBuf(pub Vec<(Instruction, Vec<u8>)>);
 
 impl From<Vec<(Instruction, Vec<u8>)>> for InstructionAndBytesParsedFromBuf {
     fn from(v: Vec<(Instruction, Vec<u8>)>) -> Self {
@@ -37,7 +37,7 @@ pub fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<In
 
 impl WitnessEntries {
     // TODO: Also move behind a feature flag...
-    fn parse_to_instructions_and_bytes_for_instruction(
+    pub fn parse_to_instructions_and_bytes_for_instruction(
         bytes: Vec<u8>,
     ) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
         let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);

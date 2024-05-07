@@ -3,33 +3,30 @@ use std::fmt::Debug;
 use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
+use evm_arithmetization_mpt::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization_mpt::GenerationInputs;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
+use mpt_trie::partial_trie::PartialTrie;
 
-use crate::aliased_crate_types::{MptAccountRlp, MptLegacyReceiptRlp};
-use crate::compact::compact_mpt_processing::{MptPartialTriePreImages, ProcessedCompactOutput};
-use crate::compact::compact_to_mpt_trie::StateTrieExtractionOutput;
-use crate::decoding_mpt::{MptTraceParsingResult, TxnMetaState};
 use crate::processed_block_trace::ProcessedBlockTrace;
 use crate::protocol_processing::{
-    process_block_trace_trie_pre_images, process_mpt_block_trace_trie_pre_images,
-    TraceParsingResult,
+    process_mpt_block_trace_trie_pre_images, TraceProtocolDecodingResult,
 };
-use crate::trace_protocol::{
-    AtomicUnitInfo, BlockTrace, ContractCodeUsage, MptBlockTraceTriePreImages,
-    MptCombinedPreImages, MptSeparateStorageTriesPreImage, MptSeparateTriePreImage,
-    MptSeparateTriePreImages, MptTrieCompact, MptTrieUncompressed, TriePreImage, TxnInfo,
-};
+use crate::trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TxnInfo};
 use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
-    HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
+    OtherBlockData, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
-    h_addr_nibs_to_h256, hash, print_value_and_hash_nodes_of_storage_trie,
-    print_value_and_hash_nodes_of_trie,
+    hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
 };
 use crate::{
-    aliased_crate_types::MptGenerationInputs, protocol_processing::process_mpt_trie_images,
+    compact::{
+        compact_mpt_processing::MptPartialTriePreImages,
+        compact_processing_common::ProcessedCompactOutput,
+        compact_to_mpt_trie::StateTrieExtractionOutput,
+    },
+    decoding_mpt::TxnMetaState,
 };
 
 pub(crate) type MptProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceMptSpec>;
@@ -46,11 +43,11 @@ pub(crate) struct ProcedBlockTraceMptSpec {
 impl BlockTrace {
     /// Processes and returns the [GenerationInputs] for all transactions in the
     /// block.
-    pub fn mpt_into_proof_gen_ir<F>(
+    pub fn into_proof_gen_mpt_ir<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> TraceParsingResult<Vec<MptGenerationInputs>>
+    ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
@@ -66,7 +63,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> TraceParsingResult<MptProcessedBlockTrace>
+    ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
     where
         F: CodeHashResolveFunc,
     {
@@ -85,12 +82,8 @@ impl BlockTrace {
             .state
             .items()
             .filter_map(|(addr, data)| {
-                data.as_val().map(|data| {
-                    (
-                        h_addr_nibs_to_h256(&addr),
-                        rlp::decode::<MptAccountRlp>(data).unwrap(),
-                    )
-                })
+                data.as_val()
+                    .map(|data| (addr.into(), rlp::decode::<AccountRlp>(data).unwrap()))
             })
             .collect();
 
@@ -116,7 +109,7 @@ impl BlockTrace {
 
     fn process_atomic_units<F>(
         atomic_info: AtomicUnitInfo,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, MptAccountRlp)],
+        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         code_hash_resolver: &mut CodeHashResolving<F>,
         withdrawals: &[(Address, U256)],
     ) -> ProcessedSectionInfo
@@ -152,15 +145,16 @@ impl BlockTrace {
 
                 ProcessedSectionInfo::Txns(proced_txn_info)
             }
-            AtomicUnitInfo::Continuations(cont_info) => {
+            AtomicUnitInfo::Continuations(_) => {
                 todo!("Continuation support with MPT not yet implemented!")
             }
         }
     }
 }
 
+/// Mpt processed pre-image.
 #[derive(Clone, Debug)]
-pub(crate) struct MptProcessedBlockTracePreImages {
+pub struct MptProcessedBlockTracePreImages {
     pub(crate) tries: MptPartialTriePreImages,
     pub(crate) extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
 }
@@ -204,6 +198,7 @@ where
 
 #[derive(Debug)]
 pub(crate) enum ProcessedSectionInfo {
+    #[allow(dead_code)]
     Continuations(Vec<ProcessedContinuationInfo>),
     Txns(Vec<ProcessedSectionTxnInfo>),
 }
@@ -246,7 +241,7 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, MptAccountRlp)],
+        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedSectionTxnInfo {
@@ -375,7 +370,7 @@ impl TxnInfo {
 }
 
 fn process_rlped_receipt_node_bytes(raw_bytes: Vec<u8>) -> Vec<u8> {
-    match rlp::decode::<MptLegacyReceiptRlp>(&raw_bytes) {
+    match rlp::decode::<LegacyReceiptRlp>(&raw_bytes) {
         Ok(_) => raw_bytes,
         Err(_) => {
             // Must be non-legacy.
