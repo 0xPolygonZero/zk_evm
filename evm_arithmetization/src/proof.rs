@@ -279,6 +279,9 @@ pub struct PublicValuesTarget {
 }
 
 impl PublicValuesTarget {
+    pub(crate) const SIZE: usize = TrieRootsTarget::SIZE + TrieRootsTarget::SIZE
+     + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE + ExtraBlockDataTarget::SIZE;
+
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         let TrieRootsTarget {
@@ -435,6 +438,17 @@ impl PublicValuesTarget {
         }
     }
 
+    // Todo
+    // maybe should be `impl Into<vec> for PublicValuesTarget`.
+    pub(crate) fn to_public_inputs(&self, res: &mut Vec<Target>) {
+        self.trie_roots_before.to_public_inputs(res);
+        self.trie_roots_after.to_public_inputs(res);
+        self.block_metadata.to_public_inputs(res);
+        self.block_hashes.to_public_inputs(res);
+        self.extra_block_data.to_public_inputs(res);
+        assert_eq!(res.len(), PublicValuesTarget::SIZE);
+    }
+
     /// Returns the public values in `pv0` or `pv1` depending on `condition`.
     pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
@@ -508,6 +522,12 @@ impl TrieRootsTarget {
             transactions_root,
             receipts_root,
         }
+    }
+
+    pub(crate) fn to_public_inputs(&self, res: &mut Vec<Target>) {
+        res.extend(self.state_root);
+        res.extend(self.transactions_root);
+        res.extend(self.receipts_root);
     }
 
     /// If `condition`, returns the trie hashes in `tr0`,
@@ -608,6 +628,20 @@ impl BlockMetadataTarget {
         }
     }
 
+    pub(crate) fn to_public_inputs(&self, res: &mut Vec<Target>) {
+        res.extend(self.block_beneficiary);
+        res.push(self.block_timestamp);
+        res.push(self.block_number);
+        res.push(self.block_difficulty);
+        res.extend(self.block_random);
+        res.push(self.block_gaslimit);
+        res.push(self.block_chain_id);
+        res.extend(self.block_base_fee);
+        res.push(self.block_gas_used);
+        res.extend(self.block_bloom);
+    }
+
+
     /// If `condition`, returns the block metadata in `bm0`,
     /// otherwise returns the block metadata in `bm1`.
     pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
@@ -701,6 +735,11 @@ impl BlockHashesTarget {
         }
     }
 
+    pub(crate) fn to_public_inputs(&self, res: &mut Vec<Target>) {
+        res.extend(&self.prev_hashes);
+        res.extend(&self.cur_hash);
+    }
+
     /// If `condition`, returns the block hashes in `bm0`,
     /// otherwise returns the block hashes in `bm1`.
     pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
@@ -776,6 +815,14 @@ impl ExtraBlockDataTarget {
             gas_used_before,
             gas_used_after,
         }
+    }
+
+    pub(crate) fn to_public_inputs(&self, res: &mut Vec<Target>) {
+        res.extend(self.checkpoint_state_trie_root);
+        res.push(self.txn_number_before);
+        res.push(self.txn_number_after);
+        res.push(self.gas_used_before);
+        res.push(self.gas_used_after);
     }
 
     /// If `condition`, returns the extra block data in `ed0`,

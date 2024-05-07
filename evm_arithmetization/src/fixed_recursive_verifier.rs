@@ -12,7 +12,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::RichField;
+use plonky2::hash::hash_types::{HashOut, HashOutTarget, RichField};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -20,7 +20,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{
     CircuitConfig, CircuitData, CommonCircuitData, VerifierCircuitData, VerifierCircuitTarget,
 };
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut, Hasher};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::recursion::dummy_circuit::cyclic_base_proof;
@@ -38,6 +38,7 @@ use starky::stark::Stark;
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
+use crate::private_public_values;
 use crate::proof::{
     AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
     PublicValues, PublicValuesTarget, TrieRoots, TrieRootsTarget,
@@ -80,7 +81,8 @@ where
     pub block: BlockCircuitData<F, C, D>,
     /// The two-to-one block aggregation circuit, which verifies two unrelated
     /// block proofs.
-    pub two_to_one_block: TwoToOneAggCircuitData<F, C, D>,
+    //pub two_to_one_block_ivc: TwoToOneBlockIVCAggCircuitData<F, C, D>,
+    pub two_to_one_block_binop: TwoToOneBlockBinopAggCircuitData<F, C, D>,
     /// Holds chains of circuits for each table and for each initial
     /// `degree_bits`.
     pub by_table: [RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
@@ -361,6 +363,220 @@ where
     }
 }
 
+
+
+/// Data for the two-to-one block circuit, which is used to generate a
+/// proof of two unrelated proofs.
+#[derive(Eq, PartialEq, Debug)]
+pub struct TwoToOneBlockIVCAggCircuitData<F, C, const D: usize>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    pub circuit: CircuitData<F, C, D>,
+    ///// new structure
+    prev_proof: ProofWithPublicInputsTarget<D>,
+    curr_proof: ProofWithPublicInputsTarget<D>,
+    has_prev: BoolTarget,
+    curr_pv: PublicValuesTarget,
+    prev_pv_hash: HashOutTarget,
+    curr_pv_hash: HashOutTarget,
+    mix_pv_hash: HashOutTarget,
+    // TODO: do I need this?
+    cyclic_vk: VerifierCircuitTarget,
+}
+
+// impl<F, C, const D: usize> TwoToOneBlockIVCAggCircuitData<F, C, D>
+// where
+//     F: RichField + Extendable<D>,
+//     C: GenericConfig<D, F = F>,
+// {
+//     fn to_buffer(
+//         &self,
+//         buffer: &mut Vec<u8>,
+//         gate_serializer: &dyn GateSerializer<F, D>,
+//         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
+//     ) -> IoResult<()> {
+//         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
+//         self.prev.to_buffer(buffer);
+//         self.curr.to_buffer(buffer);
+//         buffer.write_target_hash(&self.agg_pv_hash)?;
+//         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
+//         Ok(())
+//     }
+
+//     fn from_buffer(
+//         buffer: &mut Buffer,
+//         gate_serializer: &dyn GateSerializer<F, D>,
+//         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
+//     ) -> IoResult<Self> {
+//         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
+//         let lhs = BlockIVCAggChildTarget::from_buffer(buffer)?;
+//         let rhs = BlockIVCAggChildTarget::from_buffer(buffer)?;
+//         let mix_pv_hash = buffer.read_target_hash()?;
+//         let cyclic_vk = buffer.read_target_verifier_circuit()?;
+//         Ok(Self {
+//             circuit,
+//             prev: lhs,
+//             curr: rhs,
+//             mix_pv_hash,
+//             cyclic_vk,
+//         })
+//     }
+
+// }
+
+
+#[derive(Eq, PartialEq, Debug)]
+struct BlockIVCAggChildTarget<const D: usize>
+{
+    has_prev: BoolTarget,
+    agg_proof: ProofWithPublicInputsTarget<D>,
+    block_proof: ProofWithPublicInputsTarget<D>,
+    pv: PublicValuesTarget,
+    pv1: PublicValuesTarget,
+    pv_hash: HashOutTarget,
+}
+
+
+impl<const D: usize> BlockIVCAggChildTarget<D> {
+    // fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+    //     buffer.write_target_bool(self.has_prev)?;
+    //     buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
+    //     buffer.write_target_proof_with_public_inputs(&self.block_proof)?;
+    //     buffer.write_target_hash(&self.pv_hash)?;
+    //     Ok(())
+    // }
+
+    // fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+    //     let is_agg = buffer.read_target_bool()?;
+    //     let agg_proof = buffer.read_target_proof_with_public_inputs()?;
+    //     let block_proof = buffer.read_target_proof_with_public_inputs()?;
+    //     let pv_hash = buffer.read_target_hash()?;
+    //     Ok(Self {
+    //         has_prev: is_agg,
+    //         agg_proof,
+    //         block_proof,
+    //         pv_hash,
+    //     })
+    // }
+
+    fn public_values<F, C>(&self, builder: &mut CircuitBuilder<F, D>) -> PublicValuesTarget
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+    {
+        let agg_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
+        let block_pv = PublicValuesTarget::from_public_inputs(&self.block_proof.public_inputs);
+        PublicValuesTarget::select(builder, self.has_prev, agg_pv, block_pv)
+    }
+}
+
+
+/// Data for the two-to-one block circuit, which is used to generate a
+/// proof of two unrelated proofs.
+#[derive(Eq, PartialEq, Debug)]
+pub struct TwoToOneBlockBinopAggCircuitData<F, C, const D: usize>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    pub circuit: CircuitData<F, C, D>,
+    lhs: BlockBinopAggChildTarget<D>,
+    rhs: BlockBinopAggChildTarget<D>,
+    mix_pv_hash: HashOutTarget,
+    dummy_pis: Vec<Target>,
+    cyclic_vk: VerifierCircuitTarget,
+}
+
+impl<F, C, const D: usize> TwoToOneBlockBinopAggCircuitData<F, C, D>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    fn to_buffer(
+        &self,
+        buffer: &mut Vec<u8>,
+        gate_serializer: &dyn GateSerializer<F, D>,
+        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
+    ) -> IoResult<()> {
+        buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
+        self.lhs.to_buffer(buffer);
+        self.rhs.to_buffer(buffer);
+        //buffer.write_target_hash(&self.mix_pv_hash)?;
+        buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
+        Ok(())
+    }
+
+    fn from_buffer(
+        buffer: &mut Buffer,
+        gate_serializer: &dyn GateSerializer<F, D>,
+        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
+    ) -> IoResult<Self> {
+        let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
+        let lhs = BlockBinopAggChildTarget::from_buffer(buffer)?;
+        let rhs = BlockBinopAggChildTarget::from_buffer(buffer)?;
+        let mix_pv_hash = buffer.read_target_hash()?;
+        let cyclic_vk = buffer.read_target_verifier_circuit()?;
+        Ok(Self {
+            circuit,
+            lhs,
+            rhs,
+            mix_pv_hash,
+            dummy_pis: todo!(),
+            cyclic_vk,
+        })
+    }
+
+}
+
+
+#[derive(Eq, PartialEq, Debug)]
+struct BlockBinopAggChildTarget<const D: usize>
+{
+    is_agg: BoolTarget,
+    agg_proof: ProofWithPublicInputsTarget<D>,
+    block_proof: ProofWithPublicInputsTarget<D>,
+    //pv_hash: HashOutTarget,
+}
+
+
+impl<const D: usize> BlockBinopAggChildTarget<D> {
+    fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        buffer.write_target_bool(self.is_agg)?;
+        buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
+        buffer.write_target_proof_with_public_inputs(&self.block_proof)?;
+        //buffer.write_target_hash(&self.pv_hash)?;
+        Ok(())
+    }
+
+    fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let is_agg = buffer.read_target_bool()?;
+        let agg_proof = buffer.read_target_proof_with_public_inputs()?;
+        let block_proof = buffer.read_target_proof_with_public_inputs()?;
+        let pv_hash = buffer.read_target_hash()?;
+        Ok(Self {
+            is_agg,
+            agg_proof,
+            block_proof,
+            //pv_hash,
+        })
+    }
+
+    fn public_values<F: RichField + Extendable<D>>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+    ) -> Vec<Target> {
+        zip_eq(
+            &self.agg_proof.public_inputs,
+            &self.block_proof.public_inputs,
+        )
+        .map(|(&agg_pv, &block_pv)| builder.select(self.is_agg, agg_pv, block_pv))
+        .collect()
+    }
+}
+
+
 impl<F, C, const D: usize> AllRecursiveCircuits<F, C, D>
 where
     F: RichField + Extendable<D>,
@@ -435,11 +651,13 @@ where
         )?;
         let block =
             BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
-        let two_to_one_block = TwoToOneAggCircuitData::from_buffer(
-            &mut buffer,
-            gate_serializer,
-            generator_serializer,
-        )?;
+        let two_to_one_block_ivc = todo!();
+        // TwoToOneBlockIVCAggCircuitData::from_buffer(
+        //     &mut buffer,
+        //     gate_serializer,
+        //     generator_serializer,
+        // )?;
+        let two_to_one_block_binop = todo!();
 
         let by_table = match skip_tables {
             true => (0..NUM_TABLES)
@@ -476,7 +694,8 @@ where
             aggregation,
             two_to_one_aggregation,
             block,
-            two_to_one_block,
+            //two_to_one_block_ivc,
+            two_to_one_block_binop,
             by_table,
         })
     }
@@ -567,13 +786,21 @@ where
         let aggregation = Self::create_aggregation_circuit(&root);
         let two_to_one_aggregation = Self::create_two_to_one_agg_circuit(&aggregation);
         let block = Self::create_block_circuit(&aggregation);
-        let two_to_one_block = Self::create_two_to_one_block_circuit(&block);
+
+        //dbg!(&block.circuit.common, &aggregation.circuit.common);
+        //let two_to_one_block_ivc = Self::create_two_to_one_block_circuit_ivc(&block);
+        let two_to_one_block_binop = Self::create_two_to_one_block_circuit_binop(&by_table, &block);
+
+        //dbg!(&block.circuit.common, &two_to_one_block_binop.circuit.common);
+        assert_eq!(&block.circuit.common, &two_to_one_block_binop.circuit.common);
+
         Self {
             root,
             aggregation,
             two_to_one_aggregation,
             block,
-            two_to_one_block,
+            //two_to_one_block_ivc,
+            two_to_one_block_binop,
             by_table,
         }
     }
@@ -738,6 +965,7 @@ where
         let mut builder = CircuitBuilder::<F, D>::new(root.circuit.common.config.clone());
         let public_values = add_virtual_public_values(&mut builder);
         let cyclic_vk = builder.add_verifier_data_public_inputs();
+        let count_public_inputs = builder.num_public_inputs();
         let lhs = Self::add_agg_child(&mut builder, root);
         let rhs = Self::add_agg_child(&mut builder, root);
 
@@ -792,10 +1020,15 @@ where
         );
 
         // Pad to match the root circuit's degree.
+        log::info!("Before padding: Aggregation: {} vs Root: {}.", builder.num_gates(),root.circuit.common.degree_bits());
         while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
             builder.add_gate(NoopGate, vec![]);
         }
+        log::info!("After padding: Aggregation: {} vs Root: {}.", builder.num_gates(), root.circuit.common.degree_bits());
 
+        assert_eq!(count_public_inputs, builder.num_public_inputs());
+        log::info!("AGG circuit Expected: {}, actual: {}", root.circuit.common.num_public_inputs, builder.num_public_inputs());
+        assert_eq!(root.circuit.common.num_public_inputs, builder.num_public_inputs());
         let circuit = builder.build::<C>();
         AggregationCircuitData {
             circuit,
@@ -1367,6 +1600,11 @@ where
         pv0: PublicValues,
         pv1: PublicValues,
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+        let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
+        let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
+        debug_assert_eq!(pv0, ppp0);
+        debug_assert_eq!(pv1, ppp1);
+
         let mut inputs = PartialWitness::new();
 
         inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.proof0, proof0);
@@ -1573,34 +1811,34 @@ where
     /// # Outputs
     ///
     /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
-    pub fn prove_two_to_one_block(
-        &self,
-        proof0: &ProofWithPublicInputs<F, C, D>,
-        proof1: &ProofWithPublicInputs<F, C, D>,
-        pv0: PublicValues,
-        pv1: PublicValues,
-    ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
-        let mut inputs = PartialWitness::new();
+    // pub fn prove_two_to_one_block(
+    //     &self,
+    //     proof0: &ProofWithPublicInputs<F, C, D>,
+    //     proof1: &ProofWithPublicInputs<F, C, D>,
+    //     pv0: PublicValues,
+    //     pv1: PublicValues,
+    // ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+    //     let mut inputs = PartialWitness::new();
 
-        inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
-        inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
+    //     inputs.set_proof_with_pis_target(&self.two_to_one_block.proof0, proof0);
+    //     inputs.set_proof_with_pis_target(&self.two_to_one_block.proof1, proof1);
 
-        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0, &pv0).map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
-        set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1, &pv1).map_err(|_| {
-            anyhow::Error::msg("Invalid conversion when setting public values targets.")
-        })?;
+    //     set_public_value_targets(&mut inputs, &self.two_to_one_block.pv0, &pv0).map_err(|_| {
+    //         anyhow::Error::msg("Invalid conversion when setting public values targets.")
+    //     })?;
+    //     set_public_value_targets(&mut inputs, &self.two_to_one_block.pv1, &pv1).map_err(|_| {
+    //         anyhow::Error::msg("Invalid conversion when setting public values targets.")
+    //     })?;
 
-        let proof = self.two_to_one_block.circuit.prove(inputs)?;
-        Ok(proof)
-    }
+    //     let proof = self.two_to_one_block.circuit.prove(inputs)?;
+    //     Ok(proof)
+    // }
 
     pub fn verify_two_to_one_block(
         &self,
         proof: &ProofWithPublicInputs<F, C, D>,
     ) -> anyhow::Result<()> {
-        self.two_to_one_block.circuit.verify(proof.clone())
+        self.two_to_one_block_binop.circuit.verify(proof.clone())
     }
 
     fn create_two_to_one_agg_circuit(
@@ -1648,8 +1886,446 @@ where
             pv1,
         }
     }
-}
 
+    /// This circuit follows the structure of [`create_block_circuit`]. This
+    /// circuit creates a IVC chain of unrelated blockproofs.  In contract, it
+    /// does not have any of the check between the blocks and their public
+    /// values, because they are not related.  However, it utilizes hashes of
+    /// public values to verify that the prover knew the corresponding public
+    /// value at prooftime.  This part can be confusing:  the public values are
+    /// kept hidden as part of the witness.  Not because they are not public and
+    /// not because they are not known to the verifier, but rather to keep the
+    /// actual (registered) public values constant size, which is a requirement
+    /// to do cyclic recursion.  Another thing, that can be confusing is that
+    /// `previous` here refers to the block, that came before and not to the
+    /// actual blockchain-order ancestor of the current block.  The latter is
+    /// not a concern in this circuit.
+    fn create_two_to_one_block_circuit_ivc(
+        block_circuit: &BlockCircuitData<F, C, D>
+    ) -> TwoToOneBlockIVCAggCircuitData<F, C, D>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        // Question: Do I need to adjust CommonCircuitData here like in [`create_block_circuit`]?
+        let expected_common_data = CommonCircuitData {
+            fri_params: FriParams {
+                degree_bits: 14,
+                ..block_circuit.circuit.common.fri_params.clone()
+            },
+            ..block_circuit.circuit.common.clone()
+        };
+
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+
+        let check_prev = builder.add_virtual_bool_target_safe();
+
+        /// PublicInput: hash(pv0), hash(pv1), pv01_hash
+        let prev_pv_hash = builder.add_virtual_hash();
+        let curr_pv_hash = builder.add_virtual_hash();
+        let mix_pv_hash = builder.add_virtual_hash_public_input();
+
+        /// PrivateInput: p0, p1, pv0, pv1
+        let prev_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
+        let curr_proof = builder.add_virtual_proof_with_pis(&block_circuit.circuit.common);
+
+
+        // public inputs as structs
+        let curr_pv_target = add_virtual_public_values(&mut builder);
+        let curr_pv = PublicValuesTarget::from_public_inputs(&curr_proof.public_inputs);
+
+        //connect pvs
+        //let public_values = add_virtual_public_values(&mut builder);
+        //let prev_pv = PublicValuesTarget::from_public_inputs(&prev_proof.public_inputs);
+        //let curr_pv = PublicValuesTarget::from_public_inputs(&curr_proof.public_inputs);
+
+
+        /// hashes
+        let prev_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(prev_proof.public_inputs.to_owned());
+        let curr_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(curr_proof.public_inputs.to_owned());
+
+        let mut mix_vec = vec![];
+        mix_vec.extend(&curr_hash_circuit.elements);
+        mix_vec.extend(&prev_hash_circuit.elements);
+        let mix_hash_circuit = builder.hash_n_to_hash_no_pad::<C::Hasher>(mix_vec);
+
+        builder.connect_hashes(prev_pv_hash, curr_hash_circuit);
+        builder.connect_hashes(curr_pv_hash, prev_hash_circuit);
+        builder.connect_hashes(mix_pv_hash, mix_hash_circuit);
+
+
+        /// conditionally connect prev_pv_hash
+        // TODO what happens here?
+        // aka block verifier key
+        // let block_verifier_data =
+        // builder.constant_verifier_data(&block.circuit.verifier_data().verifier_only);
+
+        // Verify previous block proof unless it is a dummy (cyclic base case)
+        let cyclic_vk = builder.add_verifier_data_public_inputs();
+        let count_public_inputs = builder.num_public_inputs();
+        builder
+            .conditionally_verify_cyclic_proof_or_dummy::<C>(
+                check_prev,
+                &prev_proof,
+                &expected_common_data
+            )
+            .expect("Failed to build cyclic recursion circuit for `prev`.");
+
+        // Always verify current agg proof
+        let block_verifier_data = builder.constant_verifier_data(&block_circuit.circuit.verifier_only);
+        builder.verify_proof::<C>(&curr_proof, &block_verifier_data, &block_circuit.circuit.common);
+
+        // Question:  Is this necessary here: Why/why not? Pad to match the root circuit's degree.
+        // while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
+        //     builder.add_gate(NoopGate, vec![]);
+        // }
+
+        assert_eq!(count_public_inputs, builder.num_public_inputs());
+        let circuit = builder.build::<C>();
+
+        TwoToOneBlockIVCAggCircuitData {
+            circuit,
+            prev_proof,
+            curr_proof,
+            has_prev: check_prev,
+            curr_pv,
+            prev_pv_hash,
+            curr_pv_hash,
+            mix_pv_hash,
+            cyclic_vk,
+        }
+    }
+
+
+    /// Create a two-to-one block aggregation proof, combining two unrelated
+    /// block proofs into a single one.
+    ///
+    /// # Arguments
+    ///
+    /// - `proof0`: the first block proof including vectorized public inputs.
+    /// - `proof1`: the second block proof including vectorized public inputs.
+    /// - `lhs_proof`: the left child proof.
+    /// - `lhs_public_values`: the public values associated to the right child
+    ///   proof.
+    /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
+    ///   aggregation proof or
+    /// a regular transaction proof.
+    /// - `rhs_proof`: the right child proof.
+    /// - `rhs_public_values`: the public values associated to the right child
+    ///   proof.
+    ///
+    /// # Outputs
+    ///
+    /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
+    ///
+    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
+    /// its [`PublicValues`]. Only the proof with public inputs is necessary
+    /// for a verifier to assert correctness of the computation,
+    /// but the public values are output for the prover convenience, as these
+    /// are necessary during proof aggregation.
+    // pub fn prove_two_to_one_block_ivc(
+    //     &self,
+    //     opt_prev_proof: Option<&ProofWithPublicInputs<F, C, D>>,
+    //     curr_proof: &ProofWithPublicInputs<F, C, D>,
+    // ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+    //     let mut witness = PartialWitness::new();
+
+    //     let has_prev = opt_prev_proof.is_some();
+    //     witness.set_bool_target(self.two_to_one_block_ivc.has_prev, has_prev);
+
+    //     if let Some(prev_proof) = opt_prev_proof {
+    //         // get hashes and combine.  lhs: `[0..4]`, rhs: `[4..8]`, mix: `[8..12]`,
+    //         // cyclic_vk?, ???
+    //         let prev_pv_hash = HashOut {
+    //             elements: prev_proof.public_inputs[8..12].try_into()?,
+    //         };
+    //         witness.set_hash_target(self.two_to_one_block_ivc.prev_pv_hash, prev_pv_hash);
+
+    //         // select ..
+    //         witness
+    //             .set_proof_with_pis_target(&self.two_to_one_block_ivc.prev_proof, prev_proof);
+    //     } else {
+    //         // when no prev proof
+    //         witness.set_proof_with_pis_target(
+    //             &self.block.parent_block_proof,
+    //             &cyclic_base_proof(
+    //                 &self.block.circuit.common,
+    //                 &self.block.circuit.verifier_only,
+    //                 todo!(),
+    //             ),
+    //         );
+
+
+    //     }
+
+    //     let curr_pv_hash = HashOut {
+    //         elements: curr_proof.public_inputs[8..12].try_into()?,
+    //     };
+    //     let mix_pv_hash = C::InnerHasher::two_to_one(todo!(), curr_pv_hash);
+
+    //     // set hashes
+    //     witness.set_hash_target(self.two_to_one_block_ivc.curr_pv_hash, curr_pv_hash);
+    //     witness.set_hash_target(self.two_to_one_block_ivc.mix_pv_hash, mix_pv_hash);
+
+    //     // set proofs
+    //     witness
+    //         .set_proof_with_pis_target(&self.two_to_one_block_ivc.curr_proof, curr_proof);
+
+    //     witness
+    //         .set_verifier_data_target(&self.block.cyclic_vk, &self.block.circuit.verifier_only);
+
+
+    //     // this is not used, but needs to be set to satisfy check in cyclic prover.
+    //     set_public_value_targets(
+    //         &mut witness,
+    //         &self.two_to_one_block_ivc.curr_pv,
+    //         &PublicValues::from_public_inputs(&curr_proof.public_inputs),
+    //     )
+    //     .map_err(|_| {
+    //         anyhow::Error::msg("Invalid conversion when setting public values targets.")
+    //     })?;
+
+
+    //     // prove
+    //     let proof = self.two_to_one_block_ivc.circuit.prove(witness)?;
+    //     Ok(proof)
+    // }
+
+
+    // pub fn verify_two_to_one_block_ivc(
+    //     &self,
+    //     proof: &ProofWithPublicInputs<F, C, D>,
+    // ) -> anyhow::Result<()> {
+    //     self.two_to_one_block_ivc.circuit.verify(proof.clone());
+    //     // Note that this does not enforce that the inner circuit uses the correct verification key.
+    //     // This is not possible to check in this recursive circuit, since we do not know the
+    //     // verification key until after we build it. Verifiers must separately call
+    //     // `check_cyclic_proof_verifier_data`, in addition to verifying a recursive proof, to check
+    //     // that the verification key matches.
+
+    //     // todo
+    //     let verifier_data = &self.two_to_one_block_ivc.circuit.verifier_data();
+    //     check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
+    // }
+
+    pub fn prove_two_to_one_block_binop(
+        &self,
+        lhs: &ProofWithPublicInputs<F, C, D>,
+        lhs_is_agg: bool,
+        rhs: &ProofWithPublicInputs<F, C, D>,
+        rhs_is_agg: bool,
+    ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
+        let mut witness = PartialWitness::new();
+
+        // if lhs_is_agg && rhs_is_agg {
+            let junk_pis = &self.two_to_one_block_binop.dummy_pis;
+            witness.set_target_arr(&junk_pis , &vec![F::ZERO; junk_pis.len()]);
+        //}
+
+        Self::set_dummy_if_necessary(
+            &self.two_to_one_block_binop.lhs,
+            lhs_is_agg,
+            &self.two_to_one_block_binop.circuit,
+            &mut witness,
+            &lhs,
+        );
+
+        Self::set_dummy_if_necessary(
+            &self.two_to_one_block_binop.rhs,
+            rhs_is_agg,
+            &self.two_to_one_block_binop.circuit,
+            &mut witness,
+            &rhs,
+        );
+
+        witness.set_verifier_data_target(
+            &self.two_to_one_block_binop.cyclic_vk,
+            &self.two_to_one_block_binop.circuit.verifier_only,
+        );
+        //dbg!(&self.two_to_one_block_binop.circuit.verifier_only);
+
+        let lhs_pv_hash = C::InnerHasher::hash_no_pad(&lhs.public_inputs);
+        let rhs_pv_hash = C::InnerHasher::hash_no_pad(&rhs.public_inputs);
+        let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
+        witness.set_hash_target(self.two_to_one_block_binop.mix_pv_hash, mix_pv_hash);
+
+
+        // prove
+        let proof = self.two_to_one_block_binop.circuit.prove(witness)?;
+        Ok(proof)
+    }
+
+    pub fn verify_two_to_one_block_binop(
+        &self,
+        proof: &ProofWithPublicInputs<F, C, D>,
+    ) -> anyhow::Result<()> {
+        self.two_to_one_block_binop.circuit.verify(proof.clone());
+        // Note that this does not enforce that the inner circuit uses the correct verification key.
+        // This is not possible to check in this recursive circuit, since we do not know the
+        // verification key until after we build it. Verifiers must separately call
+        // `check_cyclic_proof_verifier_data`, in addition to verifying a recursive proof, to check
+        // that the verification key matches.
+
+        // todo
+        let verifier_data = &self.two_to_one_block_binop.circuit.verifier_data();
+        check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
+    }
+
+    fn add_block_agg_child(
+        builder: &mut CircuitBuilder<F, D>,
+        block: &BlockCircuitData<F, C, D>,
+    ) -> BlockBinopAggChildTarget<D> {
+        let count_public_inputs = builder.num_public_inputs();
+        let block_common = &block.circuit.common;
+        let block_vk = builder.constant_verifier_data(&block.circuit.verifier_only);
+        let is_agg = builder.add_virtual_bool_target_safe();
+        // block_common should be use for agg_proof because they are similar
+        let agg_proof = builder.add_virtual_proof_with_pis(block_common);
+        let block_proof = builder.add_virtual_proof_with_pis(block_common);
+        builder
+            .conditionally_verify_cyclic_proof::<C>(
+                is_agg, &agg_proof, &block_proof, &block_vk, block_common,
+            )
+            .expect("Failed to build cyclic recursion circuit");
+        assert_eq!(count_public_inputs, builder.num_public_inputs());
+        BlockBinopAggChildTarget {
+            is_agg,
+            agg_proof,
+            block_proof,
+            // pv_hash,
+        }
+    }
+
+    fn create_two_to_one_block_circuit_binop(
+        by_table: &[RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
+        block: &BlockCircuitData<F, C, D>,
+    ) -> TwoToOneBlockBinopAggCircuitData<F, C, D>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        let mut builder = CircuitBuilder::<F, D>::new(block.circuit.common.config.clone());
+
+        let mut padding_pis = vec![];
+        // magic numbers derived from failing assertion at end of this function.
+        while builder.num_public_inputs() < block.circuit.common.num_public_inputs-(2337-2269) {
+            let target = builder.add_virtual_public_input();
+            padding_pis.push(target);
+        }
+
+        // let cap_len = block.public_values.mem_before.mem_cap.0.len();
+        /// PublicInput: hash(pv0), hash(pv1), pv01_hash
+        // let mix_pv_hash = builder.add_virtual_hash_public_input();
+        let cyclic_vk = builder.add_verifier_data_public_inputs();
+        // making sure we do not add public inputs after this point
+        let count_public_inputs = builder.num_public_inputs();
+
+        let lhs = Self::add_block_agg_child(&mut builder, &block);
+        let rhs = Self::add_block_agg_child(&mut builder, &block);
+
+        let a = lhs.public_values(&mut builder);
+        let b = rhs.public_values(&mut builder);
+
+        let lhs_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(a);
+        let rhs_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(b);
+        let mut mix_vec = vec![];
+        mix_vec.extend(&lhs_pv_hash.elements);
+        mix_vec.extend(&rhs_pv_hash.elements);
+        let mix_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+        // let mix_pv_hash = builder.constant_hash(HashOut::ZERO);
+
+        //builder.connect_hashes(lhs.pv_hash, lhs_hash_circuit);
+        //builder.connect_hashes(rhs.pv_hash, rhs_hash_circuit);
+        //builder.connect_hashes(mix_pv_hash, mix_hash_circuit);
+
+        // Pad to match the block circuit's degree.
+        log::info!("Before padding:  TwoToOneBlockBinop: {} vs Block: {}.", builder.num_gates(),  block.circuit.common.degree_bits());
+        // while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
+        //     builder.add_gate(NoopGate, vec![]);
+        // }
+        log::info!("After padding:  TwoToOneBlockBinop: {} vs Block: {}.", builder.num_gates(),  block.circuit.common.degree_bits());
+
+        log::info!("Expected: {}, actual: {}", block.circuit.common.num_public_inputs, builder.num_public_inputs());
+
+        assert_eq!(count_public_inputs, builder.num_public_inputs());
+        assert_eq!(block.circuit.common.num_public_inputs, builder.num_public_inputs(), "Block aggregation circuit and block base case circuit must have same number of public inputs.");
+        dbg!("Now attempting to build circuit.");
+        let circuit = builder.build::<C>();
+        TwoToOneBlockBinopAggCircuitData {
+            circuit,
+            lhs,
+            rhs,
+            mix_pv_hash,
+            dummy_pis: padding_pis,
+            cyclic_vk,
+        }
+    }
+
+    /// Used in the case of a non aggregation transaction child.
+    /// Creates dummy public inputs to set the cyclic vk to the aggregation
+    /// circuit values, so that both aggregation and non-aggregation parts
+    /// of the child share the same vk. This is possible because only the
+    /// aggregation inner circuit is checked against its vk.
+    fn set_dummy_proof_with_cyclic_vk_pis(
+        circuit_agg: &CircuitData<F, C, D>,
+        witness: &mut PartialWitness<F>,
+        agg_proof: &ProofWithPublicInputsTarget<D>,
+        proof: &ProofWithPublicInputs<F, C, D>,
+    ) {
+        let ProofWithPublicInputs {
+            proof,
+            public_inputs,
+        } = proof;
+        let ProofWithPublicInputsTarget {
+            proof: proof_targets,
+            public_inputs: pi_targets,
+        } = agg_proof;
+
+        // The proof remains the same.
+        witness.set_proof_target(proof_targets, proof);
+
+        let num_pis = circuit_agg.common.num_public_inputs;
+        let mut dummy_pis = vec![F::ZERO; num_pis];
+        let cyclic_verifying_data = &circuit_agg.verifier_only;
+        let mut cyclic_vk = cyclic_verifying_data.circuit_digest.to_vec();
+        cyclic_vk.append(&mut cyclic_verifying_data.constants_sigmas_cap.flatten());
+
+        let cyclic_vk_len = cyclic_vk.len();
+        for i in 0..cyclic_vk_len {
+            dummy_pis[num_pis - cyclic_vk_len + i] = cyclic_vk[i];
+        }
+
+        // Set dummy public inputs.
+        for (&pi_t, pi) in pi_targets.iter().zip_eq(dummy_pis) {
+            witness.set_target(pi_t, pi);
+        }
+    }
+
+    /// If the lhs is not an aggregation, we set the cyclic vk to a dummy value,
+    /// so that it corresponds to the aggregation cyclic vk.
+    fn set_dummy_if_necessary(
+        agg_child: &BlockBinopAggChildTarget<D>,
+        is_agg: bool,
+        circuit: &CircuitData<F, C, D>,
+        agg_inputs: &mut PartialWitness<F>,
+        proof: &ProofWithPublicInputs<F, C, D>,
+    ) {
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
+        if is_agg {
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
+        } else {
+            Self::set_dummy_proof_with_cyclic_vk_pis(
+                circuit,
+                agg_inputs,
+                &agg_child.agg_proof,
+                proof,
+            )
+        }
+        agg_inputs.set_proof_with_pis_target(&agg_child.block_proof, proof);
+    }
+}
 /// A map between initial degree sizes and their associated shrinking recursion
 /// circuits.
 #[derive(Eq, PartialEq, Debug)]
