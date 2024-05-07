@@ -75,7 +75,7 @@ global init_access_lists:
     // both @SEGMENT_ACCESSED_ADDRESSES and the unscaled access addresses list len
     // must be even numbers
     %div_const(2)
-    // stack: SEGMENT_ACCESSED_ADDRESSES/2 + access_addr_list_len/2, ptr/2, ptr/2
+    // stack: scaled_len/2, ptr/2, ptr/2
     %assert_gt
     %mul_const(2)
     // stack: ptr
@@ -220,7 +220,7 @@ global remove_accessed_addresses:
     // By construction, both @SEGMENT_ACCESSED_STORAGE_KEYS and the unscaled list len
     // must be multiples of 4
     %div_const(4)
-    // stack: @SEGMENT_ACCESSED_STORAGE_KEYS/4 + accessed_strg_keys_len/4, ptr/4, ptr/4
+    // stack: scaled_len/4, ptr/4, ptr/4
     %assert_gt
     %mul_const(4)
     // stack: ptr
