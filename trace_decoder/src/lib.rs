@@ -74,7 +74,7 @@
 //! vector of IRs, one must call the method
 //! [into_txn_proof_gen_ir](BlockTrace::into_txn_proof_gen_ir):
 //! ```ignore
-//! pub fn into_txn_proof_gen_ir<F>(
+//! pub fn mpt_into_txn_proof_gen_ir<F>(
 //!     self,
 //!     // Specifies the way code hashes should be dealt with.
 //!     p_meta: &ProcessingMeta<F>,
@@ -116,15 +116,29 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+mod aliased_crate_types;
 /// Provides debugging tools and a compact representation of state and storage
 /// tries, used in tests.
 pub mod compact;
 /// Defines the main functions used to generate the IR.
 pub mod decoding;
+mod decoding_mpt;
+mod decoding_smt;
 mod deserializers;
-/// Defines functions that processes a [BlockTrace] so that it is easier to turn
-/// the block transactions into IRs.
-pub mod processed_block_trace;
+
+/// Core logic shared between mpt/smt versions of processing block traces.
+mod processed_block_trace;
+
+/// Defines functions that processes a [BlockTrace] into the mpt format so that
+/// it is easier to turn the block transactions into IRs.
+pub mod processed_block_trace_mpt;
+
+/// Defines functions that processes a [BlockTrace] into the smt format so that
+/// it is easier to turn the block transactions into IRs.
+pub mod processed_block_trace_smt;
+
+pub mod protocol_processing;
+
 pub mod trace_protocol;
 /// Defines multiple types used in the other modules.
 pub mod types;

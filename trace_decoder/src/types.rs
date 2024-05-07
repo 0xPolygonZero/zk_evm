@@ -1,7 +1,8 @@
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
+
+use crate::aliased_crate_types::{MptBlockHashes, MptBlockMetadata};
 
 /// A type alias for `[`[`U256`]`; 8]` of a bloom filter.
 pub type Bloom = [U256; 8];
@@ -67,9 +68,9 @@ pub struct OtherBlockData {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockLevelData {
     /// All block data excluding block hashes and withdrawals.
-    pub b_meta: BlockMetadata,
+    pub b_meta: MptBlockMetadata,
     /// Block hashes: the previous 256 block hashes and the current block hash.
-    pub b_hashes: BlockHashes,
+    pub b_hashes: MptBlockHashes,
     /// Block withdrawal addresses and values.
     pub withdrawals: Vec<(Address, U256)>,
 }
