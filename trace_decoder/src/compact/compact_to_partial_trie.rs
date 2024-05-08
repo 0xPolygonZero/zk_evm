@@ -1,10 +1,7 @@
 //! Logic to convert the decoded compact into a `mpt_trie`
 //! [`HashedPartialTrie`]. This is the final stage in the decoding process.
 
-use std::{
-    collections::HashMap,
-    fmt::{self, Display},
-};
+use std::collections::HashMap;
 
 use evm_arithmetization::generation::mpt::AccountRlp;
 use log::trace;
@@ -19,11 +16,8 @@ use super::compact_prestate_processing::{
 };
 use crate::{
     decoding::TrieType,
-    types::{
-        CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH,
-        EMPTY_TRIE_HASH,
-    },
-    utils::{h_addr_nibs_to_h256, hash},
+    types::{CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH},
+    utils::hash,
 };
 
 /// A trait to represent building either a state or storage trie from compact
@@ -64,7 +58,7 @@ trait CompactToPartialTrieExtractionOutput {
     /// Insert a hash node with our key that we constructed so far from
     /// traversing down the trie.
     fn process_hash(&mut self, curr_key: Nibbles, hash: TrieRootHash) -> CompactParsingResult<()> {
-        self.trie().insert(curr_key, hash);
+        self.trie().insert(curr_key, hash)?;
 
         Ok(())
     }
@@ -96,9 +90,12 @@ trait CompactToPartialTrieExtractionOutput {
     fn trie(&mut self) -> &mut HashedPartialTrie;
 }
 
+/// An error that occurs when we encounter a node type that we did not expect.
 #[derive(Debug)]
-pub(super) enum UnexpectedCompactNodeType {
+pub enum UnexpectedCompactNodeType {
+    /// We expected a storage node, but got account leaf instead.
     AccountLeaf,
+    /// We expected a storage node, but got a code leaf instead.
     Code,
 }
 
@@ -157,7 +154,7 @@ pub(super) struct StorageTrieExtractionOutput {
 }
 
 impl CompactToPartialTrieExtractionOutput for StorageTrieExtractionOutput {
-    fn process_code(&mut self, c_bytes: Vec<u8>) -> CompactParsingResult<()> {
+    fn process_code(&mut self, _: Vec<u8>) -> CompactParsingResult<()> {
         Err(CompactParsingError::UnexpectedNodeForTrieType(
             UnexpectedCompactNodeType::Code,
             TrieType::Storage,
@@ -170,8 +167,8 @@ impl CompactToPartialTrieExtractionOutput for StorageTrieExtractionOutput {
         leaf_key: &Nibbles,
         leaf_node_data: &LeafNodeData,
     ) -> CompactParsingResult<()> {
-        /// If we encounter an `AccountLeaf` when processing a storage trie,
-        /// then something is wrong.
+        // If we encounter an `AccountLeaf` when processing a storage trie,
+        // then something is wrong.
         process_leaf_common(
             &mut self.trie,
             curr_key,
@@ -191,7 +188,7 @@ impl CompactToPartialTrieExtractionOutput for StorageTrieExtractionOutput {
     }
 }
 
-fn process_leaf_common<F: FnMut(&AccountNodeData, &Nibbles) -> CompactParsingResult<Vec<u8>>>(
+fn process_leaf_common<F: FnMut(&AccountNodeData, &Nibbles) -> CompactParsingResult<AccountRlp>>(
     trie: &mut HashedPartialTrie,
     curr_key: Nibbles,
     leaf_key: &Nibbles,
@@ -202,10 +199,12 @@ fn process_leaf_common<F: FnMut(&AccountNodeData, &Nibbles) -> CompactParsingRes
 
     let l_val = match leaf_node_data {
         LeafNodeData::Value(v_bytes) => rlp::encode(&v_bytes.0).to_vec(),
-        LeafNodeData::Account(acc_data) => account_leaf_proc_f(acc_data, &full_k)?,
+        LeafNodeData::Account(acc_data) => {
+            rlp::encode(&account_leaf_proc_f(acc_data, &full_k)?).to_vec()
+        }
     };
 
-    trie.insert(full_k, l_val);
+    trie.insert(full_k, l_val)?;
     Ok(())
 }
 
@@ -235,8 +234,6 @@ where
     Ok(output)
 }
 
-// TODO: Consider putting in some asserts that invalid nodes are not appearing
-// in the wrong trie type (eg. account )
 fn create_partial_trie_from_compact_node_rec<T>(
     curr_key: Nibbles,
     curr_node: &NodeEntry,
@@ -262,7 +259,7 @@ fn process_account_node(
     h_addr_nibs: &HashedAccountAddrNibbles,
     c_hash_to_code: &mut HashMap<CodeHash, Vec<u8>>,
     h_addr_to_storage_trie: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
-) -> Vec<u8> {
+) -> AccountRlp {
     let code_hash = match &acc_data.account_node_code {
         Some(AccountNodeCode::CodeNode(c_bytes)) => {
             let c_hash = hash(c_bytes);
@@ -281,13 +278,10 @@ fn process_account_node(
 
     h_addr_to_storage_trie.insert(h_addr, s_trie);
 
-    let account = AccountRlp {
+    AccountRlp {
         nonce: acc_data.nonce,
         balance: acc_data.balance,
         storage_root,
         code_hash,
-    };
-
-    // TODO: Avoid the unnecessary allocation...
-    rlp::encode(&account).into()
+    }
 }

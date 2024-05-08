@@ -710,13 +710,15 @@ impl<F: Field> State<F> for Interpreter<F> {
     }
 
     fn log_debug(&self, msg: String) {
-        log::debug!("{}", msg);
+        if !self.is_jumpdest_analysis {
+            log::debug!("{}", msg);
+        }
     }
 
-    fn log_info(&self, _msg: String) {}
-
-    fn log_log(&self, level: Level, msg: String) {
-        log::log!(level, "{}", msg);
+    fn log(&self, level: Level, msg: String) {
+        if !self.is_jumpdest_analysis {
+            log::log!(level, "{}", msg);
+        }
     }
 }
 
