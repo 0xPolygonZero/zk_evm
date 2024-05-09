@@ -4,7 +4,7 @@ use crate::{
 };
 
 impl SmtProcessedBlockTrace {
-    pub(crate) fn into_proof_gen_ir(
+    pub(crate) fn into_proof_gen_smt_ir(
         self,
         _other_data: OtherBlockData,
     ) -> TraceDecodingResult<Vec<SmtGenerationInputs>> {

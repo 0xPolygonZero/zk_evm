@@ -23,7 +23,7 @@ use crate::{
     processed_block_trace::{BlockTraceProcessing, ProcessedSectionInfo, ProcessingMeta},
 };
 
-pub(crate) type MptProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceMptSpec>;
+pub(crate) type MptProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceMptSpec, MptBlockTraceProcessing>;
 
 pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
 pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
@@ -31,10 +31,9 @@ pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
 #[derive(Debug)]
 pub(crate) struct ProcedBlockTraceMptSpec {
     pub(crate) tries: MptPartialTriePreImages,
-    pub(crate) sect_info: ProcessedSectionInfo,
 }
 
-struct MptBlockTraceProcessing;
+pub(crate) struct MptBlockTraceProcessing;
 
 impl BlockTraceProcessing for MptBlockTraceProcessing {
     type ProcessedPreImage = MptProcessedBlockTracePreImages;
@@ -68,43 +67,10 @@ impl BlockTraceProcessing for MptBlockTraceProcessing {
 
     fn create_spec_output(
         image: Self::ProcessedPreImage,
-        sect_info: ProcessedSectionInfo,
     ) -> Self::Output {
         ProcedBlockTraceMptSpec {
             tries: image.tries,
-            sect_info,
         }
-    }
-}
-
-impl BlockTrace {
-    /// Processes and returns the [GenerationInputs] for all transactions in the
-    /// block.
-    pub fn into_proof_gen_mpt_ir<F>(
-        self,
-        p_meta: &ProcessingMeta<F>,
-        other_data: OtherBlockData,
-    ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
-    where
-        F: CodeHashResolveFunc,
-    {
-        let processed_block_trace =
-            self.into_mpt_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
-
-        let res = processed_block_trace.into_proof_gen_ir(other_data)?;
-
-        Ok(res)
-    }
-
-    fn into_mpt_processed_block_trace<F>(
-        self,
-        p_meta: &ProcessingMeta<F>,
-        withdrawals: Vec<(Address, U256)>,
-    ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
-    where
-        F: CodeHashResolveFunc,
-    {
-        self.into_processed_block_trace::<_, MptBlockTraceProcessing>(p_meta, withdrawals)
     }
 }
 

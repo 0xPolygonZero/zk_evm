@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    iter::once,
+    iter::once, marker::PhantomData,
 };
 
 use ethereum_types::{Address, U256};
@@ -8,16 +8,7 @@ use evm_arithmetization_mpt::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use mpt_trie::nibbles::Nibbles;
 
 use crate::{
-    aliased_crate_types::MptAccountRlp,
-    decoding_mpt::TxnMetaState,
-    processed_block_trace_mpt::{StorageAccess, StorageWrite},
-    protocol_processing::TraceProtocolDecodingResult,
-    trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TriePreImage, TxnInfo},
-    types::{
-        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, TrieRootHash,
-        EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
-    },
-    utils::hash,
+    aliased_crate_types::MptAccountRlp, decoding::ProcessedBlockTraceDecode, decoding_mpt::TxnMetaState, processed_block_trace_mpt::{ProcedBlockTraceMptSpec, StorageAccess, StorageWrite}, protocol_processing::TraceProtocolDecodingResult, trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TriePreImage, TxnInfo}, types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH}, utils::hash
 };
 
 pub(crate) trait BlockTraceProcessing {
@@ -35,23 +26,29 @@ pub(crate) trait BlockTraceProcessing {
     ) -> Option<&HashMap<CodeHash, Vec<u8>>>;
     fn create_spec_output(
         image: Self::ProcessedPreImage,
-        sect_info: ProcessedSectionInfo,
     ) -> Self::Output;
 }
 #[derive(Debug)]
-pub(crate) struct ProcessedBlockTrace<T> {
+pub(crate) struct ProcessedBlockTrace<T, D>
+where
+    D: ProcessedBlockTraceDecode,
+{
     pub(crate) spec: T,
+    pub(crate) sect_info: ProcessedSectionInfo,
     pub(crate) withdrawals: Vec<(Address, U256)>,
+    decode_spec: PhantomData<D>,
 }
 
 impl BlockTrace {
-    pub(crate) fn into_processed_block_trace<F, P: BlockTraceProcessing>(
+    pub(crate) fn into_processed_block_trace<F, P, D>(
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> TraceProtocolDecodingResult<ProcessedBlockTrace<P::Output>>
+    ) -> TraceProtocolDecodingResult<ProcessedBlockTrace<P::Output, D>>
     where
         F: CodeHashResolveFunc,
+        P: BlockTraceProcessing,
+        D: ProcessedBlockTraceDecode,
     {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
@@ -73,9 +70,9 @@ impl BlockTrace {
             &withdrawals,
         );
 
-        let spec = P::create_spec_output(pre_image_data, sect_info);
+        let spec = P::create_spec_output(pre_image_data);
 
-        Ok(ProcessedBlockTrace { spec, withdrawals })
+        Ok(ProcessedBlockTrace { spec, sect_info, withdrawals, decode_spec: PhantomData::<D> })
     }
 
     fn process_atomic_units<F>(
@@ -116,7 +113,7 @@ impl BlockTrace {
 
                 ProcessedSectionInfo::Txns(proced_txn_info)
             }
-            AtomicUnitInfo::Continuations(cont_info) => {
+            AtomicUnitInfo::Continuations(_) => {
                 todo!("Continuation support with MPT not yet implemented!")
             }
         }

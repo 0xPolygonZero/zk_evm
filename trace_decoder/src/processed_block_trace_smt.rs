@@ -14,7 +14,7 @@ use crate::{
     types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr, OtherBlockData},
 };
 
-pub(crate) type SmtProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceSmtSpec>;
+pub(crate) type SmtProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceSmtSpec, SmtBlockTraceProcessing>;
 
 /// Smt processed pre-image.
 #[derive(Clone, Debug)]
@@ -51,7 +51,6 @@ impl BlockTraceProcessing for SmtBlockTraceProcessing {
 
     fn create_spec_output(
         image: Self::ProcessedPreImage,
-        sect_info: ProcessedSectionInfo,
     ) -> Self::Output {
         todo!()
     }
