@@ -52,7 +52,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let mut initial_block_hashes = vec![H256::default(); 256];
     initial_block_hashes[255] = H256::from_uint(&0x200.into());
     let inputs = GenerationInputs {
-        signed_txn: None,
+        signed_txns: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
             state_trie,
