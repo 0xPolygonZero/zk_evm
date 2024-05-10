@@ -21,7 +21,7 @@
 //! sequentialize the entire proof generation process. So in the end, it's ideal
 //! if we can get this information sent to us instead.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use enum_as_inner::EnumAsInner;
 use ethereum_types::{Address, U256};

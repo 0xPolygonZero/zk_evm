@@ -83,9 +83,17 @@ impl BlockTrace {
             })
             .collect();
 
+        let code_db = {
+            let mut code_db = self.code_db.unwrap_or_default();
+            if let Some(code_mappings) = pre_image_data.extra_code_hash_mappings {
+                code_db.extend(code_mappings);
+            }
+            code_db
+        };
+
         let mut code_hash_resolver = CodeHashResolving {
             client_code_hash_resolve_f: &p_meta.resolve_code_hash_fn,
-            extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
+            extra_code_hash_mappings: code_db,
         };
 
         let sect_info = Self::process_atomic_units(
