@@ -152,10 +152,11 @@ pub(crate) fn generate_keccak_general<F: Field, T: Transition<F>>(
             val.low_u32() as u8
         })
         .collect_vec();
-    log::debug!("Hashing {:?}", input);
 
     let hash = keccak(&input);
     push_no_write(generation_state, hash.into_uint());
+
+    state.log_debug(format!("Hashing {:?}", input));
 
     keccak_sponge_log(state, base_address, input);
 
@@ -702,7 +703,10 @@ pub(crate) fn generate_syscall<F: Field, T: Transition<F>>(
 
     push_with_write(state, &mut row, syscall_info)?;
 
-    log::debug!("Syscall to {}", KERNEL.offset_name(new_program_counter));
+    state.log_debug(format!(
+        "Syscall to {}",
+        KERNEL.offset_name(new_program_counter)
+    ));
     byte_packing_log(state, base_address, bytes);
 
     state.push_arithmetic(range_check_op);
@@ -748,11 +752,10 @@ pub(crate) fn generate_exit_kernel<F: Field, T: Transition<F>>(
     generation_state.registers.program_counter = program_counter;
     generation_state.registers.is_kernel = is_kernel_mode;
     generation_state.registers.gas_used = gas_used_val;
-    log::debug!(
+    state.log_debug(format!(
         "Exiting to {}, is_kernel={}",
-        program_counter,
-        is_kernel_mode
-    );
+        program_counter, is_kernel_mode
+    ));
 
     state.push_cpu(row);
 
@@ -971,7 +974,10 @@ pub(crate) fn generate_exception<F: Field, T: Transition<F>>(
     push_with_write(generation_state, &mut row, exc_info)?;
     byte_packing_log(state, base_address, bytes);
 
-    log::debug!("Exception to {}", KERNEL.offset_name(new_program_counter));
+    state.log_debug(format!(
+        "Exception to {}",
+        KERNEL.offset_name(new_program_counter)
+    ));
     state.push_arithmetic(range_check_op);
     state.push_cpu(row);
 
