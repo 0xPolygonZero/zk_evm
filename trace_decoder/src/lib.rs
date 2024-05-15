@@ -48,7 +48,7 @@
 //!          .run(runtime)
 //!          .await?;
 //!
-//!      
+//!
 //!      if let AggregatableProof::Agg(proof) = agg_proof {
 //!          let prev = previous.map(|p| GeneratedBlockProof {
 //!              b_height: block_number.as_u64() - 1,
@@ -128,6 +128,8 @@ mod deserializers;
 
 /// Core logic shared between mpt/smt versions of processing block traces.
 mod processed_block_trace;
+
+mod code_hash_resolver;
 
 /// Defines functions that processes a [BlockTrace] into the mpt format so that
 /// it is easier to turn the block transactions into IRs.

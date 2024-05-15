@@ -8,6 +8,7 @@ use evm_arithmetization_mpt::GenerationInputs;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::PartialTrie;
 
+use crate::code_hash_resolver::CodeHashResolver;
 use crate::compact::compact_prestate_processing::{
     MptPartialTriePreImages, ProcessedCompactOutput,
 };
@@ -41,14 +42,16 @@ impl BlockTrace {
     /// block.
     pub fn into_proof_gen_mpt_ir<F>(
         self,
-        p_meta: &ProcessingMeta<F>,
+        c_resolve: &dyn CodeHashResolver,
         other_data: OtherBlockData,
     ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
-        let processed_block_trace =
-            self.into_mpt_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
+        let processed_block_trace = self.into_mpt_processed_block_trace::<F>(
+            c_resolve,
+            other_data.b_data.withdrawals.clone(),
+        )?;
 
         let res = processed_block_trace.into_proof_gen_ir(other_data)?;
 
@@ -57,7 +60,7 @@ impl BlockTrace {
 
     fn into_mpt_processed_block_trace<F>(
         self,
-        p_meta: &ProcessingMeta<F>,
+        c_resolve: &dyn CodeHashResolver,
         withdrawals: Vec<(Address, U256)>,
     ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
     where
@@ -83,8 +86,8 @@ impl BlockTrace {
             })
             .collect();
 
-        let mut code_hash_resolver = CodeHashResolving {
-            client_code_hash_resolve_f: &p_meta.resolve_code_hash_fn,
+        let mut code_hash_resolver = MPTCodeHashResolving {
+            client_code_hash_resolve_f: &c_resolve.resolve_code_hash_fn,
             extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
         };
 
@@ -106,7 +109,7 @@ impl BlockTrace {
     fn process_atomic_units<F>(
         atomic_info: AtomicUnitInfo,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
-        code_hash_resolver: &mut CodeHashResolving<F>,
+        code_hash_resolver: &mut MPTCodeHashResolving<F>,
         withdrawals: &[(Address, U256)],
     ) -> ProcessedSectionInfo
     where
@@ -170,27 +173,27 @@ impl From<ProcessedCompactOutput> for MptProcessedBlockTracePreImages {
     }
 }
 
-/// Structure storing a function turning a `CodeHash` into bytes.
-#[derive(Debug)]
-pub struct ProcessingMeta<F>
-where
-    F: CodeHashResolveFunc,
-{
-    resolve_code_hash_fn: F,
-}
+// /// Structure storing a function turning a `CodeHash` into bytes.
+// #[derive(Debug)]
+// pub struct ProcessingMeta<F>
+// where
+//     F: CodeHashResolveFunc,
+// {
+//     resolve_code_hash_fn: F,
+// }
 
-impl<F> ProcessingMeta<F>
-where
-    F: CodeHashResolveFunc,
-{
-    /// Returns a `ProcessingMeta` given the provided code hash resolving
-    /// function.
-    pub const fn new(resolve_code_hash_fn: F) -> Self {
-        Self {
-            resolve_code_hash_fn,
-        }
-    }
-}
+// impl<F> ProcessingMeta<F>
+// where
+//     F: CodeHashResolveFunc,
+// {
+//     /// Returns a `ProcessingMeta` given the provided code hash resolving
+//     /// function.
+//     pub const fn new(resolve_code_hash_fn: F) -> Self {
+//         Self {
+//             resolve_code_hash_fn,
+//         }
+//     }
+// }
 
 #[derive(Debug)]
 pub(crate) enum ProcessedSectionInfo {
@@ -209,7 +212,7 @@ pub(crate) struct ProcessedSectionTxnInfo {
 #[derive(Debug)]
 pub(crate) struct ProcessedContinuationInfo {}
 
-struct CodeHashResolving<F> {
+struct MPTCodeHashResolving<F> {
     /// If we have not seen this code hash before, use the resolve function that
     /// the client passes down to us. This will likely be an rpc call/cache
     /// check.
@@ -221,7 +224,7 @@ struct CodeHashResolving<F> {
     extra_code_hash_mappings: HashMap<CodeHash, Vec<u8>>,
 }
 
-impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
+impl<F: CodeHashResolveFunc> CodeHashResolver for MPTCodeHashResolving<F> {
     fn resolve(&mut self, c_hash: &CodeHash) -> Vec<u8> {
         match self.extra_code_hash_mappings.get(c_hash) {
             Some(code) => code.clone(),
@@ -239,7 +242,7 @@ impl TxnInfo {
         self,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
-        code_hash_resolver: &mut CodeHashResolving<F>,
+        code_hash_resolver: &mut MPTCodeHashResolving<F>,
     ) -> ProcessedSectionTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
