@@ -21,6 +21,7 @@ pub struct SmtProcessedBlockTracePreImage {}
 #[derive(Debug)]
 pub(crate) struct ProcedBlockTraceSmtSpec {}
 
+#[allow(dead_code)]
 struct SMTCodeHashResolving<F> {
     /// If we have not seen this code hash before, use the resolve function that
     /// the client passes down to us. This will likely be an rpc call/cache
