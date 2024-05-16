@@ -103,41 +103,31 @@
 
 %macro sha2_choice
     // stack: x, y, z
-    DUP1
-    // stack: x, x, y, z
-    NOT
-    // stack: not x, x, y, z
     SWAP1
-    // stack: x, not x, y, z
-    SWAP3
-    // stack: z, not x, y, x
+    // stack: y, x, z
+    DUP3
+    // stack: z, y, x, z
+    XOR
+    // stack: z xor y, x, z
     AND
-    // stack: (not x) and z, y, x
-    SWAP2
-    // stack: x, y, (not x) and z
-    AND
-    // stack: x and y, (not x) and z
-    OR
+    // stack: (z xor y) and x, z
+    XOR
+    // stack: ((z xor y) and x) xor z == (x and y) xor (not x and z)
 %endmacro
 
 %macro sha2_majority
     // stack: x, y, z
-    DUP1
-    // stack: x, x, y, z
-    DUP3
-    // stack: y, x, x, y, z
-    DUP5
-    // stack: z, y, x, x, y, z
+    DUP2
+    DUP2
     AND
-    // stack: z and y, x, x, y, z
-    SWAP4
-    // stack: z, x, x, y, z and y
-    AND
-    // stack: z and x, x, y, z and y
+    // stack: x and y, x, y, z
     SWAP2
-    // stack: y, x, z and x, z and y
+    // stack: y, x, x and y, z
+    OR
+    // stack: y or x, x and y, z
+    %stack(y_or_x, x_and_y, z) -> (z, y_or_x, x_and_y)
     AND
-    // stack: y and x, z and x, z and y
+    // stack: (z and (y or x), x and y
     OR
-    OR
+    // stack: (z and (y or x) or (x and y) == (x and y) or (x and z) or (y and z)
 %endmacro

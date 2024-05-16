@@ -9,10 +9,11 @@
     // stack: e, f, g, Sigma_1(e), h, K[i], W[i]
     %sha2_choice
     // stack: Ch(e, f, g), Sigma_1(e), h, K[i], W[i]
-    %add_u32
-    %add_u32
-    %add_u32
-    %add_u32
+    ADD
+    ADD
+    ADD
+    ADD
+    %as_u32
     // stack: Ch(e, f, g) + Sigma_1(e) + h + K[i] + W[i]
 %endmacro
 
