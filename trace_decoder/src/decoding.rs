@@ -646,7 +646,7 @@ impl ProcessedBlockTrace {
             let withdrawal_addrs =
                 withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
             last_inputs.tries.state_trie = create_minimal_state_partial_trie(
-                &last_inputs.tries.state_trie,
+                &final_trie_state.state,
                 withdrawal_addrs,
                 iter::empty(),
             )?;

@@ -5,8 +5,6 @@
 //! This test only `simulates` the zkEVM CPU, i.e. does not generate STARK
 //! traces nor generates proofs, as its purpose is to be runnable easily in the
 //! CI even in `debug` mode.
-//!
-//! The tested block is this one: <https://etherscan.io/block/19807080>.
 
 use std::time::Duration;
 
@@ -33,11 +31,10 @@ pub struct ProverInput {
 
 type F = GoldilocksField;
 
-#[test]
-fn test_block_19807080() {
+fn test_block(path: &str) {
     init_logger();
 
-    let bytes = std::fs::read("tests/b19807080_trace.json").unwrap();
+    let bytes = std::fs::read(path).unwrap();
     let prover_input: ProverInput = serde_json::from_slice(&bytes).unwrap();
 
     let tx_inputs = prover_input
@@ -61,6 +58,18 @@ fn test_block_19807080() {
     }
 }
 
-pub fn init_logger() {
+/// Tests a small block with withdrawals: <https://etherscan.io/block/19807080>.
+#[test]
+fn test_block_19807080() {
+    test_block("tests/b19807080_trace.json")
+}
+
+/// Tests an empty block with withdrawals: <https://etherscan.io/block/19840104>.
+#[test]
+fn test_block_19840104() {
+    test_block("tests/b19840104_trace.json")
+}
+
+fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }
