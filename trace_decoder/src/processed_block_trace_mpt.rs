@@ -42,7 +42,7 @@ impl BlockTrace {
     /// block.
     pub fn into_proof_gen_mpt_ir<F>(
         self,
-        c_resolve: &dyn CodeHashResolver,
+        c_resolve: &dyn Fn(&CodeHash) -> Vec<u8>,
         other_data: OtherBlockData,
     ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
@@ -60,7 +60,7 @@ impl BlockTrace {
 
     fn into_mpt_processed_block_trace<F>(
         self,
-        c_resolve: &dyn CodeHashResolver,
+        c_resolve: &dyn Fn(&CodeHash) -> Vec<u8>,
         withdrawals: Vec<(Address, U256)>,
     ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
     where
@@ -87,7 +87,7 @@ impl BlockTrace {
             .collect();
 
         let mut code_hash_resolver = MPTCodeHashResolving {
-            client_code_hash_resolve_f: &c_resolve.resolve_code_hash_fn,
+            client_code_hash_resolve_f: &c_resolve,
             extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
         };
 
