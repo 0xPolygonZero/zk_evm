@@ -13,13 +13,11 @@ gen_message_schedule_from_block:
     // stack: block_addr, output_addr, retdest
     DUP1
     // stack: block_addr, block_addr, output_addr, retdest
-    %add_const(32)
-    // stack: block_addr + 32, block_addr, output_addr, retdest
-    SWAP1
-    // stack: block_addr, block_addr + 32, output_addr, retdest
     %mload_u256
-    // stack: block[0], block_addr + 32, output_addr, retdest
+    // stack: block[0], block_addr, output_addr, retdest
     SWAP1
+    // stack: block_addr, block[0], output_addr, retdest
+    %add_const(32)
     // stack: block_addr + 32, block[0], output_addr, retdest
     %mload_u256
     // stack: block[1], block[0], output_addr, retdest
