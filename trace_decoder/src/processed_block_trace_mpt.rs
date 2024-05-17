@@ -42,30 +42,25 @@ impl BlockTrace {
     /// block.
     pub fn into_proof_gen_mpt_ir<F>(
         self,
-        c_resolve: &dyn Fn(&CodeHash) -> Vec<u8>,
+        c_resolve: &dyn CodeHashResolveFunc,
         other_data: OtherBlockData,
     ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
-        let processed_block_trace = self.into_mpt_processed_block_trace::<F>(
-            c_resolve,
-            other_data.b_data.withdrawals.clone(),
-        )?;
+        let processed_block_trace =
+            self.into_mpt_processed_block_trace(c_resolve, other_data.b_data.withdrawals.clone())?;
 
         let res = processed_block_trace.into_proof_gen_ir(other_data)?;
 
         Ok(res)
     }
 
-    fn into_mpt_processed_block_trace<F>(
+    fn into_mpt_processed_block_trace(
         self,
-        c_resolve: &dyn Fn(&CodeHash) -> Vec<u8>,
+        c_resolve: &dyn CodeHashResolveFunc,
         withdrawals: Vec<(Address, U256)>,
-    ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
-    where
-        F: CodeHashResolveFunc,
-    {
+    ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace> {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
         let pre_image_data = process_mpt_block_trace_trie_pre_images(self.trie_pre_images)?;
