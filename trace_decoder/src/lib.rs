@@ -116,6 +116,12 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+#[cfg(not(any(feature = "mpt", feature = "smt")))]
+compile_error! {"Either the \"mpt\" or \"smt\" feature (but not both) must be enabled"}
+
+#[cfg(all(feature = "mpt", feature = "smt"))]
+compile_error! {"The features \"mpt\" and \"smt\" are mutually exclusive and can not be enabled at the same time"}
+
 mod aliased_crate_types;
 /// Provides debugging tools and a compact representation of state and storage
 /// tries, used in tests.

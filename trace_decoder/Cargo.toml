@@ -13,6 +13,7 @@ keywords.workspace = true
 bytes = { workspace = true }
 ciborium = "0.2.1"
 ciborium-io = "0.2.1"
+cfg-if = "1.0.0"
 enum-as-inner = { workspace = true }
 enumn = "0.1.12"
 ethereum-types = { workspace = true }
@@ -25,14 +26,19 @@ rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true }
 serde_with = "3.4.0"
+supertrait = "0.1.0"
 thiserror = { workspace = true }
 
 # Local dependencies
 mpt_trie = { version = "0.2.1", path = "../mpt_trie" }
 smt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "smt_insert_hash" }
 
-evm_arithmetization_mpt = { package = "evm_arithmetization", version = "0.1.3", path = "../evm_arithmetization" }
-evm_arithmetization_smt = { package = "evm_arithmetization", version = "0.1.2", git = "https://github.com/0xPolygonZero/zk_evm.git", branch = "feat_type2_hack" }
+evm_arithmetization_mpt = { package = "evm_arithmetization", version = "0.1.3", path = "../evm_arithmetization", optional = true }
+evm_arithmetization_smt = { package = "evm_arithmetization", version = "0.1.2", git = "https://github.com/0xPolygonZero/zk_evm.git", branch = "feat_type2_hack", optional = true }
 
 [dev-dependencies]
 pretty_env_logger = "0.5.0"
+
+[features]
+mpt = ["evm_arithmetization_mpt"]
+smt = ["evm_arithmetization_smt"]
