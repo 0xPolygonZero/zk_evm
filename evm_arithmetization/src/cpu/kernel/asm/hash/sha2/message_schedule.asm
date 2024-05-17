@@ -183,12 +183,14 @@ global sha2_gen_all_message_schedules:
     // stack: output_addr, retdest
     DUP1
     // stack: output_addr, output_addr, retdest
-    %mload_current_general_no_offset
-    // stack: num_blocks, output_addr, output_addr, retdest
-    PUSH 1
-    // stack: cur_offset = 1, counter = num_blocks, output_addr, output_addr, retdest
-    %build_current_general_address
-    // stack: cur_addr, counter, output_addr, output_addr, retdest
+    %build_current_general_address_no_offset
+    DUP1
+    // stack: base_addr, base_addr, output_addr, output_addr, retdest
+    MLOAD_GENERAL
+    // stack: num_blocks, base_addr, output_addr, output_addr, retdest
+    SWAP1
+    %increment
+    // stack: cur_addr (offset = 1), counter = num_blocks, output_addr, output_addr, retdest
 gen_all_message_schedules_loop:
     // stack: cur_addr, counter, cur_output_addr, output_addr, retdest
     PUSH gen_all_message_schedules_loop_end

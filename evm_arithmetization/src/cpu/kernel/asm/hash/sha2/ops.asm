@@ -26,16 +26,14 @@
     // stack: x, x
     %rotr(7)
     // stack: rotr(x, 7), x
-    SWAP1
-    // stack: x, rotr(x, 7)
     DUP1
-    // stack: x, x, rotr(x, 7)
-    %rotr(18)
-    // stack: rotr(x, 18), x, rotr(x, 7)
-    SWAP1
-    // stack: x, rotr(x, 18), rotr(x, 7)
+    // stack: rotr(x, 7), rotr(x, 7), x
+    %rotr(11)
+    // stack: rotr(x, 18), rotr(x, 7), x
+    SWAP2
+    // stack: x, rotr(x, 7), rotr(x, 18)
     %shr_const(3)
-    // stack: shr(x, 3), rotr(x, 18), rotr(x, 7)
+    // stack: shr(x, 3), rotr(x, 7), rotr(x, 18)
     XOR
     XOR
 %endmacro
@@ -46,36 +44,30 @@
     // stack: x, x
     %rotr(17)
     // stack: rotr(x, 17), x
-    SWAP1
-    // stack: x, rotr(x, 17)
     DUP1
-    // stack: x, x, rotr(x, 17)
-    %rotr(19)
-    // stack: rotr(x, 19), x, rotr(x, 17)
-    SWAP1
-    // stack: x, rotr(x, 19), rotr(x, 17)
+    // stack: rotr(x, 17), rotr(x, 17), x
+    %rotr(2)
+    // stack: rotr(x, 19), rotr(x, 17), x
+    SWAP2
+    // stack: x, rotr(x, 17), rotr(x, 19)
     PUSH 10
     SHR
-    // stack: shr(x, 10), rotr(x, 19), rotr(x, 17)
+    // stack: shr(x, 10), rotr(x, 17), rotr(x, 19)
     XOR
     XOR
 %endmacro
 
 %macro sha2_bigsigma_0
     // stack: x
-    DUP1
-    // stack: x, x
     %rotr(2)
-    // stack: rotr(x, 2), x
-    SWAP1
-    // stack: x, rotr(x, 2)
+    // stack: rotr(x, 2)
     DUP1
-    // stack: x, x, rotr(x, 2)
-    %rotr(13)
-    // stack: rotr(x, 13), x, rotr(x, 2)
-    SWAP1
-    // stack: x, rotr(x, 13), rotr(x, 2)
-    %rotr(22)
+    // stack: rotr(x, 2), rotr(x, 2)
+    %rotr(11)
+    // stack: rotr(x, 13), rotr(x, 2)
+    DUP1
+    // stack: rotr(x, 13), rotr(x, 13), rotr(x, 2)
+    %rotr(9)
     // stack: rotr(x, 22), rotr(x, 13), rotr(x, 2)
     XOR
     XOR
@@ -83,19 +75,15 @@
 
 %macro sha2_bigsigma_1
     // stack: x
-    DUP1
-    // stack: x, x
     %rotr(6)
-    // stack: rotr(x, 6), x
-    SWAP1
-    // stack: x, rotr(x, 6)
+    // stack: rotr(x, 6)
     DUP1
-    // stack: x, x, rotr(x, 6)
-    %rotr(11)
-    // stack: rotr(x, 11), x, rotr(x, 6)
-    SWAP1
-    // stack: x, rotr(x, 11), rotr(x, 6)
-    %rotr(25)
+    // stack: rotr(x, 6), rotr(x, 6)
+    %rotr(5)
+    // stack: rotr(x, 11), rotr(x, 6)
+    DUP1
+    // stack: rotr(x, 11), rotr(x, 11), rotr(x, 6)
+    %rotr(14)
     // stack: rotr(x, 25), rotr(x, 11), rotr(x, 6)
     XOR
     XOR
