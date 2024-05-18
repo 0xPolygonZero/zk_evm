@@ -13,7 +13,6 @@
     ADD
     ADD
     ADD
-    %as_u32
     // stack: Ch(e, f, g) + Sigma_1(e) + h + K[i] + W[i]
 %endmacro
 
@@ -28,6 +27,6 @@
     // stack: c, a, b, Sigma_0(a)
     %sha2_majority
     // stack: Maj(c, a, b), Sigma_0(a)
-    %add_u32
+    ADD
     // stack: Maj(c, a, b) + Sigma_0(a)
 %endmacro
