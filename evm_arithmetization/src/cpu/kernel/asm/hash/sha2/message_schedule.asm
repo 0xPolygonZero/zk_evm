@@ -43,27 +43,22 @@ gen_message_schedule_from_block_0_loop:
     // stack: output_addr, block[0] % (1 << 32), block[0] >> 32, output_addr, counter, block[1], retdest
     %mstore_u32
     // stack: block[0] >> 32, output_addr, counter, block[1], retdest
-    SWAP1
-    // stack: output_addr, block[0] >> 32, counter, block[1], retdest
-    %sub_const(4)
-    // stack: output_addr - 4, block[0] >> 32, counter, block[1], retdest
-    SWAP1
-    // stack: block[0] >> 32, output_addr - 4, counter, block[1], retdest
+    %stack (block0_shifted, output_addr, counter) -> (output_addr, 4, 1, counter, block0_shifted)
+    SUB
+    // stack: output_addr - 4, 1, counter, block[0] >> 32, block[1], retdest
     SWAP2
-    // stack: counter, output_addr - 4, block[0] >> 32, block[1], retdest
-    %decrement
+    SUB
+    // stack: counter - 1, output_addr - 4, block[0] >> 32, block[1], retdest
     DUP1
     %jumpi(gen_message_schedule_from_block_0_loop)
 gen_message_schedule_from_block_0_end:
     // stack: old counter=0, output_addr, block[0], block[1], retdest
     POP
     // stack: output_addr, block[0], block[1], retdest
-    %stack (out, b0, b1) -> (out, 8, b1, b0)
-    // stack: output_addr, counter=8, block[1], block[0], retdest
     %add_const(64)
-    // stack: output_addr + 64, counter, block[1], block[0], retdest
-    SWAP1
-    // stack: counter, output_addr + 64, block[1], block[0], retdest
+    // stack: output_addr + 64, block[0], block[1], retdest
+    %stack (out, b0, b1) -> (8, out, b1, b0)
+    // stack: counter=8, output_addr + 64, block[1], block[0], retdest
 gen_message_schedule_from_block_1_loop:
     // Split the second half (256 bits) of the block into the next eight (32-bit) chunks of the message sdchedule.
     // stack: counter, output_addr, block[1], block[0], retdest
@@ -81,29 +76,22 @@ gen_message_schedule_from_block_1_loop:
     // stack: output_addr, block[1] % (1 << 32), block[1] >> 32, output_addr, counter, block[0], retdest
     %mstore_u32
     // stack: block[1] >> 32, output_addr, counter, block[0], retdest
-    SWAP1
-    // stack: output_addr, block[1] >> 32, counter, block[0], retdest
-    %sub_const(4)
-    // stack: output_addr - 4, block[1] >> 32, counter, block[0], retdest
-    SWAP1
-    // stack: block[1] >> 32, output_addr - 4, counter, block[0], retdest
+    %stack (block1_shifted, output_addr, counter) -> (output_addr, 4, 1, counter, block1_shifted)
+    SUB
+    // stack: output_addr - 4, 1, counter, block[1] >> 32, block[0], retdest
     SWAP2
-    // stack: counter, output_addr - 4, block[1] >> 32, block[0], retdest
-    %decrement
+    SUB
+    // stack: counter - 1, output_addr - 4, block[1] >> 32, block[0], retdest
     DUP1
     %jumpi(gen_message_schedule_from_block_1_loop)
 gen_message_schedule_from_block_1_end:
     // stack: old counter=0, output_addr, block[1], block[0], retdest
     POP
     // stack: output_addr, block[0], block[1], retdest
-    PUSH 48
-    // stack: counter=48, output_addr, block[0], block[1], retdest
-    SWAP1
-    // stack: output_addr, counter, block[0], block[1], retdest
     %add_const(36)
-    // stack: output_addr + 36, counter, block[0], block[1], retdest
-    SWAP1
-    // stack: counter, output_addr + 36, block[0], block[1], retdest
+    // stack: output_addr + 36, block[0], block[1], retdest
+    PUSH 48
+    // stack: counterr=48, output_addr + 36, block[0], block[1], retdest
 gen_message_schedule_remaining_loop:
     // Generate the next 48 chunks of the message schedule, one at a time, from prior chunks.
     // stack: counter, output_addr, block[0], block[1], retdest
