@@ -161,7 +161,7 @@ gen_message_schedule_remaining_end:
     %pop4
     JUMP
 
-// Precodition: memory, starting at 0, contains num_blocks, block0[0], ..., block0[63], block1[0], ..., blocklast[63]
+// Precondition: memory, starting at 0, contains num_blocks, block0[0], ..., block0[63], block1[0], ..., blocklast[63]
 //              stack contains output_addr
 // Postcondition: starting at output_addr, set of 256 bytes per block
 //                each contains the 64 32-bit chunks of the message schedule for that block (in four-byte increments)

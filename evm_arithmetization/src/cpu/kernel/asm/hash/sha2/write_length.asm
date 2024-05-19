@@ -9,7 +9,7 @@
     %and_const(0xff)
     // stack: length % (1 << 8), last_addr, length, last_addr
     MSTORE_GENERAL
-    
+
     %rep 7
         // For i = 0 to 6
         // stack: length >> (8 * i), last_addr - i - 1
@@ -24,7 +24,7 @@
         DUP3
         // stack: length >> (8 * (i + 1)), 256, last_addr - i - 2, length >> (8 * (i + 1)), last_addr - i - 2
         MOD
-        // stack: (length >> (8 * (i + 1))) % (1 << 8), length >> (8 * (i + 1)), last_addr - i - 2
+        // stack: (length >> (8 * (i + 1))) % (1 << 8), last_addr - i - 2, length >> (8 * (i + 1)), last_addr - i - 2
         MSTORE_GENERAL
     %endrep
 
