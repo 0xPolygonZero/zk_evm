@@ -319,16 +319,35 @@ impl TxnInfo {
                     || code_change;
 
                 if state_write_occurred {
-                    let state_trie_writes = StateTrieWrites {
-                        balance: trace.balance,
-                        nonce: trace.nonce,
-                        storage_trie_change,
-                        code_hash: trace.code_usage.as_ref().map(|usage| usage.get_code_hash()),
-                    };
+                    if let Some(state_trie_writes) =
+                        nodes_used_by_txn.state_writes.get_mut(&hashed_addr)
+                    {
+                        // The entry already exists, so we update only the relevant fields.
+                        if trace.balance.is_some() {
+                            state_trie_writes.balance = trace.balance;
+                        }
+                        if trace.nonce.is_some() {
+                            state_trie_writes.nonce = trace.nonce;
+                        }
+                        if storage_trie_change {
+                            state_trie_writes.storage_trie_change = storage_trie_change;
+                        }
+                        if code_change {
+                            state_trie_writes.code_hash =
+                                trace.code_usage.as_ref().map(|usage| usage.get_code_hash());
+                        }
+                    } else {
+                        let state_trie_writes = StateTrieWrites {
+                            balance: trace.balance,
+                            nonce: trace.nonce,
+                            storage_trie_change,
+                            code_hash: trace.code_usage.as_ref().map(|usage| usage.get_code_hash()),
+                        };
 
-                    nodes_used_by_txn
-                        .state_writes
-                        .insert(hashed_addr, state_trie_writes);
+                        nodes_used_by_txn
+                            .state_writes
+                            .insert(hashed_addr, state_trie_writes);
+                    }
                 }
 
                 for (k, v) in storage_writes.into_iter() {
