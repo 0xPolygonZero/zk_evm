@@ -113,12 +113,9 @@ global txn_loop:
     PROVER_INPUT(end_of_txns)
     %jumpi(execute_withdrawals)
 
-    // Initialize memory values.
-    %initialize_memory_pre_txn
-    
     // Call route_txn. When we return, we will process the txn receipt.
     PUSH txn_loop_after
-   
+
     // stack: retdest, prev_gas_used, txn_counter, num_nibbles, txn_nb
     %stack(retdest, prev_gas_used, txn_counter, num_nibbles) -> (txn_counter, num_nibbles, retdest, prev_gas_used, txn_counter, num_nibbles) 
     %jump(route_txn)
@@ -132,6 +129,9 @@ global txn_loop_after:
 
     // stack: new_cum_gas, txn_counter, num_nibbles, txn_nb
     SWAP3 %increment SWAP3
+
+    // Re-initialize memory values before processing the next txn.
+    %reinitialize_memory_pre_txn
 
     // stack: new_cum_gas, txn_counter, num_nibbles, new_txn_number
     %jump(txn_loop)
@@ -162,11 +162,11 @@ global check_receipt_trie:
     
     %jump(halt)
 
-%macro initialize_memory_pre_txn
-    // Initialize accessed addresses and storage keys lists
+%macro reinitialize_memory_pre_txn
+    // Reinitialize accessed addresses and storage keys lists
     %init_access_lists
 
-    // Initialize metadata
+    // Reinitialize global metadata
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_IS_PRECOMPILE_FROM_EOA)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_LOGS_LEN)
@@ -176,4 +176,7 @@ global check_receipt_trie:
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_JOURNAL_DATA_LEN)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN)
+
+    // Reinitialize `chain_id` for legacy txns
+    PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)
 %endmacro
