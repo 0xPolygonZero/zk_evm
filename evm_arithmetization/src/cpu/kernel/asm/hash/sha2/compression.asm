@@ -65,10 +65,11 @@ compression_loop:
     %mload_kernel_code_u32
     // stack: K[i], W[i], a[i], b[i], c[i], d[i], e[i], f[i], g[i], h[i], num_blocks, scratch_space_addr, message_schedule_addr, i, a[0]..h[0], retdest
     DUP10
-    DUP10
-    DUP10
-    DUP10
-    // stack: e[i], f[i], g[i], h[i], K[i], W[i], a[i], b[i], c[i], d[i], e[i], f[i], g[i], h[i], num_blocks, scratch_space_addr, message_schedule_addr, i, a[0]..h[0], retdest
+    DUP8
+    DUP11
+    DUP11
+    DUP11
+    // stack: e[i], f[i], g[i], e[i], h[i], K[i], W[i], a[i], b[i], c[i], d[i], e[i], f[i], g[i], h[i], num_blocks, scratch_space_addr, message_schedule_addr, i, a[0]..h[0], retdest
     %sha2_temp_word1
     // stack: T1[i], a[i], b[i], c[i], d[i], e[i], f[i], g[i], h[i], num_blocks, scratch_space_addr, message_schedule_addr, i, a[0]..h[0], retdest
     DUP4
