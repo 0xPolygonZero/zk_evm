@@ -115,7 +115,7 @@
     // stack: y or x, x and y, z
     %stack(y_or_x, x_and_y, z) -> (z, y_or_x, x_and_y)
     AND
-    // stack: (z and (y or x), x and y
+    // stack: z and (y or x), x and y
     OR
     // stack: (z and (y or x) or (x and y) == (x and y) or (x and z) or (y and z)
 %endmacro
