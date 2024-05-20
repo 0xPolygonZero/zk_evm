@@ -91,7 +91,7 @@ gen_message_schedule_from_block_1_end:
     %add_const(36)
     // stack: output_addr + 36, block[0], block[1], retdest
     PUSH 48
-    // stack: counterr=48, output_addr + 36, block[0], block[1], retdest
+    // stack: counter=48, output_addr + 36, block[0], block[1], retdest
 gen_message_schedule_remaining_loop:
     // Generate the next 48 chunks of the message schedule, one at a time, from prior chunks.
     // stack: counter, output_addr, block[0], block[1], retdest
