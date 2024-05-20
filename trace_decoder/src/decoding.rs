@@ -1,7 +1,9 @@
 use std::{
+    cmp::min,
     collections::HashMap,
     fmt::{self, Display, Formatter},
-    iter::{self, empty, once},
+    iter::{self, empty},
+    ops::Range,
 };
 
 use ethereum_types::{Address, H256, U256, U512};
@@ -233,6 +235,7 @@ impl ProcessedBlockTrace {
     pub(crate) fn into_txn_proof_gen_ir(
         self,
         other_data: OtherBlockData,
+        batch_size: usize,
     ) -> TraceParsingResult<Vec<GenerationInputs>> {
         let mut curr_block_tries = PartialTrieState {
             state: self.tries.state.clone(),
@@ -258,13 +261,22 @@ impl ProcessedBlockTrace {
         // A copy of the initial extra_data possibly needed during padding.
         let extra_data_for_dummies = extra_data.clone();
 
+        let num_txs = self
+            .txn_info
+            .iter()
+            .map(|tx_info| tx_info.meta.len())
+            .sum::<usize>();
+
         let mut txn_gen_inputs = self
             .txn_info
             .into_iter()
             .enumerate()
             .map(|(txn_idx, txn_info)| {
+                let txn_range =
+                    (txn_idx * batch_size)..min(txn_idx * batch_size + batch_size, num_txs);
+
                 Self::process_txn_info(
-                    txn_idx,
+                    txn_range,
                     txn_info,
                     &mut curr_block_tries,
                     &mut extra_data,
@@ -341,7 +353,7 @@ impl ProcessedBlockTrace {
     fn create_minimal_partial_tries_needed_by_txn(
         curr_block_tries: &PartialTrieState,
         nodes_used_by_txn: &NodesUsedByTxn,
-        txn_idx: TxnIdx,
+        txn_range: Range<TxnIdx>,
         delta_application_out: TrieDeltaApplicationOutput,
         _coin_base_addr: &Address,
     ) -> TraceParsingResult<TrieInputs> {
@@ -353,13 +365,15 @@ impl ProcessedBlockTrace {
                 .into_iter(),
         )?;
 
-        let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
+        let txn_nibbles = txn_range
+            .map(|txn_idx| Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap())
+            .into_iter();
 
         let transactions_trie =
-            create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
+            create_trie_subset_wrapped(&curr_block_tries.txn, txn_nibbles.clone(), TrieType::Txn)?;
 
         let receipts_trie =
-            create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
+            create_trie_subset_wrapped(&curr_block_tries.receipt, txn_nibbles, TrieType::Receipt)?;
 
         let storage_tries = create_minimal_storage_partial_tries(
             &curr_block_tries.storage,
@@ -629,13 +643,17 @@ impl ProcessedBlockTrace {
 
     /// Processes a single transaction in the trace.
     fn process_txn_info(
-        txn_idx: usize,
+        txn_range: Range<TxnIdx>,
         txn_info: ProcessedTxnInfo,
         curr_block_tries: &mut PartialTrieState,
         extra_data: &mut ExtraBlockData,
         other_data: &OtherBlockData,
     ) -> TraceParsingResult<GenerationInputs> {
-        trace!("Generating proof IR for txn {}...", txn_idx);
+        trace!(
+            "Generating proof IR for txn {} through {}...",
+            txn_range.start,
+            txn_range.end - 1
+        );
 
         Self::init_any_needed_empty_storage_tries(
             &mut curr_block_tries.storage,
@@ -669,7 +687,7 @@ impl ProcessedBlockTrace {
         let tries = Self::create_minimal_partial_tries_needed_by_txn(
             &tries_at_start_of_txn,
             &txn_info.nodes_used_by_txn,
-            txn_idx,
+            txn_range,
             delta_out,
             &other_data.b_data.b_meta.block_beneficiary,
         )?;

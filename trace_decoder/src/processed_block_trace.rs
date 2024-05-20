@@ -53,7 +53,7 @@ impl BlockTrace {
             batch_size,
         )?;
 
-        processed_block_trace.into_txn_proof_gen_ir(other_data)
+        processed_block_trace.into_txn_proof_gen_ir(other_data, batch_size)
     }
 
     fn into_processed_block_trace<F>(
