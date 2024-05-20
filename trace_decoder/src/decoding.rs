@@ -365,9 +365,8 @@ impl ProcessedBlockTrace {
                 .into_iter(),
         )?;
 
-        let txn_nibbles = txn_range
-            .map(|txn_idx| Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap())
-            .into_iter();
+        let txn_nibbles =
+            txn_range.map(|txn_idx| Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap());
 
         let transactions_trie =
             create_trie_subset_wrapped(&curr_block_tries.txn, txn_nibbles.clone(), TrieType::Txn)?;
