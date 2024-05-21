@@ -39,8 +39,8 @@ global panic:
 %endmacro
 
 %macro assert_lt(ret)
-    GE
-    %assert_zero($ret)
+    LT
+    %assert_nonzero($ret)
 %endmacro
 
 %macro assert_le
@@ -56,10 +56,8 @@ global panic:
 %endmacro
 
 %macro assert_gt
-    // %assert_zero is cheaper than %assert_nonzero, so we will leverage the
-    // fact that (x > y) == !(x <= y).
-    LE
-    %assert_zero
+    GT
+    %assert_nonzero
 %endmacro
 
 %macro assert_gt(ret)
