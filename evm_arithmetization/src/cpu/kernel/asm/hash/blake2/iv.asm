@@ -35,17 +35,14 @@ global blake2_iv_const:
 
 global blake2_iv:
     // stack: i, retdest
-    PUSH blake2_iv_const
-    // stack: blake2_iv_const, i, retdest
-    SWAP1
-    // stack: i, blake2_iv_const, retdest
     %mul_const(8)
+    PUSH blake2_iv_const
     ADD
-    // stack: blake2_iv_const + 2 * i, retdest
+    // stack: blake2_iv_const + 8 * i, retdest
     DUP1
-    // stack: blake2_iv_const + 2 * i, blake2_iv_const + 2 * i, retdest
+    // stack: blake2_iv_const + 8 * i, blake2_iv_const + 8 * i, retdest
     %add_const(4)
-    // stack: blake2_iv_const + 2 * i + 1, blake2_iv_const + 2 * i, retdest
+    // stack: blake2_iv_const + 8 * i + 4, blake2_iv_const + 8 * i, retdest
     %mload_kernel_code_u32
     SWAP1
     %mload_kernel_code_u32

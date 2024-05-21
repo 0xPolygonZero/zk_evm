@@ -60,11 +60,12 @@ global permutation_9_constants:
 
 global blake2_permutation:
     // stack: i, round, retdest
+    PUSH 10 // round_mod
     PUSH permutation_0_constants
-    // stack: permutation_0_constants, i, round, retdest
-    SWAP2
-    // stack: round, i, permutation_0_constants, retdest
-    %mod_const(10)
+    // stack: permutation_0_constants, 10, i, round, retdest
+    SWAP3
+    // stack: round, 10, i, permutation_0_constants, retdest
+    MOD
     // stack: round % 10, i, permutation_0_constants, retdest
     %mul_const(16)
     ADD
