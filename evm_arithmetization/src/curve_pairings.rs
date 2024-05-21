@@ -5,7 +5,7 @@ use rand::distributions::Standard;
 use rand::prelude::Distribution;
 use rand::Rng;
 
-use crate::extension_tower::{Adj, FieldExt, Fp12, Fp2, Fp6, Stack, BLS381, BN254};
+use crate::extension_tower::{Adj, FieldExt, Fp12, Fp2, Fp6, Stack, BLS381};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct CurveAff<T>
@@ -42,6 +42,7 @@ impl<T: FieldExt + Stack> Stack for CurveAff<T> {
     }
 }
 
+#[cfg(test)]
 impl<T> CurveAff<T>
 where
     T: FieldExt,
@@ -151,16 +152,6 @@ where
     pub z: T,
 }
 
-impl<T: FieldExt> CurveProj<T> {
-    pub(crate) const fn unit() -> Self {
-        CurveProj {
-            x: T::ZERO,
-            y: T::ZERO,
-            z: T::ZERO,
-        }
-    }
-}
-
 impl<T: FieldExt + Stack> Stack for CurveProj<T> {
     const SIZE: usize = 3 * T::SIZE;
 
@@ -182,6 +173,7 @@ impl<T: FieldExt + Stack> Stack for CurveProj<T> {
 
 /// The tangent and chord functions output sparse Fp12 elements.
 /// This map embeds the nonzero coefficients into an Fp12.
+#[cfg(test)]
 pub(crate) const fn sparse_embed<F>(g000: F, g01: Fp2<F>, g11: Fp2<F>) -> Fp12<F>
 where
     F: FieldExt,
@@ -205,21 +197,8 @@ where
     Fp12 { z0: g0, z1: g1 }
 }
 
-pub(crate) fn check_curve_eq_aff<T>(p: CurveAff<T>, b_coeff: T) -> bool
-where
-    T: FieldExt,
-{
-    p.y * p.y == p.x * p.x * p.x + b_coeff
-}
-
-pub(crate) fn check_curve_eq_proj<T>(p: CurveProj<T>, b_coeff: T) -> bool
-where
-    T: FieldExt,
-{
-    p.y * p.y == p.x * p.x * p.x + b_coeff
-}
-
 /// Generates a sparse, random Fp12 element.
+#[cfg(test)]
 pub(crate) fn gen_fp12_sparse<F, R: Rng + ?Sized>(rng: &mut R) -> Fp12<F>
 where
     F: FieldExt,
@@ -229,8 +208,10 @@ where
     sparse_embed::<F>(rng.gen::<F>(), rng.gen::<Fp2<F>>(), rng.gen::<Fp2<F>>())
 }
 
+#[cfg(test)]
 pub mod bn254 {
     use super::*;
+    use crate::extension_tower::BN254;
 
     /// The BN curve consists of pairs
     ///     (x, y): (BN254, BN254) | y^2 = x^3 + 3
@@ -769,7 +750,6 @@ pub mod bls381 {
             z: Fp2::<BLS381>::UNIT,
         };
         let mut acc: Fp12<BLS381> = Fp12::<BLS381>::UNIT;
-        let mut line: Fp12<BLS381>;
 
         let mut found_one = false;
         for i in (0..64).rev().map(|b| (((X_GENERATOR >> 1) >> b) & 1) == 1) {
@@ -1005,9 +985,8 @@ pub mod bls381 {
 
 #[cfg(test)]
 mod tests {
-    use rand::thread_rng;
-
     use super::*;
+    use crate::extension_tower::BN254;
 
     #[test]
     fn test_bls_pairing() {

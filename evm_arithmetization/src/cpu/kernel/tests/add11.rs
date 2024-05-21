@@ -122,26 +122,36 @@ fn test_add11_yml() {
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
-        );
+        )
+        .unwrap();
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after.insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_after).to_vec(),
-        );
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
-        expected_state_trie_after.insert(
-            beacon_roots_account_nibbles(),
-            rlp::encode(&beacon_roots_account).to_vec(),
-        );
-        expected_state_trie_after.insert(
-            ger_account_nibbles(),
-            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        );
+            .insert(
+                beneficiary_nibbles,
+                rlp::encode(&beneficiary_account_after).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                beacon_roots_account_nibbles(),
+                rlp::encode(&beacon_roots_account).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                ger_account_nibbles(),
+                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+            )
+            .unwrap();
         expected_state_trie_after
     };
     let receipt_0 = LegacyReceiptRlp {
@@ -151,10 +161,12 @@ fn test_add11_yml() {
         logs: vec![],
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    );
+    receipts_trie
+        .insert(
+            Nibbles::from_str("0x80").unwrap(),
+            rlp::encode(&receipt_0).to_vec(),
+        )
+        .unwrap();
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
@@ -290,26 +302,36 @@ fn test_add11_yml_with_exception() {
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
-        );
+        )
+        .unwrap();
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after.insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_after).to_vec(),
-        );
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
-        expected_state_trie_after.insert(
-            beacon_roots_account_nibbles(),
-            rlp::encode(&beacon_roots_account).to_vec(),
-        );
-        expected_state_trie_after.insert(
-            ger_account_nibbles(),
-            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        );
+            .insert(
+                beneficiary_nibbles,
+                rlp::encode(&beneficiary_account_after).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                beacon_roots_account_nibbles(),
+                rlp::encode(&beacon_roots_account).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                ger_account_nibbles(),
+                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+            )
+            .unwrap();
         expected_state_trie_after
     };
 
@@ -320,10 +342,12 @@ fn test_add11_yml_with_exception() {
         logs: vec![],
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    );
+    receipts_trie
+        .insert(
+            Nibbles::from_str("0x80").unwrap(),
+            rlp::encode(&receipt_0).to_vec(),
+        )
+        .unwrap();
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),

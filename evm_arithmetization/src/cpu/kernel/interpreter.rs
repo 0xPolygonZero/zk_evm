@@ -51,6 +51,7 @@ pub(crate) struct Interpreter<F: Field> {
     /// halt_context
     pub(crate) halt_context: Option<usize>,
     /// Counts the number of appearances of each opcode. For debugging purposes.
+    #[allow(unused)]
     pub(crate) opcode_count: [usize; 0x100],
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
@@ -616,6 +617,7 @@ impl<F: Field> Transition<F> for Interpreter<F> {
     }
 }
 
+#[cfg(debug_assertions)]
 fn get_mnemonic(opcode: u8) -> &'static str {
     match opcode {
         0x00 => "STOP",

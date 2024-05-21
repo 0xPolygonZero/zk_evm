@@ -1,5 +1,3 @@
-#![allow(clippy::empty_docs)]
-
 use std::str::FromStr;
 
 use ethereum_types::U256;
