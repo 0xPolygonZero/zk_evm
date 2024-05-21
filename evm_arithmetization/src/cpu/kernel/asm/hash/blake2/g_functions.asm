@@ -1,103 +1,106 @@
-%macro blake2_g_function
+%macro blake2_g_function(a, b, c, d)
     // Function to mix two input words, x and y, into the four words indexed by a, b, c, d (which
     // are in the range 0..16) in the internal state.
     // The internal state is stored in memory starting at the address start.
-    // stack: a, b, c, d, x, y, start
-    DUP1
-    DUP5
-    DUP5
-    DUP5
-    // stack: b, c, d, a, a, b, c, d, x, y, start
+    // stack: x, y, start
+
+    // Precompute final addresses
+    PUSH $d DUP4 ADD
+    PUSH $c DUP5 ADD
+    PUSH $b DUP6 ADD
+    PUSH $a DUP7 ADD
+
+    // stack: a_fin, b_fin, c_fin, d_fin, x, y, start
+    PUSH $a
+    PUSH $d
+    PUSH $c
+    PUSH $b
+    // stack: b, c, d, a, a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP11
-    // stack: start, b, c, d, a, a, b, c, d, x, y, start
+    // stack: start, b, c, d, a, a_fin, b_fin, c_fin, d_fin, x, y, start
     ADD
     MLOAD_GENERAL
-    // stack: v[b], c, d, a, a, b, c, d, x, y, start
+    // stack: v[b], c, d, a, a_fin, b_fin, c_fin, d_fin, x, y, start
     SWAP1
-    // stack: c, v[b], d, a, a, b, c, d, x, y, start
+    // stack: c, v[b], d, a, a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP11
-    // stack: start, c, v[b], c, d, a, b, c, d, x, y, start
+    // stack: start, c, v[b], c, d, a_fin, b_fin, c_fin, d_fin, x, y, start
     ADD
     MLOAD_GENERAL
-    // stack: v[c], v[b], d, a, a, b, c, d, x, y, start
+    // stack: v[c], v[b], d, a, a_fin, b_fin, c_fin, d_fin, x, y, start
     SWAP2
-    // stack: d, v[b], v[c], a, a, b, c, d, x, y, start
+    // stack: d, v[b], v[c], a, a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP11
-    // stack: start, d, v[b], v[c], a, a, b, c, d, x, y, start
+    // stack: start, d, v[b], v[c], a, a_fin, b_fin, c_fin, d_fin, x, y, start
     ADD
     MLOAD_GENERAL
-    // stack: v[d], v[b], v[c], a, a, b, c, d, x, y, start
+    // stack: v[d], v[b], v[c], a, a_fin, b_fin, c_fin, d_fin, x, y, start
     SWAP3
-    // stack: a, v[b], v[c], v[d], a, b, c, d, x, y, start
+    // stack: a, v[b], v[c], v[d], a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP11
-    // stack: start, a, v[b], v[c], v[d], a, b, c, d, x, y, start
+    // stack: start, a, v[b], v[c], v[d], a_fin, b_fin, c_fin, d_fin, x, y, start
     ADD
     MLOAD_GENERAL
-    // stack: v[a], v[b], v[c], v[d], a, b, c, d, x, y, start
+    // stack: v[a], v[b], v[c], v[d], a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP2
-    // stack: v[b], v[a], v[b], v[c], v[d], a, b, c, d, x, y, start
+    // stack: v[b], v[a], v[b], v[c], v[d], a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP10
-    // stack: x, v[b], v[a], v[b], v[c], v[d], a, b, c, d, x, y, start
+    // stack: x, v[b], v[a], v[b], v[c], v[d], a_fin, b_fin, c_fin, d_fin, x, y, start
     ADD
     ADD
     %as_u64
-    // stack: v[a]' = (v[a] + v[b] + x) % 2^64, v[b], v[c], v[d], a, b, c, d, x, y, start
+    // stack: v[a]' = (v[a] + v[b] + x) % 2^64, v[b], v[c], v[d], a_fin, b_fin, c_fin, d_fin, x, y, start
     %stack (a, b, c, d) -> (a, d, a, b, c)
-    // stack: v[a]', v[d], v[a]', v[b], v[c], a, b, c, d, x, y, start
+    // stack: v[a]', v[d], v[a]', v[b], v[c], a_fin, b_fin, c_fin, d_fin, x, y, start
     XOR
     %rotr_64(32)
-    // stack: v[d]' = (v[d] ^ v[a]') >>> 32, v[a]', v[b], v[c], a, b, c, d, x, y, start
+    // stack: v[d]' = (v[d] ^ v[a]') >>> 32, v[a]', v[b], v[c], a_fin, b_fin, c_fin, d_fin, x, y, start
     %stack (d, a, b, c) -> (c, d, a, b, d)
-    // stack: v[c], v[d]', v[a]', v[b], v[d]', a, b, c, d, x, y, start
+    // stack: v[c], v[d]', v[a]', v[b], v[d]', a_fin, b_fin, c_fin, d_fin, x, y, start
     ADD
     %as_u64
-    // stack: v[c]' = (v[c] + v[d]') % 2^64, v[a]', v[b], v[d]', a, b, c, d, x, y, start
+    // stack: v[c]' = (v[c] + v[d]') % 2^64, v[a]', v[b], v[d]', a_fin, b_fin, c_fin, d_fin, x, y, start
     %stack (c, a, b, d) -> (b, c, a, c, d)
-    // stack: v[b], v[c]', v[a]', v[c]', v[d]', a, b, c, d, x, y, start
+    // stack: v[b], v[c]', v[a]', v[c]', v[d]', a_fin, b_fin, c_fin, d_fin, x, y, start
     XOR
     %rotr_64(24)
-    // stack: v[b]' = (v[b] ^ v[c]') >>> 24, v[a]', v[c]', v[d]', a, b, c, d, x, y, start
+    // stack: v[b]' = (v[b] ^ v[c]') >>> 24, v[a]', v[c]', v[d]', a_fin, b_fin, c_fin, d_fin, x, y, start
     SWAP1
-    // stack: v[a]', v[b]', v[c]', v[d]', a, b, c, d, x, y, start
+    // stack: v[a]', v[b]', v[c]', v[d]', a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP2
-    // stack: v[b]', v[a]', v[b]', v[c]', v[d]', a, b, c, d, x, y, start
+    // stack: v[b]', v[a]', v[b]', v[c]', v[d]', a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP11
-    // stack: y, v[b]', v[a]', v[b]', v[c]', v[d]', a, b, c, d, x, y, start
+    // stack: y, v[b]', v[a]', v[b]', v[c]', v[d]', a_fin, b_fin, c_fin, d_fin, x, y, start
     ADD
     ADD
     %as_u64
-    // stack: v[a]'' = (v[a]' + v[b]' + y) % 2^64, v[b]', v[c]', v[d]', a, b, c, d, x, y, start
+    // stack: v[a]'' = (v[a]' + v[b]' + y) % 2^64, v[b]', v[c]', v[d]', a_fin, b_fin, c_fin, d_fin, x, y, start
     SWAP3
-    // stack: v[d]', v[b]', v[c]', v[a]'', a, b, c, d, x, y, start
+    // stack: v[d]', v[b]', v[c]', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP4
-    // stack: v[a]'', v[d]', v[b]', v[c]', v[a]'', a, b, c, d, x, y, start
+    // stack: v[a]'', v[d]', v[b]', v[c]', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
     XOR
     %rotr_64(16)
-    // stack: v[d]'' = (v[a]'' ^ v[d]') >>> 8, v[b]', v[c]', v[a]'', a, b, c, d, x, y, start
+    // stack: v[d]'' = (v[a]'' ^ v[d]') >>> 8, v[b]', v[c]', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
     SWAP2
-    // stack: v[c]', v[b]', v[d]'', v[a]'', a, b, c, d, x, y, start
+    // stack: v[c]', v[b]', v[d]'', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP3
-    // stack: v[d]'', v[c]', v[b]', v[d]'', v[a]'', a, b, c, d, x, y, start
+    // stack: v[d]'', v[c]', v[b]', v[d]'', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
     ADD
     %as_u64
-    // stack: v[c]'' = (v[c]' + v[d]'') % 2^64, v[b]', v[d]'', v[a]'', a, b, c, d, x, y, start
+    // stack: v[c]'' = (v[c]' + v[d]'') % 2^64, v[b]', v[d]'', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
     DUP1
-    // stack: v[c]'', v[c]'', v[b]', v[d]'', v[a]'', a, b, c, d, x, y, start
+    // stack: v[c]'', v[c]'', v[b]', v[d]'', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
     SWAP2
-    // stack: v[b]', v[c]'', v[c]'', v[d]'', v[a]'', a, b, c, d, x, y, start
+    // stack: v[b]', v[c]'', v[c]'', v[d]'', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
     XOR
     %rotr_64(63)
-    // stack: v[b]'' = (v[b]' ^ v[c]'') >>> 7, v[c]'', v[d]'', v[a]'', a, b, c, d, x, y, start
-    %stack (vb, vc, vd, va, a, b, c, d, x, y, start) -> (start, a, va, start, b, vb, start, c, vc, start, d, vd)
-    // stack: start, a, v[a]'', start, b, v[b]'', start, c, v[c]'', start, d, v[d]''
-    ADD
-    %swap_mstore
-    ADD
-    %swap_mstore
-    ADD
-    %swap_mstore
-    ADD
-    %swap_mstore
+    // stack: v[b]'' = (v[b]' ^ v[c]'') >>> 7, v[c]'', v[d]'', v[a]'', a_fin, b_fin, c_fin, d_fin, x, y, start
+    %stack (vb, vc, vd, va, a, b, c, d, x, y, start) -> (va, a, vb, b, vc, c, vd, d)
+    MSTORE_GENERAL
+    MSTORE_GENERAL
+    MSTORE_GENERAL
+    MSTORE_GENERAL
 %endmacro
 
 %macro call_blake2_g_function(a, b, c, d, x_idx, y_idx)
@@ -124,12 +127,7 @@
     ADD
     MLOAD_GENERAL
     // stack: m[s[x_idx]], m[s[y_idx]], start, round, start
-    PUSH $d
-    PUSH $c
-    PUSH $b
-    PUSH $a
-    // stack: a, b, c, d, m[s[x_idx]], m[s[y_idx]], start, round, start
-    %blake2_g_function
+    %blake2_g_function($a, $b, $c, $d)
     // stack: round, start
 %endmacro
 
