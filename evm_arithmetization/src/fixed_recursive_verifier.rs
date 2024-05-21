@@ -278,7 +278,6 @@ struct AggregationChildWithDummyTarget<const D: usize> {
     is_dummy: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
     real_proof: ProofWithPublicInputsTarget<D>,
-    dummy_proof: ProofWithPublicInputsTarget<D>,
 }
 
 impl<const D: usize> AggregationChildWithDummyTarget<D> {
@@ -287,7 +286,6 @@ impl<const D: usize> AggregationChildWithDummyTarget<D> {
         buffer.write_target_bool(self.is_dummy)?;
         buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
         buffer.write_target_proof_with_public_inputs(&self.real_proof)?;
-        buffer.write_target_proof_with_public_inputs(&self.dummy_proof)?;
         Ok(())
     }
 
@@ -296,13 +294,11 @@ impl<const D: usize> AggregationChildWithDummyTarget<D> {
         let is_dummy = buffer.read_target_bool()?;
         let agg_proof = buffer.read_target_proof_with_public_inputs()?;
         let real_proof = buffer.read_target_proof_with_public_inputs()?;
-        let dummy_proof = buffer.read_target_proof_with_public_inputs()?;
         Ok(Self {
             is_agg,
             is_dummy,
             agg_proof,
             real_proof,
-            dummy_proof,
         })
     }
 
@@ -315,11 +311,9 @@ impl<const D: usize> AggregationChildWithDummyTarget<D> {
     ) -> PublicValuesTarget {
         let agg_pv =
             PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs, len_mem_cap);
-        let real_pv =
+        let segment_pv =
             PublicValuesTarget::from_public_inputs(&self.real_proof.public_inputs, len_mem_cap);
-        let dummy_pv =
-            PublicValuesTarget::from_public_inputs(&self.dummy_proof.public_inputs, len_mem_cap);
-        let segment_pv = PublicValuesTarget::select(builder, self.is_dummy, dummy_pv, real_pv);
+
         PublicValuesTarget::select(builder, self.is_agg, agg_pv, segment_pv)
     }
 }
@@ -965,7 +959,8 @@ where
         );
 
         // If the rhs is a dummy, then the lhs must be a segment.
-        builder.mul_sub(is_dummy.target, lhs_segment.is_agg.target, is_dummy.target);
+        let constr = builder.mul(is_dummy.target, lhs_segment.is_agg.target);
+        builder.assert_zero(constr);
 
         // If the rhs is a dummy, then the aggregation PVs are equal to the lhs PVs.
         TrieRootsTarget::assert_equal_if(
@@ -1308,7 +1303,6 @@ where
             is_dummy,
             agg_proof,
             real_proof,
-            dummy_proof,
         }
     }
 
@@ -1988,99 +1982,6 @@ where
                 &agg_child.agg_proof,
                 proof,
             );
-            // If we have a dummy, the PVs are just copied from the lhs.
-            // if is_dummy {
-            // let mut dummy_pis = proof.public_inputs.clone();
-            // // We must change trie roots before, registers before and
-            // memory before. // Trie roots before := Trie
-            // roots after
-            // dummy_pis.copy_within(TrieRootsTarget::SIZE..
-            // TrieRootsTarget::SIZE * 2, 0); // Registers
-            // before := Registers after
-            // dummy_pis.copy_within(
-            //     TrieRootsTarget::SIZE * 2
-            //         + BlockMetadataTarget::SIZE
-            //         + BlockHashesTarget::SIZE
-            //         + ExtraBlockDataTarget::SIZE
-            //         + RegistersDataTarget::SIZE
-            //         ..TrieRootsTarget::SIZE * 2
-            //             + BlockMetadataTarget::SIZE
-            //             + BlockHashesTarget::SIZE
-            //             + ExtraBlockDataTarget::SIZE
-            //             + RegistersDataTarget::SIZE * 2,
-            //     TrieRootsTarget::SIZE * 2
-            //         + BlockMetadataTarget::SIZE
-            //         + BlockHashesTarget::SIZE
-            //         + ExtraBlockDataTarget::SIZE,
-            // );
-            // // Mem before := Mem after
-            // dummy_pis.copy_within(
-            //     TrieRootsTarget::SIZE * 2
-            //         + BlockMetadataTarget::SIZE
-            //         + BlockHashesTarget::SIZE
-            //         + ExtraBlockDataTarget::SIZE
-            //         + RegistersDataTarget::SIZE * 2
-            //         + len_mem_cap * NUM_HASH_OUT_ELTS
-            //         ..TrieRootsTarget::SIZE * 2
-            //             + BlockMetadataTarget::SIZE
-            //             + BlockHashesTarget::SIZE
-            //             + ExtraBlockDataTarget::SIZE
-            //             + RegistersDataTarget::SIZE * 2
-            //             + 2 * len_mem_cap * NUM_HASH_OUT_ELTS,
-            //     TrieRootsTarget::SIZE * 2
-            //         + BlockMetadataTarget::SIZE
-            //         + BlockHashesTarget::SIZE
-            //         + ExtraBlockDataTarget::SIZE
-            //         + RegistersDataTarget::SIZE * 2,
-            // );
-
-            // // let lhs_pv =
-            // PublicValues::from_public_inputs(&proof.public_inputs,
-            // // len_mem_cap); let mut dummy_pv = lhs_pv.clone();
-            // // dummy_pv.trie_roots_before =
-            // dummy_pv.trie_roots_after.clone(); // dummy_pv.
-            // registers_before = dummy_pv.registers_after.clone();
-            // // dummy_pv.mem_before = dummy_pv.mem_after.clone();
-
-            // // let dummy_pv_targets =
-            // PublicValuesTarget::from_public_inputs( //
-            // &agg_child.dummy_proof.public_inputs, //     len_mem_cap,
-            // // );
-
-            // // let mut pw = PartialWitness::<F>::new();
-            // // for (i, &pi) in dummy_pis.iter().enumerate() {
-            // //     pw.set_target(circuit.prover_only.public_inputs[i],
-            // pi); // }
-
-            // let mut dummy_pis_map = HashMap::new();
-            // for (idx, &pi) in dummy_pis.iter().enumerate() {
-            //     dummy_pis_map.insert(idx, pi);
-            // }
-
-            // let dummy_circuit = dummy_circuit::<F, C,
-            // D>(&circuit.common); println!("Generating
-            // dummy proof..."); let dummy_proof =
-            // dummy_proof::<F, C, D>(&dummy_circuit, dummy_pis_map)
-            //     .expect("Cannot generate dummy proof.");
-            // println!("Dummy proof generated!");
-
-            // //let dummy_proof = circuit.prove(pw).expect("Cannot generate
-            // dummy proof.");
-
-            // // let mut dummy_pis = vec![F::ZERO;
-            // circuit.common.num_public_inputs];
-
-            // // let mut dummy_proof_with_pis = ProofWithPublicInputs {
-            // //     proof: dummy_proof,
-            // //     public_inputs: dummy_pis,
-            // // }
-            // agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof,
-            // &dummy_proof); // set_public_value_targets(agg_inputs,
-            // &dummy_pv_targets, // &dummy_pv);
-            //}
-            if !is_dummy {
-                agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof, proof);
-            }
         }
         agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof);
     }
