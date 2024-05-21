@@ -78,77 +78,38 @@ impl PublicValues {
                     - 1
         );
 
-        let trie_roots_before = TrieRoots::from_public_inputs(&pis[0..TrieRootsTarget::SIZE]);
+        let mut offset = 0;
+        let trie_roots_before =
+            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
+        offset += TrieRootsTarget::SIZE;
         let trie_roots_after =
-            TrieRoots::from_public_inputs(&pis[TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2]);
-        let block_metadata = BlockMetadata::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE],
+            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
+        offset += TrieRootsTarget::SIZE;
+        let block_metadata =
+            BlockMetadata::from_public_inputs(&pis[offset..offset + BlockMetadataTarget::SIZE]);
+        offset += BlockMetadataTarget::SIZE;
+        let block_hashes =
+            BlockHashes::from_public_inputs(&pis[offset..offset + BlockHashesTarget::SIZE]);
+        offset += BlockHashesTarget::SIZE;
+        let extra_block_data =
+            ExtraBlockData::from_public_inputs(&pis[offset..offset + ExtraBlockDataTarget::SIZE]);
+        offset += ExtraBlockDataTarget::SIZE;
+        let registers_before =
+            RegistersData::from_public_inputs(&pis[offset..offset + RegistersDataTarget::SIZE]);
+        offset += RegistersDataTarget::SIZE;
+        let registers_after =
+            RegistersData::from_public_inputs(&pis[offset..offset + RegistersDataTarget::SIZE]);
+        offset += RegistersDataTarget::SIZE;
+        let mem_before = MemCap::from_public_inputs(
+            &pis[offset..offset + len_mem_cap * NUM_HASH_OUT_ELTS],
+            len_mem_cap,
         );
-        let block_hashes = BlockHashes::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE],
-        );
-        let extra_block_data = ExtraBlockData::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE],
-        );
-        let registers_before = RegistersData::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2
-                + BlockMetadataTarget::SIZE
-                + BlockHashesTarget::SIZE
-                + ExtraBlockDataTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    + RegistersDataTarget::SIZE],
-        );
-        let registers_after = RegistersData::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2
-                + BlockMetadataTarget::SIZE
-                + BlockHashesTarget::SIZE
-                + ExtraBlockDataTarget::SIZE
-                + RegistersDataTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    + RegistersDataTarget::SIZE * 2],
+        offset += len_mem_cap * NUM_HASH_OUT_ELTS;
+        let mem_after = MemCap::from_public_inputs(
+            &pis[offset..offset + len_mem_cap * NUM_HASH_OUT_ELTS],
+            len_mem_cap,
         );
 
-        let mem_before = MemCap::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2
-                + BlockMetadataTarget::SIZE
-                + BlockHashesTarget::SIZE
-                + ExtraBlockDataTarget::SIZE
-                + RegistersDataTarget::SIZE * 2
-                ..TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    + RegistersDataTarget::SIZE * 2
-                    + len_mem_cap * NUM_HASH_OUT_ELTS],
-            len_mem_cap,
-        );
-        let mem_after = MemCap::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2
-                + BlockMetadataTarget::SIZE
-                + BlockHashesTarget::SIZE
-                + ExtraBlockDataTarget::SIZE
-                + RegistersDataTarget::SIZE * 2
-                + len_mem_cap * NUM_HASH_OUT_ELTS
-                ..TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    + RegistersDataTarget::SIZE * 2
-                    + 2 * len_mem_cap * NUM_HASH_OUT_ELTS],
-            len_mem_cap,
-        );
-        // There are 3 elements per address, + 1 U256 for the memory value.
         Self {
             trie_roots_before,
             trie_roots_after,
@@ -159,6 +120,72 @@ impl PublicValues {
             registers_after,
             mem_before,
             mem_after,
+        }
+    }
+}
+
+/// Memory values which are public.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct FinalPublicValues {
+    /// Trie hashes before the execution of the local state transition
+    pub trie_roots_before: TrieRoots,
+    /// Trie hashes after the execution of the local state transition.
+    pub trie_roots_after: TrieRoots,
+    /// Block metadata: it remains unchanged within a block.
+    pub block_metadata: BlockMetadata,
+    /// 256 previous block hashes and current block's hash.
+    pub block_hashes: BlockHashes,
+    /// The state trie digest of the checkpoint block.
+    pub extra_block_data: ExtraBlockData,
+}
+
+impl FinalPublicValues {
+    /// Extracts final public values from the given public inputs of a proof.
+    /// Public values are always the first public inputs added to the circuit,
+    /// so we can start extracting at index 0.
+    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+        assert!(
+            pis.len()
+                > TrieRootsTarget::SIZE * 2
+                    + BlockMetadataTarget::SIZE
+                    + BlockHashesTarget::SIZE
+                    + ExtraBlockDataTarget::SIZE
+        );
+
+        let mut offset = 0;
+        let trie_roots_before =
+            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
+        offset += TrieRootsTarget::SIZE;
+        let trie_roots_after =
+            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
+        offset += TrieRootsTarget::SIZE;
+        let block_metadata =
+            BlockMetadata::from_public_inputs(&pis[offset..offset + BlockMetadataTarget::SIZE]);
+        offset += BlockMetadataTarget::SIZE;
+        let block_hashes =
+            BlockHashes::from_public_inputs(&pis[offset..offset + BlockHashesTarget::SIZE]);
+        offset += BlockHashesTarget::SIZE;
+        let extra_block_data =
+            ExtraBlockData::from_public_inputs(&pis[offset..offset + ExtraBlockDataTarget::SIZE]);
+
+        Self {
+            trie_roots_before,
+            trie_roots_after,
+            block_metadata,
+            block_hashes,
+            extra_block_data,
+        }
+    }
+}
+
+impl From<PublicValues> for FinalPublicValues {
+    fn from(value: PublicValues) -> Self {
+        Self {
+            trie_roots_before: value.trie_roots_before,
+            trie_roots_after: value.trie_roots_after,
+            block_metadata: value.block_metadata,
+            block_hashes: value.block_hashes,
+            extra_block_data: value.extra_block_data,
         }
     }
 }
@@ -178,9 +205,9 @@ impl TrieRoots {
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == TrieRootsTarget::SIZE);
 
-        let state_root = get_h256(&pis[0..8]);
-        let transactions_root = get_h256(&pis[8..16]);
-        let receipts_root = get_h256(&pis[16..24]);
+        let state_root = get_h256(&pis[0..TARGET_HASH_SIZE]);
+        let transactions_root = get_h256(&pis[TARGET_HASH_SIZE..2 * TARGET_HASH_SIZE]);
+        let receipts_root = get_h256(&pis[2 * TARGET_HASH_SIZE..3 * TARGET_HASH_SIZE]);
 
         Self {
             state_root,
@@ -221,7 +248,9 @@ impl BlockHashes {
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == BlockHashesTarget::SIZE);
 
-        let prev_hashes: [H256; 256] = core::array::from_fn(|i| get_h256(&pis[8 * i..8 + 8 * i]));
+        let prev_hashes: [H256; 256] = core::array::from_fn(|i| {
+            get_h256(&pis[TARGET_HASH_SIZE * i..TARGET_HASH_SIZE * (i + 1)])
+        });
         let cur_hash = get_h256(&pis[2048..2056]);
 
         Self {
@@ -271,7 +300,11 @@ impl BlockMetadata {
         let block_base_fee =
             (pis[18].to_canonical_u64() + (pis[19].to_canonical_u64() << 32)).into();
         let block_gas_used = pis[20].to_canonical_u64().into();
-        let block_bloom = core::array::from_fn(|i| h2u(get_h256(&pis[21 + 8 * i..29 + 8 * i])));
+        let block_bloom = core::array::from_fn(|i| {
+            h2u(get_h256(
+                &pis[21 + TARGET_HASH_SIZE * i..21 + TARGET_HASH_SIZE * (i + 1)],
+            ))
+        });
 
         Self {
             block_beneficiary,
@@ -757,25 +790,30 @@ impl PublicValuesTarget {
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
 pub struct TrieRootsTarget {
     /// Targets for the state trie hash.
-    pub(crate) state_root: [Target; 8],
+    pub(crate) state_root: [Target; TARGET_HASH_SIZE],
     /// Targets for the transactions trie hash.
-    pub(crate) transactions_root: [Target; 8],
+    pub(crate) transactions_root: [Target; TARGET_HASH_SIZE],
     /// Targets for the receipts trie hash.
-    pub(crate) receipts_root: [Target; 8],
+    pub(crate) receipts_root: [Target; TARGET_HASH_SIZE],
 }
 
+/// Number of `Target`s required for hashes.
+pub(crate) const TARGET_HASH_SIZE: usize = 8;
+
 impl TrieRootsTarget {
-    /// Number of `Target`s required for all trie hashes.
-    pub(crate) const HASH_SIZE: usize = 8;
-    pub(crate) const SIZE: usize = Self::HASH_SIZE * 3;
+    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 3;
 
     /// Extracts trie hash `Target`s for all tries from the provided public
     /// input `Target`s. The provided `pis` should start with the trie
     /// hashes.
     pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
-        let state_root = pis[0..8].try_into().unwrap();
-        let transactions_root = pis[8..16].try_into().unwrap();
-        let receipts_root = pis[16..24].try_into().unwrap();
+        let state_root = pis[0..TARGET_HASH_SIZE].try_into().unwrap();
+        let transactions_root = pis[TARGET_HASH_SIZE..2 * TARGET_HASH_SIZE]
+            .try_into()
+            .unwrap();
+        let receipts_root = pis[2 * TARGET_HASH_SIZE..3 * TARGET_HASH_SIZE]
+            .try_into()
+            .unwrap();
 
         Self {
             state_root,
