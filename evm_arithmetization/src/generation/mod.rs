@@ -477,7 +477,7 @@ fn simulate_cpu<F: Field>(
     max_cpu_len_log: Option<usize>,
     is_dummy: bool,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
-    let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log, is_dummy)?;
+    let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log)?;
 
     let pc = state.registers.program_counter;
     // Setting the values of padding rows.

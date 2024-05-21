@@ -4,9 +4,9 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
+use hashbrown::HashMap;
 use plonky2::{
     gates::noop::NoopGate,
-    iop::witness::PartialWitness,
     plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
     util::timing::TimingTree,
 };
@@ -17,7 +17,7 @@ use crate::{
         SegmentAggregatableProof, TxnAggregatableProof,
     },
     prover_state::ProverState,
-    types::{Config, Field, PlonkyProofIntern, EXTENSION_DEGREE},
+    types::{Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
 
 /// A type alias for `Result<T, ProofGenError>`.
@@ -166,13 +166,6 @@ pub fn dummy_proof() -> ProofGenResult<PlonkyProofIntern> {
     builder.add_gate(NoopGate, vec![]);
     let circuit_data = builder.build::<_>();
 
-    let inputs = PartialWitness::new();
-
-    plonky2::plonk::prover::prove::<Field, Config, EXTENSION_DEGREE>(
-        &circuit_data.prover_only,
-        &circuit_data.common,
-        inputs,
-        &mut TimingTree::default(),
-    )
-    .map_err(|e| ProofGenError(e.to_string()))
+    plonky2::recursion::dummy_circuit::dummy_proof(&circuit_data, HashMap::default())
+        .map_err(|e| ProofGenError(e.to_string()))
 }

@@ -496,7 +496,7 @@ impl<F: Field> Interpreter<F> {
     }
 
     pub(crate) fn run(&mut self) -> Result<(RegistersState, Option<MemoryState>), anyhow::Error> {
-        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log, self.is_dummy)?;
+        let (final_registers, final_mem) = self.run_cpu(self.max_cpu_len_log)?;
 
         #[cfg(debug_assertions)]
         {

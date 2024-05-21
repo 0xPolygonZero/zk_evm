@@ -476,7 +476,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         None,
     )?;
 
-    assert_eq!(segment_proofs_data_first.len(), 1); // second one is a dummy segment
+    assert_eq!(segment_proofs_data_first.len(), 2); // second one is a dummy segment
 
     println!("Prove first aggreg...");
     let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
@@ -485,9 +485,9 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             &segment_proofs_data_first[0].proof_with_pis,
             segment_proofs_data_first[0].public_values.clone(),
             false,
-            true,
-            &segment_proofs_data_first[0].proof_with_pis,
-            segment_proofs_data_first[0].public_values.clone(),
+            segment_proofs_data_first[1].is_dummy,
+            &segment_proofs_data_first[1].proof_with_pis,
+            segment_proofs_data_first[1].public_values.clone(),
         )?;
     all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
 
@@ -637,7 +637,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             &segment_proofs_data_second[0].proof_with_pis,
             segment_proofs_data_second[0].public_values.clone(),
             false,
-            false,
+            segment_proofs_data_second[1].is_dummy,
             &segment_proofs_data_second[1].proof_with_pis,
             segment_proofs_data_second[1].public_values.clone(),
         )?;
@@ -726,7 +726,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &segment_proofs_data[0].proof_with_pis,
         segment_proofs_data[0].public_values.clone(),
         false,
-        false,
+        segment_proofs_data[1].is_dummy,
         &segment_proofs_data[1].proof_with_pis,
         segment_proofs_data[1].public_values.clone(),
     )?;

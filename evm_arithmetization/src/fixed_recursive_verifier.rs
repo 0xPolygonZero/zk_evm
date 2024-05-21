@@ -64,12 +64,14 @@ use crate::witness::state::RegistersState;
 /// this size.
 const THRESHOLD_DEGREE_BITS: usize = 13;
 
+#[derive(Clone)]
 pub struct ProverOutputData<F, C, const D: usize>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
     C::Hasher: AlgebraicHasher<F>,
 {
+    pub is_dummy: bool,
     pub proof_with_pis: ProofWithPublicInputs<F, C, D>,
     pub public_values: PublicValues,
 }
@@ -1546,6 +1548,7 @@ where
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
         Ok(ProverOutputData {
+            is_dummy: false,
             proof_with_pis: root_proof,
             public_values: all_proof.public_values,
         })
@@ -1575,6 +1578,12 @@ where
                 abort_signal.clone(),
             )?;
             proofs.push(proof);
+        }
+
+        if proofs.len() == 1 {
+            let mut first_proof = proofs[0].clone();
+            first_proof.is_dummy = true;
+            proofs.push(first_proof);
         }
 
         Ok(proofs)
@@ -1959,7 +1968,10 @@ where
         agg_inputs.set_proof_with_pis_target(&agg_child.proof, proof);
     }
 
-    /// TODO: Better comment. This function also takes care of the dummy PIs.
+    /// If the proof is not an aggregation, we set the cyclic vk to a dummy
+    /// value, so that it corresponds to the aggregation cyclic vk. If the proof
+    /// is dummy, we set `is_dummy` to `true`. Note that only the rhs can be
+    /// dummy.
     fn set_dummy_if_necessary_with_dummy(
         agg_child: &AggregationChildWithDummyTarget<D>,
         is_agg: bool,

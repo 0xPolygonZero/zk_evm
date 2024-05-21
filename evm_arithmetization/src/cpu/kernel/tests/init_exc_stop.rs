@@ -13,8 +13,10 @@ use crate::generation::state::State;
 use crate::generation::TrieInputs;
 use crate::generation::NUM_EXTRA_CYCLES_AFTER;
 use crate::generation::NUM_EXTRA_CYCLES_BEFORE;
+use crate::memory::segments::Segment;
 use crate::proof::BlockMetadata;
 use crate::proof::TrieRoots;
+use crate::witness::memory::MemoryAddress;
 use crate::witness::state::RegistersState;
 use crate::{proof::BlockHashes, GenerationInputs, Node};
 
@@ -89,19 +91,47 @@ fn test_init_exc_stop() {
         "Incorrect registers for dummy run."
     );
 
-    let main_offset = KERNEL.global_labels["main"];
-    let mut interpreter: Interpreter<F> =
-        Interpreter::new_dummy_with_generation_inputs(initial_offset, vec![], &inputs);
+    let exc_stop_offset = KERNEL.global_labels["exc_stop"];
+
+    let pc_u256 = U256::from(interpreter.get_registers().program_counter);
+    let exit_info = pc_u256 + (U256::one() << 32);
+    interpreter.push(exit_info).unwrap();
+    interpreter.get_mut_registers().program_counter = exc_stop_offset;
     interpreter.halt_offsets = vec![KERNEL.global_labels["halt_final"]];
     interpreter.set_is_kernel(true);
     interpreter.clock = 0;
+
+    // Set the program counter and `is_kernel` at the end of the execution. They
+    // have offsets 6 and 7 respectively in segment `RegistersStates`.
+    let regs_to_set = [
+        (
+            MemoryAddress {
+                context: 0,
+                segment: Segment::RegistersStates.unscale(),
+                virt: 6,
+            },
+            pc_u256,
+        ),
+        (
+            MemoryAddress {
+                context: 0,
+                segment: Segment::RegistersStates.unscale(),
+                virt: 7,
+            },
+            U256::one(),
+        ),
+    ];
+    interpreter.set_memory_multi_addresses(&regs_to_set);
+
     interpreter.run().expect("Running dummy exc_stop failed.");
 
-    // The "-1" comes from the fact that we stop 1 cycle before the max, to allow
-    // for one padding row, which is needed for CPU STARK.
+    // The "-2" comes from the fact that:
+    // - we stop 1 cycle before the max, to allow for one padding row, which is
+    //   needed for CPU STARK.
+    // - we normally need one additional cycle to enter `exc_stop`.
     assert_eq!(
         interpreter.get_clock(),
-        NUM_EXTRA_CYCLES_BEFORE + NUM_EXTRA_CYCLES_AFTER - 1,
+        NUM_EXTRA_CYCLES_AFTER - 2,
         "NUM_EXTRA_CYCLES_AFTER is set incorrectly."
     );
 }

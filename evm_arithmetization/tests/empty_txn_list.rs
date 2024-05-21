@@ -182,7 +182,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
             &segment_proofs_data[0].proof_with_pis,
             segment_proofs_data[0].public_values.clone(),
             false,
-            false,
+            segment_proofs_data[1].is_dummy,
             &segment_proofs_data[1].proof_with_pis,
             segment_proofs_data[1].public_values.clone(),
         )?;
@@ -194,7 +194,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
             &segmented_agg_proof,
             segmented_agg_public_values,
             false,
-            false,
+            segment_proofs_data[2].is_dummy,
             &segment_proofs_data[2].proof_with_pis,
             segment_proofs_data[2].public_values.clone(),
         )?;
