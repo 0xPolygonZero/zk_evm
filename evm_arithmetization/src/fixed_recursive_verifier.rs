@@ -867,27 +867,16 @@ where
         let lhs_pv = lhs_segment.public_values(&mut builder, cap_before_len);
         let rhs_pv = rhs_segment.public_values(&mut builder, cap_before_len);
 
-        // All the block metadata is the same for both segments. It is also the case for
-        // extra_block_data.
+        let is_dummy = rhs_segment.is_dummy;
+        let one = builder.one();
+        let is_not_dummy = builder.sub(one, is_dummy.target);
+        let is_not_dummy = BoolTarget::new_unsafe(is_not_dummy);
+
+        // Always connect the lhs to the aggregation public values.
         TrieRootsTarget::connect(
             &mut builder,
             public_values.trie_roots_before,
             lhs_pv.trie_roots_before,
-        );
-        TrieRootsTarget::connect(
-            &mut builder,
-            lhs_pv.trie_roots_after,
-            rhs_pv.trie_roots_after,
-        );
-        TrieRootsTarget::connect(
-            &mut builder,
-            public_values.trie_roots_after,
-            rhs_pv.trie_roots_after,
-        );
-        BlockMetadataTarget::connect(
-            &mut builder,
-            public_values.block_metadata,
-            rhs_pv.block_metadata,
         );
         BlockMetadataTarget::connect(
             &mut builder,
@@ -897,77 +886,99 @@ where
         BlockHashesTarget::connect(
             &mut builder,
             public_values.block_hashes,
-            rhs_pv.block_hashes,
-        );
-        BlockHashesTarget::connect(
-            &mut builder,
-            public_values.block_hashes,
             lhs_pv.block_hashes,
-        );
-        ExtraBlockDataTarget::connect(
-            &mut builder,
-            public_values.extra_block_data,
-            rhs_pv.extra_block_data,
         );
         ExtraBlockDataTarget::connect(
             &mut builder,
             public_values.extra_block_data,
             lhs_pv.extra_block_data,
         );
-
-        // Connect registers and merkle caps between segments.
-        RegistersDataTarget::connect(
-            &mut builder,
-            public_values.registers_after.clone(),
-            rhs_pv.registers_after.clone(),
-        );
         RegistersDataTarget::connect(
             &mut builder,
             public_values.registers_before.clone(),
             lhs_pv.registers_before.clone(),
-        );
-        RegistersDataTarget::connect(
-            &mut builder,
-            lhs_pv.registers_after,
-            rhs_pv.registers_before.clone(),
         );
         MemCapTarget::connect(
             &mut builder,
             public_values.mem_before.clone(),
             lhs_pv.mem_before.clone(),
         );
-        MemCapTarget::connect(
-            &mut builder,
-            public_values.mem_after.clone(),
-            rhs_pv.mem_after.clone(),
-        );
-        MemCapTarget::connect(&mut builder, lhs_pv.mem_after, rhs_pv.mem_before.clone());
 
-        // If the rhs is a dummy, then the lhs must be a segment.
-        builder.mul_sub(
-            rhs_segment.is_dummy.target,
-            lhs_segment.is_agg.target,
-            rhs_segment.is_dummy.target,
-        );
-
-        // If the rhs is a dummy, then its PV after must be equal to its PV before.
+        // If the rhs is a real proof: All the block metadata is the same for both
+        // segments. It is also the case for extra_block_data.
         TrieRootsTarget::assert_equal_if(
             &mut builder,
-            rhs_segment.is_dummy,
-            rhs_pv.trie_roots_before,
+            is_not_dummy,
+            lhs_pv.trie_roots_after,
             rhs_pv.trie_roots_after,
+        );
+        TrieRootsTarget::assert_equal_if(
+            &mut builder,
+            is_not_dummy,
+            public_values.trie_roots_after,
+            rhs_pv.trie_roots_after,
+        );
+        BlockMetadataTarget::assert_equal_if(
+            &mut builder,
+            is_not_dummy,
+            public_values.block_metadata,
+            rhs_pv.block_metadata,
+        );
+        BlockHashesTarget::assert_equal_if(
+            &mut builder,
+            is_not_dummy,
+            public_values.block_hashes,
+            rhs_pv.block_hashes,
+        );
+        ExtraBlockDataTarget::assert_equal_if(
+            &mut builder,
+            is_not_dummy,
+            public_values.extra_block_data,
+            rhs_pv.extra_block_data,
+        );
+
+        // If the rhs is a real proof: Connect registers and merkle caps between
+        // segments.
+        RegistersDataTarget::assert_equal_if(
+            &mut builder,
+            is_not_dummy,
+            public_values.registers_after.clone(),
+            rhs_pv.registers_after.clone(),
         );
         RegistersDataTarget::assert_equal_if(
             &mut builder,
-            rhs_segment.is_dummy,
-            rhs_pv.registers_before,
-            rhs_pv.registers_after,
+            is_not_dummy,
+            lhs_pv.registers_after,
+            rhs_pv.registers_before.clone(),
         );
         MemCapTarget::assert_equal_if(
             &mut builder,
-            rhs_segment.is_dummy,
-            rhs_pv.mem_before,
-            rhs_pv.mem_after,
+            is_not_dummy,
+            public_values.mem_after.clone(),
+            rhs_pv.mem_after.clone(),
+        );
+        MemCapTarget::assert_equal_if(
+            &mut builder,
+            is_not_dummy,
+            lhs_pv.mem_after.clone(),
+            rhs_pv.mem_before.clone(),
+        );
+
+        // If the rhs is a dummy, then the lhs must be a segment.
+        builder.mul_sub(is_dummy.target, lhs_segment.is_agg.target, is_dummy.target);
+
+        // If the rhs is a dummy, then the aggregation PVs are equal to the lhs PVs.
+        TrieRootsTarget::assert_equal_if(
+            &mut builder,
+            is_dummy,
+            public_values.trie_roots_after,
+            lhs_pv.trie_roots_after,
+        );
+        MemCapTarget::assert_equal_if(
+            &mut builder,
+            is_dummy,
+            public_values.mem_after.clone(),
+            lhs_pv.mem_after.clone(),
         );
 
         // Pad to match the root circuit's degree.
@@ -1278,7 +1289,7 @@ where
         let is_dummy = builder.add_virtual_bool_target_safe();
         let real_proof = builder.add_virtual_proof_with_pis(common);
         let (dummy_proof, dummy_vk) = builder
-            .dummy_proof_and_constant_vk_no_generator::<C>(common)
+            .dummy_proof_and_vk::<C>(common)
             .expect("Failed to build dummy proof.");
 
         let segment_proof = builder.select_proof_with_pis(is_dummy, &dummy_proof, &real_proof);
@@ -1751,24 +1762,31 @@ where
         );
 
         // Aggregates both `PublicValues` from the provided proofs into a single one.
+
+        let real_public_values = if rhs_is_dummy {
+            lhs_public_values.clone()
+        } else {
+            rhs_public_values.clone()
+        };
+
         let agg_public_values = PublicValues {
             trie_roots_before: lhs_public_values.trie_roots_before,
-            trie_roots_after: rhs_public_values.trie_roots_after,
+            trie_roots_after: real_public_values.trie_roots_after,
             extra_block_data: ExtraBlockData {
                 checkpoint_state_trie_root: lhs_public_values
                     .extra_block_data
                     .checkpoint_state_trie_root,
                 txn_number_before: lhs_public_values.extra_block_data.txn_number_before,
-                txn_number_after: rhs_public_values.extra_block_data.txn_number_after,
+                txn_number_after: real_public_values.extra_block_data.txn_number_after,
                 gas_used_before: lhs_public_values.extra_block_data.gas_used_before,
-                gas_used_after: rhs_public_values.extra_block_data.gas_used_after,
+                gas_used_after: real_public_values.extra_block_data.gas_used_after,
             },
-            block_metadata: rhs_public_values.block_metadata,
-            block_hashes: rhs_public_values.block_hashes,
+            block_metadata: real_public_values.block_metadata,
+            block_hashes: real_public_values.block_hashes,
             registers_before: lhs_public_values.registers_before,
-            registers_after: rhs_public_values.registers_after,
+            registers_after: real_public_values.registers_after,
             mem_before: lhs_public_values.mem_before,
-            mem_after: rhs_public_values.mem_after,
+            mem_after: real_public_values.mem_after,
         };
 
         set_public_value_targets(
@@ -1970,88 +1988,97 @@ where
                 &agg_child.agg_proof,
                 proof,
             );
-            if is_dummy {
-                let mut dummy_pis = proof.public_inputs.clone();
-                // We must change trie roots before, registers before and memory before.
-                // Trie roots before := Trie roots after
-                dummy_pis.copy_within(TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2, 0);
-                // Registers before := Registers after
-                dummy_pis.copy_within(
-                    TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE
-                        ..TrieRootsTarget::SIZE * 2
-                            + BlockMetadataTarget::SIZE
-                            + BlockHashesTarget::SIZE
-                            + ExtraBlockDataTarget::SIZE
-                            + RegistersDataTarget::SIZE * 2,
-                    TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE,
-                );
-                // Mem before := Mem after
-                dummy_pis.copy_within(
-                    TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE * 2
-                        + len_mem_cap * NUM_HASH_OUT_ELTS
-                        ..TrieRootsTarget::SIZE * 2
-                            + BlockMetadataTarget::SIZE
-                            + BlockHashesTarget::SIZE
-                            + ExtraBlockDataTarget::SIZE
-                            + RegistersDataTarget::SIZE * 2
-                            + 2 * len_mem_cap * NUM_HASH_OUT_ELTS,
-                    TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE * 2,
-                );
+            // If we have a dummy, the PVs are just copied from the lhs.
+            // if is_dummy {
+            // let mut dummy_pis = proof.public_inputs.clone();
+            // // We must change trie roots before, registers before and
+            // memory before. // Trie roots before := Trie
+            // roots after
+            // dummy_pis.copy_within(TrieRootsTarget::SIZE..
+            // TrieRootsTarget::SIZE * 2, 0); // Registers
+            // before := Registers after
+            // dummy_pis.copy_within(
+            //     TrieRootsTarget::SIZE * 2
+            //         + BlockMetadataTarget::SIZE
+            //         + BlockHashesTarget::SIZE
+            //         + ExtraBlockDataTarget::SIZE
+            //         + RegistersDataTarget::SIZE
+            //         ..TrieRootsTarget::SIZE * 2
+            //             + BlockMetadataTarget::SIZE
+            //             + BlockHashesTarget::SIZE
+            //             + ExtraBlockDataTarget::SIZE
+            //             + RegistersDataTarget::SIZE * 2,
+            //     TrieRootsTarget::SIZE * 2
+            //         + BlockMetadataTarget::SIZE
+            //         + BlockHashesTarget::SIZE
+            //         + ExtraBlockDataTarget::SIZE,
+            // );
+            // // Mem before := Mem after
+            // dummy_pis.copy_within(
+            //     TrieRootsTarget::SIZE * 2
+            //         + BlockMetadataTarget::SIZE
+            //         + BlockHashesTarget::SIZE
+            //         + ExtraBlockDataTarget::SIZE
+            //         + RegistersDataTarget::SIZE * 2
+            //         + len_mem_cap * NUM_HASH_OUT_ELTS
+            //         ..TrieRootsTarget::SIZE * 2
+            //             + BlockMetadataTarget::SIZE
+            //             + BlockHashesTarget::SIZE
+            //             + ExtraBlockDataTarget::SIZE
+            //             + RegistersDataTarget::SIZE * 2
+            //             + 2 * len_mem_cap * NUM_HASH_OUT_ELTS,
+            //     TrieRootsTarget::SIZE * 2
+            //         + BlockMetadataTarget::SIZE
+            //         + BlockHashesTarget::SIZE
+            //         + ExtraBlockDataTarget::SIZE
+            //         + RegistersDataTarget::SIZE * 2,
+            // );
 
-                // let lhs_pv = PublicValues::from_public_inputs(&proof.public_inputs,
-                // len_mem_cap); let mut dummy_pv = lhs_pv.clone();
-                // dummy_pv.trie_roots_before = dummy_pv.trie_roots_after.clone();
-                // dummy_pv.registers_before = dummy_pv.registers_after.clone();
-                // dummy_pv.mem_before = dummy_pv.mem_after.clone();
+            // // let lhs_pv =
+            // PublicValues::from_public_inputs(&proof.public_inputs,
+            // // len_mem_cap); let mut dummy_pv = lhs_pv.clone();
+            // // dummy_pv.trie_roots_before =
+            // dummy_pv.trie_roots_after.clone(); // dummy_pv.
+            // registers_before = dummy_pv.registers_after.clone();
+            // // dummy_pv.mem_before = dummy_pv.mem_after.clone();
 
-                // let dummy_pv_targets = PublicValuesTarget::from_public_inputs(
-                //     &agg_child.dummy_proof.public_inputs,
-                //     len_mem_cap,
-                // );
+            // // let dummy_pv_targets =
+            // PublicValuesTarget::from_public_inputs( //
+            // &agg_child.dummy_proof.public_inputs, //     len_mem_cap,
+            // // );
 
-                // let mut pw = PartialWitness::<F>::new();
-                // for (i, &pi) in dummy_pis.iter().enumerate() {
-                //     pw.set_target(circuit.prover_only.public_inputs[i], pi);
-                // }
+            // // let mut pw = PartialWitness::<F>::new();
+            // // for (i, &pi) in dummy_pis.iter().enumerate() {
+            // //     pw.set_target(circuit.prover_only.public_inputs[i],
+            // pi); // }
 
-                let mut dummy_pis_map = HashMap::new();
-                for (idx, &pi) in dummy_pis.iter().enumerate() {
-                    dummy_pis_map.insert(idx, pi);
-                }
+            // let mut dummy_pis_map = HashMap::new();
+            // for (idx, &pi) in dummy_pis.iter().enumerate() {
+            //     dummy_pis_map.insert(idx, pi);
+            // }
 
-                let dummy_circuit = dummy_circuit::<F, C, D>(&circuit.common);
-                println!("Generating dummy proof...");
-                let dummy_proof = dummy_proof::<F, C, D>(&dummy_circuit, dummy_pis_map)
-                    .expect("Cannot generate dummy proof.");
-                println!("Dummy proof generated!");
+            // let dummy_circuit = dummy_circuit::<F, C,
+            // D>(&circuit.common); println!("Generating
+            // dummy proof..."); let dummy_proof =
+            // dummy_proof::<F, C, D>(&dummy_circuit, dummy_pis_map)
+            //     .expect("Cannot generate dummy proof.");
+            // println!("Dummy proof generated!");
 
-                //let dummy_proof = circuit.prove(pw).expect("Cannot generate dummy proof.");
+            // //let dummy_proof = circuit.prove(pw).expect("Cannot generate
+            // dummy proof.");
 
-                // let mut dummy_pis = vec![F::ZERO; circuit.common.num_public_inputs];
+            // // let mut dummy_pis = vec![F::ZERO;
+            // circuit.common.num_public_inputs];
 
-                // let mut dummy_proof_with_pis = ProofWithPublicInputs {
-                //     proof: dummy_proof,
-                //     public_inputs: dummy_pis,
-                // }
-                agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof, &dummy_proof);
-                // set_public_value_targets(agg_inputs, &dummy_pv_targets,
-                // &dummy_pv);
-            } else {
+            // // let mut dummy_proof_with_pis = ProofWithPublicInputs {
+            // //     proof: dummy_proof,
+            // //     public_inputs: dummy_pis,
+            // // }
+            // agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof,
+            // &dummy_proof); // set_public_value_targets(agg_inputs,
+            // &dummy_pv_targets, // &dummy_pv);
+            //}
+            if !is_dummy {
                 agg_inputs.set_proof_with_pis_target(&agg_child.dummy_proof, proof);
             }
         }

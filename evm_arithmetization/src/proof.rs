@@ -959,6 +959,41 @@ impl BlockMetadataTarget {
             builder.connect(bm0.block_bloom[i], bm1.block_bloom[i])
         }
     }
+
+    /// If `condition`, asserts that `bm0 == bm1`.
+    pub(crate) fn assert_equal_if<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        bm0: Self,
+        bm1: Self,
+    ) {
+        for i in 0..5 {
+            builder.assert_equal_if(
+                condition.target,
+                bm0.block_beneficiary[i],
+                bm1.block_beneficiary[i],
+            );
+        }
+        builder.assert_equal_if(condition.target, bm0.block_timestamp, bm1.block_timestamp);
+        builder.assert_equal_if(condition.target, bm0.block_number, bm1.block_number);
+        builder.assert_equal_if(condition.target, bm0.block_difficulty, bm1.block_difficulty);
+        for i in 0..8 {
+            builder.assert_equal_if(condition.target, bm0.block_random[i], bm1.block_random[i]);
+        }
+        builder.assert_equal_if(condition.target, bm0.block_gaslimit, bm1.block_gaslimit);
+        builder.assert_equal_if(condition.target, bm0.block_chain_id, bm1.block_chain_id);
+        for i in 0..2 {
+            builder.assert_equal_if(
+                condition.target,
+                bm0.block_base_fee[i],
+                bm1.block_base_fee[i],
+            )
+        }
+        builder.assert_equal_if(condition.target, bm0.block_gas_used, bm1.block_gas_used);
+        for i in 0..64 {
+            builder.assert_equal_if(condition.target, bm0.block_bloom[i], bm1.block_bloom[i])
+        }
+    }
 }
 
 /// Circuit version of `BlockHashes`.
@@ -1022,6 +1057,21 @@ impl BlockHashesTarget {
         }
         for i in 0..8 {
             builder.connect(bm0.cur_hash[i], bm1.cur_hash[i]);
+        }
+    }
+
+    /// If `condition`, asserts that `bm0 == bm1`.
+    pub(crate) fn assert_equal_if<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        bm0: Self,
+        bm1: Self,
+    ) {
+        for i in 0..2048 {
+            builder.assert_equal_if(condition.target, bm0.prev_hashes[i], bm1.prev_hashes[i]);
+        }
+        for i in 0..8 {
+            builder.assert_equal_if(condition.target, bm0.cur_hash[i], bm1.cur_hash[i]);
         }
     }
 }
@@ -1114,6 +1164,30 @@ impl ExtraBlockDataTarget {
         builder.connect(ed0.txn_number_after, ed1.txn_number_after);
         builder.connect(ed0.gas_used_before, ed1.gas_used_before);
         builder.connect(ed0.gas_used_after, ed1.gas_used_after);
+    }
+
+    /// If `condition`, asserts that `ed0 == ed1`.
+    pub(crate) fn assert_equal_if<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        ed0: Self,
+        ed1: Self,
+    ) {
+        for i in 0..8 {
+            builder.assert_equal_if(
+                condition.target,
+                ed0.checkpoint_state_trie_root[i],
+                ed1.checkpoint_state_trie_root[i],
+            );
+        }
+        builder.assert_equal_if(
+            condition.target,
+            ed0.txn_number_before,
+            ed1.txn_number_before,
+        );
+        builder.assert_equal_if(condition.target, ed0.txn_number_after, ed1.txn_number_after);
+        builder.assert_equal_if(condition.target, ed0.gas_used_before, ed1.gas_used_before);
+        builder.assert_equal_if(condition.target, ed0.gas_used_after, ed1.gas_used_after);
     }
 }
 
