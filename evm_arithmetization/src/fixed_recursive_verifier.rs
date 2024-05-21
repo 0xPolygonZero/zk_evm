@@ -26,7 +26,7 @@ use plonky2::plonk::circuit_data::{
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
-use plonky2::recursion::dummy_circuit::{self, cyclic_base_proof, dummy_circuit, dummy_proof};
+use plonky2::recursion::dummy_circuit::cyclic_base_proof;
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
 };
@@ -856,7 +856,8 @@ where
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         let lhs_segment = Self::add_segment_agg_child(&mut builder, root);
-        let rhs_segment = Self::add_segment_agg_child_with_dummy(&mut builder, root);
+        let rhs_segment =
+            Self::add_segment_agg_child_with_dummy(&mut builder, root, lhs_segment.proof.clone());
 
         let lhs_pv = lhs_segment.public_values(&mut builder, cap_before_len);
         let rhs_pv = rhs_segment.public_values(&mut builder, cap_before_len);
@@ -900,31 +901,31 @@ where
 
         // If the rhs is a real proof: All the block metadata is the same for both
         // segments. It is also the case for extra_block_data.
-        TrieRootsTarget::assert_equal_if(
+        TrieRootsTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             lhs_pv.trie_roots_after,
             rhs_pv.trie_roots_after,
         );
-        TrieRootsTarget::assert_equal_if(
+        TrieRootsTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             public_values.trie_roots_after,
             rhs_pv.trie_roots_after,
         );
-        BlockMetadataTarget::assert_equal_if(
+        BlockMetadataTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             public_values.block_metadata,
             rhs_pv.block_metadata,
         );
-        BlockHashesTarget::assert_equal_if(
+        BlockHashesTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             public_values.block_hashes,
             rhs_pv.block_hashes,
         );
-        ExtraBlockDataTarget::assert_equal_if(
+        ExtraBlockDataTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             public_values.extra_block_data,
@@ -933,25 +934,25 @@ where
 
         // If the rhs is a real proof: Connect registers and merkle caps between
         // segments.
-        RegistersDataTarget::assert_equal_if(
+        RegistersDataTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             public_values.registers_after.clone(),
             rhs_pv.registers_after.clone(),
         );
-        RegistersDataTarget::assert_equal_if(
+        RegistersDataTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             lhs_pv.registers_after,
             rhs_pv.registers_before.clone(),
         );
-        MemCapTarget::assert_equal_if(
+        MemCapTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             public_values.mem_after.clone(),
             rhs_pv.mem_after.clone(),
         );
-        MemCapTarget::assert_equal_if(
+        MemCapTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
             lhs_pv.mem_after.clone(),
@@ -963,13 +964,13 @@ where
         builder.assert_zero(constr);
 
         // If the rhs is a dummy, then the aggregation PVs are equal to the lhs PVs.
-        TrieRootsTarget::assert_equal_if(
+        TrieRootsTarget::conditional_assert_eq(
             &mut builder,
             is_dummy,
             public_values.trie_roots_after,
             lhs_pv.trie_roots_after,
         );
-        MemCapTarget::assert_equal_if(
+        MemCapTarget::conditional_assert_eq(
             &mut builder,
             is_dummy,
             public_values.mem_after.clone(),
@@ -1276,6 +1277,7 @@ where
     fn add_segment_agg_child_with_dummy(
         builder: &mut CircuitBuilder<F, D>,
         root: &RootCircuitData<F, C, D>,
+        dummy_proof: ProofWithPublicInputsTarget<D>,
     ) -> AggregationChildWithDummyTarget<D> {
         let common = &root.circuit.common;
         let root_vk = builder.constant_verifier_data(&root.circuit.verifier_only);
@@ -1283,18 +1285,14 @@ where
         let agg_proof = builder.add_virtual_proof_with_pis(common);
         let is_dummy = builder.add_virtual_bool_target_safe();
         let real_proof = builder.add_virtual_proof_with_pis(common);
-        let (dummy_proof, dummy_vk) = builder
-            .dummy_proof_and_vk::<C>(common)
-            .expect("Failed to build dummy proof.");
 
         let segment_proof = builder.select_proof_with_pis(is_dummy, &dummy_proof, &real_proof);
-        let segment_vk = builder.select_verifier_data(is_dummy, &dummy_vk, &root_vk);
         builder
             .conditionally_verify_cyclic_proof::<C>(
                 is_agg,
                 &agg_proof,
                 &segment_proof,
-                &segment_vk,
+                &root_vk,
                 common,
             )
             .expect("Failed to build cyclic recursion circuit");
