@@ -212,7 +212,7 @@ global terminate_common:
 
     // Go back to the parent context.
     %mload_context_metadata(@CTX_METADATA_PARENT_CONTEXT)
-    SET_CONTEXT
+    %set_and_prune_ctx
     %decrement_call_depth
     // stack: (empty)
 

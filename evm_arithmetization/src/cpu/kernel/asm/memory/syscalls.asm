@@ -112,6 +112,15 @@ calldataload_large_offset:
 codecopy_within_bounds:
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     POP
+    // stack: segment, src_ctx, kexit_info, dest_offset, offset, size
+    GET_CONTEXT
+    %stack (context, segment, src_ctx, kexit_info, dest_offset, offset, size) ->
+        (src_ctx, segment, offset, @SEGMENT_MAIN_MEMORY, dest_offset, context, size, codecopy_after, src_ctx, kexit_info)
+    %build_address
+    SWAP3 %build_address
+    // stack: DST, SRC, size, codecopy_after, src_ctx, kexit_info
+    %jump(memcpy_bytes)
+
 wcopy_within_bounds:
     // stack: segment, src_ctx, kexit_info, dest_offset, offset, size
     GET_CONTEXT
@@ -131,7 +140,15 @@ wcopy_empty:
 
 codecopy_large_offset:
     // stack: total_size, src_ctx, kexit_info, dest_offset, offset, size
-    %pop2
+    POP
+    // offset is larger than the size of the {CALLDATA,CODE,RETURNDATA}. So we just have to write zeros.
+    // stack: src_ctx, kexit_info, dest_offset, offset, size
+    GET_CONTEXT
+    %stack (context, src_ctx, kexit_info, dest_offset, offset, size) ->
+        (context, @SEGMENT_MAIN_MEMORY, dest_offset, size, codecopy_after, src_ctx, kexit_info)
+    %build_address
+    %jump(memset)
+
 wcopy_large_offset:
     // offset is larger than the size of the {CALLDATA,CODE,RETURNDATA}. So we just have to write zeros.
     // stack: kexit_info, dest_offset, offset, size
@@ -140,6 +157,24 @@ wcopy_large_offset:
         (context, @SEGMENT_MAIN_MEMORY, dest_offset, size, wcopy_after, kexit_info)
     %build_address
     %jump(memset)
+
+codecopy_after:
+    // stack: src_ctx, kexit_info
+    DUP1 GET_CONTEXT
+    // stack: ctx, src_ctx, src_ctx, kexit_info
+    // If ctx == src_ctx, it's a CODECOPY, and we don't need to prune the context.
+    EQ
+    // stack: ctx == src_ctx, src_ctx, kexit_info
+    %jumpi(codecopy_no_prune)
+    // stack: src_ctx, kexit_info
+    %prune_context
+    // stack: kexit_info
+    EXIT_KERNEL
+
+codecopy_no_prune:
+    // stack: src_ctx, kexit_info
+    POP
+    EXIT_KERNEL
 
 wcopy_after:
     // stack: kexit_info
@@ -248,9 +283,37 @@ extcodecopy_contd:
 
     GET_CONTEXT
     %stack (context, new_dest_offset, copy_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size) ->
-        (src_ctx, segment, offset, @SEGMENT_MAIN_MEMORY, dest_offset, context, copy_size, wcopy_large_offset, kexit_info, new_dest_offset, offset, extra_size)
+        (src_ctx, segment, offset, @SEGMENT_MAIN_MEMORY, dest_offset, context, copy_size, codecopy_large_offset, copy_size, src_ctx, kexit_info, new_dest_offset, offset, extra_size)
     %build_address
     SWAP3 %build_address
-    // stack: DST, SRC, copy_size, wcopy_large_offset, kexit_info, new_dest_offset, offset, extra_size
+    // stack: DST, SRC, copy_size, codecopy_large_offset, copy_size, src_ctx, kexit_info, new_dest_offset, offset, extra_size
     %jump(memcpy_bytes)
+%endmacro
+
+// Adds stale_ctx to the list of stale contexts. You need to return to a previous, older context with
+// a SET_CONTEXT instruction. By assumption, stale_ctx is greater than the current context.
+%macro prune_context
+    // stack: stale_ctx
+    GET_CONTEXT
+    // stack: curr_ctx, stale_ctx
+    // When we go to stale_ctx, we want its stack to contain curr_ctx so that we can immediately
+    // call SET_CONTEXT. For that, we need a stack length of 1, and store curr_ctx in Segment::Stack[0].
+    PUSH @SEGMENT_STACK
+    DUP3 ADD
+    // stack: stale_ctx_stack_addr, curr_ctx, stale_ctx
+    DUP2
+    // stack: curr_ctx, stale_ctx_stack_addr, curr_ctx, stale_ctx
+    MSTORE_GENERAL
+    // stack: curr_ctx, stale_ctx
+    PUSH @CTX_METADATA_STACK_SIZE
+    DUP3 ADD
+    // stack: stale_ctx_stack_size_addr, curr_ctx, stale_ctx
+    PUSH 1
+    MSTORE_GENERAL
+    // stack: curr_ctx, stale_ctx
+    POP
+    SET_CONTEXT
+    // We're now in stale_ctx, with stack: curr_ctx
+    %set_and_prune_ctx
+    // We're now in curr_ctx, with an empty stack.
 %endmacro

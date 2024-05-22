@@ -26,7 +26,7 @@ fn test_log_0() -> Result<()> {
         U256::from_big_endian(&address.to_fixed_bytes()),
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack, None);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, 0.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsDataLen, 0.into());
 
@@ -70,7 +70,7 @@ fn test_log_2() -> Result<()> {
         U256::from_big_endian(&address.to_fixed_bytes()),
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack, None);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, 2.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsDataLen, 5.into());
 
@@ -134,7 +134,7 @@ fn test_log_4() -> Result<()> {
         U256::from_big_endian(&address.to_fixed_bytes()),
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack, None);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, 2.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsDataLen, 5.into());
 
@@ -197,7 +197,7 @@ fn test_log_5() -> Result<()> {
         U256::from_big_endian(&address.to_fixed_bytes()),
     ];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_entry, initial_stack, None);
     interpreter.set_global_metadata_field(GlobalMetadata::LogsLen, 0.into());
     interpreter.set_global_metadata_field(GlobalMetadata::LogsDataLen, 0.into());
 

@@ -29,15 +29,15 @@ const NATIVE_INSTRUCTIONS: [usize; 12] = [
     // not exceptions (also jump)
 ];
 
-/// Returns `halt`'s program counter.
+/// Returns `halt_final`'s program counter.
 pub(crate) fn get_halt_pc<F: Field>() -> F {
-    let halt_pc = KERNEL.global_labels["halt"];
+    let halt_pc = KERNEL.global_labels["halt_final"];
     F::from_canonical_usize(halt_pc)
 }
 
-/// Returns `main`'s program counter.
+/// Returns `init`'s program counter. All segments should start at that PC.
 pub(crate) fn get_start_pc<F: Field>() -> F {
-    let start_pc = KERNEL.global_labels["main"];
+    let start_pc = KERNEL.global_labels["init"];
 
     F::from_canonical_usize(start_pc)
 }

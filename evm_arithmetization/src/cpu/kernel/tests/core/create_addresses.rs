@@ -20,7 +20,7 @@ fn test_get_create_address() -> Result<()> {
     let expected_addr = U256::from_big_endian(&hex!("3f09c73a5ed19289fb9bdc72f1742566df146f56"));
 
     let initial_stack = vec![retaddr, nonce, sender];
-    let mut interpreter: Interpreter<F> = Interpreter::new(get_create_address, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(get_create_address, initial_stack, None);
     interpreter.run()?;
 
     assert_eq!(interpreter.stack(), &[expected_addr]);
@@ -106,7 +106,8 @@ fn test_get_create2_address() -> Result<()> {
     } in create2_test_cases()
     {
         let initial_stack = vec![retaddr, salt, U256::from(code_hash.0), sender];
-        let mut interpreter: Interpreter<F> = Interpreter::new(get_create2_address, initial_stack);
+        let mut interpreter: Interpreter<F> =
+            Interpreter::new(get_create2_address, initial_stack, None);
         interpreter.run()?;
 
         assert_eq!(interpreter.stack(), &[expected_addr]);

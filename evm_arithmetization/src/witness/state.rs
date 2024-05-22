@@ -1,10 +1,11 @@
 use ethereum_types::U256;
+use serde::{Deserialize, Serialize};
 
 use crate::cpu::kernel::aggregator::KERNEL;
 
 const KERNEL_CONTEXT: usize = 0;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct RegistersState {
     pub program_counter: usize,
     pub is_kernel: bool,
@@ -20,6 +21,8 @@ pub struct RegistersState {
 }
 
 impl RegistersState {
+    /// Returns the KERNEL context in kernel mode, and the
+    /// current context otherwise.
     pub(crate) const fn code_context(&self) -> usize {
         if self.is_kernel {
             KERNEL_CONTEXT
@@ -27,12 +30,21 @@ impl RegistersState {
             self.context
         }
     }
+
+    /// Returns a `RegisterState` corresponding to the start
+    /// of a full transaction proof.
+    pub(crate) fn new() -> Self {
+        Self {
+            program_counter: KERNEL.global_labels["main"],
+            ..Self::default()
+        }
+    }
 }
 
 impl Default for RegistersState {
     fn default() -> Self {
         Self {
-            program_counter: KERNEL.global_labels["main"],
+            program_counter: KERNEL.global_labels["init"],
             is_kernel: true,
             stack_len: 0,
             stack_top: U256::zero(),

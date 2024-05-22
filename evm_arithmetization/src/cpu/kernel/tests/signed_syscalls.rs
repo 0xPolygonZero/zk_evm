@@ -118,7 +118,7 @@ fn run_test(fn_label: &str, expected_fn: fn(U256, U256) -> U256, opname: &str) {
     for &x in &inputs {
         for &y in &inputs {
             let stack = vec![retdest, y, x];
-            let mut interpreter: Interpreter<F> = Interpreter::new(fn_label, stack);
+            let mut interpreter: Interpreter<F> = Interpreter::new(fn_label, stack, None);
             interpreter.run().unwrap();
             assert_eq!(interpreter.stack_len(), 1usize, "unexpected stack size");
             let output = interpreter

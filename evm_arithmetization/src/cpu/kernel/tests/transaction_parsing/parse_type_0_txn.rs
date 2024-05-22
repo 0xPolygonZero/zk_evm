@@ -15,7 +15,7 @@ fn process_type_0_txn() -> Result<()> {
     let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
 
     let retaddr = 0xDEADBEEFu32.into();
-    let mut interpreter: Interpreter<F> = Interpreter::new(process_type_0_txn, vec![retaddr]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(process_type_0_txn, vec![retaddr], None);
 
     // When we reach process_normalized_txn, we're done with parsing and
     // normalizing. Processing normalized transactions is outside the scope of

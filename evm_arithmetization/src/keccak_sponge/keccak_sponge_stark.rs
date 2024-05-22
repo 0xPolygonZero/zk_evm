@@ -279,17 +279,18 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
         operations: Vec<KeccakSpongeOp>,
         min_rows: usize,
     ) -> Vec<[F; NUM_KECCAK_SPONGE_COLUMNS]> {
+        let min_num_rows = min_rows.max(BYTE_RANGE_MAX);
         let base_len: usize = operations
             .iter()
             .map(|op| op.input.len() / KECCAK_RATE_BYTES + 1)
             .sum();
-        let mut rows = Vec::with_capacity(base_len.max(min_rows).next_power_of_two());
+        let mut rows = Vec::with_capacity(base_len.max(min_num_rows).next_power_of_two());
         // Generate active rows.
         for op in operations {
             rows.extend(self.generate_rows_for_op(op));
         }
         // Pad the trace.
-        let padded_rows = rows.len().max(min_rows).next_power_of_two();
+        let padded_rows = rows.len().max(min_num_rows).next_power_of_two();
         for _ in rows.len()..padded_rows {
             rows.push(self.generate_padding_row());
         }

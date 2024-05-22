@@ -39,6 +39,7 @@ static_assertions = "1.1.0"
 hashbrown = { version = "0.14.0" }
 tiny-keccak = "2.0.2"
 serde_json = { workspace = true }
+serde-big-array = { workspace = true }
 
 # Local dependencies
 mpt_trie = { version = "0.2.1", path = "../mpt_trie" }

@@ -9,6 +9,7 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 
 use super::columns::ops::OpsColumnsView;
 use super::cpu_stark::{disable_unused_channels, disable_unused_channels_circuit};
+use super::kernel::aggregator::KERNEL;
 use crate::cpu::columns::CpuColumnsView;
 use crate::memory::segments::Segment;
 
@@ -89,6 +90,9 @@ fn eval_packed_get<P: PackedField>(
         yield_constr.constraint(filter * limb);
     }
 
+    // We cannot prune a context in GET_CONTEXT.
+    yield_constr.constraint(filter * lv.general.context_pruning().pruning_flag);
+
     // Constrain new stack length.
     yield_constr.constraint(filter * (nv.stack_len - (lv.stack_len + P::ONES)));
 
@@ -121,6 +125,10 @@ fn eval_ext_circuit_get<F: RichField + Extendable<D>, const D: usize>(
         yield_constr.constraint(builder, constr);
     }
 
+    // We cannot prune a context in GET_CONTEXT.
+    let constr = builder.mul_extension(filter, lv.general.context_pruning().pruning_flag);
+    yield_constr.constraint(builder, constr);
+
     // Constrain new stack length.
     {
         let new_len = builder.add_const_extension(lv.stack_len, F::ONE);
@@ -148,12 +156,24 @@ fn eval_packed_set<P: PackedField>(
 
     // The next row's context is read from stack_top.
     yield_constr.constraint(filter * (stack_top[2] - nv.context));
-    for (_, &limb) in stack_top.iter().enumerate().filter(|(i, _)| *i != 2) {
+    // The stack top contains the new context in the third limb, and a flag
+    // indicating whether the old context should be pruned in the first limb. The
+    // other limbs should be 0.
+    for (_, &limb) in stack_top[1..].iter().enumerate().filter(|(i, _)| *i != 1) {
         yield_constr.constraint(filter * limb);
     }
 
-    // The old SP is decremented (since the new context was popped) and stored in
-    // memory. The new SP is loaded from memory.
+    // Check that the pruning flag is binary.
+    yield_constr.constraint(
+        lv.op.context_op
+            * lv.general.context_pruning().pruning_flag
+            * (lv.general.context_pruning().pruning_flag - P::Scalar::ONES),
+    );
+    // stack_top[0] contains a flag indicating whether the context should be pruned.
+    yield_constr.constraint(filter * (lv.general.context_pruning().pruning_flag - stack_top[0]));
+
+    // The old SP is decremented (since the new context was popped)
+    // and stored in memory. The new SP is loaded from memory.
     // This is all done with CTLs: nothing is constrained here.
 
     // Constrain stack_inv_aux_2.
@@ -197,10 +217,24 @@ fn eval_ext_circuit_set<F: RichField + Extendable<D>, const D: usize>(
         let constr = builder.mul_extension(filter, diff);
         yield_constr.constraint(builder, constr);
     }
-    for (_, &limb) in stack_top.iter().enumerate().filter(|(i, _)| *i != 2) {
+    for (_, &limb) in stack_top[1..].iter().enumerate().filter(|(i, _)| *i != 1) {
         let constr = builder.mul_extension(filter, limb);
         yield_constr.constraint(builder, constr);
     }
+
+    // Check that the pruning flag is binary.
+    let diff = builder.mul_sub_extension(
+        lv.general.context_pruning().pruning_flag,
+        lv.general.context_pruning().pruning_flag,
+        lv.general.context_pruning().pruning_flag,
+    );
+    let constr = builder.mul_extension(lv.op.context_op, diff);
+    yield_constr.constraint(builder, constr);
+
+    // stack_top[0] contains a flag indicating whether the context should be pruned.
+    let diff = builder.sub_extension(lv.general.context_pruning().pruning_flag, stack_top[0]);
+    let constr = builder.mul_extension(filter, diff);
+    yield_constr.constraint(builder, constr);
 
     // The old SP is decremented (since the new context was popped) and stored in
     // memory. The new SP is loaded from memory.
