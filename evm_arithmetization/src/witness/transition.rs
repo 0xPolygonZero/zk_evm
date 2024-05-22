@@ -282,14 +282,16 @@ pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, o
     } else {
         log::Level::Trace
     };
-    log::log!(
+    state.log(
         level,
-        "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
-        state.get_clock(),
-        state.get_context(),
-        KERNEL.offset_name(pc),
-        op,
-        state.get_generation_state().stack(),
+        format!(
+            "Cycle {}, ctx={}, pc={}, instruction={:?}, stack={:?}",
+            state.get_clock(),
+            state.get_context(),
+            KERNEL.offset_name(pc),
+            op,
+            state.get_generation_state().stack(),
+        ),
     );
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);

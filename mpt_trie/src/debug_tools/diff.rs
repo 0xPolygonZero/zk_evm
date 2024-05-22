@@ -113,14 +113,15 @@ impl DiffPoint {
     }
 }
 
-// TODO: Redo display method so this is more readable...
 impl Display for DiffPoint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Point Diff {{depth: {}, ", self.depth)?;
-        write!(f, "Path: ({}), ", self.path)?;
-        write!(f, "Key: {:x} ", self.key)?;
-        write!(f, "A info: {} ", self.a_info)?;
-        write!(f, "B info: {}}}", self.b_info)
+        writeln!(f, "Point Diff {{")?;
+        writeln!(f, "    Depth: {},", self.depth)?;
+        writeln!(f, "    Path: ({}),", self.path)?;
+        writeln!(f, "    Key: {:x},", self.key)?;
+        writeln!(f, "    A info: {},", self.a_info)?;
+        writeln!(f, "    B info: {}", self.b_info)?;
+        write!(f, "}}")
     }
 }
 
@@ -136,18 +137,20 @@ pub struct NodeInfo {
     hash: H256,
 }
 
-// TODO: Redo display method so this is more readable...
 impl Display for NodeInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(key: {:x} ", self.key)?;
+        write!(f, "NodeInfo {{ Key: 0x{:x}, ", self.key)?;
 
         match &self.value {
             Some(v) => write!(f, "Value: 0x{}, ", hex::encode(v))?,
             None => write!(f, "Value: N/A, ")?,
         }
 
-        write!(f, "Node type: {} ", self.node_type)?;
-        write!(f, "Trie hash: {:x})", self.hash)
+        write!(
+            f,
+            "Node type: {}, Trie hash: 0x{:x} }}",
+            self.node_type, self.hash
+        )
     }
 }
 
