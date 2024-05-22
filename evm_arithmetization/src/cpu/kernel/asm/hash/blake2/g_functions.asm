@@ -12,45 +12,45 @@
 
     // stack: addr_a, addr_b, addr_c, addr_d, x, y, start
     PUSH $a
-    PUSH $d
     PUSH $c
     PUSH $b
-    // stack: b, c, d, a, addr_a, addr_b, addr_c, addr_d, x, y, start
+    PUSH $d
+    // stack: d, b, c, a, addr_a, addr_b, addr_c, addr_d, x, y, start
     DUP11
-    // stack: start, b, c, d, a, addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: start, d, b, c, a, addr_a, addr_b, addr_c, addr_d, x, y, start
     ADD
     MLOAD_GENERAL
-    // stack: v[b], c, d, a, addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: v[d], b, c, a, addr_a, addr_b, addr_c, addr_d, x, y, start
     SWAP1
-    // stack: c, v[b], d, a, addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: b, v[d], c, a, addr_a, addr_b, addr_c, addr_d, x, y, start
     DUP11
-    // stack: start, c, v[b], c, d, addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: start, b, v[d], c, d, addr_a, addr_b, addr_c, addr_d, x, y, start
     ADD
     MLOAD_GENERAL
-    // stack: v[c], v[b], d, a, addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: v[b], v[d], c, a, addr_a, addr_b, addr_c, addr_d, x, y, start
     SWAP2
-    // stack: d, v[b], v[c], a, addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: c, v[d], v[b], a, addr_a, addr_b, addr_c, addr_d, x, y, start
     DUP11
-    // stack: start, d, v[b], v[c], a, addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: start, c, v[d], v[b], a, addr_a, addr_b, addr_c, addr_d, x, y, start
     ADD
     MLOAD_GENERAL
-    // stack: v[d], v[b], v[c], a, addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: v[c], v[d], v[b], a, addr_a, addr_b, addr_c, addr_d, x, y, start
     SWAP3
-    // stack: a, v[b], v[c], v[d], addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: a, v[d], v[b], v[c], addr_a, addr_b, addr_c, addr_d, x, y, start
     DUP11
-    // stack: start, a, v[b], v[c], v[d], addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: start, a, v[d], v[b], v[c], addr_a, addr_b, addr_c, addr_d, x, y, start
     ADD
     MLOAD_GENERAL
-    // stack: v[a], v[b], v[c], v[d], addr_a, addr_b, addr_c, addr_d, x, y, start
-    DUP2
-    // stack: v[b], v[a], v[b], v[c], v[d], addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: v[a], v[d], v[b], v[c], addr_a, addr_b, addr_c, addr_d, x, y, start
+    DUP3
+    // stack: v[b], v[a], v[d], v[b], v[c], addr_a, addr_b, addr_c, addr_d, x, y, start
     DUP10
-    // stack: x, v[b], v[a], v[b], v[c], v[d], addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: x, v[b], v[a], v[d], v[b], v[c], addr_a, addr_b, addr_c, addr_d, x, y, start
     ADD
     ADD
     %as_u64
-    // stack: v[a]' = (v[a] + v[b] + x) % 2^64, v[b], v[c], v[d], addr_a, addr_b, addr_c, addr_d, x, y, start
-    %stack (a, b, c, d) -> (a, d, a, b, c)
+    // stack: v[a]' = (v[a] + v[b] + x) % 2^64, v[d], v[b], v[c], addr_a, addr_b, addr_c, addr_d, x, y, start
+    %stack (a, d, b, c) -> (a, d, a, b, c)
     // stack: v[a]', v[d], v[a]', v[b], v[c], addr_a, addr_b, addr_c, addr_d, x, y, start
     XOR
     %rotr_64(32)
