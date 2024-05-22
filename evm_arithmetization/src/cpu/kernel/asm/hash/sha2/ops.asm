@@ -1,14 +1,14 @@
 // 32-bit right rotation
 %macro rotr(rot)
     // stack: value
+    DUP1
+    // stack: value, value
     PUSH $rot
-    // stack: rot, value
-    DUP2
-    DUP2
-    // stack: rot, value, rot, value
+    // stack: rot, value, value
     SHR
-    // stack: value >> rot, rot, value
-    %stack (shifted, rot, value) -> (rot, value, shifted)
+    // stack: value >> rot, value
+    SWAP1
+    PUSH $rot
     // stack: rot, value, value >> rot
     PUSH 32
     SUB
@@ -26,16 +26,14 @@
     // stack: x, x
     %rotr(7)
     // stack: rotr(x, 7), x
-    SWAP1
-    // stack: x, rotr(x, 7)
     DUP1
-    // stack: x, x, rotr(x, 7)
-    %rotr(18)
-    // stack: rotr(x, 18), x, rotr(x, 7)
-    SWAP1
-    // stack: x, rotr(x, 18), rotr(x, 7)
+    // stack: rotr(x, 7), rotr(x, 7), x
+    %rotr(11)
+    // stack: rotr(x, 18), rotr(x, 7), x
+    SWAP2
+    // stack: x, rotr(x, 7), rotr(x, 18)
     %shr_const(3)
-    // stack: shr(x, 3), rotr(x, 18), rotr(x, 7)
+    // stack: shr(x, 3), rotr(x, 7), rotr(x, 18)
     XOR
     XOR
 %endmacro
@@ -46,36 +44,30 @@
     // stack: x, x
     %rotr(17)
     // stack: rotr(x, 17), x
-    SWAP1
-    // stack: x, rotr(x, 17)
     DUP1
-    // stack: x, x, rotr(x, 17)
-    %rotr(19)
-    // stack: rotr(x, 19), x, rotr(x, 17)
-    SWAP1
-    // stack: x, rotr(x, 19), rotr(x, 17)
+    // stack: rotr(x, 17), rotr(x, 17), x
+    %rotr(2)
+    // stack: rotr(x, 19), rotr(x, 17), x
+    SWAP2
+    // stack: x, rotr(x, 17), rotr(x, 19)
     PUSH 10
     SHR
-    // stack: shr(x, 10), rotr(x, 19), rotr(x, 17)
+    // stack: shr(x, 10), rotr(x, 17), rotr(x, 19)
     XOR
     XOR
 %endmacro
 
 %macro sha2_bigsigma_0
     // stack: x
-    DUP1
-    // stack: x, x
     %rotr(2)
-    // stack: rotr(x, 2), x
-    SWAP1
-    // stack: x, rotr(x, 2)
+    // stack: rotr(x, 2)
     DUP1
-    // stack: x, x, rotr(x, 2)
-    %rotr(13)
-    // stack: rotr(x, 13), x, rotr(x, 2)
-    SWAP1
-    // stack: x, rotr(x, 13), rotr(x, 2)
-    %rotr(22)
+    // stack: rotr(x, 2), rotr(x, 2)
+    %rotr(11)
+    // stack: rotr(x, 13), rotr(x, 2)
+    DUP1
+    // stack: rotr(x, 13), rotr(x, 13), rotr(x, 2)
+    %rotr(9)
     // stack: rotr(x, 22), rotr(x, 13), rotr(x, 2)
     XOR
     XOR
@@ -83,19 +75,15 @@
 
 %macro sha2_bigsigma_1
     // stack: x
-    DUP1
-    // stack: x, x
     %rotr(6)
-    // stack: rotr(x, 6), x
-    SWAP1
-    // stack: x, rotr(x, 6)
+    // stack: rotr(x, 6)
     DUP1
-    // stack: x, x, rotr(x, 6)
-    %rotr(11)
-    // stack: rotr(x, 11), x, rotr(x, 6)
-    SWAP1
-    // stack: x, rotr(x, 11), rotr(x, 6)
-    %rotr(25)
+    // stack: rotr(x, 6), rotr(x, 6)
+    %rotr(5)
+    // stack: rotr(x, 11), rotr(x, 6)
+    DUP1
+    // stack: rotr(x, 11), rotr(x, 11), rotr(x, 6)
+    %rotr(14)
     // stack: rotr(x, 25), rotr(x, 11), rotr(x, 6)
     XOR
     XOR
@@ -103,41 +91,31 @@
 
 %macro sha2_choice
     // stack: x, y, z
-    DUP1
-    // stack: x, x, y, z
-    NOT
-    // stack: not x, x, y, z
     SWAP1
-    // stack: x, not x, y, z
-    SWAP3
-    // stack: z, not x, y, x
+    // stack: y, x, z
+    DUP3
+    // stack: z, y, x, z
+    XOR
+    // stack: z xor y, x, z
     AND
-    // stack: (not x) and z, y, x
-    SWAP2
-    // stack: x, y, (not x) and z
-    AND
-    // stack: x and y, (not x) and z
-    OR
+    // stack: (z xor y) and x, z
+    XOR
+    // stack: ((z xor y) and x) xor z == (x and y) xor (not x and z)
 %endmacro
 
 %macro sha2_majority
     // stack: x, y, z
-    DUP1
-    // stack: x, x, y, z
-    DUP3
-    // stack: y, x, x, y, z
-    DUP5
-    // stack: z, y, x, x, y, z
+    DUP2
+    DUP2
     AND
-    // stack: z and y, x, x, y, z
-    SWAP4
-    // stack: z, x, x, y, z and y
-    AND
-    // stack: z and x, x, y, z and y
+    // stack: x and y, x, y, z
     SWAP2
-    // stack: y, x, z and x, z and y
+    // stack: y, x, x and y, z
+    OR
+    // stack: y or x, x and y, z
+    %stack(y_or_x, x_and_y, z) -> (z, y_or_x, x_and_y)
     AND
-    // stack: y and x, z and x, z and y
+    // stack: z and (y or x), x and y
     OR
-    OR
+    // stack: (z and (y or x) or (x and y) == (x and y) or (x and z) or (y and z)
 %endmacro

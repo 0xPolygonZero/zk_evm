@@ -5,6 +5,7 @@ use anyhow::{anyhow, bail};
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
+use log::Level;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
@@ -170,7 +171,7 @@ pub(crate) trait State<F: RichField> {
                     }
                 } else {
                     #[cfg(not(test))]
-                    log::info!("CPU halted after {} cycles", self.get_clock());
+                    self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
                     return Ok(());
                 }
             }
@@ -261,6 +262,24 @@ pub(crate) trait State<F: RichField> {
 
         let opcode = read_code_memory(generation_state, &mut row);
         (row, opcode)
+    }
+
+    /// Logs `msg` in `debug` mode.
+    #[inline]
+    fn log_debug(&self, msg: String) {
+        log::debug!("{}", msg);
+    }
+
+    /// Logs `msg` in `info` mode.
+    #[inline]
+    fn log_info(&self, msg: String) {
+        log::info!("{}", msg);
+    }
+
+    /// Logs `msg` at `level`.
+    #[inline]
+    fn log(&self, level: Level, msg: String) {
+        log::log!(level, "{}", msg);
     }
 }
 
@@ -501,7 +520,7 @@ impl<F: RichField> State<F> for GenerationState<F> {
         if registers.is_kernel {
             log_kernel_instruction(self, op);
         } else {
-            log::debug!("User instruction: {:?}", op);
+            self.log_debug(format!("User instruction: {:?}", op));
         }
         fill_op_flag(op, &mut row);
 

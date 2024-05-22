@@ -16,11 +16,11 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::assembler::BYTES_PER_OFFSET;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::membus::NUM_CHANNELS;
 use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::memory::segments::Segment;
-use crate::memory::NUM_CHANNELS;
 use crate::poseidon::columns::POSEIDON_SPONGE_RATE;
 use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonSimpleOp};
 use crate::util::u256_to_usize;
@@ -160,10 +160,11 @@ pub(crate) fn generate_keccak_general<F: RichField, T: Transition<F>>(
             val.low_u32() as u8
         })
         .collect_vec();
-    log::debug!("Hashing {:?}", input);
 
     let hash = keccak(&input);
     push_no_write(generation_state, hash.into_uint());
+
+    state.log_debug(format!("Hashing {:?}", input));
 
     keccak_sponge_log(state, base_address, input);
 
@@ -787,7 +788,10 @@ pub(crate) fn generate_syscall<F: RichField, T: Transition<F>>(
 
     push_with_write(state, &mut row, syscall_info)?;
 
-    log::debug!("Syscall to {}", KERNEL.offset_name(new_program_counter));
+    state.log_debug(format!(
+        "Syscall to {}",
+        KERNEL.offset_name(new_program_counter)
+    ));
     byte_packing_log(state, base_address, bytes);
 
     state.push_arithmetic(range_check_op);
@@ -833,11 +837,10 @@ pub(crate) fn generate_exit_kernel<F: RichField, T: Transition<F>>(
     generation_state.registers.program_counter = program_counter;
     generation_state.registers.is_kernel = is_kernel_mode;
     generation_state.registers.gas_used = gas_used_val;
-    log::debug!(
+    state.log_debug(format!(
         "Exiting to {}, is_kernel={}",
-        program_counter,
-        is_kernel_mode
-    );
+        program_counter, is_kernel_mode
+    ));
 
     state.push_cpu(row);
 
@@ -1056,7 +1059,10 @@ pub(crate) fn generate_exception<F: RichField, T: Transition<F>>(
     push_with_write(generation_state, &mut row, exc_info)?;
     byte_packing_log(state, base_address, bytes);
 
-    log::debug!("Exception to {}", KERNEL.offset_name(new_program_counter));
+    state.log_debug(format!(
+        "Exception to {}",
+        KERNEL.offset_name(new_program_counter)
+    ));
     state.push_arithmetic(range_check_op);
     state.push_cpu(row);
 
