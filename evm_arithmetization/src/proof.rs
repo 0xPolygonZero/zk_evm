@@ -135,7 +135,7 @@ pub struct FinalPublicValues {
     pub block_metadata: BlockMetadata,
     /// 256 previous block hashes and current block's hash.
     pub block_hashes: BlockHashes,
-    /// The state trie digest of the checkpoint block.
+    /// Extra block data that is specific to the current proof.
     pub extra_block_data: ExtraBlockData,
 }
 
