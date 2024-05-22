@@ -28,6 +28,7 @@ use crate::proof::{BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, Tri
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel};
 
+pub(crate) mod linked_list;
 pub mod mpt;
 pub(crate) mod prover_input;
 pub(crate) mod rlp;

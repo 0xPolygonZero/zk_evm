@@ -320,6 +320,7 @@ impl<F: Field> GenerationState<F> {
 
         trie_roots_ptrs
     }
+
     pub(crate) fn new(inputs: GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
         let rlp_prover_inputs =
             all_rlp_prover_inputs_reversed(inputs.clone().signed_txn.as_ref().unwrap_or(&vec![]));

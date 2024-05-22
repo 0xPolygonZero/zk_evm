@@ -15,8 +15,70 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::memory::segments::Segment::{self, AccessedAddresses, AccessedStorageKeys};
+use crate::util::u256_to_usize;
+use crate::witness::errors::ProgramError;
+use crate::witness::errors::ProverInputError::InvalidInput;
 use crate::witness::memory::MemoryAddress;
 
+// A linked list implemented using a vector `access_list_mem`.
+// In this representation, the values of nodes are stored in the range
+// `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
+// 1]` holds the address of the next node, where i = node_size * j.
+pub(crate) struct LinkedList<'a, const N: usize> {
+    linked_list_mem: &'a mut Vec<Option<U256>>,
+    offset: usize,
+    pos: usize,
+}
+
+impl<'a, const N: usize> LinkedList<'a, N> {
+    fn from_mem_and_segment(
+        access_list_mem: &'a mut Vec<Option<U256>>,
+        segment: Segment,
+    ) -> Result<Self, ProgramError> {
+        if access_list_mem.is_empty() {
+            return Err(ProgramError::ProverInputError(InvalidInput));
+        }
+        Ok(Self {
+            linked_list_mem: access_list_mem,
+            offset: segment as usize,
+            pos: 0,
+        })
+    }
+
+    /// Returns the index of a node whose value is less or equal than `val`
+    fn predecessor(self, val: U256) -> Option<usize> {
+        for (curr_ptr, node) in self {
+            if node[0] > val {
+                return Some(curr_ptr);
+            }
+        }
+        None
+    }
+
+    fn insert(&mut self, node: &[Option<U256>; N]) -> Result<(), ProgramError> {
+        self.linked_list_mem.extend_from_slice(node);
+        Ok(())
+    }
+}
+
+impl<'a, const N: usize> Iterator for LinkedList<'a, N> {
+    type Item = (usize, [U256; N]);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Ok(new_pos) =
+            u256_to_usize(self.linked_list_mem[self.pos + N - 1].unwrap_or_default())
+        {
+            let old_pos = self.pos;
+            self.pos = new_pos - self.offset;
+            Some((
+                old_pos,
+                std::array::from_fn(|i| self.linked_list_mem[self.pos + i].unwrap_or_default()),
+            ))
+        } else {
+            None
+        }
+    }
+}
 fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
 }
@@ -69,20 +131,22 @@ fn test_list_iterator() -> Result<()> {
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    let Some((pos_0, addr, ptr, ctr)) = list.next() else {
+    let Some((pos_0, [addr, ptr, ctr, scaled_pos_1])) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(pos_0, 0);
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
     assert_eq!(ctr, U256::zero());
-    let Some((pos_0, addr, ptr, ctr)) = list.next() else {
+    assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
+    let Some((pos_0, [addr, ptr, ctr, scaled_pos_1])) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(pos_0, 0);
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
     assert_eq!(ctr, U256::zero());
+    assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
     Ok(())
 }
 
@@ -118,21 +182,28 @@ fn test_insert_account() -> Result<()> {
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    let Some((old_pos, addr, ptr, ctr)) = list.next() else {
+    let Some((old_pos, [addr, ptr, ctr, scaled_next_pos])) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(old_pos, 0);
     assert_eq!(addr, U256::from(address.0.as_slice()));
     assert_eq!(ptr, payload_ptr);
     assert_eq!(ctr, U256::zero());
-    let Some((old_pos, addr, ptr, ctr)) = list.next() else {
+    assert_eq!(
+        scaled_next_pos,
+        (Segment::AccountsLinkedList as usize).into()
+    );
+    let Some((old_pos, [addr, ptr, ctr, scaled_new_pos])) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(old_pos, 4);
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
     assert_eq!(ctr, U256::zero());
-
+    assert_eq!(
+        scaled_new_pos,
+        (Segment::AccountsLinkedList as usize + 4).into()
+    );
     Ok(())
 }
 
@@ -284,7 +355,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    for (i, (_, addr, ptr, ctr)) in list.enumerate() {
+    for (i, (_, [addr, ptr, ctr, _])) in list.enumerate() {
         if addr == U256::MAX {
             //
             assert_eq!(addr, U256::MAX);
