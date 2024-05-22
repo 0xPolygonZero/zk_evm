@@ -222,7 +222,7 @@ use mpt_trie::partial_trie::HashedPartialTrie;
 // the time being, it will be able to be disabled with a feature flag
 // (`disable_jemalloc`) in order to allow users to use their own allocator if
 // needed.
-#[cfg(not(any(target_env = "msvc", disable_jemalloc)))]
+#[cfg(not(any(target_env = "msvc", feature = "disable_jemalloc")))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
