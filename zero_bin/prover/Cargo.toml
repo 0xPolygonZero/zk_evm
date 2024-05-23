@@ -18,8 +18,6 @@ anyhow = { workspace = true }
 futures = { workspace = true }
 alloy.workspace = true
 ruint = { version = "1.12.1", features = ["num-traits", "primitive-types"] }
-
-# Local dependencies
 ops = { path = "../ops" }
 common = { path = "../common" }
 num-traits = "0.2.19"

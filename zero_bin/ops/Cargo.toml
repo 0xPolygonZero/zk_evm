@@ -13,11 +13,8 @@ paladin-core = { workspace = true }
 serde = { workspace = true }
 evm_arithmetization = { workspace = true }
 proof_gen = { workspace = true }
-trace_decoder = { workspace = true }
 tracing = { workspace = true }
 keccak-hash = { workspace = true }
-__compat_rlp.workspace = true
-__compat_ethereum-types.workspace = true
 
 common = { path = "../common" }
 

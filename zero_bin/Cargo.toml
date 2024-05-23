@@ -18,16 +18,10 @@ futures = "0.3.29"
 keccak-hash = "0.10.0"
 alloy = { git = "https://github.com/alloy-rs/alloy", features = [
     "rpc-types-eth",
-    "rpc-types-trace",
     "providers",
     "transports",
     "transport-http",
-    "rpc-client",
-    "consensus",
-    "rlp",
 ] }
-__compat_ethereum-types = { version = "0.14.1", package = "ethereum-types" }
-__compat_rlp = { version = "0.5.2", package = "rlp" }
 
 
 # zk-evm dependencies
