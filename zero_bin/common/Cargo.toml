@@ -9,7 +9,6 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-alloy.workspace = true
 thiserror = { workspace = true }
 tracing = { workspace = true }
 proof_gen = { workspace = true }
@@ -19,4 +18,3 @@ clap = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-__compat_primitive-types = { version = "0.12.2", package = "primitive-types" }

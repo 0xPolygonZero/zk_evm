@@ -1223,12 +1223,10 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 name = "common"
 version = "0.1.0"
 dependencies = [
- "alloy",
  "anyhow",
  "clap",
  "evm_arithmetization",
  "plonky2",
- "primitive-types 0.12.2",
  "proof_gen",
  "serde",
  "serde_json",
@@ -3691,6 +3689,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "itertools 0.13.0",
+ "primitive-types 0.12.2",
  "prover",
  "serde",
  "serde_json",

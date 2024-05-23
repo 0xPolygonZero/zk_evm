@@ -27,3 +27,4 @@ itertools = "0.13.0"
 url = "2.5.0"
 common = { path = "../common" }
 prover = { path = "../prover" }
+__compat_primitive-types = { version = "0.12.2", package = "primitive-types" }
