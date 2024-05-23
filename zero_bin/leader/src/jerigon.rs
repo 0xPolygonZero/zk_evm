@@ -18,7 +18,7 @@ pub(crate) async fn jerigon_main(
     proof_output_path_opt: Option<PathBuf>,
     save_inputs_on_error: bool,
 ) -> Result<()> {
-    let prover_input = rpc::fetch_prover_input(rpc::FetchProverInputRequest {
+    let prover_input = rpc::prover_input(rpc::FetchProverInputRequest {
         rpc_url,
         block_number,
         checkpoint_block_number,
