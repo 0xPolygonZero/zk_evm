@@ -17,10 +17,17 @@ bunzip2 -f witness.json.bz2
 export RAYON_NUM_THREADS=$num_procs
 export TOKIO_WORKER_THREADS=$num_procs
 
+# - paladin-core uses linkme: https://github.com/0xPolygonZero/paladin/blob/72c5fdf62e67851e29b5841d83374e6d57939a40/paladin-core/src/lib.rs#L237
+# - we get linker errors using the `zero-ci` runner:
+#   - https://github.com/0xPolygonZero/zero-bin/blob/b49074a8e293060737521d53e4b81cff25b22167/.github/workflows/ci.yml#L70
+#   - https://github.com/0xPolygonZero/zero-bin/actions/runs/9201764830/job/25310482047?pr=78
+# - linkme hits an error using rust-lld on nightly: https://github.com/dtolnay/linkme/pull/88
+#
+# so copy linkme's workaround
+export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=full
 export RUST_LOG=info
-export RUSTFLAGS='-C target-cpu=native'
 
 if [[ $1 == "test_only" ]]; then
     # Circuit sizes don't matter in test_only mode, so we keep them minimal.
