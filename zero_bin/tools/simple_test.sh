@@ -20,7 +20,10 @@ export TOKIO_WORKER_THREADS=$num_procs
 export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=full
 export RUST_LOG=info
-export RUSTFLAGS='-C target-cpu=native'
+# Disable the lld linker for now, as it's causing issues with the linkme package.
+# https://github.com/rust-lang/rust/pull/124129
+# https://github.com/dtolnay/linkme/pull/88
+export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 if [[ $1 == "test_only" ]]; then
     # Circuit sizes don't matter in test_only mode, so we keep them minimal.

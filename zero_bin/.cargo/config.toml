@@ -1,0 +1,4 @@
+[build]
+# https://github.com/rust-lang/rust/pull/124129
+# https://github.com/dtolnay/linkme/pull/88
+rustflags = ["-Zlinker-features=-lld"]
