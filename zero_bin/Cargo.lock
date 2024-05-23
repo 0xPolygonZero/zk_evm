@@ -2991,8 +2991,7 @@ dependencies = [
 [[package]]
 name = "paladin-core"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5af1955eaab1506a43d046628c218b7b3915539554838feb85ed31f54aace2f2"
+source = "git+https://github.com/0xPolygonZero/paladin?branch=0xaatif/used#a1c2de851eb9e4a2eecc20ea560c2d4d629cd06d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3024,8 +3023,7 @@ dependencies = [
 [[package]]
 name = "paladin-opkind-derive"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af25dcb10b7c0ce99abee8694e2e79e4787d7f778b9339dc5a50ba6fc45e5cc9"
+source = "git+https://github.com/0xPolygonZero/paladin?branch=0xaatif/used#a1c2de851eb9e4a2eecc20ea560c2d4d629cd06d"
 dependencies = [
  "quote",
  "syn 2.0.53",
