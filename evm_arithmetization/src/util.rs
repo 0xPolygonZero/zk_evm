@@ -127,17 +127,6 @@ pub(crate) fn h256_limbs<F: Field>(h256: H256) -> [F; 8] {
         .unwrap()
 }
 
-/// Returns the 32-bit limbs of a `U160`.
-pub(crate) fn h160_limbs<F: Field>(h160: H160) -> [F; 5] {
-    h160.0
-        .chunks(4)
-        .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
-        .map(F::from_canonical_u32)
-        .collect_vec()
-        .try_into()
-        .unwrap()
-}
-
 pub(crate) const fn indices_arr<const N: usize>() -> [usize; N] {
     let mut indices_arr = [0; N];
     let mut i = 0;

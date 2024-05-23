@@ -102,8 +102,12 @@ fn test_insert_address() -> Result<()> {
 
     assert!(address != H160::zero(), "Cosmic luck or bad RNG?");
 
-    interpreter.push(retaddr);
-    interpreter.push(U256::from(address.0.as_slice()));
+    interpreter
+        .push(retaddr)
+        .expect("The stack should not overflow");
+    interpreter
+        .push(U256::from(address.0.as_slice()))
+        .expect("The stack should not overflow");
     interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
 
     interpreter.run()?;
@@ -146,8 +150,12 @@ fn test_insert_accessed_addresses() -> Result<()> {
     let offset = Segment::AccessedAddresses as usize;
     for i in 0..n {
         let addr = U256::from(addresses[i].0.as_slice());
-        interpreter.push(0xdeadbeefu32.into());
-        interpreter.push(addr);
+        interpreter
+            .push(0xdeadbeefu32.into())
+            .expect("The stack should not overflow");
+        interpreter
+            .push(addr)
+            .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
         interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::one());
@@ -156,8 +164,12 @@ fn test_insert_accessed_addresses() -> Result<()> {
     for i in 0..n {
         // Test for address already in list.
         let addr_in_list = addresses[i];
-        interpreter.push(retaddr);
-        interpreter.push(U256::from(addr_in_list.0.as_slice()));
+        interpreter
+            .push(retaddr)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(U256::from(addr_in_list.0.as_slice()))
+            .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
         interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::zero());
@@ -170,8 +182,12 @@ fn test_insert_accessed_addresses() -> Result<()> {
     }
 
     // Test for address not in list.
-    interpreter.push(retaddr);
-    interpreter.push(U256::from(addr_not_in_list.0.as_slice()));
+    interpreter
+        .push(retaddr)
+        .expect("The stack should not overflow");
+    interpreter
+        .push(U256::from(addr_not_in_list.0.as_slice()))
+        .expect("The stack should not overflow");
     interpreter.generation_state.registers.program_counter = insert_accessed_addresses;
 
     interpreter.run()?;
@@ -222,9 +238,15 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     for i in 0..n {
         let addr = U256::from(storage_keys[i].0 .0.as_slice());
         let key = storage_keys[i].1;
-        interpreter.push(retaddr);
-        interpreter.push(key);
-        interpreter.push(addr);
+        interpreter
+            .push(retaddr)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(key)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(addr)
+            .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
         interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::one());
@@ -234,9 +256,15 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     for i in 0..10 {
         // Test for storage key already in list.
         let (addr, key) = storage_keys[i];
-        interpreter.push(retaddr);
-        interpreter.push(key);
-        interpreter.push(U256::from(addr.0.as_slice()));
+        interpreter
+            .push(retaddr)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(key)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(U256::from(addr.0.as_slice()))
+            .expect("The stack should not overflow");
         interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
         interpreter.run()?;
         assert_eq!(interpreter.pop().unwrap(), U256::zero());
@@ -250,9 +278,15 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
     }
 
     // Test for storage key not in list.
-    interpreter.push(retaddr);
-    interpreter.push(storage_key_not_in_list.1);
-    interpreter.push(U256::from(storage_key_not_in_list.0 .0.as_slice()));
+    interpreter
+        .push(retaddr)
+        .expect("The stack should not overflow");
+    interpreter
+        .push(storage_key_not_in_list.1)
+        .expect("The stack should not overflow");
+    interpreter
+        .push(U256::from(storage_key_not_in_list.0 .0.as_slice()))
+        .expect("The stack should not overflow");
     interpreter.generation_state.registers.program_counter = insert_accessed_storage_keys;
 
     interpreter.run()?;

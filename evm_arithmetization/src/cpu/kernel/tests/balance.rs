@@ -96,7 +96,7 @@ fn prepare_interpreter<F: Field>(
     );
     let hash = H256::from_uint(&interpreter.stack()[1]);
 
-    state_trie.insert(k, rlp::encode(account).to_vec());
+    state_trie.insert(k, rlp::encode(account).to_vec())?;
     let expected_state_trie_hash = state_trie.hash();
     assert_eq!(hash, expected_state_trie_hash);
 

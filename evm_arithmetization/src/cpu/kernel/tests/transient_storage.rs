@@ -1,22 +1,16 @@
-use std::array;
-
 use anyhow::Result;
-use ethereum_types::{Address, U256};
+use ethereum_types::U256;
 use once_cell::sync::Lazy;
-use pest::error::Error;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
-use rand::{thread_rng, Rng};
 
 use crate::cpu::kernel::aggregator::{
     combined_kernel_from_files, KERNEL_FILES, NUMBER_KERNEL_FILES,
 };
 use crate::cpu::kernel::assembler::Kernel;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::{self, Interpreter};
+use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
-use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryAddress;
 use crate::GenerationInputs;
 
@@ -119,8 +113,12 @@ fn test_tstore_tload() -> Result<()> {
         + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
     interpreter.generation_state.registers.program_counter = sys_tload;
     interpreter.generation_state.registers.is_kernel = true;
-    interpreter.push(2.into());
-    interpreter.push(kexit_info);
+    interpreter
+        .push(2.into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push(kexit_info)
+        .expect("The stack should not overflow");
 
     interpreter.run()?;
 
@@ -134,8 +132,12 @@ fn test_tstore_tload() -> Result<()> {
     interpreter.generation_state.registers.program_counter = sys_tload;
     interpreter.generation_state.registers.is_kernel = true;
     let slot: U256 = 4.into();
-    interpreter.push(slot);
-    interpreter.push(kexit_info);
+    interpreter
+        .push(slot)
+        .expect("The stack should not overflow");
+    interpreter
+        .push(kexit_info)
+        .expect("The stack should not overflow");
 
     interpreter.run()?;
 
@@ -175,7 +177,7 @@ fn test_many_tstore_many_tload() -> Result<()> {
 
     let sys_tstore = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tstore"];
 
-    for i in (0..10) {
+    for i in 0..10 {
         interpreter.generation_state.registers.program_counter = sys_tstore;
         interpreter.generation_state.registers.is_kernel = true;
         let kexit_info = U256::from(0xdeadbeefu32)
@@ -183,9 +185,15 @@ fn test_many_tstore_many_tload() -> Result<()> {
             + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
         let val: U256 = i.into();
         let slot: U256 = i.into();
-        interpreter.push(val);
-        interpreter.push(slot);
-        interpreter.push(kexit_info);
+        interpreter
+            .push(val)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(slot)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(kexit_info)
+            .expect("The stack should not overflow");
 
         interpreter.run()?;
         assert_eq!(
@@ -196,15 +204,19 @@ fn test_many_tstore_many_tload() -> Result<()> {
 
     let sys_tload = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tload"];
 
-    for i in (0..10) {
+    for i in 0..10 {
         interpreter.generation_state.registers.program_counter = sys_tload;
         interpreter.generation_state.registers.is_kernel = true;
         let kexit_info = U256::from(0xdeadbeefu32)
             + (U256::from(u64::from(true)) << 32)
             + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
         let slot: U256 = i.into();
-        interpreter.push(slot);
-        interpreter.push(kexit_info);
+        interpreter
+            .push(slot)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(kexit_info)
+            .expect("The stack should not overflow");
 
         interpreter.run()?;
         assert_eq!(
@@ -257,7 +269,7 @@ fn test_revert() -> Result<()> {
     interpreter.generation_state.memory.set(addr_addr, 3.into());
 
     // Store different values at slot 1
-    for i in (0..10) {
+    for i in 0..10 {
         interpreter.generation_state.registers.program_counter = sys_tstore;
         interpreter.generation_state.registers.is_kernel = true;
         let kexit_info = U256::from(0xdeadbeefu32)
@@ -265,9 +277,15 @@ fn test_revert() -> Result<()> {
             + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
         let val: U256 = i.into();
         let slot: U256 = 1.into();
-        interpreter.push(val);
-        interpreter.push(slot);
-        interpreter.push(kexit_info);
+        interpreter
+            .push(val)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(slot)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(kexit_info)
+            .expect("The stack should not overflow");
 
         interpreter.run()?;
         assert_eq!(
@@ -282,7 +300,9 @@ fn test_revert() -> Result<()> {
     let checkpoint = KERNEL.global_labels["checkpoint"];
     interpreter.generation_state.registers.program_counter = checkpoint;
     interpreter.generation_state.registers.is_kernel = true;
-    interpreter.push(0xdeadbeefu32.into());
+    interpreter
+        .push(0xdeadbeefu32.into())
+        .expect("The stack should not overflow");
     interpreter.run()?;
     assert!(interpreter.stack().is_empty());
 
@@ -290,7 +310,7 @@ fn test_revert() -> Result<()> {
     interpreter.generation_state.registers.gas_used = gas_before_checkpoint;
 
     // Now we change `val` 10 more times
-    for i in (10..20) {
+    for i in 10..20 {
         interpreter.generation_state.registers.program_counter = sys_tstore;
         interpreter.generation_state.registers.is_kernel = true;
         let kexit_info = U256::from(0xdeadbeefu32)
@@ -298,9 +318,15 @@ fn test_revert() -> Result<()> {
             + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
         let val: U256 = i.into();
         let slot: U256 = 1.into();
-        interpreter.push(val);
-        interpreter.push(slot);
-        interpreter.push(kexit_info);
+        interpreter
+            .push(val)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(slot)
+            .expect("The stack should not overflow");
+        interpreter
+            .push(kexit_info)
+            .expect("The stack should not overflow");
 
         interpreter.run()?;
         assert_eq!(
@@ -315,9 +341,15 @@ fn test_revert() -> Result<()> {
     let kexit_info = U256::from(0xdeadbeefu32)
         + (U256::from(u64::from(true)) << 32)
         + (U256::from(interpreter.generation_state.registers.gas_used) << 192);
-    interpreter.push(3.into()); // val
-    interpreter.push(2.into()); // slot
-    interpreter.push(kexit_info);
+    interpreter
+        .push(3.into())
+        .expect("The stack should not overflow"); // val
+    interpreter
+        .push(2.into())
+        .expect("The stack should not overflow"); // slot
+    interpreter
+        .push(kexit_info)
+        .expect("The stack should not overflow");
     assert!(interpreter.run().is_err());
 
     // Now we should load the value before the revert
@@ -326,8 +358,12 @@ fn test_revert() -> Result<()> {
     interpreter.generation_state.registers.gas_used = 0;
     let kexit_info = U256::from(0xdeadbeefu32) + (U256::from(u64::from(true)) << 32);
     interpreter.generation_state.registers.is_kernel = true;
-    interpreter.push(1.into());
-    interpreter.push(kexit_info);
+    interpreter
+        .push(1.into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push(kexit_info)
+        .expect("The stack should not overflow");
 
     interpreter.run()?;
 

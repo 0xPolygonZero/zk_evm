@@ -13,6 +13,7 @@ mod utils;
 pub(crate) mod interpreter;
 
 pub use constants::cancun_constants;
+pub use constants::global_exit_root;
 
 #[cfg(test)]
 mod tests;

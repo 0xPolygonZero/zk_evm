@@ -59,19 +59,6 @@ pub fn create_account_storage(storage_pairs: &[(U256, U256)]) -> anyhow::Result<
     Ok(trie)
 }
 
-/// Creates the storage trie of the beacon roots contract account at the
-/// provided timestamp. Not passing any parent root will consider the parent
-/// root at genesis, i.e. the empty hash.
-fn beacon_roots_contract_storage(
-    timestamp: U256,
-    parent_root: H256,
-) -> anyhow::Result<HashedPartialTrie> {
-    let timestamp_idx = timestamp % HISTORY_BUFFER_LENGTH.1;
-    let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH.1;
-
-    create_account_storage(&[(timestamp_idx, timestamp), (root_idx, h2u(parent_root))])
-}
-
 /// Updates the beacon roots account storage with the provided timestamp and
 /// block parent root.
 pub fn update_beacon_roots_account_storage(

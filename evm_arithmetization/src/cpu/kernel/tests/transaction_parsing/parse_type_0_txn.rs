@@ -15,7 +15,7 @@ fn process_type_0_txn() -> Result<()> {
     let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
 
     let retaddr = 0xDEADBEEFu32.into();
-    const INITIAL_TXN_RLP_ADDR: usize = (Segment::RlpRaw as usize + 1);
+    const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
     let mut interpreter: Interpreter<F> = Interpreter::new(
         process_type_0_txn,
         vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],

@@ -163,7 +163,7 @@ pub(crate) trait State<F: Field> {
                     }
                 } else {
                     #[cfg(not(test))]
-                    self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
+                    log::info!("CPU halted after {} cycles", self.get_clock());
                     return Ok(());
                 }
             }
@@ -260,12 +260,6 @@ pub(crate) trait State<F: Field> {
     #[inline]
     fn log_debug(&self, msg: String) {
         log::debug!("{}", msg);
-    }
-
-    /// Logs `msg` in `info` mode.
-    #[inline]
-    fn log_info(&self, msg: String) {
-        log::info!("{}", msg);
     }
 
     /// Logs `msg` at `level`.

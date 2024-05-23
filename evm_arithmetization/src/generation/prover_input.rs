@@ -1,4 +1,3 @@
-use core::cmp::min;
 use core::mem::transmute;
 use core::ops::Neg;
 use std::collections::{BTreeSet, HashMap};
@@ -7,7 +6,6 @@ use std::str::FromStr;
 use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
-use keccak_hash::keccak;
 use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
@@ -29,7 +27,7 @@ use crate::generation::prover_input::FieldOp::{Inverse, Sqrt};
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::memory::segments::Segment::BnPairing;
-use crate::util::{biguint_to_mem_vec, h2u, mem_vec_to_biguint, sha2, u256_to_u8, u256_to_usize};
+use crate::util::{biguint_to_mem_vec, mem_vec_to_biguint, sha2, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProverInputError::*;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::MemoryAddress;
@@ -304,8 +302,6 @@ impl<F: Field> GenerationState<F> {
             ));
         };
 
-        let jd_len = jumpdest_table.len();
-
         if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
@@ -324,8 +320,6 @@ impl<F: Field> GenerationState<F> {
                 ProverInputError::InvalidJumpdestSimulation,
             ));
         };
-
-        let jd_len = jumpdest_table.len();
 
         if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
@@ -526,7 +520,7 @@ impl<F: Field> GenerationState<F> {
         let mut z_bytes = [0u8; 32];
         z.to_big_endian(&mut z_bytes);
         let mut acc = CurveAff::<Fp2<BLS381>>::unit();
-        for (i, &byte) in z_bytes.iter().enumerate() {
+        for byte in z_bytes.into_iter() {
             acc = acc * 256_i32;
             acc = acc + (CurveAff::<Fp2<BLS381>>::GENERATOR * byte as i32);
         }

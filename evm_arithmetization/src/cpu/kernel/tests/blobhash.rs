@@ -31,8 +31,12 @@ fn test_valid_blobhash() -> Result<()> {
 
     interpreter.set_context_metadata_field(1, GasLimit, U256::from(1000000000000u64));
 
-    interpreter.push(index.into()); // target hash index
-    interpreter.push(retdest); // kexit_info
+    interpreter
+        .push(index.into())
+        .expect("The stack should not overflow"); // target hash index
+    interpreter
+        .push(retdest)
+        .expect("The stack should not overflow"); // kexit_info
 
     interpreter.run()?;
 
@@ -68,8 +72,12 @@ fn test_invalid_blobhash() -> Result<()> {
 
     interpreter.set_context_metadata_field(1, GasLimit, U256::from(1000000000000u64));
 
-    interpreter.push(index.into()); // target hash index
-    interpreter.push(retdest); // kexit_info
+    interpreter
+        .push(index.into())
+        .expect("The stack should not overflow"); // target hash index
+    interpreter
+        .push(retdest)
+        .expect("The stack should not overflow"); // kexit_info
 
     interpreter.run()?;
 
