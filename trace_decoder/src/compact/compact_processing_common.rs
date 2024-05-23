@@ -1005,8 +1005,7 @@ pub struct ProcessedCompactOutput<T> {
     /// The header of the compact.
     pub header: Header,
 
-    /// The actual processed `mpt_trie` tries and additional code hash mappings
-    /// from the compact.
+    /// The processed tries and any other state from the output.
     pub witness_out: T,
 }
 

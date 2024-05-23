@@ -1,36 +1,34 @@
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
-    iter::{self, empty, once},
+    iter::{self, empty},
 };
 
 use ethereum_types::{Address, U256, U512};
-use evm_arithmetization_mpt::{generation::mpt::AccountRlp, GenerationInputs};
+use evm_arithmetization_mpt::{generation::mpt::AccountRlp};
 use keccak_hash::H256;
 use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
-    partial_trie::HashedPartialTrie,
     trie_ops::{TrieOpError, ValOrHash},
-    trie_subsets::SubsetTrieError,
 };
 use thiserror::Error;
 
 use crate::{
-    aliased_crate_types::{BlockHashes, BlockMetadata, ExtraBlockData, TrieInputs, TrieRoots},
+    aliased_crate_types::{BlockHashes, BlockMetadata, ExtraBlockData, TrieRoots},
     compact::compact_processing_common::CompactParsingError,
     processed_block_trace::{
-        NodesUsedByTxn, ProcessedBlockTrace, ProcessedSectionInfo, ProcessedSectionTxnInfo,
-        StateTrieWrites,
+        NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites,
     },
     types::{
-        HashedAccountAddr, HashedNodeAddr, HashedStorageAddr, HashedStorageAddrNibbles,
-        OtherBlockData, StorageVal, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
+        HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
+        OtherBlockData, TrieRootHash, TxnIdx,
         EMPTY_TRIE_HASH, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, optional_field, optional_field_hex, update_val_if_some},
 };
 
+/// Result alias for any operation that may fail related to decoding.
 pub type TraceDecodingResult<T> = Result<T, TraceDecodingError>;
 
 pub(crate) trait ProcessedBlockTraceDecode {
@@ -82,11 +80,15 @@ pub(crate) trait GenIr {
 }
 
 /// Wrapper to reduce the otherwise extreme verbosity.
-pub(crate) type TrieState<D: ProcessedBlockTraceDecode> =
-    TrieStateIntern<D::StateTrie, D::StorageTries, D::ReceiptTrie, D::TxnTrie>;
+pub(crate) type TrieState<D> = TrieStateIntern<
+    <D as ProcessedBlockTraceDecode>::StateTrie,
+    <D as ProcessedBlockTraceDecode>::StorageTries,
+    <D as ProcessedBlockTraceDecode>::ReceiptTrie,
+    <D as ProcessedBlockTraceDecode>::TxnTrie,
+>;
 
 #[derive(Clone, Debug)]
-struct TrieStateIntern<A, B, C, D>
+pub(crate) struct TrieStateIntern<A, B, C, D>
 where
     A: Trie + StateTrie + Clone,
     B: StorageTries + Clone,
@@ -305,8 +307,8 @@ pub enum TraceDecodingErrorReason {
     #[error("Compact parsing error: {0}")]
     CompactDecodingError(CompactParsingError),
 
-    // Currently the SMT library does not produce errors, so as a last resort, we can create
-    // string errors hinting at what might have gone wrong.
+    /// Currently the SMT library does not produce errors, so as a last resort,
+    /// we can create string errors hinting at what might have gone wrong.
     #[error("{0}")]
     Other(String),
 }
@@ -363,25 +365,8 @@ where
         self,
         other_data: OtherBlockData,
     ) -> TraceDecodingResult<Vec<D::Ir>> {
-        match self.sect_info {
-            ProcessedSectionInfo::Continuations(_) => {
-                todo!("MPT continuations are not implemented yet!")
-            }
-            ProcessedSectionInfo::Txns(txns) => Self::process_txns(
-                txns,
-                &mut D::get_trie_pre_image(&self.spec),
-                self.withdrawals,
-                &other_data,
-            ),
-        }
-    }
+        let mut curr_block_tries = D::get_trie_pre_image(&self.spec);
 
-    fn process_txns(
-        txns: Vec<ProcessedSectionTxnInfo>,
-        curr_block_tries: &mut TrieState<D>,
-        withdrawals: Vec<(Address, U256)>,
-        other_data: &OtherBlockData,
-    ) -> TraceDecodingResult<Vec<D::Ir>> {
         // This is just a copy of `curr_block_tries`.
         // TODO: Check if we can remove these clones before PR merge...
         let initial_tries_for_dummies = curr_block_tries.clone();
@@ -397,16 +382,17 @@ where
         // A copy of the initial extra_data possibly needed during padding.
         let extra_data_for_dummies = extra_data.clone();
 
-        let mut ir = txns
+        let mut ir = self
+            .txn_info
             .into_iter()
             .enumerate()
             .map(|(txn_idx, sect_info)| {
                 Self::process_txn_info(
                     txn_idx,
                     sect_info,
-                    curr_block_tries,
+                    &mut curr_block_tries,
                     &mut extra_data,
-                    other_data,
+                    &other_data,
                 )
                 .map_err(|mut e| {
                     e.txn_idx(txn_idx);
@@ -422,18 +408,18 @@ where
 
         Self::pad_gen_inputs_with_dummy_inputs_if_needed(
             &mut ir,
-            other_data,
+            &other_data,
             &extra_data,
             &extra_data_for_dummies,
             &initial_tries_for_dummies,
             &curr_block_tries,
         );
 
-        if !withdrawals.is_empty() {
+        if !self.withdrawals.is_empty() {
             Self::add_withdrawals_to_txns(
                 &mut ir,
                 &mut curr_block_tries.state,
-                withdrawals.clone(),
+                self.withdrawals.clone(),
             )?;
         }
 
@@ -484,7 +470,7 @@ where
         meta: &TxnMetaState,
     ) -> TraceDecodingResult<()> {
         for (hashed_acc_addr, storage_writes) in deltas.storage_writes.iter() {
-            let mut storage_trie = trie_state
+            let storage_trie = trie_state
                 .storage
                 .get_mut_trie(hashed_acc_addr)
                 .ok_or_else(|| {
@@ -618,7 +604,7 @@ where
             let state_trie = last_inputs.get_state_trie_mut();
 
             *state_trie = Self::create_minimal_state_partial_trie(
-                &state_trie,
+                state_trie,
                 withdrawal_addrs,
                 iter::empty(),
             )?;
@@ -678,7 +664,7 @@ where
     /// Processes a single transaction in the trace.
     fn process_txn_info(
         txn_idx: usize,
-        txn_info: ProcessedSectionTxnInfo,
+        txn_info: ProcessedTxnInfo,
         curr_block_tries: &mut TrieState<D>,
         extra_data: &mut ExtraBlockData,
         other_data: &OtherBlockData,
@@ -720,7 +706,7 @@ where
         )?;
 
         let tries =
-            D::create_trie_subsets(&curr_block_tries, &txn_info.nodes_used_by_txn, txn_idx)?;
+            D::create_trie_subsets(curr_block_tries, &txn_info.nodes_used_by_txn, txn_idx)?;
 
         let trie_roots_after = Self::calculate_trie_input_hashes(curr_block_tries);
 

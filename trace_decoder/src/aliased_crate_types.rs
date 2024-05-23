@@ -30,7 +30,8 @@ macro_rules! include_feature_gated_zero_deps {
 cfg_if! {
     if #[cfg(feature = "mpt")] {
         include_feature_gated_zero_deps!(evm_arithmetization_mpt);
-    } else if #[cfg(feature = "smt")] {
+    }
+    else if #[cfg(feature = "smt")] {
         include_feature_gated_zero_deps!(evm_arithmetization_smt);
     }
 }

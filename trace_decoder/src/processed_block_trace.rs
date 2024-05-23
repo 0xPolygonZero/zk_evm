@@ -9,12 +9,11 @@ use evm_arithmetization_mpt::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use mpt_trie::nibbles::Nibbles;
 
 use crate::{
-    decoding::{ProcessedBlockTraceDecode, TxnMetaState},
-    processed_block_trace_mpt::{ProcedBlockTraceMptSpec, StorageAccess, StorageWrite},
-    protocol_processing::TraceProtocolDecodingResult,
-    trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TriePreImage, TxnInfo},
+    decoding::{ProcessedBlockTraceDecode, TraceDecodingResult, TxnMetaState},
+    processed_block_trace_mpt::{StorageAccess, StorageWrite},
+    trace_protocol::{BlockTrace, BlockTraceTriePreImages, ContractCodeUsage, TxnInfo},
     types::{
-        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
+        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
         TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
     },
     utils::hash,
@@ -25,14 +24,17 @@ pub(crate) trait BlockTraceProcessing {
     type Output;
 
     fn process_block_trace(
-        image: TriePreImage,
-    ) -> TraceProtocolDecodingResult<Self::ProcessedPreImage>;
+        image: BlockTraceTriePreImages,
+    ) -> TraceDecodingResult<Self::ProcessedPreImage>;
+
     fn get_account_keys(
         image: &Self::ProcessedPreImage,
     ) -> impl Iterator<Item = (HashedAccountAddr, AccountRlp)>;
+
     fn get_any_extra_code_hash_mappings(
         image: &Self::ProcessedPreImage,
     ) -> Option<&HashMap<CodeHash, Vec<u8>>>;
+
     fn create_spec_output(image: Self::ProcessedPreImage) -> Self::Output;
 }
 #[derive(Debug)]
@@ -41,7 +43,7 @@ where
     D: ProcessedBlockTraceDecode,
 {
     pub(crate) spec: T,
-    pub(crate) sect_info: ProcessedSectionInfo,
+    pub(crate) txn_info: Vec<ProcessedTxnInfo>,
     pub(crate) withdrawals: Vec<(Address, U256)>,
     decode_spec: PhantomData<D>,
 }
@@ -51,7 +53,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> TraceProtocolDecodingResult<ProcessedBlockTrace<P::Output, D>>
+    ) -> TraceDecodingResult<ProcessedBlockTrace<P::Output, D>>
     where
         F: CodeHashResolveFunc,
         P: BlockTraceProcessing,
@@ -70,65 +72,40 @@ impl BlockTrace {
                 .unwrap_or_default(),
         };
 
-        let sect_info = Self::process_atomic_units(
-            self.atomic_info,
-            &all_accounts_in_pre_image,
-            &mut code_hash_resolver,
-            &withdrawals,
-        );
+        let last_tx_idx = self.txn_info.len().saturating_sub(1);
+
+        let txn_info = self
+            .txn_info
+            .into_iter()
+            .enumerate()
+            .map(|(i, t)| {
+                let extra_state_accesses = if last_tx_idx == i {
+                    // If this is the last transaction, we mark the withdrawal addresses
+                    // as accessed in the state trie.
+                    withdrawals
+                        .iter()
+                        .map(|(addr, _)| hash(addr.as_bytes()))
+                        .collect::<Vec<_>>()
+                } else {
+                    Vec::new()
+                };
+
+                t.into_processed_txn_info(
+                    &all_accounts_in_pre_image,
+                    &extra_state_accesses,
+                    &mut code_hash_resolver,
+                )
+            })
+            .collect::<Vec<_>>();
 
         let spec = P::create_spec_output(pre_image_data);
 
         Ok(ProcessedBlockTrace {
             spec,
-            sect_info,
+            txn_info,
             withdrawals,
             decode_spec: PhantomData::<D>,
         })
-    }
-
-    fn process_atomic_units<F>(
-        atomic_info: AtomicUnitInfo,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
-        code_hash_resolver: &mut CodeHashResolving<F>,
-        withdrawals: &[(Address, U256)],
-    ) -> ProcessedSectionInfo
-    where
-        F: CodeHashResolveFunc,
-    {
-        match atomic_info {
-            AtomicUnitInfo::Txn(txn_info) => {
-                let last_tx_idx = txn_info.len().saturating_sub(1);
-
-                let proced_txn_info = txn_info
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, t)| {
-                        let extra_state_accesses = if last_tx_idx == i {
-                            // If this is the last transaction, we mark the withdrawal addresses
-                            // as accessed in the state trie.
-                            withdrawals
-                                .iter()
-                                .map(|(addr, _)| hash(addr.as_bytes()))
-                                .collect::<Vec<_>>()
-                        } else {
-                            Vec::new()
-                        };
-
-                        t.into_processed_txn_info(
-                            all_accounts_in_pre_image,
-                            &extra_state_accesses,
-                            code_hash_resolver,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-
-                ProcessedSectionInfo::Txns(proced_txn_info)
-            }
-            AtomicUnitInfo::Continuations(_) => {
-                todo!("Continuation support with MPT not yet implemented!")
-            }
-        }
     }
 }
 
@@ -155,13 +132,7 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) enum ProcessedSectionInfo {
-    Continuations(Vec<ProcessedContinuationInfo>),
-    Txns(Vec<ProcessedSectionTxnInfo>),
-}
-
-#[derive(Debug)]
-pub(crate) struct ProcessedSectionTxnInfo {
+pub(crate) struct ProcessedTxnInfo {
     pub(crate) nodes_used_by_txn: NodesUsedByTxn,
     pub(crate) contract_code_accessed: HashMap<CodeHash, Vec<u8>>,
     pub(crate) meta: TxnMetaState,
@@ -201,7 +172,7 @@ impl TxnInfo {
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
         code_hash_resolver: &mut CodeHashResolving<F>,
-    ) -> ProcessedSectionTxnInfo {
+    ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
 
@@ -318,7 +289,7 @@ impl TxnInfo {
             gas_used: self.meta.gas_used,
         };
 
-        ProcessedSectionTxnInfo {
+        ProcessedTxnInfo {
             nodes_used_by_txn,
             contract_code_accessed,
             meta: new_meta_state,

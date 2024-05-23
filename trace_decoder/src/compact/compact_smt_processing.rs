@@ -5,15 +5,15 @@ use std::collections::HashMap;
 use super::{
     compact_processing_common::{
         process_compact_prestate_common, CollapsableWitnessEntryTraverser, CompactCursor,
-        CompactParsingError, CompactParsingResult, DebugCompactCursor, Header, Instruction,
-        NodeEntry, Opcode, ParserState, ProcessedCompactOutput, WitnessBytes, WitnessEntries,
-        WitnessEntry,
+        CompactCursorFast, CompactParsingError, CompactParsingResult, DebugCompactCursor, Header,
+        Instruction, NodeEntry, Opcode, ParserState, ProcessedCompactOutput, WitnessBytes,
+        WitnessEntries, WitnessEntry,
     },
     compact_to_smt_trie::{
         create_smt_trie_from_remaining_witness_elem, SmtStateTrieExtractionOutput,
     },
 };
-use crate::{trace_protocol::SingleSmtPreImage, types::CodeHash, utils::hash};
+use crate::{protocol_processing::ProtocolPreImageProcessing, types::CodeHash, utils::hash};
 
 /// Byte to encode the type of node the SMT leaf represents.
 // `enumn` (`N`) generates public functions that are missing documentation, so I think we need to
@@ -55,11 +55,10 @@ impl ParserState {
         create_smt_trie_from_remaining_witness_elem(node_entry, code)
     }
 
-    pub(crate) fn create_and_extract_header_debug_smt(
+    pub(crate) fn create_and_extract_header_smt<C: CompactCursor>(
         witness_bytes_raw: Vec<u8>,
     ) -> CompactParsingResult<(Header, Self)> {
-        let witness_bytes: WitnessBytes<DebugCompactCursor> =
-            WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
+        let witness_bytes = WitnessBytes::<C>::new(witness_bytes_raw);
         let (header, entries) = witness_bytes.process_into_instructions_and_header_smt()?;
         let p_state = Self { entries };
 
@@ -206,15 +205,49 @@ impl<C: CompactCursor> WitnessBytes<C> {
     }
 }
 
+fn process_compact_smt_prestate(
+    state: Vec<u8>,
+) -> CompactParsingResult<ProcessedCompactOutput<SmtStateTrieExtractionOutput>> {
+    process_compact_prestate_common(
+        state,
+        ParserState::create_and_extract_header_smt::<CompactCursorFast>,
+        ParserState::parse_smt,
+    )
+}
+
 /// Processes the compact prestate into the trie format of `smt_trie`. Also
 /// enables heavy debug traces during processing.
 // TODO: Move behind a feature flag...
-pub fn process_compact_smt_prestate_debug(
-    state: SingleSmtPreImage,
+fn process_compact_smt_prestate_debug(
+    state: Vec<u8>,
 ) -> CompactParsingResult<ProcessedCompactOutput<SmtStateTrieExtractionOutput>> {
     process_compact_prestate_common(
-        state.0,
-        ParserState::create_and_extract_header_debug_smt,
+        state,
+        ParserState::create_and_extract_header_smt::<DebugCompactCursor>,
         ParserState::parse_smt,
     )
+}
+
+pub(crate) struct SmtPreImageProcessing;
+
+const SMT_HEADER_VERSION: u8 = 1;
+
+impl ProtocolPreImageProcessing for SmtPreImageProcessing {
+    type ProcessedPreImage = SmtStateTrieExtractionOutput;
+
+    fn process_image(
+        bytes: Vec<u8>,
+    ) -> CompactParsingResult<ProcessedCompactOutput<Self::ProcessedPreImage>> {
+        process_compact_smt_prestate(bytes)
+    }
+
+    fn process_image_debug(
+        bytes: Vec<u8>,
+    ) -> CompactParsingResult<ProcessedCompactOutput<Self::ProcessedPreImage>> {
+        process_compact_smt_prestate_debug(bytes)
+    }
+
+    fn expected_header_version() -> u8 {
+        SMT_HEADER_VERSION
+    }
 }

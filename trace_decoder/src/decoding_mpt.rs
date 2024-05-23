@@ -3,53 +3,44 @@ use std::{
     iter::{self, empty, once},
 };
 
-use ethereum_types::{Address, U256, U512};
+use ethereum_types::{Address, U256};
 use evm_arithmetization_mpt::{
     generation::{mpt::AccountRlp, TrieInputs},
     proof::{BlockHashes, BlockMetadata},
     GenerationInputs,
 };
 use keccak_hash::H256;
-use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node, PartialTrie},
+    partial_trie::{HashedPartialTrie, PartialTrie},
     special_query::path_for_query,
-    trie_ops::{TrieOpError, TrieOpResult},
     trie_subsets::{create_trie_subset, SubsetTrieError},
     utils::{IntoTrieKey, TriePath},
 };
-use rlp::Decodable;
 
 use crate::{
     aliased_crate_types::{ExtraBlockData, TrieRoots},
-    compact::compact_mpt_processing::MptPartialTriePreImages,
     decoding::{
         self, create_trie_subset_wrapped, GenIr, ProcessedBlockTraceDecode, StateTrie,
         StorageTries, TraceDecodingError, TraceDecodingErrorReason, TraceDecodingResult, Trie,
         TrieState, TrieType,
     },
-    processed_block_trace::{
-        NodesUsedByTxn, ProcessedSectionInfo, ProcessedSectionTxnInfo, ProcessingMeta,
-        StateTrieWrites,
-    },
+    processed_block_trace::{NodesUsedByTxn, ProcessingMeta},
     processed_block_trace_mpt::{
         MptBlockTraceProcessing, MptProcessedBlockTrace, ProcedBlockTraceMptSpec,
     },
-    protocol_processing::TraceProtocolDecodingResult,
     trace_protocol::BlockTrace,
     types::{
-        CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
-        HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
-        ZERO_STORAGE_SLOT_VAL_RLPED,
+        CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
+        HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, TxnIdx,
     },
-    utils::{hash, nibbles_to_h256, update_val_if_some},
+    utils::{nibbles_to_h256},
 };
 
 type MptTrieState = TrieState<MptBlockTraceDecoding>;
 
 #[derive(Clone, Debug)]
-struct MptStorageTries(HashMap<HashedAccountAddr, HashedPartialTrie>);
+pub(crate) struct MptStorageTries(HashMap<HashedAccountAddr, HashedPartialTrie>);
 
 impl From<HashMap<HashedAccountAddr, HashedPartialTrie>> for MptStorageTries {
     fn from(v: HashMap<HashedAccountAddr, HashedPartialTrie>) -> Self {
@@ -158,7 +149,7 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
     }
 
     fn create_trie_inputs(tries: TrieState<Self>) -> Self::TrieInputs {
-        let storage_tries = Vec::from_iter(tries.storage.0.into_iter());
+        let storage_tries = Vec::from_iter(tries.storage.0);
 
         TrieInputs {
             state_trie: tries.state.trie,
@@ -198,7 +189,7 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
 }
 
 #[derive(Clone, Debug)]
-struct MptTrie {
+pub(crate) struct MptTrie {
     trie: HashedPartialTrie,
     traced_delete_info: TrieDeltaApplicationOutput,
 }
@@ -228,9 +219,9 @@ impl Trie for MptTrie {
         k: Nibbles,
         v: V,
     ) -> TraceDecodingResult<()> {
-        self.trie
-            .insert(k, v.into())
-            .map_err(|err| TraceDecodingError::new(TraceDecodingErrorReason::TrieOpError(err)))
+        self.trie.insert(k, v.into()).map_err(|err| {
+            TraceDecodingError::new(TraceDecodingErrorReason::TrieOpError(err))
+        })
     }
 
     /// If a branch collapse occurred after a delete, then we must ensure that
@@ -444,16 +435,14 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
+    ) -> TraceDecodingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
         let processed_block_trace =
             self.into_mpt_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
 
-        let res = processed_block_trace
-            .into_proof_gen_ir(other_data)
-            .map_err(|err| Box::new(err))?;
+        let res = processed_block_trace.into_proof_gen_ir(other_data)?;
 
         Ok(res)
     }
@@ -462,7 +451,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
+    ) -> TraceDecodingResult<MptProcessedBlockTrace>
     where
         F: CodeHashResolveFunc,
     {

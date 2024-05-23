@@ -21,7 +21,7 @@ use super::{
         StateTrieExtractionOutput,
     },
 };
-use crate::{trace_protocol::MptTrieCompact, types::HashedAccountAddr};
+use crate::{protocol_processing::ProtocolPreImageProcessing, types::HashedAccountAddr};
 
 /// Account node data.
 #[derive(Clone, Debug, PartialEq)]
@@ -370,30 +370,6 @@ pub(crate) struct MptPartialTriePreImages {
     pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
 }
 
-/// Processes the compact prestate into the trie format of `mpt_trie`.
-pub fn process_compact_mpt_prestate(
-    state: MptTrieCompact,
-) -> CompactParsingResult<ProcessedCompactOutput<StateTrieExtractionOutput>> {
-    process_compact_prestate_common(
-        state.0,
-        ParserState::create_and_extract_header_mpt,
-        ParserState::parse_mpt,
-    )
-}
-
-/// Processes the compact prestate into the trie format of `mpt_trie`. Also
-/// enables heavy debug traces during processing.
-// TODO: Move behind a feature flag...
-pub fn process_compact_mpt_prestate_debug(
-    state: MptTrieCompact,
-) -> CompactParsingResult<ProcessedCompactOutput<StateTrieExtractionOutput>> {
-    process_compact_prestate_common(
-        state.0,
-        ParserState::create_and_extract_header_debug_mpt,
-        ParserState::parse_mpt,
-    )
-}
-
 // TODO: Move behind a feature flag just used for debugging (but probably not
 // `debug`)...
 #[allow(dead_code)]
@@ -437,5 +413,40 @@ impl Display for InstructionAndBytesParsedFromBuf {
         }
 
         Ok(())
+    }
+}
+
+pub(crate) struct MptPreImageProcessing;
+
+const MPT_HEADER_VERSION: u8 = 0;
+
+impl ProtocolPreImageProcessing for MptPreImageProcessing {
+    type ProcessedPreImage = StateTrieExtractionOutput;
+
+    /// Processes the compact prestate into the trie format of `mpt_trie`.
+    fn process_image(
+        bytes: Vec<u8>,
+    ) -> CompactParsingResult<ProcessedCompactOutput<Self::ProcessedPreImage>> {
+        process_compact_prestate_common(
+            bytes,
+            ParserState::create_and_extract_header_mpt,
+            ParserState::parse_mpt,
+        )
+    }
+
+    /// Processes the compact prestate into the trie format of `mpt_trie`. Also
+    /// enables heavy debug traces during processing.
+    fn process_image_debug(
+        bytes: Vec<u8>,
+    ) -> CompactParsingResult<ProcessedCompactOutput<Self::ProcessedPreImage>> {
+        process_compact_prestate_common(
+            bytes,
+            ParserState::create_and_extract_header_debug_mpt,
+            ParserState::parse_mpt,
+        )
+    }
+
+    fn expected_header_version() -> u8 {
+        MPT_HEADER_VERSION
     }
 }

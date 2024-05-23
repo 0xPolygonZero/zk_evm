@@ -1,9 +1,17 @@
+use crate::cfg_if;
+
 pub mod compact_debug_tools;
-pub mod compact_mpt_processing;
 pub(crate) mod compact_processing_common;
-pub mod compact_smt_processing;
-pub mod compact_to_mpt_trie;
-pub mod compact_to_smt_trie;
+
+cfg_if! {
+    if #[cfg(feature = "mpt")] {
+        pub mod compact_mpt_processing;
+        pub mod compact_to_mpt_trie;
+    } else if #[cfg(feature = "smt")] {
+        pub mod compact_smt_processing;
+        pub mod compact_to_smt_trie;
+    }
+}
 
 #[cfg(test)]
 pub(crate) mod complex_test_payloads;

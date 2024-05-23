@@ -3,15 +3,15 @@ use mpt_trie::partial_trie::PartialTrie;
 use smt_trie::utils::hashout2u;
 
 use super::{
-    compact_mpt_processing::{process_compact_mpt_prestate, process_compact_mpt_prestate_debug},
+    compact_mpt_processing::MptPreImageProcessing,
     compact_processing_common::{CompactParsingResult, Header, ProcessedCompactOutput},
-    compact_smt_processing::process_compact_smt_prestate_debug,
+    compact_smt_processing::SmtPreImageProcessing,
     compact_to_mpt_trie::StateTrieExtractionOutput,
     compact_to_smt_trie::SmtStateTrieExtractionOutput,
 };
 use crate::{
-    aliased_crate_types::MptAccountRlp,
-    trace_protocol::{MptTrieCompact, SingleSmtPreImage},
+    aliased_crate_types::AccountRlp,
+    protocol_processing::ProtocolPreImageProcessing,
     types::{HashedAccountAddr, TrieRootHash, EMPTY_TRIE_HASH},
     utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie},
 };
@@ -160,11 +160,10 @@ pub(crate) const SMT_TEST_PAYLOAD_25: TestProtocolInputAndRoot = TestProtocolInp
     root_str: "24047e78097271a4a9d0e3cf69dd9f5273dc050ae866f2bc5c9450b6f99fe049",
 };
 
-type ProcessMptCompactPrestateFn =
-    ProcessedCompactPrestateFn<MptTrieCompact, StateTrieExtractionOutput>;
+type ProcessMptCompactPrestateFn = ProcessedCompactPrestateFn<Vec<u8>, StateTrieExtractionOutput>;
 
 type ProcessSmtCompactPrestateFn =
-    ProcessedCompactPrestateFn<SingleSmtPreImage, SmtStateTrieExtractionOutput>;
+    ProcessedCompactPrestateFn<Vec<u8>, SmtStateTrieExtractionOutput>;
 
 type ProcessedCompactPrestateFn<T, U> = fn(T) -> CompactParsingResult<ProcessedCompactOutput<U>>;
 
@@ -176,21 +175,21 @@ pub(crate) struct TestProtocolInputAndRoot {
 impl TestProtocolInputAndRoot {
     #[allow(dead_code)]
     pub(crate) fn parse_and_check_hash_matches(self) {
-        self.parse_and_check_mpt_trie(process_compact_mpt_prestate);
+        self.parse_and_check_mpt_trie(MptPreImageProcessing::process_image);
     }
 
     pub(crate) fn parse_and_check_hash_matches_with_debug(self) {
-        self.parse_and_check_mpt_trie(process_compact_mpt_prestate_debug);
+        self.parse_and_check_mpt_trie(MptPreImageProcessing::process_image_debug);
     }
 
     pub(crate) fn parse_and_check_hash_matches_with_debug_smt(self) {
-        self.parse_and_check_smt_trie(process_compact_smt_prestate_debug)
+        self.parse_and_check_smt_trie(SmtPreImageProcessing::process_image_debug)
     }
 
     fn parse_and_check_mpt_trie(self, process_compact_prestate_f: ProcessMptCompactPrestateFn) {
         let protocol_bytes = hex::decode(self.byte_str).unwrap();
 
-        let out = match process_compact_prestate_f(MptTrieCompact(protocol_bytes)) {
+        let out = match process_compact_prestate_f(protocol_bytes) {
             Ok(x) => x,
             Err(err) => panic!("{}", err.to_string()),
         };
@@ -210,8 +209,7 @@ impl TestProtocolInputAndRoot {
         let protocol_bytes = hex::decode(self.byte_str).unwrap();
 
         let out: ProcessedCompactOutput<SmtStateTrieExtractionOutput> =
-            process_compact_prestate_f(SingleSmtPreImage(protocol_bytes))
-                .unwrap_or_else(|err| panic!("{}", err));
+            process_compact_prestate_f(protocol_bytes).unwrap_or_else(|err| panic!("{}", err));
         let mut buf: [u8; 32] = [0; 32];
         hashout2u(out.witness_out.state_trie.root).to_big_endian(&mut buf);
 
@@ -233,7 +231,7 @@ impl TestProtocolInputAndRoot {
                 data.as_val().map(|data| {
                     (
                         HashedAccountAddr::from_slice(&addr.bytes_be()),
-                        rlp::decode::<MptAccountRlp>(data).unwrap().storage_root,
+                        rlp::decode::<AccountRlp>(data).unwrap().storage_root,
                     )
                 })
             })

@@ -4,18 +4,16 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use ethereum_types::{Address, U256};
-use evm_arithmetization_mpt::GenerationInputs;
 use mpt_trie::partial_trie::PartialTrie;
 
+use crate::compact::compact_mpt_processing::MptPreImageProcessing;
+use crate::decoding::TraceDecodingResult;
 use crate::processed_block_trace::ProcessedBlockTrace;
-use crate::processed_block_trace::{BlockTraceProcessing, ProcessedSectionInfo, ProcessingMeta};
-use crate::protocol_processing::{
-    process_mpt_block_trace_trie_pre_images, TraceProtocolDecodingResult,
-};
-use crate::trace_protocol::{BlockTrace, TriePreImage};
+use crate::processed_block_trace::{BlockTraceProcessing};
+use crate::protocol_processing::{process_block_trace_trie_pre_images};
+use crate::trace_protocol::{BlockTraceTriePreImages};
 use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedStorageAddrNibbles, OtherBlockData,
+    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedStorageAddrNibbles,
 };
 use crate::{
     aliased_crate_types::AccountRlp,
@@ -45,9 +43,10 @@ impl BlockTraceProcessing for MptBlockTraceProcessing {
     type Output = ProcedBlockTraceMptSpec;
 
     fn process_block_trace(
-        image: TriePreImage,
-    ) -> TraceProtocolDecodingResult<Self::ProcessedPreImage> {
-        process_mpt_block_trace_trie_pre_images(image)
+        image: BlockTraceTriePreImages,
+    ) -> TraceDecodingResult<Self::ProcessedPreImage> {
+        process_block_trace_trie_pre_images::<MptPreImageProcessing>(image)
+            .map(|image| image.into())
     }
 
     fn get_account_keys(
