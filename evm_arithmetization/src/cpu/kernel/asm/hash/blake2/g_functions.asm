@@ -81,7 +81,7 @@
     // stack: v[a]'', v[d]', v[b]', v[c]', v[a]'', addr_a, addr_b, addr_c, addr_d, x, y, start
     XOR
     %rotr_64(16)
-    // stack: v[d]'' = (v[a]'' ^ v[d]') >>> 8, v[b]', v[c]', v[a]'', addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: v[d]'' = (v[a]'' ^ v[d]') >>> 16, v[b]', v[c]', v[a]'', addr_a, addr_b, addr_c, addr_d, x, y, start
     SWAP2
     // stack: v[c]', v[b]', v[d]'', v[a]'', addr_a, addr_b, addr_c, addr_d, x, y, start
     DUP3
@@ -95,7 +95,7 @@
     // stack: v[b]', v[c]'', v[c]'', v[d]'', v[a]'', addr_a, addr_b, addr_c, addr_d, x, y, start
     XOR
     %rotr_64(63)
-    // stack: v[b]'' = (v[b]' ^ v[c]'') >>> 7, v[c]'', v[d]'', v[a]'', addr_a, addr_b, addr_c, addr_d, x, y, start
+    // stack: v[b]'' = (v[b]' ^ v[c]'') >>> 63, v[c]'', v[d]'', v[a]'', addr_a, addr_b, addr_c, addr_d, x, y, start
 
     // Store resulting values at precomputed addresses
     %stack (vb, vc, vd, va, a, b, c, d, x, y, start) -> (va, a, vb, b, vc, c, vd, d)
@@ -109,7 +109,7 @@
     DUP2
     %blake2_message_addr
     DUP1
-    // stack: message_addr, start, round, start
+    // stack: message_addr, message_addr, start, round, start
     PUSH $y_idx
     DUP5
     // stack: round, y_idx, message_addr, message_addr, start, round, start
