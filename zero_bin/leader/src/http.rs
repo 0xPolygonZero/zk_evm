@@ -1,8 +1,8 @@
 use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
+use alloy::primitives::U256;
 use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
-use ethereum_types::U256;
 use paladin::runtime::Runtime;
 use proof_gen::{proof_types::GeneratedBlockProof, types::PlonkyProofIntern};
 use prover::ProverInput;
