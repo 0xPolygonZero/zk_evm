@@ -568,12 +568,6 @@ pub fn generate_all_data_segments<F: RichField>(
         };
     }
 
-    // Handle single-segment case
-    // if all_seg_data.len() == 1 {
-    //     segment_data.is_dummy = true;
-    //     all_seg_data.push(segment_data);
-    // }
-
     Ok(all_seg_data)
 }
 
