@@ -14,12 +14,15 @@ proof_gen = { workspace = true }
 trace_decoder = { workspace = true }
 tracing = { workspace = true }
 paladin-core = { workspace = true }
-ethereum-types = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
+alloy.workspace = true
+ruint = { version = "1.12.1", features = ["num-traits", "primitive-types"] }
 
 # Local dependencies
 ops = { path = "../ops" }
+common = { path = "../common" }
+num-traits = "0.2.19"
 
 [features]
 default = []

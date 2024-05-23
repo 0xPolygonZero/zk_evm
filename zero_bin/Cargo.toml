@@ -13,11 +13,22 @@ tokio = { version = "1.33.0", features = ["full"] }
 serde = "1.0.183"
 serde_path_to_error = "0.1.14"
 serde_json = "1.0.107"
-ethereum-types = "0.14.1"
 thiserror = "1.0.50"
 futures = "0.3.29"
-rlp = "0.5.2"
 keccak-hash = "0.10.0"
+alloy = { git = "https://github.com/alloy-rs/alloy", features = [
+    "rpc-types-eth",
+    "rpc-types-trace",
+    "providers",
+    "transports",
+    "transport-http",
+    "rpc-client",
+    "consensus",
+    "rlp",
+] }
+__compat_ethereum-types = { version = "0.14.1", package = "ethereum-types" }
+__compat_rlp = { version = "0.5.2", package = "rlp" }
+
 
 # zk-evm dependencies
 plonky2 = "0.2.2"

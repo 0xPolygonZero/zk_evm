@@ -9,6 +9,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+alloy.workspace = true
 thiserror = { workspace = true }
 tracing = { workspace = true }
 proof_gen = { workspace = true }
@@ -20,3 +21,4 @@ trace_decoder = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 seahash = "4.1.0"
+__compat_primitive-types = { version = "0.12.2", package = "primitive-types" }
