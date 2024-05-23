@@ -1,3 +1,6 @@
+//! Defines functions that processes a [BlockTrace] into the mpt format so that
+//! it is easier to turn the block transactions into IRs.
+
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -5,12 +8,8 @@ use ethereum_types::{Address, U256};
 use evm_arithmetization_mpt::GenerationInputs;
 use mpt_trie::partial_trie::PartialTrie;
 
-use crate::compact::{
-    compact_mpt_processing::MptPartialTriePreImages,
-    compact_processing_common::ProcessedCompactOutput,
-    compact_to_mpt_trie::StateTrieExtractionOutput,
-};
 use crate::processed_block_trace::ProcessedBlockTrace;
+use crate::processed_block_trace::{BlockTraceProcessing, ProcessedSectionInfo, ProcessingMeta};
 use crate::protocol_processing::{
     process_mpt_block_trace_trie_pre_images, TraceProtocolDecodingResult,
 };
@@ -19,11 +18,17 @@ use crate::types::{
     CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedStorageAddrNibbles, OtherBlockData,
 };
 use crate::{
-    aliased_crate_types::MptAccountRlp,
-    processed_block_trace::{BlockTraceProcessing, ProcessedSectionInfo, ProcessingMeta},
+    aliased_crate_types::AccountRlp,
+    compact::{
+        compact_mpt_processing::MptPartialTriePreImages,
+        compact_processing_common::ProcessedCompactOutput,
+        compact_to_mpt_trie::StateTrieExtractionOutput,
+    },
+    decoding_mpt::MptBlockTraceDecoding,
 };
 
-pub(crate) type MptProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceMptSpec, MptBlockTraceProcessing>;
+pub(crate) type MptProcessedBlockTrace =
+    ProcessedBlockTrace<ProcedBlockTraceMptSpec, MptBlockTraceDecoding>;
 
 pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
 pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
@@ -55,7 +60,7 @@ impl BlockTraceProcessing for MptBlockTraceProcessing {
     > {
         image.tries.state.items().filter_map(|(addr, data)| {
             data.as_val()
-                .map(|data| (addr.into(), rlp::decode::<MptAccountRlp>(data).unwrap()))
+                .map(|data| (addr.into(), rlp::decode::<AccountRlp>(data).unwrap()))
         })
     }
 
@@ -65,12 +70,8 @@ impl BlockTraceProcessing for MptBlockTraceProcessing {
         image.extra_code_hash_mappings.as_ref()
     }
 
-    fn create_spec_output(
-        image: Self::ProcessedPreImage,
-    ) -> Self::Output {
-        ProcedBlockTraceMptSpec {
-            tries: image.tries,
-        }
+    fn create_spec_output(image: Self::ProcessedPreImage) -> Self::Output {
+        ProcedBlockTraceMptSpec { tries: image.tries }
     }
 }
 

@@ -26,7 +26,6 @@ rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true }
 serde_with = "3.4.0"
-supertrait = "0.1.0"
 thiserror = { workspace = true }
 
 # Local dependencies

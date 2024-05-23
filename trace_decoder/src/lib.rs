@@ -80,7 +80,7 @@
 //!     p_meta: &ProcessingMeta<F>,
 //!     // Extra data needed for proof generation.
 //!     other_data: OtherBlockData,
-//! ) -> TraceParsingResult<Vec<GenerationInputs>>
+//! ) -> TraceDecodingResult<Vec<GenerationInputs>>
 //! ```
 //!
 //! It first preprocesses the [BlockTrace] to provide transaction,
@@ -116,6 +116,8 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+use cfg_if::cfg_if;
+
 #[cfg(not(any(feature = "mpt", feature = "smt")))]
 compile_error! {"Either the \"mpt\" or \"smt\" feature (but not both) must be enabled"}
 
@@ -128,20 +130,10 @@ mod aliased_crate_types;
 pub mod compact;
 /// Defines the main functions used to generate the IR.
 pub mod decoding;
-mod decoding_mpt;
-mod decoding_smt;
 mod deserializers;
 
 /// Core logic shared between mpt/smt versions of processing block traces.
 mod processed_block_trace;
-
-/// Defines functions that processes a [BlockTrace] into the mpt format so that
-/// it is easier to turn the block transactions into IRs.
-pub mod processed_block_trace_mpt;
-
-/// Defines functions that processes a [BlockTrace] into the smt format so that
-/// it is easier to turn the block transactions into IRs.
-pub mod processed_block_trace_smt;
 
 pub mod protocol_processing;
 
@@ -150,3 +142,13 @@ pub mod trace_protocol;
 pub mod types;
 /// Defines useful functions necessary to the other modules.
 pub mod utils;
+
+cfg_if! {
+    if #[cfg(feature = "mpt")] {
+        mod decoding_mpt;
+        pub mod processed_block_trace_mpt;
+    } else if #[cfg(feature = "smt")] {
+        mod decoding_smt;
+        pub mod processed_block_trace_smt;
+    }
+}

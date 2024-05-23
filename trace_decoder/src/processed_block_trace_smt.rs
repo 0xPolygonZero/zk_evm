@@ -1,11 +1,14 @@
+//! Defines functions that processes a [BlockTrace] into the smt format so that
+//! it is easier to turn the block transactions into IRs.
+
 use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
 use evm_arithmetization_mpt::generation::mpt::AccountRlp;
 
 use crate::{
-    aliased_crate_types::SmtGenerationInputs,
-    decoding::TraceDecodingResult,
+    aliased_crate_types::GenerationInputs,
+    decoding::{ProcessedBlockTraceDecode, TraceDecodingResult},
     processed_block_trace::{
         BlockTraceProcessing, ProcessedBlockTrace, ProcessedSectionInfo, ProcessingMeta,
     },
@@ -14,7 +17,8 @@ use crate::{
     types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr, OtherBlockData},
 };
 
-pub(crate) type SmtProcessedBlockTrace = ProcessedBlockTrace<ProcedBlockTraceSmtSpec, SmtBlockTraceProcessing>;
+pub(crate) type SmtProcessedBlockTrace =
+    ProcessedBlockTrace<ProcedBlockTraceSmtSpec, SmtBlockTraceProcessing>;
 
 /// Smt processed pre-image.
 #[derive(Clone, Debug)]
@@ -49,9 +53,60 @@ impl BlockTraceProcessing for SmtBlockTraceProcessing {
         todo!()
     }
 
-    fn create_spec_output(
-        image: Self::ProcessedPreImage,
-    ) -> Self::Output {
+    fn create_spec_output(image: Self::ProcessedPreImage) -> Self::Output {
+        todo!()
+    }
+}
+
+pub(crate) struct SmtBlockTraceDecoding;
+
+impl ProcessedBlockTraceDecode for SmtBlockTraceDecoding {
+    type Spec;
+    type Ir;
+    type TrieInputs;
+    type StateTrie;
+    type StorageTries;
+    type ReceiptTrie;
+    type TxnTrie;
+
+    fn get_trie_pre_image(spec: &Self::Spec) -> crate::decoding::TrieState<Self> {
+        todo!()
+    }
+
+    fn create_trie_subsets(
+        tries: &crate::decoding::TrieState<Self>,
+        nodes_used_by_txn: &crate::processed_block_trace::NodesUsedByTxn,
+        txn_idx: crate::types::TxnIdx,
+    ) -> TraceDecodingResult<crate::decoding::TrieState<Self>> {
+        todo!()
+    }
+
+    fn create_dummy_ir(
+        other_data: &OtherBlockData,
+        extra_data: &crate::aliased_crate_types::ExtraBlockData,
+        final_tries: &crate::decoding::TrieState<Self>,
+        account_addrs_accessed: impl Iterator<Item = HashedAccountAddr>,
+    ) -> Self::Ir {
+        todo!()
+    }
+
+    fn create_trie_inputs(tries: crate::decoding::TrieState<Self>) -> Self::TrieInputs {
+        todo!()
+    }
+
+    fn create_ir(
+        txn_number_before: U256,
+        gas_used_before: U256,
+        gas_used_after: U256,
+        signed_txn: Option<Vec<u8>>,
+        withdrawals: Vec<(Address, U256)>,
+        tries: Self::TrieInputs,
+        trie_roots_after: crate::aliased_crate_types::TrieRoots,
+        checkpoint_state_trie_root: crate::types::TrieRootHash,
+        contract_code: HashMap<keccak_hash::H256, Vec<u8>>,
+        block_metadata: crate::aliased_crate_types::BlockMetadata,
+        block_hashes: crate::aliased_crate_types::BlockHashes,
+    ) -> Self::Ir {
         todo!()
     }
 }
@@ -61,7 +116,7 @@ impl BlockTrace {
     pub fn into_proof_gen_smt_ir(
         self,
         _other_data: OtherBlockData,
-    ) -> TraceDecodingResult<Vec<SmtGenerationInputs>> {
+    ) -> TraceDecodingResult<Vec<GenerationInputs>> {
         todo!()
     }
 
@@ -71,7 +126,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> TraceProtocolDecodingResult<Vec<SmtGenerationInputs>>
+    ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
@@ -87,10 +142,13 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> TraceProtocolDecodingResult<SmtProcessedBlockTrace>
+    ) -> TraceProtocolDecodingResult<ProcessedBlockTrace<_, _>>
     where
         F: CodeHashResolveFunc,
     {
-        self.into_processed_block_trace::<_, SmtBlockTraceProcessing>(p_meta, withdrawals)
+        self.into_processed_block_trace::<_, SmtBlockTraceProcessing, SmtBlockTraceDecoding>(
+            p_meta,
+            withdrawals,
+        )
     }
 }

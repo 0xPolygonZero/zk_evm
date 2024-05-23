@@ -3,7 +3,8 @@
 //!
 //! Currently (this may change in the future), but SMT support is currently on
 //! its own separate branch in `zk_evm`. We want to be able to support both
-//! `MPT` (on the `main` branch) and SMT (on the `feat/type2` branch) using feature gating. Because `feat/type2` modifies existing types that `main`
+//! `MPT` (on the `main` branch) and SMT (on the `feat/type2` branch) using
+//! feature gating. Because `feat/type2` modifies existing types that `main`
 //! uses, we can not just simply use imports from both branches at the same
 //! time. Instead, we need to make each version of the packages their own
 //! separate dependency. This module just aliases the types to make them a bit

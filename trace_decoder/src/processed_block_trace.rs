@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
-    iter::once, marker::PhantomData,
+    iter::once,
+    marker::PhantomData,
 };
 
 use ethereum_types::{Address, U256};
@@ -8,7 +9,15 @@ use evm_arithmetization_mpt::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use mpt_trie::nibbles::Nibbles;
 
 use crate::{
-    aliased_crate_types::MptAccountRlp, decoding::ProcessedBlockTraceDecode, decoding_mpt::TxnMetaState, processed_block_trace_mpt::{ProcedBlockTraceMptSpec, StorageAccess, StorageWrite}, protocol_processing::TraceProtocolDecodingResult, trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TriePreImage, TxnInfo}, types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH}, utils::hash
+    decoding::{ProcessedBlockTraceDecode, TxnMetaState},
+    processed_block_trace_mpt::{ProcedBlockTraceMptSpec, StorageAccess, StorageWrite},
+    protocol_processing::TraceProtocolDecodingResult,
+    trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TriePreImage, TxnInfo},
+    types::{
+        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
+        TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    },
+    utils::hash,
 };
 
 pub(crate) trait BlockTraceProcessing {
@@ -24,9 +33,7 @@ pub(crate) trait BlockTraceProcessing {
     fn get_any_extra_code_hash_mappings(
         image: &Self::ProcessedPreImage,
     ) -> Option<&HashMap<CodeHash, Vec<u8>>>;
-    fn create_spec_output(
-        image: Self::ProcessedPreImage,
-    ) -> Self::Output;
+    fn create_spec_output(image: Self::ProcessedPreImage) -> Self::Output;
 }
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace<T, D>
@@ -72,12 +79,17 @@ impl BlockTrace {
 
         let spec = P::create_spec_output(pre_image_data);
 
-        Ok(ProcessedBlockTrace { spec, sect_info, withdrawals, decode_spec: PhantomData::<D> })
+        Ok(ProcessedBlockTrace {
+            spec,
+            sect_info,
+            withdrawals,
+            decode_spec: PhantomData::<D>,
+        })
     }
 
     fn process_atomic_units<F>(
         atomic_info: AtomicUnitInfo,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, MptAccountRlp)],
+        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         code_hash_resolver: &mut CodeHashResolving<F>,
         withdrawals: &[(Address, U256)],
     ) -> ProcessedSectionInfo
@@ -186,7 +198,7 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, MptAccountRlp)],
+        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedSectionTxnInfo {
