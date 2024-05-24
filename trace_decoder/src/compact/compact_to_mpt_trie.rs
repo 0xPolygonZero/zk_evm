@@ -10,13 +10,9 @@ use mpt_trie::{
     partial_trie::{HashedPartialTrie, PartialTrie},
 };
 
-use super::{
-    compact_mpt_processing::AccountNodeData,
-    compact_processing_common::{
-        AccountNodeCode, CompactDecodingResult, CompactParsingError, CompactParsingResult,
-        LeafNodeData, NodeEntry, WitnessEntry,
-    },
-};
+use super::compact_processing_common::{
+        AccountNodeCode, AccountNodeData, CompactDecodingResult, CompactParsingError, CompactParsingResult, LeafNodeData, NodeEntry, UnexpectedCompactNodeType, WitnessEntry
+    };
 use crate::{
     decoding::TrieType,
     types::{CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH},
@@ -91,15 +87,6 @@ trait CompactToPartialTrieExtractionOutput {
     /// Since we need to access the current trie for both concrete types, we
     /// need a common method to access the trie.
     fn trie(&mut self) -> &mut HashedPartialTrie;
-}
-
-/// An error that occurs when we encounter a node type that we did not expect.
-#[derive(Clone, Copy, Debug)]
-pub enum UnexpectedCompactNodeType {
-    /// We expected a storage node, but got account leaf instead.
-    AccountLeaf,
-    /// We expected a storage node, but got a code leaf instead.
-    Code,
 }
 
 /// Output from constructing a state trie from compact.

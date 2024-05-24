@@ -1,12 +1,11 @@
-use keccak_hash::H256;
-use mpt_trie::partial_trie::PartialTrie;
-use smt_trie::utils::hashout2u;
 
 use crate::{
-    aliased_crate_types::AccountRlp, compact::compact_processing_common::{CompactParsingResult, Header, ProcessedCompactOutput}, protocol_processing::ProtocolPreImageProcessing, types::{HashedAccountAddr, TrieRootHash, EMPTY_TRIE_HASH}, utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie}
+    compact::compact_processing_common::{CompactParsingResult, Header, ProcessedCompactOutput},
+    types::{TrieRootHash},
 };
 
-pub(super) type ProcessedCompactPrestateFn<T, U> = fn(T) -> CompactParsingResult<ProcessedCompactOutput<U>>;
+pub(super) type ProcessedCompactPrestateFn<T, U> =
+    fn(T) -> CompactParsingResult<ProcessedCompactOutput<U>>;
 
 pub(super) struct TestProtocolInputAndRoot {
     pub(super) byte_str: &'static str,

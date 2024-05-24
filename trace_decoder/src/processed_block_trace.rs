@@ -5,19 +5,16 @@ use std::{
 };
 
 use ethereum_types::{Address, U256};
-use evm_arithmetization_mpt::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use mpt_trie::nibbles::Nibbles;
 
 use crate::{
-    decoding::{ProcessedBlockTraceDecode, TraceDecodingResult, TxnMetaState},
-    processed_block_trace_mpt::{StorageAccess, StorageWrite},
-    trace_protocol::{BlockTrace, BlockTraceTriePreImages, ContractCodeUsage, TxnInfo},
-    types::{
-        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
-        TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
-    },
-    utils::hash,
+    aliased_crate_types::{AccountRlp, LegacyReceiptRlp}, decoding::{ProcessedBlockTraceDecode, TraceDecodingResult, TxnMetaState}, trace_protocol::{BlockTrace, BlockTraceTriePreImages, ContractCodeUsage, TxnInfo}, types::{
+        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH
+    }, utils::hash
 };
+
+pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
+pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
 
 pub(crate) trait BlockTraceProcessing {
     type ProcessedPreImage;

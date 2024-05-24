@@ -15,37 +15,6 @@ use super::{
 };
 use crate::{protocol_processing::ProtocolPreImageProcessing, types::CodeHash, utils::hash};
 
-/// Byte to encode the type of node the SMT leaf represents.
-// `enumn` (`N`) generates public functions that are missing documentation, so I think we need to
-// disable missing doc checks here.
-#[allow(missing_docs)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SmtLeafNodeType {
-    /// Node contains the balance for a account.
-    Balance = 0,
-    /// Node contains the nonce for a account.
-    Nonce = 1,
-    /// Node contains the contract code hash for a account.
-    Code = 2,
-    /// Node contains the storage root for a account.
-    Storage = 3,
-    /// Node contains the length of the contract bytecode for an account.
-    CodeLength = 4,
-}
-
-impl SmtLeafNodeType {
-    pub(crate) fn from_byte(byte: u8) -> Option<Self> {
-        match byte {
-            0 => Some(Self::Balance),
-            1 => Some(Self::Nonce),
-            2 => Some(Self::Code),
-            3 => Some(Self::Storage),
-            4 => Some(Self::CodeLength),
-            _ => None,
-        }
-    }
-}
-
 impl ParserState {
     fn parse_smt(mut self) -> CompactParsingResult<SmtStateTrieExtractionOutput> {
         let mut entry_buf = Vec::new();

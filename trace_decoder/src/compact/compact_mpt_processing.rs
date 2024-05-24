@@ -9,12 +9,7 @@ use mpt_trie::partial_trie::HashedPartialTrie;
 
 use super::{
     compact_processing_common::{
-        process_compact_prestate_common, try_get_node_entry_from_witness_entry, AccountNodeCode,
-        Balance, BranchMask, CollapsableWitnessEntryTraverser, CompactCursorFast,
-        CompactDecodingResult, CompactParsingError, CompactParsingResult, DebugCompactCursor,
-        Header, Instruction, LeafNodeData, NodeEntry, Nonce, ParserState, ProcessedCompactOutput,
-        WitnessBytes, WitnessEntry, BRANCH_MAX_CHILDREN,
-        MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE,
+        process_compact_prestate_common, try_get_node_entry_from_witness_entry, AccountNodeCode, AccountNodeData, BranchMask, CollapsableWitnessEntryTraverser, CompactCursorFast, CompactDecodingResult, CompactParsingError, CompactParsingResult, DebugCompactCursor, Header, Instruction, LeafNodeData, NodeEntry, ParserState, ProcessedCompactOutput, WitnessBytes, WitnessEntry, BRANCH_MAX_CHILDREN, MAX_WITNESS_ENTRIES_NEEDED_TO_MATCH_A_RULE
     },
     compact_to_mpt_trie::{
         create_mpt_trie_from_remaining_witness_elem, create_storage_mpt_trie_from_compact_node,
@@ -22,35 +17,6 @@ use super::{
     },
 };
 use crate::{protocol_processing::ProtocolPreImageProcessing, types::HashedAccountAddr};
-
-/// Account node data.
-#[derive(Clone, Debug, PartialEq)]
-pub struct AccountNodeData {
-    /// The nonce of the account.
-    pub nonce: Nonce,
-    /// The balance of the account.
-    pub balance: Balance,
-    /// The storage trie of the account.
-    pub storage_trie: Option<HashedPartialTrie>,
-    /// The code of the account.
-    pub account_node_code: Option<AccountNodeCode>,
-}
-
-impl AccountNodeData {
-    fn new(
-        nonce: Nonce,
-        balance: Balance,
-        storage_trie: Option<HashedPartialTrie>,
-        account_node_code: Option<AccountNodeCode>,
-    ) -> Self {
-        Self {
-            nonce,
-            balance,
-            storage_trie,
-            account_node_code,
-        }
-    }
-}
 
 impl ParserState {
     fn create_and_extract_header_mpt(

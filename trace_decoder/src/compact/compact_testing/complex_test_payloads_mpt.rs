@@ -1,8 +1,16 @@
-use crate::{aliased_crate_types::AccountRlp, compact::{compact_mpt_processing::MptPreImageProcessing, compact_to_mpt_trie::StateTrieExtractionOutput}, protocol_processing::ProtocolPreImageProcessing, types::{HashedAccountAddr, EMPTY_TRIE_HASH}, utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie}};
-
 use mpt_trie::partial_trie::PartialTrie;
 
 use super::complex_test_payloads::{ProcessedCompactPrestateFn, TestProtocolInputAndRoot};
+use crate::{
+    aliased_crate_types::AccountRlp,
+    compact::{
+        compact_mpt_processing::MptPreImageProcessing,
+        compact_to_mpt_trie::StateTrieExtractionOutput,
+    },
+    protocol_processing::ProtocolPreImageProcessing,
+    types::{HashedAccountAddr, EMPTY_TRIE_HASH},
+    utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie},
+};
 
 type ProcessMptCompactPrestateFn = ProcessedCompactPrestateFn<Vec<u8>, StateTrieExtractionOutput>;
 
@@ -76,9 +84,15 @@ impl TestProtocolInputAndRoot {
 
 #[cfg(test)]
 mod tests {
-    use crate::compact::{compact_debug_tools::parse_just_to_instructions, compact_processing_common::Instruction, compact_testing::complex_test_payloads::{h_decode, h_decode_key, init_testing_env}};
-
-    use super::{MPT_TEST_PAYLOAD_1, MPT_TEST_PAYLOAD_2, MPT_TEST_PAYLOAD_3, MPT_TEST_PAYLOAD_4, MPT_TEST_PAYLOAD_5, MPT_TEST_PAYLOAD_6};
+    use super::{
+        MPT_TEST_PAYLOAD_1, MPT_TEST_PAYLOAD_2, MPT_TEST_PAYLOAD_3, MPT_TEST_PAYLOAD_4,
+        MPT_TEST_PAYLOAD_5, MPT_TEST_PAYLOAD_6,
+    };
+    use crate::compact::{
+        compact_debug_tools::parse_just_to_instructions,
+        compact_processing_common::Instruction,
+        compact_testing::complex_test_payloads::{h_decode, h_decode_key, init_testing_env},
+    };
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
 

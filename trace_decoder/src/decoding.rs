@@ -5,7 +5,6 @@ use std::{
 };
 
 use ethereum_types::{Address, U256, U512};
-use evm_arithmetization_mpt::{generation::mpt::AccountRlp};
 use keccak_hash::H256;
 use log::trace;
 use mpt_trie::{
@@ -15,14 +14,13 @@ use mpt_trie::{
 use thiserror::Error;
 
 use crate::{
-    aliased_crate_types::{BlockHashes, BlockMetadata, ExtraBlockData, TrieRoots},
+    aliased_crate_types::{AccountRlp, BlockHashes, BlockMetadata, ExtraBlockData, TrieRoots},
     compact::compact_processing_common::CompactParsingError,
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites,
     },
     types::{
-        HashedAccountAddr, HashedNodeAddr, HashedStorageAddr,
-        OtherBlockData, TrieRootHash, TxnIdx,
+        HashedAccountAddr, HashedNodeAddr, HashedStorageAddr, OtherBlockData, TrieRootHash, TxnIdx,
         EMPTY_TRIE_HASH, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, optional_field, optional_field_hex, update_val_if_some},
@@ -705,8 +703,7 @@ where
             &txn_info.meta,
         )?;
 
-        let tries =
-            D::create_trie_subsets(curr_block_tries, &txn_info.nodes_used_by_txn, txn_idx)?;
+        let tries = D::create_trie_subsets(curr_block_tries, &txn_info.nodes_used_by_txn, txn_idx)?;
 
         let trie_roots_after = Self::calculate_trie_input_hashes(curr_block_tries);
 

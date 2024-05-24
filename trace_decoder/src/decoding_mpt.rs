@@ -31,10 +31,10 @@ use crate::{
     },
     trace_protocol::BlockTrace,
     types::{
-        CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
-        HashedStorageAddrNibbles, OtherBlockData, TrieRootHash, TxnIdx,
+        CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
+        OtherBlockData, TrieRootHash, TxnIdx,
     },
-    utils::{nibbles_to_h256},
+    utils::nibbles_to_h256,
 };
 
 type MptTrieState = TrieState<MptBlockTraceDecoding>;
@@ -219,9 +219,9 @@ impl Trie for MptTrie {
         k: Nibbles,
         v: V,
     ) -> TraceDecodingResult<()> {
-        self.trie.insert(k, v.into()).map_err(|err| {
-            TraceDecodingError::new(TraceDecodingErrorReason::TrieOpError(err))
-        })
+        self.trie
+            .insert(k, v.into())
+            .map_err(|err| TraceDecodingError::new(TraceDecodingErrorReason::TrieOpError(err)))
     }
 
     /// If a branch collapse occurred after a delete, then we must ensure that

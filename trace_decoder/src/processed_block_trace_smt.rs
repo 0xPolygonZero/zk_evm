@@ -4,16 +4,14 @@
 use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
-use evm_arithmetization_mpt::generation::mpt::AccountRlp;
 
 use crate::{
-    aliased_crate_types::GenerationInputs,
+    aliased_crate_types::{AccountRlp, GenerationInputs},
     decoding::{ProcessedBlockTraceDecode, TraceDecodingResult},
     processed_block_trace::{
-        BlockTraceProcessing, ProcessedBlockTrace, ProcessedSectionInfo, ProcessingMeta,
+        BlockTraceProcessing, ProcessedBlockTrace, ProcessingMeta,
     },
-    protocol_processing::TraceProtocolDecodingResult,
-    trace_protocol::{BlockTrace, TriePreImage},
+    trace_protocol::{BlockTrace, BlockTraceTriePreImages},
     types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr, OtherBlockData},
 };
 
@@ -34,8 +32,8 @@ impl BlockTraceProcessing for SmtBlockTraceProcessing {
     type Output = ProcedBlockTraceSmtSpec;
 
     fn process_block_trace(
-        image: TriePreImage,
-    ) -> TraceProtocolDecodingResult<Self::ProcessedPreImage> {
+        image: BlockTraceTriePreImages,
+    ) -> TraceDecodingResult<Self::ProcessedPreImage> {
         todo!()
     }
 
@@ -126,7 +124,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
-    ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
+    ) -> TraceDecodingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
@@ -142,7 +140,7 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
-    ) -> TraceProtocolDecodingResult<ProcessedBlockTrace<_, _>>
+    ) -> TraceDecodingResult<ProcessedBlockTrace<_, _>>
     where
         F: CodeHashResolveFunc,
     {

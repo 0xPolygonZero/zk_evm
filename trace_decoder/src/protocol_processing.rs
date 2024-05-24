@@ -2,18 +2,13 @@
 //! "inner" complex logic (eg. compact decoding) is handled in separate
 //! dedicated modules.
 
-use std::{
-    collections::HashMap,
-};
+use std::collections::HashMap;
 
 use mpt_trie::partial_trie::HashedPartialTrie;
 
 use crate::{
-    compact::{
-        compact_processing_common::{
-            CompactParsingError, CompactParsingResult,
-            ProcessedCompactOutput,
-        },
+    compact::compact_processing_common::{
+        CompactParsingError, CompactParsingResult, ProcessedCompactOutput,
     },
     decoding::{TraceDecodingError, TraceDecodingResult},
     trace_protocol::{

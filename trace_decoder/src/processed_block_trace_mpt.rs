@@ -8,13 +8,11 @@ use mpt_trie::partial_trie::PartialTrie;
 
 use crate::compact::compact_mpt_processing::MptPreImageProcessing;
 use crate::decoding::TraceDecodingResult;
+use crate::processed_block_trace::BlockTraceProcessing;
 use crate::processed_block_trace::ProcessedBlockTrace;
-use crate::processed_block_trace::{BlockTraceProcessing};
-use crate::protocol_processing::{process_block_trace_trie_pre_images};
-use crate::trace_protocol::{BlockTraceTriePreImages};
-use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedStorageAddrNibbles,
-};
+use crate::protocol_processing::process_block_trace_trie_pre_images;
+use crate::trace_protocol::BlockTraceTriePreImages;
+use crate::types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr};
 use crate::{
     aliased_crate_types::AccountRlp,
     compact::{
@@ -27,9 +25,6 @@ use crate::{
 
 pub(crate) type MptProcessedBlockTrace =
     ProcessedBlockTrace<ProcedBlockTraceMptSpec, MptBlockTraceDecoding>;
-
-pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
-pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
 
 #[derive(Debug)]
 pub(crate) struct ProcedBlockTraceMptSpec {

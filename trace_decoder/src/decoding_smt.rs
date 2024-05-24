@@ -1,5 +1,5 @@
 use crate::{
-    aliased_crate_types::SmtGenerationInputs, decoding::TraceDecodingResult,
+    decoding::TraceDecodingResult,
     processed_block_trace_smt::SmtProcessedBlockTrace, types::OtherBlockData,
 };
 

@@ -12,15 +12,11 @@ use enum_as_inner::EnumAsInner;
 use ethereum_types::U256;
 use keccak_hash::H256;
 use log::trace;
-use mpt_trie::nibbles::{FromHexPrefixError, Nibbles};
+use mpt_trie::{nibbles::{FromHexPrefixError, Nibbles}, partial_trie::HashedPartialTrie};
 use mpt_trie::trie_ops::TrieOpError;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 
-use super::{
-    compact_mpt_processing::AccountNodeData, compact_smt_processing::SmtLeafNodeType,
-    compact_to_mpt_trie::UnexpectedCompactNodeType,
-};
 use crate::{decoding::TrieType, types::TrieRootHash};
 
 pub(super) type BranchMask = u32;
@@ -175,6 +171,15 @@ impl Display for CursorBytesErrorInfo {
     }
 }
 
+/// An error that occurs when we encounter a node type that we did not expect.
+#[derive(Clone, Copy, Debug)]
+pub enum UnexpectedCompactNodeType {
+    /// We expected a storage node, but got account leaf instead.
+    AccountLeaf,
+    /// We expected a storage node, but got a code leaf instead.
+    Code,
+}
+
 #[derive(Debug, enumn::N)]
 pub(super) enum Opcode {
     Leaf = 0x00,
@@ -293,6 +298,39 @@ impl Display for NodeEntry {
     }
 }
 
+/// Byte to encode the type of node the SMT leaf represents.
+// `enumn` (`N`) generates public functions that are missing documentation, so I think we need to
+// disable missing doc checks here.
+// Note: Needs to be in the common module as `NodeEntry` is present with both `mpt` & `smt` feature
+// flags.
+#[allow(missing_docs)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SmtLeafNodeType {
+    /// Node contains the balance for a account.
+    Balance = 0,
+    /// Node contains the nonce for a account.
+    Nonce = 1,
+    /// Node contains the contract code hash for a account.
+    Code = 2,
+    /// Node contains the storage root for a account.
+    Storage = 3,
+    /// Node contains the length of the contract bytecode for an account.
+    CodeLength = 4,
+}
+
+impl SmtLeafNodeType {
+    pub(crate) fn from_byte(byte: u8) -> Option<Self> {
+        match byte {
+            0 => Some(Self::Balance),
+            1 => Some(Self::Nonce),
+            2 => Some(Self::Code),
+            3 => Some(Self::Storage),
+            4 => Some(Self::CodeLength),
+            _ => None,
+        }
+    }
+}
+
 /// A value of a node data.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValueNodeData(pub(super) Vec<u8>);
@@ -310,6 +348,35 @@ pub enum LeafNodeData {
     Value(ValueNodeData),
     /// An account node.
     Account(AccountNodeData),
+}
+
+/// Account node data.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AccountNodeData {
+    /// The nonce of the account.
+    pub nonce: Nonce,
+    /// The balance of the account.
+    pub balance: Balance,
+    /// The storage trie of the account.
+    pub storage_trie: Option<HashedPartialTrie>,
+    /// The code of the account.
+    pub account_node_code: Option<AccountNodeCode>,
+}
+
+impl AccountNodeData {
+    pub(crate) fn new(
+        nonce: Nonce,
+        balance: Balance,
+        storage_trie: Option<HashedPartialTrie>,
+        account_node_code: Option<AccountNodeCode>,
+    ) -> Self {
+        Self {
+            nonce,
+            balance,
+            storage_trie,
+            account_node_code,
+        }
+    }
 }
 
 /// An account node code.
@@ -1008,4 +1075,3 @@ pub struct ProcessedCompactOutput<T> {
     /// The processed tries and any other state from the output.
     pub witness_out: T,
 }
-
