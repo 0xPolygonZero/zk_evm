@@ -465,7 +465,6 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
     let max_cpu_len_log = 15;
 
-    println!("Prove first txn segment...");
     let segment_proofs_data_first = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
@@ -478,7 +477,6 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
 
     assert_eq!(segment_proofs_data_first.len(), 2); // second one is a dummy segment
 
-    println!("Prove first aggreg...");
     let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
         .prove_segment_aggregation(
             false,
@@ -611,7 +609,6 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     };
 
     let mut timing = TimingTree::new("prove root second", log::Level::Info);
-    println!("Prove second txn segments...");
     let segment_proofs_data_second = &all_circuits.prove_all_segments(
         &all_stark,
         &config,
@@ -630,7 +627,6 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         all_circuits.verify_root(proof.clone())?;
     }
 
-    println!("Prove second aggreg...");
     let (segment_agg_proof_second, updated_agg_public_values_second) = all_circuits
         .prove_segment_aggregation(
             false,

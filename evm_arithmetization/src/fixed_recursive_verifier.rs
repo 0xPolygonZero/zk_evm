@@ -857,6 +857,7 @@ where
         let public_values = add_virtual_public_values(&mut builder, cap_before_len);
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
+        // The right hand side child might be dummy.
         let lhs_segment = Self::add_segment_agg_child(&mut builder, root);
         let rhs_segment =
             Self::add_segment_agg_child_with_dummy(&mut builder, root, lhs_segment.proof.clone());
@@ -874,6 +875,11 @@ where
             &mut builder,
             public_values.trie_roots_before,
             lhs_pv.trie_roots_before,
+        );
+        TrieRootsTarget::connect(
+            &mut builder,
+            public_values.trie_roots_after,
+            lhs_pv.trie_roots_after,
         );
         BlockMetadataTarget::connect(
             &mut builder,
@@ -906,8 +912,8 @@ where
         TrieRootsTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
-            lhs_pv.trie_roots_after,
-            rhs_pv.trie_roots_after,
+            public_values.trie_roots_before,
+            rhs_pv.trie_roots_before,
         );
         TrieRootsTarget::conditional_assert_eq(
             &mut builder,
@@ -945,7 +951,7 @@ where
         RegistersDataTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
-            lhs_pv.registers_after,
+            lhs_pv.registers_after.clone(),
             rhs_pv.registers_before.clone(),
         );
         MemCapTarget::conditional_assert_eq(
@@ -966,17 +972,17 @@ where
         builder.assert_zero(constr);
 
         // If the rhs is a dummy, then the aggregation PVs are equal to the lhs PVs.
-        TrieRootsTarget::conditional_assert_eq(
-            &mut builder,
-            is_dummy,
-            public_values.trie_roots_after,
-            lhs_pv.trie_roots_after,
-        );
         MemCapTarget::conditional_assert_eq(
             &mut builder,
             is_dummy,
             public_values.mem_after.clone(),
-            lhs_pv.mem_after.clone(),
+            lhs_pv.mem_after,
+        );
+        RegistersDataTarget::conditional_assert_eq(
+            &mut builder,
+            is_dummy,
+            public_values.registers_after.clone(),
+            lhs_pv.registers_after,
         );
 
         // Pad to match the root circuit's degree.
@@ -1580,6 +1586,8 @@ where
             proofs.push(proof);
         }
 
+        // Since aggregations require at least two segment proofs, add a dummy proof if
+        // there is only one proof.
         if proofs.len() == 1 {
             let mut first_proof = proofs[0].clone();
             first_proof.is_dummy = true;
@@ -1745,6 +1753,7 @@ where
             .0
             .len();
 
+        // If rhs is dummy, the rhs proof is also set to be the lhs.
         let real_rhs_proof = if rhs_is_dummy { lhs_proof } else { rhs_proof };
 
         Self::set_dummy_if_necessary_with_dummy(
