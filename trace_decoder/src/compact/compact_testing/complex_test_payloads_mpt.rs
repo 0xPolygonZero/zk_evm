@@ -1,36 +1,36 @@
-use crate::{protocol_processing::ProtocolPreImageProcessing, utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie}};
-
-use super::{compact_mpt_processing::MptPreImageProcessing, compact_to_mpt_trie::StateTrieExtractionOutput, complex_test_payloads::{ProcessedCompactPrestateFn, TestProtocolInputAndRoot}};
+use crate::{aliased_crate_types::AccountRlp, compact::{compact_mpt_processing::MptPreImageProcessing, compact_to_mpt_trie::StateTrieExtractionOutput}, protocol_processing::ProtocolPreImageProcessing, types::{HashedAccountAddr, EMPTY_TRIE_HASH}, utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie}};
 
 use mpt_trie::partial_trie::PartialTrie;
 
+use super::complex_test_payloads::{ProcessedCompactPrestateFn, TestProtocolInputAndRoot};
+
 type ProcessMptCompactPrestateFn = ProcessedCompactPrestateFn<Vec<u8>, StateTrieExtractionOutput>;
 
-pub(crate) const MPT_TEST_PAYLOAD_1: TestProtocolInputAndRoot = TestProtocolInputAndRoot { byte_str: "01055821033601462093b5945d1676df093446790fd31b20e7b12a2e8e5e09d068109616b0084a021e19e0c9bab240000005582103468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d0084101031a697e814758281972fcd13bc9707dbcd2f195986b05463d7b78426508445a0405582103b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b900841010558210389802d6ed1a28b049e9d4fe5334c5902fd9bc00c42821c82f82ee2da10be90800841010558200256274a27dd7524955417c11ecd917251cc7c4c8310f4c7e4bd3c304d3d9a79084a021e19e0c9bab2400000055820023ab0970b73895b8c9959bae685c3a19f45eb5ad89d42b52a340ec4ac204d190841010219102005582103876da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca6100841010558210352688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62008410105582103690b239ba3aaf993e443ae14aeffc44cf8d9931a79baed9fa141d0e4506e131008410102196573", root_str: "6a0673c691edfa4c4528323986bb43c579316f436ff6f8b4ac70854bbd95340b" };
+pub(super) const MPT_TEST_PAYLOAD_1: TestProtocolInputAndRoot = TestProtocolInputAndRoot { byte_str: "01055821033601462093b5945d1676df093446790fd31b20e7b12a2e8e5e09d068109616b0084a021e19e0c9bab240000005582103468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d0084101031a697e814758281972fcd13bc9707dbcd2f195986b05463d7b78426508445a0405582103b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b900841010558210389802d6ed1a28b049e9d4fe5334c5902fd9bc00c42821c82f82ee2da10be90800841010558200256274a27dd7524955417c11ecd917251cc7c4c8310f4c7e4bd3c304d3d9a79084a021e19e0c9bab2400000055820023ab0970b73895b8c9959bae685c3a19f45eb5ad89d42b52a340ec4ac204d190841010219102005582103876da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca6100841010558210352688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62008410105582103690b239ba3aaf993e443ae14aeffc44cf8d9931a79baed9fa141d0e4506e131008410102196573", root_str: "6a0673c691edfa4c4528323986bb43c579316f436ff6f8b4ac70854bbd95340b" };
 
-pub(crate) const MPT_TEST_PAYLOAD_2: TestProtocolInputAndRoot = TestProtocolInputAndRoot { byte_str: "01055821033601462093b5945d1676df093446790fd31b20e7b12a2e8e5e09d068109616b0084a021e19e0c9bab240000005582103468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d0084101031a697e814758281972fcd13bc9707dbcd2f195986b05463d7b78426508445a0405582103b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b900841010558210389802d6ed1a28b049e9d4fe5334c5902fd9bc00c42821c82f82ee2da10be90800841010558200256274a27dd7524955417c11ecd917251cc7c4c8310f4c7e4bd3c304d3d9a790c014a021e0c000250c782fa00055820023ab0970b73895b8c9959bae685c3a19f45eb5ad89d42b52a340ec4ac204d1908410102191020055820021eec2b84f0ba344fd4b4d2f022469febe7a772c4789acfc119eb558ab1da3d08480de0b6b3a76400000558200276da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca61084101021901200558210352688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62008410105582103690b239ba3aaf993e443ae14aeffc44cf8d9931a79baed9fa141d0e4506e131008410102196573", root_str: "e779761e7f0cf4bb2b5e5a2ebac65406d3a7516d46798040803488825a01c19c" };
+pub(super) const MPT_TEST_PAYLOAD_2: TestProtocolInputAndRoot = TestProtocolInputAndRoot { byte_str: "01055821033601462093b5945d1676df093446790fd31b20e7b12a2e8e5e09d068109616b0084a021e19e0c9bab240000005582103468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d0084101031a697e814758281972fcd13bc9707dbcd2f195986b05463d7b78426508445a0405582103b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b900841010558210389802d6ed1a28b049e9d4fe5334c5902fd9bc00c42821c82f82ee2da10be90800841010558200256274a27dd7524955417c11ecd917251cc7c4c8310f4c7e4bd3c304d3d9a790c014a021e0c000250c782fa00055820023ab0970b73895b8c9959bae685c3a19f45eb5ad89d42b52a340ec4ac204d1908410102191020055820021eec2b84f0ba344fd4b4d2f022469febe7a772c4789acfc119eb558ab1da3d08480de0b6b3a76400000558200276da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca61084101021901200558210352688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62008410105582103690b239ba3aaf993e443ae14aeffc44cf8d9931a79baed9fa141d0e4506e131008410102196573", root_str: "e779761e7f0cf4bb2b5e5a2ebac65406d3a7516d46798040803488825a01c19c" };
 
-pub(crate) const MPT_TEST_PAYLOAD_3: TestProtocolInputAndRoot = TestProtocolInputAndRoot { byte_str: "01055821033601462093b5945d1676df093446790fd31b20e7b12a2e8e5e09d068109616b0084a021e19e0c9bab240000005582103468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d0084101031a697e814758281972fcd13bc9707dbcd2f195986b05463d7b78426508445a0405582103b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b900841010558210389802d6ed1a28b049e9d4fe5334c5902fd9bc00c42821c82f82ee2da10be90800841010558200256274a27dd7524955417c11ecd917251cc7c4c8310f4c7e4bd3c304d3d9a790c024a021e0a9cae36fa8e4788055820023ab0970b73895b8c9959bae685c3a19f45eb5ad89d42b52a340ec4ac204d1908410102191020055820021eec2b84f0ba344fd4b4d2f022469febe7a772c4789acfc119eb558ab1da3d08480f43fc2c04ee00000558200276da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca61084101021901200558210352688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62008410105582103690b239ba3aaf993e443ae14aeffc44cf8d9931a79baed9fa141d0e4506e131008410102196573", root_str: "6978d65a3f2fc887408cc28dbb796836ff991af73c21ea74d03a11f6cdeb119c" };
+pub(super) const MPT_TEST_PAYLOAD_3: TestProtocolInputAndRoot = TestProtocolInputAndRoot { byte_str: "01055821033601462093b5945d1676df093446790fd31b20e7b12a2e8e5e09d068109616b0084a021e19e0c9bab240000005582103468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d0084101031a697e814758281972fcd13bc9707dbcd2f195986b05463d7b78426508445a0405582103b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b900841010558210389802d6ed1a28b049e9d4fe5334c5902fd9bc00c42821c82f82ee2da10be90800841010558200256274a27dd7524955417c11ecd917251cc7c4c8310f4c7e4bd3c304d3d9a790c024a021e0a9cae36fa8e4788055820023ab0970b73895b8c9959bae685c3a19f45eb5ad89d42b52a340ec4ac204d1908410102191020055820021eec2b84f0ba344fd4b4d2f022469febe7a772c4789acfc119eb558ab1da3d08480f43fc2c04ee00000558200276da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca61084101021901200558210352688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62008410105582103690b239ba3aaf993e443ae14aeffc44cf8d9931a79baed9fa141d0e4506e131008410102196573", root_str: "6978d65a3f2fc887408cc28dbb796836ff991af73c21ea74d03a11f6cdeb119c" };
 
-pub(crate) const MPT_TEST_PAYLOAD_4: TestProtocolInputAndRoot = TestProtocolInputAndRoot { byte_str: "0103a6885b3731702da62e8e4a8f584ac46a7f6822f4e2ba50fba902f67b1588d23b005821028015657e298d35290e69628be03d91f74d613caf3afdbe09138cfa415efe2f5044deadbeef0558210218b289936a0874cccee65712c88cdaa0a305b004d3fda2942b2b2dc54f14f6110b443b9aca0004", root_str: "69a5a7a8f99161a35e8b64975d8c6af10db4eee7bd956418839d8ff763aaf00c" };
+pub(super) const MPT_TEST_PAYLOAD_4: TestProtocolInputAndRoot = TestProtocolInputAndRoot { byte_str: "0103a6885b3731702da62e8e4a8f584ac46a7f6822f4e2ba50fba902f67b1588d23b005821028015657e298d35290e69628be03d91f74d613caf3afdbe09138cfa415efe2f5044deadbeef0558210218b289936a0874cccee65712c88cdaa0a305b004d3fda2942b2b2dc54f14f6110b443b9aca0004", root_str: "69a5a7a8f99161a35e8b64975d8c6af10db4eee7bd956418839d8ff763aaf00c" };
 
-pub(crate) const MPT_TEST_PAYLOAD_5: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+pub(super) const MPT_TEST_PAYLOAD_5: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
     byte_str: include_str!("large_test_payloads/mpt_test_payload_5.txt"),
     root_str: "2b5a703bdec53099c42d7575f8cd6db85d6f2226a04e98e966fcaef87868869b",
 };
 
-pub(crate) const MPT_TEST_PAYLOAD_6: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
+pub(super) const MPT_TEST_PAYLOAD_6: TestProtocolInputAndRoot = TestProtocolInputAndRoot {
     byte_str: include_str!("large_test_payloads/mpt_test_payload_6.txt"),
     root_str: "135a0c66146c60d7f78049b3a3486aae3e155015db041a4650966e001f9ba301",
 };
 
 impl TestProtocolInputAndRoot {
     #[allow(dead_code)]
-    pub(crate) fn parse_and_check_hash_matches(self) {
+    pub(super) fn parse_and_check_hash_matches(self) {
         self.parse_and_check_mpt_trie(MptPreImageProcessing::process_image);
     }
 
-    pub(crate) fn parse_and_check_hash_matches_with_debug(self) {
+    pub(super) fn parse_and_check_hash_matches_with_debug(self) {
         self.parse_and_check_mpt_trie(MptPreImageProcessing::process_image_debug);
     }
 
@@ -76,7 +76,7 @@ impl TestProtocolInputAndRoot {
 
 #[cfg(test)]
 mod tests {
-    use crate::compact::{compact_debug_tools::parse_just_to_instructions, compact_processing_common::Instruction, complex_test_payloads::{h_decode, h_decode_key, init}};
+    use crate::compact::{compact_debug_tools::parse_just_to_instructions, compact_processing_common::Instruction, compact_testing::complex_test_payloads::{h_decode, h_decode_key, init_testing_env}};
 
     use super::{MPT_TEST_PAYLOAD_1, MPT_TEST_PAYLOAD_2, MPT_TEST_PAYLOAD_3, MPT_TEST_PAYLOAD_4, MPT_TEST_PAYLOAD_5, MPT_TEST_PAYLOAD_6};
 
@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn simple_instructions_are_parsed_correctly() {
-        init();
+        init_testing_env();
 
         let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
         let instrs = parse_just_to_instructions(bytes);
@@ -112,37 +112,37 @@ mod tests {
 
     #[test]
     fn mpt_complex_payload_1() {
-        init();
+        init_testing_env();
         MPT_TEST_PAYLOAD_1.parse_and_check_hash_matches_with_debug();
     }
 
     #[test]
     fn mpt_complex_payload_2() {
-        init();
+        init_testing_env();
         MPT_TEST_PAYLOAD_2.parse_and_check_hash_matches_with_debug();
     }
 
     #[test]
     fn mpt_complex_payload_3() {
-        init();
+        init_testing_env();
         MPT_TEST_PAYLOAD_3.parse_and_check_hash_matches_with_debug();
     }
 
     #[test]
     fn mpt_complex_payload_4() {
-        init();
+        init_testing_env();
         MPT_TEST_PAYLOAD_4.parse_and_check_hash_matches_with_debug();
     }
 
     #[test]
     fn mpt_complex_payload_5() {
-        init();
+        init_testing_env();
         MPT_TEST_PAYLOAD_5.parse_and_check_hash_matches_with_debug();
     }
 
     #[test]
     fn mpt_complex_payload_6() {
-        init();
+        init_testing_env();
         MPT_TEST_PAYLOAD_6.parse_and_check_hash_matches_with_debug();
     }
 }

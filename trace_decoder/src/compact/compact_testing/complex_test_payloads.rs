@@ -23,7 +23,7 @@ impl TestProtocolInputAndRoot {
 }
 
 #[cfg(test)]
-pub(super) fn init() {
+pub(super) fn init_testing_env() {
     let _ = pretty_env_logger::try_init();
 }
 
