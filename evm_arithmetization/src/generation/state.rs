@@ -14,6 +14,9 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
+use crate::generation::mpt::{
+    load_linked_lists_and_txn_and_receipt_mpts, StateAndStorageLeaves, TxnAndReceiptTries,
+};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
@@ -319,6 +322,38 @@ impl<F: Field> GenerationState<F> {
             trie_data.iter().map(|&val| Some(val)).collect();
 
         trie_roots_ptrs
+    }
+
+    fn preinitialize_linked_list_and_txn_and_receipt_mpts(
+        &mut self,
+        trie_inputs: &TrieInputs,
+    ) -> TrieRootPtrs {
+        let (
+            StateAndStorageLeaves {
+                state_leaves,
+                storage_leaves,
+            },
+            TxnAndReceiptTries {
+                txn_root_ptr,
+                receipt_root_ptr,
+                trie_data,
+            },
+        ) = load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
+            .expect("Invalid MPT data for preinitialization");
+
+        self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()].content =
+            state_leaves.iter().map(|&val| Some(val)).collect();
+        self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()].content =
+            storage_leaves.iter().map(|&val| Some(val)).collect();
+        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
+            trie_data.iter().map(|&val| Some(val)).collect();
+
+        TrieRootPtrs {
+            // TODO: Perhaps is safer to make state_root_ptr an Option
+            state_root_ptr: 0,
+            txn_root_ptr,
+            receipt_root_ptr,
+        }
     }
 
     pub(crate) fn new(inputs: GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {

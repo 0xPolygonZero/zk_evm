@@ -329,6 +329,7 @@ fn get_state_and_storage_leaves(
     key: Nibbles,
     state_leaves: &mut Vec<U256>,
     storage_leaves: &mut Vec<U256>,
+    trie_data: &mut Vec<U256>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<(), ProgramError> {
     match trie.deref() {
@@ -350,6 +351,7 @@ fn get_state_and_storage_leaves(
                     extended_key,
                     state_leaves,
                     storage_leaves,
+                    trie_data,
                     storage_tries_by_state_key,
                 )?;
             }
@@ -363,6 +365,7 @@ fn get_state_and_storage_leaves(
                 extended_key,
                 state_leaves,
                 storage_leaves,
+                trie_data,
                 storage_tries_by_state_key,
             )?;
 
@@ -398,14 +401,19 @@ associated storage trie hash"
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             );
             // Set `value_ptr_ptr`.
-            state_leaves.push((state_leaves.len() + 1).into());
+            state_leaves.push((trie_data.len()).into());
 
-            state_leaves.push(nonce);
-            state_leaves.push(balance);
+            trie_data.push(nonce);
+            trie_data.push(balance);
             // The Storage pointer is only written in the trie
-            state_leaves.push(code_hash.into_uint());
-            let storage_ptr =
-                get_storage_leaves(storage_trie, storage_leaves, &parse_storage_value)?;
+            trie_data.push(0.into());
+            trie_data.push(code_hash.into_uint());
+            get_storage_leaves(
+                storage_trie,
+                storage_leaves,
+                trie_data,
+                &parse_storage_value,
+            )?;
 
             Ok(())
         }
@@ -416,6 +424,7 @@ associated storage trie hash"
 pub(crate) fn get_storage_leaves<F>(
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<U256>,
+    trie_data: &mut Vec<U256>,
     parse_value: &F,
 ) -> Result<(), ProgramError>
 where
@@ -425,14 +434,14 @@ where
         Node::Branch { children, value } => {
             // Now, load all children and update their pointers.
             for (i, child) in children.iter().enumerate() {
-                let child_ptr = get_storage_leaves(child, storage_leaves, parse_value)?;
+                let child_ptr = get_storage_leaves(child, storage_leaves, trie_data, parse_value)?;
             }
 
             Ok(())
         }
 
         Node::Extension { nibbles, child } => {
-            get_storage_leaves(child, storage_leaves, parse_value)?;
+            get_storage_leaves(child, storage_leaves, trie_data, parse_value)?;
 
             Ok(())
         }
@@ -445,10 +454,10 @@ where
             );
 
             // Set `value_ptr_ptr`.
-            storage_leaves.push((storage_leaves.len() + 1).into());
+            storage_leaves.push((storage_leaves.len()).into());
 
             let leaf = parse_value(value)?;
-            storage_leaves.extend(leaf);
+            trie_data.extend(leaf);
 
             Ok(())
         }
@@ -494,7 +503,7 @@ pub(crate) fn load_all_mpts(
     Ok((trie_root_ptrs, trie_data))
 }
 
-pub(crate) fn load_linked_lists_txn_and_receipt_mpt(
+pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     trie_inputs: &TrieInputs,
 ) -> Result<(StateAndStorageLeaves, TxnAndReceiptTries), ProgramError> {
     let mut state_leaves = vec![U256::zero()];
@@ -524,6 +533,7 @@ pub(crate) fn load_linked_lists_txn_and_receipt_mpt(
         empty_nibbles(),
         &mut state_leaves,
         &mut storage_leaves,
+        &mut trie_data,
         &storage_tries_by_state_key,
     );
 
