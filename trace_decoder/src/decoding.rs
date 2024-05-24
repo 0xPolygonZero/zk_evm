@@ -39,17 +39,20 @@ pub(crate) trait ProcessedBlockTraceDecode {
     type TxnTrie: Trie + Clone;
 
     fn get_trie_pre_image(spec: &Self::Spec) -> TrieState<Self>;
+
     fn create_trie_subsets(
         tries: &TrieState<Self>,
         nodes_used_by_txn: &NodesUsedByTxn,
         txn_idx: TxnIdx,
     ) -> TraceDecodingResult<TrieState<Self>>;
+
     fn create_dummy_ir(
         other_data: &OtherBlockData,
         extra_data: &ExtraBlockData,
         final_tries: &TrieState<Self>,
         account_addrs_accessed: impl Iterator<Item = HashedAccountAddr>,
     ) -> Self::Ir;
+
     fn create_trie_inputs(tries: TrieState<Self>) -> Self::TrieInputs;
 
     fn create_ir(
@@ -69,12 +72,17 @@ pub(crate) trait ProcessedBlockTraceDecode {
 
 pub(crate) trait GenIr {
     type TrieRoots;
-    type StateTrie: Trie + StateTrie + Clone;
+    type StateTrie: Trie + Clone;
+    type StateTrieRef: Into<Self::StateTrie> + Clone;
 
     fn get_signed_txn(&self) -> Option<&[u8]>;
     fn get_withdrawals_mut(&mut self) -> &mut Vec<(Address, U256)>;
-    fn get_state_trie_mut(&mut self) -> &mut Self::StateTrie;
-    fn get_trie_roots_mut(&mut self) -> &mut TrieRoots;
+    
+    // I can not find a better way to deal with the state trie other than these two methods...
+    fn get_state_trie_ref<'a>(&'a self) -> &'a Self::StateTrieRef;
+    fn set_state_trie(&mut self, trie: Self::StateTrieRef);
+    
+    fn get_final_trie_roots_mut(&mut self) -> &mut TrieRoots;
 }
 
 /// Wrapper to reduce the otherwise extreme verbosity.
@@ -104,18 +112,17 @@ where
 /// so we need to append the redundant `trie_` prefixes to avoid name collisions
 /// with the [`PartialTrie`] trie from `mpt_trie`.
 pub(crate) trait Trie {
-    fn trie_contains(&self, k: Nibbles) -> TraceDecodingResult<bool>;
+    fn trie_contains(&self, k: Nibbles) -> bool;
     fn trie_get(&self, k: Nibbles) -> Option<&[u8]>;
     fn trie_insert<V: Into<NodeInsertType>>(&mut self, k: Nibbles, v: V)
         -> TraceDecodingResult<()>;
     fn trie_delete(&mut self, k: Nibbles) -> TraceDecodingResult<()>;
-    fn trie_create_trie_subset<K>(
+    fn trie_create_trie_subset(
         &self,
-        ks: impl Iterator<Item = K>,
+        ks: impl Iterator<Item = Nibbles>,
         trie_type: TrieType,
     ) -> TraceDecodingResult<Self>
     where
-        K: Into<Nibbles>,
         Self: Sized;
     fn trie_hash(&self) -> TrieRootHash;
 }
@@ -125,12 +132,14 @@ pub(crate) trait StorageTries {
 
     fn get_trie(&self, h_addr: &HashedAccountAddr) -> Option<&Self::StorageTrie>;
     fn get_mut_trie(&mut self, h_addr: &HashedAccountAddr) -> Option<&mut Self::StorageTrie>;
-    fn get_trie_and_create_mut(&mut self, h_addr: &HashedAccountAddr) -> &mut Self::StorageTrie;
-    fn remove_trie(&mut self, addr: &HashedAccountAddr) -> Option<Self::StorageTrie>;
+    fn get_trie_or_create_mut(&mut self, h_addr: &HashedAccountAddr) -> &mut Self::StorageTrie;
+    
+    /// Attempts to remove the trie with the given key and returns true if it was found.
+    fn remove_trie(&mut self, addr: &HashedAccountAddr) -> bool;
 }
 
 // Extra helper functions for the state trie.
-pub(crate) trait StateTrie {
+pub(crate) trait StateTrie: Trie {
     fn get_account(&self, addr: Nibbles) -> TraceDecodingResult<Option<AccountRlp>>;
     fn set_account(&mut self, addr: Nibbles, acc: &AccountRlp);
 }
@@ -456,7 +465,7 @@ where
                     .map(|s_root| hash(s_root.as_bytes()))
                     .unwrap_or_else(|| EMPTY_TRIE_HASH);
 
-                let trie = storage_tries.get_trie_and_create_mut(h_addr);
+                let trie = storage_tries.get_trie_or_create_mut(h_addr);
                 trie.trie_insert(Nibbles::default(), NodeInsertType::Hash(trie_root_hash));
             };
         }
@@ -522,14 +531,15 @@ where
         for hashed_addr in deltas.self_destructed_accounts.iter() {
             let k = Nibbles::from_h256_be(*hashed_addr);
 
-            trie_state.storage.remove_trie(hashed_addr).ok_or_else(|| {
+            if !trie_state.storage.remove_trie(hashed_addr) {
                 let hashed_addr = *hashed_addr;
                 let mut e = TraceDecodingError::new(
                     TraceDecodingErrorReason::MissingAccountStorageTrie(hashed_addr),
                 );
                 e.h_addr(hashed_addr);
-                e
-            })?;
+                
+                return Err(e);
+            };
 
             // TODO: Once the mechanism for resolving code hashes settles, we probably want
             // to also delete the code hash mapping here as well...
@@ -599,10 +609,10 @@ where
             let withdrawal_addrs =
                 withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
 
-            let state_trie = last_inputs.get_state_trie_mut();
+            let state_trie_ref = last_inputs.get_state_trie_ref();
 
-            *state_trie = Self::create_minimal_state_partial_trie(
-                state_trie,
+            let sub_state_trie = Self::create_minimal_state_partial_trie(
+                state_trie_ref,
                 withdrawal_addrs,
                 iter::empty(),
             )?;
@@ -614,7 +624,7 @@ where
         )?;
 
         *last_inputs.get_withdrawals_mut() = withdrawals;
-        last_inputs.get_trie_roots_mut().state_root = final_trie_state.trie_hash();
+        last_inputs.get_final_trie_roots_mut().state_root = final_trie_state.trie_hash();
 
         Ok(())
     }

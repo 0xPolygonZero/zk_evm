@@ -40,16 +40,16 @@ use crate::{
 type MptTrieState = TrieState<MptBlockTraceDecoding>;
 
 #[derive(Clone, Debug)]
-pub(crate) struct MptStorageTries(HashMap<HashedAccountAddr, HashedPartialTrie>);
+pub(crate) struct MptStorageTries(HashMap<HashedAccountAddr, MptTrie>);
 
-impl From<HashMap<HashedAccountAddr, HashedPartialTrie>> for MptStorageTries {
-    fn from(v: HashMap<HashedAccountAddr, HashedPartialTrie>) -> Self {
+impl From<HashMap<HashedAccountAddr, MptTrie>> for MptStorageTries {
+    fn from(v: HashMap<HashedAccountAddr, MptTrie>) -> Self {
         Self(v)
     }
 }
 
-impl FromIterator<(HashedAccountAddr, HashedPartialTrie)> for MptStorageTries {
-    fn from_iter<T: IntoIterator<Item = (HashedAccountAddr, HashedPartialTrie)>>(iter: T) -> Self {
+impl FromIterator<(HashedAccountAddr, MptTrie)> for MptStorageTries {
+    fn from_iter<T: IntoIterator<Item = (HashedAccountAddr, MptTrie)>>(iter: T) -> Self {
         Self(HashMap::from_iter(iter))
     }
 }
@@ -58,19 +58,19 @@ impl StorageTries for MptStorageTries {
     type StorageTrie = MptTrie;
 
     fn get_trie(&self, h_addr: &HashedAccountAddr) -> Option<&Self::StorageTrie> {
-        todo!()
+        self.0.get(h_addr)
     }
 
     fn get_mut_trie(&mut self, h_addr: &HashedAccountAddr) -> Option<&mut Self::StorageTrie> {
-        todo!()
+        self.0.get_mut(h_addr)
     }
 
-    fn get_trie_and_create_mut(&mut self, h_addr: &HashedAccountAddr) -> &mut Self::StorageTrie {
-        todo!()
+    fn get_trie_or_create_mut(&mut self, h_addr: &HashedAccountAddr) -> &mut Self::StorageTrie {
+        self.0.entry(*h_addr).or_default()
     }
 
-    fn remove_trie(&mut self, addr: &HashedAccountAddr) -> Option<Self::StorageTrie> {
-        todo!()
+    fn remove_trie(&mut self, addr: &HashedAccountAddr) -> bool {
+        self.0.remove(addr).is_some()
     }
 }
 
@@ -85,8 +85,13 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
     type ReceiptTrie = MptTrie;
     type TxnTrie = MptTrie;
 
-    fn get_trie_pre_image(spec: &Self::Spec) -> TrieState<Self> {
-        todo!()
+    fn get_trie_pre_image(spec: &Self::Spec) -> MptTrieState {
+        MptTrieState {
+            state: spec.tries.state.clone().into(),
+            storage: MptStorageTries::from_iter(spec.tries.storage.iter().map(|(k, t)| (*k, t.clone().into()))),
+            receipt: HashedPartialTrie::default().into(),
+            txn: HashedPartialTrie::default().into(),
+        }
     }
 
     fn create_trie_subsets(
@@ -149,7 +154,7 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
     }
 
     fn create_trie_inputs(tries: TrieState<Self>) -> Self::TrieInputs {
-        let storage_tries = Vec::from_iter(tries.storage.0);
+        let storage_tries = Vec::from_iter(tries.storage.0.into_iter().map(|(k, t)| (k, t.trie)));
 
         TrieInputs {
             state_trie: tries.state.trie,
@@ -188,7 +193,7 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct MptTrie {
     trie: HashedPartialTrie,
     traced_delete_info: TrieDeltaApplicationOutput,
@@ -204,14 +209,12 @@ impl From<HashedPartialTrie> for MptTrie {
 }
 
 impl Trie for MptTrie {
-    fn trie_contains(&self, k: Nibbles) -> TraceDecodingResult<bool> {
-        // TODO: Replace with `trie.contains` once we add that function to the
-        // `mpt_trie`...
-        Ok(self.trie.get(k).is_some())
+    fn trie_contains(&self, k: Nibbles) -> bool {
+        self.trie.trie_contains(k)
     }
 
     fn trie_get(&self, k: Nibbles) -> Option<&[u8]> {
-        self.trie.get(k)
+        self.trie.trie_get(k)
     }
 
     fn trie_insert<V: Into<decoding::NodeInsertType>>(
@@ -219,9 +222,7 @@ impl Trie for MptTrie {
         k: Nibbles,
         v: V,
     ) -> TraceDecodingResult<()> {
-        self.trie
-            .insert(k, v.into())
-            .map_err(|err| TraceDecodingError::new(TraceDecodingErrorReason::TrieOpError(err)))
+        self.trie.trie_insert(k, v)
     }
 
     /// If a branch collapse occurred after a delete, then we must ensure that
@@ -229,7 +230,7 @@ impl Trie for MptTrie {
     /// plonky2. Returns the key to the remaining child if a collapse occurred.
     fn trie_delete(&mut self, k: Nibbles) -> TraceDecodingResult<()> {
         let old_trace = Self::get_trie_trace(&self.trie, &k);
-        self.trie.delete(k)?;
+        self.trie.trie_delete(k)?;
         let new_trace = Self::get_trie_trace(&self.trie, &k);
 
         if let Some(branch_collapse_key) =
@@ -245,16 +246,51 @@ impl Trie for MptTrie {
         Ok(())
     }
 
-    fn trie_create_trie_subset<K>(
+    fn trie_create_trie_subset(
         &self,
-        ks: impl Iterator<Item = K>,
+        ks: impl Iterator<Item = Nibbles>,
         trie_type: TrieType,
     ) -> TraceDecodingResult<Self>
     where
-        K: Into<Nibbles>,
         Self: Sized,
     {
-        create_trie_subset(&self.trie, ks)
+        self.trie.trie_create_trie_subset(ks, trie_type).map(|t| t.into())
+    }
+
+    fn trie_hash(&self) -> TrieRootHash {
+        self.trie.trie_hash()
+    }
+}
+
+impl Trie for HashedPartialTrie {
+    fn trie_contains(&self, k: Nibbles) -> bool {
+        // TODO: Replace with `trie.contains` once we add that function to the
+        // `mpt_trie`...
+        self.get(k).is_some()
+    }
+
+    fn trie_get(&self, k: Nibbles) -> Option<&[u8]> {
+        self.get(k)
+    }
+
+    fn trie_insert<V: Into<decoding::NodeInsertType>>(&mut self, k: Nibbles, v: V)
+        -> TraceDecodingResult<()> {
+        self.insert(k, v.into()).map_err(|err| TraceDecodingError::new(TraceDecodingErrorReason::TrieOpError(err)))
+    }
+
+    fn trie_delete(&mut self, k: Nibbles) -> TraceDecodingResult<()> {
+        self.delete(k)?;
+        Ok(())
+    }
+
+    fn trie_create_trie_subset(
+        &self,
+        ks: impl Iterator<Item = Nibbles>,
+        trie_type: TrieType,
+    ) -> TraceDecodingResult<Self>
+    where
+        Self: Sized {
+        create_trie_subset(self, ks)
             .map_err(|err| {
                 let key = match err {
                     SubsetTrieError::UnexpectedKey(key, _) => key,
@@ -268,7 +304,7 @@ impl Trie for MptTrie {
     }
 
     fn trie_hash(&self) -> TrieRootHash {
-        self.trie.hash()
+        self.hash()
     }
 }
 
@@ -325,72 +361,30 @@ impl MptTrie {
     }
 }
 
-impl Trie for HashedPartialTrie {
-    fn trie_contains(&self, k: Nibbles) -> TraceDecodingResult<bool> {
-        todo!()
-    }
-
-    fn trie_get(&self, k: Nibbles) -> Option<&[u8]> {
-        todo!()
-    }
-
-    fn trie_insert<V: Into<decoding::NodeInsertType>>(
-        &mut self,
-        k: Nibbles,
-        v: V,
-    ) -> TraceDecodingResult<()> {
-        todo!()
-    }
-
-    fn trie_delete(&mut self, k: Nibbles) -> TraceDecodingResult<()> {
-        todo!()
-    }
-
-    fn trie_create_trie_subset<K>(
-        &self,
-        ks: impl Iterator<Item = K>,
-        trie_type: TrieType,
-    ) -> TraceDecodingResult<Self>
-    where
-        K: Into<Nibbles>,
-        Self: Sized,
-    {
-        todo!()
-    }
-
-    fn trie_hash(&self) -> TrieRootHash {
-        todo!()
-    }
-}
-
 impl GenIr for GenerationInputs {
     type TrieRoots = TrieRoots;
 
+    type StateTrieRef = HashedPartialTrie;
     type StateTrie = MptTrie;
 
     fn get_signed_txn(&self) -> Option<&[u8]> {
-        todo!()
+        self.signed_txn.as_deref()
     }
 
     fn get_withdrawals_mut(&mut self) -> &mut Vec<(Address, U256)> {
-        todo!()
+        &mut self.withdrawals
     }
 
-    fn get_state_trie_mut(&mut self) -> &mut Self::StateTrie {
-        todo!()
+    fn get_state_trie_ref<'a>(&'a self) -> &'a Self::StateTrieRef {
+        &self.tries.state_trie
     }
 
-    fn get_trie_roots_mut(&mut self) -> &mut TrieRoots {
-        todo!()
+    fn set_state_trie(&mut self, trie: Self::StateTrieRef) {
+        self.tries.state_trie = trie
     }
-}
 
-impl MptProcessedBlockTrace {
-    pub(crate) fn into_proof_gen_mpt_ir(
-        self,
-        other_data: OtherBlockData,
-    ) -> TraceDecodingResult<Vec<GenerationInputs>> {
-        todo!()
+    fn get_final_trie_roots_mut(&mut self) -> &mut TrieRoots {
+        &mut self.trie_roots_after
     }
 }
 
