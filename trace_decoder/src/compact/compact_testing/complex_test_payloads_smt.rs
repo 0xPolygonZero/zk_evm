@@ -1,7 +1,9 @@
 use keccak_hash::H256;
 use smt_trie::utils::hashout2u;
 
-use super::{compact_processing_common::ProcessedCompactOutput, compact_smt_processing::SmtPreImageProcessing, compact_to_smt_trie::SmtStateTrieExtractionOutput, complex_test_payloads::{ProcessedCompactPrestateFn, TestProtocolInputAndRoot}};
+use crate::compact::{compact_processing_common::ProcessedCompactOutput, compact_smt_processing::SmtPreImageProcessing, compact_to_smt_trie::SmtStateTrieExtractionOutput};
+
+use super::complex_test_payloads::{ProcessedCompactPrestateFn, TestProtocolInputAndRoot};
 
 type ProcessSmtCompactPrestateFn =
     ProcessedCompactPrestateFn<Vec<u8>, SmtStateTrieExtractionOutput>;
@@ -151,7 +153,7 @@ impl TestProtocolInputAndRoot {
 
 #[cfg(test)]
 mod tests {
-    use crate::compact::complex_test_payloads::init;
+    use crate::compact::compact_testing::complex_test_payloads::init;
 
     use super::{SMT_TEST_PAYLOAD_1, SMT_TEST_PAYLOAD_10, SMT_TEST_PAYLOAD_11, SMT_TEST_PAYLOAD_12, SMT_TEST_PAYLOAD_13, SMT_TEST_PAYLOAD_14, SMT_TEST_PAYLOAD_15, SMT_TEST_PAYLOAD_16, SMT_TEST_PAYLOAD_17, SMT_TEST_PAYLOAD_18, SMT_TEST_PAYLOAD_19, SMT_TEST_PAYLOAD_2, SMT_TEST_PAYLOAD_20, SMT_TEST_PAYLOAD_21, SMT_TEST_PAYLOAD_22, SMT_TEST_PAYLOAD_23, SMT_TEST_PAYLOAD_24, SMT_TEST_PAYLOAD_25, SMT_TEST_PAYLOAD_3, SMT_TEST_PAYLOAD_4, SMT_TEST_PAYLOAD_5, SMT_TEST_PAYLOAD_6, SMT_TEST_PAYLOAD_7, SMT_TEST_PAYLOAD_8, SMT_TEST_PAYLOAD_9};
 

@@ -2,14 +2,8 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::PartialTrie;
 use smt_trie::utils::hashout2u;
 
-use super::{
-    compact_processing_common::{key_bytes_to_nibbles, CompactParsingResult, Header, ProcessedCompactOutput},
-};
 use crate::{
-    aliased_crate_types::AccountRlp,
-    protocol_processing::ProtocolPreImageProcessing,
-    types::{HashedAccountAddr, TrieRootHash, EMPTY_TRIE_HASH},
-    utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie},
+    aliased_crate_types::AccountRlp, compact::compact_processing_common::{CompactParsingResult, Header, ProcessedCompactOutput}, protocol_processing::ProtocolPreImageProcessing, types::{HashedAccountAddr, TrieRootHash, EMPTY_TRIE_HASH}, utils::{print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie}
 };
 
 pub(super) type ProcessedCompactPrestateFn<T, U> = fn(T) -> CompactParsingResult<ProcessedCompactOutput<U>>;
@@ -36,7 +30,7 @@ pub(super) fn init() {
 #[cfg(test)]
 pub(super) fn h_decode_key(h_bytes: &str) -> mpt_trie::nibbles::Nibbles {
     let bytes = hex::decode(h_bytes).unwrap();
-    key_bytes_to_nibbles(&bytes)
+    crate::compact::compact_processing_common::key_bytes_to_nibbles(&bytes)
 }
 
 #[cfg(test)]
