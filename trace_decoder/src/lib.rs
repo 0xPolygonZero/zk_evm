@@ -74,13 +74,13 @@
 //! vector of IRs, one must call the method
 //! [into_txn_proof_gen_ir](BlockTrace::into_txn_proof_gen_ir):
 //! ```ignore
-//! pub fn into_txn_proof_gen_ir<F>(
+//! pub fn mpt_into_txn_proof_gen_ir<F>(
 //!     self,
 //!     // Specifies the way code hashes should be dealt with.
 //!     p_meta: &ProcessingMeta<F>,
 //!     // Extra data needed for proof generation.
 //!     other_data: OtherBlockData,
-//! ) -> TraceParsingResult<Vec<GenerationInputs>>
+//! ) -> TraceDecodingResult<Vec<GenerationInputs>>
 //! ```
 //!
 //! It first preprocesses the [BlockTrace] to provide transaction,
@@ -116,17 +116,39 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+use cfg_if::cfg_if;
+
+#[cfg(not(any(feature = "mpt", feature = "smt")))]
+compile_error! {"Either the \"mpt\" or \"smt\" feature (but not both) must be enabled"}
+
+#[cfg(all(feature = "mpt", feature = "smt"))]
+compile_error! {"The features \"mpt\" and \"smt\" are mutually exclusive and can not be enabled at the same time"}
+
+mod aliased_crate_types;
 /// Provides debugging tools and a compact representation of state and storage
 /// tries, used in tests.
 pub mod compact;
 /// Defines the main functions used to generate the IR.
 pub mod decoding;
 mod deserializers;
-/// Defines functions that processes a [BlockTrace] so that it is easier to turn
-/// the block transactions into IRs.
-pub mod processed_block_trace;
+
+/// Core logic shared between mpt/smt versions of processing block traces.
+mod processed_block_trace;
+
+pub mod protocol_processing;
+
 pub mod trace_protocol;
 /// Defines multiple types used in the other modules.
 pub mod types;
 /// Defines useful functions necessary to the other modules.
 pub mod utils;
+
+cfg_if! {
+    if #[cfg(feature = "mpt")] {
+        mod decoding_mpt;
+        pub mod processed_block_trace_mpt;
+    } else if #[cfg(feature = "smt")] {
+        mod decoding_smt;
+        pub mod processed_block_trace_smt;
+    }
+}

@@ -84,7 +84,7 @@ pub enum BytesToNibblesError {
     TooManyBytes(usize),
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 /// Errors encountered when converting to hex prefix encoding to nibbles.
 pub enum FromHexPrefixError {
     #[error("Tried to convert a hex prefix byte string into `Nibbles` with invalid flags at the start: {0:#04b}")]

@@ -2,6 +2,7 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use log::trace;
 use mpt_trie::{
+    nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
     trie_ops::ValOrHash,
 };
@@ -52,4 +53,18 @@ pub(crate) fn optional_field<T: std::fmt::Debug>(label: &str, value: Option<T>) 
 
 pub(crate) fn optional_field_hex<T: std::fmt::UpperHex>(label: &str, value: Option<T>) -> String {
     value.map_or(String::new(), |v| format!("{}: 0x{:064X}\n", label, v))
+}
+
+/// Converts `[`Nibbles`]` to an [`H256`].
+///
+/// Note that this is meant to only be called on Nibbles that have all 64
+/// internal nibbles set, and will error if not all of them are used.
+pub(crate) fn nibbles_to_h256(n: &Nibbles) -> H256 {
+    // TODO: Have this return a `Result`...
+    assert!(
+        n.count >= 64,
+        "Attempted to create an H256 from `Nibbles` that had less than 64 nibbles!"
+    );
+
+    H256::from_slice(&n.bytes_be())
 }
