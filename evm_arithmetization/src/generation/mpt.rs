@@ -9,8 +9,11 @@ use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
+use super::linked_list::empty_list_mem;
+use super::prover_input::{ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE};
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;
+use crate::memory::segments::Segment;
 use crate::util::h2u;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
@@ -25,20 +28,9 @@ pub struct AccountRlp {
 
 #[derive(Clone, Debug)]
 pub struct TrieRootPtrs {
-    pub state_root_ptr: usize,
+    pub state_root_ptr: Option<usize>,
     pub txn_root_ptr: usize,
     pub receipt_root_ptr: usize,
-}
-
-pub struct StateAndStorageLeaves {
-    pub state_leaves: Vec<U256>,
-    pub storage_leaves: Vec<U256>,
-}
-
-pub struct TxnAndReceiptTries {
-    pub txn_root_ptr: usize,
-    pub receipt_root_ptr: usize,
-    pub trie_data: Vec<U256>,
 }
 
 impl Default for AccountRlp {
@@ -319,11 +311,6 @@ fn load_state_trie(
     }
 }
 
-// pub enum NodePtr {
-//     Inner(usize),
-//     Leaf(usize),
-// }
-
 fn get_state_and_storage_leaves(
     trie: &HashedPartialTrie,
     key: Nibbles,
@@ -394,21 +381,35 @@ fn get_state_and_storage_leaves(
 associated storage trie hash"
             );
 
-            state_leaves.push(nibbles.count.into());
-            state_leaves.push(
-                nibbles
-                    .try_into()
-                    .map_err(|_| ProgramError::IntegerTooLarge)?,
-            );
+            // The last leaf must point to the new one
+            let len = state_leaves.len();
+            state_leaves[len - 1] =
+                U256::from(Segment::AccountsLinkedList as usize + state_leaves.len());
+            // The nibbles are the address?
+            let address = nibbles
+                .try_into()
+                .map_err(|_| ProgramError::IntegerTooLarge)?;
+            state_leaves.push(address);
             // Set `value_ptr_ptr`.
             state_leaves.push((trie_data.len()).into());
+            // Set counter
+            state_leaves.push(0.into());
+            // Set the next node as the inital node
+            state_leaves.push((Segment::AccountsLinkedList as usize).into());
 
+            // Push the payload in the trie data
             trie_data.push(nonce);
             trie_data.push(balance);
             // The Storage pointer is only written in the trie
             trie_data.push(0.into());
+            log::debug!(
+                "code_hash = {:?} written at position = {:?}",
+                code_hash.into_uint(),
+                trie_data.len()
+            );
             trie_data.push(code_hash.into_uint());
             get_storage_leaves(
+                address,
                 storage_trie,
                 storage_leaves,
                 trie_data,
@@ -422,6 +423,7 @@ associated storage trie hash"
 }
 
 pub(crate) fn get_storage_leaves<F>(
+    address: U256,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<U256>,
     trie_data: &mut Vec<U256>,
@@ -434,27 +436,37 @@ where
         Node::Branch { children, value } => {
             // Now, load all children and update their pointers.
             for (i, child) in children.iter().enumerate() {
-                let child_ptr = get_storage_leaves(child, storage_leaves, trie_data, parse_value)?;
+                let child_ptr =
+                    get_storage_leaves(address, child, storage_leaves, trie_data, parse_value)?;
             }
 
             Ok(())
         }
 
         Node::Extension { nibbles, child } => {
-            get_storage_leaves(child, storage_leaves, trie_data, parse_value)?;
+            get_storage_leaves(address, child, storage_leaves, trie_data, parse_value)?;
 
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
-            storage_leaves.push(nibbles.count.into());
+            // The last leaf must point to the new one
+            let len = storage_leaves.len();
+            storage_leaves[len - 1] =
+                U256::from(Segment::StorageLinkedList as usize + storage_leaves.len());
+            // Write the address
+            storage_leaves.push(address);
+            // Write the key
             storage_leaves.push(
                 nibbles
                     .try_into()
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             );
-
-            // Set `value_ptr_ptr`.
-            storage_leaves.push((storage_leaves.len()).into());
+            // Write `value_ptr_ptr`.
+            storage_leaves.push((trie_data.len()).into());
+            // Write the counter
+            storage_leaves.push(0.into());
+            // Set the next node as the inital node
+            storage_leaves.push((Segment::StorageLinkedList as usize).into());
 
             let leaf = parse_value(value)?;
             trie_data.extend(leaf);
@@ -495,7 +507,7 @@ pub(crate) fn load_all_mpts(
     let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
 
     let trie_root_ptrs = TrieRootPtrs {
-        state_root_ptr,
+        state_root_ptr: Some(state_root_ptr),
         txn_root_ptr,
         receipt_root_ptr,
     };
@@ -505,9 +517,11 @@ pub(crate) fn load_all_mpts(
 
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     trie_inputs: &TrieInputs,
-) -> Result<(StateAndStorageLeaves, TxnAndReceiptTries), ProgramError> {
-    let mut state_leaves = vec![U256::zero()];
-    let mut storage_leaves = vec![U256::zero()];
+) -> Result<(TrieRootPtrs, Vec<U256>, Vec<U256>, Vec<U256>), ProgramError> {
+    let mut state_leaves =
+        empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList).to_vec();
+    let mut storage_leaves =
+        empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList).to_vec();
     let mut trie_data = vec![U256::zero()];
 
     let storage_tries_by_state_key = trie_inputs
@@ -519,6 +533,9 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
             (key, storage_trie)
         })
         .collect();
+
+    // TODO: Remove after checking correctness of linked lists
+    let state_root_ptr = load_state_mpt(trie_inputs, &mut trie_data)?;
 
     let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
         let mut parsed_txn = vec![U256::from(rlp.len())];
@@ -538,15 +555,14 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     );
 
     Ok((
-        StateAndStorageLeaves {
-            state_leaves,
-            storage_leaves,
-        },
-        TxnAndReceiptTries {
+        TrieRootPtrs {
+            state_root_ptr: Some(state_root_ptr),
             txn_root_ptr,
             receipt_root_ptr,
-            trie_data,
         },
+        state_leaves,
+        storage_leaves,
+        trie_data,
     ))
 }
 

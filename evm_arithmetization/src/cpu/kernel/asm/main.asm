@@ -37,7 +37,7 @@ global hash_initial_tries:
     // We initialize the segment length with 1 because the segment contains 
     // the null pointer `0` when the tries are empty.
     PUSH 1
-    %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)    %assert_eq
+     %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)    %assert_eq
     // stack: trie_data_len
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_BEFORE)      %assert_eq
     // stack: trie_data_len

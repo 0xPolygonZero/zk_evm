@@ -73,7 +73,11 @@ impl<F: Field> GenerationState<F> {
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let trie = input_fn.0[1].as_str();
         match trie {
-            "state" => Ok(U256::from(self.trie_root_ptrs.state_root_ptr)),
+            "state" => self
+                .trie_root_ptrs
+                .state_root_ptr
+                .ok_or(ProgramError::ProverInputError(InvalidInput))
+                .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
@@ -406,10 +410,22 @@ impl<F: Field> GenerationState<F> {
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
     fn run_next_insert_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
+        log::debug!(
+            "accounts linked list = {:?}",
+            self.get_accounts_linked_list()
+        );
+        log::debug!(
+            "trie data[58] = {:?}",
+            self.memory.contexts[0].segments[Segment::TrieData.unscale()].content[55..60].to_vec(),
+        );
         if let Some((ptr, _)) = self
             .get_accounts_linked_list()?
             .find(|(_, node)| node[0] > addr)
         {
+            log::debug!(
+                "found ptr = {:?}",
+                Segment::AccountsLinkedList as usize + ptr
+            );
             Ok(
                 ((Segment::AccountsLinkedList as usize + ptr) / ACCOUNTS_LINKED_LIST_NODE_SIZE)
                     .into(),

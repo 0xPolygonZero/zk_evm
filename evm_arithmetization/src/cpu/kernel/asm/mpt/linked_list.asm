@@ -98,7 +98,9 @@ global insert_account:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
     // stack: pred_ptr/4, addr, payload_ptr, retdest
+global debug_got_ptr:
     %get_valid_account_ptr
+global debug_valid_ptr:
     // stack: pred_ptr, addr, payload_ptr, retdest
     DUP1
     MLOAD_GENERAL
@@ -348,7 +350,6 @@ slot_found:
     %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
 
-global debug_insert_new_slot:
 insert_new_slot:
     // stack: pred_addr, pred_ptr, addr, key, payload_ptr, retdest
     POP
@@ -358,7 +359,6 @@ insert_new_slot:
     %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     DUP2
     MLOAD_GENERAL
-global debug_next_ptr:
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     // Check that this is not a deleted node
     DUP1
@@ -366,20 +366,17 @@ global debug_next_ptr:
     %assert_zero
     DUP1
     MLOAD_GENERAL
-global debug_next_addr:
     // stack: next_addr, next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     DUP1
     DUP6
     // Here, (addr > pred_addr) || (pred_ptr == @SEGMENT_ACCOUNTS_LINKED_LIST).
     // We should have (addr < next_addr), meaning the new value can be inserted between pred_ptr and next_ptr.
-global debug_before_lt:
     LT
     %jumpi(next_node_ok)
     // If addr <= next_addr, then it addr must be equal to next_addr
     // stack: next_addr, next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     DUP5
     %assert_eq
-global debug_after_assert_eq:
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     DUP1
     %increment
@@ -388,7 +385,6 @@ global debug_after_assert_eq:
     DUP6
     // The next key must be strictly larger
     %assert_lt
-global debug_next_node_ok:
 next_node_ok:
     // stack: next_addr, next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     POP
@@ -444,9 +440,7 @@ global remove_slot:
     // stack: addr, key, retdest
     PROVER_INPUT(linked_list::remove_slot)
     // stack: pred_ptr/5, addr, key, retdest
-global debug_before_valid_storage_ptr:
     %get_valid_slot_ptr
-global debug_after_valid_storage_ptr:
     // stack: pred_ptr, addr, key, retdest
     %add_const(4)
     // stack: next_ptr_ptr, addr, key, retdest
@@ -457,7 +451,6 @@ global debug_after_valid_storage_ptr:
     MLOAD_GENERAL
     // stack: next_addr, next_ptr, next_ptr_ptr, addr, key, retdest
     DUP4
-global debug_before_assert_eq:
     %assert_eq
     // stack: next_ptr, next_ptr_ptr, addr, key, retdest
     DUP1
@@ -465,7 +458,6 @@ global debug_before_assert_eq:
     MLOAD_GENERAL
     // stack: next_key, next_ptr, next_ptr_ptr, addr, key, retdest
     DUP5
-global debug_before_assert_eq_2:
     %assert_eq
     // stack: next_ptr, next_ptr_ptr, addr, key, retdest
     %add_const(4)
@@ -482,4 +474,11 @@ global debug_before_assert_eq_2:
     %pop2
     JUMP
 
-    
+%macro read_accounts_linked_list
+    %stack (addr) -> (addr, 0, %%after)
+    %addr_to_state_key
+    %jump(insert_account)
+%%after:
+    // stack: cold_access, account_ptr
+    POP
+%endmacro

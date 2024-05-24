@@ -14,9 +14,7 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
-use crate::generation::mpt::{
-    load_linked_lists_and_txn_and_receipt_mpts, StateAndStorageLeaves, TxnAndReceiptTries,
-};
+use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
@@ -152,6 +150,15 @@ pub(crate) trait State<F: Field> {
         let halt_offsets = self.get_halt_offsets();
 
         loop {
+            // TODO: remove!
+
+            log::debug!(
+                "chupalla = {:?}",
+                self.get_generation_state().memory.contexts[0].segments
+                    [Segment::TrieData.unscale()]
+                .content[58]
+            );
+
             let registers = self.get_registers();
             let pc = registers.program_counter;
 
@@ -324,22 +331,13 @@ impl<F: Field> GenerationState<F> {
         trie_roots_ptrs
     }
 
-    fn preinitialize_linked_list_and_txn_and_receipt_mpts(
+    fn preinitialize_linked_lists_and_txn_and_receipt_mpts(
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
-        let (
-            StateAndStorageLeaves {
-                state_leaves,
-                storage_leaves,
-            },
-            TxnAndReceiptTries {
-                txn_root_ptr,
-                receipt_root_ptr,
-                trie_data,
-            },
-        ) = load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
-            .expect("Invalid MPT data for preinitialization");
+        let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
+                .expect("Invalid MPT data for preinitialization");
 
         self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()].content =
             state_leaves.iter().map(|&val| Some(val)).collect();
@@ -348,12 +346,7 @@ impl<F: Field> GenerationState<F> {
         self.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
             trie_data.iter().map(|&val| Some(val)).collect();
 
-        TrieRootPtrs {
-            // TODO: Perhaps is safer to make state_root_ptr an Option
-            state_root_ptr: 0,
-            txn_root_ptr,
-            receipt_root_ptr,
-        }
+        trie_roots_ptrs
     }
 
     pub(crate) fn new(inputs: GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
@@ -372,13 +365,14 @@ impl<F: Field> GenerationState<F> {
             state_key_to_address: HashMap::new(),
             bignum_modmul_result_limbs,
             trie_root_ptrs: TrieRootPtrs {
-                state_root_ptr: 0,
+                state_root_ptr: Some(0),
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
         };
-        let trie_root_ptrs = state.preinitialize_mpts(&inputs.tries);
+        let trie_root_ptrs =
+            state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
 
         state.trie_root_ptrs = trie_root_ptrs;
         Ok(state)
@@ -459,7 +453,7 @@ impl<F: Field> GenerationState<F> {
             bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),
             withdrawal_prover_inputs: self.withdrawal_prover_inputs.clone(),
             trie_root_ptrs: TrieRootPtrs {
-                state_root_ptr: 0,
+                state_root_ptr: Some(0),
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },
