@@ -8,20 +8,24 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 use crate::cpu::columns::{CpuColumnsView, COL_MAP};
 
 /// List of opcode blocks
-///  Each block corresponds to exactly one flag, and each flag corresponds to
+/// Each block corresponds to exactly one flag, and each flag corresponds to
 /// exactly one block.  Each block of opcodes:
+///
 /// - is contiguous,
 /// - has a length that is a power of 2, and
 /// - its start index is a multiple of its length (it is aligned).
-///  These properties permit us to check if an opcode belongs to a block of
+///
+/// These properties permit us to check if an opcode belongs to a block of
 /// length 2^n by checking its top 8-n bits.
-///  Additionally, each block can be made available only to the user, only to
+///
+/// Additionally, each block can be made available only to the user, only to
 /// the kernel, or to both. This is mainly useful for making some instructions
 /// kernel-only, while still decoding to invalid for the user. We do this by
 /// making one kernel-only block and another user-only block. The exception is
 /// the PANIC instruction which is user-only without a corresponding kernel
 /// block. This makes the proof unverifiable when PANIC is executed in kernel
 /// mode, which is the intended behavior.
+///
 /// Note: invalid opcodes are not represented here. _Any_ opcode is permitted to
 /// decode to `is_invalid`. The kernel then verifies that the opcode was
 /// _actually_ invalid.

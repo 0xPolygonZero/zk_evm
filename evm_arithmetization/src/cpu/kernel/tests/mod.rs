@@ -259,6 +259,18 @@ impl<F: Field> Interpreter<F> {
         output
     }
 
+    pub(crate) const fn stack_len(&self) -> usize {
+        self.generation_state.registers.stack_len
+    }
+
+    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
+        if self.stack_len() > 0 {
+            Ok(self.generation_state.registers.stack_top)
+        } else {
+            Err(ProgramError::StackUnderflow)
+        }
+    }
+
     // Actually pushes in memory. Only used for tests.
     pub(crate) fn push(&mut self, x: U256) -> Result<(), ProgramError> {
         use crate::cpu::stack::MAX_USER_STACK_SIZE;

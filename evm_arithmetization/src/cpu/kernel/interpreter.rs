@@ -5,7 +5,6 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use core::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
@@ -346,31 +345,14 @@ impl<F: Field> Interpreter<F> {
         }
     }
 
+    // As this relies on the underlying `GenerationState` method, stacks containing
+    // more than 10 elements will be truncated. As such, new tests that would need
+    // to access more elements would require special handling.
     pub(crate) fn stack(&self) -> Vec<U256> {
-        match self.stack_len().cmp(&1) {
-            Ordering::Greater => {
-                let mut stack = self.generation_state.memory.contexts[self.context()].segments
-                    [Segment::Stack.unscale()]
-                .content
-                .iter()
-                .filter_map(|&opt_elt| opt_elt)
-                .collect::<Vec<_>>();
-                stack.truncate(self.stack_len() - 1);
-                stack.push(
-                    self.stack_top()
-                        .expect("The stack is checked to be nonempty"),
-                );
-                stack
-            }
-            Ordering::Equal => {
-                vec![self
-                    .stack_top()
-                    .expect("The stack is checked to be nonempty")]
-            }
-            Ordering::Less => {
-                vec![]
-            }
-        }
+        let mut stack = self.generation_state.stack();
+        stack.reverse();
+
+        stack
     }
 
     fn stack_segment_mut(&mut self) -> &mut Vec<Option<U256>> {
@@ -390,18 +372,6 @@ impl<F: Field> Interpreter<F> {
                 self.generation_state.registers.context,
                 BTreeSet::from([offset]),
             );
-        }
-    }
-
-    pub(crate) const fn stack_len(&self) -> usize {
-        self.generation_state.registers.stack_len
-    }
-
-    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
-        if self.stack_len() > 0 {
-            Ok(self.generation_state.registers.stack_top)
-        } else {
-            Err(ProgramError::StackUnderflow)
         }
     }
 
@@ -522,7 +492,10 @@ impl<F: Field> State<F> for Interpreter<F> {
     }
 
     fn get_stack(&self) -> Vec<U256> {
-        self.stack()
+        let mut stack = self.stack();
+        stack.reverse();
+
+        stack
     }
 
     fn get_halt_offsets(&self) -> Vec<usize> {
