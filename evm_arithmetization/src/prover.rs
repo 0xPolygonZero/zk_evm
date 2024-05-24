@@ -177,6 +177,7 @@ where
 /// - `trace_poly_values` are the trace values for each STARK.
 /// - `trace_commitments` are the trace polynomials commitments for each STARK.
 /// - `ctl_data_per_table` group all the cross-table lookup data for each STARK.
+///
 /// Each STARK uses its associated data to generate a proof.
 fn prove_with_commitments<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
