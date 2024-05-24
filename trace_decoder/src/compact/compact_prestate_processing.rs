@@ -14,7 +14,8 @@ use ethereum_types::{H256, U256};
 use log::trace;
 use mpt_trie::{
     nibbles::{FromHexPrefixError, Nibbles},
-    partial_trie::{HashedPartialTrie, PartialTrie},
+    partial_trie::HashedPartialTrie,
+    trie_ops::TrieOpError,
 };
 use serde::de::DeserializeOwned;
 use thiserror::Error;
@@ -26,7 +27,7 @@ use super::compact_to_partial_trie::{
 use crate::{
     decoding::TrieType,
     trace_protocol::TrieCompact,
-    types::{CodeHash, HashedAccountAddr, TrieRootHash},
+    types::{HashedAccountAddr, TrieRootHash},
 };
 
 /// Result alias for any error that can occur when processing encoded compact
@@ -120,10 +121,26 @@ pub enum CompactParsingError {
     /// Error when constructing a key from bytes.
     #[error("Unable to create key nibbles from bytes {0}")]
     KeyError(#[from] FromHexPrefixError),
+
+    /// Failure due to an incompatible version.
+    #[error("Incompatible version, expected: {0}, actual: {1}")]
+    IncompatibleVersion(u8, u8),
+
+    /// Failure due to a trie operation error.
+    #[error("Trie operation error: {0}")]
+    TrieOpError(TrieOpError),
 }
 
+impl From<TrieOpError> for CompactParsingError {
+    fn from(err: TrieOpError) -> Self {
+        CompactParsingError::TrieOpError(err)
+    }
+}
+
+/// Represents detailed error information about issues encountered
+/// while processing byte streams with a cursor.
 #[derive(Debug)]
-pub(crate) struct CursorBytesErrorInfo {
+pub struct CursorBytesErrorInfo {
     error_start_pos: usize,
     bad_bytes_hex: String,
 }
@@ -167,9 +184,12 @@ enum Opcode {
     EmptyRoot = 0x06,
 }
 
+/// Compact witness entry.
 #[derive(Clone, Debug, EnumAsInner)]
-pub(crate) enum WitnessEntry {
+pub enum WitnessEntry {
+    /// An instruction.
     Instruction(Instruction),
+    /// A node.
     Node(NodeEntry),
 }
 
@@ -182,15 +202,22 @@ impl Display for WitnessEntry {
     }
 }
 
-// TODO: Ignore `NEW_TRIE` for now...
+/// A type alias for a list of witness entries.
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum Instruction {
+pub enum Instruction {
+    /// A leaf node.
     Leaf(Nibbles, RawValue),
+    /// An extension node.
     Extension(Nibbles),
+    /// A branch node.
     Branch(BranchMask),
+    /// A hash node.
     Hash(HashValue),
+    /// A code node.
     Code(RawCode),
+    /// An account leaf node.
     AccountLeaf(Nibbles, Nonce, Balance, HasCode, HasStorage),
+    /// An empty root node.
     EmptyRoot,
 }
 
@@ -220,13 +247,20 @@ impl From<Instruction> for WitnessEntry {
     }
 }
 
+/// A node witness entry.
 #[derive(Clone, Debug)]
-pub(crate) enum NodeEntry {
+pub enum NodeEntry {
+    /// A branch node.
     Branch([Option<Box<NodeEntry>>; 16]),
+    /// A code node.
     Code(Vec<u8>),
+    /// An empty node.
     Empty,
+    /// A hash node.
     Hash(HashValue),
+    /// A leaf node.
     Leaf(Nibbles, LeafNodeData),
+    /// An extension node.
     Extension(Nibbles, Box<NodeEntry>),
 }
 
@@ -243,8 +277,9 @@ impl Display for NodeEntry {
     }
 }
 
+/// A value of a node data.
 #[derive(Clone, Debug)]
-pub(super) struct ValueNodeData(pub(super) Vec<u8>);
+pub struct ValueNodeData(pub(super) Vec<u8>);
 
 impl From<Vec<u8>> for ValueNodeData {
     fn from(v: Vec<u8>) -> Self {
@@ -252,15 +287,21 @@ impl From<Vec<u8>> for ValueNodeData {
     }
 }
 
+/// A leaf node data.
 #[derive(Clone, Debug)]
-pub(super) enum LeafNodeData {
+pub enum LeafNodeData {
+    /// A value node.
     Value(ValueNodeData),
+    /// An account node.
     Account(AccountNodeData),
 }
 
+/// An account node code.
 #[derive(Clone, Debug)]
-pub(super) enum AccountNodeCode {
+pub enum AccountNodeCode {
+    /// A code node.
     CodeNode(Vec<u8>),
+    /// A hash node.
     HashNode(TrieRootHash),
 }
 
@@ -276,12 +317,17 @@ impl From<TrieRootHash> for AccountNodeCode {
     }
 }
 
+/// An account node data.
 #[derive(Clone, Debug)]
-pub(super) struct AccountNodeData {
-    pub(super) nonce: Nonce,
-    pub(super) balance: Balance,
-    pub(super) storage_trie: Option<HashedPartialTrie>,
-    pub(super) account_node_code: Option<AccountNodeCode>,
+pub struct AccountNodeData {
+    /// The nonce of the account.
+    pub nonce: Nonce,
+    /// The balance of the account.
+    pub balance: Balance,
+    /// The storage trie of the account.
+    pub storage_trie: Option<HashedPartialTrie>,
+    /// The code of the account.
+    pub account_node_code: Option<AccountNodeCode>,
 }
 
 impl AccountNodeData {
@@ -300,9 +346,11 @@ impl AccountNodeData {
     }
 }
 
+/// A witness header.
 #[derive(Debug)]
-pub(crate) struct Header {
-    version: u8,
+pub struct Header {
+    /// The version of the witness.
+    pub version: u8,
 }
 
 impl Display for Header {
@@ -426,7 +474,7 @@ impl ParserState {
                         traverser,
                         NodeEntry::Extension(k, Box::new(node.clone())),
                     ),
-                    _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+                    _ => Self::invalid_witness_err(2, traverser),
                 }
             }
             WitnessEntry::Instruction(Instruction::Code(c)) => {
@@ -549,7 +597,7 @@ impl ParserState {
             WitnessEntry::Node(node) => {
                 Self::try_create_and_insert_partial_trie_from_node(&node, None, 2, traverser)
             }
-            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(2, traverser),
         }
     }
 
@@ -566,7 +614,7 @@ impl ParserState {
             WitnessEntry::Node(NodeEntry::Hash(h)) => {
                 Ok((2, Some(AccountNodeCode::HashNode(h)), None))
             }
-            _ => Self::invalid_witness_err(2, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(2, traverser),
         }
     }
 
@@ -593,7 +641,7 @@ impl ParserState {
                     traverser,
                 )
             }
-            _ => Self::invalid_witness_err(3, TraverserDirection::Backwards, traverser),
+            _ => Self::invalid_witness_err(3, traverser),
         }
     }
 
@@ -608,7 +656,7 @@ impl ParserState {
                 let s_trie_out = create_storage_partial_trie_from_compact_node(storage_root_node)?;
                 Ok((n, account_node_code, Some(s_trie_out.trie)))
             }
-            None => Self::invalid_witness_err(n, TraverserDirection::Backwards, traverser),
+            None => Self::invalid_witness_err(n, traverser),
         }
     }
 
@@ -621,24 +669,9 @@ impl ParserState {
 
     fn invalid_witness_err<T>(
         n: usize,
-        t_dir: TraverserDirection,
         traverser: &mut CollapsableWitnessEntryTraverser,
     ) -> CompactParsingResult<T> {
-        let adjacent_elems_buf = match t_dir {
-            TraverserDirection::Forwards => traverser.get_next_n_elems(n).cloned().collect(),
-            TraverserDirection::Backwards => traverser.get_prev_n_elems(n).cloned().collect(),
-            TraverserDirection::Both => {
-                let prev_elems = traverser.get_prev_n_elems(n);
-                let next_elems_including_curr = traverser.get_next_n_elems(n + 1);
-                let prev_elems_vec: Vec<_> = prev_elems.collect();
-
-                prev_elems_vec
-                    .into_iter()
-                    .chain(next_elems_including_curr)
-                    .cloned()
-                    .collect()
-            }
-        };
+        let adjacent_elems_buf = traverser.get_prev_n_elems(n).cloned().collect();
 
         Err(CompactParsingError::InvalidWitnessFormat(
             adjacent_elems_buf,
@@ -684,10 +717,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         Ok((header, self.instrs))
     }
 
-    // TODO: Look at removing code duplication...
-    // TODO: Move behind a feature flag...
-    // TODO: Fairly hacky...
-    // TODO: Replace `unwrap()`s with `Result`s?
+    #[allow(dead_code)]
     fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure(
         self,
     ) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
@@ -697,6 +727,7 @@ impl<C: CompactCursor> WitnessBytes<C> {
         (instr_and_bytes_buf.into(), res)
     }
 
+    #[allow(dead_code)]
     fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(
         mut self,
         instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,
@@ -814,9 +845,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
         let _ = Self::read_account_flag_field_if_present_or_default(flags.code_present, || {
             self.byte_cursor.read_t::<u64>("code size")
         })?;
-
-        // TODO: process actual storage trie probably? Wait until we know what is going
-        // on here.
 
         self.push_entry(Instruction::AccountLeaf(
             key,
@@ -1009,7 +1037,6 @@ impl CompactCursorFast {
 #[derive(Debug)]
 struct DebugCompactCursor(CompactCursorFast);
 
-// TODO: There are some decent opportunities to reduce code duplication here...
 impl CompactCursor for DebugCompactCursor {
     fn new(bytes: Vec<u8>) -> Self {
         Self(CompactCursorFast::new(bytes))
@@ -1136,8 +1163,6 @@ struct CollapsableWitnessEntryTraverser<'a> {
     entry_cursor: CursorMut<'a, WitnessEntry>,
 }
 
-// TODO: For now, lets just use pure values in the buffer, but we probably want
-// to switch over to references later...
 impl<'a> CollapsableWitnessEntryTraverser<'a> {
     fn advance(&mut self) {
         self.entry_cursor.move_next();
@@ -1186,15 +1211,6 @@ impl<'a> CollapsableWitnessEntryTraverser<'a> {
     }
 
     // Inclusive.
-    fn replace_next_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
-        for _ in 0..n {
-            self.entry_cursor.remove_current();
-        }
-
-        self.entry_cursor.insert_after(entry)
-    }
-
-    // Inclusive.
     fn replace_prev_n_entries_with_single_entry(&mut self, n: usize, entry: WitnessEntry) {
         for _ in 0..n {
             self.entry_cursor.remove_current();
@@ -1219,13 +1235,6 @@ const fn try_get_node_entry_from_witness_entry(entry: &WitnessEntry) -> Option<&
         WitnessEntry::Node(n_entry) => Some(n_entry),
         _ => None,
     }
-}
-
-#[derive(Debug)]
-enum TraverserDirection {
-    Forwards,
-    Backwards,
-    Both,
 }
 
 #[derive(Debug, Default)]
@@ -1284,6 +1293,7 @@ fn process_compact_prestate_common(
 
 // TODO: Move behind a feature flag just used for debugging (but probably not
 // `debug`)...
+#[allow(dead_code)]
 fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
@@ -1328,6 +1338,7 @@ impl Display for InstructionAndBytesParsedFromBuf {
 }
 
 // TODO: Also move behind a feature flag...
+#[allow(dead_code)]
 fn parse_to_instructions_and_bytes_for_instruction(
     bytes: Vec<u8>,
 ) -> (InstructionAndBytesParsedFromBuf, CompactParsingResult<()>) {
@@ -1336,7 +1347,6 @@ fn parse_to_instructions_and_bytes_for_instruction(
         .process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure()
 }
 
-// TODO: This could probably be made a bit faster...
 fn key_bytes_to_nibbles(bytes: &[u8]) -> Nibbles {
     let mut key = Nibbles::default();
 
@@ -1427,15 +1437,12 @@ fn get_bytes_from_cursor<C: CompactCursor>(cursor: &mut C, cursor_start_pos: u64
 
 #[cfg(test)]
 mod tests {
-    use mpt_trie::{nibbles::Nibbles, partial_trie::PartialTrie};
+    use mpt_trie::nibbles::Nibbles;
 
     use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
-    use crate::compact::{
-        compact_prestate_processing::ParserState,
-        complex_test_payloads::{
-            TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
-            TEST_PAYLOAD_6,
-        },
+    use crate::compact::complex_test_payloads::{
+        TEST_PAYLOAD_1, TEST_PAYLOAD_2, TEST_PAYLOAD_3, TEST_PAYLOAD_4, TEST_PAYLOAD_5,
+        TEST_PAYLOAD_6,
     };
 
     const SIMPLE_PAYLOAD_STR: &str = "01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012";
@@ -1451,23 +1458,6 @@ mod tests {
 
     fn h_decode(b_str: &str) -> Vec<u8> {
         hex::decode(b_str).unwrap()
-    }
-
-    // TODO: Refactor (or remove?) this test as it will crash when it tries to
-    // deserialize the trie leaves into `AccountRlp`...
-    #[test]
-    #[ignore]
-    fn simple_full() {
-        init();
-
-        let bytes = hex::decode(SIMPLE_PAYLOAD_STR).unwrap();
-        let (header, parser) = ParserState::create_and_extract_header(bytes).unwrap();
-
-        assert_eq!(header.version, 1);
-        let _ = match parser.parse() {
-            Ok(trie) => trie,
-            Err(err) => panic!("{}", err),
-        };
     }
 
     #[test]

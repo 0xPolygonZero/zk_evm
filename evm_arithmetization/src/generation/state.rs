@@ -30,7 +30,8 @@ use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::{TraceCheckpoint, Traces};
 use crate::witness::transition::{
-    decode, fill_op_flag, get_op_special_length, might_overflow_op, read_code_memory, Transition,
+    decode, fill_op_flag, get_op_special_length, log_kernel_instruction, might_overflow_op,
+    read_code_memory, Transition,
 };
 use crate::witness::util::{fill_channel_with_value, stack_peek};
 use crate::{arithmetic, keccak, logic};
@@ -309,16 +310,23 @@ pub(crate) trait State<F: Field> {
         (row, opcode)
     }
 
-    /// Logs `msg` in `debug` mode, in the interpreter.
-    fn log_debug(&self, _msg: String) {}
+    /// Logs `msg` in `debug` mode.
+    #[inline]
+    fn log_debug(&self, msg: String) {
+        log::debug!("{}", msg);
+    }
 
-    /// Logs `msg` in `info` mode, in the interpreter.
+    /// Logs `msg` in `info` mode.
+    #[inline]
     fn log_info(&self, msg: String) {
         log::info!("{}", msg);
     }
 
-    /// Logs `msg` at `level`, during witness generation.
-    fn log_log(&self, _level: Level, _msg: String) {}
+    /// Logs `msg` at `level`.
+    #[inline]
+    fn log(&self, level: Level, msg: String) {
+        log::log!(level, "{}", msg);
+    }
 }
 
 #[derive(Debug)]
@@ -580,6 +588,11 @@ impl<F: Field> State<F> for GenerationState<F> {
 
         let op = decode(registers, opcode)?;
 
+        if registers.is_kernel {
+            log_kernel_instruction(self, op);
+        } else {
+            self.log_debug(format!("User instruction: {:?}", op));
+        }
         fill_op_flag(op, &mut row);
 
         self.fill_stack_fields(&mut row)?;

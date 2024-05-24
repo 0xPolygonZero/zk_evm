@@ -302,11 +302,6 @@ impl<F: Field> GenerationState<F> {
         if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
         {
-            log::debug!(
-                "jumpdest_table_len = {:?}, ctx_jumpdest_table.len = {:?}",
-                jd_len,
-                ctx_jumpdest_table.len()
-            );
             Ok(next_jumpdest_proof.into())
         } else {
             Err(ProgramError::ProverInputError(

@@ -46,8 +46,8 @@ use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
     AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
-    MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget, TrieRoots,
-    TrieRootsTarget,
+    FinalPublicValues, MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget,
+    TrieRoots, TrieRootsTarget, TARGET_HASH_SIZE,
 };
 use crate::prover::{check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData};
 use crate::recursive_verifier::{
@@ -2023,7 +2023,7 @@ where
         opt_parent_block_proof: Option<&ProofWithPublicInputs<F, C, D>>,
         agg_root_proof: &ProofWithPublicInputs<F, C, D>,
         public_values: PublicValues,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, FinalPublicValues)> {
         let mut block_inputs = PartialWitness::new();
 
         block_inputs.set_bool_target(
@@ -2049,21 +2049,19 @@ where
             let mut nonzero_pis = HashMap::new();
 
             // Initialize the checkpoint block roots before, and state root after.
-            let state_trie_root_before_keys = 0..TrieRootsTarget::HASH_SIZE;
+            let state_trie_root_before_keys = 0..TARGET_HASH_SIZE;
             for (key, &value) in state_trie_root_before_keys
                 .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
             {
                 nonzero_pis.insert(key, value);
             }
-            let txn_trie_root_before_keys =
-                TrieRootsTarget::HASH_SIZE..TrieRootsTarget::HASH_SIZE * 2;
+            let txn_trie_root_before_keys = TARGET_HASH_SIZE..TARGET_HASH_SIZE * 2;
             for (key, &value) in txn_trie_root_before_keys.clone().zip_eq(&h256_limbs::<F>(
                 public_values.trie_roots_before.transactions_root,
             )) {
                 nonzero_pis.insert(key, value);
             }
-            let receipts_trie_root_before_keys =
-                TrieRootsTarget::HASH_SIZE * 2..TrieRootsTarget::HASH_SIZE * 3;
+            let receipts_trie_root_before_keys = TARGET_HASH_SIZE * 2..TARGET_HASH_SIZE * 3;
             for (key, &value) in receipts_trie_root_before_keys
                 .clone()
                 .zip_eq(&h256_limbs::<F>(
@@ -2073,7 +2071,7 @@ where
                 nonzero_pis.insert(key, value);
             }
             let state_trie_root_after_keys =
-                TrieRootsTarget::SIZE..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE;
+                TrieRootsTarget::SIZE..TrieRootsTarget::SIZE + TARGET_HASH_SIZE;
             for (key, &value) in state_trie_root_after_keys
                 .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
             {
@@ -2155,7 +2153,7 @@ where
         })?;
 
         let block_proof = self.block.circuit.prove(block_inputs)?;
-        Ok((block_proof, block_public_values))
+        Ok((block_proof, block_public_values.into()))
     }
 
     pub fn verify_block(&self, block_proof: &ProofWithPublicInputs<F, C, D>) -> anyhow::Result<()> {

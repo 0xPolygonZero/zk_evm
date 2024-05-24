@@ -6,7 +6,9 @@ use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::proof::{
+    BlockHashes, BlockMetadata, FinalPublicValues, PublicValues, TrieRoots,
+};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
 use log::info;
@@ -228,11 +230,8 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         all_circuits.prove_block(None, &txn_proof, txn_public_values)?;
     all_circuits.verify_block(&block_proof)?;
 
-    // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(
-        &block_proof.public_inputs,
-        block_public_values.mem_before.mem_cap.len(),
-    );
+    // Test retrieved final public values from the proof public inputs.
+    let retrieved_public_values = FinalPublicValues::from_public_inputs(&block_proof.public_inputs);
     assert_eq!(retrieved_public_values, block_public_values);
 
     // Get the verifier associated to these preprocessed circuits, and have it
