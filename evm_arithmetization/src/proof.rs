@@ -211,12 +211,12 @@ impl BlockMetadata {
             (pis[18].to_canonical_u64() + (pis[19].to_canonical_u64() << 32)).into();
         let block_gas_used = pis[20].to_canonical_u64().into();
         let block_blob_gas_used =
-            (pis[23].to_canonical_u64() + (pis[24].to_canonical_u64() << 32)).into();
+            (pis[21].to_canonical_u64() + (pis[22].to_canonical_u64() << 32)).into();
         let block_excess_blob_gas =
-            (pis[25].to_canonical_u64() + (pis[26].to_canonical_u64() << 32)).into();
-        let parent_beacon_block_root = get_h256(&pis[27..35]);
+            (pis[23].to_canonical_u64() + (pis[24].to_canonical_u64() << 32)).into();
+        let parent_beacon_block_root = get_h256(&pis[25..33]);
         let block_bloom =
-            core::array::from_fn(|i| h2u(get_h256(&pis[35 + 8 * i..35 + 8 * (i + 1)])));
+            core::array::from_fn(|i| h2u(get_h256(&pis[33 + 8 * i..33 + 8 * (i + 1)])));
 
         Self {
             block_beneficiary,
