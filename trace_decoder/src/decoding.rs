@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
-    iter::{self, once},
+    iter::once,
 };
 
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
@@ -645,10 +645,21 @@ impl ProcessedBlockTrace {
             // state accesses to the withdrawal addresses.
             let withdrawal_addrs =
                 withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
+
+            let additional_paths = if last_inputs.txn_number_before == 0.into() {
+                // We need to include the beacon roots contract as this is payload is at the
+                // start of the block execution.
+                vec![Nibbles::from_h256_be(H256(
+                    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
+                ))]
+            } else {
+                vec![]
+            };
+
             last_inputs.tries.state_trie = create_minimal_state_partial_trie(
                 &final_trie_state.state,
                 withdrawal_addrs,
-                iter::empty(),
+                additional_paths.into_iter(),
             )?;
         }
 
