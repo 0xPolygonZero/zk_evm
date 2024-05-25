@@ -257,11 +257,12 @@ impl ProcessedBlockTrace {
             .txn_info
             .into_iter()
             .map(|txn_info| {
+                let is_initial_payload = txn_idx == 0;
+
                 let current_idx = txn_idx;
                 if !txn_info.meta.is_dummy() {
                     txn_idx += 1;
                 }
-                let is_initial_payload = txn_idx == 0;
 
                 Self::process_txn_info(
                     current_idx,
