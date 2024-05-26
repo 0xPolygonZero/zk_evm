@@ -18,11 +18,17 @@ use trace_decoder::{
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 #[allow(clippy::large_enum_variant)]
-enum JerigonTrace {
+enum ZeroTrace {
     Result(TxnInfo),
     BlockWitness(BlockTraceTriePreImages),
 }
 
+/// When [fetching a block over RPC](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblockbynumber),
+/// we can choose the transaction format, between:
+/// - Full JSON.
+/// - Just the hash.
+///
+/// We only need the latter.
 const BLOCK_WITHOUT_FULL_TRANSACTIONS: bool = false;
 
 pub async fn prover_input<ProviderT, TransportT>(
@@ -37,7 +43,7 @@ where
     // Grab trace information
     /////////////////////////
     let traces = provider
-        .raw_request::<_, Vec<JerigonTrace>>(
+        .raw_request::<_, Vec<ZeroTrace>>(
             "debug_traceBlockByNumber".into(),
             (target_block_id, json!({"tracer": "zeroTracer"})),
         )
@@ -47,8 +53,8 @@ where
         traces
             .into_iter()
             .partition_map::<Vec<_>, Vec<_>, _, _, _>(|it| match it {
-                JerigonTrace::Result(it) => Either::Left(it),
-                JerigonTrace::BlockWitness(it) => Either::Right(it),
+                ZeroTrace::Result(it) => Either::Left(it),
+                ZeroTrace::BlockWitness(it) => Either::Right(it),
             });
 
     // Grab block info

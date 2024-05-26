@@ -7,16 +7,15 @@ use url::Url;
 
 #[derive(Parser)]
 pub enum Args {
-    /// Fetch and generate prover input from the RPC endpoint
+    /// Fetch and generate prover input from the RPC endpoint.
     Fetch {
-        /// The RPC URL
+        /// The RPC URL.
         #[arg(short = 'u', long, value_hint = ValueHint::Url)]
         rpc_url: Url,
-        /// The block number
+        /// The block number.
         #[arg(short, long)]
         block_number: BlockId,
-        /// The checkpoint block number
-        // TODO(aatifsyed): impl Display for alloy::..::BlockId
+        /// The checkpoint block number.
         #[arg(short, long, default_value = "0")]
         checkpoint_block_number: BlockId,
     },
