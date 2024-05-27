@@ -433,6 +433,15 @@ zero_hash:
     // stack: (empty)
 %endmacro
 
+// Faults if the given offset is "out of range", i.e. does not fit in a single memory limb.
+%macro ensure_offset_in_range
+    // stack: offset
+    %gt_const(0xffffffff)
+    // stack: is_overflow
+    %jumpi(fault_exception)
+    // stack: (empty)
+%endmacro
+
 // Convenience macro for checking if the current context is static.
 // Called before state-changing opcodes.
 %macro check_static

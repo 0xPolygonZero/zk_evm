@@ -112,7 +112,7 @@ calldataload_large_offset:
 codecopy_within_bounds:
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     POP
-wcopy_within_bounds:
+global wcopy_within_bounds:
     // TODO: rework address creation to have less stack manipulation overhead
     // stack: segment, src_ctx, kexit_info, dest_offset, offset, size
     GET_CONTEXT
@@ -123,17 +123,17 @@ wcopy_within_bounds:
     // stack: DST, SRC, size, wcopy_after, kexit_info
     %jump(memcpy_bytes)
 
-wcopy_empty:
+global wcopy_empty:
     // stack: Gverylow, kexit_info, dest_offset, offset, size
     %charge_gas
     %stack (kexit_info, dest_offset, offset, size) -> (kexit_info)
     EXIT_KERNEL
 
 
-codecopy_large_offset:
+global codecopy_large_offset:
     // stack: total_size, src_ctx, kexit_info, dest_offset, offset, size
     %pop2
-wcopy_large_offset:
+global wcopy_large_offset:
     // offset is larger than the size of the {CALLDATA,CODE,RETURNDATA}. So we just have to write zeros.
     // stack: kexit_info, dest_offset, offset, size
     GET_CONTEXT
@@ -142,7 +142,7 @@ wcopy_large_offset:
     %build_address
     %jump(memset)
 
-wcopy_after:
+global wcopy_after:
     // stack: kexit_info
     EXIT_KERNEL
 
@@ -225,6 +225,12 @@ global sys_mcopy:
     // stack: kexit_info, dest_offset, offset, size
     %wcopy_charge_gas
 
+    // stack: kexit_info, dest_offset, offset, size
+    DUP2
+    %ensure_offset_in_range
+    DUP3
+    %ensure_offset_in_range
+
     %stack (kexit_info, dest_offset, offset, size) -> (dest_offset, size, kexit_info, dest_offset, offset, size)
     %add_or_fault
     // stack: expanded_num_bytes, kexit_info, dest_offset, offset, size, kexit_info
@@ -255,7 +261,7 @@ global sys_mcopy:
     // stack: segment, context, kexit_info, dest_offset, offset, size
     %jump(wcopy_within_bounds)
 
-mcopy_with_overlap:
+global mcopy_with_overlap:
     // We do have an overlap between the SRC and DST ranges. We will first copy the overlapping segment
     // (i.e. end of the copy portion), then copy the remaining (i.e. beginning) portion. 
 
