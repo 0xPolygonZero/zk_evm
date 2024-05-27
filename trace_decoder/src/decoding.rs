@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
-    iter::{self, once},
+    iter::once,
 };
 
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
@@ -256,13 +256,13 @@ impl ProcessedBlockTrace {
         let mut txn_gen_inputs = self
             .txn_info
             .into_iter()
-            .enumerate()
-            .map(|(idx, txn_info)| {
+            .map(|txn_info| {
+                let is_initial_payload = txn_idx == 0;
+
                 let current_idx = txn_idx;
                 if !txn_info.meta.is_dummy() {
                     txn_idx += 1;
                 }
-                let is_initial_payload = idx == 0;
 
                 Self::process_txn_info(
                     current_idx,
@@ -645,10 +645,21 @@ impl ProcessedBlockTrace {
             // state accesses to the withdrawal addresses.
             let withdrawal_addrs =
                 withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
+
+            let additional_paths = if last_inputs.txn_number_before == 0.into() {
+                // We need to include the beacon roots contract as this payload is at the
+                // start of the block execution.
+                vec![Nibbles::from_h256_be(H256(
+                    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
+                ))]
+            } else {
+                vec![]
+            };
+
             last_inputs.tries.state_trie = create_minimal_state_partial_trie(
                 &final_trie_state.state,
                 withdrawal_addrs,
-                iter::empty(),
+                additional_paths.into_iter(),
             )?;
         }
 
@@ -716,7 +727,7 @@ impl ProcessedBlockTrace {
         );
         // For each non-dummy txn, we increment `txn_number_after` by 1, and
         // update `gas_used_after` accordingly.
-        extra_data.txn_number_after += U256::one();
+        extra_data.txn_number_after += U256::from(!txn_info.meta.is_dummy() as u8);
         extra_data.gas_used_after += txn_info.meta.gas_used.into();
 
         // Because we need to run delta application before creating the minimal
@@ -772,7 +783,7 @@ impl ProcessedBlockTrace {
 
         // After processing a transaction, we update the remaining accumulators
         // for the next transaction.
-        extra_data.txn_number_before += U256::one();
+        extra_data.txn_number_before = extra_data.txn_number_after;
         extra_data.gas_used_before = extra_data.gas_used_after;
 
         Ok(gen_inputs)
