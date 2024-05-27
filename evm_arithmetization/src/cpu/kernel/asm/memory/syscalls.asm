@@ -225,15 +225,14 @@ global sys_mcopy:
     // stack: kexit_info, dest_offset, offset, size
     %wcopy_charge_gas
 
-    // stack: kexit_info, dest_offset, offset, size
-    DUP2
-    %ensure_offset_in_range
-    DUP3
-    %ensure_offset_in_range
-
     %stack (kexit_info, dest_offset, offset, size) -> (dest_offset, size, kexit_info, dest_offset, offset, size)
     %add_or_fault
     // stack: expanded_num_bytes, kexit_info, dest_offset, offset, size, kexit_info
+    DUP1 %ensure_reasonable_offset
+    %update_mem_bytes
+
+    %stack (kexit_info, dest_offset, offset, size) -> (offset, size, kexit_info, dest_offset, offset, size)
+    %add_or_fault
     DUP1 %ensure_reasonable_offset
     %update_mem_bytes
 
