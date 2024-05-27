@@ -34,16 +34,17 @@ global main:
 global hash_initial_tries:
     // We compute the length of the trie data segment in `mpt_hash` so that we
     // can check the value provided by the prover.
-    // We initialize the segment length with 1 because the segment contains 
-    // the null pointer `0` when the tries are empty.
-    PUSH 1
-     %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)    %assert_eq
+    // The trie data segment is already written by the linked lists
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+    %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)    %assert_eq
     // stack: trie_data_len
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_BEFORE)      %assert_eq
     // stack: trie_data_len
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_BEFORE)  %assert_eq
     // stack: trie_data_full_len
+global debug_before_the_55:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+global debug_after_the_55:
 
 global start_txn:
     // stack: (empty)

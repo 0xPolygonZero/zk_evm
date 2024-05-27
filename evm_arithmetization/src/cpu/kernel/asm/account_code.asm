@@ -33,6 +33,7 @@ global debug_ll_addr:
     %add_const(3)
     %mload_trie_data
     // stack: ll_code_hash, address, retdest
+global debug_addr_from_ll:
     SWAP1
     %mpt_read_state_trie
     DUP1

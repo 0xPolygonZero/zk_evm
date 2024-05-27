@@ -537,6 +537,11 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     // TODO: Remove after checking correctness of linked lists
     let state_root_ptr = load_state_mpt(trie_inputs, &mut trie_data)?;
 
+    log::debug!(
+        "trie_data size after loading state_mpt = {:?}",
+        trie_data.len()
+    );
+
     let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
         let mut parsed_txn = vec![U256::from(rlp.len())];
         parsed_txn.extend(rlp.iter().copied().map(U256::from));

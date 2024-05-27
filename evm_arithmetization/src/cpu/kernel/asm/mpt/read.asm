@@ -5,6 +5,7 @@ global mpt_read_state_trie:
     // stack: addr, retdest
     %addr_to_state_key
     // stack: key, retdest
+global debug_mpt_read_state_trie_state_key:
     PUSH 64 // num_nibbles
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT) // node_ptr
     // stack: node_ptr, num_nibbles, key, retdest

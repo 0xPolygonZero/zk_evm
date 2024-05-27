@@ -5,6 +5,7 @@ global transfer_eth:
     // stack: from, to, amount, retdest
     %stack (from, to, amount, retdest)
         -> (from, amount, to, amount, retdest)
+global debug_o_sera_aca:
     %deduct_eth
     // stack: deduct_eth_status, to, amount, retdest
     %jumpi(transfer_eth_failure)

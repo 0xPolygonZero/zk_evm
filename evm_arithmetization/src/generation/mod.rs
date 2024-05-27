@@ -178,6 +178,13 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
                     .len())
             .into(),
         ),
+        (
+            GlobalMetadata::TrieDataSize,
+            state.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                .content
+                .len()
+                .into(),
+        ),
     ];
 
     let channel = MemoryChannel::GeneralPurpose(0);
@@ -223,7 +230,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 
 pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
     log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
-    log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
+    log::debug!("Input state_trie: {:#?}", &inputs.tries.state_trie);
     log::debug!(
         "Input transactions_trie: {:?}",
         &inputs.tries.transactions_trie

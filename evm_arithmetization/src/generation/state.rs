@@ -13,6 +13,7 @@ use super::TrieInputs;
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
@@ -152,12 +153,18 @@ pub(crate) trait State<F: Field> {
         loop {
             // TODO: remove!
 
-            log::debug!(
-                "chupalla = {:?}",
-                self.get_generation_state().memory.contexts[0].segments
-                    [Segment::TrieData.unscale()]
-                .content[58]
-            );
+            // log::debug!(
+            //     "content[1] = {:?}, content[58] = {:?} \n trie_data_size = {:?}",
+            //     self.get_generation_state().memory.contexts[0].segments
+            //         [Segment::TrieData.unscale()]
+            //     .content[1],
+            //     self.get_generation_state().memory.contexts[0].segments
+            //         [Segment::TrieData.unscale()]
+            //     .content[58],
+            //     self.get_generation_state().memory.contexts[0].segments
+            //         [Segment::GlobalMetadata.unscale()]
+            //     .get(GlobalMetadata::TrieDataSize.unscale())
+            // );
 
             let registers = self.get_registers();
             let pc = registers.program_counter;
