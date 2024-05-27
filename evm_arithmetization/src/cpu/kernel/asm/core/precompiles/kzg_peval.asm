@@ -53,6 +53,9 @@ global precompile_kzg_peval:
 global verify_kzg_proof:
     // stack: versioned_hash, z, y, comm_hi, comm_lo, proof_hi, proof_lo, base_addr, kexit_info
     PROVER_INPUT(kzg_point_eval)
+    DUP1 ISZERO
+    // stack: is_invalid, res_hi, versioned_hash, z, y, comm_hi, comm_lo, proof_hi, proof_lo, base_addr, kexit_info
+    %jumpi(fault_exception)
     PROVER_INPUT(kzg_point_eval_2)
     // stack: res_lo, res_hi, versioned_hash, z, y, comm_hi, comm_lo, proof_hi, proof_lo, base_addr, kexit_info
     %stack (res_lo, res_hi, versioned_hash, z, y, comm_hi, comm_lo, proof_hi, proof_lo, base_addr, kexit_info) ->
