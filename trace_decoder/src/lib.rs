@@ -129,8 +129,6 @@ mod deserializers;
 /// Core logic shared between mpt/smt versions of processing block traces.
 mod processed_block_trace;
 
-mod code_hash_resolver;
-
 /// Defines functions that processes a [BlockTrace] into the mpt format so that
 /// it is easier to turn the block transactions into IRs.
 pub mod processed_block_trace_mpt;

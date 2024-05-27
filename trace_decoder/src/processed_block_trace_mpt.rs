@@ -8,11 +8,10 @@ use evm_arithmetization_mpt::GenerationInputs;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::PartialTrie;
 
-use crate::code_hash_resolver::CodeHashResolver;
 use crate::compact::compact_prestate_processing::{
     MptPartialTriePreImages, ProcessedCompactOutput,
 };
-use crate::decoding_mpt::TxnMetaState;
+use crate::decoding_mpt::{CodeHashResolver, TxnMetaState};
 use crate::processed_block_trace::ProcessedBlockTrace;
 use crate::protocol_processing::{
     process_mpt_block_trace_trie_pre_images, TraceProtocolDecodingResult,
@@ -42,11 +41,11 @@ impl BlockTrace {
     /// block.
     pub fn into_proof_gen_mpt_ir<F>(
         self,
-        c_resolve: &dyn CodeHashResolveFunc,
+        c_resolve: &CodeHashResolveFunc,
         other_data: OtherBlockData,
     ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
-        F: CodeHashResolveFunc,
+        F: CodeHashResolver,
     {
         let processed_block_trace =
             self.into_mpt_processed_block_trace(c_resolve, other_data.b_data.withdrawals.clone())?;
@@ -58,7 +57,7 @@ impl BlockTrace {
 
     fn into_mpt_processed_block_trace(
         self,
-        c_resolve: &dyn CodeHashResolveFunc,
+        c_resolve: &CodeHashResolveFunc,
         withdrawals: Vec<(Address, U256)>,
     ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace> {
         // The compact format is able to provide actual code, so if it does, we should
@@ -167,28 +166,6 @@ impl From<ProcessedCompactOutput> for MptProcessedBlockTracePreImages {
         }
     }
 }
-
-// /// Structure storing a function turning a `CodeHash` into bytes.
-// #[derive(Debug)]
-// pub struct ProcessingMeta<F>
-// where
-//     F: CodeHashResolveFunc,
-// {
-//     resolve_code_hash_fn: F,
-// }
-
-// impl<F> ProcessingMeta<F>
-// where
-//     F: CodeHashResolveFunc,
-// {
-//     /// Returns a `ProcessingMeta` given the provided code hash resolving
-//     /// function.
-//     pub const fn new(resolve_code_hash_fn: F) -> Self {
-//         Self {
-//             resolve_code_hash_fn,
-//         }
-//     }
-// }
 
 #[derive(Debug)]
 pub(crate) enum ProcessedSectionInfo {

@@ -6,7 +6,7 @@ use ethereum_types::{Address, U256};
 use crate::types::CodeHash;
 use crate::{
     aliased_crate_types::SmtGenerationInputs,
-    code_hash_resolver::CodeHashResolver,
+    decoding_mpt::CodeHashResolver,
     decoding_smt::SmtTraceParsingResult,
     processed_block_trace::ProcessedBlockTrace,
     trace_protocol::BlockTrace,
@@ -60,11 +60,11 @@ impl BlockTrace {
     /// block.
     pub fn smt_into_proof_gen_ir<F>(
         self,
-        c_resolve: &dyn CodeHashResolveFunc,
+        c_resolve: &CodeHashResolveFunc,
         other_data: OtherBlockData,
     ) -> SmtTraceParsingResult<Vec<SmtGenerationInputs>>
     where
-        F: CodeHashResolveFunc,
+        F: CodeHashResolver,
     {
         let processed_block_trace =
             self.into_smt_processed_block_trace(c_resolve, other_data.b_data.withdrawals.clone())?;
@@ -74,7 +74,7 @@ impl BlockTrace {
 
     fn into_smt_processed_block_trace(
         self,
-        c_resolve: &dyn CodeHashResolveFunc,
+        c_resolve: &CodeHashResolveFunc,
         withdrawals: Vec<(Address, U256)>,
     ) -> SmtTraceParsingResult<SmtProcessedBlockTrace> {
         let _ = c_resolve;
