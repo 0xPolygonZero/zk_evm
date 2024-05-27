@@ -1672,9 +1672,8 @@ where
     /// # Arguments
     ///
     /// - `opt_parent_txn_proof`: an optional parent transaction proof. Passing
-    ///   one will generate a proof of
-    /// validity for both the transaction range covered by the previous proof
-    /// and the current transaction.
+    ///   one will generate a proof of validity for both the transaction range
+    ///   covered by the previous proof and the current transaction.
     /// - `agg_proof`: the final aggregation proof containing all segments
     ///   within the current transaction.
     /// - `public_values`: the public values associated to the aggregation
