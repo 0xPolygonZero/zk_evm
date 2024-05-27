@@ -17,7 +17,6 @@ global init_access_lists:
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_DATA_COST)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_START)
-    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
     
     // Store @U256_MAX at the beggining of the segment
     PUSH @SEGMENT_ACCESSED_ADDRESSES // ctx == virt == 0
