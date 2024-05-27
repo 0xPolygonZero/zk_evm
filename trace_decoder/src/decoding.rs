@@ -311,7 +311,10 @@ impl ProcessedBlockTrace {
         let timestamp = rlp::encode(&block_data.block_timestamp).to_vec();
 
         let root_idx = timestamp_idx + HISTORY_BUFFER_LENGTH_MOD;
-        let calldata = rlp::encode(&block_data.parent_beacon_block_root).to_vec();
+        let calldata = rlp::encode(&U256::from_big_endian(
+            &block_data.parent_beacon_block_root.0,
+        ))
+        .to_vec();
 
         let storage_trie = trie_state
             .storage
