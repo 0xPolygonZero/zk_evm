@@ -386,7 +386,7 @@ associated storage trie hash"
             state_leaves[len - 1] =
                 U256::from(Segment::AccountsLinkedList as usize + state_leaves.len());
             // The nibbles are the address?
-            let address = nibbles
+            let address = merged_key
                 .try_into()
                 .map_err(|_| ProgramError::IntegerTooLarge)?;
             state_leaves.push(address);

@@ -40,7 +40,7 @@ pub(crate) fn initialize_mpts<F: Field>(
         MemoryAddress::new_bundle((GlobalMetadata::TrieDataSize as usize).into()).unwrap();
 
     let to_set = [
-        (state_addr, trie_root_ptrs.state_root_ptr.into()),
+        (state_addr, trie_root_ptrs.state_root_ptr.unwrap().into()),
         (txn_addr, trie_root_ptrs.txn_root_ptr.into()),
         (receipts_addr, trie_root_ptrs.receipt_root_ptr.into()),
         (len_addr, trie_data.len().into()),

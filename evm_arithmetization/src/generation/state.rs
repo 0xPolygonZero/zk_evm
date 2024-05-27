@@ -6,6 +6,7 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
+use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::types::Field;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
@@ -17,6 +18,7 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
+use crate::generation::trie_extractor::get_state_trie;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
@@ -152,6 +154,18 @@ pub(crate) trait State<F: Field> {
 
         loop {
             // TODO: remove!
+
+            // log::debug!(
+            //     "state_trie = {:?}",
+            //     get_state_trie::<HashedPartialTrie>(
+            //         &self.get_generation_state().memory,
+            //         self.get_generation_state().memory.contexts[0].segments
+            //             [Segment::GlobalMetadata.unscale()]
+            //         .get(GlobalMetadata::StateTrieRoot.unscale())
+            //         .try_into()
+            //         .unwrap()
+            //     )
+            // );
 
             // log::debug!(
             //     "content[1] = {:?}, content[58] = {:?} \n trie_data_size = {:?}",
