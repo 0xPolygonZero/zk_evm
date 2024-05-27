@@ -647,7 +647,7 @@ impl ProcessedBlockTrace {
                 withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
 
             let additional_paths = if last_inputs.txn_number_before == 0.into() {
-                // We need to include the beacon roots contract as this is payload is at the
+                // We need to include the beacon roots contract as this payload is at the
                 // start of the block execution.
                 vec![Nibbles::from_h256_be(H256(
                     BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
