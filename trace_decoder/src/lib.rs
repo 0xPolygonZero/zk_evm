@@ -133,7 +133,7 @@ pub mod decoding;
 mod deserializers;
 
 /// Core logic shared between mpt/smt versions of processing block traces.
-mod processed_block_trace;
+pub mod processed_block_trace;
 
 pub mod protocol_processing;
 
