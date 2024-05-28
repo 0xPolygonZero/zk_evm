@@ -412,26 +412,15 @@ impl<F: Field> GenerationState<F> {
         let proof_lo = stack_peek(self, 6)?;
 
         // Validate scalars
-        if z > BLS_SCALAR {
-            return Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure("z is not canonical.".to_string()),
-            ));
-        }
-        if y > BLS_SCALAR {
-            return Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure("y is not canonical.".to_string()),
-            ));
+        if z > BLS_SCALAR || y > BLS_SCALAR {
+            return Ok(U256::zero());
         }
 
         let mut comm_bytes = [0u8; 48];
         comm_lo.to_big_endian(&mut comm_bytes[16..48]); // only actually 16 bytes
         if comm_bytes[16..32] != [0; 16] {
             // Commitments must fit in 48 bytes.
-            return Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure(
-                    "Commitment does not fit in 48 bytes.".to_string(),
-                ),
-            ));
+            return Ok(U256::zero());
         }
         comm_hi.to_big_endian(&mut comm_bytes[0..32]);
 
@@ -439,9 +428,7 @@ impl<F: Field> GenerationState<F> {
         proof_lo.to_big_endian(&mut proof_bytes[16..48]); // only actually 16 bytes
         if proof_bytes[16..32] != [0; 16] {
             // Proofs must fit in 48 bytes.
-            return Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure("Proof does not fit in 48 bytes.".to_string()),
-            ));
+            return Ok(U256::zero());
         }
         proof_hi.to_big_endian(&mut proof_bytes[0..32]);
 
@@ -457,38 +444,40 @@ impl<F: Field> GenerationState<F> {
         expected_versioned_hash |= U256::from(KZG_VERSIONED_HASH) << 248; // append 1
 
         if versioned_hash != expected_versioned_hash {
-            return Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure(
-                    "Versioned hash does not match expected value.".to_string(),
-                ),
-            ));
+            return Ok(U256::zero());
         }
 
         self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes)
     }
 
     /// Returns the second part of the KZG precompile output.
-    /// The POINT_EVALUATION_PRECOMPILE returns a 64-byte value. Because EVM
-    /// words only fit in 32 bytes, we read the previously pushed value and
-    /// then accordingly push the following word.
+    ///
+    /// The POINT_EVALUATION_PRECOMPILE returns a 64-byte value.
+    /// Because EVM words only fit in 32 bytes, we need to push
+    /// the following word separately.
     fn run_kzg_point_eval_2(&mut self) -> Result<U256, ProgramError> {
         let prev_value = stack_peek(self, 0)?;
 
-        if prev_value == U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1]) {
-            Ok(U256::from_big_endian(
-                &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
-            ))
-        } else {
-            Err(ProgramError::ProverInputError(
+        // `run_kzg_point_eval_1` should return 0 upon failure, which should be caught
+        // in the Kernel. Ending up here should hence not happen.
+        if prev_value != U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1]) {
+            return Err(ProgramError::ProverInputError(
                 ProverInputError::KzgEvalFailure(
-                    "run_kzg_point_eval_1 should have output the expected return value or errored"
+                    "run_kzg_point_eval_1 should have output the expected return value at this point"
                         .to_string(),
                 ),
-            ))
+            ));
         }
+
+        Ok(U256::from_big_endian(
+            &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
+        ))
     }
 
     /// Verifies a KZG proof, i.e. that the commitment opens to y at z.
+    ///
+    /// Returns `0` upon failure of one of the checks, or `BLS_MODULUS` upon
+    /// success.
     fn verify_kzg_proof(
         &self,
         comm_bytes: &[u8; 48],
@@ -499,21 +488,13 @@ impl<F: Field> GenerationState<F> {
         let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes) {
             c
         } else {
-            return Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure(
-                    "Commitment did not deserialize into a valid G1 point.".to_string(),
-                ),
-            ));
+            return Ok(U256::zero());
         };
 
         let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes) {
             p
         } else {
-            return Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure(
-                    "Proof did not deserialize into a valid G1 point.".to_string(),
-                ),
-            ));
+            return Ok(U256::zero());
         };
 
         // TODO: use some WNAF method if performance becomes critical
@@ -561,11 +542,7 @@ impl<F: Field> GenerationState<F> {
             * bls381::ate_optim(proof, x_minus_z)
             != Fp12::<BLS381>::UNIT
         {
-            Err(ProgramError::ProverInputError(
-                ProverInputError::KzgEvalFailure(
-                    "Final pairing check did not succeed.".to_string(),
-                ),
-            ))
+            Ok(U256::zero())
         } else {
             Ok(U256::from_big_endian(
                 &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1],
