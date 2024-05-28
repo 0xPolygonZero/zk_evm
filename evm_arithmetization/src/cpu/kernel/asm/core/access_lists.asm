@@ -69,17 +69,22 @@ global init_access_lists:
     POP
 %endmacro
 
-// Multiply the ptr at the top of the stack by 2
-// and abort if 2*ptr - @SEGMENT_ACCESSED_ADDRESSES >= @GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN
-// In this way ptr must be pointing to the begining of a node.
+// Multiply the value at the top of the stack, denoted by ptr/2, by 2
+// and abort if ptr/2 >= mem[@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN]/2
+// In this way 2*ptr/2 must be pointing to the begining of a node.
 %macro get_valid_addr_ptr
-    // stack: ptr
+    // stack: ptr/2
+    DUP1
+    // stack: ptr/2, ptr/2
+    %mload_global_metadata(@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN)
+    // @GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN must be an even number because
+    // both @SEGMENT_ACCESSED_ADDRESSES and the unscaled access addresses list len
+    // must be even numbers
+    %div_const(2)
+    // stack: scaled_len/2, ptr/2, ptr/2
+    %assert_gt
     %mul_const(2)
-    PUSH @SEGMENT_ACCESSED_ADDRESSES
-    DUP2
-    SUB
-    %assert_lt_const(@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN)
-    // stack: 2*ptr
+    // stack: ptr
 %endmacro
 
 
@@ -211,17 +216,20 @@ global remove_accessed_addresses:
     // stack: cold_access, value_ptr
 %endmacro
 
-// Multiply the ptr at the top of the stack by 4
-// and abort if 4*ptr - SEGMENT_ACCESSED_STORAGE_KEYS >= @GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN
-// In this way ptr must be pointing to the beginning of a node.
+// Multiply the ptr at the top of the stack, denoted by ptr/4, by 4
+// and abort if ptr/4 >= @GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN/4
+// In this way 4*ptr/4 be pointing to the beginning of a node.
 %macro get_valid_storage_ptr
-    // stack: ptr
+    // stack: ptr/4
+    DUP1
+    %mload_global_metadata(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
+    // By construction, both @SEGMENT_ACCESSED_STORAGE_KEYS and the unscaled list len
+    // must be multiples of 4
+    %div_const(4)
+    // stack: scaled_len/4, ptr/4, ptr/4
+    %assert_gt
     %mul_const(4)
-    PUSH @SEGMENT_ACCESSED_STORAGE_KEYS
-    DUP2
-    SUB
-    %assert_lt_const(@GLOBAL_METADATA_ACCESSED_STORAGE_KEYS_LEN)
-    // stack: 2*ptr
+    // stack: ptr
 %endmacro
 
 /// Inserts the storage key into the access list if it is not already present.

@@ -141,5 +141,5 @@ blake2_f_contd:
         // stack: addr_(i+1), h_(i+1)', ..., h_7', kexit_info
     %endrep
 
-    // stack: kexit_info    
+    // stack: kexit_info
     %jump(pop_and_return_success)

@@ -46,8 +46,8 @@ use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
     AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
-    MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget, TrieRoots,
-    TrieRootsTarget,
+    FinalPublicValues, MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget,
+    TrieRoots, TrieRootsTarget, TARGET_HASH_SIZE,
 };
 use crate::prover::{check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData};
 use crate::recursive_verifier::{
@@ -396,15 +396,12 @@ where
     /// # Arguments
     ///
     /// - `skip_tables`: a boolean indicating whether to serialize only the
-    ///   upper circuits
-    /// or the entire prover state, including recursive circuits to shrink STARK
-    /// proofs.
+    ///   upper circuits or the entire prover state, including recursive
+    ///   circuits to shrink STARK proofs.
     /// - `gate_serializer`: a custom gate serializer needed to serialize
-    ///   recursive circuits
-    /// common data.
+    ///   recursive circuits common data.
     /// - `generator_serializer`: a custom generator serializer needed to
-    ///   serialize recursive
-    /// circuits proving data.
+    ///   serialize recursive circuits proving data.
     pub fn to_bytes(
         &self,
         skip_tables: bool,
@@ -437,15 +434,12 @@ where
     ///
     /// - `bytes`: a slice of bytes to deserialize this prover state from.
     /// - `skip_tables`: a boolean indicating whether to deserialize only the
-    ///   upper circuits
-    /// or the entire prover state, including recursive circuits to shrink STARK
-    /// proofs.
+    ///   upper circuits or the entire prover state, including recursive
+    ///   circuits to shrink STARK proofs.
     /// - `gate_serializer`: a custom gate serializer needed to serialize
-    ///   recursive circuits
-    /// common data.
+    ///   recursive circuits common data.
     /// - `generator_serializer`: a custom generator serializer needed to
-    ///   serialize recursive
-    /// circuits proving data.
+    ///   serialize recursive circuits proving data.
     pub fn from_bytes(
         bytes: &[u8],
         skip_tables: bool,
@@ -512,10 +506,10 @@ where
     /// # Arguments
     ///
     /// - `all_stark`: a structure defining the logic of all STARK modules and
-    ///   their associated
-    /// cross-table lookups.
+    ///   their associated cross-table lookups.
     /// - `degree_bits_ranges`: the logarithmic ranges to be supported for the
     ///   recursive tables.
+    ///
     /// Transactions may yield arbitrary trace lengths for each STARK module
     /// (within some bounds), unknown prior generating the witness to create
     /// a proof. Thus, for each STARK module, we construct a map from
@@ -524,8 +518,7 @@ where
     /// for this STARK module. Specifying a wide enough range allows a
     /// prover to cover all possible scenarios.
     /// - `stark_config`: the configuration to be used for the STARK prover. It
-    ///   will usually be a fast
-    /// one yielding large proofs.
+    ///   will usually be a fast one yielding large proofs.
     pub fn new(
         all_stark: &AllStark<F, D>,
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
@@ -1348,20 +1341,16 @@ where
     /// # Arguments
     ///
     /// - `all_stark`: a structure defining the logic of all STARK modules and
-    ///   their associated
-    /// cross-table lookups.
+    ///   their associated cross-table lookups.
     /// - `config`: the configuration to be used for the STARK prover. It will
-    ///   usually be a fast
-    /// one yielding large proofs.
+    ///   usually be a fast one yielding large proofs.
     /// - `generation_inputs`: a transaction and auxiliary data needed to
-    ///   generate a proof, provided
-    /// in Intermediary Representation.
+    ///   generate a proof, provided in Intermediary Representation.
     /// - `timing`: a profiler defining a scope hierarchy and the time consumed
     ///   by each one.
     /// - `abort_signal`: an optional [`AtomicBool`] wrapped behind an [`Arc`],
-    ///   to send a kill signal
-    /// early. This is only necessary in a distributed setting where a worker
-    /// may be blocking the entire queue.
+    ///   to send a kill signal early. This is only necessary in a distributed
+    ///   setting where a worker may be blocking the entire queue.
     ///
     /// # Outputs
     ///
@@ -1577,14 +1566,12 @@ where
     /// # Arguments
     ///
     /// - `lhs_is_agg`: a boolean indicating whether the left child proof is an
-    ///   aggregation proof or
-    /// a regular segment proof.
+    ///   aggregation proof or a regular segment proof.
     /// - `lhs_proof`: the left child proof.
     /// - `lhs_public_values`: the public values associated to the right child
     ///   proof.
     /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
-    ///   aggregation proof or
-    /// a regular transaction proof.
+    ///   aggregation proof or a regular transaction proof.
     /// - `rhs_proof`: the right child proof.
     /// - `rhs_public_values`: the public values associated to the right child
     ///   proof.
@@ -1685,9 +1672,8 @@ where
     /// # Arguments
     ///
     /// - `opt_parent_txn_proof`: an optional parent transaction proof. Passing
-    ///   one will generate a proof of
-    /// validity for both the transaction range covered by the previous proof
-    /// and the current transaction.
+    ///   one will generate a proof of validity for both the transaction range
+    ///   covered by the previous proof and the current transaction.
     /// - `agg_proof`: the final aggregation proof containing all segments
     ///   within the current transaction.
     /// - `public_values`: the public values associated to the aggregation
@@ -1837,9 +1823,8 @@ where
     /// # Arguments
     ///
     /// - `opt_parent_block_proof`: an optional parent block proof. Passing one
-    ///   will generate a proof of
-    /// validity for both the block range covered by the previous proof and the
-    /// current block.
+    ///   will generate a proof of validity for both the block range covered by
+    ///   the previous proof and the current block.
     /// - `agg_root_proof`: the final aggregation proof containing all
     ///   transactions within the current block.
     /// - `public_values`: the public values associated to the aggregation
@@ -1855,7 +1840,7 @@ where
         opt_parent_block_proof: Option<&ProofWithPublicInputs<F, C, D>>,
         agg_root_proof: &ProofWithPublicInputs<F, C, D>,
         public_values: PublicValues,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, FinalPublicValues)> {
         let mut block_inputs = PartialWitness::new();
 
         block_inputs.set_bool_target(
@@ -1881,21 +1866,19 @@ where
             let mut nonzero_pis = HashMap::new();
 
             // Initialize the checkpoint block roots before, and state root after.
-            let state_trie_root_before_keys = 0..TrieRootsTarget::HASH_SIZE;
+            let state_trie_root_before_keys = 0..TARGET_HASH_SIZE;
             for (key, &value) in state_trie_root_before_keys
                 .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
             {
                 nonzero_pis.insert(key, value);
             }
-            let txn_trie_root_before_keys =
-                TrieRootsTarget::HASH_SIZE..TrieRootsTarget::HASH_SIZE * 2;
+            let txn_trie_root_before_keys = TARGET_HASH_SIZE..TARGET_HASH_SIZE * 2;
             for (key, &value) in txn_trie_root_before_keys.clone().zip_eq(&h256_limbs::<F>(
                 public_values.trie_roots_before.transactions_root,
             )) {
                 nonzero_pis.insert(key, value);
             }
-            let receipts_trie_root_before_keys =
-                TrieRootsTarget::HASH_SIZE * 2..TrieRootsTarget::HASH_SIZE * 3;
+            let receipts_trie_root_before_keys = TARGET_HASH_SIZE * 2..TARGET_HASH_SIZE * 3;
             for (key, &value) in receipts_trie_root_before_keys
                 .clone()
                 .zip_eq(&h256_limbs::<F>(
@@ -1905,7 +1888,7 @@ where
                 nonzero_pis.insert(key, value);
             }
             let state_trie_root_after_keys =
-                TrieRootsTarget::SIZE..TrieRootsTarget::SIZE + TrieRootsTarget::HASH_SIZE;
+                TrieRootsTarget::SIZE..TrieRootsTarget::SIZE + TARGET_HASH_SIZE;
             for (key, &value) in state_trie_root_after_keys
                 .zip_eq(&h256_limbs::<F>(public_values.trie_roots_before.state_root))
             {
@@ -1987,7 +1970,7 @@ where
         })?;
 
         let block_proof = self.block.circuit.prove(block_inputs)?;
-        Ok((block_proof, block_public_values))
+        Ok((block_proof, block_public_values.into()))
     }
 
     pub fn verify_block(&self, block_proof: &ProofWithPublicInputs<F, C, D>) -> anyhow::Result<()> {
