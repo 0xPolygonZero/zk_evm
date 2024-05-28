@@ -9,9 +9,9 @@
 //!
 //! The length of a sequence can be retrieved for CTLs as:
 //!
-//!    sequence_length = \sum_{i=0}^31 b[i] * (i + 1)
+//! `sequence_length = \sum_{i=0}^31 b[i] * (i + 1)`
 //!
-//! where b[i] is the `i`-th byte flag.
+//! where `b[i]` is the `i`-th byte flag.
 //!
 //! Because of the discrepancy in endianness between the different tables, the
 //! byte sequences are actually written in the trace in reverse order from the
