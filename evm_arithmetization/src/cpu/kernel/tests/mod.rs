@@ -13,6 +13,7 @@ mod exp;
 mod hash;
 mod kernel_consistency;
 mod log;
+mod mcopy;
 mod mpt;
 mod packing;
 mod receipt;
