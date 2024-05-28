@@ -1,6 +1,6 @@
 use crate::{
-    decoding::TraceDecodingResult,
-    processed_block_trace_smt::SmtProcessedBlockTrace, types::OtherBlockData,
+    decoding::TraceDecodingResult, processed_block_trace_smt::SmtProcessedBlockTrace,
+    types::OtherBlockData,
 };
 
 impl SmtProcessedBlockTrace {

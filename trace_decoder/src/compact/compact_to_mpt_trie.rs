@@ -11,8 +11,9 @@ use mpt_trie::{
 };
 
 use super::compact_processing_common::{
-        AccountNodeCode, AccountNodeData, CompactDecodingResult, CompactParsingError, CompactParsingResult, LeafNodeData, NodeEntry, UnexpectedCompactNodeType, WitnessEntry
-    };
+    AccountNodeCode, AccountNodeData, CompactDecodingResult, CompactParsingError,
+    CompactParsingResult, LeafNodeData, NodeEntry, UnexpectedCompactNodeType, WitnessEntry,
+};
 use crate::{
     decoding::TrieType,
     types::{CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH},

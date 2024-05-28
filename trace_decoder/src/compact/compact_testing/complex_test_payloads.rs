@@ -1,7 +1,6 @@
-
 use crate::{
     compact::compact_processing_common::{CompactParsingResult, Header, ProcessedCompactOutput},
-    types::{TrieRootHash},
+    types::TrieRootHash,
 };
 
 pub(super) type ProcessedCompactPrestateFn<T, U> =

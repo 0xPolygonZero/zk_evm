@@ -156,8 +156,6 @@ impl TestProtocolInputAndRoot {
 
 #[cfg(test)]
 mod tests {
-    use crate::compact::compact_testing::complex_test_payloads::init_testing_env;
-
     use super::{
         SMT_TEST_PAYLOAD_1, SMT_TEST_PAYLOAD_10, SMT_TEST_PAYLOAD_11, SMT_TEST_PAYLOAD_12,
         SMT_TEST_PAYLOAD_13, SMT_TEST_PAYLOAD_14, SMT_TEST_PAYLOAD_15, SMT_TEST_PAYLOAD_16,
@@ -167,6 +165,7 @@ mod tests {
         SMT_TEST_PAYLOAD_5, SMT_TEST_PAYLOAD_6, SMT_TEST_PAYLOAD_7, SMT_TEST_PAYLOAD_8,
         SMT_TEST_PAYLOAD_9,
     };
+    use crate::compact::compact_testing::complex_test_payloads::init_testing_env;
 
     #[test]
     fn smt_complex_payload_1() {

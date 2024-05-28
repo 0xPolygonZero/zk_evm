@@ -1,15 +1,12 @@
 use std::{
-    collections::HashMap,
-    fmt::{self, Display, Formatter},
-    iter::{self, empty},
+    collections::HashMap, fmt::{self, Display, Formatter}, iter::{self, empty}
 };
 
 use ethereum_types::{Address, U256, U512};
 use keccak_hash::H256;
 use log::trace;
 use mpt_trie::{
-    nibbles::Nibbles,
-    trie_ops::{TrieOpError, ValOrHash},
+    nibbles::Nibbles, trie_ops::{TrieOpError, ValOrHash}
 };
 use thiserror::Error;
 
@@ -73,15 +70,13 @@ pub(crate) trait ProcessedBlockTraceDecode {
 pub(crate) trait GenIr {
     type TrieRoots;
     type StateTrie: Trie + Clone;
-    type StateTrieRef: Into<Self::StateTrie> + Clone;
+    type StateTrieRef: Into<Self::StateTrie> + StateTrie;
 
     fn get_signed_txn(&self) -> Option<&[u8]>;
     fn get_withdrawals_mut(&mut self) -> &mut Vec<(Address, U256)>;
-    
-    // I can not find a better way to deal with the state trie other than these two methods...
-    fn get_state_trie_ref<'a>(&'a self) -> &'a Self::StateTrieRef;
-    fn set_state_trie(&mut self, trie: Self::StateTrieRef);
-    
+
+    fn get_state_trie_mut(&mut self) -> &mut Self::StateTrieRef;
+
     fn get_final_trie_roots_mut(&mut self) -> &mut TrieRoots;
 }
 
@@ -133,8 +128,9 @@ pub(crate) trait StorageTries {
     fn get_trie(&self, h_addr: &HashedAccountAddr) -> Option<&Self::StorageTrie>;
     fn get_mut_trie(&mut self, h_addr: &HashedAccountAddr) -> Option<&mut Self::StorageTrie>;
     fn get_trie_or_create_mut(&mut self, h_addr: &HashedAccountAddr) -> &mut Self::StorageTrie;
-    
-    /// Attempts to remove the trie with the given key and returns true if it was found.
+
+    /// Attempts to remove the trie with the given key and returns true if it
+    /// was found.
     fn remove_trie(&mut self, addr: &HashedAccountAddr) -> bool;
 }
 
@@ -537,7 +533,7 @@ where
                     TraceDecodingErrorReason::MissingAccountStorageTrie(hashed_addr),
                 );
                 e.h_addr(hashed_addr);
-                
+
                 return Err(e);
             };
 
@@ -609,13 +605,15 @@ where
             let withdrawal_addrs =
                 withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
 
-            let state_trie_ref = last_inputs.get_state_trie_ref();
+            let state_trie_ref = last_inputs.get_state_trie_mut();
 
             let sub_state_trie = Self::create_minimal_state_partial_trie(
                 state_trie_ref,
                 withdrawal_addrs,
                 iter::empty(),
             )?;
+
+            *state_trie_ref = sub_state_trie;
         }
 
         Self::update_trie_state_from_withdrawals(
@@ -739,11 +737,11 @@ where
         Ok(gen_inputs)
     }
 
-    fn create_minimal_state_partial_trie(
-        state_trie: &D::StateTrie,
+    fn create_minimal_state_partial_trie<U: StateTrie>(
+        state_trie: &U,
         state_accesses: impl Iterator<Item = HashedNodeAddr>,
         additional_state_trie_paths_to_not_hash: impl Iterator<Item = Nibbles>,
-    ) -> TraceDecodingResult<D::StateTrie> {
+    ) -> TraceDecodingResult<U> {
         create_trie_subset_wrapped(
             state_trie,
             state_accesses

@@ -8,9 +8,14 @@ use ethereum_types::{Address, U256};
 use mpt_trie::nibbles::Nibbles;
 
 use crate::{
-    aliased_crate_types::{AccountRlp, LegacyReceiptRlp}, decoding::{ProcessedBlockTraceDecode, TraceDecodingResult, TxnMetaState}, trace_protocol::{BlockTrace, BlockTraceTriePreImages, ContractCodeUsage, TxnInfo}, types::{
-        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH
-    }, utils::hash
+    aliased_crate_types::{AccountRlp, LegacyReceiptRlp},
+    decoding::{ProcessedBlockTraceDecode, TraceDecodingResult, TxnMetaState},
+    trace_protocol::{BlockTrace, BlockTraceTriePreImages, ContractCodeUsage, TxnInfo},
+    types::{
+        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
+        TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    },
+    utils::hash,
 };
 
 pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;

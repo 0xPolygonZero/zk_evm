@@ -12,7 +12,9 @@ use smt_trie::{
     smt::{HashOut, Key, Smt, F},
 };
 
-use super::compact_processing_common::{CompactDecodingResult, CompactParsingResult, NodeEntry, SmtLeafNodeType};
+use super::compact_processing_common::{
+    CompactDecodingResult, CompactParsingResult, NodeEntry, SmtLeafNodeType,
+};
 use crate::types::{CodeHash, TrieRootHash};
 
 /// Currently, the smt library requires that all calls to [`set_hash`] must

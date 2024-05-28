@@ -12,8 +12,11 @@ use enum_as_inner::EnumAsInner;
 use ethereum_types::U256;
 use keccak_hash::H256;
 use log::trace;
-use mpt_trie::{nibbles::{FromHexPrefixError, Nibbles}, partial_trie::HashedPartialTrie};
 use mpt_trie::trie_ops::TrieOpError;
+use mpt_trie::{
+    nibbles::{FromHexPrefixError, Nibbles},
+    partial_trie::HashedPartialTrie,
+};
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 

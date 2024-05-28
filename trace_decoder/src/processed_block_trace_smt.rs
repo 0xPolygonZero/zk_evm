@@ -8,9 +8,7 @@ use ethereum_types::{Address, U256};
 use crate::{
     aliased_crate_types::{AccountRlp, GenerationInputs},
     decoding::{ProcessedBlockTraceDecode, TraceDecodingResult},
-    processed_block_trace::{
-        BlockTraceProcessing, ProcessedBlockTrace, ProcessingMeta,
-    },
+    processed_block_trace::{BlockTraceProcessing, ProcessedBlockTrace, ProcessingMeta},
     trace_protocol::{BlockTrace, BlockTraceTriePreImages},
     types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr, OtherBlockData},
 };
