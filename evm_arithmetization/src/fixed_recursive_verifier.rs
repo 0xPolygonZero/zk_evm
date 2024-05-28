@@ -444,15 +444,12 @@ where
     /// # Arguments
     ///
     /// - `skip_tables`: a boolean indicating whether to serialize only the
-    ///   upper circuits
-    /// or the entire prover state, including recursive circuits to shrink STARK
-    /// proofs.
+    ///   upper circuits or the entire prover state, including recursive
+    ///   circuits to shrink STARK proofs.
     /// - `gate_serializer`: a custom gate serializer needed to serialize
-    ///   recursive circuits
-    /// common data.
+    ///   recursive circuits common data.
     /// - `generator_serializer`: a custom generator serializer needed to
-    ///   serialize recursive
-    /// circuits proving data.
+    ///   serialize recursive circuits proving data.
     pub fn to_bytes(
         &self,
         skip_tables: bool,
@@ -485,15 +482,12 @@ where
     ///
     /// - `bytes`: a slice of bytes to deserialize this prover state from.
     /// - `skip_tables`: a boolean indicating whether to deserialize only the
-    ///   upper circuits
-    /// or the entire prover state, including recursive circuits to shrink STARK
-    /// proofs.
+    ///   upper circuits or the entire prover state, including recursive
+    ///   circuits to shrink STARK proofs.
     /// - `gate_serializer`: a custom gate serializer needed to serialize
-    ///   recursive circuits
-    /// common data.
+    ///   recursive circuits common data.
     /// - `generator_serializer`: a custom generator serializer needed to
-    ///   serialize recursive
-    /// circuits proving data.
+    ///   serialize recursive circuits proving data.
     pub fn from_bytes(
         bytes: &[u8],
         skip_tables: bool,
@@ -560,10 +554,10 @@ where
     /// # Arguments
     ///
     /// - `all_stark`: a structure defining the logic of all STARK modules and
-    ///   their associated
-    /// cross-table lookups.
+    ///   their associated cross-table lookups.
     /// - `degree_bits_ranges`: the logarithmic ranges to be supported for the
     ///   recursive tables.
+    ///
     /// Transactions may yield arbitrary trace lengths for each STARK module
     /// (within some bounds), unknown prior generating the witness to create
     /// a proof. Thus, for each STARK module, we construct a map from
@@ -572,8 +566,7 @@ where
     /// for this STARK module. Specifying a wide enough range allows a
     /// prover to cover all possible scenarios.
     /// - `stark_config`: the configuration to be used for the STARK prover. It
-    ///   will usually be a fast
-    /// one yielding large proofs.
+    ///   will usually be a fast one yielding large proofs.
     pub fn new(
         all_stark: &AllStark<F, D>,
         degree_bits_ranges: &[Range<usize>; NUM_TABLES],
@@ -1467,20 +1460,16 @@ where
     /// # Arguments
     ///
     /// - `all_stark`: a structure defining the logic of all STARK modules and
-    ///   their associated
-    /// cross-table lookups.
+    ///   their associated cross-table lookups.
     /// - `config`: the configuration to be used for the STARK prover. It will
-    ///   usually be a fast
-    /// one yielding large proofs.
+    ///   usually be a fast one yielding large proofs.
     /// - `generation_inputs`: a transaction and auxiliary data needed to
-    ///   generate a proof, provided
-    /// in Intermediary Representation.
+    ///   generate a proof, provided in Intermediary Representation.
     /// - `timing`: a profiler defining a scope hierarchy and the time consumed
     ///   by each one.
     /// - `abort_signal`: an optional [`AtomicBool`] wrapped behind an [`Arc`],
-    ///   to send a kill signal
-    /// early. This is only necessary in a distributed setting where a worker
-    /// may be blocking the entire queue.
+    ///   to send a kill signal early. This is only necessary in a distributed
+    ///   setting where a worker may be blocking the entire queue.
     ///
     /// # Outputs
     ///
@@ -1705,14 +1694,12 @@ where
     /// # Arguments
     ///
     /// - `lhs_is_agg`: a boolean indicating whether the left child proof is an
-    ///   aggregation proof or
-    /// a regular segment proof.
+    ///   aggregation proof or a regular segment proof.
     /// - `lhs_proof`: the left child proof.
     /// - `lhs_public_values`: the public values associated to the right child
     ///   proof.
     /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
-    ///   aggregation proof or
-    /// a regular transaction proof.
+    ///   aggregation proof or a regular transaction proof.
     /// - `rhs_proof`: the right child proof.
     /// - `rhs_public_values`: the public values associated to the right child
     ///   proof.
@@ -1834,9 +1821,8 @@ where
     /// # Arguments
     ///
     /// - `opt_parent_txn_proof`: an optional parent transaction proof. Passing
-    ///   one will generate a proof of
-    /// validity for both the transaction range covered by the previous proof
-    /// and the current transaction.
+    ///   one will generate a proof of validity for both the transaction range
+    ///   covered by the previous proof and the current transaction.
     /// - `agg_proof`: the final aggregation proof containing all segments
     ///   within the current transaction.
     /// - `public_values`: the public values associated to the aggregation
@@ -2014,9 +2000,8 @@ where
     /// # Arguments
     ///
     /// - `opt_parent_block_proof`: an optional parent block proof. Passing one
-    ///   will generate a proof of
-    /// validity for both the block range covered by the previous proof and the
-    /// current block.
+    ///   will generate a proof of validity for both the block range covered by
+    ///   the previous proof and the current block.
     /// - `agg_root_proof`: the final aggregation proof containing all
     ///   transactions within the current block.
     /// - `public_values`: the public values associated to the aggregation
