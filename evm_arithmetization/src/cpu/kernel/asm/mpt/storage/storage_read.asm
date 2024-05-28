@@ -5,7 +5,17 @@
 %endmacro
 
 global sload_current:
-    %stack (slot) -> (slot, after_storage_read)
+
+    // TEST STORAGE linked list
+    DUP1
+    %read_storage_linked_list
+    %mload_trie_data
+    %stack (ll_value, slot) -> (slot, after_storage_read, ll_value)
+
+    // %stack (slot) -> (slot, after_storage_read)
+
+
+
     %slot_to_storage_key
     // stack: storage_key, after_storage_read
     PUSH 64 // storage_key has 64 nibbles
@@ -14,18 +24,27 @@ global sload_current:
     %jump(mpt_read)
 
 global after_storage_read:
-    // stack: value_ptr, retdest
+    // stack: value_ptr, ll_value, retdest
     DUP1 %jumpi(storage_key_exists)
 
     // Storage key not found. Return default value_ptr = 0,
     // which derefs to 0 since @SEGMENT_TRIE_DATA[0] = 0.
-    %stack (value_ptr, retdest) -> (retdest, 0)
+    
+    %stack (value_ptr, ll_value, retdest) -> (retdest, 0)
+    //%stack (value_ptr, retdest) -> (retdest, 0)
+    
     JUMP
 
 global storage_key_exists:
     // stack: value_ptr, retdest
+    // actually: value_ptr, ll_value, retdest
     %mload_trie_data
     // stack: value, retdest
+    // atually: value, ll_value, retdest
+    DUP2
+global debug_ll_storage_ok:
+    %assert_eq
+
     SWAP1
     JUMP
 

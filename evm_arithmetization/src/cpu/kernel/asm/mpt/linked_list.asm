@@ -310,7 +310,7 @@ global remove_account:
 
 %macro insert_slot_no_return
     %insert_account
-    POP
+    %pop2
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/5, by 5
@@ -534,5 +534,17 @@ global remove_slot:
     %jump(search_account)
 %%after:
     // stack: cold_access, account_ptr
+    POP
+%endmacro
+
+%macro read_storage_linked_list
+    // stack: slot
+    %slot_to_storage_key
+    %address
+    %addr_to_state_key
+    %stack (addr, key) -> (addr, key, 0, %%after)
+    %jump(insert_slot)
+%%after:
+    // stack: cold_access, slot_ptr
     POP
 %endmacro
