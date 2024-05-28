@@ -1,7 +1,8 @@
+use alloy::primitives::U256;
 use anyhow::Result;
-use ethereum_types::U256;
 #[cfg(feature = "test_only")]
 use futures::stream::TryStreamExt;
+use num_traits::ToPrimitive as _;
 use ops::TxProof;
 use paladin::{
     directive::{Directive, IndexedStream},
@@ -27,7 +28,7 @@ fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
 
 impl ProverInput {
     pub fn get_block_number(&self) -> U256 {
-        self.other_data.b_data.b_meta.block_number
+        self.other_data.b_data.b_meta.block_number.into()
     }
 
     #[cfg(not(feature = "test_only"))]
@@ -37,6 +38,8 @@ impl ProverInput {
         previous: Option<PlonkyProofIntern>,
         save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
+        use anyhow::Context as _;
+
         let block_number = self.get_block_number();
         info!("Proving block {block_number}");
 
@@ -57,8 +60,11 @@ impl ProverInput {
             .await?;
 
         if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
+            let block_number = block_number
+                .to_u64()
+                .context("block number overflows u64")?;
             let prev = previous.map(|p| GeneratedBlockProof {
-                b_height: block_number.as_u64() - 1,
+                b_height: block_number - 1,
                 intern: p,
             });
 

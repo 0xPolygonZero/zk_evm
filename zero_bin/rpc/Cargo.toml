@@ -16,21 +16,15 @@ anyhow = { workspace = true }
 serde = { workspace = true }
 trace_decoder = { workspace = true }
 serde_json = { workspace = true }
-serde_path_to_error = { workspace = true }
 clap = { workspace = true }
-ethereum-types = { workspace = true }
 evm_arithmetization = { workspace = true }
 thiserror = { workspace = true }
+alloy.workspace = true
 futures = { workspace = true }
-
 hex = "0.4.3"
 hex-literal = "0.4.1"
-reqwest = { version = "0.11.22", default-features = false, features = [
-  "json",
-  "rustls-tls",
-] }
-
-
-# Local dependencies
+itertools = "0.13.0"
+url = "2.5.0"
 common = { path = "../common" }
 prover = { path = "../prover" }
+__compat_primitive-types = { version = "0.12.2", package = "primitive-types" }

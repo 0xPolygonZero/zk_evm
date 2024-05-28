@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
 };
 
+use alloy::providers::RootProvider;
 use anyhow::Result;
 use paladin::runtime::Runtime;
 use proof_gen::types::PlonkyProofIntern;
@@ -18,11 +19,11 @@ pub(crate) async fn jerigon_main(
     proof_output_path_opt: Option<PathBuf>,
     save_inputs_on_error: bool,
 ) -> Result<()> {
-    let prover_input = rpc::fetch_prover_input(rpc::FetchProverInputRequest {
-        rpc_url,
-        block_number,
-        checkpoint_block_number,
-    })
+    let prover_input = rpc::prover_input(
+        RootProvider::new_http(rpc_url.parse()?),
+        block_number.into(),
+        checkpoint_block_number.into(),
+    )
     .await?;
 
     let proof = prover_input
