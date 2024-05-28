@@ -145,7 +145,10 @@ fn test_kzg_peval_precompile() -> Result<()> {
 
         let verify_kzg_proof = KERNEL.global_labels["verify_kzg_proof"];
         let mut interpreter: Interpreter<F> = Interpreter::new(verify_kzg_proof, stack);
-        interpreter.halt_offsets = vec![KERNEL.global_labels["store_kzg_verification"]];
+        interpreter.halt_offsets = vec![
+            KERNEL.global_labels["store_kzg_verification"],
+            KERNEL.global_labels["fault_exception"],
+        ];
         if *is_correct {
             interpreter.run().unwrap();
 
@@ -161,10 +164,11 @@ fn test_kzg_peval_precompile() -> Result<()> {
                 U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1])
             );
         } else {
-            assert!(interpreter.run().is_err());
-
-            let err_msg = interpreter.run().unwrap_err();
-            assert!(err_msg.to_string().contains("KzgEvalFailure"));
+            interpreter.run().unwrap();
+            assert_eq!(
+                interpreter.generation_state.registers.program_counter,
+                KERNEL.global_labels["fault_exception"]
+            );
         }
     }
 
