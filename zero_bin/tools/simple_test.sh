@@ -50,7 +50,7 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $1 == "test_only" ]]; then
-    cargo run --release --features test_only --bin leader -- --runtime in-memory stdio < witness.json | tee test.out
+    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < witness.json | tee test.out
     if grep 'Successfully generated witness for block' test.out; then
         echo "Success - Note this was just a test, not a proof"
         exit
@@ -70,7 +70,7 @@ tail -n 1 leader.out > proof.json
 
 ../target/release/verifier -f proof.json | tee verify.out
 
-if grep 'Proof verified successfully!' verify.out; then
+if grep -q 'Proof verified successfully!' verify.out; then
     duration_ns=$((end_time - start_time))
     duration_sec=$(echo "$duration_ns / 1000000000" | bc -l)
     echo "Success!"
