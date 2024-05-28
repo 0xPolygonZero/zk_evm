@@ -389,7 +389,7 @@ impl Display for InstructionAndBytesParsedFromBuf {
 
 pub(crate) struct MptPreImageProcessing;
 
-const MPT_HEADER_VERSION: u8 = 0;
+const MPT_HEADER_VERSION: u8 = 1;
 
 impl ProtocolPreImageProcessing for MptPreImageProcessing {
     type ProcessedPreImage = StateTrieExtractionOutput;

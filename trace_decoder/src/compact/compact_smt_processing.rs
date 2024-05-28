@@ -199,7 +199,7 @@ fn process_compact_smt_prestate_debug(
 
 pub(crate) struct SmtPreImageProcessing;
 
-const SMT_HEADER_VERSION: u8 = 1;
+const SMT_HEADER_VERSION: u8 = 0;
 
 impl ProtocolPreImageProcessing for SmtPreImageProcessing {
     type ProcessedPreImage = SmtStateTrieExtractionOutput;
