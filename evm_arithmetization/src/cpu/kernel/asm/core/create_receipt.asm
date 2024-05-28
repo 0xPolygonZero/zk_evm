@@ -212,11 +212,10 @@ process_receipt_after_write:
     %rep 8
         // stack: addr, new_cum_gas, txn_nb, num_nibbles, retdest
         PUSH 0 // we will fill the memory segment with zeroes
-        DUP2
-        // stack: addr, 0, addr, new_cum_gas, txn_nb, num_nibbles, retdest
+        SWAP1
+        // stack: addr, 0, new_cum_gas, txn_nb, num_nibbles, retdest
         MSTORE_32BYTES_32
-        // stack: new_addr, addr, new_cum_gas, txn_nb, num_nibbles, retdest
-        SWAP1 POP
+        // stack: new_addr, new_cum_gas, txn_nb, num_nibbles, retdest
     %endrep
     POP
     // stack: new_cum_gas, txn_nb, num_nibbles, retdest
