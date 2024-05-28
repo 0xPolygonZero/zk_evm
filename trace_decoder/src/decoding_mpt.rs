@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, iter::{self, empty, once}
+    collections::HashMap, iter::{empty, once}
 };
 
 use ethereum_types::{Address, U256};
@@ -33,7 +33,6 @@ use crate::{
         CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
         OtherBlockData, TrieRootHash, TxnIdx,
     },
-    utils::nibbles_to_h256,
 };
 
 type MptTrieState = TrieState<MptBlockTraceDecoding>;
@@ -103,7 +102,27 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
         nodes_used_by_txn: &NodesUsedByTxn,
         txn_idx: TxnIdx,
     ) -> TraceDecodingResult<TrieState<Self>> {
-        todo!()
+        let state = create_minimal_state_partial_trie(
+            &tries.state,
+            nodes_used_by_txn.state_accesses.iter().cloned(),
+        )?;
+    
+        let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
+        // TODO: Replace cast once `mpt_trie` supports `into` for `usize...
+        let txn = create_trie_subset_wrapped(&tries.txn, once(txn_k), TrieType::Txn)?;
+    
+        let receipt =
+            create_trie_subset_wrapped(&tries.receipt, once(txn_k), TrieType::Receipt)?;
+    
+        let storage =
+            create_minimal_storage_partial_tries(&tries.storage, nodes_used_by_txn.storage_accesses.iter().map(|(k, v)| (*k, v.iter().cloned())))?;
+    
+        Ok(MptTrieState {
+            state,
+            storage,
+            receipt,
+            txn,
+        })
     }
 
     fn create_dummy_ir(
@@ -117,7 +136,6 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
             create_minimal_state_partial_trie(
                 &final_tries.state,
                 account_addrs_accessed,
-                iter::empty(),
             )
             .expect(
                 "Managed to error when creating a fully hashed out trie! (should not be possible)",
@@ -200,14 +218,14 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct MptTrie {
     trie: HashedPartialTrie,
-    traced_delete_info: TrieDeltaApplicationOutput,
+    additional_trie_paths_to_not_hash: Vec<Nibbles>,
 }
 
 impl From<HashedPartialTrie> for MptTrie {
     fn from(v: HashedPartialTrie) -> Self {
         Self {
             trie: v,
-            traced_delete_info: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -216,7 +234,7 @@ impl From<&mut HashedPartialTrie> for MptTrie {
     fn from(v: &mut HashedPartialTrie) -> Self {
         Self {
             trie: v.clone(),
-            traced_delete_info: Default::default(),
+            ..Default::default()
         }
     }
 }
@@ -249,10 +267,7 @@ impl Trie for MptTrie {
         if let Some(branch_collapse_key) =
             Self::node_deletion_resulted_in_a_branch_collapse(&old_trace, &new_trace)
         {
-            self.traced_delete_info
-                .additional_storage_trie_paths_to_not_hash
-                .entry(nibbles_to_h256(&k))
-                .or_default()
+            self.additional_trie_paths_to_not_hash
                 .push(branch_collapse_key);
         }
 
@@ -329,6 +344,16 @@ impl Trie for HashedPartialTrie {
 
 impl StateTrie for MptTrie {
     fn get_account(&self, addr: Nibbles) -> TraceDecodingResult<Option<AccountRlp>> {
+        self.trie.get_account(addr)
+    }
+
+    fn set_account(&mut self, addr: Nibbles, acc: &AccountRlp) {
+        self.trie.set_account(addr, acc);
+    }
+}
+
+impl StateTrie for HashedPartialTrie {
+    fn get_account(&self, addr: Nibbles) -> TraceDecodingResult<Option<crate::aliased_crate_types::AccountRlp>> {
         let acc_bytes = self.trie_get(addr);
 
         let res = match acc_bytes {
@@ -344,18 +369,9 @@ impl StateTrie for MptTrie {
         Ok(res)
     }
 
-    fn set_account(&mut self, addr: Nibbles, acc: &AccountRlp) {
-        self.trie.insert(addr, rlp::encode(acc).to_vec());
-    }
-}
-
-impl StateTrie for HashedPartialTrie {
-    fn get_account(&self, addr: Nibbles) -> TraceDecodingResult<Option<crate::aliased_crate_types::AccountRlp>> {
-        todo!()
-    }
-
     fn set_account(&mut self, addr: Nibbles, acc: &crate::aliased_crate_types::AccountRlp) {
-        todo!()
+        // Should never be able to fail.
+        self.insert(addr, rlp::encode(acc).to_vec()).expect("Failed encoding to rlp encode Account!");
     }
 }
 
@@ -417,14 +433,13 @@ impl GenIr for GenerationInputs {
 fn create_minimal_state_partial_trie(
     state_trie: &MptTrie,
     state_accesses: impl Iterator<Item = HashedNodeAddr>,
-    additional_state_trie_paths_to_not_hash: impl Iterator<Item = Nibbles>,
 ) -> TraceDecodingResult<MptTrie> {
     create_trie_subset_wrapped(
         state_trie,
         state_accesses
             .into_iter()
             .map(Nibbles::from_h256_be)
-            .chain(additional_state_trie_paths_to_not_hash),
+            .chain(state_trie.additional_trie_paths_to_not_hash.iter().cloned()),
         TrieType::State,
     )
 }
@@ -484,12 +499,7 @@ impl BlockTrace {
 
 fn create_minimal_storage_partial_tries<'a>(
     storage_tries: &MptStorageTries,
-    accesses_per_account: impl Iterator<
-        Item = (
-            HashedAccountAddr,
-            impl Iterator<Item = HashedStorageAddrNibbles>,
-        ),
-    >,
+    accesses_per_account: impl Iterator<Item = (HashedAccountAddr, impl Iterator<Item = HashedStorageAddrNibbles>)>,
 ) -> TraceDecodingResult<MptStorageTries> {
     accesses_per_account
         .map(|(h_addr, mem_accesses)| {
@@ -500,54 +510,14 @@ fn create_minimal_storage_partial_tries<'a>(
                 .get(&h_addr)
                 .expect("Base storage trie missing! This should not be possible!");
 
+            let slots_to_not_hash = mem_accesses.chain(base_storage_trie.additional_trie_paths_to_not_hash.iter().cloned());
+
             let partial_storage_trie =
-                create_trie_subset_wrapped(base_storage_trie, mem_accesses, TrieType::Storage)?;
+                create_trie_subset_wrapped(base_storage_trie, slots_to_not_hash, TrieType::Storage)?;
 
             Ok((h_addr, partial_storage_trie))
         })
         .collect::<TraceDecodingResult<_>>()
-}
-
-fn create_minimal_partial_tries_needed_by_txn(
-    curr_block_tries: &MptTrieState,
-    nodes_used_by_txn: &NodesUsedByTxn,
-    txn_idx: TxnIdx,
-    delta_application_out: TrieDeltaApplicationOutput,
-) -> TraceDecodingResult<MptTrieState> {
-    let state = create_minimal_state_partial_trie(
-        &curr_block_tries.state,
-        nodes_used_by_txn.state_accesses.iter().cloned(),
-        delta_application_out
-            .additional_state_trie_paths_to_not_hash
-            .into_iter(),
-    )?;
-
-    let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
-    // TODO: Replace cast once `mpt_trie` supports `into` for `usize...
-    let txn = create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
-
-    let receipt =
-        create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
-
-    let storage_accesses = nodes_used_by_txn.state_accesses.iter().map(|h_addr| {
-        let x = delta_application_out
-            .additional_storage_trie_paths_to_not_hash
-            .get(h_addr)
-            .into_iter()
-            .flat_map(|slots| slots.iter().cloned());
-
-        (*h_addr, x)
-    });
-
-    let storage =
-        create_minimal_storage_partial_tries(&curr_block_tries.storage, storage_accesses)?;
-
-    Ok(MptTrieState {
-        state,
-        storage,
-        receipt,
-        txn,
-    })
 }
 
 // We really want to get a trie with just a hash node here, and this is an easy
@@ -589,13 +559,4 @@ fn create_dummy_proof_tries_mpt(
             TrieType::Txn,
         ),
     }
-}
-
-/// Additional information discovered during delta application.
-#[derive(Clone, Debug, Default)]
-struct TrieDeltaApplicationOutput {
-    // During delta application, if a delete occurs, we may have to make sure additional nodes
-    // that are not accessed by the txn remain unhashed.
-    additional_state_trie_paths_to_not_hash: Vec<Nibbles>,
-    additional_storage_trie_paths_to_not_hash: HashMap<H256, Vec<Nibbles>>,
 }
