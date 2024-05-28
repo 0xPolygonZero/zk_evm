@@ -112,7 +112,9 @@ impl ProverInput {
 
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
-            b_height: block_number.as_u64(),
+            b_height: block_number
+                .to_u64()
+                .expect("Block number should fit in a u64"),
             intern: proof_gen::proof_gen::dummy_proof()?,
         })
     }
