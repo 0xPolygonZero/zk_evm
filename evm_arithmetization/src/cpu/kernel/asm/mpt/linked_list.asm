@@ -72,7 +72,7 @@ global init_linked_lists:
 
 %macro insert_account_no_return
     %insert_account
-    POP
+    %pop2
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/4, by 4
@@ -98,9 +98,7 @@ global insert_account:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
     // stack: pred_ptr/4, addr, payload_ptr, retdest
-global debug_got_ptr:
     %get_valid_account_ptr
-global debug_valid_ptr:
     // stack: pred_ptr, addr, payload_ptr, retdest
     DUP1
     MLOAD_GENERAL
@@ -206,6 +204,62 @@ insert_new_account:
     PUSH 0
     SWAP1
     SWAP2
+    JUMP
+
+%macro search_account
+    %stack (addr, ptr) -> (addr, ptr, %%after)
+    %jump(search_account)
+%%after:
+    // stack: cold_access
+%endmacro
+
+%macro search_account_no_return
+    %search_account
+    %pop2
+%endmacro
+
+
+/// Search the account addr and payload pointer into the linked list.
+/// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
+/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+global search_account:
+    // stack: addr, payload_ptr, retdest
+    PROVER_INPUT(linked_list::insert_account)
+    // stack: pred_ptr/4, addr, payload_ptr, retdest
+    %get_valid_account_ptr
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    DUP1
+    MLOAD_GENERAL
+    DUP1
+    // stack: pred_addr, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    DUP4 GT
+    DUP3 %eq_const(@SEGMENT_ACCOUNTS_LINKED_LIST)
+    ADD // OR
+    // If the predesessor is strictly smaller or the predecessor is the special
+    // node with key @U256_MAX (and hence we're inserting a new minimum), then
+    // we need to insert a new node.
+    %jumpi(account_not_found)
+    // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
+    // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
+    DUP3
+    %assert_eq
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    // Check that this is not a deleted node
+    DUP1
+    %add_const(3)
+    MLOAD_GENERAL
+    %jump_neq_const(@U256_MAX, account_found)
+    // The storage key is not in the list.
+    PANIC
+
+account_not_found:
+    // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
+    %pop3
+    SWAP1
+    PUSH 1
+    SWAP1
     JUMP
 
 /// Remove the storage key and its value from the access list.
@@ -477,7 +531,7 @@ global remove_slot:
 %macro read_accounts_linked_list
     %stack (addr) -> (addr, 0, %%after)
     %addr_to_state_key
-    %jump(insert_account)
+    %jump(search_account)
 %%after:
     // stack: cold_access, account_ptr
     POP

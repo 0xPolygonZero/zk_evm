@@ -24,29 +24,7 @@ extcodehash_dead:
 
 global extcodehash:
     // stack: address, retdest
-
-    //TEST linked list
-    DUP1
-    %read_accounts_linked_list
-    // stack: ll_addr, address, retdest
-global debug_ll_addr:
-    %add_const(3)
-    %mload_trie_data
-    // stack: ll_code_hash, address, retdest
-global debug_addr_from_ll:
-    SWAP1
     %mpt_read_state_trie
-    DUP1
-    %add_const(3)
-    %mload_trie_data
-    // stack: code_hash, account_ptr, ll_code_hash, retdest
-    SWAP1 SWAP2
-    // stack: ll_code_hash, code_hash, account_ptr, retdest  
-global debug_before_eq_code_hash:  
-    %assert_eq
-    // END TEST linked list
-
-
     // stack: account_ptr, retdest
     DUP1 ISZERO %jumpi(retzero)
     %add_const(3)

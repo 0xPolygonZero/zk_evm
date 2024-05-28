@@ -230,7 +230,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 
 pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
     log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
-    log::debug!("Input state_trie: {:#?}", &inputs.tries.state_trie);
+    log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
     log::debug!(
         "Input transactions_trie: {:?}",
         &inputs.tries.transactions_trie
@@ -249,17 +249,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     debug_inputs(&inputs);
     let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
-    log::debug!(
-        "trie data[..59] = {:?}",
-        state.memory.contexts[0].segments[Segment::TrieData.unscale()].content[..59].to_vec()
-    );
 
     apply_metadata_and_tries_memops(&mut state, &inputs);
-
-    log::debug!(
-        "trie data[..59] = {:?}",
-        state.memory.contexts[0].segments[Segment::TrieData.unscale()].content[..59].to_vec()
-    );
 
     let cpu_res = timed!(timing, "simulate CPU", simulate_cpu(&mut state));
 

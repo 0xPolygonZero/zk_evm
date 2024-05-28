@@ -153,33 +153,6 @@ pub(crate) trait State<F: Field> {
         let halt_offsets = self.get_halt_offsets();
 
         loop {
-            // TODO: remove!
-
-            // log::debug!(
-            //     "state_trie = {:?}",
-            //     get_state_trie::<HashedPartialTrie>(
-            //         &self.get_generation_state().memory,
-            //         self.get_generation_state().memory.contexts[0].segments
-            //             [Segment::GlobalMetadata.unscale()]
-            //         .get(GlobalMetadata::StateTrieRoot.unscale())
-            //         .try_into()
-            //         .unwrap()
-            //     )
-            // );
-
-            // log::debug!(
-            //     "content[1] = {:?}, content[58] = {:?} \n trie_data_size = {:?}",
-            //     self.get_generation_state().memory.contexts[0].segments
-            //         [Segment::TrieData.unscale()]
-            //     .content[1],
-            //     self.get_generation_state().memory.contexts[0].segments
-            //         [Segment::TrieData.unscale()]
-            //     .content[58],
-            //     self.get_generation_state().memory.contexts[0].segments
-            //         [Segment::GlobalMetadata.unscale()]
-            //     .get(GlobalMetadata::TrieDataSize.unscale())
-            // );
-
             let registers = self.get_registers();
             let pc = registers.program_counter;
 

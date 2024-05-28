@@ -40,7 +40,6 @@ global update_txn_trie:
     // stack: txn_rlp_len, txn_counter, num_nibbles, retdest
     // Copy the transaction rlp to the trie data segment.
     %get_trie_data_size
-global debug_get_trie_data_size:
     // stack: value_ptr, txn_rlp_len, txn_counter, num_nibbles, retdest
     SWAP1
     // First we write txn rlp length

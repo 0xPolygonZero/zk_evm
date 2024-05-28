@@ -5,7 +5,6 @@ global transfer_eth:
     // stack: from, to, amount, retdest
     %stack (from, to, amount, retdest)
         -> (from, amount, to, amount, retdest)
-global debug_o_sera_aca:
     %deduct_eth
     // stack: deduct_eth_status, to, amount, retdest
     %jumpi(transfer_eth_failure)
@@ -67,7 +66,7 @@ global add_eth:
     // stack: addr, amount, retdest
     DUP1 %insert_touched_addresses
     DUP1 %mpt_read_state_trie
-global debug_leyendo_account:
+global debug_is_not_arriving_here:
     // stack: account_ptr, addr, amount, retdest
     DUP1 ISZERO %jumpi(add_eth_new_account) // If the account pointer is null, we need to create the account.
     %add_const(1)

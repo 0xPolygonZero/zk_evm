@@ -42,9 +42,8 @@ global hash_initial_tries:
     // stack: trie_data_len
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_BEFORE)  %assert_eq
     // stack: trie_data_full_len
-global debug_before_the_55:
+
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
-global debug_after_the_55:
 
 global start_txn:
     // stack: (empty)

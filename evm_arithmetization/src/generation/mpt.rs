@@ -399,17 +399,28 @@ associated storage trie hash"
 
             // Push the payload in the trie data
             trie_data.push(nonce);
+            log::debug!(
+                "added nonce = {:?} to trie_data at pos = {:?}",
+                trie_data[trie_data.len() - 1],
+                trie_data.len() - 1
+            );
             trie_data.push(balance);
+            log::debug!(
+                "added balance = {:?} to trie_data at pos = {:?}",
+                trie_data[trie_data.len() - 1],
+                trie_data.len() - 1
+            );
             // The Storage pointer is only written in the trie
             trie_data.push(0.into());
-            log::debug!(
-                "code_hash = {:?} written at position = {:?}",
-                code_hash.into_uint(),
-                trie_data.len()
-            );
             trie_data.push(code_hash.into_uint());
+            log::debug!(
+                "added code_hash = {:?} to trie_data at pos = {:?}",
+                trie_data[trie_data.len() - 1],
+                trie_data.len() - 1
+            );
             get_storage_leaves(
                 address,
+                empty_nibbles(),
                 storage_trie,
                 storage_leaves,
                 trie_data,
@@ -424,6 +435,7 @@ associated storage trie hash"
 
 pub(crate) fn get_storage_leaves<F>(
     address: U256,
+    key: Nibbles,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<U256>,
     trie_data: &mut Vec<U256>,
@@ -436,28 +448,47 @@ where
         Node::Branch { children, value } => {
             // Now, load all children and update their pointers.
             for (i, child) in children.iter().enumerate() {
-                let child_ptr =
-                    get_storage_leaves(address, child, storage_leaves, trie_data, parse_value)?;
+                let extended_key = key.merge_nibbles(&Nibbles {
+                    count: 1,
+                    packed: i.into(),
+                });
+                let child_ptr = get_storage_leaves(
+                    address,
+                    extended_key,
+                    child,
+                    storage_leaves,
+                    trie_data,
+                    parse_value,
+                )?;
             }
 
             Ok(())
         }
 
         Node::Extension { nibbles, child } => {
-            get_storage_leaves(address, child, storage_leaves, trie_data, parse_value)?;
+            let extended_key = key.merge_nibbles(nibbles);
+            get_storage_leaves(
+                address,
+                extended_key,
+                child,
+                storage_leaves,
+                trie_data,
+                parse_value,
+            )?;
 
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
             // The last leaf must point to the new one
             let len = storage_leaves.len();
+            let merged_key = key.merge_nibbles(nibbles);
             storage_leaves[len - 1] =
                 U256::from(Segment::StorageLinkedList as usize + storage_leaves.len());
             // Write the address
             storage_leaves.push(address);
             // Write the key
             storage_leaves.push(
-                nibbles
+                merged_key
                     .try_into()
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             );
@@ -536,11 +567,6 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
 
     // TODO: Remove after checking correctness of linked lists
     let state_root_ptr = load_state_mpt(trie_inputs, &mut trie_data)?;
-
-    log::debug!(
-        "trie_data size after loading state_mpt = {:?}",
-        trie_data.len()
-    );
 
     let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
         let mut parsed_txn = vec![U256::from(rlp.len())];

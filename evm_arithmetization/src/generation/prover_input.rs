@@ -414,18 +414,27 @@ impl<F: Field> GenerationState<F> {
             "accounts linked list = {:?}",
             self.get_accounts_linked_list()
         );
-        log::debug!(
-            "trie data[58] = {:?}",
-            self.memory.contexts[0].segments[Segment::TrieData.unscale()].content[55..60].to_vec(),
-        );
-        if let Some((ptr, _)) = self
+        if let Some((ptr, node)) = self
             .get_accounts_linked_list()?
             .find(|(_, node)| node[0] > addr)
         {
-            log::debug!(
-                "found ptr = {:?}",
-                Segment::AccountsLinkedList as usize + ptr
-            );
+            {
+                let mut next_ptr: usize = node[3].try_into().unwrap();
+                next_ptr -= Segment::AccountsLinkedList as usize;
+                let index: usize = self.memory.contexts[0].segments
+                    [Segment::AccountsLinkedList.unscale()]
+                .content[next_ptr + 1]
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+                log::debug!(
+                    "account found = {:?} at ptr = {:?}",
+                    self.memory.contexts[0].segments[Segment::TrieData.unscale()].content
+                        [index..index + 4]
+                        .to_vec(),
+                    index
+                );
+            }
             Ok(
                 ((Segment::AccountsLinkedList as usize + ptr) / ACCOUNTS_LINKED_LIST_NODE_SIZE)
                     .into(),
@@ -442,12 +451,10 @@ impl<F: Field> GenerationState<F> {
     fn run_next_insert_slot(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        log::debug!("Looking for addr = {:?} and key = {:?}", addr, key);
-        if let Some((ptr, _)) = self.get_storage_linked_list()?.find(|(_, node)| {
-            log::debug!("searching in node = {:?}", node);
-            node[0] > addr || (node[0] == addr && node[1] > key)
-        }) {
-            log::debug!("found");
+        if let Some((ptr, _)) = self
+            .get_storage_linked_list()?
+            .find(|(_, node)| node[0] > addr || (node[0] == addr && node[1] > key))
+        {
             Ok((ptr / STORAGE_LINKED_LIST_NODE_SIZE).into())
         } else {
             Ok(0.into())

@@ -71,7 +71,6 @@ global buy_gas:
     // stack: gas_cost, retdest
     %mload_txn_field(@TXN_FIELD_ORIGIN)
     // stack: sender_addr, gas_cost, retdest
-global debug_sera_aca:
     %deduct_eth
     // stack: deduct_eth_status, retdest
     %jumpi(panic)
@@ -104,7 +103,6 @@ global warm_coinbase:
 
 global process_based_on_type:
     %is_contract_creation
-global debug_is_contract_creation:
     %jumpi(process_contract_creation_txn)
     %jump(process_message_txn)
 
@@ -227,7 +225,6 @@ global process_message_txn:
     // stack: retdest
     %mload_txn_field(@TXN_FIELD_VALUE)
     %mload_txn_field(@TXN_FIELD_TO)
-global debug_es_esta_la_addr_maldita:
     DUP1 %insert_accessed_addresses_no_return
     %mload_txn_field(@TXN_FIELD_ORIGIN)
     // stack: from, to, amount, retdest
