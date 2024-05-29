@@ -120,7 +120,7 @@ global memcpy_bytes_backwards:
     // We will pack 32 bytes into a U256 from the source, and then unpack it at the destination.
     // Copy the next chunk of bytes.
     // stack: DST, SRC, count, retdest
-    PUSH 32
+    PUSH 0x20
     DUP3
     // stack: SRC, 32, DST, SRC, count, retdest
     MLOAD_32BYTES
@@ -128,16 +128,24 @@ global memcpy_bytes_backwards:
     SWAP1
     // stack: DST, value, SRC, count, retdest
     MSTORE_32BYTES_32
-    // stack: DST', SRC, count, retdest
+    // stack: DST'', SRC, count, retdest
 
-    // Decrement DST' by 64 (32 from `MSTORE_32BYTES_32` + 32 for the next chunk).
-    %sub_const(0x40)
-    // Decrement SRC by 32.
-    SWAP1
-    %sub_const(0x20)
-    SWAP1
     // Decrement count by 32.
-    PUSH 32 DUP4 SUB SWAP3 POP
+    SWAP2
+    %sub_const(0x20)
+    SWAP2
+
+    // Decrement DST'' by 32 (from `MSTORE_32BYTES_32` increment) + min(32, count') for the next chunk.
+    // Decrement SRC by min(32, count').
+    // stack: DST'', SRC, count', retdest
+    DUP3 PUSH 0x20 %min
+    // stack: min(32, count'), DST'', SRC, count', retdest
+    DUP1 %add_const(0x20)
+    // stack: 32 + min(32, count'), min(32, count'), DST'', SRC, count', retdest
+    SWAP3 SUB
+    // stack: SRC' = SRC-min(32, count'), DST'', 32 + min(32, count'), count', retdest
+    SWAP2 SWAP1 SUB
+    // stack: DST' = DST''-(32+min(32, count')), SRC', count', retdest
 
     // Continue the loop.
     %jump(memcpy_bytes_backwards)

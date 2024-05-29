@@ -84,3 +84,17 @@ fn test_mcopy_1_0_8() {
 
     assert!(test_mcopy(dest_offset, offset, size, &pre_memory, &post_memory).is_ok())
 }
+
+#[test]
+fn test_mcopy_1_0_33() {
+    init_logger();
+    let dest_offset = 1;
+    let offset = 0;
+    let size = 33;
+    let pre_memory =
+        hex!("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627");
+    let post_memory =
+        hex!("00000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20222324252627");
+
+    assert!(test_mcopy(dest_offset, offset, size, &pre_memory, &post_memory).is_ok())
+}
