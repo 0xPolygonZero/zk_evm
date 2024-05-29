@@ -17,6 +17,7 @@ use starky::evaluation_frame::StarkEvaluationFrame;
 use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
+use super::columns::PREINITIALIZED_SEGMENTS;
 use super::segments::Segment;
 use crate::all_stark::EvmStarkFrame;
 use crate::memory::columns::{
@@ -130,6 +131,11 @@ pub(crate) fn generate_first_change_flags_and_rc<F: RichField>(
         let address_changed =
             row[CONTEXT_FIRST_CHANGE] + row[SEGMENT_FIRST_CHANGE] + row[VIRTUAL_FIRST_CHANGE];
         row[INITIALIZE_AUX] = next_segment * address_changed * next_is_read;
+
+        row[PREINITIALIZED_SEGMENTS] = (next_segment
+            - F::from_canonical_usize(Segment::TrieData.unscale()))
+            * (next_segment - F::from_canonical_usize(Segment::AccountsLinkedList.unscale()))
+            * (next_segment - F::from_canonical_usize(Segment::StorageLinkedList.unscale()))
     }
 }
 
@@ -369,6 +375,18 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             initialize_aux - next_addr_segment * not_address_unchanged * next_is_read,
         );
 
+        // Validate preinitialized_segments.
+        let preinitialized_segments = local_values[PREINITIALIZED_SEGMENTS];
+        yield_constr.constraint_transition(
+            preinitialized_segments
+                - (next_addr_segment
+                    - P::Scalar::from_canonical_usize(Segment::TrieData.unscale()))
+                    * (next_addr_segment
+                        - P::Scalar::from_canonical_usize(Segment::AccountsLinkedList.unscale()))
+                    * (next_addr_segment
+                        - P::Scalar::from_canonical_usize(Segment::StorageLinkedList.unscale())),
+        );
+
         for i in 0..8 {
             // Enumerate purportedly-ordered log.
             yield_constr.constraint_transition(
@@ -385,9 +403,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             // 0 is already included in initialize_aux). There is overlap with
             // the previous constraint, but this is not a problem.
             yield_constr.constraint_transition(
-                (next_addr_segment - P::Scalar::from_canonical_usize(Segment::TrieData.unscale()))
-                    * initialize_aux
-                    * next_values_limbs[i],
+                preinitialized_segments * initialize_aux * next_values_limbs[i],
             );
         }
 
@@ -530,6 +546,29 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             builder.sub_extension(initialize_aux, computed_initialize_aux);
         yield_constr.constraint_transition(builder, new_first_read_constraint);
 
+        // Validate preinitialized_segments.
+        let preinitialized_segments = local_values[PREINITIALIZED_SEGMENTS];
+        let segment_trie_data = builder.add_const_extension(
+            next_addr_segment,
+            F::NEG_ONE * F::from_canonical_usize(Segment::TrieData.unscale()),
+        );
+        let segment_accounts_list = builder.add_const_extension(
+            next_addr_segment,
+            F::NEG_ONE * F::from_canonical_usize(Segment::AccountsLinkedList.unscale()),
+        );
+        let segment_storage_list = builder.add_const_extension(
+            next_addr_segment,
+            F::NEG_ONE * F::from_canonical_usize(Segment::StorageLinkedList.unscale()),
+        );
+        let segment_prod = builder.mul_many_extension([
+            segment_trie_data,
+            segment_accounts_list,
+            segment_storage_list,
+        ]);
+        let preinitialized_segments_constraint =
+            builder.sub_extension(preinitialized_segments, segment_prod);
+        yield_constr.constraint_transition(builder, preinitialized_segments_constraint);
+
         for i in 0..8 {
             // Enumerate purportedly-ordered log.
             let value_diff = builder.sub_extension(next_values_limbs[i], value_limbs[i]);
@@ -549,12 +588,10 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             // zero-initializes all segments except the specified ones (segment
             // 0 is already included in initialize_aux). There is overlap with
             // the previous constraint, but this is not a problem.
-            let segment_trie_data = builder.add_const_extension(
-                next_addr_segment,
-                F::NEG_ONE * F::from_canonical_usize(Segment::TrieData.unscale()),
+            let zero_init_constraint = builder.mul_extension(
+                preinitialized_segments,
+                context_zero_initializing_constraint,
             );
-            let zero_init_constraint =
-                builder.mul_extension(segment_trie_data, context_zero_initializing_constraint);
             yield_constr.constraint_transition(builder, zero_init_constraint);
         }
 
