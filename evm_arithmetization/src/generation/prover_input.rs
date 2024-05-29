@@ -451,6 +451,7 @@ impl<F: Field> GenerationState<F> {
     fn run_next_insert_slot(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
+        log::debug!("storage linked list = {:?}", self.get_storage_linked_list());
         if let Some((ptr, _)) = self
             .get_storage_linked_list()?
             .find(|(_, node)| node[0] > addr || (node[0] == addr && node[1] > key))

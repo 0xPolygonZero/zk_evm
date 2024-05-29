@@ -339,10 +339,13 @@ global insert_slot:
     PROVER_INPUT(linked_list::insert_slot)
     // stack: pred_ptr/5, addr, key, payload_ptr, retdest
     %get_valid_slot_ptr
+global debug_the_ptr:
 
     // stack: pred_ptr, addr, key, payload_ptr, retdest
     DUP1
+global debug_before_mload:
     MLOAD_GENERAL
+global debug_after_mload:
     DUP1
     // stack: pred_addr, pred_addr, pred_ptr, addr, key, payload_ptr, retdest
     DUP4 
@@ -353,10 +356,12 @@ global insert_slot:
     // node with key @U256_MAX (and hence we're inserting a new minimum), then
     // we need to insert a new node.
     %jumpi(insert_new_slot)
+global debug_after_first_jumpi:
     // stack: pred_addr, pred_ptr, addr, key, payload_ptr, retdest
     // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
     DUP3
     %assert_eq
+global debug_after_assert_eq:
     // stack: pred_ptr, addr, key, payload_ptr, retdest
     DUP1
     %increment
@@ -364,6 +369,7 @@ global insert_slot:
     // stack: pred_key, pred_ptr, addr, key, payload_ptr, retdest
     DUP1 DUP5
     GT
+global before_jumpi:
     %jumpi(insert_new_slot)
     // stack: pred_key, pred_ptr, addr, key, payload_ptr, retdest
     DUP4
@@ -404,14 +410,17 @@ slot_found:
     %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
 
+global debug_insert_new_slot:
 insert_new_slot:
-    // stack: pred_addr, pred_ptr, addr, key, payload_ptr, retdest
+    // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
     POP
     // get the value of the next address
     %add_const(4)
+global debug_next_ptr_ptr:
     // stack: next_ptr_ptr, addr, key, payload_ptr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     DUP2
+global debug_mload_1:
     MLOAD_GENERAL
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     // Check that this is not a deleted node
@@ -419,6 +428,7 @@ insert_new_slot:
     %eq_const(@U256_MAX)
     %assert_zero
     DUP1
+    global debug_mload_2:
     MLOAD_GENERAL
     // stack: next_addr, next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     DUP1
@@ -434,29 +444,35 @@ insert_new_slot:
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     DUP1
     %increment
+global debug_mload_3:
     MLOAD_GENERAL
     // stack: next_key, next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
-    DUP6
+    DUP1 // This is added just to have the correct stack in next_node_ok
+    DUP7
     // The next key must be strictly larger
     %assert_lt
 next_node_ok:
-    // stack: next_addr, next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
+    // stack: next_addr or next_key, next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     POP
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr, key, payload_ptr, retdest
     SWAP2
     DUP2
     // stack: new_ptr, next_ptr_ptr, new_ptr, next_ptr, addr, key, payload_ptr, retdest
+global debug_mstore_1:
     MSTORE_GENERAL
+global debug_after_mstore_1:
     // stack: new_ptr, next_ptr, addr, key, payload_ptr, retdest
     // Write the address in the new node
     DUP1
     DUP4
+global debug_mload_5:
     MSTORE_GENERAL
     // stack: new_ptr, next_ptr, addr, key, payload_ptr, retdest
     // Write the key in the new node
     %increment
     DUP1
     DUP5
+global debug_mload_6:
     MSTORE_GENERAL
     // stack: new_ptr + 1, next_ptr, addr, key, payload_ptr, retdest
     // Store payload_ptr

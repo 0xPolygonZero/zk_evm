@@ -8,6 +8,7 @@ global sload_current:
 
     // TEST STORAGE linked list
     DUP1
+global debug_the_slot:
     %read_storage_linked_list
     %mload_trie_data
     %stack (ll_value, slot) -> (slot, after_storage_read, ll_value)

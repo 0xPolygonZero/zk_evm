@@ -119,8 +119,21 @@ sstore_after_refund:
     %append_to_trie_data
     // stack: slot, value_ptr, kexit_info
 
+    // TEST storage write
+    // TEST STORAGE linked list
+    DUP2
+    DUP2
+    %slot_to_storage_key
+    %address
+    %addr_to_state_key
+    %insert_slot_no_return
+
+
     // Next, call mpt_insert on the current account's storage root.
     %stack (slot, value_ptr) -> (slot, value_ptr, after_storage_insert)
+
+
+
     %slot_to_storage_key
     // stack: storage_key, value_ptr, after_storage_insert, kexit_info
     PUSH 64 // storage_key has 64 nibbles
