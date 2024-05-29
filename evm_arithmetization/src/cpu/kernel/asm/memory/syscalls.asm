@@ -244,46 +244,61 @@ global sys_mcopy:
     // stack: kexit_info, dest_offset, offset, size
     GET_CONTEXT
     PUSH @SEGMENT_MAIN_MEMORY
-    DUP6 DUP6 ADD
-    // stack: offset + size, segment, context, kexit_info, dest_offset, offset, size
-    DUP5 LT
-    // stack: dest_offset < offset + size, segment, context, kexit_info, dest_offset, offset, size
-    DUP6 DUP6 GT
-    // stack: dest_offset > offset, dest_offset < offset + size, segment, context, kexit_info, dest_offset, offset, size
-    MUL // AND
-    // stack: (dest_offset > offset) && (dest_offset < offset + size), segment, context, kexit_info, dest_offset, offset, size
 
-    // If both conditions are satisfied, that means we will get an overlap, in which case we need to process the copy
-    // in two chunks to prevent overwriting memory data before reading it.
-    %jumpi(mcopy_with_overlap)
+    DUP5 DUP5 LT
+    // stack: dest_offset < offset, kexit_info, dest_offset, offset, size
+    %jumpi(wcopy_within_bounds)
 
     // stack: segment, context, kexit_info, dest_offset, offset, size
+    DUP6 PUSH 32 %min
+    // stack: shift=min(size, 32), segment, context, kexit_info, dest_offset, offset, size
+    DUP6 DUP8 ADD
+    // stack: offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP6 LT
+    // stack: dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP2
+    // stack: shift, dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP9 GT
+    // stack: size > shift, dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    MUL // AND
+    // stack: (size > shift) && (dest_offset < offset + size), shift, segment, context, kexit_info, dest_offset, offset, size
+
+    // If the conditions `size > shift` and `dest_offset < offset + size` are satisfied, that means
+    // we will get an overlap that will overwrite some SRC data. In that case, we will proceed to the
+    // memcpy in the backwards direction to never overwrite the SRC section before it has been read.
+    %jumpi(mcopy_with_overlap)
+
+    // Otherwise, we either have `SRC` < `DST`, or a small enough `size` that a single loop of
+    // `memcpy_bytes` suffices and does not risk to overwrite `SRC` data before being read.
+    // stack: shift, segment, context, kexit_info, dest_offset, offset, size
+    POP
     %jump(wcopy_within_bounds)
 
 mcopy_with_overlap:
-    // We do have an overlap between the SRC and DST ranges. We will first copy the overlapping segment
-    // (i.e. end of the copy portion), then copy the remaining (i.e. beginning) portion. 
+    // We do have an overlap between the SRC and DST ranges.
+    // We will proceed to `memcpy` in the backwards direction to prevent overwriting unread SRC data.
+    // For this, we need to update `offset` and `dest_offset` to their final position, corresponding
+    // to `x + size - min(32, size)`.
 
-    // stack: segment, context, kexit_info, dest_offset, offset, size
-    DUP5 DUP5 SUB
-    // stack: remaining_size = dest_offset - offset, segment, context, kexit_info, dest_offset, offset, size
-    DUP1 DUP8
-    SUB // overlapping_size = size - remaining_size
-    // stack: overlapping_size, remaining_size, segment, context, kexit_info, dest_offset, offset, size
+    // stack: shift=min(size, 32), segment, context, kexit_info, dest_offset, offset, size
+    DUP1
+    // stack: shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP8 DUP8 ADD
+    // stack: offset+size, shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    SUB
+    // stack: offset'=offset+size-shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    SWAP5 DUP8 ADD
+    // stack: dest_offset+size, shift, segment, context, kexit_info, offset', offset, size
+    SUB
+    // stack: dest_offset'=dest_offset+size-shift, segment, context, kexit_info, offset', offset, size
 
-    // Shift the initial offsets to copy the overlapping segment first.
-    DUP2 DUP8 ADD
-    // stack: offset_first_copy, overlapping_size, remaining_size, segment, context, kexit_info, dest_offset, offset, size
-    DUP3 DUP8 ADD
-    // stack: dest_offset_first_copy, offset_first_copy, overlapping_size, remaining_size, segment, context, kexit_info, dest_offset, offset, size
-
-    %stack (dest_offset_first_copy, offset_first_copy, overlapping_size, remaining_size, segment, context, kexit_info, dest_offset, offset, size) ->
-        (context, segment, offset_first_copy, segment, dest_offset_first_copy, context, overlapping_size, wcopy_within_bounds, segment, context, kexit_info, dest_offset, offset, remaining_size)
+    %stack (next_dst_offset, segment, context, kexit_info, new_offset, offset, size) ->
+        (context, segment, new_offset, segment, next_dst_offset, context, size, wcopy_after, kexit_info)
     %build_address // SRC
     SWAP3
     %build_address // DST
-    // stack: DST, SRC, overlapping_size, wcopy_within_bounds, segment, context, kexit_info, dest_offset, offset, remaining_size
-    %jump(memcpy_bytes)
+    // stack: DST, SRC, size, wcopy_after, kexit_info
+    %jump(memcpy_bytes_backwards)
 
 mcopy_empty:
     // kexit_info, dest_offset, offset, size
