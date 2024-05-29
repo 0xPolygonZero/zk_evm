@@ -565,6 +565,10 @@ pub fn generate_next_segment<F: RichField>(
     };
 
     let segment_index = segment_data.segment_index;
+    log::info!(
+        "Starting generate_next_segment for index {}. Interpreter already created.",
+        segment_index
+    );
 
     // Run the interpreter to get `registers_after` and the partial data for the
     // next segment.
@@ -583,9 +587,10 @@ pub fn generate_next_segment<F: RichField>(
         ));
 
         segment_data.registers_after = updated_registers;
-
+        log::info!("Done with segment {:?}", segment_index);
         Some((segment_data, partial_segment_data))
     } else {
+        log::info!("Done with segment {:?}", segment_index);
         None
     }
 }
