@@ -244,6 +244,11 @@ global sys_mcopy:
     // stack: kexit_info, dest_offset, offset, size
     GET_CONTEXT
     PUSH @SEGMENT_MAIN_MEMORY
+
+    DUP5 DUP5 LT
+    // stack: dest_offset < offset, kexit_info, dest_offset, offset, size
+    %jumpi(wcopy_within_bounds)
+
     // stack: segment, context, kexit_info, dest_offset, offset, size
     DUP6 PUSH 32 %min
     // stack: shift=min(size, 32), segment, context, kexit_info, dest_offset, offset, size
