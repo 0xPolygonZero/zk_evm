@@ -25,7 +25,7 @@ use starky::stark::Stark;
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
-use crate::generation::state::GenerationState;
+use crate::generation::state::{GenerationState, State};
 use crate::generation::{generate_traces, GenerationInputs};
 use crate::get_challenges::observe_public_values;
 use crate::memory::segments::Segment;
@@ -51,6 +51,18 @@ pub struct GenerationSegmentData {
     pub(crate) extra_data: ExtraSegmentData,
     /// Log of the maximal cpu length.
     pub(crate) max_cpu_len_log: Option<usize>,
+}
+
+/// Dummy data used for padding.
+pub fn make_dummy_segment_data(template: GenerationSegmentData) -> GenerationSegmentData {
+    assert!(
+        template.registers_after.program_counter == KERNEL.global_labels["halt"],
+        "Dummy segment isn't terminal."
+    );
+    GenerationSegmentData {
+        registers_before: template.registers_after,
+        ..template
+    }
 }
 
 impl GenerationSegmentData {
@@ -520,6 +532,61 @@ fn build_segment_data<F: RichField>(
             jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             next_txn_index: interpreter.generation_state.next_txn_index,
         },
+    }
+}
+
+/// Returns the data for the current segment, as well as the data -- except
+/// registers_after -- for the next segment.
+pub fn generate_next_segment<F: RichField>(
+    max_cpu_len_log: Option<usize>,
+    inputs: &GenerationInputs,
+    partial_segment_data: Option<GenerationSegmentData>,
+) -> Option<(GenerationSegmentData, Option<GenerationSegmentData>)> {
+    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+        KERNEL.global_labels["init"],
+        vec![],
+        inputs,
+        max_cpu_len_log,
+    );
+
+    // Get the (partial) current segment data, if it is provided. Otherwise,
+    // initialize it.
+    let mut segment_data = if let Some(partial) = partial_segment_data {
+        if partial.registers_after.program_counter == KERNEL.global_labels["halt"] {
+            return None;
+        }
+        interpreter
+            .get_mut_generation_state()
+            .set_segment_data(&partial);
+        interpreter.generation_state.memory = partial.memory.clone();
+        partial
+    } else {
+        build_segment_data(0, None, None, None, &interpreter)
+    };
+
+    let segment_index = segment_data.segment_index;
+
+    // Run the interpreter to get `registers_after` and the partial data for the
+    // next segment.
+    let run_result = set_registers_and_run(segment_data.registers_after, &mut interpreter);
+
+    if let Ok((updated_registers, mem_after)) = run_result {
+        // Set `registers_after` correctly and push the data.
+        let before_registers = segment_data.registers_after;
+
+        let partial_segment_data = Some(build_segment_data(
+            segment_index + 1,
+            Some(updated_registers),
+            Some(updated_registers),
+            mem_after,
+            &interpreter,
+        ));
+
+        segment_data.registers_after = updated_registers;
+
+        Some((segment_data, partial_segment_data))
+    } else {
+        None
     }
 }
 
