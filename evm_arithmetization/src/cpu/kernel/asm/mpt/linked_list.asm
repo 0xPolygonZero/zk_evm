@@ -219,8 +219,8 @@ insert_new_account:
 %endmacro
 
 
-/// Search the account addr and payload pointer into the linked list.
-/// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
+/// Search the account addr andin the linked list.
+/// Return `1, payload_ptr` if the account was not found, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 global search_account:
     // stack: addr, payload_ptr, retdest
@@ -335,7 +335,7 @@ global remove_account:
 /// Return `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 global insert_slot:
-    // stack: addr, payload_ptr, retdest
+    // stack: addr, key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_slot)
     // stack: pred_ptr/5, addr, key, payload_ptr, retdest
     %get_valid_slot_ptr
@@ -504,8 +504,70 @@ global debug_mload_6:
     SWAP2
     JUMP
 
+/// Search the pair (addres, storage_key) in the storage the linked list.
+/// Returns `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
+/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+// TODO: Not sure if this is correct, bc if a value is not found we need to return 0 but keep track of it for
+// having the right cold_access
+global search_slot:
+    // stack: addr, payload_ptr, retdest
+    PROVER_INPUT(linked_list::insert_slot)
+    // stack: pred_ptr/5, addr, key, payload_ptr, retdest
+    %get_valid_slot_ptr
+
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    DUP1
+    MLOAD_GENERAL
+    DUP1
+    // stack: pred_addr, pred_addr, pred_ptr, addr, key, payload_ptr, retdest
+    DUP4 
+    GT
+    DUP3 %eq_const(@SEGMENT_STORAGE_LINKED_LIST)
+    ADD // OR
+    // If the predesessor is strictly smaller or the predecessor is the special
+    // node with key @U256_MAX (and hence we're inserting a new minimum), then
+    // the slot was not found
+    %jumpi(slot_not_found)
+    // stack: pred_addr, pred_ptr, addr, key, payload_ptr, retdest
+    // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
+    DUP3
+    %assert_eq
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    DUP1
+    %increment
+    MLOAD_GENERAL
+    // stack: pred_key, pred_ptr, addr, key, payload_ptr, retdest
+    DUP1 DUP5
+    GT
+    %jumpi(slot_not_found)
+    // stack: pred_key, pred_ptr, addr, key, payload_ptr, retdest
+    DUP4
+    // We know that key <= pred_key. It must hold that pred_key == key.
+    %assert_eq
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    // Check that this is not a deleted node
+    DUP1
+    %add_const(4)
+    MLOAD_GENERAL
+    %jump_neq_const(@U256_MAX, slot_found)
+    // The storage key is not in the list.
+    PANIC
+
+slot_not_found:    
+// stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
+    %pop4
+    SWAP1
+    PUSH 1
+    SWAP1
+global debug_before_jump:
+    JUMP
+
+
 /// Remove the storage key and its value from the list.
 /// Panics if the key is not in the list.
+
 global remove_slot:
     // stack: addr, key, retdest
     PROVER_INPUT(linked_list::remove_slot)
@@ -544,6 +606,10 @@ global remove_slot:
     %pop2
     JUMP
 
+/// Search the account addr and payload pointer into the linked list.
+/// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
+/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+
 %macro read_accounts_linked_list
     %stack (addr) -> (addr, 0, %%after)
     %addr_to_state_key
@@ -559,8 +625,8 @@ global remove_slot:
     %address
     %addr_to_state_key
     %stack (addr, key) -> (addr, key, 0, %%after)
-    %jump(insert_slot)
+    %jump(search_slot)
 %%after:
-    // stack: cold_access, slot_ptr
+    // stack: cold_access, value_ptr, slot_ptr
     POP
 %endmacro

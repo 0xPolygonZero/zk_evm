@@ -7,13 +7,16 @@
 global sload_current:
 
     // TEST STORAGE linked list
-    DUP1
-global debug_the_slot:
-    %read_storage_linked_list
-    %mload_trie_data
-    %stack (ll_value, slot) -> (slot, after_storage_read, ll_value)
+//    DUP1
+//global debug_the_slot:
+//    %read_storage_linked_list
+//global debug_after_read_linked_list:
+//    %mload_trie_data
+//global debug_read_val:
+//    %stack (ll_value, slot) -> (slot, after_storage_read, ll_value)
+//global debug_stack_after_debug_read_val:
 
-    // %stack (slot) -> (slot, after_storage_read)
+     %stack (slot) -> (slot, after_storage_read)
 
 
 
@@ -31,8 +34,10 @@ global after_storage_read:
     // Storage key not found. Return default value_ptr = 0,
     // which derefs to 0 since @SEGMENT_TRIE_DATA[0] = 0.
     
-    %stack (value_ptr, ll_value, retdest) -> (retdest, 0)
-    //%stack (value_ptr, retdest) -> (retdest, 0)
+global debug_donde_que_salta:
+    // This is the replacement
+    // %stack (value_ptr, ll_value, retdest) -> (retdest, 0)
+    %stack (value_ptr, retdest) -> (retdest, 0)
     
     JUMP
 
@@ -42,9 +47,11 @@ global storage_key_exists:
     %mload_trie_data
     // stack: value, retdest
     // atually: value, ll_value, retdest
-    DUP2
-global debug_ll_storage_ok:
-    %assert_eq
+    
+    
+    // DUP2
+//global debug_ll_storage_ok:
+    // %assert_eq
 
     SWAP1
     JUMP
