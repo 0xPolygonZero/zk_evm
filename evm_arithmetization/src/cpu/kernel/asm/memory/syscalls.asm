@@ -252,18 +252,18 @@ global sys_mcopy:
     // stack: segment, context, kexit_info, dest_offset, offset, size
     DUP6 PUSH 32 %min
     // stack: shift=min(size, 32), segment, context, kexit_info, dest_offset, offset, size
-    DUP6 DUP2 ADD
-    // stack: offset + shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP6 DUP8 ADD
+    // stack: offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
     DUP6 LT
-    // stack: dest_offset < offset + shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
     DUP2
-    // stack: shift, dest_offset < offset + shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: shift, dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
     DUP9 GT
-    // stack: size > shift, dest_offset < offset + shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: size > shift, dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
     MUL // AND
-    // stack: (size > shift) && (dest_offset < offset + shift), shift, segment, context, kexit_info, dest_offset, offset, size
+    // stack: (size > shift) && (dest_offset < offset + size), shift, segment, context, kexit_info, dest_offset, offset, size
 
-    // If the conditions `size > shift` and `dest_offset < offset + shift` are satisfied, that means
+    // If the conditions `size > shift` and `dest_offset < offset + size` are satisfied, that means
     // we will get an overlap that will overwrite some SRC data. In that case, we will proceed to the
     // memcpy in the backwards direction to never overwrite the SRC section before it has been read.
     %jumpi(mcopy_with_overlap)
