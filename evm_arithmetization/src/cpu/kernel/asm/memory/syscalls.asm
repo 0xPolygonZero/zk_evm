@@ -112,7 +112,7 @@ calldataload_large_offset:
 codecopy_within_bounds:
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     POP
-global wcopy_within_bounds:
+wcopy_within_bounds:
     // TODO: rework address creation to have less stack manipulation overhead
     // stack: segment, src_ctx, kexit_info, dest_offset, offset, size
     GET_CONTEXT
@@ -123,17 +123,17 @@ global wcopy_within_bounds:
     // stack: DST, SRC, size, wcopy_after, kexit_info
     %jump(memcpy_bytes)
 
-global wcopy_empty:
+wcopy_empty:
     // stack: Gverylow, kexit_info, dest_offset, offset, size
     %charge_gas
     %stack (kexit_info, dest_offset, offset, size) -> (kexit_info)
     EXIT_KERNEL
 
 
-global codecopy_large_offset:
+codecopy_large_offset:
     // stack: total_size, src_ctx, kexit_info, dest_offset, offset, size
     %pop2
-global wcopy_large_offset:
+wcopy_large_offset:
     // offset is larger than the size of the {CALLDATA,CODE,RETURNDATA}. So we just have to write zeros.
     // stack: kexit_info, dest_offset, offset, size
     GET_CONTEXT
@@ -142,7 +142,7 @@ global wcopy_large_offset:
     %build_address
     %jump(memset)
 
-global wcopy_after:
+wcopy_after:
     // stack: kexit_info
     EXIT_KERNEL
 
@@ -260,7 +260,7 @@ global sys_mcopy:
     // stack: segment, context, kexit_info, dest_offset, offset, size
     %jump(wcopy_within_bounds)
 
-global mcopy_with_overlap:
+mcopy_with_overlap:
     // We do have an overlap between the SRC and DST ranges. We will first copy the overlapping segment
     // (i.e. end of the copy portion), then copy the remaining (i.e. beginning) portion. 
 
