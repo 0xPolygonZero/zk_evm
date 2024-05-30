@@ -68,7 +68,7 @@ fn get_generation_inputs() -> GenerationInputs {
         .unwrap();
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_trie: state_trie_before.clone(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
         storage_tries: vec![(to_hashed, Node::Empty.into())],
@@ -157,13 +157,13 @@ fn get_generation_inputs() -> GenerationInputs {
     };
 
     GenerationInputs {
-        signed_txn: Some(txn.to_vec()),
+        signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
         block_metadata,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: state_trie_before.hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0xa868u64.into(),

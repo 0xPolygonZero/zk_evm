@@ -64,7 +64,7 @@ pub struct GenerationInputs {
 
     /// A None would yield an empty proof, otherwise this contains the encoding
     /// of a transaction.
-    pub signed_txn: Option<Vec<u8>>,
+    pub signed_txns: Vec<Vec<u8>>,
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
@@ -105,7 +105,7 @@ pub(crate) struct TrimmedGenerationInputs {
     pub(crate) gas_used_after: U256,
 
     /// Indicates whether there is an actual transaction or a dummy payload.
-    pub(crate) has_txn: bool,
+    pub(crate) txns_len: usize,
 
     /// Expected trie roots after the transactions are executed.
     pub(crate) trie_roots_after: TrieRoots,
@@ -160,7 +160,7 @@ impl GenerationInputs {
             txn_number_before: self.txn_number_before,
             gas_used_before: self.gas_used_before,
             gas_used_after: self.gas_used_after,
-            has_txn: self.signed_txn.is_some(),
+            txns_len: self.signed_txns.len(),
             trie_roots_after: self.trie_roots_after.clone(),
             checkpoint_state_trie_root: self.checkpoint_state_trie_root,
             contract_code: self.contract_code.clone(),
@@ -204,7 +204,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
         (
             GlobalMetadata::TxnNumberAfter,
-            inputs.txn_number_before + if inputs.signed_txn.is_some() { 1 } else { 0 },
+            inputs.txn_number_before + inputs.signed_txns.len(),
         ),
         (
             GlobalMetadata::StateTrieRootDigestBefore,
@@ -314,7 +314,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 }
 
 pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
-    log::debug!("Input signed_txn: {:?}", &inputs.signed_txn);
+    log::debug!("Input signed_txns: {:?}", &inputs.signed_txns);
     log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
     log::debug!(
         "Input transactions_trie: {:?}",

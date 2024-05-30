@@ -219,7 +219,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let inputs = GenerationInputs {
-        signed_txn: Some(txn.to_vec()),
+        signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after,
@@ -429,7 +429,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let mut block_hashes = vec![H256::default(); 256];
 
     let inputs_first = GenerationInputs {
-        signed_txn: Some(txn.to_vec()),
+        signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after: tries_after,
@@ -592,7 +592,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     };
 
     let inputs = GenerationInputs {
-        signed_txn: Some(txn_2.to_vec()),
+        signed_txns: vec![txn_2.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after: trie_roots_after.clone(),
@@ -674,7 +674,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
 
     let max_cpu_len_log = 13;
     let inputs = GenerationInputs {
-        signed_txn: None,
+        signed_txns: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
             state_trie: expected_state_trie_after,

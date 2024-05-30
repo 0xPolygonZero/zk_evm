@@ -44,7 +44,7 @@ fn test_init_exc_stop() {
     };
 
     let inputs = GenerationInputs {
-        signed_txn: None,
+        signed_txns: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
             state_trie,

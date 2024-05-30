@@ -336,6 +336,8 @@ pub struct GenerationState<F: Field> {
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
 
+    pub(crate) next_txn_index: usize,
+
     /// Memory used by stale contexts can be pruned so proving segments can be
     /// smaller.
     pub(crate) stale_contexts: Vec<usize>,
@@ -379,8 +381,7 @@ impl<F: Field> GenerationState<F> {
         trie_roots_ptrs
     }
     pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
-        let rlp_prover_inputs =
-            all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().unwrap_or(&vec![]));
+        let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let bignum_modmul_result_limbs = Vec::new();
 
@@ -389,6 +390,7 @@ impl<F: Field> GenerationState<F> {
             registers: Default::default(),
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
+            next_txn_index: 0,
             stale_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
@@ -477,6 +479,7 @@ impl<F: Field> GenerationState<F> {
             registers: self.registers,
             memory: self.memory.clone(),
             traces: Traces::default(),
+            next_txn_index: 0,
             stale_contexts: Vec::new(),
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),
             state_key_to_address: self.state_key_to_address.clone(),
@@ -504,6 +507,7 @@ impl<F: Field> GenerationState<F> {
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
             .clone_from(&segment_data.extra_data.jumpdest_table);
+        self.next_txn_index = segment_data.extra_data.next_txn_index;
         self.registers = RegistersState {
             program_counter: self.registers.program_counter,
             is_kernel: self.registers.is_kernel,

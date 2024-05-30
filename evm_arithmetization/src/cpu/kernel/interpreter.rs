@@ -9,7 +9,7 @@ use core::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
-use ethereum_types::{BigEndianHash, U256};
+use ethereum_types::{BigEndianHash, H160, H256, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
@@ -120,6 +120,7 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+    pub(crate) next_txn_index: usize,
 }
 
 pub(crate) fn set_registers_and_run<F: Field>(
@@ -272,8 +273,7 @@ impl<F: Field> Interpreter<F> {
         self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
 
         // Update the RLP and withdrawal prover inputs.
-        let rlp_prover_inputs =
-            all_rlp_prover_inputs_reversed(inputs.signed_txn.as_ref().unwrap_or(&vec![]));
+        let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         self.generation_state.rlp_prover_inputs = rlp_prover_inputs;
         self.generation_state.withdrawal_prover_inputs = withdrawal_prover_inputs;
@@ -305,7 +305,7 @@ impl<F: Field> Interpreter<F> {
             (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
             (
                 GlobalMetadata::TxnNumberAfter,
-                inputs.txn_number_before + if inputs.signed_txn.is_some() { 1 } else { 0 },
+                inputs.txn_number_before + inputs.signed_txns.len(),
             ),
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
