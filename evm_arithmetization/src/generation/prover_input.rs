@@ -336,7 +336,7 @@ impl<F: Field> GenerationState<F> {
     /// Returns a non-jumpdest proof for the address on the top of the stack. A
     /// non-jumpdest proof is the closest address to the address on the top of
     /// the stack, if the closses address is >= 32, or zero otherwise.
-    fn run_next_non_jumpdest_proof(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_non_jumpdest_proof(&self) -> Result<U256, ProgramError> {
         let code = self.get_current_code()?;
         let address = u256_to_usize(stack_peek(self, 0)?)?;
         let closest_opcode_addr = get_closest_opcode_address(&code, address);
@@ -349,13 +349,15 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns a pointer to an element in the list whose value is such that
     /// `value <= addr < next_value` and `addr` is the top of the stack.
-    fn run_next_addresses_insert(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_addresses_insert(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some((ptr, _)) = self
+        if let Some((([_, ptr], _), _)) = self
             .get_addresses_access_list()?
-            .find(|&(_, node)| node[0] > addr)
+            .zip(self.get_addresses_access_list()?.skip(1))
+            .zip(self.get_addresses_access_list()?.skip(2))
+            .find(|&((_, [prev_addr, _]), [next_addr, _])| prev_addr <= addr && addr < next_addr)
         {
-            Ok(((Segment::AccessedAddresses as usize + ptr) / 2usize).into())
+            Ok(ptr / U256::from(2))
         } else {
             Ok((Segment::AccessedAddresses as usize).into())
         }
@@ -364,13 +366,14 @@ impl<F: Field> GenerationState<F> {
     /// Returns a pointer to an element in the list whose value is such that
     /// `value < addr == next_value` and addr is the top of the stack.
     /// If the element is not in the list returns loops forever
-    fn run_next_addresses_remove(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_addresses_remove(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some((ptr, _)) = self
+        if let Some(([_, ptr], _)) = self
             .get_addresses_access_list()?
-            .find(|(_, node)| node[0] == addr)
+            .zip(self.get_addresses_access_list()?.skip(1))
+            .find(|&(_, [next_addr, _])| next_addr == addr)
         {
-            Ok(((Segment::AccessedAddresses as usize + ptr) / 2usize).into())
+            Ok(ptr / U256::from(2))
         } else {
             Ok((Segment::AccessedAddresses as usize).into())
         }
@@ -378,14 +381,21 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns a pointer to the predecessor of the top of the stack in the
     /// accessed storage keys list.
-    fn run_next_storage_insert(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_storage_insert(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        if let Some((ptr, _)) = self
+        if let Some((([.., ptr], _), _)) = self
             .get_storage_keys_access_list()?
-            .find(|(_, node)| node[0] > addr || (node[0] == addr && node[1] > key))
+            .zip(self.get_storage_keys_access_list()?.skip(1))
+            .zip(self.get_storage_keys_access_list()?.skip(2))
+            .find(
+                |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
+                    (prev_addr <= addr && addr < next_addr)
+                        || (next_addr == addr && prev_key <= key && key < next_key)
+                },
+            )
         {
-            Ok(((Segment::AccessedStorageKeys as usize + ptr) / 4usize).into())
+            Ok(ptr / U256::from(4))
         } else {
             Ok((Segment::AccessedStorageKeys as usize).into())
         }
@@ -393,14 +403,15 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns a pointer to the predecessor of the top of the stack in the
     /// accessed storage keys list.
-    fn run_next_storage_remove(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_storage_remove(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        if let Some((ptr, _)) = self
+        if let Some(([.., ptr], _)) = self
             .get_storage_keys_access_list()?
-            .find(|(_, node)| (node[0] == addr && node[1] == key) || node[0] == U256::MAX)
+            .zip(self.get_storage_keys_access_list()?.skip(1))
+            .find(|&(_, [next_addr, next_key, ..])| (next_addr == addr && next_key == key))
         {
-            Ok(((Segment::AccessedStorageKeys as usize + ptr) / 4usize).into())
+            Ok(ptr / U256::from(4))
         } else {
             Ok((Segment::AccessedStorageKeys as usize).into())
         }
@@ -408,37 +419,20 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns a pointer to an node in the list such that
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
-    fn run_next_insert_account(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_insert_account(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         log::debug!(
             "accounts linked list = {:?}",
             self.get_accounts_linked_list()
         );
-        if let Some((ptr, node)) = self
+        if let Some((([.., pred_ptr], [node_addr, ..]), _)) = self
             .get_accounts_linked_list()?
-            .find(|(_, node)| node[0] > addr)
+            .zip(self.get_accounts_linked_list()?.skip(1))
+            .zip(self.get_accounts_linked_list()?.skip(2))
+            .find(|&((_, [prev_addr, ..]), [next_addr, ..])| prev_addr <= addr && addr < next_addr)
         {
-            {
-                let mut next_ptr: usize = node[3].try_into().unwrap();
-                next_ptr -= Segment::AccountsLinkedList as usize;
-                let index: usize = self.memory.contexts[0].segments
-                    [Segment::AccountsLinkedList.unscale()]
-                .content[next_ptr + 1]
-                    .unwrap()
-                    .try_into()
-                    .unwrap();
-                log::debug!(
-                    "account found = {:?} at ptr = {:?}",
-                    self.memory.contexts[0].segments[Segment::TrieData.unscale()].content
-                        [index..index + 4]
-                        .to_vec(),
-                    index
-                );
-            }
-            Ok(
-                ((Segment::AccountsLinkedList as usize + ptr) / ACCOUNTS_LINKED_LIST_NODE_SIZE)
-                    .into(),
-            )
+            log::debug!("account found = {:?} at ptr = {:?}", node_addr, pred_ptr);
+            Ok(pred_ptr / U256::from(ACCOUNTS_LINKED_LIST_NODE_SIZE))
         } else {
             Ok((Segment::AccountsLinkedList as usize).into())
         }
@@ -448,49 +442,57 @@ impl<F: Field> GenerationState<F> {
     /// `node[0] <= addr < next_node[0]`, or  node[0] == addr and `node[1] <=
     /// key < next_node[1]`, where `addr` and `key` are the elements at top
     /// of the stack.
-    fn run_next_insert_slot(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_insert_slot(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
         log::debug!("storage linked list = {:?}", self.get_storage_linked_list());
-        if let Some((ptr, _)) = self
+        if let Some((([.., pred_ptr], _), _)) = self
             .get_storage_linked_list()?
-            .find(|(_, node)| node[0] > addr || (node[0] == addr && node[1] > key))
+            .zip(self.get_storage_linked_list()?.skip(1))
+            .zip(self.get_storage_linked_list()?.skip(2))
+            .find(
+                |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
+                    (prev_addr <= addr && addr < next_addr) || (next_addr == addr && next_key > key)
+                },
+            )
         {
-            Ok((ptr / STORAGE_LINKED_LIST_NODE_SIZE).into())
+            Ok(pred_ptr / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {
-            Ok(0.into())
+            Ok((Segment::StorageLinkedList as usize).into())
         }
     }
 
-    /// Returns a pointer to an element in the list such that
-    /// `node[0] < addr == next_node[0]` and addr is the top of the stack.
+    /// Returns a pointer `ptr`` to a node of the form [next_addr, ..]  in the
+    /// list such that `next_addr = addr` and addr is the top of the stack.
     /// If the element is not in the list loops forever
-    fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_remove_account(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some((ptr, _)) = self
+        if let Some(([.., ptr], _)) = self
             .get_accounts_linked_list()?
-            .find(|(_, node)| node[0] == addr)
+            .zip(self.get_accounts_linked_list()?.skip(1))
+            .find(|&(_, [next_node_addr, ..])| next_node_addr == addr)
         {
             Ok((ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE).into())
         } else {
-            Ok(0.into())
+            Ok((Segment::AccountsLinkedList as usize).into())
         }
     }
 
-    /// Returns a pointer to an element in the list such that
-    /// `node[0] <= addr == next_node[0]` and `node[1] < key == next_node[1] `,
+    /// Returns a pointer `ptr`to an a node = [next_addr, next_key] in the list
+    /// such that `next_addr == addr` and `next_key == key `,
     /// and `addr, key` are the elements at the top of the stack.
     /// If the element is not in the list loops forever
-    fn run_next_remove_slot(&mut self) -> Result<U256, ProgramError> {
+    fn run_next_remove_slot(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        if let Some((ptr, _)) = self
+        if let Some(([.., ptr], _)) = self
             .get_storage_linked_list()?
-            .find(|(_, node)| node[0] == addr && node[1] == key)
+            .zip(self.get_storage_linked_list()?.skip(1))
+            .find(|&(_, [next_addr, next_key, ..])| next_addr == addr && next_key == key)
         {
-            Ok((ptr / STORAGE_LINKED_LIST_NODE_SIZE).into())
+            Ok(ptr / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {
-            Ok(0.into())
+            Ok((Segment::StorageLinkedList as usize).into())
         }
     }
 }
@@ -565,7 +567,7 @@ impl<F: Field> GenerationState<F> {
     }
 
     pub(crate) fn get_addresses_access_list(
-        &mut self,
+        &self,
     ) -> Result<LinkedList<ADRESSSES_ACCESS_LIST_LEN>, ProgramError> {
         // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
         // virtual address in the segment. In order to get the length we need
@@ -574,7 +576,7 @@ impl<F: Field> GenerationState<F> {
             .content
             .len();
         LinkedList::from_mem_and_segment(
-            &mut self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content,
+            &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content,
             Segment::AccessedAddresses,
         )
     }
@@ -612,13 +614,13 @@ impl<F: Field> GenerationState<F> {
     }
 
     pub(crate) fn get_storage_keys_access_list(
-        &mut self,
+        &self,
     ) -> Result<LinkedList<STORAGE_KEYS_ACCESS_LIST_LEN>, ProgramError> {
         // GlobalMetadata::AccessedStorageKeysLen stores the value of the next available
         // virtual address in the segment. In order to get the length we need
         // to substract Segment::AccessedStorageKeys as usize
         LinkedList::from_mem_and_segment(
-            &mut self.memory.contexts[0].segments[Segment::AccessedStorageKeys.unscale()].content,
+            &self.memory.contexts[0].segments[Segment::AccessedStorageKeys.unscale()].content,
             Segment::AccessedStorageKeys,
         )
     }

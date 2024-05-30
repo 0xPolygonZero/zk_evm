@@ -204,6 +204,7 @@ insert_new_account:
     PUSH 0
     SWAP1
     SWAP2
+global debug_before_jump:
     JUMP
 
 %macro search_account
@@ -561,7 +562,6 @@ slot_not_found:
     SWAP1
     PUSH 1
     SWAP1
-global debug_before_jump:
     JUMP
 
 

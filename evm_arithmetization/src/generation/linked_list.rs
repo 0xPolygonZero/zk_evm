@@ -76,9 +76,9 @@ impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Linked List {{");
         let cloned_list = self.clone();
-        for (_, node) in cloned_list {
+        for node in cloned_list {
             if node[0] == U256::MAX {
-                writeln!(f, "{:?}", node);
+                writeln!(f, "Node: {:?}", node);
                 break;
             }
             writeln!(f, "{:?} ->", node);
@@ -88,16 +88,16 @@ impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N> {
 }
 
 impl<'a, const N: usize> Iterator for LinkedList<'a, N> {
-    type Item = (usize, [U256; N]);
+    type Item = [U256; N];
 
     fn next(&mut self) -> Option<Self::Item> {
+        // The first node is always the special node, so we skip it in the first
+        // iteration.
         if let Ok(new_pos) = u256_to_usize(self.mem[self.pos + N - 1].unwrap_or_default()) {
-            let old_pos = self.pos;
             self.pos = new_pos - self.offset;
-            Some((
-                old_pos,
-                std::array::from_fn(|i| self.mem[self.pos + i].unwrap_or_default()),
-            ))
+            Some(std::array::from_fn(|i| {
+                self.mem[self.pos + i].unwrap_or_default()
+            }))
         } else {
             None
         }

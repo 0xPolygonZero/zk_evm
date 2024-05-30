@@ -93,18 +93,16 @@ fn test_list_iterator() -> Result<()> {
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be an accounts list");
 
-    let Some((pos_0, [addr, ptr, ctr, scaled_pos_1])) = accounts_list.next() else {
+    let Some([addr, ptr, ctr, scaled_pos_1]) = accounts_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(pos_0, 0);
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
     assert_eq!(ctr, U256::zero());
     assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
-    let Some((pos_0, [addr, ptr, ctr, scaled_pos_1])) = accounts_list.next() else {
+    let Some([addr, ptr, ctr, scaled_pos_1]) = accounts_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(pos_0, 0);
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
     assert_eq!(ctr, U256::zero());
@@ -114,23 +112,21 @@ fn test_list_iterator() -> Result<()> {
         .generation_state
         .get_storage_linked_list()
         .expect("Since we called init_access_lists there must be a storage list");
-    let Some((pos_0, [addr, key, ptr, ctr, scaled_pos_1])) = storage_list.next() else {
+    let Some([addr, key, ptr, ctr, scaled_pos_1]) = storage_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(pos_0, 0);
     assert_eq!(addr, U256::MAX);
     assert_eq!(key, U256::zero());
     assert_eq!(ptr, U256::zero());
     assert_eq!(ctr, U256::zero());
-    assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
-    let Some((pos_0, [addr, key, ptr, ctr, scaled_pos_1])) = storage_list.next() else {
+    assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
+    let Some([addr, key, ptr, ctr, scaled_pos_1]) = storage_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(pos_0, 0);
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
     assert_eq!(ctr, U256::zero());
-    assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
+    assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
 
     Ok(())
 }
@@ -167,10 +163,9 @@ fn test_insert_account() -> Result<()> {
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    let Some((old_pos, [addr, ptr, ctr, scaled_next_pos])) = list.next() else {
+    let Some([addr, ptr, ctr, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(old_pos, 0);
     assert_eq!(addr, U256::from(address.0.as_slice()));
     assert_eq!(ptr, payload_ptr);
     assert_eq!(ctr, U256::zero());
@@ -178,10 +173,9 @@ fn test_insert_account() -> Result<()> {
         scaled_next_pos,
         (Segment::AccountsLinkedList as usize).into()
     );
-    let Some((old_pos, [addr, ptr, ctr, scaled_new_pos])) = list.next() else {
+    let Some([addr, ptr, ctr, scaled_new_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(old_pos, 4);
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
     assert_eq!(ctr, U256::zero());
@@ -226,11 +220,9 @@ fn test_insert_storage() -> Result<()> {
         .get_storage_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    let Some((old_pos, [inserted_addr, inserted_key, ptr, ctr, scaled_next_pos])) = list.next()
-    else {
+    let Some([inserted_addr, inserted_key, ptr, ctr, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(old_pos, 0);
     assert_eq!(inserted_addr, U256::from(address.0.as_slice()));
     assert_eq!(inserted_key, U256::from(key.0.as_slice()));
     assert_eq!(ptr, payload_ptr);
@@ -239,11 +231,9 @@ fn test_insert_storage() -> Result<()> {
         scaled_next_pos,
         (Segment::StorageLinkedList as usize).into()
     );
-    let Some((old_pos, [inserted_addr, inserted_key, ptr, ctr, scaled_new_pos])) = list.next()
-    else {
+    let Some([inserted_addr, inserted_key, ptr, ctr, scaled_new_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(old_pos, 5);
     assert_eq!(inserted_addr, U256::MAX);
     assert_eq!(inserted_key, U256::zero());
     assert_eq!(ptr, U256::zero());
@@ -288,6 +278,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     let offset = Segment::AccountsLinkedList as usize;
     // Insert all addresses
     for i in 0..n {
+        log::debug!("checking {i}-th insertion");
         let addr = U256::from(addresses[i as usize].0.as_slice());
         interpreter.push(0xdeadbeefu32.into());
         interpreter.push(addr + delta_ptr); // ptr = addr + delta_ptr for the sake of the test
@@ -403,7 +394,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    for (i, (_, [addr, ptr, ctr, _])) in list.enumerate() {
+    for (i, [addr, ptr, ctr, _]) in list.enumerate() {
         if addr == U256::MAX {
             //
             assert_eq!(addr, U256::MAX);
@@ -581,7 +572,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
         .get_storage_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    for (i, (_, [addr, key, ptr, ctr, _])) in list.enumerate() {
+    for (i, [addr, key, ptr, ctr, _]) in list.enumerate() {
         if addr == U256::MAX {
             //
             assert_eq!(addr, U256::MAX);
