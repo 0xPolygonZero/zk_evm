@@ -463,7 +463,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     );
 
     let mut timing = TimingTree::new("prove root first", log::Level::Info);
-    let max_cpu_len_log = 15;
+    let max_cpu_len_log = 20;
 
     let segment_proofs_data_first = &all_circuits.prove_all_segments(
         &all_stark,

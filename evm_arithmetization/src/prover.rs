@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
+use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
@@ -54,7 +55,7 @@ pub struct GenerationSegmentData {
 }
 
 /// Dummy data used for padding.
-pub fn make_dummy_segment_data(template: GenerationSegmentData) -> GenerationSegmentData {
+pub(crate) fn make_dummy_segment_data(template: GenerationSegmentData) -> GenerationSegmentData {
     assert!(
         template.registers_after.program_counter == KERNEL.global_labels["halt"],
         "Dummy segment isn't terminal."
@@ -535,9 +536,47 @@ fn build_segment_data<F: RichField>(
     }
 }
 
+pub struct SegmentDataIterator {
+    pub partial_next_data: Option<GenerationSegmentData>,
+    pub inputs: GenerationInputs,
+    pub max_cpu_len_log: Option<usize>,
+    pub nb_segments: usize,
+}
+
+type F = GoldilocksField;
+impl Iterator for SegmentDataIterator {
+    type Item = (GenerationInputs, GenerationSegmentData);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let cur_and_next_data = generate_next_segment::<F>(
+            self.max_cpu_len_log,
+            &self.inputs,
+            self.partial_next_data.clone(),
+        );
+
+        if cur_and_next_data.is_some() {
+            let (data, next_data) = cur_and_next_data.expect(
+                "Data cannot be
+`None`",
+            );
+            self.nb_segments += 1;
+            self.partial_next_data = next_data;
+            Some((self.inputs.clone(), data))
+        } else {
+            if self.nb_segments == 1 {
+                let data = self.partial_next_data.clone().expect("eyo");
+                self.nb_segments += 1;
+                Some((self.inputs.clone(), make_dummy_segment_data(data)))
+            } else {
+                None
+            }
+        }
+    }
+}
+
 /// Returns the data for the current segment, as well as the data -- except
 /// registers_after -- for the next segment.
-pub fn generate_next_segment<F: RichField>(
+pub(crate) fn generate_next_segment<F: RichField>(
     max_cpu_len_log: Option<usize>,
     inputs: &GenerationInputs,
     partial_segment_data: Option<GenerationSegmentData>,
@@ -587,10 +626,8 @@ pub fn generate_next_segment<F: RichField>(
         ));
 
         segment_data.registers_after = updated_registers;
-        log::info!("Done with segment {:?}", segment_index);
         Some((segment_data, partial_segment_data))
     } else {
-        log::info!("Done with segment {:?}", segment_index);
         None
     }
 }

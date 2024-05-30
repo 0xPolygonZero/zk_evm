@@ -49,7 +49,10 @@ use crate::proof::{
     FinalPublicValues, MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget,
     TrieRoots, TrieRootsTarget, TARGET_HASH_SIZE,
 };
-use crate::prover::{check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData};
+use crate::prover::{
+    check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData,
+    SegmentDataIterator,
+};
 use crate::recursive_verifier::{
     add_common_recursion_gates, add_virtual_public_values, get_memory_extra_looking_sum_circuit,
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
@@ -1560,15 +1563,22 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
-        let mut all_data_segments =
-            generate_all_data_segments::<F>(Some(max_cpu_len_log), &generation_inputs)?;
-        let mut proofs = Vec::with_capacity(all_data_segments.len());
-        for mut data in all_data_segments {
+        // log::info!("hello");
+        let mut it_segment_data = SegmentDataIterator {
+            inputs: generation_inputs.clone(),
+            partial_next_data: None,
+            max_cpu_len_log: Some(max_cpu_len_log),
+            nb_segments: 0,
+        };
+
+        let mut proofs = vec![];
+
+        while let Some(mut next_data) = it_segment_data.next() {
             let proof = self.prove_segment(
                 all_stark,
                 config,
                 generation_inputs.clone(),
-                &mut data,
+                &mut next_data.1,
                 timing,
                 abort_signal.clone(),
             )?;
