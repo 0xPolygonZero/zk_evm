@@ -7,9 +7,7 @@
 global mpt_insert_state_trie:
     // stack: key, value_ptr, retdest
     DUP2 DUP2 
-global debug_before_insert_account_no_return:
     %insert_account_no_return
-global debug_account_inserted:
     %stack (key, value_ptr)
         -> (key, value_ptr, mpt_insert_state_trie_save)
     PUSH 64 // num_nibbles

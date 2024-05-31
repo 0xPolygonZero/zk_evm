@@ -1,3 +1,4 @@
+// TODO: Use only linked lists
 global mpt_read_state_trie_test:
     // stack: addr, retdest
     // stack: address, retdest
@@ -6,11 +7,8 @@ global mpt_read_state_trie_test:
     DUP1
     %read_accounts_linked_list
     // stack: ll_addr, address, retdest
-global debug_ll_addr:
     %add_const(3)
-global debug_before_read_tre_data:
     %mload_trie_data
-global debug_ll_code_hash:
     // stack: ll_code_hash, address, retdest
     SWAP1
     %mpt_read_state_trie_original
@@ -20,7 +18,7 @@ global debug_ll_code_hash:
     // stack: code_hash, account_ptr, ll_code_hash, retdest
     SWAP1 SWAP2
     // stack: ll_code_hash, code_hash, account_ptr, retdest
-global debug_before_eq_hashes:
+global debug_at_least_the_code_hash_is_the_same:
     %assert_eq
     // END TEST linked list
     SWAP1

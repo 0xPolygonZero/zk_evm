@@ -6,15 +6,12 @@
 
 global sload_current:
 
+    // TODO: Use only the linked list
     // TEST STORAGE linked list
     DUP1
-global debug_the_slot:
     %read_storage_linked_list
-global debug_after_read_linked_list:
     %mload_trie_data
-global debug_read_val:
     %stack (ll_value, slot) -> (slot, after_storage_read, ll_value)
-global debug_stack_after_debug_read_val:
 
     // %stack (slot) -> (slot, after_storage_read)
 
@@ -34,8 +31,10 @@ global after_storage_read:
     // Storage key not found. Return default value_ptr = 0,
     // which derefs to 0 since @SEGMENT_TRIE_DATA[0] = 0.
     
-global debug_donde_que_salta:
-    %stack (value_ptr, ll_value, retdest) -> (retdest, 0)
+    POP
+global debug_the_storage_value_is_zero:
+    %assert_zero
+    %stack (retdest) -> (retdest, 0)
     //%stack (value_ptr, retdest) -> (retdest, 0)
     
     JUMP
@@ -47,7 +46,7 @@ global storage_key_exists:
     // stack: value, retdest
     // atually: value, ll_value, retdest
     DUP2
-global debug_ll_storage_ok:
+global debug_the_storage_value_is_the_same:
     %assert_eq
 
     SWAP1
