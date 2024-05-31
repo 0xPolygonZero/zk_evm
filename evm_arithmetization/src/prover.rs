@@ -54,18 +54,6 @@ pub struct GenerationSegmentData {
     pub(crate) max_cpu_len_log: Option<usize>,
 }
 
-/// Dummy data used for padding.
-pub(crate) fn make_dummy_segment_data(template: GenerationSegmentData) -> GenerationSegmentData {
-    assert!(
-        template.registers_after.program_counter == KERNEL.global_labels["halt"],
-        "Dummy segment isn't terminal."
-    );
-    GenerationSegmentData {
-        registers_before: template.registers_after,
-        ..template
-    }
-}
-
 impl GenerationSegmentData {
     /// Indicates if this segment is a dummy one.
     pub fn is_dummy(&self) -> bool {
@@ -563,13 +551,7 @@ impl Iterator for SegmentDataIterator {
             self.partial_next_data = next_data;
             Some((self.inputs.clone(), data))
         } else {
-            if self.nb_segments == 1 {
-                let data = self.partial_next_data.clone().expect("eyo");
-                self.nb_segments += 1;
-                Some((self.inputs.clone(), make_dummy_segment_data(data)))
-            } else {
-                None
-            }
+            None
         }
     }
 }
