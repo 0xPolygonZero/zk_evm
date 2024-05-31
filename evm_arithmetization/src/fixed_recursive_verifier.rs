@@ -1563,7 +1563,6 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
-        // log::info!("hello");
         let mut it_segment_data = SegmentDataIterator {
             inputs: generation_inputs.clone(),
             partial_next_data: None,
@@ -1573,7 +1572,7 @@ where
 
         let mut proofs = vec![];
 
-        while let Some(mut next_data) = it_segment_data.next() {
+        for mut next_data in it_segment_data {
             let proof = self.prove_segment(
                 all_stark,
                 config,
