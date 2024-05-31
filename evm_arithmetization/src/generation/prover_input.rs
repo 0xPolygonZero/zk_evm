@@ -386,23 +386,37 @@ impl<F: Field> GenerationState<F> {
     fn run_next_storage_insert(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
+        log::debug!(
+            "storage access list = {:?}",
+            self.get_storage_keys_access_list()
+        );
+        log::debug!("linda no?");
         if let Some((([.., ptr], _), _)) = self
             .get_storage_keys_access_list()?
             .zip(self.get_storage_keys_access_list()?.skip(1))
             .zip(self.get_storage_keys_access_list()?.skip(2))
+            .inspect(
+                |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
+                    log::debug!("radical");
+                    let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
+                        || (prev_addr == addr && prev_key <= key);
+                    let next_is_strictly_larger =
+                        next_addr > key || (next_addr == addr && next_key > key);
+                    log::debug!("addr = {:?}, prev_addr = {:?}, prev_key = {:?}, next_addr = {:?}, next_key = {:?}, prev_is_less_or_equal = {:?}, next_is_strictly_larger = {:?}",
+                        addr, prev_addr, prev_key, next_addr, next_key, prev_is_less_or_equal, next_is_strictly_larger);
+                }
+            )
             .find(
                 |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
-                    let next_addr_is_larger =
-                        (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr;
-                    let between_same_addr = prev_addr == addr && addr == next_addr;
-                    let new_smallest_key =
-                        (prev_addr < addr || prev_addr == U256::MAX) && addr == next_addr;
-                    next_addr_is_larger
-                        || (between_same_addr && prev_key <= key && key < next_key)
-                        || (new_smallest_key && key < next_key)
-                },
+                    let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
+                        || (prev_addr == addr && prev_key <= key);
+                    let next_is_strictly_larger =
+                        next_addr > addr || (next_addr == addr && next_key > key);
+                    prev_is_less_or_equal && next_is_strictly_larger
+                }
             )
         {
+            log::debug!("ptr = {:?} found", ptr);
             Ok(ptr / U256::from(4))
         } else {
             Ok((Segment::AccessedStorageKeys as usize).into())
@@ -460,16 +474,24 @@ impl<F: Field> GenerationState<F> {
             .get_storage_linked_list()?
             .zip(self.get_storage_linked_list()?.skip(1))
             .zip(self.get_storage_linked_list()?.skip(2))
+            .inspect(
+                |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
+                    log::debug!("radical");
+                    let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
+                        || (prev_addr == addr && prev_key <= key);
+                    let next_is_strictly_larger =
+                        next_addr > addr || (next_addr == addr && next_key > key);
+                    log::debug!("addr = {:?}, key = {:?}, prev_addr = {:?}, prev_key = {:?}, next_addr = {:?}, next_key = {:?}, prev_is_less_or_equal = {:?}, next_is_strictly_larger = {:?}",
+                        addr, key, prev_addr, prev_key, next_addr, next_key, prev_is_less_or_equal, next_is_strictly_larger);
+                }
+            )
             .find(
                 |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
-                    let next_addr_is_larger =
-                        (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr;
-                    let between_same_addr = prev_addr == addr && addr == next_addr;
-                    let new_smallest_key =
-                        (prev_addr < addr || prev_addr == U256::MAX) && addr == next_addr;
-                    next_addr_is_larger
-                        || (between_same_addr && prev_key <= key && key < next_key)
-                        || (new_smallest_key && key < next_key)
+                    let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
+                        || (prev_addr == addr && prev_key <= key);
+                    let next_is_strictly_larger =
+                        next_addr > addr || (next_addr == addr && next_key > key);
+                    prev_is_less_or_equal && next_is_strictly_larger
                 },
             )
         {
