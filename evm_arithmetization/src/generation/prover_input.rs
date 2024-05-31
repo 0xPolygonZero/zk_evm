@@ -355,7 +355,9 @@ impl<F: Field> GenerationState<F> {
             .get_addresses_access_list()?
             .zip(self.get_addresses_access_list()?.skip(1))
             .zip(self.get_addresses_access_list()?.skip(2))
-            .find(|&((_, [prev_addr, _]), [next_addr, _])| prev_addr <= addr && addr < next_addr)
+            .find(|&((_, [prev_addr, _]), [next_addr, _])| {
+                (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
+            })
         {
             Ok(ptr / U256::from(2))
         } else {
@@ -390,8 +392,14 @@ impl<F: Field> GenerationState<F> {
             .zip(self.get_storage_keys_access_list()?.skip(2))
             .find(
                 |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
-                    (prev_addr <= addr && addr < next_addr)
-                        || (next_addr == addr && prev_key <= key && key < next_key)
+                    let next_addr_is_larger =
+                        (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr;
+                    let between_same_addr = prev_addr == addr && addr == next_addr;
+                    let new_smallest_key =
+                        (prev_addr < addr || prev_addr == U256::MAX) && addr == next_addr;
+                    next_addr_is_larger
+                        || (between_same_addr && prev_key <= key && key < next_key)
+                        || (new_smallest_key && key < next_key)
                 },
             )
         {
@@ -408,7 +416,7 @@ impl<F: Field> GenerationState<F> {
         let key = stack_peek(self, 1)?;
         if let Some(([.., ptr], _)) = self
             .get_storage_keys_access_list()?
-            .zip(self.get_storage_keys_access_list()?.skip(1))
+            .zip(self.get_storage_keys_access_list()?.skip(2))
             .find(|&(_, [next_addr, next_key, ..])| (next_addr == addr && next_key == key))
         {
             Ok(ptr / U256::from(4))
@@ -429,7 +437,9 @@ impl<F: Field> GenerationState<F> {
             .get_accounts_linked_list()?
             .zip(self.get_accounts_linked_list()?.skip(1))
             .zip(self.get_accounts_linked_list()?.skip(2))
-            .find(|&((_, [prev_addr, ..]), [next_addr, ..])| prev_addr <= addr && addr < next_addr)
+            .find(|&((_, [prev_addr, ..]), [next_addr, ..])| {
+                (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
+            })
         {
             log::debug!("account found = {:?} at ptr = {:?}", node_addr, pred_ptr);
             Ok(pred_ptr / U256::from(ACCOUNTS_LINKED_LIST_NODE_SIZE))
@@ -452,13 +462,21 @@ impl<F: Field> GenerationState<F> {
             .zip(self.get_storage_linked_list()?.skip(2))
             .find(
                 |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
-                    (prev_addr <= addr && addr < next_addr) || (next_addr == addr && next_key > key)
+                    let next_addr_is_larger =
+                        (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr;
+                    let between_same_addr = prev_addr == addr && addr == next_addr;
+                    let new_smallest_key =
+                        (prev_addr < addr || prev_addr == U256::MAX) && addr == next_addr;
+                    next_addr_is_larger
+                        || (between_same_addr && prev_key <= key && key < next_key)
+                        || (new_smallest_key && key < next_key)
                 },
             )
         {
-            Ok(pred_ptr / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
+            Ok((pred_ptr - U256::from(Segment::StorageLinkedList as usize))
+                / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {
-            Ok((Segment::StorageLinkedList as usize).into())
+            Ok(U256::zero())
         }
     }
 
@@ -469,9 +487,18 @@ impl<F: Field> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
         if let Some(([.., ptr], _)) = self
             .get_accounts_linked_list()?
-            .zip(self.get_accounts_linked_list()?.skip(1))
+            .zip(self.get_accounts_linked_list()?.skip(2))
             .find(|&(_, [next_node_addr, ..])| next_node_addr == addr)
         {
+            log::debug!(
+                "storage linked list = {:?}",
+                self.get_accounts_linked_list()
+            );
+            log::debug!(
+                "deleting account with addr = {:?} and ptr = {:?}",
+                addr,
+                ptr
+            );
             Ok((ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE).into())
         } else {
             Ok((Segment::AccountsLinkedList as usize).into())
@@ -487,10 +514,11 @@ impl<F: Field> GenerationState<F> {
         let key = stack_peek(self, 1)?;
         if let Some(([.., ptr], _)) = self
             .get_storage_linked_list()?
-            .zip(self.get_storage_linked_list()?.skip(1))
+            .zip(self.get_storage_linked_list()?.skip(2))
             .find(|&(_, [next_addr, next_key, ..])| next_addr == addr && next_key == key)
         {
-            Ok(ptr / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
+            Ok((ptr - U256::from(Segment::StorageLinkedList as usize))
+                / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {
             Ok((Segment::StorageLinkedList as usize).into())
         }

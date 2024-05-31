@@ -315,6 +315,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     // Test for address already in list.
     for i in 0..n {
         let addr_in_list = U256::from(addresses[i as usize].0.as_slice());
+        log::debug!("checking already in the list {i}-th");
         interpreter.push(retaddr);
         interpreter.push(U256::zero());
         interpreter.push(addr_in_list);
@@ -372,8 +373,9 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     let mut new_addresses = vec![];
 
     for (i, j) in (0..n).tuples() {
-        // Test for address already in list.
+        // Remove addressese already in list.
         let addr_in_list = U256::from(addresses[i as usize].0.as_slice());
+        log::debug!("Removing {i}-th addr = {:?}", addr_in_list);
         interpreter.push(retaddr);
         interpreter.push(addr_in_list);
         interpreter.generation_state.registers.program_counter = delete_account_label;
@@ -396,7 +398,6 @@ fn test_insert_and_delete_accounts() -> Result<()> {
 
     for (i, [addr, ptr, ctr, _]) in list.enumerate() {
         if addr == U256::MAX {
-            //
             assert_eq!(addr, U256::MAX);
             assert_eq!(ptr, U256::zero());
             assert_eq!(ctr, U256::zero());

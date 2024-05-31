@@ -78,7 +78,7 @@ impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N> {
         let cloned_list = self.clone();
         for node in cloned_list {
             if node[0] == U256::MAX {
-                writeln!(f, "Node: {:?}", node);
+                writeln!(f, "{:?}", node);
                 break;
             }
             writeln!(f, "{:?} ->", node);
