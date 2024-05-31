@@ -7,9 +7,7 @@ global sys_sstore:
     %check_static
     DUP1 %leftover_gas %le_const(@GAS_CALLSTIPEND) %jumpi(fault_exception)
     %stack (kexit_info, slot, value) -> (slot, kexit_info, slot, value)
-global before_sload_current:
     %sload_current
-global after_sload_current:
     %address
     %stack (addr, current_value, kexit_info, slot, value) -> (addr, slot, current_value, kexit_info, slot, value)
     %insert_accessed_storage_keys
@@ -19,11 +17,9 @@ global after_sload_current:
     MLOAD_GENERAL
     // stack: original_value, current_value, kexit_info, slot, value
     PUSH 0
-global debug_a:
     // stack: gas, original_value, current_value, kexit_info, slot, value
     %jump(sstore_after_cold_access_check)
 
-global debug_sstore_cold_access:
 sstore_cold_access:
     // stack: value_ptr, current_value, kexit_info, slot, value
     DUP2 MSTORE_GENERAL
@@ -32,7 +28,6 @@ sstore_cold_access:
     PUSH @GAS_COLDSLOAD
     // stack: gas, original_value, current_value, kexit_info, slot, value
 
-global debug_sstore_after_cold_access_check:
 sstore_after_cold_access_check:
     // Check for warm access.
     %stack (gas, original_value, current_value, kexit_info, slot, value) ->
@@ -51,17 +46,14 @@ sstore_after_cold_access_check:
     DUP2 ISZERO ISZERO %mul_const(@GAS_SRESET) ADD
     %jump(sstore_charge_gas)
 
-global debug_sstore_warm:
 sstore_warm:
     // stack: gas, original_value, current_value, kexit_info, slot, value)
     %add_const(@GAS_WARMACCESS)
 
-global debug_sstore_charge_gas:
 sstore_charge_gas:
     %stack (gas, original_value, current_value, kexit_info, slot, value) -> (gas, kexit_info, current_value, value, original_value, slot)
     %charge_gas
 
-global debug_sstore_refund:
 sstore_refund:
     %stack (kexit_info, current_value, value, original_value, slot) -> (current_value, value, current_value, value, original_value, slot, kexit_info)
     EQ %jumpi(sstore_no_refund)
@@ -136,12 +128,8 @@ sstore_after_refund:
     %addr_to_state_key
     %insert_slot_no_return
 
-
     // Next, call mpt_insert on the current account's storage root.
     %stack (slot, value_ptr) -> (slot, value_ptr, after_storage_insert)
-
-
-
     %slot_to_storage_key
     // stack: storage_key, value_ptr, after_storage_insert, kexit_info
     PUSH 64 // storage_key has 64 nibbles

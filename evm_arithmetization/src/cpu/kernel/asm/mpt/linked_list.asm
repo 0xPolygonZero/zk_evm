@@ -310,7 +310,7 @@ global remove_account:
 %endmacro
 
 %macro insert_slot_no_return
-    %insert_account
+    %insert_slot
     %pop2
 %endmacro
 
