@@ -2,17 +2,49 @@ use anyhow::Result;
 use ethereum_types::U256;
 use once_cell::sync::Lazy;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
+use plonky2::field::types::Field;
 
 use crate::cpu::kernel::aggregator::{
     combined_kernel_from_files, KERNEL_FILES, NUMBER_KERNEL_FILES,
 };
 use crate::cpu::kernel::assembler::Kernel;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::witness::memory::MemoryAddress;
 use crate::GenerationInputs;
+
+fn initialize_interpreter<F: Field>(interpreter: &mut Interpreter<F>, gas_limit: U256) {
+    let gas_limit_address = MemoryAddress {
+        context: 0,
+        segment: Segment::ContextMetadata.unscale(),
+        virt: ContextMetadata::GasLimit.unscale(),
+    };
+    interpreter
+        .generation_state
+        .memory
+        .set(gas_limit_address, gas_limit);
+
+    let addr_addr = MemoryAddress {
+        context: 0,
+        segment: Segment::ContextMetadata.unscale(),
+        virt: ContextMetadata::Address.unscale(),
+    };
+    interpreter.generation_state.memory.set(addr_addr, 3.into());
+
+    let initial_len = MemoryAddress {
+        context: 0,
+        segment: Segment::GlobalMetadata.unscale(),
+        virt: GlobalMetadata::TransientStorageLen.unscale(),
+    };
+    // Store 0 but scaled by its segment
+    interpreter
+        .generation_state
+        .memory
+        .set(initial_len, (Segment::TransientStorage as usize).into());
+}
 
 #[test]
 fn test_tstore() -> Result<()> {
@@ -27,21 +59,7 @@ fn test_tstore() -> Result<()> {
     ];
 
     let mut interpreter: Interpreter<F> = Interpreter::new(sys_tstore, initial_stack);
-    let gas_limit_address = MemoryAddress {
-        context: 0,
-        segment: Segment::ContextMetadata.unscale(),
-        virt: ContextMetadata::GasLimit.unscale(),
-    };
-    let addr_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::ContextMetadata.unscale(),
-        virt: ContextMetadata::Address.unscale(),
-    };
-    interpreter
-        .generation_state
-        .memory
-        .set(gas_limit_address, 100.into());
-    interpreter.generation_state.memory.set(addr_addr, 3.into());
+    initialize_interpreter(&mut interpreter, 100.into());
 
     interpreter.run()?;
 
@@ -87,21 +105,7 @@ fn test_tstore_tload() -> Result<()> {
     ];
 
     let mut interpreter: Interpreter<F> = Interpreter::new(sys_tstore, initial_stack);
-    let gas_limit_address = MemoryAddress {
-        context: 0,
-        segment: Segment::ContextMetadata.unscale(),
-        virt: ContextMetadata::GasLimit.unscale(),
-    };
-    let addr_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::ContextMetadata.unscale(),
-        virt: ContextMetadata::Address.unscale(),
-    };
-    interpreter
-        .generation_state
-        .memory
-        .set(gas_limit_address, 200.into());
-    interpreter.generation_state.memory.set(addr_addr, 3.into());
+    initialize_interpreter(&mut interpreter, 200.into());
 
     interpreter.run()?;
 
@@ -150,6 +154,7 @@ fn test_tstore_tload() -> Result<()> {
 #[test]
 fn test_many_tstore_many_tload() -> Result<()> {
     let kexit_info = U256::from(0xdeadbeefu32) + (U256::from(u64::from(true)) << 32);
+    let sys_tstore = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tstore"];
 
     let initial_stack = vec![
         1.into(), // val
@@ -158,24 +163,7 @@ fn test_many_tstore_many_tload() -> Result<()> {
     ];
 
     let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
-    let gas_limit_address = MemoryAddress {
-        context: 0,
-        segment: Segment::ContextMetadata.unscale(),
-        virt: ContextMetadata::GasLimit.unscale(),
-    };
-    let addr_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::ContextMetadata.unscale(),
-        virt: ContextMetadata::Address.unscale(),
-    };
-
-    interpreter
-        .generation_state
-        .memory
-        .set(gas_limit_address, (10 * 200).into());
-    interpreter.generation_state.memory.set(addr_addr, 3.into());
-
-    let sys_tstore = crate::cpu::kernel::aggregator::KERNEL.global_labels["sys_tstore"];
+    initialize_interpreter(&mut interpreter, (10 * 200).into());
 
     for i in 0..10 {
         interpreter.generation_state.registers.program_counter = sys_tstore;
@@ -250,23 +238,7 @@ fn test_revert() -> Result<()> {
     let mut interpreter = Interpreter::<F>::new(sys_tstore, vec![]);
     interpreter.generation_state =
         GenerationState::<F>::new(GenerationInputs::default(), &KERNEL.code).unwrap();
-
-    let gas_limit_address = MemoryAddress {
-        context: 0,
-        segment: Segment::ContextMetadata.unscale(),
-        virt: ContextMetadata::GasLimit.unscale(),
-    };
-    let addr_addr = MemoryAddress {
-        context: 0,
-        segment: Segment::ContextMetadata.unscale(),
-        virt: ContextMetadata::Address.unscale(),
-    };
-
-    interpreter
-        .generation_state
-        .memory
-        .set(gas_limit_address, (20 * 100).into());
-    interpreter.generation_state.memory.set(addr_addr, 3.into());
+    initialize_interpreter(&mut interpreter, (20 * 100).into());
 
     // Store different values at slot 1
     for i in 0..10 {
