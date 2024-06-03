@@ -8,6 +8,13 @@
 /// If the key isn't found in the array, it is inserted at the end.
 /// TODO: Look into using a more efficient data structure.
 
+/// The initial length, 0, must be scaled by its segment for
+/// comparison with the accumulator when iterating through the list.
+%macro init_transient_storage_len
+    PUSH @SEGMENT_TRANSIENT_STORAGE
+    %mstore_global_metadata(@GLOBAL_METADATA_TRANSIENT_STORAGE_LEN)
+%endmacro
+
 %macro search_transient_storage
     %stack (addr, key) -> (addr, key, %%after)
     %jump(search_transient_storage)
@@ -15,14 +22,15 @@
     // stack:    (is_present, pos, addr, key, val)
 %endmacro
 
-/// Looks for an address, key pair into the transient storage. Returns 1 and the position in @SEGMENT_TRANSIENT_STORAGE
-/// if present or 0 and @GLOBAL_METADATA_TRANSIENT_STORAGE_LEN if not.
+/// Looks for an address, key pair into the transient storage.
+/// Returns 1 and the position in @SEGMENT_TRANSIENT_STORAGE if present,
+/// or 0 and @GLOBAL_METADATA_TRANSIENT_STORAGE_LEN if not.
 global search_transient_storage:
     // stack: addr, key, retdest
     %mload_global_metadata(@GLOBAL_METADATA_TRANSIENT_STORAGE_LEN)
     // stack: len, addr, key, retdest
-    PUSH @SEGMENT_TRANSIENT_STORAGE ADD
     PUSH @SEGMENT_TRANSIENT_STORAGE
+    // stack: i = 0, len, addr, key, retdest
 search_transient_storage_loop:
     // `i` and `len` are both scaled by SEGMENT_TRANSIENT_STORAGE
     %stack (i, len, addr, key, retdest) -> (i, len, i, len, addr, key, retdest)
@@ -56,6 +64,7 @@ search_transient_storage_not_found:
     JUMP
 
 search_transient_storage_found:
+    // stack: i, len, addr, key, retdest
     DUP1 %add_const(2)
     MLOAD_GENERAL
     %stack (val, i, len, addr, key, retdest) -> (retdest, 1, i, addr, val, key) // Return 1 to indicate that the address was already present.
@@ -119,6 +128,7 @@ global sys_tstore:
     MSTORE_GENERAL
     %increment DUP1
     DUP6
+    // stack: value, pos'', pos'', addr, original_value, slot, value, kexit_info
     MSTORE_GENERAL
     // stack: pos'', addr, original_value, slot, value, kexit_info
     // If pos'' > @GLOBAL_METADATA_TRANSIENT_STORAGE_LEN we need to also store the new @GLOBAL_METADATA_TRANSIENT_STORAGE_LEN
@@ -133,10 +143,10 @@ sys_tstore_charge_gas:
     %stack 
         (addr, original_value, slot, value, kexit_info) -> 
         (value, original_value, addr, slot, original_value, kexit_info)
-    EQ %jumpi(sstore_noop)
+    EQ %jumpi(tstore_noop)
 
+add_to_journal:
     // stack: addr, slot, original_value, kexit_info
-global debug_journal:
     %journal_add_transient_storage_change
 
     // stack: kexit_info
@@ -144,15 +154,14 @@ global debug_journal:
 
 new_transient_storage_len:
     // Store the new (unscaled) length.
-    // stack: addr, original_value, slot, value, kexit_info
-    PUSH @SEGMENT_TRANSIENT_STORAGE
-    PUSH 1
-    SUB // 1 - seg
-    ADD // new_len = (addr - seg) + 1
+    // stack: pos, addr, original_value, slot, value, kexit_info
+    %increment
+    // stack: pos + 1, addr, original_value, slot, value, kexit_info
     %mstore_global_metadata(@GLOBAL_METADATA_TRANSIENT_STORAGE_LEN)
+    // stack: addr, original_value, slot, value, kexit_info
     %jump(sys_tstore_charge_gas)
 
-sstore_noop:
+tstore_noop:
     // stack: current_value, slot, value, kexit_info
     %pop3
     EXIT_KERNEL

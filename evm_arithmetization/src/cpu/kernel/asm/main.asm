@@ -15,6 +15,9 @@ global main:
     // Initialize accessed addresses and storage keys lists
     %init_access_lists
 
+    // Initialize transient storage length
+    %init_transient_storage_len
+
     // Initialize the RLP DATA pointer to its initial position, 
     // skipping over the preinitialized empty node.
     PUSH @INITIAL_TXN_RLP_ADDR
