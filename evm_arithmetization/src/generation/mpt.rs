@@ -391,7 +391,7 @@ associated storage trie hash"
                 .map_err(|_| ProgramError::IntegerTooLarge)?;
             state_leaves.push(address);
             // Set `value_ptr_ptr`.
-            state_leaves.push((trie_data.len()).into());
+            state_leaves.push(trie_data.len().into());
             // Set counter
             state_leaves.push(0.into());
             // Set the next node as the inital node
