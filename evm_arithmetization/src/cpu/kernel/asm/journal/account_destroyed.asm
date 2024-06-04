@@ -42,18 +42,18 @@ revert_account_destroyed_contd:
     SWAP1
     // Remove `prev_balance` from `target`'s balance.
     // stack: target, address, prev_balance, retdest
-    %search_account
+    %read_accounts_linked_list
     // stack: target_found, target_payload_ptr, address, prev_balance, retdest
     // The target should have been accessed before
-    %assert_zero %add_const(1)
+    %assert_eq_const(1) %add_const(1)
     // stack: target_balance_ptr, address, prev_balance, retdest
     DUP3 DUP2 %mload_trie_data
     // stack: target_balance, prev_balance, target_balance_ptr, address, prev_balance, retdest
     SUB SWAP1 %mstore_trie_data
     // stack: address, prev_balance, retdest
-    %search_account
+    %read_accounts_linked_list
     // stack: address_found, account_payload, prev_balance, retdest
-    %assert_zero
+    %assert_eq_const(1)
     %increment
     // stack: account_balance_payload, prev_balance, retdest
     %mstore_trie_data

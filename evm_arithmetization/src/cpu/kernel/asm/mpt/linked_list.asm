@@ -147,7 +147,7 @@ account_found:
     // stack: access_ctr + 1, orig_payload_ptr, addr, payload_ptr, retdest
     // If access_ctr == 1 then this it's a cold access 
     %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
+    %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, 1, cold_access, orig_payload_ptr)
     JUMP
 
 insert_new_account:
@@ -216,13 +216,15 @@ global debug_before_jump:
 
 %macro search_account_no_return
     %search_account
-    %pop2
+    %pop3
 %endmacro
 
 
 /// Search the account addr in the linked list.
-/// Return `1, payload_ptr` if the account was not found, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Returns (account_found, cold_access, payload_ptr) where:
+/// - `account_found` indicates whether the account was already in the linked list,
+/// - `cold_access` indicates whether the current access is a cold access (so whether the account was ever accessed before)
+/// - `payload_ptr` is a pointer to the account's payload.
 global search_account:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -246,7 +248,6 @@ global search_account:
     %assert_eq
     // stack: pred_ptr, addr, payload_ptr, retdest
     
-    // stack: pred_ptr, addr, payload_ptr, retdest
     // Check that this is not a deleted node
     DUP1
     %add_const(3)
@@ -258,9 +259,8 @@ global search_account:
 account_not_found:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     %pop3
-    SWAP1
-    PUSH 1
-    SWAP1
+    %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
+    // stack: retdest, account_found, cold_access, payload_ptr, retdest
     JUMP
 
 /// Remove the storage key and its value from the access list.
@@ -620,8 +620,8 @@ global remove_slot:
     %addr_to_state_key
     %jump(search_account)
 %%after:
-    // stack: cold_access, account_ptr
-    POP
+    // stack: address_found, cold_access, account_ptr
+    SWAP1 POP
 %endmacro
 
 %macro read_storage_linked_list
@@ -635,3 +635,7 @@ global remove_slot:
     // stack: cold_access, value_ptr, slot_ptr
     POP
 %endmacro
+
+/// Search the account addr and payload pointer into the linked list.
+/// Return `1, payload_ptr` if the account was inserted, `0, original_ptr` if it was already present
+/// and this is the first access, or `0, original_ptr` if it was already present and accessed.

@@ -9,9 +9,9 @@ global revert_code_change:
     POP
     %journal_load_2
     // stack: address, prev_codehash, retdest
-    %search_account
+    %read_accounts_linked_list
     // stack: address_found, account_ptr, prev_codehash, retdest
-    %assert_zero
+    %assert_eq_const(1)
     // stack: account_ptr, prev_codehash, retdest
     %add_const(3)
     // stack: codehash_ptr, prev_codehash, retdest
