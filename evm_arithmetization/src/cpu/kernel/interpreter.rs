@@ -114,7 +114,6 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 /// State data required to initialize the state passed to the prover.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ExtraSegmentData {
-    pub(crate) trimmed_inputs: TrimmedGenerationInputs,
     pub(crate) bignum_modmul_result_limbs: Vec<U256>,
     pub(crate) rlp_prover_inputs: Vec<U256>,
     pub(crate) withdrawal_prover_inputs: Vec<U256>,

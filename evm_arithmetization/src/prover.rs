@@ -501,7 +501,6 @@ fn build_segment_data<F: RichField>(
         memory: memory.unwrap_or_default(),
         max_cpu_len_log: interpreter.get_max_cpu_len_log(),
         extra_data: ExtraSegmentData {
-            trimmed_inputs: interpreter.generation_state.inputs.clone(),
             bignum_modmul_result_limbs: interpreter
                 .generation_state
                 .bignum_modmul_result_limbs
