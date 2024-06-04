@@ -143,7 +143,7 @@ pub(crate) fn set_registers_and_run<F: Field>(
     ]
     .iter()
     .enumerate()
-    .map(|(i, reg_content)| {
+    .for_each(|(i, reg_content)| {
         let (addr, val) = (
             MemoryAddress::new_u256s(
                 0.into(),
@@ -154,8 +154,7 @@ pub(crate) fn set_registers_and_run<F: Field>(
             *reg_content,
         );
         interpreter.generation_state.memory.set(addr, val);
-    })
-    .collect::<Vec<_>>();
+    });
 
     interpreter.run()
 }

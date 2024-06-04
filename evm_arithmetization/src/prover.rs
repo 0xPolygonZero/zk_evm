@@ -672,9 +672,6 @@ pub mod testing {
             let (updated_registers, mem_after) =
                 set_registers_and_run(segment_data.registers_before, &mut interpreter)?;
 
-            // Set `registers_after`.
-            segment_data.registers_after = updated_registers;
-
             segment_data = build_segment_data(
                 segment_index,
                 Some(updated_registers),
