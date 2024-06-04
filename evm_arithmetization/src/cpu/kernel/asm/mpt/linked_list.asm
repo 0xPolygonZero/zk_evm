@@ -226,6 +226,7 @@ global debug_before_jump:
 /// - `cold_access` indicates whether the current access is a cold access (so whether the account was ever accessed before)
 /// - `payload_ptr` is a pointer to the account's payload.
 global search_account:
+    // addr is the key here
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
     // stack: pred_ptr/4, addr, payload_ptr, retdest
@@ -413,7 +414,7 @@ slot_found:
     // stack: access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
     // If access_ctr == 1 then this it's a cold access 
     %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
+    %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, 1, cold_access, orig_payload_ptr)
     JUMP
 
 global debug_insert_new_slot:
@@ -516,7 +517,7 @@ global debug_mload_6:
 // TODO: Not sure if this is correct, bc if a value is not found we need to return 0 but keep track of it for
 // having the right cold_access
 global search_slot:
-    // stack: addr, payload_ptr, retdest
+    // stack: addr, key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_slot)
     // stack: pred_ptr/5, addr, key, payload_ptr, retdest
     %get_valid_slot_ptr
@@ -564,9 +565,7 @@ global search_slot:
 slot_not_found:    
 // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
     %pop4
-    SWAP1
-    PUSH 1
-    SWAP1
+    %stack (payload_ptr, retdest) -> (retdest, 0, 1, payload_ptr)
     JUMP
 
 
@@ -632,8 +631,18 @@ global remove_slot:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: cold_access, value_ptr, slot_ptr
-    POP
+    // stack: storage_found, cold_access, value_ptr, slot_ptr
+    SWAP1 POP
+%endmacro
+
+%macro read_slot_linked_list
+    // stack: address, slot
+    %addr_to_state_key
+    SWAP1 %slot_to_storage_key
+    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0 %%after)
+    %jump(search_slot)
+%%after:
+    // stack: storage_found, cold_access, value_ptr, slot_ptr
 %endmacro
 
 /// Search the account addr and payload pointer into the linked list.
