@@ -9,7 +9,9 @@ global revert_nonce_change:
     POP
     %journal_load_2
     // stack: address, prev_nonce, retdest
-    %mpt_read_state_trie
+    %search_account
+    // stack: found_address, payload_ptr, prev_nonce, retdest
+    %assert_zero // The address should already be present.
     // stack: nonce_ptr, prev_nonce retdest
     %mstore_trie_data
     // stack: retdest

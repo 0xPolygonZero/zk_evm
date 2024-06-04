@@ -220,7 +220,7 @@ global debug_before_jump:
 %endmacro
 
 
-/// Search the account addr andin the linked list.
+/// Search the account addr in the linked list.
 /// Return `1, payload_ptr` if the account was not found, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 global search_account:
@@ -295,6 +295,11 @@ global remove_account:
     POP
     JUMP
 
+%macro remove_account
+    %stack (addr) -> (addr, %%after)
+    %jump(remove_account)
+%%after:
+%endmacro
 
 //
 //

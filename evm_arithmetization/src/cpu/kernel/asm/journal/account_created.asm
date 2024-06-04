@@ -9,5 +9,5 @@ global revert_account_created:
     POP
     %journal_load_1
     // stack: address, retdest
-    %delete_account
+    %remove_account
     JUMP

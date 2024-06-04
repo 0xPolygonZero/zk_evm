@@ -4,14 +4,14 @@
     %journal_add_3(@JOURNAL_ENTRY_ACCOUNT_DESTROYED)
 %endmacro
 
-global revert_account_destroyed:
+global revert_account_destroyed_original:
     // stack: entry_type, ptr, retdest
     POP
     %journal_load_3
     // stack: address, target, prev_balance, retdest
     PUSH revert_account_destroyed_contd DUP2
     %jump(remove_selfdestruct_list)
-revert_account_destroyed_contd:
+revert_account_destroyed_contd_original:
     // stack: address, target, prev_balance, retdest
     SWAP1
     // Remove `prev_balance` from `target`'s balance.
@@ -30,3 +30,32 @@ revert_account_destroyed_contd:
     %mstore_trie_data
     JUMP
 
+global revert_account_destroyed:
+    // stack: entry_type, ptr, retdest
+    POP
+    %journal_load_3
+    // stack: address, target, prev_balance, retdest
+    PUSH revert_account_destroyed_contd DUP2
+    %jump(remove_selfdestruct_list)
+revert_account_destroyed_contd:
+    // stack: address: target, prev_balance, retdest
+    SWAP1
+    // Remove `prev_balance` from `target`'s balance.
+    // stack: target, address, prev_balance, retdest
+    %search_account
+    // stack: target_found, target_payload_ptr, address, prev_balance, retdest
+    // The target should have been accessed before
+    %assert_zero %add_const(1)
+    // stack: target_balance_ptr, address, prev_balance, retdest
+    DUP3 DUP2 %mload_trie_data
+    // stack: target_balance, prev_balance, target_balance_ptr, address, prev_balance, retdest
+    SUB SWAP1 %mstore_trie_data
+    // stack: address, prev_balance, retdest
+    %search_account
+    // stack: address_found, account_payload, prev_balance, retdest
+    %assert_zero
+    %increment
+    // stack: account_balance_payload, prev_balance, retdest
+    %mstore_trie_data
+    JUMP
+    
