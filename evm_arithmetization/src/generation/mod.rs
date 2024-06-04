@@ -343,10 +343,7 @@ fn initialize_kernel_code_and_shift_table(memory: &mut MemoryState) {
 
 /// Returns the memory addresses and values that should comprise the state at
 /// the start of the segment's execution.
-fn get_all_memory_address_and_values<F: RichField + Extendable<D>, const D: usize>(
-    memory_before: &MemoryState,
-    state: &mut GenerationState<F>,
-) -> Vec<(MemoryAddress, U256)> {
+fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(MemoryAddress, U256)> {
     let mut res = vec![];
     for (ctx_idx, ctx) in memory_before.contexts.iter().enumerate() {
         for (segment_idx, segment) in ctx.segments.iter().enumerate() {
@@ -385,7 +382,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     initialize_kernel_code_and_shift_table(&mut segment_data.memory);
 
     // Retrieve initial memory addresses and values.
-    let actual_mem_before = get_all_memory_address_and_values(&segment_data.memory, &mut state);
+    let actual_mem_before = get_all_memory_address_and_values(&segment_data.memory);
 
     // Initialize the state with the one at the end of the
     // previous segment execution, if any.
