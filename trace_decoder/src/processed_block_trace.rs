@@ -16,7 +16,7 @@ use crate::decoding::{TraceParsingError, TraceParsingResult};
 use crate::trace_protocol::{
     BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
     SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages, TrieCompact,
-    TrieUncompressed, TxnInfo,
+    TxnInfo,
 };
 use crate::types::{
     CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
@@ -171,7 +171,6 @@ fn process_separate_trie_pre_images(
 
 fn process_state_trie(trie: SeparateTriePreImage) -> HashedPartialTrie {
     match trie {
-        SeparateTriePreImage::Uncompressed(_) => todo!(),
         SeparateTriePreImage::Direct(t) => t.0,
     }
 }
@@ -180,15 +179,8 @@ fn process_storage_tries(
     trie: SeparateStorageTriesPreImage,
 ) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
     match trie {
-        SeparateStorageTriesPreImage::SingleTrie(t) => process_single_combined_storage_tries(t),
         SeparateStorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
     }
-}
-
-fn process_single_combined_storage_tries(
-    _trie: TrieUncompressed,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
-    todo!()
 }
 
 fn process_multiple_storage_tries(
