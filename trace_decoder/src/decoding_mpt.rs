@@ -510,7 +510,7 @@ impl MptProcessedBlockTrace {
             tries,
             trie_roots_after,
             checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
-            contract_code: txn_info.contract_code_accessed,
+            contract_code: HashMap::default(),
             block_metadata: other_data.b_data.b_meta.clone(),
             block_hashes: other_data.b_data.b_hashes.clone(),
         };

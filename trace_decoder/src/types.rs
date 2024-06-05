@@ -30,7 +30,8 @@ pub type TrieRootHash = H256;
 pub type TxnIdx = usize;
 
 /// A function which turns a code hash into bytes.
-pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;
+pub trait ResolveFunc = Fn(&CodeHash) -> Vec<u8>;
+pub trait InsertCodeFunc = Fn(H256, Vec<u8>);
 
 // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 pub(crate) const EMPTY_CODE_HASH: H256 = H256([

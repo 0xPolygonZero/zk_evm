@@ -12,14 +12,14 @@ use crate::compact::compact_prestate_processing::{
     MptPartialTriePreImages, ProcessedCompactOutput,
 };
 use crate::decoding_mpt::{CodeHashResolver, TxnMetaState};
-use crate::processed_block_trace::ProcessedBlockTrace;
+use crate::processed_block_trace::{CodeHashMeta, ProcessedBlockTrace};
 use crate::protocol_processing::{
     process_mpt_block_trace_trie_pre_images, TraceProtocolDecodingResult,
 };
 use crate::trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TxnInfo};
 use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-    OtherBlockData, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    CodeHash, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, InsertCodeFunc,
+    OtherBlockData, ResolveFunc, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
@@ -36,32 +36,53 @@ pub(crate) struct ProcedBlockTraceMptSpec {
     pub(crate) sect_info: ProcessedSectionInfo,
 }
 
+struct MPTCodeHashResolving<F, G> {
+    resolve_fn: F,
+    insert_code_fn: G,
+}
+
+impl<F, G> CodeHashResolver for MPTCodeHashResolving<F, G>
+where
+    F: ResolveFunc,
+    G: InsertCodeFunc,
+{
+    fn resolve(&mut self, c_hash: &CodeHash) -> Vec<u8> {
+        (self.resolve_fn)(c_hash)
+    }
+
+    fn insert_code(&mut self, c_hash: H256, code: Vec<u8>) {
+        (self.insert_code_fn)(c_hash, code)
+    }
+}
+
 impl BlockTrace {
     /// Processes and returns the [GenerationInputs] for all transactions in the
     /// block.
-    pub fn into_proof_gen_mpt_ir<F>(
+    pub fn into_proof_gen_mpt_ir<F, G>(
         self,
-        c_resolve: &F,
+        cmeta: &CodeHashMeta<F, G>,
         other_data: OtherBlockData,
     ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
-        F: CodeHashResolveFunc,
+        F: ResolveFunc,
+        G: InsertCodeFunc,
     {
         let processed_block_trace =
-            self.into_mpt_processed_block_trace(c_resolve, other_data.b_data.withdrawals.clone())?;
+            self.into_mpt_processed_block_trace(cmeta, other_data.b_data.withdrawals.clone())?;
 
         let res = processed_block_trace.into_proof_gen_ir(other_data)?;
 
         Ok(res)
     }
 
-    fn into_mpt_processed_block_trace<F>(
+    fn into_mpt_processed_block_trace<F, G>(
         self,
-        c_resolve: &F,
+        cmeta: &CodeHashMeta<F, G>,
         withdrawals: Vec<(Address, U256)>,
     ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
     where
-        F: CodeHashResolveFunc,
+        F: ResolveFunc,
+        G: InsertCodeFunc,
     {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
@@ -84,8 +105,8 @@ impl BlockTrace {
             .collect();
 
         let mut code_hash_resolver = MPTCodeHashResolving {
-            client_code_hash_resolve_f: &c_resolve,
-            extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
+            resolve_fn: cmeta.resolve_fn,
+            insert_code_fn: cmeta.insert_code_fn,
         };
 
         let sect_info = Self::process_atomic_units(
@@ -103,14 +124,15 @@ impl BlockTrace {
         Ok(ProcessedBlockTrace { spec, withdrawals })
     }
 
-    fn process_atomic_units<F>(
+    fn process_atomic_units<F, G>(
         atomic_info: AtomicUnitInfo,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
-        code_hash_resolver: &mut MPTCodeHashResolving<F>,
+        code_hash_resolver: &mut MPTCodeHashResolving<F, G>,
         withdrawals: &[(Address, U256)],
     ) -> ProcessedSectionInfo
     where
-        F: CodeHashResolveFunc,
+        F: ResolveFunc,
+        G: InsertCodeFunc,
     {
         match atomic_info {
             AtomicUnitInfo::Txn(txn_info) => {
@@ -180,47 +202,24 @@ pub(crate) enum ProcessedSectionInfo {
 #[derive(Debug)]
 pub(crate) struct ProcessedSectionTxnInfo {
     pub(crate) nodes_used_by_txn: NodesUsedByTxn,
-    pub(crate) contract_code_accessed: HashMap<CodeHash, Vec<u8>>,
     pub(crate) meta: TxnMetaState,
 }
 
 #[derive(Debug)]
 pub(crate) struct ProcessedContinuationInfo {}
 
-struct MPTCodeHashResolving<F> {
-    /// If we have not seen this code hash before, use the resolve function that
-    /// the client passes down to us. This will likely be an rpc call/cache
-    /// check.
-    client_code_hash_resolve_f: F,
-
-    /// Code hash mappings that we have constructed from parsing the block
-    /// trace. If there are any txns that create contracts, then they will also
-    /// get added here as we process the deltas.
-    extra_code_hash_mappings: HashMap<CodeHash, Vec<u8>>,
-}
-
-impl<F: CodeHashResolveFunc> CodeHashResolver for MPTCodeHashResolving<F> {
-    fn resolve(&mut self, c_hash: &CodeHash) -> Vec<u8> {
-        match self.extra_code_hash_mappings.get(c_hash) {
-            Some(code) => code.clone(),
-            None => (self.client_code_hash_resolve_f)(c_hash),
-        }
-    }
-
-    fn insert_code(&mut self, c_hash: H256, code: Vec<u8>) {
-        self.extra_code_hash_mappings.insert(c_hash, code);
-    }
-}
-
 impl TxnInfo {
-    fn into_processed_txn_info<F: CodeHashResolveFunc>(
+    fn into_processed_txn_info<F, G>(
         self,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
-        code_hash_resolver: &mut MPTCodeHashResolving<F>,
-    ) -> ProcessedSectionTxnInfo {
+        code_hash_resolver: &mut MPTCodeHashResolving<F, G>,
+    ) -> ProcessedSectionTxnInfo
+    where
+        F: ResolveFunc,
+        G: InsertCodeFunc,
+    {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
-        let mut contract_code_accessed = create_empty_code_access_map();
 
         for (addr, trace) in self.traces {
             let hashed_addr = hash(addr.as_bytes());
@@ -276,14 +275,10 @@ impl TxnInfo {
             if let Some(c_usage) = trace.code_usage {
                 match c_usage {
                     ContractCodeUsage::Read(c_hash) => {
-                        contract_code_accessed
-                            .entry(c_hash)
-                            .or_insert_with(|| code_hash_resolver.resolve(&c_hash));
+                        code_hash_resolver.resolve(&c_hash);
                     }
                     ContractCodeUsage::Write(c_bytes) => {
                         let c_hash = hash(&c_bytes);
-
-                        contract_code_accessed.insert(c_hash, c_bytes.0.clone());
                         code_hash_resolver.insert_code(c_hash, c_bytes.0);
                     }
                 }
@@ -337,7 +332,6 @@ impl TxnInfo {
 
         ProcessedSectionTxnInfo {
             nodes_used_by_txn,
-            contract_code_accessed,
             meta: new_meta_state,
         }
     }
