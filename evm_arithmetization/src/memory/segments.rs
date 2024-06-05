@@ -27,56 +27,54 @@ pub(crate) enum Segment {
     /// In general, calling a helper function can result in this memory being
     /// clobbered.
     KernelGeneral = 7 << SEGMENT_SCALING_FACTOR,
-    /// Another segment for general purpose kernel use.
-    KernelGeneral2 = 8 << SEGMENT_SCALING_FACTOR,
     /// Segment to hold account code for opcodes like `CODESIZE, CODECOPY,...`.
-    KernelAccountCode = 9 << SEGMENT_SCALING_FACTOR,
+    KernelAccountCode = 8 << SEGMENT_SCALING_FACTOR,
     /// Contains normalized transaction fields; see `NormalizedTxnField`.
-    TxnFields = 10 << SEGMENT_SCALING_FACTOR,
+    TxnFields = 9 << SEGMENT_SCALING_FACTOR,
     /// Contains the data field of a transaction.
-    TxnData = 11 << SEGMENT_SCALING_FACTOR,
+    TxnData = 10 << SEGMENT_SCALING_FACTOR,
     /// A buffer used to hold raw RLP data.
-    RlpRaw = 12 << SEGMENT_SCALING_FACTOR,
+    RlpRaw = 11 << SEGMENT_SCALING_FACTOR,
     /// Contains all trie data. It is owned by the kernel, so it only lives on
     /// context 0.
-    TrieData = 13 << SEGMENT_SCALING_FACTOR,
-    ShiftTable = 14 << SEGMENT_SCALING_FACTOR,
-    JumpdestBits = 15 << SEGMENT_SCALING_FACTOR,
-    EcdsaTable = 16 << SEGMENT_SCALING_FACTOR,
-    BnWnafA = 17 << SEGMENT_SCALING_FACTOR,
-    BnWnafB = 18 << SEGMENT_SCALING_FACTOR,
-    BnTableQ = 19 << SEGMENT_SCALING_FACTOR,
-    BnPairing = 20 << SEGMENT_SCALING_FACTOR,
+    TrieData = 12 << SEGMENT_SCALING_FACTOR,
+    ShiftTable = 13 << SEGMENT_SCALING_FACTOR,
+    JumpdestBits = 14 << SEGMENT_SCALING_FACTOR,
+    EcdsaTable = 15 << SEGMENT_SCALING_FACTOR,
+    BnWnafA = 16 << SEGMENT_SCALING_FACTOR,
+    BnWnafB = 17 << SEGMENT_SCALING_FACTOR,
+    BnTableQ = 18 << SEGMENT_SCALING_FACTOR,
+    BnPairing = 19 << SEGMENT_SCALING_FACTOR,
     /// List of addresses that have been accessed in the current transaction.
-    AccessedAddresses = 21 << SEGMENT_SCALING_FACTOR,
+    AccessedAddresses = 20 << SEGMENT_SCALING_FACTOR,
     /// List of storage keys that have been accessed in the current transaction.
-    AccessedStorageKeys = 22 << SEGMENT_SCALING_FACTOR,
+    AccessedStorageKeys = 21 << SEGMENT_SCALING_FACTOR,
     /// List of addresses that have called SELFDESTRUCT in the current
     /// transaction.
-    SelfDestructList = 23 << SEGMENT_SCALING_FACTOR,
+    SelfDestructList = 22 << SEGMENT_SCALING_FACTOR,
     /// Contains the bloom filter of a transaction.
-    TxnBloom = 24 << SEGMENT_SCALING_FACTOR,
+    TxnBloom = 23 << SEGMENT_SCALING_FACTOR,
     /// Contains the bloom filter present in the block header.
-    GlobalBlockBloom = 25 << SEGMENT_SCALING_FACTOR,
+    GlobalBlockBloom = 24 << SEGMENT_SCALING_FACTOR,
     /// List of log pointers pointing to the LogsData segment.
-    Logs = 26 << SEGMENT_SCALING_FACTOR,
-    LogsData = 27 << SEGMENT_SCALING_FACTOR,
+    Logs = 25 << SEGMENT_SCALING_FACTOR,
+    LogsData = 26 << SEGMENT_SCALING_FACTOR,
     /// Journal of state changes. List of pointers to `JournalData`. Length in
     /// `GlobalMetadata`.
-    Journal = 28 << SEGMENT_SCALING_FACTOR,
-    JournalData = 29 << SEGMENT_SCALING_FACTOR,
-    JournalCheckpoints = 30 << SEGMENT_SCALING_FACTOR,
+    Journal = 27 << SEGMENT_SCALING_FACTOR,
+    JournalData = 28 << SEGMENT_SCALING_FACTOR,
+    JournalCheckpoints = 29 << SEGMENT_SCALING_FACTOR,
     /// List of addresses that have been touched in the current transaction.
-    TouchedAddresses = 31 << SEGMENT_SCALING_FACTOR,
+    TouchedAddresses = 30 << SEGMENT_SCALING_FACTOR,
     /// List of checkpoints for the current context. Length in
     /// `ContextMetadata`.
-    ContextCheckpoints = 32 << SEGMENT_SCALING_FACTOR,
+    ContextCheckpoints = 31 << SEGMENT_SCALING_FACTOR,
     /// List of 256 previous block hashes.
-    BlockHashes = 33 << SEGMENT_SCALING_FACTOR,
+    BlockHashes = 32 << SEGMENT_SCALING_FACTOR,
 }
 
 impl Segment {
-    pub(crate) const COUNT: usize = 34;
+    pub(crate) const COUNT: usize = 33;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
     pub(crate) const fn unscale(&self) -> usize {
@@ -93,7 +91,6 @@ impl Segment {
             Self::GlobalMetadata,
             Self::ContextMetadata,
             Self::KernelGeneral,
-            Self::KernelGeneral2,
             Self::KernelAccountCode,
             Self::TxnFields,
             Self::TxnData,
@@ -133,7 +130,6 @@ impl Segment {
             Segment::GlobalMetadata => "SEGMENT_GLOBAL_METADATA",
             Segment::ContextMetadata => "SEGMENT_CONTEXT_METADATA",
             Segment::KernelGeneral => "SEGMENT_KERNEL_GENERAL",
-            Segment::KernelGeneral2 => "SEGMENT_KERNEL_GENERAL_2",
             Segment::KernelAccountCode => "SEGMENT_KERNEL_ACCOUNT_CODE",
             Segment::TxnFields => "SEGMENT_NORMALIZED_TXN",
             Segment::TxnData => "SEGMENT_TXN_DATA",
@@ -172,7 +168,6 @@ impl Segment {
             Segment::GlobalMetadata => 256,
             Segment::ContextMetadata => 256,
             Segment::KernelGeneral => 256,
-            Segment::KernelGeneral2 => 256,
             Segment::KernelAccountCode => 8,
             Segment::TxnFields => 256,
             Segment::TxnData => 8,
