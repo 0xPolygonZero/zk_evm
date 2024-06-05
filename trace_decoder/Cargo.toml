@@ -25,11 +25,8 @@ rlp-derive = { workspace = true }
 serde = { workspace = true }
 serde_with = "3.4.0"
 thiserror = { workspace = true }
-
-# Local dependencies
-# TODO: update decoder to take local versions again
-mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
-evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
+mpt_trie_type_1.workspace = true
+evm_arithmetization_type_1.workspace = true
 
 [dev-dependencies]
 pretty_env_logger = "0.5.0"

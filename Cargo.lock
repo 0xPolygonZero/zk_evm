@@ -513,7 +513,7 @@ dependencies = [
 [[package]]
 name = "evm_arithmetization"
 version = "0.1.3"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#93a3f1d7c584cbd2633ab43e6e78703510f5fe01"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#e8e60717efd5eadc6d84d8c59902f40806d7c770"
 dependencies = [
  "anyhow",
  "bytes",
@@ -912,7 +912,7 @@ dependencies = [
 [[package]]
 name = "mpt_trie"
 version = "0.2.1"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#93a3f1d7c584cbd2633ab43e6e78703510f5fe01"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#e8e60717efd5eadc6d84d8c59902f40806d7c770"
 dependencies = [
  "bytes",
  "enum-as-inner",
