@@ -10,7 +10,7 @@ use super::{
         WitnessEntries, WitnessEntry,
     },
     compact_to_smt_trie::{
-        create_smt_trie_from_remaining_witness_elem, SmtStateTrieExtractionOutput,
+        create_smt_trie_and_meta_from_remaining_witness_elem, SmtStateTrieExtractionOutput,
     },
 };
 use crate::{protocol_processing::ProtocolPreImageProcessing, types::CodeHash, utils::hash};
@@ -21,7 +21,7 @@ impl ParserState {
         let mut code = HashMap::new();
         let node_entry = self.apply_rules_to_witness_entries_smt(&mut entry_buf, &mut code);
 
-        create_smt_trie_from_remaining_witness_elem(node_entry, code)
+        create_smt_trie_and_meta_from_remaining_witness_elem(node_entry, code)
     }
 
     pub(crate) fn create_and_extract_header_smt<C: CompactCursor>(

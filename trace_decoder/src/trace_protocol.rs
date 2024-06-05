@@ -24,11 +24,11 @@
 use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
-use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, FromInto, TryFromInto};
 
 use crate::{
+    aliased_crate_types::HashedPartialTrie,
     deserializers::ByteString,
     types::{CodeHash, HashedAccountAddr, StorageAddr, StorageVal},
     utils::hash,

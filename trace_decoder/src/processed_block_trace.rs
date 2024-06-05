@@ -5,21 +5,20 @@ use std::{
 };
 
 use ethereum_types::{Address, U256};
-use mpt_trie::nibbles::Nibbles;
 
 use crate::{
     aliased_crate_types::{AccountRlp, LegacyReceiptRlp},
     decoding::{ProcessedBlockTraceDecode, TraceDecodingResult, TxnMetaState},
     trace_protocol::{BlockTrace, BlockTraceTriePreImages, ContractCodeUsage, TxnInfo},
     types::{
-        CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-        TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+        AccountInfo, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
+        HashedStorageAddrNibbles, StorageAddr, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
     },
     utils::hash,
 };
 
-pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
-pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
+pub(crate) type StorageAccess = Vec<StorageAddr>;
+pub(crate) type StorageWrite = Vec<(StorageAddr, U256)>;
 
 pub(crate) trait BlockTraceProcessing {
     type ProcessedPreImage;
@@ -29,9 +28,9 @@ pub(crate) trait BlockTraceProcessing {
         image: BlockTraceTriePreImages,
     ) -> TraceDecodingResult<Self::ProcessedPreImage>;
 
-    fn get_account_keys(
+    fn get_accounts(
         image: &Self::ProcessedPreImage,
-    ) -> impl Iterator<Item = (HashedAccountAddr, AccountRlp)>;
+    ) -> impl Iterator<Item = (Address, AccountInfo)>;
 
     fn get_any_extra_code_hash_mappings(
         image: &Self::ProcessedPreImage,
@@ -65,7 +64,7 @@ impl BlockTrace {
         // take advantage of it.
         let pre_image_data = P::process_block_trace(self.trie_pre_images)?;
 
-        let all_accounts_in_pre_image: Vec<_> = P::get_account_keys(&pre_image_data).collect();
+        let all_accounts_in_pre_image: Vec<_> = P::get_accounts(&pre_image_data).collect();
 
         let mut code_hash_resolver = CodeHashResolving {
             client_code_hash_resolve_f: &p_meta.resolve_code_hash_fn,
@@ -84,10 +83,7 @@ impl BlockTrace {
                 let extra_state_accesses = if last_tx_idx == i {
                     // If this is the last transaction, we mark the withdrawal addresses
                     // as accessed in the state trie.
-                    withdrawals
-                        .iter()
-                        .map(|(addr, _)| hash(addr.as_bytes()))
-                        .collect::<Vec<_>>()
+                    withdrawals.iter().map(|(addr, _)| *addr).collect()
                 } else {
                     Vec::new()
                 };
@@ -171,8 +167,8 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
-        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
-        extra_state_accesses: &[HashedAccountAddr],
+        all_accounts_in_pre_image: &[(Address, AccountInfo)],
+        extra_state_accesses: &[Address],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
@@ -191,12 +187,9 @@ impl TxnInfo {
             let storage_write_keys = storage_writes.keys();
             let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
 
-            nodes_used_by_txn.storage_accesses.push((
-                hashed_addr,
-                storage_access_keys
-                    .map(|k| Nibbles::from_h256_be(hash(&k.0)))
-                    .collect(),
-            ));
+            nodes_used_by_txn
+                .storage_accesses
+                .push((addr, storage_access_keys.collect::<Vec<_>>()));
 
             let storage_trie_change = !storage_writes.is_empty();
             let code_change = trace.code_usage.is_some();
@@ -215,19 +208,16 @@ impl TxnInfo {
 
                 nodes_used_by_txn
                     .state_writes
-                    .push((hashed_addr, state_trie_writes))
+                    .push((addr, state_trie_writes))
             }
 
-            let storage_writes_vec = storage_writes
-                .into_iter()
-                .map(|(k, v)| (Nibbles::from_h256_be(k), rlp::encode(&v).to_vec()))
-                .collect();
+            let storage_writes_vec: Vec<_> = storage_writes.into_iter().collect();
 
             nodes_used_by_txn
                 .storage_writes
-                .push((hashed_addr, storage_writes_vec));
+                .push((addr, storage_writes_vec));
 
-            nodes_used_by_txn.state_accesses.push(hashed_addr);
+            nodes_used_by_txn.state_accesses.push(addr);
 
             if let Some(c_usage) = trace.code_usage {
                 match c_usage {
@@ -249,12 +239,12 @@ impl TxnInfo {
                 .self_destructed
                 .map_or(false, |self_destructed| self_destructed)
             {
-                nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
+                nodes_used_by_txn.self_destructed_accounts.push(addr);
             }
         }
 
-        for &hashed_addr in extra_state_accesses {
-            nodes_used_by_txn.state_accesses.push(hashed_addr);
+        for &addr in extra_state_accesses {
+            nodes_used_by_txn.state_accesses.push(addr);
         }
 
         let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
@@ -267,11 +257,11 @@ impl TxnInfo {
 
         let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
             .iter()
-            .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
+            .filter(|(_, data)| data.s_root != EMPTY_TRIE_HASH);
 
         let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
             .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(addr))
-            .map(|(addr, data)| (*addr, data.storage_root));
+            .map(|(addr, data)| (*addr, data.s_root));
 
         nodes_used_by_txn
             .state_accounts_with_no_accesses_but_storage_tries
@@ -316,15 +306,14 @@ fn create_empty_code_access_map() -> HashMap<CodeHash, Vec<u8>> {
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    pub(crate) state_accesses: Vec<HashedNodeAddr>,
-    pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
+    pub(crate) state_accesses: Vec<Address>,
+    pub(crate) state_writes: Vec<(Address, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(HashedAccountAddr, StorageAccess)>,
-    pub(crate) storage_writes: Vec<(HashedAccountAddr, StorageWrite)>,
-    pub(crate) state_accounts_with_no_accesses_but_storage_tries:
-        HashMap<HashedAccountAddr, TrieRootHash>,
-    pub(crate) self_destructed_accounts: Vec<HashedAccountAddr>,
+    pub(crate) storage_accesses: Vec<(Address, StorageAccess)>,
+    pub(crate) storage_writes: Vec<(Address, StorageWrite)>,
+    pub(crate) state_accounts_with_no_accesses_but_storage_tries: HashMap<Address, TrieRootHash>,
+    pub(crate) self_destructed_accounts: Vec<Address>,
 }
 
 #[derive(Debug)]

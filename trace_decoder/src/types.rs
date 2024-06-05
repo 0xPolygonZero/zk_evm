@@ -1,8 +1,7 @@
 use ethereum_types::{Address, H256, U256};
-use mpt_trie::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
-use crate::aliased_crate_types::{BlockHashes, BlockMetadata};
+use crate::aliased_crate_types::{BlockHashes, BlockMetadata, Nibbles};
 
 /// A type alias for `[`[`U256`]`; 8]` of a bloom filter.
 pub type Bloom = [U256; 8];
@@ -19,7 +18,7 @@ pub type HashedStorageAddr = H256;
 /// A type alias for [`Nibbles`] of a hashed storage address's nibbles.
 pub type HashedStorageAddrNibbles = Nibbles;
 /// A type alias for [`H256`] of a storage address.
-pub type StorageAddr = H256;
+pub type StorageAddr = U256;
 /// A type alias for [`H256`] of a storage address's nibbles.
 pub type StorageAddrNibbles = H256;
 /// A type alias for [`U256`] of a storage value.
@@ -52,7 +51,37 @@ pub(crate) const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
 ];
 
 // This is just `rlp(0)`.
-pub(crate) const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
+pub(crate) const ZERO_STORAGE_SLOT_VAL_RLPED: u64 = 128;
+
+/// We can't rely on `AccountRlp` as it is missing the `storage_root` field when
+/// built for `smt`.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct AccountInfo {
+    pub(crate) balance: U256,
+    pub(crate) nonce: U256,
+    pub(crate) c_hash: CodeHash,
+    pub(crate) s_root: TrieRootHash,
+}
+
+/// Used to avoid setting nodes that have not changed for SMT tries.
+#[derive(Debug)]
+struct AccountSetInfo {
+    balance: Option<U256>,
+    nonce: Option<U256>,
+    c_hash: Option<CodeHash>,
+    s_root: Option<TrieRootHash>,
+}
+
+impl From<AccountInfo> for AccountSetInfo {
+    fn from(v: AccountInfo) -> Self {
+        Self {
+            balance: Some(v.balance),
+            nonce: Some(v.nonce),
+            c_hash: Some(v.c_hash),
+            s_root: Some(v.s_root),
+        }
+    }
+}
 
 /// Other data that is needed for proof gen.
 #[derive(Clone, Debug, Deserialize, Serialize)]

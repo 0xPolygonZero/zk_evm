@@ -148,7 +148,7 @@ impl TestProtocolInputAndRoot {
         let out: ProcessedCompactOutput<SmtStateTrieExtractionOutput> =
             process_compact_prestate_f(protocol_bytes).unwrap_or_else(|err| panic!("{}", err));
         let mut buf: [u8; 32] = [0; 32];
-        hashout2u(out.witness_out.state_trie.root).to_big_endian(&mut buf);
+        hashout2u(out.witness_out.trie.root).to_big_endian(&mut buf);
 
         self.header_and_hash_checks(H256::from_slice(&buf), out.header);
     }

@@ -24,18 +24,35 @@ use crate::{
 };
 
 pub(crate) type MptProcessedBlockTrace =
-    ProcessedBlockTrace<ProcedBlockTraceMptSpec, MptBlockTraceDecoding>;
+    ProcessedBlockTrace<MptPartialTriePreImages, MptBlockTraceDecoding>;
 
-#[derive(Debug)]
-pub(crate) struct ProcedBlockTraceMptSpec {
-    pub(crate) tries: MptPartialTriePreImages,
+#[derive(Clone, Debug, Default)]
+pub(crate) struct MptPartialTriePreImages {
+    pub state: HashedPartialTrie,
+    pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
+}
+
+impl BlockTrace {
+    fn into_mpt_processed_block_trace<F>(
+        self,
+        p_meta: &ProcessingMeta<F>,
+        withdrawals: Vec<(Address, U256)>,
+    ) -> TraceDecodingResult<MptProcessedBlockTrace>
+    where
+        F: CodeHashResolveFunc,
+    {
+        self.into_processed_block_trace::<_, MptBlockTraceProcessing, MptBlockTraceDecoding>(
+            p_meta,
+            withdrawals,
+        )
+    }
 }
 
 pub(crate) struct MptBlockTraceProcessing;
 
 impl BlockTraceProcessing for MptBlockTraceProcessing {
     type ProcessedPreImage = MptProcessedBlockTracePreImages;
-    type Output = ProcedBlockTraceMptSpec;
+    type Output = MptPartialTriePreImages;
 
     fn process_block_trace(
         image: BlockTraceTriePreImages,
@@ -65,7 +82,10 @@ impl BlockTraceProcessing for MptBlockTraceProcessing {
     }
 
     fn create_spec_output(image: Self::ProcessedPreImage) -> Self::Output {
-        ProcedBlockTraceMptSpec { tries: image.tries }
+        MptPartialTriePreImages {
+            state: image.tries.state,
+            storage: image.tries.storage,
+        }
     }
 }
 

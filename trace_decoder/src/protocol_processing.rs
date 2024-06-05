@@ -4,8 +4,7 @@
 
 use std::collections::HashMap;
 
-use mpt_trie::partial_trie::HashedPartialTrie;
-
+use crate::aliased_crate_types::{HashedPartialTrie, PreImageProcessing};
 use crate::{
     compact::compact_processing_common::{
         CompactParsingError, CompactParsingResult, ProcessedCompactOutput,
@@ -31,7 +30,15 @@ pub(crate) trait ProtocolPreImageProcessing {
     fn expected_header_version() -> u8;
 }
 
-pub(crate) fn process_block_trace_trie_pre_images<P: ProtocolPreImageProcessing>(
+pub fn process_block_trace_trie_pre_images(
+    block_trace_pre_images: BlockTraceTriePreImages,
+) -> TraceDecodingResult<
+    ProcessedCompactOutput<<PreImageProcessing as ProtocolPreImageProcessing>::ProcessedPreImage>,
+> {
+    process_block_trace_trie_pre_images_intern::<PreImageProcessing>(block_trace_pre_images)
+}
+
+fn process_block_trace_trie_pre_images_intern<P: ProtocolPreImageProcessing>(
     block_trace_pre_images: BlockTraceTriePreImages,
 ) -> TraceDecodingResult<ProcessedCompactOutput<P::ProcessedPreImage>> {
     match block_trace_pre_images {

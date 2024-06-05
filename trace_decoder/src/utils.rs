@@ -1,12 +1,8 @@
-use ethereum_types::H256;
+use ethereum_types::{H256, U256};
 use keccak_hash::keccak;
 use log::trace;
-use mpt_trie::{
-    nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, PartialTrie},
-    trie_ops::ValOrHash,
-};
 
+use crate::aliased_crate_types::{HashedPartialTrie, Nibbles, PartialTrie, ValOrHash};
 use crate::types::HashedStorageAddr;
 
 pub(crate) fn hash(bytes: &[u8]) -> H256 {
@@ -67,4 +63,15 @@ pub(crate) fn nibbles_to_h256(n: &Nibbles) -> H256 {
     );
 
     H256::from_slice(&n.bytes_be())
+}
+
+pub(crate) fn is_rlped_0(v: &U256) -> bool {
+    v.as_u64() == 128
+}
+
+pub(crate) fn u256_to_h256(v: &U256) -> H256 {
+    let mut h256 = H256::zero();
+    v.to_big_endian(&mut h256.0);
+
+    h256
 }

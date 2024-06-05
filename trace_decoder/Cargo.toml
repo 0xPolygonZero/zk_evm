@@ -29,15 +29,19 @@ serde_with = "3.4.0"
 thiserror = { workspace = true }
 
 # Local dependencies
-mpt_trie = { version = "0.2.1", path = "../mpt_trie" }
-smt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/type2" }
+
+
+smt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/type2", optional = true }
 
 evm_arithmetization_mpt = { package = "evm_arithmetization", version = "0.1.3", path = "../evm_arithmetization", optional = true }
-evm_arithmetization_smt = { package = "evm_arithmetization", version = "0.1.2", git = "https://github.com/0xPolygonZero/zk_evm.git", branch = "feat/type2", optional = true }
+evm_arithmetization_smt = { package = "evm_arithmetization", version = "0.1.2", git = "https://github.com/0xPolygonZero/zk_evm.git", branch = "smt_txn_traces_update", optional = true }
+
+mpt_trie_normal = { package = "mpt_trie", version = "0.2.1", path = "../mpt_trie", optional = true }
+mpt_trie_type2 = { package = "mpt_trie", version = "0.2.1", git = "https://github.com/0xPolygonZero/zk_evm.git", branch = "smt_txn_traces_update", optional = true }
 
 [dev-dependencies]
 pretty_env_logger = "0.5.0"
 
 [features]
-mpt = ["evm_arithmetization_mpt"]
-smt = ["evm_arithmetization_smt"]
+mpt = ["evm_arithmetization_mpt", "mpt_trie_normal"]
+smt = ["evm_arithmetization_smt", "smt_trie", "mpt_trie_type2"]

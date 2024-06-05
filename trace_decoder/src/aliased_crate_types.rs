@@ -13,25 +13,46 @@
 
 use cfg_if::cfg_if;
 
-macro_rules! include_feature_gated_zero_deps {
+use crate::compact;
+
+macro_rules! include_feature_gated_evm_deps {
     ($crate_name:ident) => {
-        pub(crate) type AccountRlp = $crate_name::generation::mpt::AccountRlp;
-        pub(crate) type BlockHashes = $crate_name::proof::BlockHashes;
-        pub(crate) type BlockMetadata = $crate_name::proof::BlockMetadata;
-        pub(crate) type ExtraBlockData = $crate_name::proof::ExtraBlockData;
-        pub(crate) type GenerationInputs = $crate_name::generation::GenerationInputs;
-        pub(crate) type LegacyReceiptRlp = $crate_name::generation::mpt::LegacyReceiptRlp;
-        pub(crate) type ProofGenIR = $crate_name::GenerationInputs;
-        pub(crate) type TrieInputs = $crate_name::generation::TrieInputs;
-        pub(crate) type TrieRoots = $crate_name::proof::TrieRoots;
+        pub(crate) use $crate_name::generation::mpt::AccountRlp;
+        pub(crate) use $crate_name::generation::mpt::LegacyReceiptRlp;
+        pub(crate) use $crate_name::generation::GenerationInputs;
+        pub(crate) use $crate_name::generation::TrieInputs;
+        pub(crate) use $crate_name::proof::BlockHashes;
+        pub(crate) use $crate_name::proof::BlockMetadata;
+        pub(crate) use $crate_name::proof::ExtraBlockData;
+        pub(crate) use $crate_name::proof::TrieRoots;
+        pub(crate) use $crate_name::GenerationInputs as ProofGenIR;
+    };
+}
+
+macro_rules! include_feature_gated_mpt_trie_deps {
+    ($crate_name:ident) => {
+        pub(crate) use $crate_name::nibbles::FromHexPrefixError;
+        pub(crate) use $crate_name::nibbles::Nibbles;
+        pub(crate) use $crate_name::partial_trie::HashedPartialTrie;
+        pub(crate) use $crate_name::partial_trie::PartialTrie;
+        pub(crate) use $crate_name::trie_ops::TrieOpError;
+        pub(crate) use $crate_name::trie_ops::ValOrHash;
+        pub(crate) use $crate_name::trie_subsets;
+        pub(crate) use $crate_name::trie_subsets::SubsetTrieError;
     };
 }
 
 cfg_if! {
     if #[cfg(feature = "mpt")] {
-        include_feature_gated_zero_deps!(evm_arithmetization_mpt);
+        include_feature_gated_evm_deps!(evm_arithmetization_mpt);
+        include_feature_gated_mpt_trie_deps!(mpt_trie_normal);
+
+        pub(crate) use compact::compact_mpt_processing::MptPreImageProcessing as PreImageProcessing;
     }
     else if #[cfg(feature = "smt")] {
-        include_feature_gated_zero_deps!(evm_arithmetization_smt);
+        include_feature_gated_evm_deps!(evm_arithmetization_smt);
+        include_feature_gated_mpt_trie_deps!(mpt_trie_type2);
+
+        pub(crate) use compact::compact_smt_processing::SmtPreImageProcessing as PreImageProcessing;
     }
 }

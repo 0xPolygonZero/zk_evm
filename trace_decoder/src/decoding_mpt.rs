@@ -1,5 +1,6 @@
 use std::{
-    collections::HashMap, iter::{empty, once}
+    collections::HashMap,
+    iter::{empty, once},
 };
 
 use ethereum_types::{Address, U256};
@@ -36,6 +37,26 @@ use crate::{
 };
 
 type MptTrieState = TrieState<MptBlockTraceDecoding>;
+
+impl BlockTrace {
+    /// Processes and returns the [GenerationInputs] for all transactions in the
+    /// block.
+    pub fn into_proof_gen_mpt_ir<F>(
+        self,
+        p_meta: &ProcessingMeta<F>,
+        other_data: OtherBlockData,
+    ) -> TraceDecodingResult<Vec<GenerationInputs>>
+    where
+        F: CodeHashResolveFunc,
+    {
+        let processed_block_trace =
+            self.into_mpt_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
+
+        let res = processed_block_trace.into_proof_gen_ir(other_data)?;
+
+        Ok(res)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct MptStorageTries(HashMap<HashedAccountAddr, MptTrie>);
@@ -97,6 +118,29 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
         }
     }
 
+    /// If the account does not have a storage trie or does but is not
+    /// accessed by any txns, then we still need to manually create an entry for
+    /// them.
+    fn init_any_needed_empty_storage_tries<'a>(
+        storage_tries: &mut D::StorageTries,
+        accounts_with_storage: impl Iterator<Item = &'a Address>,
+        state_accounts_with_no_accesses_but_storage_tries: &'a HashMap<Address, TrieRootHash>,
+    ) {
+        for addr in accounts_with_storage {
+            if storage_tries.get_trie(addr).is_none() {
+                // If the account does not have accesses but has storage that is not accessed,
+                // then we still need to create a hashed out storage trie for the account.
+                let trie_root_hash = state_accounts_with_no_accesses_but_storage_tries
+                    .get(addr)
+                    .map(|s_root| hash(s_root.as_bytes()))
+                    .unwrap_or_else(|| EMPTY_TRIE_HASH);
+
+                let trie: &mut <<D as ProcessedBlockTraceDecode>::StorageTries as StorageTries>::StorageTrie = storage_tries.get_trie_or_create_mut(addr);
+                trie.trie_insert(Address::default(), NodeInsertType::Hash(trie_root_hash));
+            };
+        }
+    }
+
     fn create_trie_subsets(
         tries: &TrieState<Self>,
         nodes_used_by_txn: &NodesUsedByTxn,
@@ -106,17 +150,21 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
             &tries.state,
             nodes_used_by_txn.state_accesses.iter().cloned(),
         )?;
-    
+
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
         // TODO: Replace cast once `mpt_trie` supports `into` for `usize...
         let txn = create_trie_subset_wrapped(&tries.txn, once(txn_k), TrieType::Txn)?;
-    
-        let receipt =
-            create_trie_subset_wrapped(&tries.receipt, once(txn_k), TrieType::Receipt)?;
-    
-        let storage =
-            create_minimal_storage_partial_tries(&tries.storage, nodes_used_by_txn.storage_accesses.iter().map(|(k, v)| (*k, v.iter().cloned())))?;
-    
+
+        let receipt = create_trie_subset_wrapped(&tries.receipt, once(txn_k), TrieType::Receipt)?;
+
+        let storage = create_minimal_storage_partial_tries(
+            &tries.storage,
+            nodes_used_by_txn
+                .storage_accesses
+                .iter()
+                .map(|(k, v)| (*k, v.iter().cloned())),
+        )?;
+
         Ok(MptTrieState {
             state,
             storage,
@@ -133,11 +181,7 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
     ) -> Self::Ir {
         let sub_tries = create_dummy_proof_tries_mpt(
             final_tries,
-            create_minimal_state_partial_trie(
-                &final_tries.state,
-                account_addrs_accessed,
-            )
-            .expect(
+            create_minimal_state_partial_trie(&final_tries.state, account_addrs_accessed).expect(
                 "Managed to error when creating a fully hashed out trie! (should not be possible)",
             ),
         );
@@ -292,56 +336,6 @@ impl Trie for MptTrie {
     }
 }
 
-impl Trie for HashedPartialTrie {
-    fn trie_contains(&self, k: Nibbles) -> bool {
-        // TODO: Replace with `trie.contains` once we add that function to the
-        // `mpt_trie`...
-        self.get(k).is_some()
-    }
-
-    fn trie_get(&self, k: Nibbles) -> Option<&[u8]> {
-        self.get(k)
-    }
-
-    fn trie_insert<V: Into<decoding::NodeInsertType>>(
-        &mut self,
-        k: Nibbles,
-        v: V,
-    ) -> TraceDecodingResult<()> {
-        self.insert(k, v.into())
-            .map_err(|err| TraceDecodingError::new(TraceDecodingErrorReason::TrieOpError(err)))
-    }
-
-    fn trie_delete(&mut self, k: Nibbles) -> TraceDecodingResult<()> {
-        self.delete(k)?;
-        Ok(())
-    }
-
-    fn trie_create_trie_subset(
-        &self,
-        ks: impl Iterator<Item = Nibbles>,
-        trie_type: TrieType,
-    ) -> TraceDecodingResult<Self>
-    where
-        Self: Sized,
-    {
-        create_trie_subset(self, ks)
-            .map_err(|err| {
-                let key = match err {
-                    SubsetTrieError::UnexpectedKey(key, _) => key,
-                };
-
-                TraceDecodingError::new(
-                    TraceDecodingErrorReason::MissingKeysCreatingSubPartialTrie(key, trie_type),
-                )
-            })
-    }
-
-    fn trie_hash(&self) -> TrieRootHash {
-        self.hash()
-    }
-}
-
 impl StateTrie for MptTrie {
     fn get_account(&self, addr: Nibbles) -> TraceDecodingResult<Option<AccountRlp>> {
         self.trie.get_account(addr)
@@ -353,8 +347,11 @@ impl StateTrie for MptTrie {
 }
 
 impl StateTrie for HashedPartialTrie {
-    fn get_account(&self, addr: Nibbles) -> TraceDecodingResult<Option<crate::aliased_crate_types::AccountRlp>> {
-        let acc_bytes = self.trie_get(addr);
+    fn get_account(
+        &self,
+        addr: Nibbles,
+    ) -> TraceDecodingResult<Option<crate::aliased_crate_types::AccountRlp>> {
+        let acc_bytes = self.get(addr);
 
         let res = match acc_bytes {
             Some(bytes) => Some(rlp::decode(bytes).map_err(|err| {
@@ -371,7 +368,8 @@ impl StateTrie for HashedPartialTrie {
 
     fn set_account(&mut self, addr: Nibbles, acc: &crate::aliased_crate_types::AccountRlp) {
         // Should never be able to fail.
-        self.insert(addr, rlp::encode(acc).to_vec()).expect("Failed encoding to rlp encode Account!");
+        self.insert(addr, rlp::encode(acc).to_vec())
+            .expect("Failed encoding to rlp encode Account!");
     }
 }
 
@@ -420,11 +418,10 @@ impl GenIr for GenerationInputs {
         &mut self.withdrawals
     }
 
-
     fn get_state_trie_mut(&mut self) -> &mut Self::StateTrieRef {
         &mut self.tries.state_trie
     }
-    
+
     fn get_final_trie_roots_mut(&mut self) -> &mut TrieRoots {
         &mut self.trie_roots_after
     }
@@ -463,43 +460,14 @@ struct PartialTrieState {
     receipt: HashedPartialTrie,
 }
 
-impl BlockTrace {
-    /// Processes and returns the [GenerationInputs] for all transactions in the
-    /// block.
-    pub fn into_proof_gen_mpt_ir<F>(
-        self,
-        p_meta: &ProcessingMeta<F>,
-        other_data: OtherBlockData,
-    ) -> TraceDecodingResult<Vec<GenerationInputs>>
-    where
-        F: CodeHashResolveFunc,
-    {
-        let processed_block_trace =
-            self.into_mpt_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
-
-        let res = processed_block_trace.into_proof_gen_ir(other_data)?;
-
-        Ok(res)
-    }
-
-    fn into_mpt_processed_block_trace<F>(
-        self,
-        p_meta: &ProcessingMeta<F>,
-        withdrawals: Vec<(Address, U256)>,
-    ) -> TraceDecodingResult<MptProcessedBlockTrace>
-    where
-        F: CodeHashResolveFunc,
-    {
-        self.into_processed_block_trace::<_, MptBlockTraceProcessing, MptBlockTraceDecoding>(
-            p_meta,
-            withdrawals,
-        )
-    }
-}
-
 fn create_minimal_storage_partial_tries<'a>(
     storage_tries: &MptStorageTries,
-    accesses_per_account: impl Iterator<Item = (HashedAccountAddr, impl Iterator<Item = HashedStorageAddrNibbles>)>,
+    accesses_per_account: impl Iterator<
+        Item = (
+            HashedAccountAddr,
+            impl Iterator<Item = HashedStorageAddrNibbles>,
+        ),
+    >,
 ) -> TraceDecodingResult<MptStorageTries> {
     accesses_per_account
         .map(|(h_addr, mem_accesses)| {
@@ -510,10 +478,18 @@ fn create_minimal_storage_partial_tries<'a>(
                 .get(&h_addr)
                 .expect("Base storage trie missing! This should not be possible!");
 
-            let slots_to_not_hash = mem_accesses.chain(base_storage_trie.additional_trie_paths_to_not_hash.iter().cloned());
+            let slots_to_not_hash = mem_accesses.chain(
+                base_storage_trie
+                    .additional_trie_paths_to_not_hash
+                    .iter()
+                    .cloned(),
+            );
 
-            let partial_storage_trie =
-                create_trie_subset_wrapped(base_storage_trie, slots_to_not_hash, TrieType::Storage)?;
+            let partial_storage_trie = create_trie_subset_wrapped(
+                base_storage_trie,
+                slots_to_not_hash,
+                TrieType::Storage,
+            )?;
 
             Ok((h_addr, partial_storage_trie))
         })
