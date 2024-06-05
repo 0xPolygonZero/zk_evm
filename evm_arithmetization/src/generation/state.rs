@@ -211,7 +211,7 @@ pub(crate) trait State<F: Field> {
                 if let Some(halt_context) = opt_halt_context {
                     if self.get_context() == halt_context {
                         // Only happens during jumpdest analysis, we don't care about the output.
-                        return Ok((final_registers, final_mem));
+                        return Ok((final_registers, None));
                     }
                 } else {
                     if !running {
