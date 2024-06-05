@@ -116,7 +116,12 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
-mod aliased_crate_types;
+#[cfg(doc)]
+use {
+    trace_protocol::{BlockTrace, TxnInfo},
+    types::OtherBlockData,
+};
+
 /// Provides debugging tools and a compact representation of state and storage
 /// tries, used in tests.
 pub mod compact;
@@ -144,3 +149,5 @@ pub mod trace_protocol;
 pub mod types;
 /// Defines useful functions necessary to the other modules.
 pub mod utils;
+
+pub mod aliased_crate_types;

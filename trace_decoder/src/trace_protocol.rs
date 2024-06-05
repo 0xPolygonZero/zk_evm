@@ -43,6 +43,10 @@ pub struct BlockTrace {
     /// The trie pre-images (state & storage) in multiple possible formats.
     pub trie_pre_images: TriePreImage,
 
+    /// The code_db is a map of code hashes to the actual code. This is needed
+    /// to execute transactions.
+    pub code_db: Option<HashMap<CodeHash, Vec<u8>>>,
+
     /// Traces and other info per txn. The index of the txn corresponds to the
     /// slot in this vec.
     pub atomic_info: AtomicUnitInfo,

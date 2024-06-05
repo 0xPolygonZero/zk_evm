@@ -72,7 +72,7 @@ pub trait ToNibbles {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 /// Errors encountered when converting from `Bytes` to `Nibbles`.
 pub enum BytesToNibblesError {
     #[error("Tried constructing `Nibbles` from a zero byte slice")]
@@ -97,7 +97,7 @@ pub enum FromHexPrefixError {
 }
 
 /// Error type for conversion.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum NibblesToTypeError {
     #[error("Overflow encountered when converting to U256: {0}")]
     /// Overflow encountered.

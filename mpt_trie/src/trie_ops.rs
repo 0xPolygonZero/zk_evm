@@ -1,5 +1,5 @@
 //! Defines various operations for
-//! [`PartialTrie`][crate::partial_trie::PartialTrie].
+//! [`PartialTrie`].
 
 use std::{fmt::Display, mem::size_of};
 

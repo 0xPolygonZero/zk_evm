@@ -144,7 +144,7 @@ impl TraceDecodingError {
 /// An error reason for trie parsing.
 #[derive(Clone, Debug, Error)]
 pub enum TraceParsingErrorReason {
-    /// Failure to decode an Ethereum [Account].
+    /// Failure to decode an Ethereum Account.
     #[error("Failed to decode RLP bytes ({0}) as an Ethereum account due to the error: {1}")]
     AccountDecode(String, String),
 
