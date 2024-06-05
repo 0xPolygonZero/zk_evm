@@ -38,7 +38,7 @@ const COMPATIBLE_HEADER_VERSION: u8 = 1;
 impl BlockTrace {
     /// Processes and returns the [GenerationInputs] for all transactions in the
     /// block.
-    pub fn into_txn_proof_gen_ir<F>(
+    pub(crate) fn into_txn_proof_gen_ir<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,

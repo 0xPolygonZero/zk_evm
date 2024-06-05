@@ -112,21 +112,31 @@
 #![feature(linked_list_cursors)]
 #![feature(trait_alias)]
 #![feature(iter_array_chunks)]
-#![deny(rustdoc::broken_intra_doc_links)]
-#![deny(missing_debug_implementations)]
-#![deny(missing_docs)]
+
+pub use decoding::TraceParsingError;
+pub use processed_block_trace::ProcessingMeta;
+pub use trace_protocol::BlockTrace;
+pub use types::{CodeHash, OtherBlockData};
 
 /// Provides debugging tools and a compact representation of state and storage
 /// tries, used in tests.
-pub mod compact;
+mod compact;
 /// Defines the main functions used to generate the IR.
-pub mod decoding;
+mod decoding;
 mod deserializers;
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
-pub mod processed_block_trace;
-pub mod trace_protocol;
+mod processed_block_trace;
+mod trace_protocol;
 /// Defines multiple types used in the other modules.
-pub mod types;
+mod types;
 /// Defines useful functions necessary to the other modules.
-pub mod utils;
+mod utils;
+
+pub fn type_1(
+    block_trace: BlockTrace,
+    other_block_data: OtherBlockData,
+    resolver: impl Fn(&CodeHash) -> Vec<u8>,
+) -> Result<Vec<evm_arithmetization_type_1::GenerationInputs>, Box<TraceParsingError>> {
+    block_trace.into_txn_proof_gen_ir(&ProcessingMeta::new(resolver), other_block_data)
+}
