@@ -8,14 +8,13 @@ use std::{
 };
 
 use ethereum_types::{Address, H160, U256, U512};
-use evm_arithmetization_smt::GenerationInputs;
 use keccak_hash::H256;
 use log::trace;
 use thiserror::Error;
 
-use crate::aliased_crate_types::trie_subsets::create_trie_subset;
-use crate::aliased_crate_types::PartialTrie;
-use crate::aliased_crate_types::{TrieOpError, ValOrHash};
+use crate::aliased_crate_types::{
+    trie_subsets::create_trie_subset, GenerationInputs, PartialTrie, TrieOpError, ValOrHash,
+};
 use crate::{
     aliased_crate_types::{
         AccountRlp, BlockHashes, BlockMetadata, ExtraBlockData, HashedPartialTrie, Nibbles,
@@ -220,8 +219,8 @@ pub(crate) trait GenIr {
     fn get_signed_txn(&self) -> Option<&[u8]>;
     fn get_withdrawals_mut(&mut self) -> &mut Vec<(Address, U256)>;
 
-    fn get_state_trie_mut(&self) -> &Self::StateTrie;
-    fn update_trie_with_subtrie(
+    fn get_state_trie(&self) -> &Self::StateTrie;
+    fn update_state_trie_with_subtrie(
         &mut self,
         state_sub_trie_override: <Self::StateTrie as Trie>::SubTrie,
     );
@@ -727,7 +726,7 @@ where
             // state accesses to the withdrawal addresses.
             let withdrawal_addrs = withdrawals_with_hashed_addrs_iter().map(|(addr, _, _)| addr);
 
-            let state_trie_ref = last_inputs.get_state_trie_mut();
+            let state_trie_ref = last_inputs.get_state_trie();
 
             let sub_state_trie = Self::create_minimal_state_partial_trie(
                 state_trie_ref,
@@ -735,7 +734,7 @@ where
                 iter::empty(),
             )?;
 
-            last_inputs.update_trie_with_subtrie(sub_state_trie);
+            last_inputs.update_state_trie_with_subtrie(sub_state_trie);
         }
 
         Self::update_trie_state_from_withdrawals(

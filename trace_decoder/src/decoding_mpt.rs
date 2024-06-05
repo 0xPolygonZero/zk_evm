@@ -10,7 +10,7 @@ use evm_arithmetization_mpt::{
     GenerationInputs,
 };
 use keccak_hash::H256;
-use mpt_trie::{
+use mpt_trie_normal::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie},
     special_query::path_for_query,
@@ -21,9 +21,10 @@ use mpt_trie::{
 use crate::{
     aliased_crate_types::{ExtraBlockData, TrieRoots},
     decoding::{
-        self, create_trie_subset_wrapped, GenIr, ProcessedBlockTraceDecode, StateTrie,
-        StorageTries, TraceDecodingError, TraceDecodingErrorReason, TraceDecodingResult, Trie,
-        TrieState, TrieType,
+        self, calculate_trie_root_hashes, create_trie_subset_wrapped, GenIr,
+        ProcessedBlockTraceDecode, StateTrie, StorageTrie, StorageTries, TraceDecodingError,
+        TraceDecodingErrorReason, TraceDecodingResult, Trie, TrieState, TrieType,
+        WrappedHashedPartialTrie,
     },
     processed_block_trace::{NodesUsedByTxn, ProcessingMeta},
     processed_block_trace_mpt::{
@@ -31,9 +32,10 @@ use crate::{
     },
     trace_protocol::BlockTrace,
     types::{
-        CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TrieRootHash, TxnIdx,
+        AccountInfo, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
+        HashedStorageAddrNibbles, OtherBlockData, StorageAddr, TrieRootHash, TxnIdx,
     },
+    utils::hash,
 };
 
 type MptTrieState = TrieState<MptBlockTraceDecoding>;
@@ -76,20 +78,20 @@ impl FromIterator<(HashedAccountAddr, MptTrie)> for MptStorageTries {
 impl StorageTries for MptStorageTries {
     type StorageTrie = MptTrie;
 
-    fn get_trie(&self, h_addr: &HashedAccountAddr) -> Option<&Self::StorageTrie> {
-        self.0.get(h_addr)
+    fn get_trie(&self, addr: Address) -> Option<&Self::StorageTrie> {
+        self.0.get(&hash(&addr.as_bytes()))
     }
 
-    fn get_mut_trie(&mut self, h_addr: &HashedAccountAddr) -> Option<&mut Self::StorageTrie> {
-        self.0.get_mut(h_addr)
+    fn get_mut_trie(&mut self, addr: Address) -> Option<&mut Self::StorageTrie> {
+        self.0.get_mut(&hash(&addr.as_bytes()))
     }
 
-    fn get_trie_or_create_mut(&mut self, h_addr: &HashedAccountAddr) -> &mut Self::StorageTrie {
-        self.0.entry(*h_addr).or_default()
+    fn get_trie_or_create_mut(&mut self, addr: Address) -> &mut Self::StorageTrie {
+        self.0.entry(hash(addr.as_bytes())).or_default()
     }
 
-    fn remove_trie(&mut self, addr: &HashedAccountAddr) -> bool {
-        self.0.remove(addr).is_some()
+    fn remove_trie(&mut self, addr: Address) -> bool {
+        self.0.remove(&hash(addr.as_bytes())).is_some()
     }
 }
 
@@ -97,12 +99,12 @@ pub(crate) struct MptBlockTraceDecoding;
 
 impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
     type Spec = ProcedBlockTraceMptSpec;
-    type Ir = GenerationInputs;
+    type Ir = MptGenInputs;
     type TrieInputs = TrieInputs;
     type StateTrie = MptTrie;
     type StorageTries = MptStorageTries;
-    type ReceiptTrie = MptTrie;
-    type TxnTrie = MptTrie;
+    type ReceiptTrie = WrappedHashedPartialTrie<TxnIdx>;
+    type TxnTrie = WrappedHashedPartialTrie<TxnIdx>;
 
     fn get_trie_pre_image(spec: &Self::Spec) -> MptTrieState {
         MptTrieState {
@@ -237,25 +239,31 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
         signed_txn: Option<Vec<u8>>,
         withdrawals: Vec<(Address, U256)>,
         tries: Self::TrieInputs,
-        trie_roots_after: crate::aliased_crate_types::TrieRoots,
         checkpoint_state_trie_root: TrieRootHash,
         contract_code: HashMap<H256, Vec<u8>>,
         block_metadata: BlockMetadata,
         block_hashes: BlockHashes,
     ) -> Self::Ir {
-        Self::Ir {
+        let trie_state = TrieState {
+            state: tries.state_trie,
+            storage: tries.storage_tries,
+            receipt: tries.receipts_trie,
+            txn: tries.transactions_trie,
+        };
+
+        MptGenInputs(GenerationInputs {
             txn_number_before,
             gas_used_before,
             gas_used_after,
             signed_txn,
             withdrawals,
             tries,
-            trie_roots_after,
+            trie_roots_after: calculate_trie_root_hashes(&trie_state),
             checkpoint_state_trie_root,
             contract_code,
             block_metadata,
             block_hashes,
-        }
+        })
     }
 }
 
@@ -286,18 +294,6 @@ impl From<&mut HashedPartialTrie> for MptTrie {
 impl Trie for MptTrie {
     fn trie_contains(&self, k: Nibbles) -> bool {
         self.trie.trie_contains(k)
-    }
-
-    fn trie_get(&self, k: Nibbles) -> Option<&[u8]> {
-        self.trie.trie_get(k)
-    }
-
-    fn trie_insert<V: Into<decoding::NodeInsertType>>(
-        &mut self,
-        k: Nibbles,
-        v: V,
-    ) -> TraceDecodingResult<()> {
-        self.trie.trie_insert(k, v)
     }
 
     /// If a branch collapse occurred after a delete, then we must ensure that
@@ -337,24 +333,57 @@ impl Trie for MptTrie {
 }
 
 impl StateTrie for MptTrie {
-    fn get_account(&self, addr: Nibbles) -> TraceDecodingResult<Option<AccountRlp>> {
+    fn get_account(&self, addr: Address) -> TraceDecodingResult<Option<AccountInfo>> {
         self.trie.get_account(addr)
     }
 
-    fn set_account(&mut self, addr: Nibbles, acc: &AccountRlp) {
+    fn set_account(&mut self, addr: Address, acc: &AccountInfo) {
         self.trie.set_account(addr, acc);
     }
 }
 
-impl StateTrie for HashedPartialTrie {
-    fn get_account(
+impl StorageTrie for MptTrie {
+    fn set_slot(&mut self, slot: &StorageAddr, val: U256) -> TraceDecodingResult<()> {
+        todo!()
+    }
+}
+
+impl Trie for HashedPartialTrie {
+    type Key = Nibbles;
+    type SubTrie = Self;
+
+    fn trie_contains(&self, k: Self::Key) -> bool {
+        self.get(k).is_some()
+    }
+
+    fn trie_delete(&mut self, k: Self::Key) -> TraceDecodingResult<()> {
+        self.delete(k)?;
+        Ok(())
+    }
+
+    fn trie_create_trie_subset(
         &self,
-        addr: Nibbles,
-    ) -> TraceDecodingResult<Option<crate::aliased_crate_types::AccountRlp>> {
+        ks: impl Iterator<Item = Self::Key>,
+        trie_type: TrieType,
+    ) -> TraceDecodingResult<Self::SubTrie>
+    where
+        Self: Sized,
+    {
+        let res = create_trie_subset(self, ks)?;
+        Ok(res)
+    }
+
+    fn trie_hash(&self) -> TrieRootHash {
+        self.hash()
+    }
+}
+
+impl StateTrie for HashedPartialTrie {
+    fn get_account(&self, addr: Address) -> TraceDecodingResult<Option<AccountInfo>> {
         let acc_bytes = self.get(addr);
 
         let res = match acc_bytes {
-            Some(bytes) => Some(rlp::decode(bytes).map_err(|err| {
+            Some(bytes) => Some(rlp::decode::<AccountRlp>(bytes).map_err(|err| {
                 TraceDecodingError::new(TraceDecodingErrorReason::AccountDecode(
                     hex::encode(bytes),
                     err.to_string(),
@@ -363,10 +392,10 @@ impl StateTrie for HashedPartialTrie {
             None => None,
         };
 
-        Ok(res)
+        Ok(res.into())
     }
 
-    fn set_account(&mut self, addr: Nibbles, acc: &crate::aliased_crate_types::AccountRlp) {
+    fn set_account(&mut self, addr: Address, acc: &AccountInfo) {
         // Should never be able to fail.
         self.insert(addr, rlp::encode(acc).to_vec())
             .expect("Failed encoding to rlp encode Account!");
@@ -404,26 +433,31 @@ impl MptTrie {
     }
 }
 
-impl GenIr for GenerationInputs {
-    type TrieRoots = TrieRoots;
+#[derive(Clone, Debug)]
+struct MptGenInputs(GenerationInputs);
 
+impl GenIr for MptGenInputs {
+    type TrieRoots = TrieRoots;
     type StateTrie = MptTrie;
-    type StateTrieRef = HashedPartialTrie;
 
     fn get_signed_txn(&self) -> Option<&[u8]> {
-        self.signed_txn.as_deref()
+        self.0.signed_txn.as_deref()
     }
 
     fn get_withdrawals_mut(&mut self) -> &mut Vec<(Address, U256)> {
-        &mut self.withdrawals
+        &mut self.0.withdrawals
     }
 
-    fn get_state_trie_mut(&mut self) -> &mut Self::StateTrieRef {
-        &mut self.tries.state_trie
+    fn get_state_trie(&self) -> &Self::StateTrie {
+        &self.0.tries.state_trie
     }
 
-    fn get_final_trie_roots_mut(&mut self) -> &mut TrieRoots {
-        &mut self.trie_roots_after
+    fn update_state_trie_with_subtrie(&mut self, state_sub_trie_override: HashedPartialTrie) {
+        self.0.tries.state_trie = state_sub_trie_override
+    }
+
+    fn finalize(self) -> GenerationInputs {
+        self.0
     }
 }
 

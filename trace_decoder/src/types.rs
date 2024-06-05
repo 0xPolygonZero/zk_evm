@@ -1,7 +1,7 @@
 use ethereum_types::{Address, H256, U256};
 use serde::{Deserialize, Serialize};
 
-use crate::aliased_crate_types::{BlockHashes, BlockMetadata, Nibbles};
+use crate::aliased_crate_types::{AccountRlp, BlockHashes, BlockMetadata, Nibbles};
 
 /// A type alias for `[`[`U256`]`; 8]` of a bloom filter.
 pub type Bloom = [U256; 8];
@@ -61,6 +61,17 @@ pub(crate) struct AccountInfo {
     pub(crate) nonce: U256,
     pub(crate) c_hash: CodeHash,
     pub(crate) s_root: TrieRootHash,
+}
+
+impl From<AccountInfo> for AccountRlp {
+    fn from(v: AccountInfo) -> Self {
+        Self {
+            nonce: v.nonce,
+            balance: v.balance,
+            storage_root: v.s_root,
+            code_hash: v.c_hash,
+        }
+    }
 }
 
 /// Used to avoid setting nodes that have not changed for SMT tries.
