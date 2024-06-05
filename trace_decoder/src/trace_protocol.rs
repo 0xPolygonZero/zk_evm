@@ -24,7 +24,7 @@
 use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
-use mpt_trie::partial_trie::HashedPartialTrie;
+use mpt_trie_type_1::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, FromInto, TryFromInto};
 

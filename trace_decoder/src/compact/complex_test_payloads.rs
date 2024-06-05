@@ -1,5 +1,5 @@
 use evm_arithmetization::generation::mpt::AccountRlp;
-use mpt_trie::partial_trie::PartialTrie;
+use mpt_trie_type_1::partial_trie::PartialTrie;
 
 use super::{
     compact_prestate_processing::{

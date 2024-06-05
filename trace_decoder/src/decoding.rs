@@ -10,7 +10,7 @@ use evm_arithmetization::{
     proof::{ExtraBlockData, TrieRoots},
 };
 use log::trace;
-use mpt_trie::{
+use mpt_trie_type_1::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,

@@ -12,7 +12,7 @@ use std::{
 use enum_as_inner::EnumAsInner;
 use ethereum_types::{H256, U256};
 use log::trace;
-use mpt_trie::{
+use mpt_trie_type_1::{
     nibbles::{FromHexPrefixError, Nibbles},
     partial_trie::HashedPartialTrie,
     trie_ops::TrieOpError,
@@ -1437,7 +1437,7 @@ fn get_bytes_from_cursor<C: CompactCursor>(cursor: &mut C, cursor_start_pos: u64
 
 #[cfg(test)]
 mod tests {
-    use mpt_trie::nibbles::Nibbles;
+    use mpt_trie_type_1::nibbles::Nibbles;
 
     use super::{key_bytes_to_nibbles, parse_just_to_instructions, Instruction};
     use crate::compact::complex_test_payloads::{

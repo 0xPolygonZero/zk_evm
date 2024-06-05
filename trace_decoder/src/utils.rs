@@ -1,7 +1,7 @@
 use ethereum_types::H256;
 use keccak_hash::keccak;
 use log::trace;
-use mpt_trie::{
+use mpt_trie_type_1::{
     partial_trie::{HashedPartialTrie, PartialTrie},
     trie_ops::ValOrHash,
 };

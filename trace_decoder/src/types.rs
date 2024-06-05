@@ -1,6 +1,6 @@
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
-use mpt_trie::nibbles::Nibbles;
+use mpt_trie_type_1::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 
 /// A type alias for `[`[`U256`]`; 8]` of a bloom filter.

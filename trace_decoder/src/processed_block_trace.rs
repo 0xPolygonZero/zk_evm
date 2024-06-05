@@ -5,8 +5,8 @@ use std::iter::once;
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::GenerationInputs;
-use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
+use mpt_trie_type_1::nibbles::Nibbles;
+use mpt_trie_type_1::partial_trie::{HashedPartialTrie, PartialTrie};
 
 use crate::compact::compact_prestate_processing::{
     process_compact_prestate_debug, CompactParsingError, CompactParsingResult,
