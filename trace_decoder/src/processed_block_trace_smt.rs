@@ -60,7 +60,7 @@ impl BlockTrace {
     /// block.
     pub fn smt_into_proof_gen_ir<F>(
         self,
-        c_resolve: &CodeHashResolveFunc,
+        c_resolve: &F,
         other_data: OtherBlockData,
     ) -> SmtTraceParsingResult<Vec<SmtGenerationInputs>>
     where
@@ -72,11 +72,14 @@ impl BlockTrace {
         processed_block_trace.into_proof_gen_ir(other_data)
     }
 
-    fn into_smt_processed_block_trace(
+    fn into_smt_processed_block_trace<F>(
         self,
-        c_resolve: &CodeHashResolveFunc,
+        c_resolve: &F,
         withdrawals: Vec<(Address, U256)>,
-    ) -> SmtTraceParsingResult<SmtProcessedBlockTrace> {
+    ) -> SmtTraceParsingResult<SmtProcessedBlockTrace>
+    where
+        F: CodeHashResolver,
+    {
         let _ = c_resolve;
         let _ = withdrawals;
         todo!()
