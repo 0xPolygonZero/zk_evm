@@ -72,7 +72,7 @@
 //!
 //! As we see in the example, to turn a [BlockTrace] into a
 //! vector of IRs, one must call the method
-//! [into_txn_proof_gen_ir](BlockTrace::into_txn_proof_gen_ir):
+//! [into_txn_proof_gen_ir](BlockTrace::mpt_into_txn_proof_gen_ir):
 //! ```ignore
 //! pub fn mpt_into_txn_proof_gen_ir<F>(
 //!     self,
@@ -132,7 +132,7 @@ mod decoding_smt;
 mod deserializers;
 
 /// Core logic shared between mpt/smt versions of processing block traces.
-mod processed_block_trace;
+pub mod processed_block_trace;
 
 /// Defines functions that processes a [BlockTrace] into the mpt format so that
 /// it is easier to turn the block transactions into IRs.

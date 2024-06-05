@@ -8,13 +8,17 @@ pub(crate) struct ProcessedBlockTrace<T> {
     pub(crate) withdrawals: Vec<(Address, U256)>,
 }
 
+/// CodeHashMeta contains the functions necessary to resolve and insert code
+/// hashes.
 #[derive(Debug)]
 pub struct CodeHashMeta<F, G>
 where
     F: ResolveFunc,
     G: InsertCodeFunc,
 {
+    /// Resolve function for code hashes.
     pub resolve_fn: F,
+    /// Insert function for code hashes.
     pub insert_code_fn: G,
 }
 
