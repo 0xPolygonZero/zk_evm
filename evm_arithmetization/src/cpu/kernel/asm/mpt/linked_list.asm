@@ -639,12 +639,8 @@ global remove_slot:
     // stack: address, slot
     %addr_to_state_key
     SWAP1 %slot_to_storage_key
-    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0 %%after)
+    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
     %jump(search_slot)
 %%after:
     // stack: storage_found, cold_access, value_ptr, slot_ptr
 %endmacro
-
-/// Search the account addr and payload pointer into the linked list.
-/// Return `1, payload_ptr` if the account was inserted, `0, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
