@@ -444,31 +444,3 @@
     // stack: offset, value
     %mstore_kernel_u32(@SEGMENT_KERNEL_GENERAL)
 %endmacro
-
-// Load a single value from kernel general 2 memory.
-%macro mload_kernel_general_2
-    // stack: offset
-    %mload_kernel(@SEGMENT_KERNEL_GENERAL_2)
-    // stack: value
-%endmacro
-
-// Load a single value from kernel general memory.
-%macro mload_kernel_general_2(offset)
-    PUSH $offset
-    %mload_kernel(@SEGMENT_KERNEL_GENERAL_2)
-    // stack: value
-%endmacro
-
-%macro mstore_kernel_general_2
-    // stack: offset, value
-    %mstore_kernel(@SEGMENT_KERNEL_GENERAL_2)
-    // stack: (empty)
-%endmacro
-
-%macro mstore_kernel_general_2(offset)
-    // stack:         value
-    PUSH $offset
-    // stack: offset, value
-    %mstore_kernel_general_2
-    // stack: (empty)
-%endmacro

@@ -100,7 +100,7 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     // *Note*: Changing this will break some tests.
     (
         "ENCODED_EMPTY_NODE_ADDR",
-        hex!("0000000000000000000000000000000000000000000000000000000c00000000"),
+        hex!("0000000000000000000000000000000000000000000000000000000b00000000"),
     ),
     // 0x10000 = 2^16 bytes, much larger than any RLP blob the EVM could possibly create.
     (
@@ -112,7 +112,7 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     // *Note*: Changing this will break some tests.
     (
         "INITIAL_TXN_RLP_ADDR",
-        hex!("0000000000000000000000000000000000000000000000000000000c00000001"),
+        hex!("0000000000000000000000000000000000000000000000000000000b00000001"),
     ),
 ];
 
