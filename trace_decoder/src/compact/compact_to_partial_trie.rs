@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization_type_1::generation::mpt::AccountRlp;
 use log::trace;
 use mpt_trie_type_1::{
     nibbles::{Nibble, Nibbles},

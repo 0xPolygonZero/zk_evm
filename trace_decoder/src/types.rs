@@ -1,5 +1,5 @@
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
+use evm_arithmetization_type_1::proof::{BlockHashes, BlockMetadata};
 use mpt_trie_type_1::nibbles::Nibbles;
 use serde::{Deserialize, Serialize};
 

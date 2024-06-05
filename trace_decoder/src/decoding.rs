@@ -5,7 +5,7 @@ use std::{
 };
 
 use ethereum_types::{Address, H256, U256, U512};
-use evm_arithmetization::{
+use evm_arithmetization_type_1::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::{ExtraBlockData, TrieRoots},
 };

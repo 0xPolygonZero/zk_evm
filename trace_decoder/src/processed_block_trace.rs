@@ -3,8 +3,8 @@ use std::fmt::Debug;
 use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
-use evm_arithmetization::GenerationInputs;
+use evm_arithmetization_type_1::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization_type_1::GenerationInputs;
 use mpt_trie_type_1::nibbles::Nibbles;
 use mpt_trie_type_1::partial_trie::{HashedPartialTrie, PartialTrie};
 

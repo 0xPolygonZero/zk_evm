@@ -1,4 +1,4 @@
-use evm_arithmetization::generation::mpt::AccountRlp;
+use evm_arithmetization_type_1::generation::mpt::AccountRlp;
 use mpt_trie_type_1::partial_trie::PartialTrie;
 
 use super::{
