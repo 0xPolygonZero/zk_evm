@@ -114,7 +114,6 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
 /// State data required to initialize the state passed to the prover.
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct ExtraSegmentData {
-    pub(crate) trimmed_inputs: TrimmedGenerationInputs,
     pub(crate) bignum_modmul_result_limbs: Vec<U256>,
     pub(crate) rlp_prover_inputs: Vec<U256>,
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
@@ -143,7 +142,7 @@ pub(crate) fn set_registers_and_run<F: Field>(
     ]
     .iter()
     .enumerate()
-    .map(|(i, reg_content)| {
+    .for_each(|(i, reg_content)| {
         let (addr, val) = (
             MemoryAddress::new_u256s(
                 0.into(),
@@ -154,8 +153,7 @@ pub(crate) fn set_registers_and_run<F: Field>(
             *reg_content,
         );
         interpreter.generation_state.memory.set(addr, val);
-    })
-    .collect::<Vec<_>>();
+    });
 
     interpreter.run()
 }

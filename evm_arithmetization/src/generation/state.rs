@@ -495,8 +495,6 @@ impl<F: Field> GenerationState<F> {
     }
 
     pub(crate) fn set_segment_data(&mut self, segment_data: &GenerationSegmentData) {
-        self.inputs
-            .clone_from(&segment_data.extra_data.trimmed_inputs);
         self.bignum_modmul_result_limbs
             .clone_from(&segment_data.extra_data.bignum_modmul_result_limbs);
         self.rlp_prover_inputs

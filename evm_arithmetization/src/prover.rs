@@ -506,7 +506,6 @@ fn build_segment_data<F: RichField>(
         memory: memory.unwrap_or_default(),
         max_cpu_len_log: interpreter.get_max_cpu_len_log(),
         extra_data: ExtraSegmentData {
-            trimmed_inputs: interpreter.generation_state.inputs.clone(),
             bignum_modmul_result_limbs: interpreter
                 .generation_state
                 .bignum_modmul_result_limbs
@@ -643,9 +642,6 @@ pub mod testing {
 
             let (updated_registers, mem_after) =
                 set_registers_and_run(segment_data.registers_before, &mut interpreter)?;
-
-            // Set `registers_after`.
-            segment_data.registers_after = updated_registers;
 
             segment_data = build_segment_data(
                 segment_index,
