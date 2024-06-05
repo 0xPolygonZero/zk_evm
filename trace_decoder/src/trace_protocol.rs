@@ -51,8 +51,6 @@ pub struct BlockTrace {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockTraceTriePreImages {
-    /// The trie pre-image with separate state/storage tries.
-    Separate(SeparateTriePreImages),
     /// The trie pre-image with combined state/storage tries.
     Combined(CombinedPreImages),
 }

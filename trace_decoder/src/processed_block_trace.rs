@@ -46,20 +46,8 @@ impl BlockTrace {
     where
         F: CodeHashResolveFunc,
     {
-        let processed_block_trace =
-            self.into_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
+        let withdrawals = other_data.b_data.withdrawals.clone();
 
-        processed_block_trace.into_txn_proof_gen_ir(other_data)
-    }
-
-    fn into_processed_block_trace<F>(
-        self,
-        p_meta: &ProcessingMeta<F>,
-        withdrawals: Vec<(Address, U256)>,
-    ) -> TraceParsingResult<ProcessedBlockTrace>
-    where
-        F: CodeHashResolveFunc,
-    {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
         let pre_image_data = process_block_trace_trie_pre_images(self.trie_pre_images)?;
@@ -111,11 +99,13 @@ impl BlockTrace {
             })
             .collect::<Vec<_>>();
 
-        Ok(ProcessedBlockTrace {
+        let processed_block_trace = ProcessedBlockTrace {
             tries: pre_image_data.tries,
             txn_info,
             withdrawals,
-        })
+        };
+
+        processed_block_trace.into_txn_proof_gen_ir(other_data)
     }
 }
 
@@ -144,7 +134,6 @@ fn process_block_trace_trie_pre_images(
     block_trace_pre_images: BlockTraceTriePreImages,
 ) -> TraceParsingResult<ProcessedBlockTracePreImages> {
     match block_trace_pre_images {
-        BlockTraceTriePreImages::Separate(t) => process_separate_trie_pre_images(t),
         BlockTraceTriePreImages::Combined(t) => process_combined_trie_pre_images(t),
     }
 }
@@ -153,40 +142,6 @@ fn process_combined_trie_pre_images(
     tries: CombinedPreImages,
 ) -> TraceParsingResult<ProcessedBlockTracePreImages> {
     Ok(process_compact_trie(tries.compact).map_err(TraceParsingError::from)?)
-}
-
-fn process_separate_trie_pre_images(
-    tries: SeparateTriePreImages,
-) -> TraceParsingResult<ProcessedBlockTracePreImages> {
-    let tries = PartialTriePreImages {
-        state: process_state_trie(tries.state),
-        storage: process_storage_tries(tries.storage),
-    };
-
-    Ok(ProcessedBlockTracePreImages {
-        tries,
-        extra_code_hash_mappings: None,
-    })
-}
-
-fn process_state_trie(trie: SeparateTriePreImage) -> HashedPartialTrie {
-    match trie {
-        SeparateTriePreImage::Direct(t) => t.0,
-    }
-}
-
-fn process_storage_tries(
-    trie: SeparateStorageTriesPreImage,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
-    match trie {
-        SeparateStorageTriesPreImage::MultipleTries(t) => process_multiple_storage_tries(t),
-    }
-}
-
-fn process_multiple_storage_tries(
-    _tries: HashMap<HashedAccountAddr, SeparateTriePreImage>,
-) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
-    todo!()
 }
 
 fn process_compact_trie(trie: TrieCompact) -> CompactParsingResult<ProcessedBlockTracePreImages> {
