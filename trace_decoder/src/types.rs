@@ -29,8 +29,9 @@ pub type TrieRootHash = H256;
 /// A type alias for [`usize`] of a transaction's index within a block.
 pub type TxnIdx = usize;
 
-/// A function which turns a code hash into bytes.
+/// A function which resolves a code hash into bytes.
 pub trait ResolveFunc = Fn(&CodeHash) -> Vec<u8>;
+/// A function which inserts code hash.
 pub trait InsertCodeFunc = Fn(H256, Vec<u8>);
 
 // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470

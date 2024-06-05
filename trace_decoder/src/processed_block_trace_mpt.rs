@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization_mpt::generation::mpt::{AccountRlp, LegacyReceiptRlp};
@@ -19,7 +18,7 @@ use crate::protocol_processing::{
 use crate::trace_protocol::{AtomicUnitInfo, BlockTrace, ContractCodeUsage, TxnInfo};
 use crate::types::{
     CodeHash, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, InsertCodeFunc,
-    OtherBlockData, ResolveFunc, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    OtherBlockData, ResolveFunc, TrieRootHash, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
@@ -64,8 +63,8 @@ impl BlockTrace {
         other_data: OtherBlockData,
     ) -> TraceProtocolDecodingResult<Vec<GenerationInputs>>
     where
-        F: ResolveFunc,
-        G: InsertCodeFunc,
+        F: ResolveFunc + Clone,
+        G: InsertCodeFunc + Clone,
     {
         let processed_block_trace =
             self.into_mpt_processed_block_trace(cmeta, other_data.b_data.withdrawals.clone())?;
@@ -81,8 +80,8 @@ impl BlockTrace {
         withdrawals: Vec<(Address, U256)>,
     ) -> TraceProtocolDecodingResult<MptProcessedBlockTrace>
     where
-        F: ResolveFunc,
-        G: InsertCodeFunc,
+        F: ResolveFunc + Clone,
+        G: InsertCodeFunc + Clone,
     {
         // The compact format is able to provide actual code, so if it does, we should
         // take advantage of it.
@@ -105,8 +104,8 @@ impl BlockTrace {
             .collect();
 
         let mut code_hash_resolver = MPTCodeHashResolving {
-            resolve_fn: cmeta.resolve_fn,
-            insert_code_fn: cmeta.insert_code_fn,
+            resolve_fn: cmeta.resolve_fn.clone(),
+            insert_code_fn: cmeta.insert_code_fn.clone(),
         };
 
         let sect_info = Self::process_atomic_units(
@@ -170,11 +169,11 @@ impl BlockTrace {
     }
 }
 
-/// Mpt processed pre-image.
+/// Mpt processed pre-i:188
+/// mage.
 #[derive(Clone, Debug)]
 pub struct MptProcessedBlockTracePreImages {
     pub(crate) tries: MptPartialTriePreImages,
-    pub(crate) extra_code_hash_mappings: Option<HashMap<CodeHash, Vec<u8>>>,
 }
 
 impl From<ProcessedCompactOutput> for MptProcessedBlockTracePreImages {
@@ -184,11 +183,7 @@ impl From<ProcessedCompactOutput> for MptProcessedBlockTracePreImages {
             storage: v.witness_out.storage_tries,
         };
 
-        Self {
-            tries,
-            extra_code_hash_mappings: (!v.witness_out.code.is_empty())
-                .then_some(v.witness_out.code),
-        }
+        Self { tries }
     }
 }
 
@@ -345,10 +340,6 @@ fn process_rlped_receipt_node_bytes(raw_bytes: Vec<u8>) -> Vec<u8> {
             rlp::decode::<Vec<u8>>(&raw_bytes).unwrap()
         }
     }
-}
-
-fn create_empty_code_access_map() -> HashMap<CodeHash, Vec<u8>> {
-    HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
 /// Note that "*_accesses" includes writes.

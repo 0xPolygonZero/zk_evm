@@ -151,10 +151,7 @@ fn process_separate_trie_pre_images(
         storage: process_storage_tries(tries.storage),
     };
 
-    Ok(MptProcessedBlockTracePreImages {
-        tries,
-        extra_code_hash_mappings: None,
-    })
+    Ok(MptProcessedBlockTracePreImages { tries })
 }
 
 fn process_state_trie(trie: MptSeparateTriePreImage) -> HashedPartialTrie {
