@@ -92,3 +92,12 @@
     MUL // Cheaper than AND
     MUL // Cheaper than AND
 %endmacro
+
+// Return [(u256::MAX, u256::MAX), (u256::MAX, u256::MAX)] which is used to indicate the input was invalid.
+%macro bn_twisted_invalid_input
+    // stack: retdest
+    PUSH @U256_MAX
+    // stack: u256::MAX, retdest
+    %stack (max, retdest) -> (retdest, max, max, max, max)
+    JUMP
+%endmacro
