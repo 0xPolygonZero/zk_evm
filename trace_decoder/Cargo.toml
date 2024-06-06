@@ -27,6 +27,9 @@ serde_with = "3.4.0"
 thiserror = { workspace = true }
 mpt_trie_type_1.workspace = true
 evm_arithmetization_type_1.workspace = true
+winnow = "0.6.11"
+bitflags = "2.5.0"
 
 [dev-dependencies]
 pretty_env_logger = "0.5.0"
+winnow = { version = "0.6.11", features = ["debug"] }

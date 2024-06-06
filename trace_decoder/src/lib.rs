@@ -133,6 +133,8 @@ mod types;
 /// Defines useful functions necessary to the other modules.
 mod utils;
 
+mod winnow_witness;
+
 pub fn type_1(
     block_trace: BlockTrace,
     other_block_data: OtherBlockData,

@@ -29,7 +29,6 @@ thiserror = "1.0.49"
 uint = "0.9.5"
 mpt_trie = { path = "mpt_trie" }
 smt_trie = { path = "smt_trie" }
-evm_arithmetization = { path = "evm_arithmetization" }
 evm_arithmetization_type_1 = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop", package = "evm_arithmetization" }
 mpt_trie_type_1 = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop", package = "mpt_trie" }                       # TODO(0xaatif): this is definitely insane
 plonky2 = "0.2.2"
