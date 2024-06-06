@@ -93,6 +93,15 @@
     MUL // Cheaper than AND
 %endmacro
 
+%macro bn_check_twisted_subgroup
+    // stack: X, Y
+    %stack (X: 2, Y: 2) -> (X, Y, @BN_SCALAR)
+    %bn_twisted_mul
+    // stack: AX, AY
+    %bn_check_twisted_ident
+    // stack: is_ident
+%endmacro
+
 // Return [(u256::MAX, u256::MAX), (u256::MAX, u256::MAX)] which is used to indicate the input was invalid.
 %macro bn_twisted_invalid_input
     // stack: retdest

@@ -50,7 +50,7 @@ global bn_twisted_add_valid_points:
     %jumpi(bn_twisted_add_snd_zero)
     // stack: X0, Y0, X1, Y1, retdest
 
-    // Check if both points have the same x-coordinate.
+    // Check if both points have the same X-coordinate.
     %dup_fp254_2_4
     // stack: X1, X0, Y0, X1, Y1, retdest
     %dup_fp254_2_2
@@ -154,7 +154,7 @@ bn_twisted_add_equal_first_coord:
     // stack: X0, Y0, X1, Y1, retdest
 
     // Otherwise, one is the negation of the other so we can return the identity.
-    %stack: (garbage: 8, retdest) -> (retdest, 0, 0, 0, 0)
+    %stack (garbage: 8, retdest) -> (retdest, 0, 0, 0, 0)
     // stack: retdest, X=0, Y=0
     JUMP
 
@@ -171,10 +171,10 @@ bn_twisted_add_equal_points:
     %dup_fp254_2_0
     // stack: X0, X0, X0, Y0, X1, Y1, retdest
     %mul_fp254_2
-    // stack: X0^2, X0, Y0, X1, Y1, retdest with
+    // stack: X0^2, X0, Y0, X1, Y1, retdest
     PUSH 0X183227397098d014dc2822db40c0ac2ecbc0b548b438e5469e10460b6c3e7ea5 // 3/2 in the base field
     // stack: 3/2, X0^2, X0, Y0, X1, Y1, retdest
-    %mul_fp254_2
+    %scale_fp254_2
     // stack: 3/2 * X0^2, X0, Y0, X1, Y1, retdest
     %dup_fp254_2_4
     // stack: Y0, 3/2 * X0^2, X0, Y0, X1, Y1, retdest
@@ -186,16 +186,30 @@ bn_twisted_add_equal_points:
 // Assumption: (X0,Y0) is a valid point.
 // Standard doubling formula.
 global bn_twisted_double:
-    // stack: x, y, retdest
+    // stack: X, Y, retdest
     %dup_fp254_2_2
-    // stack: y, x, y, retdest
+    // stack: Y, X, Y, retdest
     %dup_fp254_2_2
-    // stack: x, y, x, y, retdest
+    // stack: X, Y, X, Y, retdest
     %bn_check_twisted_ident
-    // stack: (x,y)==(0,0), x, y, retdest
+    // stack: (X,Y)==(0,0), X, Y, retdest
     %jumpi(ec_twisted_double_retself)
     %dup_fp254_2_2
-    // stack: y, x, y, retdest
+    // stack: Y, X, Y, retdest
     %dup_fp254_2_2
-    // stack: x, y, x, y, retdest
+    // stack: X, Y, X, Y, retdest
     %jump(bn_twisted_add_equal_points)
+
+// Convenience macro to call bn_twisted_add and return where we left off.
+%macro bn_twisted_add
+    %stack (X0: 2, Y0: 2, X1: 2, Y1: 2) -> (X0, Y0, X1, Y1, %%after)
+    %jump(bn_twisted_add)
+%%after:
+%endmacro
+
+// Convenience macro to call bn_twisted_double and return where we left off.
+%macro bn_twisted_double
+    %stack (X: 2, Y: 2) -> (X, Y, %%after)
+    %jump(bn_twisted_double)
+%%after:
+%endmacro

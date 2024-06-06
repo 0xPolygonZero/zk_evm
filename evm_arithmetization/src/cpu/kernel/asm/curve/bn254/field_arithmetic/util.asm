@@ -417,6 +417,14 @@
 %endmacro
 
 // cost: 2
+%macro dup_fp254_2_8
+    // stack:       X: 8, f: 2
+    DUP10
+    DUP10
+    // stack: f: 2, X: 8, f: 2
+%endmacro
+
+// cost: 2
 %macro dup_fp254_2_10
     // stack:       X: 10, f: 2
     DUP12
