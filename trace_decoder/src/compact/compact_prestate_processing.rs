@@ -727,7 +727,6 @@ impl<C: CompactCursor> WitnessBytes<C> {
         (instr_and_bytes_buf.into(), res)
     }
 
-    #[allow(dead_code)]
     fn process_into_instructions_and_keep_bytes_parsed_to_instruction_and_bail_on_first_failure_intern(
         mut self,
         instr_and_bytes_buf: &mut Vec<(Instruction, Vec<u8>)>,

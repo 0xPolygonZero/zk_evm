@@ -232,7 +232,7 @@ fn witness_test_vectors() {
     }
 
     static VECTORS: Lazy<Vec<Vector>> =
-        Lazy::new(|| serde_json::from_str(include_str!("witness_vectors.jsonc")).unwrap());
+        Lazy::new(|| serde_json::from_str(include_str!("witness_vectors.json")).unwrap());
 
     fn vectors() -> &'static [Vector] {
         &VECTORS

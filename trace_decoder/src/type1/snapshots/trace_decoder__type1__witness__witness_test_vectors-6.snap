@@ -1,5 +1,5 @@
 ---
-source: trace_decoder/src/winnow_witness.rs
+source: trace_decoder/src/type1/witness.rs
 expression: "witness::<winnow::error::ContextError>(&mut &*vector.bytes)"
 ---
 Err(

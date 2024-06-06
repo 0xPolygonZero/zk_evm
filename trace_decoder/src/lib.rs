@@ -133,12 +133,14 @@ mod types;
 /// Defines useful functions necessary to the other modules.
 mod utils;
 
-mod winnow_witness;
-
 pub fn type_1(
     block_trace: BlockTrace,
     other_block_data: OtherBlockData,
     resolver: impl Fn(&CodeHash) -> Vec<u8>,
 ) -> Result<Vec<evm_arithmetization_type_1::GenerationInputs>, Box<TraceParsingError>> {
     block_trace.into_txn_proof_gen_ir(&ProcessingMeta::new(resolver), other_block_data)
+}
+
+mod type1 {
+    mod witness;
 }
