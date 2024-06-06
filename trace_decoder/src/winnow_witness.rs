@@ -219,22 +219,26 @@ fn cbor_test_vectors() {
     do_test(b"\x17", 23, cbor);
 }
 
-#[cfg(test)]
-mod witness_test_vectors {
-    use hex_literal::hex;
-    type Error = winnow::error::ContextError;
+#[test]
+fn witness_test_vectors() {
+    use insta::assert_debug_snapshot;
+    use once_cell::sync::Lazy;
+    use serde::Deserialize;
 
-    use super::*;
-
-    #[test]
-    fn simple() {
-        let src = hex!("01004110443132333400411044313233340218300042035044313233350218180158200000000000000000000000000000000000000000000000000000000000000012");
-        dbg!(witness::<Error>.parse(&src).unwrap());
+    #[derive(Deserialize)]
+    struct Vector {
+        #[serde(with = "hex", rename = "hex")]
+        pub bytes: Vec<u8>,
     }
 
-    #[test]
-    fn one() {
-        let src = hex!("01055821033601462093b5945d1676df093446790fd31b20e7b12a2e8e5e09d068109616b0084a021e19e0c9bab240000005582103468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d0084101031a697e814758281972fcd13bc9707dbcd2f195986b05463d7b78426508445a0405582103b70e80538acdabd6137353b0f9d8d149f4dba91e8be2e7946e409bfdbe685b900841010558210389802d6ed1a28b049e9d4fe5334c5902fd9bc00c42821c82f82ee2da10be90800841010558200256274a27dd7524955417c11ecd917251cc7c4c8310f4c7e4bd3c304d3d9a79084a021e19e0c9bab2400000055820023ab0970b73895b8c9959bae685c3a19f45eb5ad89d42b52a340ec4ac204d190841010219102005582103876da518a393dbd067dc72abfa08d475ed6447fca96d92ec3f9e7eba503ca6100841010558210352688a8f926c816ca1e079067caba944f158e764817b83fc43594370ca9cf62008410105582103690b239ba3aaf993e443ae14aeffc44cf8d9931a79baed9fa141d0e4506e131008410102196573");
-        dbg!(witness::<Error>.parse(&src).unwrap());
+    static VECTORS: Lazy<Vec<Vector>> =
+        Lazy::new(|| serde_json::from_str(include_str!("witness_vectors.jsonc")).unwrap());
+
+    fn vectors() -> &'static [Vector] {
+        &VECTORS
+    }
+
+    for vector in vectors() {
+        assert_debug_snapshot!(witness::<winnow::error::ContextError>(&mut &*vector.bytes));
     }
 }

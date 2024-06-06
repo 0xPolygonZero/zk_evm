@@ -1,0 +1,12 @@
+---
+source: trace_decoder/src/winnow_witness.rs
+expression: "witness::<winnow::error::ContextError>(&mut &*vector.bytes)"
+---
+Err(
+    Backtrack(
+        ContextError {
+            context: [],
+            cause: None,
+        },
+    ),
+)
