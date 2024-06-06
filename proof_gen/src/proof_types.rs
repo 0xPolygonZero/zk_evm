@@ -58,7 +58,7 @@ pub struct GeneratedBlockProof {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum SegmentAggregatableProof {
     /// The underlying proof is a segment proof.
-    Txn(GeneratedSegmentProof),
+    Seg(GeneratedSegmentProof),
     /// The underlying proof is an aggregation proof.
     Agg(GeneratedSegmentAggProof),
 }
@@ -77,21 +77,21 @@ pub enum TxnAggregatableProof {
 impl SegmentAggregatableProof {
     pub(crate) fn public_values(&self) -> PublicValues {
         match self {
-            SegmentAggregatableProof::Txn(info) => info.p_vals.clone(),
+            SegmentAggregatableProof::Seg(info) => info.p_vals.clone(),
             SegmentAggregatableProof::Agg(info) => info.p_vals.clone(),
         }
     }
 
     pub(crate) const fn is_agg(&self) -> bool {
         match self {
-            SegmentAggregatableProof::Txn(_) => false,
+            SegmentAggregatableProof::Seg(_) => false,
             SegmentAggregatableProof::Agg(_) => true,
         }
     }
 
     pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
         match self {
-            SegmentAggregatableProof::Txn(info) => &info.intern,
+            SegmentAggregatableProof::Seg(info) => &info.intern,
             SegmentAggregatableProof::Agg(info) => &info.intern,
         }
     }
@@ -122,7 +122,7 @@ impl TxnAggregatableProof {
 
 impl From<GeneratedSegmentProof> for SegmentAggregatableProof {
     fn from(v: GeneratedSegmentProof) -> Self {
-        Self::Txn(v)
+        Self::Seg(v)
     }
 }
 
@@ -148,7 +148,7 @@ impl From<SegmentAggregatableProof> for TxnAggregatableProof {
     fn from(v: SegmentAggregatableProof) -> Self {
         match v {
             SegmentAggregatableProof::Agg(agg) => TxnAggregatableProof::Txn(agg),
-            SegmentAggregatableProof::Txn(_) => {
+            SegmentAggregatableProof::Seg(_) => {
                 panic!("Should be an aggregation by now. Missing segment?")
             }
         }
