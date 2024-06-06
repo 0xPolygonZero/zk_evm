@@ -900,8 +900,8 @@ where
             lhs_pv.mem_before.clone(),
         );
 
-        // If the rhs is a real proof: All the block metadata is the same for both
-        // segments. It is also the case for extra_block_data.
+        // If the rhs is a real proof, all the block metadata must be the same for both
+        // segments. It is also the case for the extra block data.
         TrieRootsTarget::conditional_assert_eq(
             &mut builder,
             is_not_dummy,
@@ -1695,35 +1695,29 @@ where
     ///
     /// - `lhs_is_agg`: a boolean indicating whether the left child proof is an
     ///   aggregation proof or a regular segment proof.
-    /// - `lhs_proof`: the left child proof.
-    /// - `lhs_public_values`: the public values associated to the right child
-    ///   proof.
+    /// - `lhs_proof`: the left child prover output data.
     /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
     ///   aggregation proof or a regular transaction proof.
-    /// - `rhs_proof`: the right child proof.
-    /// - `rhs_public_values`: the public values associated to the right child
-    ///   proof.
+    /// - `rhs_proof`: the right child prover output data.
     ///
     /// # Outputs
     ///
-    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
-    /// its [`PublicValues`]. Only the proof with public inputs is necessary
-    /// for a verifier to assert correctness of the computation,
-    /// but the public values are output for the prover convenience, as these
-    /// are necessary during proof aggregation.
+    /// This method outputs a [`ProverOutputData<F, C, D>`]. Only the proof with
+    /// public inputs is necessary for a verifier to assert correctness of
+    /// the computation, but the public values and `is_dummy` are output for the
+    /// prover convenience, as these are necessary during proof aggregation.
     pub fn prove_segment_aggregation(
         &self,
         lhs_is_agg: bool,
-        lhs_proof: &ProofWithPublicInputs<F, C, D>,
-        lhs_public_values: PublicValues,
-
+        lhs_prover_output: &ProverOutputData<F, C, D>,
         rhs_is_agg: bool,
-        rhs_is_dummy: bool,
-        rhs_proof: &ProofWithPublicInputs<F, C, D>,
-        rhs_public_values: PublicValues,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+        rhs_prover_output: &ProverOutputData<F, C, D>,
+    ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         let mut agg_inputs = PartialWitness::new();
 
+        let lhs_proof = &lhs_prover_output.proof_with_pis;
+        let rhs_proof = &rhs_prover_output.proof_with_pis;
+        let rhs_is_dummy = rhs_prover_output.is_dummy;
         Self::set_dummy_if_necessary(
             &self.segment_aggregation.lhs,
             lhs_is_agg,
@@ -1760,6 +1754,9 @@ where
 
         // Aggregates both `PublicValues` from the provided proofs into a single one.
 
+        let lhs_public_values = &lhs_prover_output.public_values;
+        let rhs_public_values = &rhs_prover_output.public_values;
+
         let real_public_values = if rhs_is_dummy {
             lhs_public_values.clone()
         } else {
@@ -1767,7 +1764,7 @@ where
         };
 
         let agg_public_values = PublicValues {
-            trie_roots_before: lhs_public_values.trie_roots_before,
+            trie_roots_before: lhs_public_values.trie_roots_before.clone(),
             trie_roots_after: real_public_values.trie_roots_after,
             extra_block_data: ExtraBlockData {
                 checkpoint_state_trie_root: lhs_public_values
@@ -1780,9 +1777,9 @@ where
             },
             block_metadata: real_public_values.block_metadata,
             block_hashes: real_public_values.block_hashes,
-            registers_before: lhs_public_values.registers_before,
+            registers_before: lhs_public_values.registers_before.clone(),
             registers_after: real_public_values.registers_after,
-            mem_before: lhs_public_values.mem_before,
+            mem_before: lhs_public_values.mem_before.clone(),
             mem_after: real_public_values.mem_after,
         };
 
@@ -1796,7 +1793,12 @@ where
         })?;
 
         let aggregation_proof = self.segment_aggregation.circuit.prove(agg_inputs)?;
-        Ok((aggregation_proof, agg_public_values))
+        let agg_output = ProverOutputData {
+            is_dummy: false,
+            proof_with_pis: aggregation_proof,
+            public_values: agg_public_values,
+        };
+        Ok(agg_output)
     }
 
     pub fn verify_segment_aggregation(

@@ -378,7 +378,19 @@ pub struct RegistersData {
     /// Gas used so far.
     pub gas_used: U256,
 }
+
+pub(crate) enum RegistersIdx {
+    ProgramCounter = 0,
+    IsKernel = 1,
+    StackLen = 2,
+    StackTop = 3,
+    Context = 4,
+    GasUsed = 5,
+}
+
 impl RegistersData {
+    pub(crate) const SIZE: usize = 6;
+
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == RegistersDataTarget::SIZE);
 

@@ -77,9 +77,9 @@ pub(crate) trait State<F: Field> {
     fn get_context(&self) -> usize;
 
     /// Checks whether we have reached the maximal cpu length.
-    fn at_end_segment(&self, opt_max_cpu_len: Option<usize>) -> bool {
-        if let Some(max_cpu_len_log) = opt_max_cpu_len {
-            self.get_clock() == (1 << max_cpu_len_log) - NUM_EXTRA_CYCLES_AFTER
+    fn at_end_segment(&self, opt_cycle_limit: Option<usize>) -> bool {
+        if let Some(cycle_limit) = opt_cycle_limit {
+            self.get_clock() == cycle_limit
         } else {
             false
         }
@@ -173,6 +173,9 @@ pub(crate) trait State<F: Field> {
     {
         let halt_offsets = self.get_halt_offsets();
 
+        let cycle_limit =
+            max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
+
         let mut final_registers = RegistersState::default();
         let final_mem = self.get_generation_state().memory.clone();
         let mut running = true;
@@ -182,7 +185,7 @@ pub(crate) trait State<F: Field> {
             let pc = registers.program_counter;
 
             let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
-            if running && (self.at_halt() || self.at_end_segment(max_cpu_len_log)) {
+            if running && (self.at_halt() || self.at_end_segment(cycle_limit)) {
                 running = false;
                 final_registers = registers;
 

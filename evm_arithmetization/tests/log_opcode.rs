@@ -477,17 +477,14 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
 
     assert_eq!(segment_proofs_data_first.len(), 2); // second one is a dummy segment
 
-    let (segment_agg_proof_first, updated_agg_public_values_first) = all_circuits
-        .prove_segment_aggregation(
-            false,
-            &segment_proofs_data_first[0].proof_with_pis,
-            segment_proofs_data_first[0].public_values.clone(),
-            false,
-            segment_proofs_data_first[1].is_dummy,
-            &segment_proofs_data_first[1].proof_with_pis,
-            segment_proofs_data_first[1].public_values.clone(),
-        )?;
-    all_circuits.verify_segment_aggregation(&segment_agg_proof_first)?;
+    let segment_agg_prover_output_data_first = all_circuits.prove_segment_aggregation(
+        false,
+        &segment_proofs_data_first[0],
+        false,
+        &segment_proofs_data_first[1],
+    )?;
+    all_circuits
+        .verify_segment_aggregation(&segment_agg_prover_output_data_first.proof_with_pis)?;
 
     // The gas used and transaction number are fed to the next transaction, so the
     // two proofs can be correctly aggregated.
@@ -627,25 +624,22 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         all_circuits.verify_root(proof.clone())?;
     }
 
-    let (segment_agg_proof_second, updated_agg_public_values_second) = all_circuits
-        .prove_segment_aggregation(
-            false,
-            &segment_proofs_data_second[0].proof_with_pis,
-            segment_proofs_data_second[0].public_values.clone(),
-            false,
-            segment_proofs_data_second[1].is_dummy,
-            &segment_proofs_data_second[1].proof_with_pis,
-            segment_proofs_data_second[1].public_values.clone(),
-        )?;
-    all_circuits.verify_segment_aggregation(&segment_agg_proof_second)?;
+    let segment_agg_prover_output_data_second = all_circuits.prove_segment_aggregation(
+        false,
+        &segment_proofs_data_second[0],
+        false,
+        &segment_proofs_data_second[1],
+    )?;
+    all_circuits
+        .verify_segment_aggregation(&segment_agg_prover_output_data_second.proof_with_pis)?;
 
     let (txn_proof, txn_pv) = all_circuits.prove_transaction_aggregation(
         false,
-        &segment_agg_proof_first,
-        updated_agg_public_values_first,
+        &segment_agg_prover_output_data_first.proof_with_pis,
+        segment_agg_prover_output_data_first.public_values,
         false,
-        &segment_agg_proof_second,
-        updated_agg_public_values_second,
+        &segment_agg_prover_output_data_second.proof_with_pis,
+        segment_agg_prover_output_data_second.public_values,
     )?;
 
     let (first_block_proof, _block_public_values) =
@@ -717,24 +711,21 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         all_circuits.verify_root(proof.clone())?;
     }
 
-    let (segment_agg_proof, updated_agg_public_values) = all_circuits.prove_segment_aggregation(
+    let segment_agg_prover_output_data = all_circuits.prove_segment_aggregation(
         false,
-        &segment_proofs_data[0].proof_with_pis,
-        segment_proofs_data[0].public_values.clone(),
+        &segment_proofs_data[0],
         false,
-        segment_proofs_data[1].is_dummy,
-        &segment_proofs_data[1].proof_with_pis,
-        segment_proofs_data[1].public_values.clone(),
+        &segment_proofs_data[1],
     )?;
-    all_circuits.verify_segment_aggregation(&segment_agg_proof)?;
+    all_circuits.verify_segment_aggregation(&segment_agg_prover_output_data.proof_with_pis)?;
 
     let (second_txn_proof, second_txn_pvs) = all_circuits.prove_transaction_aggregation(
         false,
-        &segment_agg_proof,
-        updated_agg_public_values.clone(),
+        &segment_agg_prover_output_data.proof_with_pis,
+        segment_agg_prover_output_data.public_values.clone(),
         false,
-        &segment_agg_proof,
-        updated_agg_public_values,
+        &segment_agg_prover_output_data.proof_with_pis,
+        segment_agg_prover_output_data.public_values,
     )?;
     let (second_block_proof, _block_public_values) = all_circuits.prove_block(
         None, // We don't specify a previous proof, considering block 1 as the new checkpoint.

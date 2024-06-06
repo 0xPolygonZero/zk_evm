@@ -3,7 +3,10 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
+use evm_arithmetization::{
+    fixed_recursive_verifier::ProverOutputData, prover::GenerationSegmentData, AllStark,
+    GenerationInputs, StarkConfig,
+};
 use hashbrown::HashMap;
 use plonky2::{
     gates::noop::NoopGate,
@@ -86,18 +89,29 @@ pub fn generate_segment_agg_proof(
             "Cannot have a dummy segment with an aggregation."
         );
     }
-    let (intern, p_vals) = p_state
+
+    let lhs_prover_output_data = ProverOutputData {
+        is_dummy: false,
+        proof_with_pis: lhs_child.intern().clone(),
+        public_values: lhs_child.public_values(),
+    };
+    let rhs_prover_output_data = ProverOutputData {
+        is_dummy: false,
+        proof_with_pis: rhs_child.intern().clone(),
+        public_values: rhs_child.public_values(),
+    };
+    let agg_output_data = p_state
         .state
         .prove_segment_aggregation(
             lhs_child.is_agg(),
-            lhs_child.intern(),
-            lhs_child.public_values(),
+            &lhs_prover_output_data,
             rhs_child.is_agg(),
-            has_dummy,
-            rhs_child.intern(),
-            rhs_child.public_values(),
+            &rhs_prover_output_data,
         )
         .map_err(|err| err.to_string())?;
+
+    let p_vals = agg_output_data.public_values;
+    let intern = agg_output_data.proof_with_pis;
 
     Ok(GeneratedSegmentAggProof { p_vals, intern })
 }

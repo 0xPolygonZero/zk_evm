@@ -15,6 +15,8 @@ use crate::generation::NUM_EXTRA_CYCLES_AFTER;
 use crate::generation::NUM_EXTRA_CYCLES_BEFORE;
 use crate::memory::segments::Segment;
 use crate::proof::BlockMetadata;
+use crate::proof::RegistersData;
+use crate::proof::RegistersIdx;
 use crate::proof::TrieRoots;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::state::RegistersState;
@@ -101,14 +103,16 @@ fn test_init_exc_stop() {
     interpreter.set_is_kernel(true);
     interpreter.clock = 0;
 
-    // Set the program counter and `is_kernel` at the end of the execution. They
-    // have offsets 6 and 7 respectively in segment `RegistersStates`.
+    // Set the program counter and `is_kernel` at the end of the execution. The
+    // `registers_before` and `registers_after` are stored contiguously in the
+    // `RegistersState` segment. We need to update `registers_after` here, hence the
+    // offset by `RegistersData::SIZE`.
     let regs_to_set = [
         (
             MemoryAddress {
                 context: 0,
                 segment: Segment::RegistersStates.unscale(),
-                virt: 6,
+                virt: RegistersData::SIZE + RegistersIdx::ProgramCounter as usize,
             },
             pc_u256,
         ),
@@ -116,7 +120,7 @@ fn test_init_exc_stop() {
             MemoryAddress {
                 context: 0,
                 segment: Segment::RegistersStates.unscale(),
-                virt: 7,
+                virt: RegistersData::SIZE + RegistersIdx::IsKernel as usize,
             },
             U256::one(),
         ),
@@ -128,7 +132,7 @@ fn test_init_exc_stop() {
     // The "-2" comes from the fact that:
     // - we stop 1 cycle before the max, to allow for one padding row, which is
     //   needed for CPU STARK.
-    // - we normally need one additional cycle to enter `exc_stop`.
+    // - we need one additional cycle to enter `exc_stop`.
     assert_eq!(
         interpreter.get_clock(),
         NUM_EXTRA_CYCLES_AFTER - 2,
