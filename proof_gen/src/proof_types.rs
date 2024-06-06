@@ -68,9 +68,6 @@ pub enum SegmentAggregatableProof {
 /// away whether or not the proof was a txn or agg proof.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum TxnAggregatableProof {
-    /// The underlying proof is a segment proof. It first needs to be aggregated
-    /// with a dummy proof.
-    Segment(GeneratedSegmentProof),
     /// The underlying proof is a transaction proof.
     Txn(GeneratedSegmentAggProof),
     /// The underlying proof is an aggregation proof.
@@ -103,7 +100,6 @@ impl SegmentAggregatableProof {
 impl TxnAggregatableProof {
     pub(crate) fn public_values(&self) -> PublicValues {
         match self {
-            TxnAggregatableProof::Segment(info) => info.p_vals.clone(),
             TxnAggregatableProof::Txn(info) => info.p_vals.clone(),
             TxnAggregatableProof::Agg(info) => info.p_vals.clone(),
         }
@@ -111,7 +107,6 @@ impl TxnAggregatableProof {
 
     pub(crate) fn is_agg(&self) -> bool {
         match self {
-            TxnAggregatableProof::Segment(_) => false,
             TxnAggregatableProof::Txn(_) => false,
             TxnAggregatableProof::Agg(_) => true,
         }
@@ -119,7 +114,6 @@ impl TxnAggregatableProof {
 
     pub(crate) fn intern(&self) -> &PlonkyProofIntern {
         match self {
-            TxnAggregatableProof::Segment(info) => &info.intern,
             TxnAggregatableProof::Txn(info) => &info.intern,
             TxnAggregatableProof::Agg(info) => &info.intern,
         }
@@ -154,7 +148,9 @@ impl From<SegmentAggregatableProof> for TxnAggregatableProof {
     fn from(v: SegmentAggregatableProof) -> Self {
         match v {
             SegmentAggregatableProof::Agg(agg) => TxnAggregatableProof::Txn(agg),
-            SegmentAggregatableProof::Txn(seg) => TxnAggregatableProof::Segment(seg),
+            SegmentAggregatableProof::Txn(_) => {
+                panic!("Should be an aggregation by now. Missing segment?")
+            }
         }
     }
 }
