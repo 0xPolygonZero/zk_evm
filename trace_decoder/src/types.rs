@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use ethereum_types::{Address, H256, U256};
 use serde::{Deserialize, Serialize};
 
@@ -63,13 +65,26 @@ pub(crate) struct AccountInfo {
     pub(crate) s_root: TrieRootHash,
 }
 
-impl From<AccountInfo> for AccountRlp {
-    fn from(v: AccountInfo) -> Self {
+impl From<&AccountInfo> for AccountRlp {
+    fn from(v: &AccountInfo) -> Self {
         Self {
             nonce: v.nonce,
             balance: v.balance,
             storage_root: v.s_root,
             code_hash: v.c_hash,
+        }
+    }
+}
+
+impl<T: Borrow<AccountRlp>> From<T> for AccountInfo {
+    fn from(v: T) -> Self {
+        let v = v.borrow();
+        
+        Self {
+            balance: v.balance,
+            nonce: v.nonce,
+            c_hash: v.code_hash,
+            s_root: v.storage_root,
         }
     }
 }

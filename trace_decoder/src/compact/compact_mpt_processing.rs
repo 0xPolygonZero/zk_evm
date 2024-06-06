@@ -5,7 +5,7 @@ use std::{
     fmt::{self, Debug, Display},
 };
 
-use mpt_trie::partial_trie::HashedPartialTrie;
+use mpt_trie_normal::partial_trie::HashedPartialTrie;
 
 use super::{
     compact_processing_common::{
@@ -333,12 +333,6 @@ impl ParserState {
         traverser.replace_prev_n_entries_with_single_entry(n, WitnessEntry::Node(entry));
         Ok(1)
     }
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct MptPartialTriePreImages {
-    pub state: HashedPartialTrie,
-    pub storage: HashMap<HashedAccountAddr, HashedPartialTrie>,
 }
 
 // TODO: Move behind a feature flag just used for debugging (but probably not

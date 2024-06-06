@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use evm_arithmetization_mpt::generation::mpt::AccountRlp;
 use log::trace;
-use mpt_trie::{
+use mpt_trie_normal::{
     nibbles::{Nibble, Nibbles},
     partial_trie::{HashedPartialTrie, PartialTrie},
 };

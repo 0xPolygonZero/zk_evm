@@ -37,7 +37,7 @@ pub type TraceDecodingResult<T> = Result<T, TraceDecodingError>;
 // We want to impl `From` for `H160` & `H256` for Nibbles, but due to the orphan
 // rule, we need a wrapper type.
 #[derive(Clone, Debug)]
-pub(super) struct WrappedNibbles(Nibbles);
+pub(super) struct WrappedNibbles(pub(crate) Nibbles);
 
 impl<'a> From<&'a H160> for WrappedNibbles {
     fn from(v: &'a H160) -> Self {
@@ -86,7 +86,7 @@ pub(crate) struct WrappedHashedPartialTrie<T> {
 
     /// Can't think of a better way to do this, but we need to associate a key
     /// type to use with a given partial trie.
-    _key_type: PhantomData<T>,
+    pub(crate) _key_type: PhantomData<T>,
 }
 
 impl<T> From<HashedPartialTrie> for WrappedHashedPartialTrie<T> {
@@ -156,6 +156,15 @@ where
     }
 }
 
+impl<T> WrappedHashedPartialTrie<T> {
+    pub(crate) fn new(trie: HashedPartialTrie) -> Self {
+        Self {
+            inner: trie,
+            _key_type: PhantomData
+        }
+    }
+}
+
 impl<T> ArbitraryValueSizeTrie for WrappedHashedPartialTrie<T>
 where
     T: Into<WrappedNibbles>,
@@ -205,6 +214,7 @@ pub(crate) trait ProcessedBlockTraceDecode {
         signed_txn: Option<Vec<u8>>,
         withdrawals: Vec<(Address, U256)>,
         tries: Self::TrieInputs,
+        trie_roots_after: TrieRoots,
         checkpoint_state_trie_root: TrieRootHash,
         contract_code: HashMap<H256, Vec<u8>>,
         block_metadata: BlockMetadata,
@@ -214,16 +224,15 @@ pub(crate) trait ProcessedBlockTraceDecode {
 
 pub(crate) trait GenIr {
     type TrieRoots;
-    type StateTrie: Trie + Clone;
 
     fn get_signed_txn(&self) -> Option<&[u8]>;
     fn get_withdrawals_mut(&mut self) -> &mut Vec<(Address, U256)>;
 
-    fn get_state_trie(&self) -> &Self::StateTrie;
+    /// Replace the state trie with a sub-trie using the following keys.
     fn update_state_trie_with_subtrie(
         &mut self,
-        state_sub_trie_override: <Self::StateTrie as Trie>::SubTrie,
-    );
+        ks: impl Iterator<Item = Address>,
+    ) -> TraceDecodingResult<()>;
 
     fn finalize(self) -> GenerationInputs;
 }
@@ -293,7 +302,8 @@ pub(crate) trait StateTrie: Trie<Key = Address> {
 }
 
 pub(crate) trait StorageTrie: Trie<Key = StorageAddr> {
-    fn set_slot(&mut self, slot: &StorageAddr, val: U256) -> TraceDecodingResult<()>;
+    fn set_slot(&mut self, slot: StorageAddr, val: U256) -> TraceDecodingResult<()>;
+    fn hash_out_trie(&mut self) -> TraceDecodingResult<()>;
 }
 
 pub(crate) trait ArbitraryValueSizeTrie: Trie {
@@ -621,7 +631,7 @@ where
             for (slot, val) in storage_writes {
                 // If we are writing a zero, then we actually need to perform a delete.
                 match is_rlped_0(val) {
-                    false => storage_trie.set_slot(slot, *val).map_err(|mut e| {
+                    false => storage_trie.set_slot(*slot, *val).map_err(|mut e| {
                         e.slot(U512::from(slot));
                         e.slot_value(U512::from(val));
                         e
@@ -726,15 +736,7 @@ where
             // state accesses to the withdrawal addresses.
             let withdrawal_addrs = withdrawals_with_hashed_addrs_iter().map(|(addr, _, _)| addr);
 
-            let state_trie_ref = last_inputs.get_state_trie();
-
-            let sub_state_trie = Self::create_minimal_state_partial_trie(
-                state_trie_ref,
-                withdrawal_addrs,
-                iter::empty(),
-            )?;
-
-            last_inputs.update_state_trie_with_subtrie(sub_state_trie);
+            last_inputs.update_state_trie_with_subtrie(withdrawal_addrs);
         }
 
         Self::update_trie_state_from_withdrawals(
@@ -835,6 +837,7 @@ where
             txn_info.meta.txn_bytes,
             Vec::default(),
             D::create_trie_inputs(sub_tries_at_start_of_txn),
+            
             extra_data.checkpoint_state_trie_root,
             txn_info.contract_code_accessed,
             other_data.b_data.b_meta.clone(),
@@ -847,23 +850,6 @@ where
         extra_data.gas_used_before = extra_data.gas_used_after;
 
         Ok(gen_inputs)
-    }
-
-    fn create_minimal_state_partial_trie<S, U>(
-        state_trie: &S,
-        state_accesses: impl Iterator<Item = Address>,
-        additional_state_trie_paths_to_not_hash: impl Iterator<Item = Address>,
-    ) -> TraceDecodingResult<U>
-    where
-        S: StateTrie<SubTrie = U>,
-    {
-        create_trie_subset_wrapped(
-            state_trie,
-            state_accesses
-                .into_iter()
-                .chain(additional_state_trie_paths_to_not_hash),
-            TrieType::State,
-        )
     }
 
     fn create_dummy_txn_pair_for_empty_block(

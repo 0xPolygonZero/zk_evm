@@ -90,8 +90,8 @@ fn process_multiple_storage_tries(
 fn process_compact_trie<P: ProtocolPreImageProcessing>(
     trie: TrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput<P::ProcessedPreImage>> {
-    let out = P::process_image(trie.0)?;
     let expected_header_version = P::expected_header_version();
+    let out = P::process_image(trie.0)?;
 
     if !out.header.version_is_compatible(expected_header_version) {
         return Err(CompactParsingError::IncompatibleVersion(

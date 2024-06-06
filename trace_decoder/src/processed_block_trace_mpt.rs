@@ -4,19 +4,23 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use mpt_trie::partial_trie::PartialTrie;
+use ethereum_types::Address;
+use ethereum_types::U256;
+use mpt_trie_normal::partial_trie::HashedPartialTrie;
+use mpt_trie_normal::partial_trie::PartialTrie;
 
 use crate::compact::compact_mpt_processing::MptPreImageProcessing;
 use crate::decoding::TraceDecodingResult;
 use crate::processed_block_trace::BlockTraceProcessing;
 use crate::processed_block_trace::ProcessedBlockTrace;
+use crate::processed_block_trace::ProcessingMeta;
 use crate::protocol_processing::process_block_trace_trie_pre_images;
+use crate::trace_protocol::BlockTrace;
 use crate::trace_protocol::BlockTraceTriePreImages;
 use crate::types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr};
 use crate::{
     aliased_crate_types::AccountRlp,
     compact::{
-        compact_mpt_processing::MptPartialTriePreImages,
         compact_processing_common::ProcessedCompactOutput,
         compact_to_mpt_trie::StateTrieExtractionOutput,
     },
@@ -33,7 +37,7 @@ pub(crate) struct MptPartialTriePreImages {
 }
 
 impl BlockTrace {
-    fn into_mpt_processed_block_trace<F>(
+    pub(crate) fn into_mpt_processed_block_trace<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
@@ -61,18 +65,16 @@ impl BlockTraceProcessing for MptBlockTraceProcessing {
             .map(|image| image.into())
     }
 
-    fn get_account_keys(
+    fn get_accounts(
         image: &Self::ProcessedPreImage,
-    ) -> impl Iterator<
-        Item = (
-            HashedAccountAddr,
-            evm_arithmetization_mpt::generation::mpt::AccountRlp,
-        ),
-    > {
-        image.tries.state.items().filter_map(|(addr, data)| {
-            data.as_val()
-                .map(|data| (addr.into(), rlp::decode::<AccountRlp>(data).unwrap()))
-        })
+    ) -> impl Iterator<Item = (Address, crate::types::AccountInfo)> {
+        image.
+
+
+        // image.tries.state.items().filter_map(|(addr, data)| {
+        //     data.as_val()
+        //         .map(|data| (addr.into(), rlp::decode::<AccountRlp>(data).unwrap().into()))
+        // })
     }
 
     fn get_any_extra_code_hash_mappings(
