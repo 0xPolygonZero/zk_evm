@@ -40,7 +40,7 @@ bn_twisted_mul_loop:
     // stack: X2, Y2, X, Y, s, n, retdest
     DUP9
     // stack: s, X2, Y2, X, Y, s, n, retdest
-    PUSH 1 DUP11 SUB
+    PUSH 1 DUP12 SUB
     // stack: n - 1, s, X2, Y2, X, Y, s, n, retdest
     SHR
     // stack: s >> n - 1, X2, Y2, X, Y, s, n, retdest
