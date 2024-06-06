@@ -35,7 +35,7 @@ use starky::lookup::{get_grand_product_challenge_set_target, GrandProductChallen
 use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
-use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
+use crate::all_stark::{all_cross_table_lookups, AllStark, Table, MEMORY_CTL_INDEX, NUM_TABLES};
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
 use crate::proof::{
@@ -587,26 +587,27 @@ where
 
         // Extra sums to add to the looked last value.
         // Only necessary for the Memory values.
-        let mut extra_looking_sums =
-            vec![vec![builder.zero(); stark_config.num_challenges]; NUM_TABLES];
+        let mut extra_looking_sums = HashMap::new();
 
-        // Memory
-        extra_looking_sums[*Table::Memory] = (0..stark_config.num_challenges)
-            .map(|c| {
-                get_memory_extra_looking_sum_circuit(
-                    &mut builder,
-                    &public_values,
-                    ctl_challenges.challenges[c],
-                )
-            })
-            .collect_vec();
+        extra_looking_sums.insert(
+            MEMORY_CTL_INDEX,
+            (0..stark_config.num_challenges)
+                .map(|c| {
+                    get_memory_extra_looking_sum_circuit(
+                        &mut builder,
+                        &public_values,
+                        ctl_challenges.challenges[c],
+                    )
+                })
+                .collect_vec(),
+        );
 
         // Verify the CTL checks.
         verify_cross_table_lookups_circuit::<F, D, NUM_TABLES>(
             &mut builder,
             all_cross_table_lookups(),
             pis.map(|p| p.ctl_zs_first),
-            Some(&extra_looking_sums),
+            &extra_looking_sums,
             stark_config,
         );
 

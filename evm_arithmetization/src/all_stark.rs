@@ -123,6 +123,10 @@ pub(crate) fn all_cross_table_lookups<F: Field>() -> Vec<CrossTableLookup<F>> {
     ]
 }
 
+/// Position of the Memory CTL within the vector of CTLs returned by
+/// `all_cross_table_lookups()`.
+pub(crate) const MEMORY_CTL_INDEX: usize = Table::Memory as usize;
+
 /// `CrossTableLookup` for `ArithmeticStark`, to connect it with the `Cpu`
 /// module.
 fn ctl_arithmetic<F: Field>() -> CrossTableLookup<F> {
