@@ -1097,6 +1097,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nunny"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14322bc44ac32006482d77e39a75b84e62f0f934b54583434724d21dd555d8a1"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1824,6 +1833,7 @@ dependencies = [
  "keccak-hash 0.10.0",
  "log",
  "mpt_trie 0.2.1 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
+ "nunny",
  "pretty_env_logger",
  "rlp",
  "rlp-derive",
