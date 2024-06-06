@@ -14,6 +14,10 @@ global ec_double_retself:
     %stack (x, y, retdest) -> (retdest, x, y)
     JUMP
 
+global ec_twisted_double_retself:
+    %stack (x=X: 2, Y: 2, retdest) -> (retdest, X, Y)
+    JUMP
+
 // Check if (x,y)==(0,0)
 %macro ec_isidentity
     // stack: x, y

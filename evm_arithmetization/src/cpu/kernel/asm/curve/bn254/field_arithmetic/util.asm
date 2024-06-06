@@ -111,6 +111,18 @@
     // stack:        z, z_
 %endmacro
 
+%macro sub_fp254_2
+    // stack: x, x_, y, y_
+    SWAP3
+    // stack: y_, x_, y, x
+    SUBFP254
+    // stack:     z_, y, x
+    SWAP2
+    // stack:     x, y, z_
+    SUBFP254
+    // stack:        z, z_
+%endmacro
+
 /// Given z = x + iy: Fp254_2, return complex conjugate z': Fp254_2
 /// where input is represented z.re, z.im and output as z'.im, z'.re
 /// cost: 9; note this returns y, x for the output x + yi
@@ -364,6 +376,62 @@
     // stack:
 %endmacro
 
+// cost: 2
+%macro dup_fp254_2_0
+    // stack:       f: 2
+    DUP2
+    DUP2
+    // stack: f: 2, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_2
+    // stack:       X: 2, f: 2
+    DUP4
+    DUP4
+    // stack: f: 2, X: 2, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_4
+    // stack:       X: 4, f: 2
+    DUP6
+    DUP6
+    // stack: f: 2, X: 4, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_6
+    // stack:       X: 6, f: 2
+    DUP8
+    DUP8
+    // stack: f: 2, X: 6, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_7
+    // stack:       X: 7, f: 2
+    DUP9
+    DUP9
+    // stack: f: 2, X: 7, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_10
+    // stack:       X: 10, f: 2
+    DUP12
+    DUP12
+    // stack: f: 2, X: 10, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_12
+    // stack:       X: 12, f: 2
+    DUP14
+    DUP14
+    // stack: f: 2, X: 12, f: 2
+%endmacro
+
 // cost: 6
 %macro dup_fp254_6_0
     // stack:       f: 6
@@ -374,7 +442,7 @@
     DUP6
     DUP6
     // stack: f: 6, f: 6
-%endmacro 
+%endmacro
 
 // cost: 6
 %macro dup_fp254_6_2
@@ -386,7 +454,7 @@
     DUP8
     DUP8
     // stack: f: 6, X: 2, f: 6
-%endmacro 
+%endmacro
 
 // cost: 6
 %macro dup_fp254_6_6
