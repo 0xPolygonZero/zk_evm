@@ -162,29 +162,6 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         ),
         (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
         (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
-        (
-            GlobalMetadata::AccountsLinkedListLen,
-            (Segment::AccountsLinkedList as usize
-                + state.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
-                    .content
-                    .len())
-            .into(),
-        ),
-        (
-            GlobalMetadata::StorageLinkedListLen,
-            (Segment::StorageLinkedList as usize
-                + state.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
-                    .content
-                    .len())
-            .into(),
-        ),
-        (
-            GlobalMetadata::TrieDataSize,
-            state.memory.contexts[0].segments[Segment::TrieData.unscale()]
-                .content
-                .len()
-                .into(),
-        ),
     ];
 
     let channel = MemoryChannel::GeneralPurpose(0);

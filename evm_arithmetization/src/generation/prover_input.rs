@@ -80,6 +80,11 @@ impl<F: Field> GenerationState<F> {
                 .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
+            "trie_data_size" => Ok(U256::from(
+                self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                    .content
+                    .len(),
+            )),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -281,6 +286,16 @@ impl<F: Field> GenerationState<F> {
             "remove_account" => self.run_next_remove_account(),
             "insert_slot" => self.run_next_insert_slot(),
             "remove_slot" => self.run_next_remove_slot(),
+            "accounts_linked_list_len" => Ok((Segment::AccountsLinkedList as usize
+                + self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
+                    .content
+                    .len())
+            .into()),
+            "storage_linked_list_len" => Ok((Segment::StorageLinkedList as usize
+                + self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
+                    .content
+                    .len())
+            .into()),
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
