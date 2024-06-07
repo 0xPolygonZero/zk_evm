@@ -1,34 +1,8 @@
 // Elliptic curve addition on the twist of BN254 curve.
+// Assumption: (X0,Y0) is a valid point.
 // Uses the standard affine addition formula.
 global bn_twisted_add:
     // stack: X0: 2, Y0: 2, X1: 2, Y1: 2, retdest
-    // Check if points are valid BN254 twist points.
-    %dup_fp254_2_2
-    // stack: Y0, X0, Y0, X1, Y1, retdest
-    %dup_fp254_2_2
-    // stack: X0, Y0, X0, Y0, X1, Y1, retdest
-    %bn_check_twisted
-    // stack: isValid(X0, Y0), X0, Y0, X1, Y1, retdest
-    %dup_fp254_2_7
-    // stack: Y1, isValid(X0, Y0), X0, Y0, X1, Y1, retdest
-    %dup_fp254_2_7
-    // stack: X1, Y1, isValid(X0, Y0), X0, Y0, X1, Y1, retdest
-    %bn_check_twisted
-    // stack: isValid(X1, Y1), isValid(X0, Y0), X0, Y0, X1, Y1, retdest
-    MUL // Cheaper than AND
-    // stack: isValid(X1, Y1) & isValid(X0, Y0), X0, Y0, X1, Y1, retdest
-    %jumpi(bn_twisted_add_valid_points)
-    // stack: X0, Y0, X1, Y1, retdest
-
-    // Otherwise return
-    %pop8
-    // stack: retdest
-    %bn_twisted_invalid_input
-
-// BN254 twisted elliptic curve addition.
-// Assumption: (X0,Y0) and (X1,Y1) are valid points.
-global bn_twisted_add_valid_points:
-    // stack: X0, Y0, X1, Y1, retdest
 
     // Check if the first point is the identity.
     %dup_fp254_2_2
@@ -98,7 +72,7 @@ bn_twisted_add_snd_zero:
 // BN254 twisted elliptic curve addition.
 // Assumption: lambda = (Y0 - Y1)/(X0 - X1)
 bn_twisted_add_valid_points_with_lambda:
-    // stack: lambda, X0: 2, Y0: 2, X1: 2, Y1: 2, retdest
+    // stack: lambda: 2, X0: 2, Y0: 2, X1: 2, Y1: 2, retdest
 
     // Compute X2 = lambda^2 - X1 - X0
     %dup_fp254_2_2

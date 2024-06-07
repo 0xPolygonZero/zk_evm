@@ -115,6 +115,8 @@
     // stack: x, x_, y, y_
     SWAP3
     // stack: y_, x_, y, x
+    SWAP1
+    // stack: x_, y_, y, x
     SUBFP254
     // stack:     z_, y, x
     SWAP2
