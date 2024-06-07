@@ -17,7 +17,9 @@ use crate::processed_block_trace::ProcessingMeta;
 use crate::protocol_processing::process_block_trace_trie_pre_images;
 use crate::trace_protocol::BlockTrace;
 use crate::trace_protocol::BlockTraceTriePreImages;
+use crate::types::AccountInfo;
 use crate::types::{CodeHash, CodeHashResolveFunc, HashedAccountAddr};
+use crate::utils::nibbles_to_h256;
 use crate::{
     aliased_crate_types::AccountRlp,
     compact::{
@@ -67,14 +69,11 @@ impl BlockTraceProcessing for MptBlockTraceProcessing {
 
     fn get_accounts(
         image: &Self::ProcessedPreImage,
-    ) -> impl Iterator<Item = (Address, crate::types::AccountInfo)> {
-        image.
-
-
-        // image.tries.state.items().filter_map(|(addr, data)| {
-        //     data.as_val()
-        //         .map(|data| (addr.into(), rlp::decode::<AccountRlp>(data).unwrap().into()))
-        // })
+    ) -> impl Iterator<Item = (HashedAccountAddr, AccountInfo)> {
+        image.tries.state.items().filter_map(|(h_addr, data)| {
+            data.as_val()
+                .map(|data| (nibbles_to_h256(&h_addr), rlp::decode::<AccountRlp>(data).unwrap().into()))
+        })
     }
 
     fn get_any_extra_code_hash_mappings(

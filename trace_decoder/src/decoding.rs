@@ -177,7 +177,7 @@ where
 
 pub(crate) trait ProcessedBlockTraceDecode {
     type Spec;
-    type Ir: GenIr<StateTrie = Self::StateTrie>;
+    type Ir: GenIr;
     type TrieInputs;
     type StateTrie: StateTrie<Key = Address> + Clone;
     type StorageTries: StorageTries<StorageTrie: Trie<Key = StorageAddr>> + Clone;
@@ -214,7 +214,6 @@ pub(crate) trait ProcessedBlockTraceDecode {
         signed_txn: Option<Vec<u8>>,
         withdrawals: Vec<(Address, U256)>,
         tries: Self::TrieInputs,
-        trie_roots_after: TrieRoots,
         checkpoint_state_trie_root: TrieRootHash,
         contract_code: HashMap<H256, Vec<u8>>,
         block_metadata: BlockMetadata,
@@ -496,6 +495,16 @@ impl From<TrieOpError> for TraceDecodingError {
         TraceDecodingError::new(TraceDecodingErrorReason::TrieOpError(err))
     }
 }
+
+// impl From<SubsetTrieError> for TraceDecodingError {
+//     fn from(err: SubsetTrieError) -> Self {
+//         let err = match err {
+//             SubsetTrieError::UnexpectedKey(k, _) => todo!(),
+//         }
+
+//         TraceDecodingError::new(TraceDecodingErrorReason::MissingKeysCreatingSubPartialTrie(k, ))
+//     }
+// }
 
 impl From<CompactParsingError> for TraceDecodingError {
     fn from(err: CompactParsingError) -> Self {
@@ -837,7 +846,6 @@ where
             txn_info.meta.txn_bytes,
             Vec::default(),
             D::create_trie_inputs(sub_tries_at_start_of_txn),
-            
             extra_data.checkpoint_state_trie_root,
             txn_info.contract_code_accessed,
             other_data.b_data.b_meta.clone(),
@@ -905,17 +913,6 @@ impl StateTrieWrites {
 
         Ok(())
     }
-}
-
-pub(crate) fn create_trie_subset_wrapped<K, T, U>(
-    trie: &T,
-    accesses: impl Iterator<Item = K>,
-    trie_type: TrieType,
-) -> TraceDecodingResult<U>
-where
-    T: Trie<Key = K, SubTrie = U>,
-{
-    trie.trie_create_trie_subset(accesses, trie_type)
 }
 
 #[derive(Debug, Default)]

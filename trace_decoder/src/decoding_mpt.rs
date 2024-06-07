@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap,
-    iter::{empty, once}, marker::PhantomData, ops::Deref,
+    collections::HashMap, iter::{empty, once}, marker::PhantomData, ops::Deref
 };
 
 use ethereum_types::{Address, U256};
@@ -19,20 +18,14 @@ use mpt_trie_normal::{
 };
 
 use crate::{
-    aliased_crate_types::{ExtraBlockData, TrieRoots},
-    decoding::{
+    aliased_crate_types::{ExtraBlockData, TrieRoots}, compact::compact_processing_common::CompactParsingError, decoding::{
         self, calculate_trie_root_hashes, create_trie_subset_wrapped, GenIr, NodeInsertType, ProcessedBlockTraceDecode, StateTrie, StorageTrie, StorageTries, TraceDecodingError, TraceDecodingErrorReason, TraceDecodingResult, Trie, TrieState, TrieType, WrappedHashedPartialTrie, WrappedNibbles
-    },
-    processed_block_trace::{NodesUsedByTxn, ProcessingMeta},
-    processed_block_trace_mpt::{
+    }, processed_block_trace::{NodesUsedByTxn, ProcessingMeta}, processed_block_trace_mpt::{
         MptBlockTraceProcessing, MptProcessedBlockTrace,
-    },
-    trace_protocol::BlockTrace,
-    types::{
+    }, trace_protocol::BlockTrace, types::{
         AccountInfo, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
         HashedStorageAddrNibbles, OtherBlockData, StorageAddr, TrieRootHash, TxnIdx, EMPTY_TRIE_HASH,
-    },
-    utils::{hash, hash_addr_to_nibbles, u256_to_bytes},
+    }, utils::{hash, hash_addr_to_nibbles, hash_slot_to_nibbles, nibbles_to_h256, nibbles_to_u256, u256_to_bytes}
 };
 
 type MptTrieState = TrieState<MptBlockTraceDecoding>;
@@ -132,13 +125,8 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
             if storage_tries.get_trie(*addr).is_none() {
                 // If the account does not have accesses but has storage that is not accessed,
                 // then we still need to create a hashed out storage trie for the account.
-                let trie_root_hash = state_accounts_with_no_accesses_but_storage_tries
-                    .get(addr)
-                    .map(|s_root| hash(s_root.as_bytes()))
-                    .unwrap_or_else(|| EMPTY_TRIE_HASH);
-
-                let trie: &mut <<Self as ProcessedBlockTraceDecode>::StorageTries as StorageTries>::StorageTrie = storage_tries.get_trie_or_create_mut(addr);
-                trie.set_slot(Address::default(), NodeInsertType::Hash(trie_root_hash));
+                let trie: &mut <<Self as ProcessedBlockTraceDecode>::StorageTries as StorageTries>::StorageTrie = storage_tries.get_trie_or_create_mut(*addr);
+                trie.hash_out_trie();
             };
         }
     }
@@ -153,17 +141,18 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
             nodes_used_by_txn.state_accesses.iter().cloned(),
         )?;
 
-        // TODO: Replace cast once `mpt_trie` supports `into` for `usize...
-        let txn = create_trie_subset_wrapped(&tries.txn, once(txn_idx), TrieType::Txn)?;
+        let txn_key = Nibbles::from(txn_idx as u32);
 
-        let receipt = create_trie_subset_wrapped(&tries.receipt, once(txn_idx), TrieType::Receipt)?;
+        // TODO: Replace cast once `mpt_trie` supports `into` for `usize...
+        let txn = create_trie_subset_wrapped(&tries.txn, once(txn_key), TrieType::Txn)?;
+        let receipt = create_trie_subset_wrapped(&tries.receipt, once(txn_key), TrieType::Receipt)?;
 
         let storage = create_minimal_storage_partial_tries(
             &tries.storage,
             nodes_used_by_txn
                 .storage_accesses
                 .iter()
-                .map(|(k, v)| (hash(k.as_bytes()), v.iter().map(|k| Nibbles::from(*k)))),
+                .map(|(k, v)| (hash(k.as_bytes()), v.iter().cloned())),
         )?;
 
         Ok(MptTrieState {
@@ -187,12 +176,6 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
             ),
         );
 
-        let trie_roots_after = TrieRoots {
-            state_root: sub_tries.state.trie_hash(),
-            transactions_root: sub_tries.txn.trie_hash(),
-            receipts_root: sub_tries.receipt.trie_hash(),
-        };
-
         // Sanity checks
         assert_eq!(
             extra_data.txn_number_before, extra_data.txn_number_after,
@@ -212,7 +195,6 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
             None,
             vec![], // this is set after creating dummy payloads,
             sub_trie_inputs,
-            trie_roots_after,
             extra_data.checkpoint_state_trie_root,
             HashMap::default(),
             other_data.b_data.b_meta.clone(),
@@ -238,12 +220,17 @@ impl ProcessedBlockTraceDecode for MptBlockTraceDecoding {
         signed_txn: Option<Vec<u8>>,
         withdrawals: Vec<(Address, U256)>,
         tries: Self::TrieInputs,
-        trie_roots_after: TrieRoots,
         checkpoint_state_trie_root: TrieRootHash,
         contract_code: HashMap<H256, Vec<u8>>,
         block_metadata: BlockMetadata,
         block_hashes: BlockHashes,
     ) -> Self::Ir {
+        let trie_roots_after = TrieRoots {
+            state_root: tries.state_trie.hash(),
+            transactions_root: tries.transactions_trie.hash(),
+            receipts_root: tries.receipts_trie.hash(),
+        };
+
         MptGenInputs(GenerationInputs {
             txn_number_before,
             gas_used_before,
@@ -268,12 +255,32 @@ pub(crate) struct MptTrie<K> {
     _key_type: PhantomData<K>,
 }
 
+impl<K> Deref for MptTrie<K> {
+    type Target = HashedPartialTrie;
+
+    fn deref(&self) -> &Self::Target {
+        &self.trie
+    }
+}
+
+impl<K> From<HashedPartialTrie> for MptTrie<K> {
+    fn from(v: HashedPartialTrie) -> Self {
+        Self::new(v)
+    }
+}
+
 impl<K> From<WrappedHashedPartialTrie<K>> for MptTrie<K> {
     fn from(v: WrappedHashedPartialTrie<K>) -> Self {
+        Self::new(v.inner)
+    }
+}
+
+impl<T> MptTrie<T> {
+    fn new(trie: HashedPartialTrie) -> Self {
         Self {
-            trie: v.inner,
+            trie,
             additional_trie_paths_to_not_hash: Default::default(),
-            _key_type: v._key_type,
+            _key_type: PhantomData,
         }
     }
 }
@@ -317,8 +324,7 @@ where
     where
         Self: Sized,
     {
-        let sub_trie: WrappedHashedPartialTrie<K> = create_trie_subset(&self.trie, ks.map(|k| k.into().0))?.into();
-        Ok(sub_trie.into())
+        Ok(create_trie_subset_wrapped(self, ks.map(|k| k.into().0), trie_type)?)
     }
 
     fn trie_hash(&self) -> TrieRootHash {
@@ -328,7 +334,7 @@ where
 
 impl StateTrie for MptTrie<Address> {
     fn get_account(&self, addr: Address) -> TraceDecodingResult<Option<AccountInfo>> {
-        let acc_bytes = self.trie.get(hash_addr_to_nibbles(addr));
+        let acc_bytes = self.trie.get(hash_addr_to_nibbles(&addr));
 
         let res = match acc_bytes {
             Some(bytes) => Some(rlp::decode::<AccountRlp>(bytes).map(|acc_rlp| acc_rlp.into()).map_err(|err| {
@@ -345,7 +351,7 @@ impl StateTrie for MptTrie<Address> {
 
     fn set_account(&mut self, addr: Address, acc: &AccountInfo) {
         // Should never be able to fail.
-        self.trie.insert(hash_addr_to_nibbles(addr), rlp::encode(&AccountRlp::from(acc)).to_vec())
+        self.trie.insert(hash_addr_to_nibbles(&addr), rlp::encode(&AccountRlp::from(acc)).to_vec())
             .expect("Failed encoding to rlp encode Account!");
     }
 }
@@ -356,7 +362,8 @@ impl StorageTrie for MptTrie<StorageAddr> {
     }
     
     fn hash_out_trie(&mut self) -> TraceDecodingResult<()> {
-        todo!()
+        self.trie = self.trie_create_trie_subset(empty(), TrieType::Storage)?.trie;
+        Ok(())
     }
 }
 
@@ -424,7 +431,7 @@ fn create_minimal_state_partial_trie(
 ) -> TraceDecodingResult<MptStateTrie> {
     create_trie_subset_wrapped(
         state_trie,
-        state_accesses,
+        state_accesses.map(|k| hash_addr_to_nibbles(&k)),
         TrieType::State,
     )
 }
@@ -466,12 +473,11 @@ fn create_minimal_storage_partial_tries<'a>(
                 .get(&h_addr)
                 .expect("Base storage trie missing! This should not be possible!");
 
-            let slots_to_not_hash = mem_accesses.chain(
+            let slots_to_not_hash = mem_accesses.map(|k| hash_slot_to_nibbles(&k)).chain(
                 base_storage_trie
                     .additional_trie_paths_to_not_hash
                     .iter()
-                    .map(|k| U256::from(*k))
-                    .cloned(),
+                    .cloned()
             );
 
             let partial_storage_trie = create_trie_subset_wrapped(
@@ -527,4 +533,26 @@ fn create_dummy_proof_tries_mpt(
             TrieType::Txn,
         ),
     }
+}
+
+fn create_trie_subset_wrapped<T, U>(
+    trie: &T,
+    ks: impl Iterator<Item = Nibbles>,
+    trie_type: TrieType,
+) -> TraceDecodingResult<U>
+where
+    T: Deref<Target = HashedPartialTrie>,
+    U: From<HashedPartialTrie>,
+{
+    let trie = create_trie_subset(trie.deref(), ks).map_err(|trie_err| {
+        let key = match trie_err {
+            SubsetTrieError::UnexpectedKey(key, _) => key,
+        };
+
+        TraceDecodingError::new(
+            TraceDecodingErrorReason::MissingKeysCreatingSubPartialTrie(key, trie_type),
+        )
+    })?;
+
+    Ok(U::from(trie))
 }

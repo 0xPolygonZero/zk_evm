@@ -14,7 +14,7 @@ use crate::{
         AccountInfo, CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr,
         HashedStorageAddrNibbles, StorageAddr, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
     },
-    utils::hash,
+    utils::{hash, hash_addr_to_nibbles},
 };
 
 pub(crate) type StorageAccess = Vec<StorageAddr>;
@@ -30,7 +30,7 @@ pub(crate) trait BlockTraceProcessing {
 
     fn get_accounts(
         image: &Self::ProcessedPreImage,
-    ) -> impl Iterator<Item = (Address, AccountInfo)>;
+    ) -> impl Iterator<Item = (HashedAccountAddr, AccountInfo)>;
 
     fn get_any_extra_code_hash_mappings(
         image: &Self::ProcessedPreImage,
@@ -167,7 +167,7 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
-        all_accounts_in_pre_image: &[(Address, AccountInfo)],
+        all_accounts_in_pre_image: &[(HashedAccountAddr, AccountInfo)],
         extra_state_accesses: &[Address],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedTxnInfo {
@@ -175,8 +175,6 @@ impl TxnInfo {
         let mut contract_code_accessed = create_empty_code_access_map();
 
         for (addr, trace) in self.traces {
-            let hashed_addr = hash(addr.as_bytes());
-
             let storage_writes = trace.storage_written.unwrap_or_default();
 
             let storage_read_keys = trace
@@ -252,7 +250,7 @@ impl TxnInfo {
                 .storage_accesses
                 .iter()
                 .filter(|(_, slots)| !slots.is_empty())
-                .map(|(addr, _)| *addr),
+                .map(|(addr, _)| hash(addr.as_bytes())),
         );
 
         let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
@@ -260,7 +258,7 @@ impl TxnInfo {
             .filter(|(_, data)| data.s_root != EMPTY_TRIE_HASH);
 
         let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
-            .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(addr))
+            .filter(|&(h_addr, _data)| !accounts_with_storage_accesses.contains(h_addr))
             .map(|(addr, data)| (*addr, data.s_root));
 
         nodes_used_by_txn

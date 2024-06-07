@@ -2,7 +2,7 @@ use ethereum_types::{Address, H256, U256};
 use keccak_hash::keccak;
 use log::trace;
 
-use crate::aliased_crate_types::{HashedPartialTrie, Nibbles, PartialTrie, ValOrHash};
+use crate::{aliased_crate_types::{HashedPartialTrie, Nibbles, PartialTrie, ValOrHash}, types::StorageAddr};
 use crate::types::HashedStorageAddr;
 
 pub(crate) fn hash(bytes: &[u8]) -> H256 {
@@ -65,12 +65,16 @@ pub(crate) fn nibbles_to_h256(n: &Nibbles) -> H256 {
     H256::from_slice(&n.bytes_be())
 }
 
+pub(crate) fn nibbles_to_u256(n: &Nibbles) -> U256 {
+    U256::from_big_endian(&n.bytes_be())
+}
+
 pub(crate) fn is_rlped_0(v: &U256) -> bool {
     v.as_u64() == 128
 }
 
 pub(crate) fn u256_to_bytes(v: &U256) -> [u8; 32] {
-    let mut buf = [0; 32];
+    let mut buf: [u8; 32] = [0; 32];
     v.to_big_endian(&mut buf);
 
     buf
@@ -84,6 +88,10 @@ pub(crate) fn u256_to_h256(v: &U256) -> H256 {
 }
 
 /// Hash an address and convert the hash to [Nibbles].
-pub(crate) fn hash_addr_to_nibbles(v: Address) -> Nibbles {
+pub(crate) fn hash_addr_to_nibbles(v: &Address) -> Nibbles {
     Nibbles::from_h256_be(hash(v.as_bytes()))
+}
+
+pub(crate) fn hash_slot_to_nibbles(v: &StorageAddr) -> Nibbles {
+    Nibbles::from_h256_be(hash(&u256_to_bytes(v)))
 }
