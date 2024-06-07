@@ -153,12 +153,15 @@ pub(crate) trait State<F: Field> {
     /// Applies a `State`'s operations since a checkpoint.
     fn apply_ops(&mut self, checkpoint: GenerationStateCheckpoint);
 
-    /// Return the offsets at which execution must halt
+    /// Returns the offsets at which execution must halt
     fn get_halt_offsets(&self) -> Vec<usize>;
 
     fn update_interpreter_final_registers(&mut self, _final_registers: RegistersState) {}
 
-    fn get_full_memory(&self) -> Option<MemoryState> {
+    /// Returns all the memory from non-stale contexts.
+    /// This is only necessary during segment data generation, hence the blanket
+    /// impl returns a dummy value.
+    fn get_active_memory(&self) -> Option<MemoryState> {
         None
     }
 
@@ -177,7 +180,7 @@ pub(crate) trait State<F: Field> {
             max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
 
         let mut final_registers = RegistersState::default();
-        let final_mem = self.get_generation_state().memory.clone();
+        let final_mem = self.get_active_memory();
         let mut running = true;
         let mut final_clock = 0;
         loop {
@@ -204,21 +207,13 @@ pub(crate) trait State<F: Field> {
                 if let Some(halt_context) = opt_halt_context {
                     if self.get_context() == halt_context {
                         // Only happens during jumpdest analysis, we don't care about the output.
-                        return Ok((final_registers, Some(final_mem)));
+                        return Ok((final_registers, None));
                     }
                 } else {
                     if !running {
                         debug_assert!(self.get_clock() - final_clock == NUM_EXTRA_CYCLES_AFTER - 1);
                     }
-                    let final_mem = if let Some(mut mem) = self.get_full_memory() {
-                        // Clear memory we will not use again.
-                        for &ctx in &self.get_generation_state().stale_contexts {
-                            mem.contexts[ctx] = MemoryContextState::default();
-                        }
-                        Some(mem)
-                    } else {
-                        None
-                    };
+                    let final_mem = self.get_active_memory();
                     #[cfg(not(test))]
                     self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
                     return Ok((final_registers, final_mem));

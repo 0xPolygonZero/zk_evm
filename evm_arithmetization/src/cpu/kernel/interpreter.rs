@@ -36,7 +36,7 @@ use crate::prover::GenerationSegmentData;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
-    MemoryAddress, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
+    MemoryAddress, MemoryContextState, MemoryOp, MemoryOpKind, MemorySegmentState, MemoryState,
 };
 use crate::witness::operation::Operation;
 use crate::witness::state::RegistersState;
@@ -632,8 +632,26 @@ impl<F: Field> State<F> for Interpreter<F> {
         self.halt_offsets.clone()
     }
 
-    fn get_full_memory(&self) -> Option<MemoryState> {
-        Some(self.generation_state.memory.clone())
+    fn get_active_memory(&self) -> Option<MemoryState> {
+        let mut memory_state = MemoryState {
+            contexts: vec![
+                MemoryContextState::default();
+                self.generation_state.memory.contexts.len()
+            ],
+            ..self.generation_state.memory.clone()
+        };
+
+        // Only copy memory from non-stale contexts
+        for (ctx_idx, ctx) in self.generation_state.memory.contexts.iter().enumerate() {
+            if !self
+                .get_generation_state()
+                .stale_contexts
+                .contains(&ctx_idx)
+            {
+                memory_state.contexts[ctx_idx] = ctx.clone();
+            }
+        }
+        Some(memory_state)
     }
 
     fn update_interpreter_final_registers(&mut self, final_registers: RegistersState) {
