@@ -397,7 +397,7 @@ impl<F: Field> GenerationState<F> {
                     let next_is_strictly_larger =
                         next_addr > addr || (next_addr == addr && next_key > key);
                     prev_is_less_or_equal && next_is_strictly_larger
-                }
+                },
             )
         {
             Ok(ptr / U256::from(4))

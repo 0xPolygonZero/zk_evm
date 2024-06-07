@@ -30,11 +30,7 @@ global after_storage_read:
 
     // Storage key not found. Return default value_ptr = 0,
     // which derefs to 0 since @SEGMENT_TRIE_DATA[0] = 0.
-    
-    POP
-global debug_the_storage_value_is_zero:
-    %assert_zero
-    %stack (retdest) -> (retdest, 0)
+    %stack (value_ptr, ll_value, retdest) -> (retdest, 0)
     //%stack (value_ptr, retdest) -> (retdest, 0)
     
     JUMP

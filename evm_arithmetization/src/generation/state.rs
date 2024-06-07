@@ -217,6 +217,7 @@ pub(crate) trait State<F: Field> {
                 if might_overflow_op(op) {
                     self.get_mut_registers().check_overflow = true;
                 }
+
                 Ok(())
             }
             Err(e) => {

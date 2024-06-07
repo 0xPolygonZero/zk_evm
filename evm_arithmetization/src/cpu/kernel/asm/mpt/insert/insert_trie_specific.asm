@@ -9,7 +9,6 @@ global mpt_insert_state_trie:
     // TODO: Use only the account linked list
     DUP2 DUP2 
     %insert_account_no_return
-    
     %stack (key, value_ptr)
         -> (key, value_ptr, mpt_insert_state_trie_save)
     PUSH 64 // num_nibbles
