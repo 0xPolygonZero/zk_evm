@@ -2,17 +2,13 @@
 // Uses the naive algorithm.
 global bn_twisted_mul:
     // stack: X: 2, Y: 2, s, retdest
-    %dup_fp254_2_2
-    // stack: Y, X, Y, s, retdest
-    %dup_fp254_2_2
+    %dup_bn_g2
     // stack: X, Y, X, Y, s, retdest
     %bn_check_twisted_ident
     // stack: (X,Y)==(0,0), X, Y, s, retdest
     %jumpi(ret_zero_ec_twisted_mul)
     // stack: X, Y, s, retdest
-    %dup_fp254_2_2
-    // stack: Y, X, Y, s, retdest
-    %dup_fp254_2_2
+    %dup_bn_g2
     // stack: X, Y, X, Y, s, retdest
     %bn_check_twisted
     // stack: isValid(X, Y), X, Y, s, retdest
@@ -79,68 +75,6 @@ bn_twisted_mul_end:
     %jump(bn_twisted_mul)
 %%after:
 %endmacro
-
-
-// G2 multiplication by z = -(2^62 + 2^55 + 1)
-global bn_twisted_mul_by_z:
-    // stack: X: 2, Y: 2, retdest
-    %dup_fp254_2_2
-    // stack: Y, X, Y, retdest
-    %dup_fp254_2_2
-    // stack: X, Y, X, Y, retdest
-    %bn_check_twisted_ident
-    // stack: (X,Y)==(0,0), X, Y, retdest
-    %jumpi(ret_zero_ec_twisted_mul)
-    // stack: X, Y, retdest
-    %dup_fp254_2_2
-    // stack: Y, X, Y, retdest
-    %dup_fp254_2_2
-    // stack: X, Y, X, Y, retdest
-    %bn_check_twisted
-    // stack: isValid(X, Y), X, Y, retdest
-    %jumpi(bn_twisted_mul_by_z_valid_point)
-    // stack: X, Y, retdest
-    %pop4
-    %bn_twisted_invalid_input
-bn_twisted_mul_by_z_valid_point:
-    // stack: X, Y, retdest
-    %dup_fp254_2_2
-    // stack: Y, X, Y, retdest
-    %dup_fp254_2_2
-    // stack: X, Y, X, Y, retdest
-
-    // We start the accumulator at our base point,
-    // equivalent of going through the naive scalar
-    // multiplication up to the MSb of z included.
-    %rep 7
-        %bn_twisted_double
-    %endrep
-
-    // stack: AX, AY, X, Y, retdest
-    %dup_fp254_2_6
-    // stack: Y, AX, AY, X, Y, retdest
-    %dup_fp254_2_6
-    // stack: X, AX, AY, X, Y, retdest
-    %bn_twisted_add // 55th bit
-
-    %rep 55
-        %bn_twisted_double
-    %endrep
-
-    // stack: AX, AY, X, Y, retdest
-    %bn_twisted_add // LSb
-    // stack: AX, AY, retdest
-    
-    // We need to output the opposite of the calculated point,
-    // to account for the negative sign of z.
-    %swap_fp254_2
-    // stack: AY, AX, retdest
-    PUSH 0 PUSH 0
-    %sub_fp254_2
-    // stack: -AY, AX, retdest
-    %stack (AY: 2, AX: 2, retdest) -> (retdest, AX, AY)
-    JUMP
-
 
 // Convenience macro to call bn_twisted_mul_by_z and return where we left off.
 %macro bn_twisted_mul_by_z

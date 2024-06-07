@@ -161,16 +161,12 @@ bn_twisted_add_equal_points:
 // Standard doubling formula.
 global bn_twisted_double:
     // stack: X, Y, retdest
-    %dup_fp254_2_2
-    // stack: Y, X, Y, retdest
-    %dup_fp254_2_2
+    %dup_bn_g2
     // stack: X, Y, X, Y, retdest
     %bn_check_twisted_ident
     // stack: (X,Y)==(0,0), X, Y, retdest
     %jumpi(ec_twisted_double_retself)
-    %dup_fp254_2_2
-    // stack: Y, X, Y, retdest
-    %dup_fp254_2_2
+    %dup_bn_g2
     // stack: X, Y, X, Y, retdest
     %jump(bn_twisted_add_equal_points)
 

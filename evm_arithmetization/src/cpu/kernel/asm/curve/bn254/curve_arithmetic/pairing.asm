@@ -68,8 +68,7 @@ bn254_input_check:
     // stack: inp_j', inp_j, j, k, inp
     %load_fp254_4
     // stack:    Q_j, inp_j, j, k, inp
-    %dup_fp254_2_2
-    %dup_fp254_2_2
+    %dup_bn_g2
     // stack: Q_j, Q_j, inp_j, j, k, inp
     %bn_check_twisted
     ISZERO
