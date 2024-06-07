@@ -96,7 +96,7 @@ pub fn generate_segment_agg_proof(
         public_values: lhs_child.public_values(),
     };
     let rhs_prover_output_data = ProverOutputData {
-        is_dummy: false,
+        is_dummy: has_dummy,
         proof_with_pis: rhs_child.intern().clone(),
         public_values: rhs_child.public_values(),
     };
