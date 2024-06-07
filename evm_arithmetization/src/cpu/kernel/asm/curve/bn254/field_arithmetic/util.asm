@@ -442,6 +442,44 @@
     // stack: f: 2, X: 12, f: 2
 %endmacro
 
+// cost: 4
+%macro dup_bn_g2
+    // stack: X: 2, Y: 2
+    %dup_fp254_2_2
+    %dup_fp254_2_2
+    // stack: X: 2, Y: 2, X: 2, Y: 2
+%endmacro
+
+%macro swap_bn_g2
+    // stack: P: 4, Q: 4
+    %stack (P: 4, Q: 4) -> (Q, P)
+    // stack: Q: 4, P: 4
+%endmacro
+
+%macro swap_bn_g2_2
+    // stack: P: 4, T: 4, Q: 4
+    %stack (P: 4, T: 4, Q: 4) -> (Q, T, P)
+    // stack: Q: 4, T: 4, P: 4
+%endmacro
+
+%macro swap_fp254_2
+    // stack:       X: 2, Y: 2
+    %stack (x, x_, y, y_) -> (y, y_, x, x_)
+    // stack:       Y: 2, X: 2
+%endmacro
+
+%macro swap_fp254_2_2
+    // stack:       X: 2, T: 2, Y: 2
+    %stack (x, x_, t, t_, y, y_) -> (y, y_, t, t_, x, x_)
+    // stack:       Y: 2, T: 2, X: 2
+%endmacro
+
+%macro swap_fp254_2_4
+    // stack:       X: 2, T: 4, Y: 2
+    %stack (x, x_, t0, t1, t2, t3, y, y_) -> (y, y_, t0, t1, t2, t3, x, x_)
+    // stack:       Y: 2, T: 4, X: 2
+%endmacro
+
 // cost: 6
 %macro dup_fp254_6_0
     // stack:       f: 6

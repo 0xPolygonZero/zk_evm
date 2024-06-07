@@ -181,6 +181,18 @@ global bn_twisted_double:
 %%after:
 %endmacro
 
+%macro bn_twisted_sub
+    // stack: X0: 2, Y0: 2, X1: 2, Y1: 2
+    %swap_fp254_2_4
+    // stack: Y1, Y0, X1, X0
+    PUSH 0 PUSH 0
+    %sub_fp254_2
+    // stack: -Y1, Y0, X1, X0
+    %stack (Y1: 2, Y0: 2, X1: 2, X0: 2) -> (X0, Y0, X1, Y1, %%after)
+    %jump(bn_twisted_add)
+%%after:
+%endmacro
+
 // Convenience macro to call bn_twisted_double and return where we left off.
 %macro bn_twisted_double
     %stack (X: 2, Y: 2) -> (X, Y, %%after)

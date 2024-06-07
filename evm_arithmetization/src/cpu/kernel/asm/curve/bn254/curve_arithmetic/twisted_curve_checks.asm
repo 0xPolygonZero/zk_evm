@@ -94,10 +94,37 @@
 %endmacro
 
 %macro bn_check_twisted_subgroup
-    // stack: X, Y
-    %stack (X: 2, Y: 2) -> (X, Y, @BN_SCALAR)
-    %bn_twisted_mul
-    // stack: AX, AY
+    // stack: Q = (X, Y)
+    %dup_bn_g2
+    // stack: Q, Q
+    %bn_twisted_mul_by_z
+    // stack: zQ, Q
+    %dup_bn_g2
+    // stack: zQ, zQ, Q
+    %swap_bn_g2_2
+    // stack: Q, zQ, zQ
+    %bn_twisted_add
+    // stack: [z+1]Q, zQ
+    %swap_bn_g2
+    // stack: zQ, [z+1]Q
+    %bn_endomorphism
+    // stack: phi(zQ), [z+1]Q
+    %dup_bn_g2
+    // stack: phi(zQ), phi(zQ), [z+1]Q
+    %bn_endomorphism
+    // stack: phi^2(zQ), phi(zQ), [z+1]Q
+    %dup_bn_g2
+    // stack: phi^2(zQ), phi^2(zQ), phi(zQ), [z+1]Q
+    %bn_endomorphism
+    // stack: phi^3(zQ), phi^2(zQ), phi(zQ), [z+1]Q
+    %bn_twisted_double
+    // stack: phi^3([2z]Q), phi^2(zQ), phi(zQ), [z+1]Q
+    %bn_twisted_sub
+    // stack: phi^3([2z]Q) - phi^2(zQ), phi(zQ), [z+1]Q
+    %bn_twisted_sub
+    // stack: phi^3([2z]Q) - phi^2(zQ) - phi(zQ), [z+1]Q
+    %bn_twisted_sub
+    // stack: phi^3([2z]Q) - phi^2(zQ) - phi(zQ) - [z+1]Q
     %bn_check_twisted_ident
     // stack: is_ident
 %endmacro
