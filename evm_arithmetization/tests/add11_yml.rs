@@ -148,7 +148,7 @@ fn add11_yml() -> anyhow::Result<()> {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
-    let inputs = GenerationInputs {
+    let _inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
         tries: tries_before,
@@ -164,6 +164,9 @@ fn add11_yml() -> anyhow::Result<()> {
             cur_hash: H256::default(),
         },
     };
+
+    let bytes = std::fs::read("./TouchToEmptyAccountRevert_d0g0v0_Shanghai.json").unwrap();
+    let inputs = serde_json::from_slice(&bytes).unwrap();
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;

@@ -10,6 +10,7 @@ global sload_current:
     DUP1
 global debug_the_slot:
     %read_storage_linked_list
+    POP // the first element is `is_found`
 global debug_after_read_linked_list:
     %mload_trie_data
 global debug_read_val:

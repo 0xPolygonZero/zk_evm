@@ -631,7 +631,7 @@ global remove_slot:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: storage_found, cold_access, value_ptr, slot_ptr
+    // stack: storage_found, cold_access, value_ptr
     SWAP1 POP
 %endmacro
 
