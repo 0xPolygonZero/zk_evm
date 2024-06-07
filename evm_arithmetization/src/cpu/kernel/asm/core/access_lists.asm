@@ -234,7 +234,6 @@ global insert_accessed_storage_keys:
     DUP4 GT
     DUP3 %eq_const(@SEGMENT_ACCESSED_STORAGE_KEYS)
     ADD // OR
-global debug_before_jumpi1:
     %jumpi(insert_storage_key)
     // stack: pred_addr, pred_ptr, addr, key, retdest
     // We know that addr <= pred_addr. It must hold that pred_addr == addr.
@@ -248,14 +247,11 @@ global debug_before_jumpi1:
     DUP1 DUP5
     GT
     // stack: key > pred_key, pred_key, pred_ptr, addr, key, retdest
-global debug_before_jumpi2:
     %jumpi(insert_storage_key)
     // stack: pred_key, pred_ptr, addr, key, retdest
     DUP4
     // We know that key <= pred_key. It must hold that pred_key == key.
-global debug_before_son_eaugles:
     %assert_eq
-global debug_lo_son:
     // stack: pred_ptr, addr, key, retdest
     // Check that this is not a deleted node
     DUP1
@@ -265,7 +261,6 @@ global debug_lo_son:
     // The storage key is not in the list.
     PANIC
 
-global debug_key_found:
 storage_key_found:
     // The address was already in the list
     // stack: pred_ptr, addr, key, retdest

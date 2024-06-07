@@ -6,11 +6,8 @@ global mpt_read_state_trie_test:
     DUP1
     %read_accounts_linked_list
     // stack: ll_addr, address, retdest
-global debug_ll_addr:
     %add_const(3)
-global debug_before_read_tre_data:
     %mload_trie_data
-global debug_ll_code_hash:
     // stack: ll_code_hash, address, retdest
     SWAP1
     %mpt_read_state_trie_original

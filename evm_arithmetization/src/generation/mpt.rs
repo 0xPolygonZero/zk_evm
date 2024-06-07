@@ -399,25 +399,10 @@ associated storage trie hash"
 
             // Push the payload in the trie data
             trie_data.push(nonce);
-            log::debug!(
-                "added nonce = {:?} to trie_data at pos = {:?}",
-                trie_data[trie_data.len() - 1],
-                trie_data.len() - 1
-            );
             trie_data.push(balance);
-            log::debug!(
-                "added balance = {:?} to trie_data at pos = {:?}",
-                trie_data[trie_data.len() - 1],
-                trie_data.len() - 1
-            );
             // The Storage pointer is only written in the trie
             trie_data.push(0.into());
             trie_data.push(code_hash.into_uint());
-            log::debug!(
-                "added code_hash = {:?} to trie_data at pos = {:?}",
-                trie_data[trie_data.len() - 1],
-                trie_data.len() - 1
-            );
             get_storage_leaves(
                 address,
                 empty_nibbles(),

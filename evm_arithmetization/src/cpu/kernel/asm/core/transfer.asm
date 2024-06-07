@@ -66,7 +66,6 @@ global add_eth:
     // stack: addr, amount, retdest
     DUP1 %insert_touched_addresses
     DUP1 %mpt_read_state_trie
-global debug_is_not_arriving_here:
     // stack: account_ptr, addr, amount, retdest
     DUP1 ISZERO %jumpi(add_eth_new_account) // If the account pointer is null, we need to create the account.
     %add_const(1)
