@@ -5,7 +5,7 @@ use either::Either;
 use ethereum_types::U256;
 use nunny::NonEmpty;
 
-use super::Instruction;
+use super::wire::Instruction;
 
 #[derive(Debug)]
 pub struct Hash {
@@ -65,11 +65,11 @@ pub enum Witness {
     Leaf(Leaf),
     Extension(Extension),
     Branch(Branch),
-    // BUG: this is undocumeted, see [`Node::Empty`]
+    // BUG: this is undocumented, see [`Node::Empty`]
     Empty,
 }
 
-pub fn forest(
+pub fn execute(
     instructions: impl IntoIterator<Item = Instruction>,
 ) -> anyhow::Result<NonEmpty<Vec<Witness>>> {
     let mut witnesses = vec![];

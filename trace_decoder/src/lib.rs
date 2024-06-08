@@ -142,7 +142,36 @@ pub fn type_1(
 }
 
 mod type1 {
-    pub use witness::{Instruction, V1Header, Witness};
-    mod witness;
-    mod witness2forest;
+    //! Based on [this specification](https://gist.github.com/mandrigin/ff7eccf30d0ef9c572bafcb0ab665cff#the-bytes-layout).
+    //! Deviations are commented with `BUG`.
+
+    /// Execution of [`Instruction`]s from the wire into a trie.
+    ///
+    /// Use of a stack machine is amenable to streaming off the wire.
+    mod execution;
+    /// Parser combinators for the binary "wire" format.
+    ///
+    /// Use of [`winnow`] is amenable to streaming off the wire.
+    mod wire;
+
+    #[test]
+    fn test() {
+        use insta::assert_debug_snapshot;
+        use serde::Deserialize;
+
+        #[derive(Deserialize)]
+        struct Case {
+            #[serde(with = "hex", rename = "hex")]
+            pub bytes: Vec<u8>,
+        }
+
+        for vector in
+            serde_json::from_str::<Vec<Case>>(include_str!("type1/witness_vectors.json")).unwrap()
+        {
+            let instructions = wire::parse(&vector.bytes).unwrap();
+            assert_debug_snapshot!(instructions);
+            let executed = execution::execute(instructions).unwrap();
+            assert_debug_snapshot!(executed);
+        }
+    }
 }

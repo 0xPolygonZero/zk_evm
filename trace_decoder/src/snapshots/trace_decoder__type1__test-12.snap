@@ -1,6 +1,6 @@
 ---
-source: trace_decoder/src/type1/witness.rs
-expression: collapsed
+source: trace_decoder/src/lib.rs
+expression: executed
 ---
 NonEmpty {
     inner: [

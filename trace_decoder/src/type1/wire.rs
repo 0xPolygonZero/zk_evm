@@ -1,9 +1,6 @@
-//! Sane parser for witness format.
-//!
-//! Based on [this specification](*https://gist.github.com/mandrigin/ff7eccf30d0ef9c572bafcb0ab665cff#the-bytes-layout)
-
 use std::{any::type_name, io};
 
+use anyhow::bail;
 use ethereum_types::U256;
 use nunny::NonEmpty;
 use serde::de::DeserializeOwned;
@@ -15,14 +12,19 @@ use winnow::{
     PResult, Parser as _,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Witness {
-    pub header: V1Header,
-    pub instructions: NonEmpty<Vec<Instruction>>,
+pub fn parse(input: &[u8]) -> anyhow::Result<NonEmpty<Vec<Instruction>>> {
+    match (
+        header::<winnow::error::ContextError>,
+        repeat_till(1.., instruction, eof).map(|(it, _)| {
+            NonEmpty::<Vec<_>>::new(it).expect("repeat_till should ensure non-empty collection")
+        }),
+    )
+        .parse(input)
+    {
+        Ok((_header, it)) => Ok(it),
+        Err(e) => bail!("parse error: {}", e),
+    }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct V1Header;
 
 /// Names are taken from the spec.
 /// Spec also requires sequences to be non-empty
@@ -67,6 +69,9 @@ pub enum Instruction {
     NewTrie,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct V1Header;
+
 /// Parameterise our combinators over the error type to facilitate opt-in
 /// debugging.
 ///
@@ -83,15 +88,6 @@ impl<'a, E> ParserError<'a> for E where
         + FromExternalError<&'a [u8], ciborium::de::Error<io::Error>>
         + FromExternalError<&'a [u8], UnrecognisedBits>
 {
-}
-
-fn witness<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Witness, E> {
-    Ok(Witness {
-        header: header.parse_next(input)?,
-        instructions: repeat_till(1.., instruction, eof)
-            .map(|(it, _)| NonEmpty::<Vec<_>>::new(it).unwrap())
-            .parse_next(input)?,
-    })
 }
 
 fn header<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<V1Header, E> {
@@ -230,33 +226,4 @@ fn cbor_test_vectors() {
     do_test(b"\x01", 1, cbor);
     do_test(b"\x0a", 10, cbor);
     do_test(b"\x17", 23, cbor);
-}
-
-#[test]
-fn witness_test_vectors() {
-    use insta::assert_debug_snapshot;
-    use once_cell::sync::Lazy;
-    use serde::Deserialize;
-
-    #[derive(Deserialize)]
-    struct Vector {
-        #[serde(with = "hex", rename = "hex")]
-        pub bytes: Vec<u8>,
-    }
-
-    static VECTORS: Lazy<Vec<Vector>> =
-        Lazy::new(|| serde_json::from_str(include_str!("witness_vectors.json")).unwrap());
-
-    fn vectors() -> &'static [Vector] {
-        &VECTORS
-    }
-
-    for vector in vectors() {
-        let parsed = witness::<winnow::error::ContextError>
-            .parse(&*vector.bytes)
-            .unwrap();
-        assert_debug_snapshot!(parsed);
-        let collapsed = super::witness2forest::forest(parsed.instructions).unwrap();
-        assert_debug_snapshot!(collapsed);
-    }
 }
