@@ -142,5 +142,7 @@ pub fn type_1(
 }
 
 mod type1 {
+    pub use witness::{Instruction, V1Header, Witness};
     mod witness;
+    mod witness2forest;
 }

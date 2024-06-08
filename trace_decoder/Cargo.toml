@@ -30,6 +30,9 @@ evm_arithmetization_type_1.workspace = true
 winnow = "0.6.11"
 bitflags = "2.5.0"
 nunny = { version = "0.2.1", features = ["serde"] }
+either = "1.12.0"
+anyhow = "1.0.86"
+bitvec = "1.0.1"
 
 [dev-dependencies]
 hex = { workspace = true, features = ["serde"] }

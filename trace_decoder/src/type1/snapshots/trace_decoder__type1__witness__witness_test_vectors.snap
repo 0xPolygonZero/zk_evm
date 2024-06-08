@@ -1,103 +1,101 @@
 ---
 source: trace_decoder/src/type1/witness.rs
-expression: "witness::<winnow::error::ContextError>(&mut &*vector.bytes)"
+expression: "witness::<winnow::error::ContextError>.parse(&*vector.bytes).unwrap()"
 ---
-Ok(
-    Witness {
-        header: V1Header,
-        instructions: NonEmpty {
-            inner: [
-                Leaf {
-                    key: NonEmpty {
-                        inner: [
-                            16,
-                        ],
-                    },
-                    value: NonEmpty {
-                        inner: [
-                            49,
-                            50,
-                            51,
-                            52,
-                        ],
-                    },
+Witness {
+    header: V1Header,
+    instructions: NonEmpty {
+        inner: [
+            Leaf {
+                key: NonEmpty {
+                    inner: [
+                        16,
+                    ],
                 },
-                Leaf {
-                    key: NonEmpty {
-                        inner: [
-                            16,
-                        ],
-                    },
-                    value: NonEmpty {
-                        inner: [
-                            49,
-                            50,
-                            51,
-                            52,
-                        ],
-                    },
+                value: NonEmpty {
+                    inner: [
+                        49,
+                        50,
+                        51,
+                        52,
+                    ],
                 },
-                Branch {
-                    mask: 48,
+            },
+            Leaf {
+                key: NonEmpty {
+                    inner: [
+                        16,
+                    ],
                 },
-                Leaf {
-                    key: NonEmpty {
-                        inner: [
-                            3,
-                            80,
-                        ],
-                    },
-                    value: NonEmpty {
-                        inner: [
-                            49,
-                            50,
-                            51,
-                            53,
-                        ],
-                    },
+                value: NonEmpty {
+                    inner: [
+                        49,
+                        50,
+                        51,
+                        52,
+                    ],
                 },
-                Branch {
-                    mask: 24,
+            },
+            Branch {
+                mask: 48,
+            },
+            Leaf {
+                key: NonEmpty {
+                    inner: [
+                        3,
+                        80,
+                    ],
                 },
-                Extension {
-                    key: NonEmpty {
-                        inner: [
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            0,
-                            18,
-                        ],
-                    },
+                value: NonEmpty {
+                    inner: [
+                        49,
+                        50,
+                        51,
+                        53,
+                    ],
                 },
-            ],
-        },
+            },
+            Branch {
+                mask: 24,
+            },
+            Extension {
+                key: NonEmpty {
+                    inner: [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        18,
+                    ],
+                },
+            },
+        ],
     },
-)
+}

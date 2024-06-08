@@ -166,7 +166,15 @@ fn account_leaf<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruc
             false => None,
         },
         has_storage: flags.contains(AccountLeafFlags::HAS_STORAGE),
-        has_code: flags.contains(AccountLeafFlags::HAS_CODE),
+        has_code: {
+            let has_code = flags.contains(AccountLeafFlags::HAS_CODE);
+            if has_code {
+                // BUG: this field is undocumented, but the previous version of
+                //      this code had it, and our tests fail without it
+                trace("code_length", cbor::<u64, _>).parse_next(input)?;
+            }
+            has_code
+        },
     })
 }
 
@@ -239,6 +247,8 @@ fn witness_test_vectors() {
     }
 
     for vector in vectors() {
-        assert_debug_snapshot!(witness::<winnow::error::ContextError>(&mut &*vector.bytes));
+        assert_debug_snapshot!(witness::<winnow::error::ContextError>
+            .parse(&*vector.bytes)
+            .unwrap());
     }
 }

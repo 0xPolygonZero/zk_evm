@@ -1896,10 +1896,13 @@ dependencies = [
 name = "trace_decoder"
 version = "0.3.1"
 dependencies = [
+ "anyhow",
  "bitflags 2.5.0",
+ "bitvec",
  "bytes",
  "ciborium",
  "ciborium-io",
+ "either",
  "enum-as-inner",
  "enumn",
  "ethereum-types",
