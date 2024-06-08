@@ -4,7 +4,6 @@ use std::{fs::File, path::PathBuf};
 use anyhow::Result;
 use clap::Parser;
 use cli::Command;
-use common::prover_state::TableLoadStrategy;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::Runtime;
@@ -55,9 +54,6 @@ async fn main() -> Result<()> {
         // state here.
         args.prover_state_config
             .into_prover_state_manager()
-            // Use the monolithic load strategy for the prover state when running in
-            // emulation mode.
-            .with_load_strategy(TableLoadStrategy::Monolithic)
             .initialize()?;
     }
 

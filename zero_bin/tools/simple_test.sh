@@ -63,7 +63,7 @@ fi
 cargo build --release --jobs "$num_procs"
 
 start_time=$(date +%s%N)
-../target/release/leader --runtime in-memory stdio < witness.json | tee leader.out
+../target/release/leader --runtime in-memory --load-strategy monolithic stdio < witness.json | tee leader.out
 end_time=$(date +%s%N)
 
 tail -n 1 leader.out > proof.json
