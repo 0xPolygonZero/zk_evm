@@ -71,6 +71,7 @@ pub fn forest(
     let mut stack = vec![];
     for instruction in instructions {
         match instruction {
+            Instruction::EmptyRoot => todo!(),
             Instruction::Hash { raw_hash } => stack.push(Node::Hash(Hash { raw_hash })),
             Instruction::Code { raw_code } => stack.push(Node::Code(Code { code: raw_code })),
             Instruction::Leaf { key, value } => stack.push(Node::Leaf(Leaf {

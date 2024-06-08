@@ -62,6 +62,8 @@ pub enum Instruction {
         has_code: bool,
         has_storage: bool,
     },
+    // BUG: see parse site
+    EmptyRoot,
     NewTrie,
 }
 
@@ -117,6 +119,9 @@ fn instruction<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruct
             trace("code", cbor.map(|raw_code| Instruction::Code { raw_code })).parse_next(input)
         }
         0x05 => trace("account_leaf", account_leaf).parse_next(input),
+        // BUG: this opcode is is undocumented, but the previous version of
+        //      this code had it, and our tests fail without it
+        0x06 => trace("empty_root", empty.value(Instruction::EmptyRoot)).parse_next(input),
         0xBB => trace("new_trie", empty.value(Instruction::NewTrie)).parse_next(input),
         _ => {
             input.reset(&start);
