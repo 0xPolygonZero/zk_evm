@@ -1,6 +1,6 @@
 ---
 source: trace_decoder/src/type1/witness.rs
-expression: "witness::<winnow::error::ContextError>.parse(&*vector.bytes).unwrap()"
+expression: parsed
 ---
 Witness {
     header: V1Header,

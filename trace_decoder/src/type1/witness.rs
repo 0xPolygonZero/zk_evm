@@ -252,8 +252,11 @@ fn witness_test_vectors() {
     }
 
     for vector in vectors() {
-        assert_debug_snapshot!(witness::<winnow::error::ContextError>
+        let parsed = witness::<winnow::error::ContextError>
             .parse(&*vector.bytes)
-            .unwrap());
+            .unwrap();
+        assert_debug_snapshot!(parsed);
+        let collapsed = super::witness2forest::forest(parsed.instructions).unwrap();
+        assert_debug_snapshot!(collapsed);
     }
 }

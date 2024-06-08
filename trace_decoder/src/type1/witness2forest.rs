@@ -56,12 +56,17 @@ pub enum Node {
     Extension(Extension),
     Branch(Branch),
     Code(Code),
+    // BUG: this is undocumented, see [`Instruction::EmptyRoot`]
+    Empty,
 }
 
+#[derive(Debug)]
 pub enum Witness {
     Leaf(Leaf),
     Extension(Extension),
     Branch(Branch),
+    // BUG: this is undocumeted, see [`Node::Empty`]
+    Empty,
 }
 
 pub fn forest(
@@ -71,7 +76,7 @@ pub fn forest(
     let mut stack = vec![];
     for instruction in instructions {
         match instruction {
-            Instruction::EmptyRoot => todo!(),
+            Instruction::EmptyRoot => stack.push(Node::Empty),
             Instruction::Hash { raw_hash } => stack.push(Node::Hash(Hash { raw_hash })),
             Instruction::Code { raw_code } => stack.push(Node::Code(Code { code: raw_code })),
             Instruction::Leaf { key, value } => stack.push(Node::Leaf(Leaf {
@@ -83,7 +88,7 @@ pub fn forest(
                 stack.push(Node::Extension(Extension { key, child }))
             }
             Instruction::AccountLeaf {
-                key, // BUG?(0xaatif): why is this unused?
+                key,
                 nonce,
                 balance,
                 has_code,
@@ -91,26 +96,22 @@ pub fn forest(
             } => {
                 // BUG: the spec sometimes writes Node::Account with 5 fields..
                 // TODO(0xaatif): should these fields even be optional?
-                let nonce = nonce.context("AccountLeaf has no nonce")?;
-                let balance = balance.context("AccountLeaf has no balance")?;
-                match (has_code, has_storage) {
+                let nonce = nonce.unwrap_or_default();
+                let balance = balance.unwrap_or_default();
+                let account = match (has_code, has_storage) {
                     (true, true) => match pop2(&mut stack) {
-                        (Some(Node::Hash(hash)), Some(storage)) => {
-                            stack.push(Node::Account(Account {
-                                nonce,
-                                balance,
-                                storage: Some(Box::new(storage)),
-                                code: Some(Either::Left(hash)),
-                            }))
-                        }
-                        (Some(Node::Code(code)), Some(storage)) => {
-                            stack.push(Node::Account(Account {
-                                nonce,
-                                balance,
-                                storage: Some(Box::new(storage)),
-                                code: Some(Either::Right(code)),
-                            }))
-                        }
+                        (Some(Node::Hash(hash)), Some(storage)) => Account {
+                            nonce,
+                            balance,
+                            storage: Some(Box::new(storage)),
+                            code: Some(Either::Left(hash)),
+                        },
+                        (Some(Node::Code(code)), Some(storage)) => Account {
+                            nonce,
+                            balance,
+                            storage: Some(Box::new(storage)),
+                            code: Some(Either::Right(code)),
+                        },
                         other => bail!(
                             "expected (Code | Hash, Node) for AccountLeaf, got {:?}",
                             other
@@ -119,35 +120,39 @@ pub fn forest(
                     (false, true) => {
                         let storage =
                             Some(Box::new(stack.pop().context("no Node for AccountLeaf")?));
-                        stack.push(Node::Account(Account {
+                        Account {
                             nonce,
                             balance,
                             storage,
                             code: None,
-                        }))
+                        }
                     }
                     (true, false) => match stack.pop() {
-                        Some(Node::Hash(it)) => stack.push(Node::Account(Account {
+                        Some(Node::Hash(it)) => Account {
                             nonce,
                             balance,
                             storage: None,
                             code: Some(Either::Left(it)),
-                        })),
-                        Some(Node::Code(it)) => stack.push(Node::Account(Account {
+                        },
+                        Some(Node::Code(it)) => Account {
                             nonce,
                             balance,
                             storage: None,
                             code: Some(Either::Right(it)),
-                        })),
+                        },
                         other => bail!("expected Code | Hash for AccountLeaf, got {:?}", other),
                     },
-                    (false, false) => stack.push(Node::Account(Account {
+                    (false, false) => Account {
                         nonce,
                         balance,
                         storage: None,
                         code: None,
-                    })),
-                }
+                    },
+                };
+                stack.push(Node::Leaf(Leaf {
+                    key,
+                    value: Either::Right(account),
+                }))
             }
             Instruction::Branch { mask } => {
                 use bitvec::{order::Lsb0, view::BitView as _};
@@ -167,8 +172,7 @@ pub fn forest(
 
     NonEmpty::<Vec<_>>::new(witnesses)
         .ok()
-        .context("no instructions")?;
-    todo!()
+        .context("no instructions")
 }
 
 fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Witness> {
@@ -177,6 +181,7 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Witness> {
             Node::Leaf(it) => Ok(Witness::Leaf(it)),
             Node::Extension(it) => Ok(Witness::Extension(it)),
             Node::Branch(it) => Ok(Witness::Branch(it)),
+            Node::Empty => Ok(Witness::Empty),
             other => bail!(
                 "expected stack to contain Leaf | Extension | Branch, got {:?}",
                 other
