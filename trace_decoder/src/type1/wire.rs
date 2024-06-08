@@ -221,7 +221,7 @@ fn do_test<'a, T: PartialEq + core::fmt::Debug>(
 
 /// <https://github.com/cbor/test-vectors/blob/aba89b653e484bc8573c22f3ff35641d79dfd8c1/appendix_a.json>
 #[test]
-fn cbor_test_vectors() {
+fn cbor_test_cases() {
     do_test(b"\x00", 0, cbor);
     do_test(b"\x01", 1, cbor);
     do_test(b"\x0a", 10, cbor);

@@ -61,7 +61,7 @@ pub enum Node {
 }
 
 #[derive(Debug)]
-pub enum Witness {
+pub enum FinalNode {
     Leaf(Leaf),
     Extension(Extension),
     Branch(Branch),
@@ -71,7 +71,7 @@ pub enum Witness {
 
 pub fn execute(
     instructions: impl IntoIterator<Item = Instruction>,
-) -> anyhow::Result<NonEmpty<Vec<Witness>>> {
+) -> anyhow::Result<NonEmpty<Vec<FinalNode>>> {
     let mut witnesses = vec![];
     let mut stack = vec![];
     for instruction in instructions {
@@ -175,13 +175,13 @@ pub fn execute(
         .context("no instructions")
 }
 
-fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Witness> {
+fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<FinalNode> {
     match (v.len(), v.pop()) {
         (1, Some(node)) => match node {
-            Node::Leaf(it) => Ok(Witness::Leaf(it)),
-            Node::Extension(it) => Ok(Witness::Extension(it)),
-            Node::Branch(it) => Ok(Witness::Branch(it)),
-            Node::Empty => Ok(Witness::Empty),
+            Node::Leaf(it) => Ok(FinalNode::Leaf(it)),
+            Node::Extension(it) => Ok(FinalNode::Extension(it)),
+            Node::Branch(it) => Ok(FinalNode::Branch(it)),
+            Node::Empty => Ok(FinalNode::Empty),
             other => bail!(
                 "expected stack to contain Leaf | Extension | Branch, got {:?}",
                 other
