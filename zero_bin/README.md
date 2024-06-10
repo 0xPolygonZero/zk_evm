@@ -385,16 +385,16 @@ A few other notes:
 
 ### Generating Witnesses Only
 
-If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `tools/debug_block.sh`:
+If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `tools/prove_blocks.sh` in the `test_only` mode:
 
 ```sh
-./debug_block.sh <BLOCK_NUMBER> <FULL_NODE_ENDPOINT>
+./prove_blocks.sh <START_BLOCK> <END_BLOCK> <FULL_NODE_ENDPOINT> <IGNORE_PREVIOUS_PROOFS> test_only
 ```
 
 Filled in:
 
 ```sh
-./debug_block.sh 18299898 http://34.89.57.138:8545
+./prove_blocks.sh 18299898 18299899 http://34.89.57.138:8545 true test_only
 ```
 
 Finally, note that both of these testing scripts force proof generation to be sequential by allowing only one worker. Because of this, this is not a realistic representation of performance but makes the debugging logs much easier to follow.

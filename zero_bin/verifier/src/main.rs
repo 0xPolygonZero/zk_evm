@@ -3,7 +3,7 @@ use std::fs::File;
 use anyhow::Result;
 use clap::Parser;
 use dotenvy::dotenv;
-use proof_gen::types::PlonkyProofIntern;
+use proof_gen::proof_types::GeneratedBlockProof;
 use serde_json::Deserializer;
 use tracing::info;
 
@@ -17,14 +17,14 @@ fn main() -> Result<()> {
     let args = cli::Cli::parse();
     let file = File::open(args.file_path)?;
     let des = &mut Deserializer::from_reader(&file);
-    let input: PlonkyProofIntern = serde_path_to_error::deserialize(des)?;
+    let input: GeneratedBlockProof = serde_path_to_error::deserialize(des)?;
 
     let verifer = args
         .prover_state_config
         .into_prover_state_manager()
         .verifier()?;
 
-    match verifer.verify(&input) {
+    match verifer.verify(&input.intern) {
         Ok(_) => info!("Proof verified successfully!"),
         Err(e) => info!("Proof verification failed with error: {:?}", e),
     };

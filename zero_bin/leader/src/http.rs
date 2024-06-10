@@ -4,8 +4,8 @@ use alloy::primitives::U256;
 use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
 use paladin::runtime::Runtime;
-use proof_gen::{proof_types::GeneratedBlockProof, types::PlonkyProofIntern};
-use prover::ProverInput;
+use proof_gen::proof_types::GeneratedBlockProof;
+use prover::BlockProverInput;
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
@@ -46,7 +46,7 @@ fn write_to_file(
 
     match file {
         Ok(file) => {
-            to_writer(file, &generated_block_proof.intern)?;
+            to_writer(file, &generated_block_proof)?;
             Ok(fully_qualified_file_name)
         }
         Err(e) => {
@@ -57,8 +57,8 @@ fn write_to_file(
 
 #[derive(Serialize, Deserialize, Debug)]
 struct HttpProverInput {
-    prover_input: ProverInput,
-    previous: Option<PlonkyProofIntern>,
+    prover_input: BlockProverInput,
+    previous: Option<GeneratedBlockProof>,
 }
 
 async fn prove(
@@ -73,7 +73,11 @@ async fn prove(
 
     match payload
         .prover_input
-        .prove(&runtime, payload.previous, save_inputs_on_error)
+        .prove(
+            &runtime,
+            payload.previous.map(futures::future::ok),
+            save_inputs_on_error,
+        )
         .await
     {
         Ok(b_proof) => match write_to_file(output_dir, block_number, &b_proof) {

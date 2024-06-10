@@ -1,13 +1,16 @@
+use alloy::primitives::B256;
+use alloy::rpc::types::eth::BlockNumberOrTag;
 use alloy::{
     providers::Provider,
-    rpc::types::eth::{BlockId, Withdrawal},
+    rpc::types::eth::{Block, BlockId, Withdrawal},
     transports::Transport,
 };
 use anyhow::Context as _;
+use common::block_interval::BlockInterval;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
 use itertools::{Either, Itertools as _};
-use prover::ProverInput;
+use prover::{BlockProverInput, ProverInput};
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{
@@ -29,13 +32,29 @@ enum ZeroTrace {
 /// - Just the hash.
 ///
 /// We only need the latter.
-const BLOCK_WITHOUT_FULL_TRANSACTIONS: bool = false;
+const BLOCK_WITH_FULL_TRANSACTIONS: bool = false;
 
-pub async fn prover_input<ProviderT, TransportT>(
+/// Retrieve block information from the provider
+pub async fn get_block<ProviderT, TransportT>(
+    provider: &mut ProviderT,
+    target_block_id: BlockId,
+    full_transaction_data: bool,
+) -> anyhow::Result<Block>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    provider
+        .get_block(target_block_id, full_transaction_data)
+        .await?
+        .context("block does not exist")
+}
+
+pub async fn block_prover_input<ProviderT, TransportT>(
     provider: ProviderT,
     target_block_id: BlockId,
-    checkpoint_block_id: BlockId,
-) -> anyhow::Result<ProverInput>
+    checkpoint_state_trie_root: B256,
+) -> anyhow::Result<BlockProverInput>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -60,7 +79,7 @@ where
     // Grab block info
     //////////////////
     let target_block = provider
-        .get_block(target_block_id, BLOCK_WITHOUT_FULL_TRANSACTIONS)
+        .get_block(target_block_id, BLOCK_WITH_FULL_TRANSACTIONS)
         .await?
         .context("target block does not exist")?;
     let target_block_number = target_block
@@ -68,12 +87,6 @@ where
         .number
         .context("target block is missing field `number`")?;
     let chain_id = provider.get_chain_id().await?;
-    let checkpoint_state_trie_root = provider
-        .get_block(checkpoint_block_id, BLOCK_WITHOUT_FULL_TRANSACTIONS)
-        .await?
-        .context("checkpoint block does not exist")?
-        .header
-        .state_root;
 
     let mut prev_hashes = [alloy::primitives::B256::ZERO; 256];
     let concurrency = prev_hashes.len();
@@ -88,7 +101,7 @@ where
                 let provider = &provider;
                 async move {
                     let block = provider
-                        .get_block(n.into(), BLOCK_WITHOUT_FULL_TRANSACTIONS)
+                        .get_block(n.into(), BLOCK_WITH_FULL_TRANSACTIONS)
                         .await
                         .context("couldn't get block")?
                         .context("no such block")?;
@@ -104,7 +117,7 @@ where
 
     // Assemble
     ///////////
-    Ok(ProverInput {
+    Ok(BlockProverInput {
         block_trace: BlockTrace {
             trie_pre_images: pre_images.pop().context("trace had no BlockWitness")?,
             txn_info,
@@ -152,6 +165,40 @@ where
             },
             checkpoint_state_trie_root: checkpoint_state_trie_root.compat(),
         },
+    })
+}
+
+/// Obtain the prover input for a given block interval
+pub async fn prover_input<ProviderT, TransportT>(
+    mut provider: ProviderT,
+    block_interval: BlockInterval,
+    checkpoint_block_id: BlockId,
+) -> anyhow::Result<ProverInput>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    // Grab interval checkpoint block state trie
+    let checkpoint_state_trie_root = get_block(
+        &mut provider,
+        checkpoint_block_id,
+        BLOCK_WITH_FULL_TRANSACTIONS,
+    )
+    .await?
+    .header
+    .state_root;
+
+    let mut block_proofs = Vec::new();
+    let mut block_interval = block_interval.into_bounded_stream()?;
+
+    while let Some(block_num) = block_interval.next().await {
+        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
+        let block_prover_input =
+            block_prover_input(&provider, block_id, checkpoint_state_trie_root).await?;
+        block_proofs.push(block_prover_input);
+    }
+    Ok(ProverInput {
+        blocks: block_proofs,
     })
 }
 

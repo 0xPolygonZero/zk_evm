@@ -8,7 +8,7 @@ use std::{
 use evm_arithmetization::{AllStark, StarkConfig};
 use proof_gen::types::AllRecursiveCircuits;
 
-use crate::parsing::{parse_range, RangeParseError};
+use crate::parsing::{parse_range_exclusive, RangeParseError};
 
 /// Number of tables defined in plonky2.
 ///
@@ -51,7 +51,7 @@ impl FromStr for CircuitSize {
     type Err = RangeParseError<usize>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(CircuitSize(parse_range(s)?))
+        Ok(CircuitSize(parse_range_exclusive(s)?))
     }
 }
 

@@ -17,6 +17,7 @@ paladin-core = { workspace = true }
 anyhow = { workspace = true }
 futures = { workspace = true }
 alloy.workspace = true
+tokio = {workspace = true}
 ruint = { version = "1.12.1", features = ["num-traits", "primitive-types"] }
 ops = { path = "../ops" }
 common = { path = "../common" }

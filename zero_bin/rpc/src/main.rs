@@ -2,6 +2,7 @@ use std::io;
 
 use alloy::{providers::RootProvider, rpc::types::eth::BlockId};
 use clap::{Parser, ValueHint};
+use common::block_interval::BlockInterval;
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 
@@ -39,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
     } = Args::parse();
     let prover_input = rpc::prover_input(
         RootProvider::new_http(rpc_url),
-        block_number,
+        BlockInterval::SingleBlockId(block_number),
         checkpoint_block_number,
     )
     .await?;

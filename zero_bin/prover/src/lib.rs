@@ -1,15 +1,17 @@
+use std::future::Future;
+
 use alloy::primitives::U256;
 use anyhow::Result;
-#[cfg(feature = "test_only")]
-use futures::stream::TryStreamExt;
+use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use ops::TxProof;
 use paladin::{
     directive::{Directive, IndexedStream},
     runtime::Runtime,
 };
-use proof_gen::{proof_types::GeneratedBlockProof, types::PlonkyProofIntern};
+use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 use trace_decoder::{
     processed_block_trace::ProcessingMeta,
     trace_protocol::BlockTrace,
@@ -18,7 +20,7 @@ use trace_decoder::{
 use tracing::info;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ProverInput {
+pub struct BlockProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
 }
@@ -26,7 +28,7 @@ fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
     todo!()
 }
 
-impl ProverInput {
+impl BlockProverInput {
     pub fn get_block_number(&self) -> U256 {
         self.other_data.b_data.b_meta.block_number.into()
     }
@@ -35,7 +37,7 @@ impl ProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        previous: Option<PlonkyProofIntern>,
+        previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
@@ -63,10 +65,10 @@ impl ProverInput {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;
-            let prev = previous.map(|p| GeneratedBlockProof {
-                b_height: block_number - 1,
-                intern: p,
-            });
+            let prev = match previous {
+                Some(it) => Some(it.await?),
+                None => None,
+            };
 
             let block_proof = paladin::directive::Literal(proof)
                 .map(&ops::BlockProof {
@@ -87,7 +89,7 @@ impl ProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        _previous: Option<PlonkyProofIntern>,
+        _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
         let block_number = self.get_block_number();
@@ -117,5 +119,53 @@ impl ProverInput {
                 .expect("Block number should fit in a u64"),
             intern: proof_gen::proof_gen::dummy_proof()?,
         })
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProverInput {
+    pub blocks: Vec<BlockProverInput>,
+}
+
+impl ProverInput {
+    pub async fn prove(
+        self,
+        runtime: &Runtime,
+        previous_proof: Option<GeneratedBlockProof>,
+        save_inputs_on_error: bool,
+    ) -> Result<Vec<GeneratedBlockProof>> {
+        let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
+            previous_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
+
+        let results: FuturesOrdered<_> = self
+            .blocks
+            .into_iter()
+            .map(|block| {
+                let block_number = block.get_block_number();
+                info!("Proving block {block_number}");
+
+                let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
+
+                // Prove the block
+                let fut = block
+                    .prove(runtime, prev.take(), save_inputs_on_error)
+                    .then(|proof| async {
+                        let proof = proof?;
+
+                        if tx.send(proof.clone()).is_err() {
+                            anyhow::bail!("Failed to send proof");
+                        }
+
+                        Ok(proof)
+                    })
+                    .boxed();
+
+                prev = Some(Box::pin(rx.map_err(anyhow::Error::new)));
+
+                fut
+            })
+            .collect();
+
+        results.try_collect().await
     }
 }

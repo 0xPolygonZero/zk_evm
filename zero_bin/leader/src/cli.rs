@@ -34,22 +34,26 @@ pub(crate) enum Command {
         // The Jerigon RPC URL.
         #[arg(long, short = 'u', value_hint = ValueHint::Url)]
         rpc_url: String,
-        /// The block number for which to generate a proof.
-        #[arg(short, long)]
-        block_number: u64,
+        /// The block interval for which to generate a proof.
+        #[arg(long, short = 'i')]
+        block_interval: String,
         /// The checkpoint block number.
         #[arg(short, long, default_value_t = 0)]
         checkpoint_block_number: u64,
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,
-        /// If provided, write the generated proof to this file instead of
+        /// If provided, write the generated proofs to this directory instead of
         /// stdout.
         #[arg(long, short = 'o', value_hint = ValueHint::FilePath)]
-        proof_output_path: Option<PathBuf>,
+        proof_output_dir: Option<PathBuf>,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
         save_inputs_on_error: bool,
+        /// Network block time in milliseconds. This value is used
+        /// to determine the blockchain node polling interval.
+        #[arg(short, long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
+        block_time: u64,
     },
     /// Reads input from HTTP and writes output to a directory.
     Http {
