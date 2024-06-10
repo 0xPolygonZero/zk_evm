@@ -7,7 +7,7 @@ use super::assembler::{assemble, Kernel};
 use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
-pub const NUMBER_KERNEL_FILES: usize = 153;
+pub const NUMBER_KERNEL_FILES: usize = 156;
 
 pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     "global jumped_to_0: PANIC",
@@ -65,7 +65,10 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/curve/bn254/curve_arithmetic/msm.asm"),
     include_str!("asm/curve/bn254/curve_arithmetic/pairing.asm"),
     include_str!("asm/curve/bn254/curve_arithmetic/precomputation.asm"),
-    include_str!("asm/curve/bn254/curve_arithmetic/twisted_curve.asm"),
+    include_str!("asm/curve/bn254/curve_arithmetic/twisted_curve_add.asm"),
+    include_str!("asm/curve/bn254/curve_arithmetic/twisted_curve_checks.asm"),
+    include_str!("asm/curve/bn254/curve_arithmetic/twisted_curve_endomorphism.asm"),
+    include_str!("asm/curve/bn254/curve_arithmetic/twisted_curve_mul.asm"),
     include_str!("asm/curve/bn254/field_arithmetic/degree_6_mul.asm"),
     include_str!("asm/curve/bn254/field_arithmetic/degree_12_mul.asm"),
     include_str!("asm/curve/bn254/field_arithmetic/frobenius.asm"),

@@ -116,6 +116,12 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+#[cfg(doc)]
+use {
+    trace_protocol::{BlockTrace, TxnInfo},
+    types::OtherBlockData,
+};
+
 /// Provides debugging tools and a compact representation of state and storage
 /// tries, used in tests.
 pub mod compact;

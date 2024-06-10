@@ -24,6 +24,41 @@
 %endmacro
 
 
+// Returns reverse order division Y/X, modulo N, in Fp2.
+%macro divr_fp254_2
+    // stack: X, Y
+    %inv_fp254_2
+    // stack: X^-1, Y
+    %mul_fp254_2
+%endmacro
+
+// The inverse of an element X in BN254 quadratic extension field
+// is just X'/||X||^2 since ||X||^2 = XX', where X' = conj(X).
+%macro inv_fp254_2
+    // stack: X = (x, x_)
+    %dup_fp254_2_0
+    // stack: x, x_, x, x_
+    DUP1
+    // stack: x, x, x_, x, x_
+    MULFP254
+    // stack: x^2, x_, x, x_
+    SWAP1
+    // stack: x_, x^2, x, x_
+    DUP1
+    // stack: x_, x_, x^2, x, x_
+    MULFP254
+    // stack: x_^2, x^2, x, x_
+    ADDFP254
+    // stack: ||X||^2, x, x_
+    %inv_fp254
+    // stack: inv, x, x_
+    %scale_fp254_2
+    // stack: X/||X||^2
+    %conj_fp254_2
+    // stack: Y = 1/X
+%endmacro
+
+
 global inv_fp254_12:
     // stack:                         inp, out, retdest
     %prover_inv_fp254_12

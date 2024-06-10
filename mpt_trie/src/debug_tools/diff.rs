@@ -30,13 +30,21 @@ use std::{fmt::Display, ops::Deref};
 
 use ethereum_types::H256;
 
-use super::common::get_key_piece_from_node;
 use crate::utils::{get_segment_from_node_and_key_piece, TriePath};
 use crate::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     utils::TrieNodeType,
 };
+
+/// Get the key piece from the given node if applicable. Note that
+/// [branch][`Node::Branch`]s have no [`Nibble`] directly associated with them.
+fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>) -> Nibbles {
+    match n {
+        Node::Empty | Node::Hash(_) | Node::Branch { .. } => Nibbles::default(),
+        Node::Extension { nibbles, child: _ } | Node::Leaf { nibbles, value: _ } => *nibbles,
+    }
+}
 
 #[derive(Debug, Eq, PartialEq)]
 /// The difference between two Tries, represented as the highest

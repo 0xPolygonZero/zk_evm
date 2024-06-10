@@ -10,12 +10,12 @@ global bn_add:
     %bn_check
     // stack: isValid(x0, y0), x0, y0, x1, y1, retdest
     DUP5
-    // stack: x1, isValid(x0, y0), x0, y0, x1, y1, retdest
+    // stack: y1, isValid(x0, y0), x0, y0, x1, y1, retdest
     DUP5
     // stack: x1, y1, isValid(x0, y0), x0, y0, x1, y1, retdest
     %bn_check
     // stack: isValid(x1, y1), isValid(x0, y0), x0, y0, x1, y1, retdest
-    AND
+    MUL // Cheaper than AND
     // stack: isValid(x1, y1) & isValid(x0, y0), x0, y0, x1, y1, retdest
     %jumpi(bn_add_valid_points)
     // stack: x0, y0, x1, y1, retdest
