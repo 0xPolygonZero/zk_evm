@@ -92,3 +92,52 @@
     MUL // Cheaper than AND
     MUL // Cheaper than AND
 %endmacro
+
+/// The `ECPAIRING` precompile requires checking that G2
+/// inputs are on the correct prime-order subgroup.
+/// This macro performs this check, based on the algorithm
+/// detailed in <https://eprint.iacr.org/2022/348.pdf>.
+%macro bn_check_twisted_subgroup
+    // stack: Q = (X, Y)
+    %dup_bn_g2
+    // stack: Q, Q
+    %bn_twisted_mul_by_z
+    // stack: zQ, Q
+    %dup_bn_g2
+    // stack: zQ, zQ, Q
+    %swap_bn_g2_2
+    // stack: Q, zQ, zQ
+    %bn_twisted_add
+    // stack: [z+1]Q, zQ
+    %swap_bn_g2
+    // stack: zQ, [z+1]Q
+    %bn_endomorphism
+    // stack: phi(zQ), [z+1]Q
+    %dup_bn_g2
+    // stack: phi(zQ), phi(zQ), [z+1]Q
+    %bn_endomorphism
+    // stack: phi^2(zQ), phi(zQ), [z+1]Q
+    %dup_bn_g2
+    // stack: phi^2(zQ), phi^2(zQ), phi(zQ), [z+1]Q
+    %bn_endomorphism
+    // stack: phi^3(zQ), phi^2(zQ), phi(zQ), [z+1]Q
+    %bn_twisted_double
+    // stack: phi^3([2z]Q), phi^2(zQ), phi(zQ), [z+1]Q
+    %bn_twisted_sub
+    // stack: phi^3([2z]Q) - phi^2(zQ), phi(zQ), [z+1]Q
+    %bn_twisted_sub
+    // stack: phi^3([2z]Q) - phi^2(zQ) - phi(zQ), [z+1]Q
+    %bn_twisted_sub
+    // stack: phi^3([2z]Q) - phi^2(zQ) - phi(zQ) - [z+1]Q
+    %bn_check_twisted_ident
+    // stack: is_ident
+%endmacro
+
+// Return [(u256::MAX, u256::MAX), (u256::MAX, u256::MAX)] which is used to indicate the input was invalid.
+%macro bn_twisted_invalid_input
+    // stack: retdest
+    PUSH @U256_MAX
+    // stack: u256::MAX, retdest
+    %stack (max, retdest) -> (retdest, max, max, max, max)
+    JUMP
+%endmacro

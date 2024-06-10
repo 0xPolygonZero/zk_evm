@@ -341,7 +341,7 @@ impl<T: FieldExt> Fp2<T> {
     ///     z -> z^p
     /// since p == 3 mod 4 and hence
     ///     i^p = i^(4k) * i^3 = 1*(-i) = -i
-    fn conj(self) -> Self {
+    pub(crate) fn conj(self) -> Self {
         Fp2 {
             re: self.re,
             im: -self.im,

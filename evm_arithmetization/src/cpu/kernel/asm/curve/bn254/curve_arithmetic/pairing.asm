@@ -68,9 +68,16 @@ bn254_input_check:
     // stack: inp_j', inp_j, j, k, inp
     %load_fp254_4
     // stack:    Q_j, inp_j, j, k, inp
+    %dup_bn_g2
+    // stack: Q_j, Q_j, inp_j, j, k, inp
     %bn_check_twisted
-    // stack: valid?, inp_j, j, k, inp
     ISZERO
+    // stack: valid_1?, Q_j, inp_j, j, k, inp
+    %stack (b, Q: 4) -> (Q, b)
+    %bn_check_twisted_subgroup
+    ISZERO
+    // stack: valid_2?, valid_1?, inp_j, j, k, inp
+    ADD // Cheaper than OR
     %jumpi(bn_pairing_invalid_input)
     // stack:         inp_j, j, k, inp
     POP
