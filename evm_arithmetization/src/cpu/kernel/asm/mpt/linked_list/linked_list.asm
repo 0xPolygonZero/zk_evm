@@ -18,7 +18,7 @@
 // The values at the respective positions are:
 // - 0: The account key
 // - 1: The key
-// - 2: A ptr to the payload (the account values)
+// - 2: A ptr to the payload (the stored value)
 // - 3: A counter indicating the number of times this slot have been accessed.
 // - 4: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
 global init_linked_lists:
@@ -613,4 +613,30 @@ global remove_slot:
 %%after:
     // stack: cold_access, value_ptr, slot_ptr
     POP
+%endmacro
+
+%macro first_account:
+    // stack: empty
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    %next_account
+%end_macro
+
+%macro next_account
+    // stack: node_ptr
+    %add_const(3)
+    MLOAD_GENERAL
+    // stack: next_node_ptr
+%endmacro
+
+%macro first_slot:
+    // stack: empty
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
+    %next_slot
+%end_macro
+
+%macro next_slot
+    // stack: node_ptr
+    %add_const(4)
+    MLOAD_GENERAL
+    // stack: next_node_ptr
 %endmacro
