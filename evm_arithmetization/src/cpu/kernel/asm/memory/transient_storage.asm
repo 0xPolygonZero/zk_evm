@@ -96,12 +96,13 @@ tload_found:
 // Post stack: value
 global sys_tload:
     // stack: kexit_info, slot
+    %charge_gas_const(@GAS_WARMACCESS)
+    // stack: kexit_info, slot
     SWAP1
     // stack: slot, kexit_info
     %tload_current
     SWAP1
 
-    %charge_gas_const(@GAS_WARMACCESS)
     // stack: kexit_info, value
     EXIT_KERNEL
 
