@@ -35,7 +35,9 @@ use starky::lookup::{get_grand_product_challenge_set_target, GrandProductChallen
 use starky::proof::StarkProofWithMetadata;
 use starky::stark::Stark;
 
-use crate::all_stark::{all_cross_table_lookups, AllStark, Table, MEMORY_CTL_INDEX, NUM_TABLES};
+use crate::all_stark::{
+    all_cross_table_lookups, AllStark, Table, MEMORY_CTL_INDEX, NUM_TABLES, TOTAL_NUM_CTLS,
+};
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
 use crate::proof::{
@@ -587,7 +589,9 @@ where
 
         // Extra sums to add to the looked last value.
         // Only necessary for the Memory values.
-        let mut extra_looking_sums = HashMap::new();
+        let mut extra_looking_sums = HashMap::from_iter(
+            (0..TOTAL_NUM_CTLS).map(|i| (i, vec![builder.zero(); stark_config.num_challenges])),
+        );
 
         extra_looking_sums.insert(
             MEMORY_CTL_INDEX,
