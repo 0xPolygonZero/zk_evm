@@ -123,8 +123,8 @@ pub enum CompactParsingError {
     KeyError(#[from] FromHexPrefixError),
 
     /// Failure due to an incompatible version.
-    #[error("Incompatible version, expected: {0}, actual: {1}")]
-    IncompatibleVersion(u8, u8),
+    #[error("Incompatible version, expected one of: {0:?}, actual: {1}")]
+    IncompatibleVersion(Vec<u8>, u8),
 
     /// Failure due to a trie operation error.
     #[error("Trie operation error: {0}")]
