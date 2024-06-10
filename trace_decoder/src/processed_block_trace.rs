@@ -33,7 +33,7 @@ pub(crate) struct ProcessedBlockTrace {
     pub(crate) withdrawals: Vec<(Address, U256)>,
 }
 
-const COMPATIBLE_HEADER_VERSION: u8 = 1;
+const COMPATIBLE_HEADER_VERSIONS: [u8; 2] = [0, 1];
 
 impl BlockTrace {
     /// Processes and returns the [GenerationInputs] for all transactions in the
@@ -214,9 +214,12 @@ fn process_multiple_storage_tries(
 fn process_compact_trie(trie: TrieCompact) -> CompactParsingResult<ProcessedBlockTracePreImages> {
     let out = process_compact_prestate_debug(trie)?;
 
-    if !out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION) {
+    if !COMPATIBLE_HEADER_VERSIONS
+        .iter()
+        .any(|&v| out.header.version_is_compatible(v))
+    {
         return Err(CompactParsingError::IncompatibleVersion(
-            COMPATIBLE_HEADER_VERSION,
+            COMPATIBLE_HEADER_VERSIONS.to_vec(),
             out.header.version,
         ));
     }
