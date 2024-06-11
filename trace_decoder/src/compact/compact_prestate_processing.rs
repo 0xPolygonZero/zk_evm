@@ -279,7 +279,7 @@ impl Display for NodeEntry {
 
 /// A value of a node data.
 #[derive(Clone, Debug)]
-pub struct ValueNodeData(pub(super) Vec<u8>);
+pub struct ValueNodeData(pub Vec<u8>);
 
 impl From<Vec<u8>> for ValueNodeData {
     fn from(v: Vec<u8>) -> Self {

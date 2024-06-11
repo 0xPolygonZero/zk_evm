@@ -141,7 +141,7 @@ impl Visitor {
     }
 }
 
-fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
+pub fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
     let mut visitor = Node2TrieVisitor::default();
     visitor.visit_node(node)?;
     let Node2TrieVisitor { path, trie } = visitor;

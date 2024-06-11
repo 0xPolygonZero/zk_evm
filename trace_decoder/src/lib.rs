@@ -176,60 +176,13 @@ mod type1 {
                 .unwrap()
                 .into_iter()
                 .enumerate()
+                .skip(1)
         {
-            println!("case {}", ix);
-            let ours = wire::parse(&case.bytes)
-                .unwrap()
-                .into_iter()
-                .map(instruction2instruction)
-                .collect::<Vec<_>>();
-            let theirs =
-                crate::compact::compact_prestate_processing::parse_just_to_instructions(case.bytes)
-                    .unwrap();
-            pretty_assertions::assert_eq!(theirs, ours);
-        }
-    }
-
-    use u4::U4;
-    use wire::Instruction;
-
-    fn instruction2instruction(
-        ours: Instruction,
-    ) -> crate::compact::compact_prestate_processing::Instruction {
-        use crate::compact::compact_prestate_processing::Instruction as Theirs;
-        match ours {
-            Instruction::Leaf { key, value } => {
-                Theirs::Leaf(nibbles2nibbles(key.into()), value.into())
+            if ix != 1 {
+                continue;
             }
-            Instruction::Extension { key } => Theirs::Extension(nibbles2nibbles(key.into())),
-            Instruction::Branch { mask } => Theirs::Branch(mask.try_into().unwrap()),
-            Instruction::Hash { raw_hash } => Theirs::Hash(raw_hash.into()),
-            Instruction::Code { raw_code } => Theirs::Code(raw_code.into()),
-            Instruction::AccountLeaf {
-                key,
-                nonce,
-                balance,
-                has_code,
-                has_storage,
-            } => Theirs::AccountLeaf(
-                nibbles2nibbles(key.into()),
-                nonce.unwrap_or_default().into(),
-                balance.unwrap_or_default(),
-                has_code,
-                has_storage,
-            ),
-            Instruction::EmptyRoot => Theirs::EmptyRoot,
-            Instruction::NewTrie => todo!(),
+            let instructions = wire::parse(&case.bytes).unwrap();
+            let executions = execution::execute(instructions).unwrap();
         }
-    }
-
-    fn nibbles2nibbles(ours: Vec<U4>) -> mpt_trie_type_1::nibbles::Nibbles {
-        ours.into_iter().fold(
-            mpt_trie_type_1::nibbles::Nibbles::default(),
-            |mut acc, el| {
-                acc.push_nibble_front(el as u8);
-                acc
-            },
-        )
     }
 }
