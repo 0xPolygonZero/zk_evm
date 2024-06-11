@@ -258,7 +258,7 @@ fn nibbles2nibbles(ours: Vec<U4>) -> mpt_trie_type_1::nibbles::Nibbles {
     ours.into_iter().fold(
         mpt_trie_type_1::nibbles::Nibbles::default(),
         |mut acc, el| {
-            acc.push_nibble_back(el as u8);
+            acc.push_nibble_front(el as u8);
             acc
         },
     )

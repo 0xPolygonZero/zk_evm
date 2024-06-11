@@ -40,5 +40,6 @@ primitive-types = "0.12.2"
 # winnow = { version = "0.6.11", features = ["debug"] }
 hex = { workspace = true, features = ["serde"] }
 insta = { version = "1.39.0", features = ["glob"] }
+pretty_assertions = "1.4.0"
 pretty_env_logger = "0.5.0"
 serde_json.workspace = true

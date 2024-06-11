@@ -177,30 +177,59 @@ mod type1 {
                 .into_iter()
                 .enumerate()
         {
-            if ix == 1 {
-            } else {
-                continue;
-            }
             println!("case {}", ix);
-            let instructions = wire::parse(&case.bytes).unwrap();
-            dbg!(&instructions);
-            // assert_debug_snapshot!(instructions);
-            let executed = execution::execute(instructions).unwrap();
-            // assert_debug_snapshot!(executed);
-            assert_eq!(executed.len(), 1);
-            // TODO(0xaatif): where does the first vector come from, why does it
-            //                try to stack too many Nibbles, and why should we
-            //                keep it?
-            if ix == 1 {
-                let reshaped = reshape::reshape(executed.into_vec().pop().unwrap()).unwrap();
-                dbg!(&reshaped);
-                if !case.expected_state_root.is_empty() {
-                    assert_eq!(
-                        reshaped.state.hash(),
-                        primitive_types::H256::from_slice(&case.expected_state_root)
-                    );
-                }
-            }
+            let ours = wire::parse(&case.bytes)
+                .unwrap()
+                .into_iter()
+                .map(instruction2instruction)
+                .collect::<Vec<_>>();
+            let theirs =
+                crate::compact::compact_prestate_processing::parse_just_to_instructions(case.bytes)
+                    .unwrap();
+            pretty_assertions::assert_eq!(theirs, ours);
         }
+    }
+
+    use u4::U4;
+    use wire::Instruction;
+
+    fn instruction2instruction(
+        ours: Instruction,
+    ) -> crate::compact::compact_prestate_processing::Instruction {
+        use crate::compact::compact_prestate_processing::Instruction as Theirs;
+        match ours {
+            Instruction::Leaf { key, value } => {
+                Theirs::Leaf(nibbles2nibbles(key.into()), value.into())
+            }
+            Instruction::Extension { key } => Theirs::Extension(nibbles2nibbles(key.into())),
+            Instruction::Branch { mask } => Theirs::Branch(mask.try_into().unwrap()),
+            Instruction::Hash { raw_hash } => Theirs::Hash(raw_hash.into()),
+            Instruction::Code { raw_code } => Theirs::Code(raw_code.into()),
+            Instruction::AccountLeaf {
+                key,
+                nonce,
+                balance,
+                has_code,
+                has_storage,
+            } => Theirs::AccountLeaf(
+                nibbles2nibbles(key.into()),
+                nonce.unwrap_or_default().into(),
+                balance.unwrap_or_default(),
+                has_code,
+                has_storage,
+            ),
+            Instruction::EmptyRoot => Theirs::EmptyRoot,
+            Instruction::NewTrie => todo!(),
+        }
+    }
+
+    fn nibbles2nibbles(ours: Vec<U4>) -> mpt_trie_type_1::nibbles::Nibbles {
+        ours.into_iter().fold(
+            mpt_trie_type_1::nibbles::Nibbles::default(),
+            |mut acc, el| {
+                acc.push_nibble_front(el as u8);
+                acc
+            },
+        )
     }
 }

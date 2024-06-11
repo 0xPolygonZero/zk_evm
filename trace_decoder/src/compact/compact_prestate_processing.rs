@@ -1292,7 +1292,7 @@ fn process_compact_prestate_common(
 
 // TODO: Move behind a feature flag just used for debugging (but probably not
 // `debug`)...
-fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
+pub fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
 

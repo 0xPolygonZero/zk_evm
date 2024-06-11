@@ -76,9 +76,18 @@ pub enum Execution {
 pub fn execute(
     instructions: impl IntoIterator<Item = Instruction>,
 ) -> anyhow::Result<NonEmpty<Vec<Execution>>> {
+    let mut instructions = instructions
+        .into_iter()
+        .collect::<std::collections::VecDeque<_>>();
     let mut witnesses = vec![];
     let mut stack = vec![];
-    for instruction in instructions {
+
+    while let Some(instruction) = instructions.pop_front() {
+        eprintln!("current {:?}", instruction);
+        eprintln!(
+            "lookahead {:?}",
+            instructions.iter().take(2).collect::<Vec<_>>()
+        );
         match instruction {
             Instruction::EmptyRoot => stack.push(Node::Empty),
             Instruction::Hash { raw_hash } => stack.push(Node::Hash(Hash { raw_hash })),
@@ -170,6 +179,10 @@ pub fn execute(
                 stack.push(Node::Branch(Branch { children }))
             }
             Instruction::NewTrie => witnesses.push(finish_stack(&mut stack)?),
+        }
+
+        if let Some(it) = stack.last() {
+            eprintln!("left: {:?}", it)
         }
     }
     witnesses.push(finish_stack(&mut stack)?);
