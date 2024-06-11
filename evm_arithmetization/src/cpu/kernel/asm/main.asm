@@ -111,6 +111,7 @@ global perform_final_checks:
     %pop3
     PUSH 1 // initial trie data length
 global check_state_trie:
+    %set_final_tries
     %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     
 global debug_check_final_trie:
     %assert_eq
