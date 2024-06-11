@@ -268,6 +268,7 @@ account_not_found:
     %jump(remove_account)
 %%after:
 %endmacro
+
 /// Remove the address and its value from the access list.
 /// Panics if the key is not in the list.
 global remove_account:
@@ -660,4 +661,13 @@ global remove_slot:
     %add_const(4)
     MLOAD_GENERAL
     // stack: next_node_ptr
+%endmacro
+
+%macro read_slot_linked_list
+    // stack: address, slot
+    %addr_to_state_key
+    SWAP1 %slot_to_storage_key
+    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
+    %jump(search_slot)
+%%after:
 %endmacro

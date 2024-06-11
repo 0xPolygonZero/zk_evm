@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -271,6 +272,7 @@ fn prepare_interpreter_all_accounts<F: Field>(
     addr: [u8; 20],
     code: &[u8],
 ) -> Result<()> {
+    init_logger();
     // Load all MPTs.
     initialize_mpts(interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
@@ -493,4 +495,8 @@ fn sload() -> Result<()> {
     let expected_state_trie_hash = state_trie_before.hash();
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
+}
+
+fn init_logger() {
+    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }

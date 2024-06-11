@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -165,6 +166,8 @@ fn test_add11_yml() {
 
 #[test]
 fn test_add11_yml_with_exception() {
+    init_logger();
+
     // In this test, we make sure that the user code throws a stack underflow
     // exception.
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
@@ -304,4 +307,8 @@ fn test_add11_yml_with_exception() {
     interpreter
         .run()
         .expect("Proving add11 with exception failed.");
+}
+
+fn init_logger() {
+    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }

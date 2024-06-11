@@ -4,7 +4,7 @@
     %journal_add_3(@JOURNAL_ENTRY_STORAGE_CHANGE)
 %endmacro
 
-global revert_storage_change:
+global revert_storage_change_original:
     // stack: entry_type, ptr, retdest
     POP
     %journal_load_3
@@ -27,7 +27,21 @@ global revert_storage_change:
         (storage_root_ptr, num_nibbles, storage_key, prev_value_ptr, new_storage_root, address, retdest)
     %jump(mpt_insert)
 
-delete:
+global revert_storage_change:
+    // stack: entry_type, ptr, retdest
+    POP
+    %journal_load_3
+    // stack: address, slot, prev_value, retdest
+    DUP3 ISZERO %jumpi(delete)
+    // stack: address, slot, prev_value, retdest
+    %read_slot_linked_list
+    // stack: storage_found, cold_access, value_ptr, prev_value, retdest
+    %assert_eq_const(1) POP
+    // stack: value_ptr, prev_value, retdest
+    %mstore_trie_data
+    JUMP
+
+delete_original:
     // stack: address, slot, prev_value, retdest
     SWAP2 POP
     %stack (slot, address, retdest) -> (slot, new_storage_root, address, retdest)
@@ -43,6 +57,15 @@ delete:
     %mload_trie_data
     // stack: storage_root_ptr, 64, storage_key, new_storage_root, address, retdest
     %jump(mpt_delete)
+
+delete:
+    // stack: address, slot, prev_value, retdest
+    SWAP2 POP
+    // stack: slot, address, retdest
+    %slot_to_storage_key
+    SWAP1 %addr_to_state_key
+    // stack: addr_key, slot_key, retdest
+    %jump(remove_slot)
 
 new_storage_root:
     // stack: new_storage_root_ptr, address, retdest

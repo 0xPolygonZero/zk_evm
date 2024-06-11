@@ -19,7 +19,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
-use crate::generation::mpt::load_all_mpts;
+use crate::generation::mpt::{load_all_mpts, load_linked_lists_and_txn_and_receipt_mpts};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
@@ -159,8 +159,16 @@ impl<F: Field> Interpreter<F> {
         self.generation_state.inputs = inputs.clone();
 
         // Initialize the MPT's pointers.
-        let (trie_root_ptrs, trie_data) =
-            load_all_mpts(tries).expect("Invalid MPT data for preinitialization");
+        let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(&inputs.tries)
+                .expect("Invalid MPT data for preinitialization");
+
+        self.generation_state.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
+            .content = state_leaves.iter().map(|&val| Some(val)).collect();
+        self.generation_state.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
+            .content = storage_leaves.iter().map(|&val| Some(val)).collect();
+        self.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
+            trie_data.iter().map(|&val| Some(val)).collect();
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
 
