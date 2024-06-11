@@ -141,7 +141,7 @@ fn test_insert_account() -> Result<()> {
     let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
     interpreter.run()?;
 
-    let insert_account_label = KERNEL.global_labels["insert_account"];
+    let insert_account_label = KERNEL.global_labels["insert_account_to_linked_list"];
 
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
@@ -256,7 +256,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
     interpreter.run()?;
 
-    let insert_account_label = KERNEL.global_labels["insert_account"];
+    let insert_account_label = KERNEL.global_labels["insert_account_to_linked_list"];
 
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();

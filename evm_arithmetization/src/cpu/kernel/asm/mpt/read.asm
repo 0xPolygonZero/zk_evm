@@ -1,26 +1,12 @@
-// TODO: Use only linked lists
-global mpt_read_state_trie_test:
+// Given an address, return a pointer to the associated account data, which
+// consists of four words (nonce, balance, storage_root, code_hash), in the
+// trie_data segment. Returns null if the address is not found.
+global mpt_read_state_trie:
     // stack: addr, retdest
     // stack: address, retdest
 
-    //TEST linked list
-    DUP1
     %read_accounts_linked_list
-    // stack: ll_addr, address, retdest
-    %add_const(3)
-    %mload_trie_data
-    // stack: ll_code_hash, address, retdest
-    SWAP1
-    %mpt_read_state_trie_original
-    DUP1
-    %add_const(3)
-    %mload_trie_data
-    // stack: code_hash, account_ptr, ll_code_hash, retdest
-    SWAP1 SWAP2
-    // stack: ll_code_hash, code_hash, account_ptr, retdest
-global debug_at_least_the_code_hash_is_the_same:
-    %assert_eq
-    // END TEST linked list
+    // stack: account_ptr
     SWAP1
     JUMP
 
@@ -29,27 +15,7 @@ global debug_at_least_the_code_hash_is_the_same:
 // Convenience macro to call mpt_read_state_trie and return where we left off.
 %macro mpt_read_state_trie
     %stack (addr) -> (addr, %%after)
-    %jump(mpt_read_state_trie_test)
-%%after:
-%endmacro
-
-
-// Given an address, return a pointer to the associated account data, which
-// consists of four words (nonce, balance, storage_root, code_hash), in the
-// state trie. Returns null if the address is not found.
-global mpt_read_state_trie_original:
-    // stack: addr, retdest
-    %addr_to_state_key
-    // stack: key, retdest
-    PUSH 64 // num_nibbles
-    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT) // node_ptr
-    // stack: node_ptr, num_nibbles, key, retdest
-    %jump(mpt_read)
-
-// Convenience macro to call mpt_read_state_trie and return where we left off.
-%macro mpt_read_state_trie_original
-    %stack (addr) -> (addr, %%after)
-    %jump(mpt_read_state_trie_original)
+    %jump(mpt_read_state_trie)
 %%after:
 %endmacro
 

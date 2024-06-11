@@ -26,6 +26,8 @@ mpt_delete_leaf:
 global delete_account:
     %stack (address, retdest) -> (address, delete_account_save, retdest)
     %addr_to_state_key
+    DUP1
+    %remove_account_from_linked_list
     // stack: key, delete_account_save, retdest
     PUSH 64
     // stack: 64, key, delete_account_save, retdest

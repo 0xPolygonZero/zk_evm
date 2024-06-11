@@ -236,22 +236,21 @@ after_read:
 
 
 sload_with_addr:
-    %stack (slot, addr) -> (slot, addr, after_storage_read)
-    %slot_to_storage_key
-    // stack: storage_key, addr, after_storage_read
-    PUSH 64 // storage_key has 64 nibbles
-    %stack (n64, storage_key, addr, after_storage_read) -> (addr, n64, storage_key, after_storage_read)
-    %mpt_read_state_trie
-    // stack: account_ptr, 64, storage_key, after_storage_read
-    DUP1 ISZERO %jumpi(ret_zero) // TODO: Fix this. This should never happen.
-    // stack: account_ptr, 64, storage_key, after_storage_read
-    %add_const(2)
-    // stack: storage_root_ptr_ptr
-    %mload_trie_data
-    // stack: storage_root_ptr, 64, storage_key, after_storage_read
-    %jump(mpt_read)
 
-ret_zero:
-    // stack: account_ptr, 64, storage_key, after_storage_read, retdest
-    %pop4
-    PUSH 0 SWAP1 JUMP
+    %read_storage_linked_list_w_addr
+    
+    // stack: value_ptr, retdest
+    DUP1 %jumpi(storage_key_exists)
+
+    // Storage key not found. Return default value_ptr = 0,
+    // which derefs to 0 since @SEGMENT_TRIE_DATA[0] = 0.
+    %stack (value_ptr, retdest) -> (retdest, 0)
+    
+    JUMP
+
+storage_key_exists:
+    // stack: value_ptr, retdest
+    %mload_trie_data
+    // stack: value, retdest
+    SWAP1
+    JUMP

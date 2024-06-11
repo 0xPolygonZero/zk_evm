@@ -6,18 +6,7 @@
 // TODO: Have this take an address and do %mpt_insert_state_trie? To match mpt_read_state_trie.
 global mpt_insert_state_trie:
     // stack: key, value_ptr, retdest
-    // TODO: Use only the account linked list
-    DUP2 DUP2 
-    %insert_account_no_return
-    %stack (key, value_ptr)
-        -> (key, value_ptr, mpt_insert_state_trie_save)
-    PUSH 64 // num_nibbles
-    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-    // stack: state_root_ptr, num_nibbles, key, value_ptr, mpt_insert_state_trie_save, retdest
-    %jump(mpt_insert)
-mpt_insert_state_trie_save:
-    // stack: updated_node_ptr, retdest
-    %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+    %insert_account_to_linked_list_no_return
     JUMP
 
 %macro mpt_insert_state_trie

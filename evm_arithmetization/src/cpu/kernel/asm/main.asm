@@ -49,7 +49,7 @@ global hash_initial_tries:
 global debug_check_hash:
     %assert_eq
 
-    %mpt_set_payload_no_return
+    %set_initial_tries
     %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
     global debug_check_hash_after_setting_payloads:
     %assert_eq
@@ -111,7 +111,9 @@ global perform_final_checks:
     %pop3
     PUSH 1 // initial trie data length
 global check_state_trie:
-    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
+    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     
+global debug_check_final_trie:
+    %assert_eq
 global check_txn_trie:
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq
 global check_receipt_trie:
