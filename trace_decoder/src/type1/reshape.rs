@@ -6,7 +6,10 @@ use std::{
 use anyhow::{bail, Context as _};
 use either::Either;
 use evm_arithmetization_type_1::generation::mpt::AccountRlp;
-use mpt_trie_type_1::partial_trie::{HashedPartialTrie, PartialTrie as _};
+use mpt_trie_type_1::{
+    partial_trie::{HashedPartialTrie, PartialTrie as _},
+    trie_ops::ValOrHash,
+};
 use nunny::NonEmpty;
 
 use super::execution::{Account, Branch, Code, Execution, Extension, Hash, Leaf, Node, Value};
@@ -58,7 +61,7 @@ impl Visitor {
                     .state
                     .insert(
                         nibbles2nibbles(self.path.clone()),
-                        mpt_trie_type_1::trie_ops::ValOrHash::Hash(raw_hash.into()),
+                        ValOrHash::Hash(raw_hash.into()),
                     )
                     .context(format!(
                         "couldn't convert save state to trie at path {:?}",
@@ -129,10 +132,7 @@ impl Visitor {
         // TODO(0xaatif): do consistency checks here.
         self.reshape
             .state
-            .insert(
-                nibbles2nibbles(key),
-                mpt_trie_type_1::trie_ops::ValOrHash::Val(value.to_vec()),
-            )
+            .insert(nibbles2nibbles(key), ValOrHash::Val(value.to_vec()))
             .context(format!(
                 "couldn't save state to trie at path {:?}",
                 self.path
@@ -142,24 +142,72 @@ impl Visitor {
 }
 
 fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
-    let mut trie = HashedPartialTrie::default();
-    for (key, leaf) in iter_leaves(node) {
-        let value = match leaf {
-            IterLeaf::Hash(Hash { raw_hash }) => {
-                mpt_trie_type_1::trie_ops::ValOrHash::Hash(raw_hash.into())
-            }
-            IterLeaf::Value(Value { raw_value }) => mpt_trie_type_1::trie_ops::ValOrHash::Val(
-                rlp::encode::<Vec<u8>>(raw_value.as_vec()).to_vec(),
-            ),
-            IterLeaf::Empty => continue,
-            IterLeaf::Account(_) => bail!("unexpected Account when building storage trie"),
-            IterLeaf::Code(_) => bail!("unexpected Code when building storage trie"),
-        };
-
-        trie.insert(nibbles2nibbles(key), value)
-            .context("couldn't insert into trie")?;
-    }
+    let mut visitor = Node2TrieVisitor::default();
+    visitor.visit_node(node)?;
+    let Node2TrieVisitor { path, trie } = visitor;
+    assert_eq!(path, vec![]);
     Ok(trie)
+}
+
+#[derive(Default)]
+struct Node2TrieVisitor {
+    path: Vec<U4>,
+    trie: HashedPartialTrie,
+}
+
+impl Node2TrieVisitor {
+    fn with_path<T>(
+        &mut self,
+        path: impl IntoIterator<Item = U4>,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let len = self.path.len();
+        self.path.extend(path);
+        let ret = f(self);
+        self.path.truncate(len);
+        ret
+    }
+    fn visit_node(&mut self, node: Node) -> anyhow::Result<()> {
+        match node {
+            Node::Branch(Branch { children }) => {
+                for (ix, child) in children.into_iter().enumerate() {
+                    if let Some(child) = child {
+                        self.with_path(
+                            iter::once(U4::new(ix.try_into().unwrap()).unwrap()),
+                            |this| this.visit_node(*child),
+                        )?;
+                    }
+                }
+                Ok(())
+            }
+            Node::Code(_) => bail!("unexpected Code when building storage trie"),
+            Node::Hash(Hash { raw_hash }) => {
+                self.trie.insert(
+                    nibbles2nibbles(self.path.clone()),
+                    ValOrHash::Hash(raw_hash.into()),
+                )?;
+                Ok(())
+            }
+            Node::Leaf(Leaf {
+                key,
+                value: Either::Left(Value { raw_value }),
+            }) => self.with_path(key, |this| {
+                this.trie.insert(
+                    nibbles2nibbles(this.path.clone()),
+                    rlp::encode(raw_value.as_vec()).to_vec(),
+                )?;
+                Ok(())
+            }),
+            Node::Leaf(Leaf {
+                value: Either::Right(_account),
+                ..
+            }) => bail!("unexpected Account Leaf when building storage trie"),
+            Node::Extension(Extension { key, child }) => {
+                self.with_path(key, |this| this.visit_node(*child))
+            }
+            Node::Empty => Ok(()),
+        }
+    }
 }
 
 enum IterLeaf {
