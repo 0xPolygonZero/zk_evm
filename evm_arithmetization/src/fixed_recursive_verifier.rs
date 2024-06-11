@@ -1567,7 +1567,6 @@ where
             inputs: generation_inputs.clone(),
             partial_next_data: None,
             max_cpu_len_log: Some(max_cpu_len_log),
-            nb_segments: 0,
         };
 
         let mut proofs = vec![];

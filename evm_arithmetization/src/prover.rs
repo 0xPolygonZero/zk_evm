@@ -527,7 +527,6 @@ pub struct SegmentDataIterator {
     pub partial_next_data: Option<GenerationSegmentData>,
     pub inputs: GenerationInputs,
     pub max_cpu_len_log: Option<usize>,
-    pub nb_segments: usize,
 }
 
 type F = GoldilocksField;
@@ -542,11 +541,7 @@ impl Iterator for SegmentDataIterator {
         );
 
         if cur_and_next_data.is_some() {
-            let (data, next_data) = cur_and_next_data.expect(
-                "Data cannot be
-`None`",
-            );
-            self.nb_segments += 1;
+            let (data, next_data) = cur_and_next_data.expect("Data cannot be `None`");
             self.partial_next_data = next_data;
             Some((self.inputs.clone(), data))
         } else {
@@ -588,9 +583,9 @@ pub(crate) fn generate_next_segment<F: RichField>(
 
     // Run the interpreter to get `registers_after` and the partial data for the
     // next segment.
-    let run_result = set_registers_and_run(segment_data.registers_after, &mut interpreter);
-
-    if let Ok((updated_registers, mem_after)) = run_result {
+    if let Ok((updated_registers, mem_after)) =
+        set_registers_and_run(segment_data.registers_after, &mut interpreter)
+    {
         // Set `registers_after` correctly and push the data.
         let before_registers = segment_data.registers_after;
 
