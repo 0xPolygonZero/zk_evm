@@ -149,130 +149,31 @@ mod type1 {
     ///
     /// Use of a stack machine is amenable to streaming off the wire.
     mod execution;
+    mod reshape;
+    /// Simple nibble representation.
+    mod u4;
     /// Parser combinators for the binary "wire" format.
     ///
     /// Use of [`winnow`] is amenable to streaming off the wire.
     mod wire;
 
-    use std::sync::Arc;
-
-    use either::Either;
-    use evm_arithmetization_type_1::generation::mpt::AccountRlp;
-    use execution::{Account, Branch, Code, Extension, FinalNode, Hash, Leaf, Node, Value};
-    use nunny::NonEmpty;
-
-    /// Keep the spec trie separate from our runtime trie.
-    fn final_node2node(
-        it: execution::FinalNode,
-    ) -> mpt_trie_type_1::partial_trie::Node<mpt_trie_type_1::partial_trie::HashedPartialTrie> {
-        match it {
-            FinalNode::Leaf(it) => leaf2leaf(it),
-            FinalNode::Extension(it) => extension2extension(it),
-            FinalNode::Branch(it) => branch2branch(it),
-            FinalNode::Empty => mpt_trie_type_1::partial_trie::Node::Empty,
-        }
-    }
-
-    fn branch2branch(
-        Branch { children }: Branch,
-    ) -> mpt_trie_type_1::partial_trie::Node<mpt_trie_type_1::partial_trie::HashedPartialTrie> {
-        mpt_trie_type_1::partial_trie::Node::Branch {
-            children: children.map(|it| match it {
-                Some(it) => Arc::new(Box::new(node2trie(*it))),
-                None => Arc::new(Box::new(node2trie(execution::Node::Empty))),
-            }),
-            value: todo!(),
-        }
-    }
-
-    fn extension2extension(
-        Extension { key, child }: Extension,
-    ) -> mpt_trie_type_1::partial_trie::Node<mpt_trie_type_1::partial_trie::HashedPartialTrie> {
-        mpt_trie_type_1::partial_trie::Node::Extension {
-            nibbles: key2nibbles(key),
-            child: Arc::new(Box::new(node2trie(*child))),
-        }
-    }
-
-    fn leaf2leaf(
-        Leaf { key, value }: Leaf,
-    ) -> mpt_trie_type_1::partial_trie::Node<mpt_trie_type_1::partial_trie::HashedPartialTrie> {
-        mpt_trie_type_1::partial_trie::Node::Leaf {
-            nibbles: key2nibbles(key),
-            value: match value {
-                Either::Left(Value { raw_value }) => rlp::encode(raw_value.as_vec()).to_vec(),
-                Either::Right(Account {
-                    nonce,
-                    balance,
-                    storage,
-                    code,
-                }) => todo!(),
-            },
-        }
-    }
-
-    fn account2account(
-        Account {
-            nonce,
-            balance,
-            storage,
-            code,
-        }: Account,
-    ) -> AccountRlp {
-        AccountRlp {
-            nonce: nonce.into(),
-            balance,
-            storage_root: match storage {
-                Some(_) => todo!(),
-                None => todo!(),
-            },
-            code_hash: match code {
-                Some(Either::Left(Hash { raw_hash })) => todo!(),
-                Some(Either::Right(Code { code })) => todo!(),
-                None => todo!(),
-            },
-        }
-    }
-
-    fn node2trie(it: execution::Node) -> mpt_trie_type_1::partial_trie::HashedPartialTrie {
-        match it {
-            Node::Hash(Hash { raw_hash }) => {
-                mpt_trie_type_1::partial_trie::Node::Hash(ethereum_types::H256::from(raw_hash))
-            }
-            Node::Value(Value { raw_value }) => todo!(),
-            Node::Account(Account {
-                nonce,
-                balance,
-                storage,
-                code,
-            }) => todo!(),
-            Node::Leaf(it) => leaf2leaf(it),
-            Node::Extension(it) => extension2extension(it),
-            Node::Branch(it) => branch2branch(it),
-            Node::Code(Code { code }) => todo!(),
-            Node::Empty => mpt_trie_type_1::partial_trie::Node::Empty,
-        }
-        .into()
-    }
-
-    fn key2nibbles(it: NonEmpty<Vec<u8>>) -> mpt_trie_type_1::nibbles::Nibbles {
-        todo!()
-    }
-
     #[test]
     fn test() {
         use insta::assert_debug_snapshot;
-        use serde::Deserialize;
 
-        #[derive(Deserialize)]
+        #[derive(serde::Deserialize)]
         struct Case {
             #[serde(with = "hex", rename = "hex")]
             pub bytes: Vec<u8>,
         }
 
-        for vector in
-            serde_json::from_str::<Vec<Case>>(include_str!("type1/witness_vectors.json")).unwrap()
+        for (ix, vector) in
+            serde_json::from_str::<Vec<Case>>(include_str!("type1/witness_vectors.json"))
+                .unwrap()
+                .into_iter()
+                .enumerate()
         {
+            println!("{}", ix);
             let instructions = wire::parse(&vector.bytes).unwrap();
             assert_debug_snapshot!(instructions);
             let executed = execution::execute(instructions).unwrap();

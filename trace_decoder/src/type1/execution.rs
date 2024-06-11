@@ -5,7 +5,7 @@ use either::Either;
 use ethereum_types::U256;
 use nunny::NonEmpty;
 
-use super::wire::Instruction;
+use super::{u4::U4, wire::Instruction};
 
 #[derive(Debug)]
 pub struct Hash {
@@ -32,13 +32,13 @@ pub struct Code {
 
 #[derive(Debug)]
 pub struct Leaf {
-    pub key: NonEmpty<Vec<u8>>,
+    pub key: NonEmpty<Vec<U4>>,
     pub value: Either<Value, Account>,
 }
 
 #[derive(Debug)]
 pub struct Extension {
-    pub key: NonEmpty<Vec<u8>>,
+    pub key: NonEmpty<Vec<U4>>,
     pub child: Box<Node>,
 }
 
@@ -47,11 +47,13 @@ pub struct Branch {
     pub children: [Option<Box<Node>>; 16],
 }
 
+/// An interior execution node
 #[derive(Debug)]
 pub enum Node {
     Hash(Hash),
-    Value(Value),
-    Account(Account),
+    // BUG: these are documented, but never constructed during execution
+    // Value(Value),
+    // Account(Account),
     Leaf(Leaf),
     Extension(Extension),
     Branch(Branch),
@@ -60,8 +62,9 @@ pub enum Node {
     Empty,
 }
 
+/// A terminal node after [`execute`]-ing
 #[derive(Debug)]
-pub enum FinalNode {
+pub enum Execution {
     Leaf(Leaf),
     Extension(Extension),
     Branch(Branch),
@@ -69,9 +72,10 @@ pub enum FinalNode {
     Empty,
 }
 
+/// Stack machine
 pub fn execute(
     instructions: impl IntoIterator<Item = Instruction>,
-) -> anyhow::Result<NonEmpty<Vec<FinalNode>>> {
+) -> anyhow::Result<NonEmpty<Vec<Execution>>> {
     let mut witnesses = vec![];
     let mut stack = vec![];
     for instruction in instructions {
@@ -175,13 +179,13 @@ pub fn execute(
         .context("no instructions")
 }
 
-fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<FinalNode> {
+fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
     match (v.len(), v.pop()) {
         (1, Some(node)) => match node {
-            Node::Leaf(it) => Ok(FinalNode::Leaf(it)),
-            Node::Extension(it) => Ok(FinalNode::Extension(it)),
-            Node::Branch(it) => Ok(FinalNode::Branch(it)),
-            Node::Empty => Ok(FinalNode::Empty),
+            Node::Leaf(it) => Ok(Execution::Leaf(it)),
+            Node::Extension(it) => Ok(Execution::Extension(it)),
+            Node::Branch(it) => Ok(Execution::Branch(it)),
+            Node::Empty => Ok(Execution::Empty),
             other => bail!(
                 "expected stack to contain Leaf | Extension | Branch, got {:?}",
                 other

@@ -33,8 +33,11 @@ nunny = { version = "0.2.1", features = ["serde"] }
 either = "1.12.0"
 anyhow = "1.0.86"
 bitvec = "1.0.1"
+primitive-types = "0.12.2"
 
 [dev-dependencies]
+# enable this feature if you're debugging binary decoding
+# winnow = { version = "0.6.11", features = ["debug"] }
 hex = { workspace = true, features = ["serde"] }
 insta = { version = "1.39.0", features = ["glob"] }
 pretty_env_logger = "0.5.0"

@@ -1,27 +1,31 @@
-use std::{any::type_name, io};
+use std::{any::type_name, io, iter};
 
 use anyhow::bail;
+use either::Either;
 use ethereum_types::U256;
 use nunny::NonEmpty;
 use serde::de::DeserializeOwned;
 use winnow::{
-    combinator::{empty, eof, repeat_till, trace},
+    combinator::{empty, eof, preceded, repeat_till, trace},
     error::{ErrMode, ErrorKind, FromExternalError},
     stream::Stream,
     token::{any, literal, take},
     PResult, Parser as _,
 };
 
+use super::u4::U4;
+use crate::type1::u4::U4x2;
+
 pub fn parse(input: &[u8]) -> anyhow::Result<NonEmpty<Vec<Instruction>>> {
-    match (
+    match preceded(
         header::<winnow::error::ContextError>,
         repeat_till(1.., instruction, eof).map(|(it, _)| {
             NonEmpty::<Vec<_>>::new(it).expect("repeat_till should ensure non-empty collection")
         }),
     )
-        .parse(input)
+    .parse(input)
     {
-        Ok((_header, it)) => Ok(it),
+        Ok(it) => Ok(it),
         Err(e) => bail!("parse error: {}", e),
     }
 }
@@ -29,22 +33,20 @@ pub fn parse(input: &[u8]) -> anyhow::Result<NonEmpty<Vec<Instruction>>> {
 /// Names are taken from the spec.
 /// Spec also requires sequences to be non-empty
 ///
-/// CBOR supports unsigned integers up to `2^64 -1`[^1], so that's what we use
-/// for native integers.
+/// CBOR supports unsigned integers up to `2^64 -1`[^1], so we use [`u64`]
+/// for directly read integers.
 ///
 /// [^1]: <https://en.wikipedia.org/wiki/CBOR#Integers_(types_0_and_1)>
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Instruction {
     Leaf {
-        /// `ENCODE_KEY`-ed
-        key: NonEmpty<Vec<u8>>,
+        key: NonEmpty<Vec<U4>>,
         value: NonEmpty<Vec<u8>>,
     },
     // BUG: the spec has `EXTENSION` and `ACCOUNT_LEAF` inconsistent
     // between the instruction list and encoding list
     Extension {
-        /// `ENCODE_KEY`-ed
-        key: NonEmpty<Vec<u8>>,
+        key: NonEmpty<Vec<U4>>,
     },
     Branch {
         mask: u64,
@@ -56,8 +58,7 @@ pub enum Instruction {
         raw_code: NonEmpty<Vec<u8>>,
     },
     AccountLeaf {
-        /// `ENCODE_KEY`-ed
-        key: NonEmpty<Vec<u8>>,
+        key: NonEmpty<Vec<U4>>,
         nonce: Option<u64>,
         // BUG: see decode site
         balance: Option<U256>,
@@ -79,14 +80,16 @@ struct V1Header;
 trait ParserError<'a>:
     winnow::error::ParserError<&'a [u8]>
     + FromExternalError<&'a [u8], ciborium::de::Error<io::Error>>
-    + FromExternalError<&'a [u8], UnrecognisedBits>
+    + FromExternalError<&'a [u8], UnrecognisedAccountLeafFlags>
+    + FromExternalError<&'a [u8], DecodeKeyError>
 {
 }
 
 impl<'a, E> ParserError<'a> for E where
     E: winnow::error::ParserError<&'a [u8]>
         + FromExternalError<&'a [u8], ciborium::de::Error<io::Error>>
-        + FromExternalError<&'a [u8], UnrecognisedBits>
+        + FromExternalError<&'a [u8], UnrecognisedAccountLeafFlags>
+        + FromExternalError<&'a [u8], DecodeKeyError>
 {
 }
 
@@ -101,12 +104,16 @@ fn instruction<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruct
     match opcode {
         0x00 => trace(
             "leaf",
-            (cbor, cbor).map(|(key, value)| Instruction::Leaf { key, value }),
+            (cbor.try_map(|it: NonEmpty<Vec<u8>>| decode_key(&it)), cbor)
+                .map(|(key, value)| Instruction::Leaf { key, value }),
         )
         .parse_next(input),
-        0x01 => {
-            trace("extension", cbor.map(|key| Instruction::Extension { key })).parse_next(input)
-        }
+        0x01 => trace(
+            "extension",
+            cbor.try_map(|it: NonEmpty<Vec<u8>>| decode_key(&it))
+                .map(|key| Instruction::Extension { key }),
+        )
+        .parse_next(input),
         0x02 => trace("branch", cbor.map(|mask| Instruction::Branch { mask })).parse_next(input),
         0x03 => {
             trace("hash", array.map(|raw_hash| Instruction::Hash { raw_hash })).parse_next(input)
@@ -131,7 +138,7 @@ fn instruction<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruct
 
 #[derive(thiserror::Error, Debug)]
 #[error("unrecognised bits in flags for account leaf")]
-struct UnrecognisedBits;
+struct UnrecognisedAccountLeafFlags;
 
 fn account_leaf<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruction, E> {
     bitflags::bitflags! {
@@ -143,9 +150,11 @@ fn account_leaf<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruc
         }
     }
 
-    let key = cbor.parse_next(input)?;
+    let key = cbor
+        .try_map(|it: NonEmpty<Vec<u8>>| decode_key(&it))
+        .parse_next(input)?;
     let flags = any
-        .try_map(|byte| AccountLeafFlags::from_bits(byte).ok_or(UnrecognisedBits))
+        .try_map(|byte| AccountLeafFlags::from_bits(byte).ok_or(UnrecognisedAccountLeafFlags))
         .parse_next(input)?;
 
     Ok(Instruction::AccountLeaf {
@@ -200,6 +209,83 @@ fn cbor<'a, T: DeserializeOwned + std::fmt::Debug, E: ParserError<'a>>(
         },
     )
     .parse_next(input)
+}
+
+#[derive(thiserror::Error, Debug)]
+enum DecodeKeyError {
+    #[error("unrecognised bits in nibble")]
+    ExcessNibbleBits,
+    #[error("unrecognised bits in flags for key encoding")]
+    UnrecognisedKeyFlags,
+    // BUG: see commented out code below
+    // #[error("missing or invalid terminator for nibbles")]
+    // Terminator,
+    #[error("span was zero but odd flag was set")]
+    OddZero,
+}
+
+fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, DecodeKeyError> {
+    bitflags::bitflags! {
+        struct EncodeKeyFlags: u8 {
+            const ODD = 0b0000_0001;
+            const TERMINATED = 0b0000_0010;
+        }
+    }
+
+    match bytes.split_first() {
+        // BUG: the previous implementation said that Erigon does this
+        (only, &[]) => Ok(nunny::vec![
+            // U4::new(*only).ok_or(DecodeKeyError::ExcessNibbleBits)?
+            // TODO(0xaatif): I don't like this line - I'm adding it because
+            //                it's required by the simplest test vector
+            U4::new(*only).unwrap_or_default()
+        ]),
+        (flags, /* mut */ rest) => {
+            // check the flags
+            let flags =
+                EncodeKeyFlags::from_bits(*flags).ok_or(DecodeKeyError::UnrecognisedKeyFlags)?;
+            // BUG?: the previous implementation ignored this flag - perhaps it's
+            //       &-ed with the prior U4?
+            // if flags.contains(EncodeKeyFlags::TERMINATED) {
+            //     match rest.split_last() {
+            //         Some((0x10, new_rest)) => rest = new_rest,
+            //         _ => return Err(DecodeKeyError::Terminator),
+            //     }
+            // }
+
+            // treat the final byte as special...
+            let (last, rest) = match rest.split_last() {
+                Some((last, rest)) => (Some(*last), rest),
+                None => (None, &[][..]),
+            };
+
+            // ...according to the ODD flag
+            let tail = match (last, flags.contains(EncodeKeyFlags::ODD)) {
+                (None, true) => return Err(DecodeKeyError::OddZero),
+                (None, false) => Either::Left(iter::empty::<U4>()),
+                (Some(left), true) => Either::Right(Either::Left(iter::once(
+                    U4::new(left.rotate_right(4)).ok_or(DecodeKeyError::ExcessNibbleBits)?,
+                ))),
+                (Some(packed), false) => {
+                    let both = U4x2 { packed };
+                    Either::Right(Either::Right([both.left(), both.right()].into_iter()))
+                }
+            };
+
+            // parse the rest of the bytes as nibbles
+            Ok(nunny::Vec::new(
+                rest.iter()
+                    .copied()
+                    .flat_map(|packed| {
+                        let both = U4x2 { packed };
+                        [both.left(), both.right()]
+                    })
+                    .chain(tail)
+                    .collect(),
+            )
+            .expect("an empty `rest` must be caught by the Erigon special case"))
+        }
+    }
 }
 
 fn array<'a, const N: usize, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<[u8; N], E> {

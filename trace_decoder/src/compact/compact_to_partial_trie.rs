@@ -16,7 +16,7 @@ use super::compact_prestate_processing::{
 };
 use crate::{
     decoding::TrieType,
-    types::{CodeHash, HashedAccountAddr, HashedAccountAddrNibbles, TrieRootHash, EMPTY_CODE_HASH},
+    types::{CodeHash, HashedAccountAddr, TrieRootHash, EMPTY_CODE_HASH},
     utils::hash,
 };
 
@@ -127,20 +127,40 @@ impl CompactToPartialTrieExtractionOutput for StateTrieExtractionOutput {
         leaf_key: &Nibbles,
         leaf_node_data: &LeafNodeData,
     ) -> CompactParsingResult<()> {
-        process_leaf_common(
-            &mut self.state_trie,
-            curr_key,
-            leaf_key,
-            leaf_node_data,
-            |acc_data, full_k| {
-                Ok(process_account_node(
-                    acc_data,
-                    full_k,
-                    &mut self.code,
-                    &mut self.storage_tries,
-                ))
-            },
-        )
+        let full_k = curr_key.merge_nibbles(leaf_key);
+
+        let l_val = match leaf_node_data {
+            LeafNodeData::Value(v_bytes) => rlp::encode(&v_bytes.0),
+            LeafNodeData::Account(acc_data) => {
+                let code_hash = match &acc_data.account_node_code {
+                    Some(AccountNodeCode::CodeNode(c_bytes)) => {
+                        let c_hash = hash(c_bytes);
+                        self.code.insert(c_hash, c_bytes.clone());
+
+                        c_hash
+                    }
+                    Some(AccountNodeCode::HashNode(c_hash)) => *c_hash,
+                    None => EMPTY_CODE_HASH,
+                };
+
+                let s_trie = acc_data.storage_trie.clone().unwrap_or_default().clone();
+                let h_addr = HashedAccountAddr::from_slice(&full_k.bytes_be());
+
+                let storage_root = s_trie.hash();
+
+                self.storage_tries.insert(h_addr, s_trie);
+
+                rlp::encode(&AccountRlp {
+                    nonce: acc_data.nonce,
+                    balance: acc_data.balance,
+                    storage_root,
+                    code_hash,
+                })
+            }
+        };
+
+        self.state_trie.insert(full_k, l_val.to_vec())?;
+        Ok(())
     }
     fn trie(&mut self) -> &mut HashedPartialTrie {
         &mut self.state_trie
@@ -251,37 +271,5 @@ where
         NodeEntry::Hash(h) => output.process_hash(curr_key, *h),
         NodeEntry::Leaf(k, v) => output.process_leaf(curr_key, k, v),
         NodeEntry::Extension(k, c) => output.process_extension(curr_key, k, c),
-    }
-}
-
-fn process_account_node(
-    acc_data: &AccountNodeData,
-    h_addr_nibs: &HashedAccountAddrNibbles,
-    c_hash_to_code: &mut HashMap<CodeHash, Vec<u8>>,
-    h_addr_to_storage_trie: &mut HashMap<HashedAccountAddr, HashedPartialTrie>,
-) -> AccountRlp {
-    let code_hash = match &acc_data.account_node_code {
-        Some(AccountNodeCode::CodeNode(c_bytes)) => {
-            let c_hash = hash(c_bytes);
-            c_hash_to_code.insert(c_hash, c_bytes.clone());
-
-            c_hash
-        }
-        Some(AccountNodeCode::HashNode(c_hash)) => *c_hash,
-        None => EMPTY_CODE_HASH,
-    };
-
-    let s_trie = acc_data.storage_trie.clone().unwrap_or_default().clone();
-    let h_addr = HashedAccountAddr::from_slice(&h_addr_nibs.bytes_be());
-
-    let storage_root = s_trie.hash();
-
-    h_addr_to_storage_trie.insert(h_addr, s_trie);
-
-    AccountRlp {
-        nonce: acc_data.nonce,
-        balance: acc_data.balance,
-        storage_root,
-        code_hash,
     }
 }

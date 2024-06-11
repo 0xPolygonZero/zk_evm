@@ -1809,6 +1809,7 @@ dependencies = [
  "mpt_trie 0.2.1 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "nunny",
  "pretty_env_logger",
+ "primitive-types 0.12.2",
  "rlp",
  "rlp-derive",
  "serde",
