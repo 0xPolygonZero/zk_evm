@@ -557,8 +557,10 @@ slot_not_found:
 
 %macro remove_slot
     %stack (addr, key) -> (addr, key, %%after)
+    %jump(remove_slot)
 %%after:
 %endmacro
+
 /// Remove the storage key and its value from the list.
 /// Panics if the key is not in the list.
 global remove_slot:

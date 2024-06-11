@@ -109,6 +109,7 @@ sstore_after_refund:
 
     // If the value is zero, delete the slot from the storage trie.
     // stack: slot, value, kexit_info
+global debug_kexit_info:
     DUP2 ISZERO %jumpi(sstore_delete)
 
     // First we write the value to MPT data, and get a pointer to it.
@@ -132,6 +133,7 @@ sstore_noop:
     EXIT_KERNEL
 
 // Delete the slot from the storage trie.
+global debug_sstore_delete:
 sstore_delete:
     // stack: slot, value, kexit_info
     SWAP1 POP
@@ -140,5 +142,7 @@ sstore_delete:
     // stack: storage_key, kexit_info
     %address
     %addr_to_state_key
+global debug_remove_slot:
     %remove_slot
+global debug_que_pasa_por_dios_santo:
     EXIT_KERNEL
