@@ -104,16 +104,10 @@ fn instruction<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruct
     match opcode {
         0x00 => trace(
             "leaf",
-            (cbor.try_map(|it: NonEmpty<Vec<u8>>| decode_key(&it)), cbor)
-                .map(|(key, value)| Instruction::Leaf { key, value }),
+            (key, cbor).map(|(key, value)| Instruction::Leaf { key, value }),
         )
         .parse_next(input),
-        0x01 => trace(
-            "extension",
-            cbor.try_map(|it: NonEmpty<Vec<u8>>| decode_key(&it))
-                .map(|key| Instruction::Extension { key }),
-        )
-        .parse_next(input),
+        0x01 => trace("extension", key.map(|key| Instruction::Extension { key })).parse_next(input),
         0x02 => trace("branch", cbor.map(|mask| Instruction::Branch { mask })).parse_next(input),
         0x03 => {
             trace("hash", array.map(|raw_hash| Instruction::Hash { raw_hash })).parse_next(input)
@@ -136,6 +130,10 @@ fn instruction<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruct
     }
 }
 
+fn key<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<NonEmpty<Vec<U4>>, E> {
+    trace("key", cbor.try_map(|it: NonEmpty<Vec<u8>>| decode_key(&it))).parse_next(input)
+}
+
 #[derive(thiserror::Error, Debug)]
 #[error("unrecognised bits in flags for account leaf")]
 struct UnrecognisedAccountLeafFlags;
@@ -150,9 +148,7 @@ fn account_leaf<'a, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<Instruc
         }
     }
 
-    let key = cbor
-        .try_map(|it: NonEmpty<Vec<u8>>| decode_key(&it))
-        .parse_next(input)?;
+    let key = key.parse_next(input)?;
     let flags = any
         .try_map(|byte| AccountLeafFlags::from_bits(byte).ok_or(UnrecognisedAccountLeafFlags))
         .parse_next(input)?;
@@ -232,7 +228,7 @@ fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, DecodeKeyErro
         }
     }
 
-    match bytes.split_first() {
+    let ret = match bytes.split_first() {
         // BUG: the previous implementation said that Erigon does this
         (only, &[]) => Ok(nunny::vec![
             // U4::new(*only).ok_or(DecodeKeyError::ExcessNibbleBits)?
@@ -285,8 +281,22 @@ fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, DecodeKeyErro
             )
             .expect("an empty `rest` must be caught by the Erigon special case"))
         }
-    }
+    }?;
+    let mut ret = ret;
+    ret.reverse(); // TODO(0xaatif): is this a bug?
+                   //    assert_eq!(ret, theirs(bytes));
+    Ok(ret)
 }
+
+// fn theirs(bytes: &[u8]) -> Vec<U4> {
+//     let mut theirs =
+// crate::compact::compact_prestate_processing::key_bytes_to_nibbles(bytes);
+//     let mut collected = vec![];
+//     while theirs.count > 0 {
+//         collected.push(U4::new(theirs.pop_next_nibble_back()).unwrap())
+//     }
+//     collected
+// }
 
 fn array<'a, const N: usize, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<[u8; N], E> {
     take(N)

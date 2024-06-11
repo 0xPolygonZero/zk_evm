@@ -1,1 +1,1 @@
-see [winnow witness tests](../winnow_witness.rs)
+[`insta`](https://docs.rs/insta) snapshots for tests

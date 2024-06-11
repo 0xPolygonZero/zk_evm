@@ -3,25 +3,44 @@ use std::{
     iter,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{bail, Context as _};
 use either::Either;
 use evm_arithmetization_type_1::generation::mpt::AccountRlp;
-use mpt_trie_type_1::partial_trie::PartialTrie as _;
+use mpt_trie_type_1::partial_trie::{HashedPartialTrie, PartialTrie as _};
 use nunny::NonEmpty;
 
-use super::execution::{Account, Branch, Code, Extension, Hash, Leaf, Node, Value};
+use super::execution::{Account, Branch, Code, Execution, Extension, Hash, Leaf, Node, Value};
 use super::u4::U4;
 
-pub struct Visitor {
-    pub path: Vec<U4>,
-    pub state: HashMap<Vec<U4>, mpt_trie_type_1::trie_ops::ValOrHash>,
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Reshape {
+    pub state: HashedPartialTrie,
     pub code: HashSet<NonEmpty<Vec<u8>>>,
     // TODO(0xaatif): this should really be a set
-    pub storage: HashMap<primitive_types::H256, mpt_trie_type_1::partial_trie::HashedPartialTrie>,
+    pub storage: HashMap<primitive_types::H256, HashedPartialTrie>,
+}
+
+pub fn reshape(execution: Execution) -> anyhow::Result<Reshape> {
+    let mut visitor = Visitor::default();
+    visitor.visit_node(match execution {
+        Execution::Leaf(it) => Node::Leaf(it),
+        Execution::Extension(it) => Node::Extension(it),
+        Execution::Branch(it) => Node::Branch(it),
+        Execution::Empty => Node::Empty,
+    })?;
+    let Visitor { path, reshape } = visitor;
+    assert_eq!(path, Vec::new());
+    Ok(reshape)
+}
+
+#[derive(Default)]
+struct Visitor {
+    path: Vec<U4>,
+    reshape: Reshape,
 }
 
 impl Visitor {
-    pub fn with_path<T>(
+    fn with_path<T>(
         &mut self,
         path: impl IntoIterator<Item = U4>,
         f: impl FnOnce(&mut Self) -> T,
@@ -32,29 +51,35 @@ impl Visitor {
         self.path.truncate(len);
         ret
     }
-    pub fn visit_node(&mut self, it: Node) -> anyhow::Result<()> {
+    fn visit_node(&mut self, it: Node) -> anyhow::Result<()> {
         match it {
             Node::Hash(Hash { raw_hash }) => {
-                self.state.insert(
-                    self.path.clone(),
-                    mpt_trie_type_1::trie_ops::ValOrHash::Hash(raw_hash.into()),
-                );
+                self.reshape
+                    .state
+                    .insert(
+                        nibbles2nibbles(self.path.clone()),
+                        mpt_trie_type_1::trie_ops::ValOrHash::Hash(raw_hash.into()),
+                    )
+                    .context(format!(
+                        "couldn't convert save state to trie at path {:?}",
+                        self.path
+                    ))?;
                 Ok(())
             }
             Node::Leaf(it) => self.visit_leaf(it),
             Node::Extension(it) => self.visit_extension(it),
             Node::Branch(it) => self.visit_branch(it),
             Node::Code(Code { code }) => {
-                self.code.insert(code);
+                self.reshape.code.insert(code);
                 Ok(())
             }
             Node::Empty => Ok(()),
         }
     }
-    pub fn visit_extension(&mut self, Extension { key, child }: Extension) -> anyhow::Result<()> {
+    fn visit_extension(&mut self, Extension { key, child }: Extension) -> anyhow::Result<()> {
         self.with_path(key, |this| this.visit_node(*child))
     }
-    pub fn visit_branch(&mut self, Branch { children }: Branch) -> anyhow::Result<()> {
+    fn visit_branch(&mut self, Branch { children }: Branch) -> anyhow::Result<()> {
         for (ix, node) in children.into_iter().enumerate() {
             if let Some(node) = node {
                 self.with_path(
@@ -65,7 +90,7 @@ impl Visitor {
         }
         Ok(())
     }
-    pub fn visit_leaf(&mut self, Leaf { key, value }: Leaf) -> anyhow::Result<()> {
+    fn visit_leaf(&mut self, Leaf { key, value }: Leaf) -> anyhow::Result<()> {
         let key = self.path.iter().copied().chain(key).collect::<Vec<_>>();
         let value = match value {
             Either::Left(Value { raw_value }) => rlp::encode(raw_value.as_vec()),
@@ -81,7 +106,7 @@ impl Visitor {
                     Some(Either::Left(Hash { raw_hash })) => raw_hash.into(),
                     Some(Either::Right(Code { code })) => {
                         let hash = crate::utils::hash(&code);
-                        self.code.insert(code);
+                        self.reshape.code.insert(code);
                         hash
                     }
                     None => crate::utils::hash(&[]),
@@ -91,37 +116,34 @@ impl Visitor {
                         Some(it) => *it,
                         None => Node::Empty,
                     })
-                    .with_context(|| {
-                        format!(
-                            "couldn't convert account storage to trie at path {:?}",
-                            self.path
-                        )
-                    })?;
+                    .context(format!(
+                        "couldn't convert account storage to trie at path {:?}",
+                        self.path
+                    ))?;
                     let storage_root = storage.hash();
-                    self.storage.insert(storage_root, storage);
+                    self.reshape.storage.insert(storage_root, storage);
                     storage_root
                 },
             }),
         };
         // TODO(0xaatif): do consistency checks here.
-        self.state.insert(
-            key,
-            mpt_trie_type_1::trie_ops::ValOrHash::Val(value.to_vec()),
-        );
+        self.reshape
+            .state
+            .insert(
+                nibbles2nibbles(key),
+                mpt_trie_type_1::trie_ops::ValOrHash::Val(value.to_vec()),
+            )
+            .context(format!(
+                "couldn't save state to trie at path {:?}",
+                self.path
+            ))?;
         Ok(())
     }
 }
 
-pub fn node2trie(node: Node) -> anyhow::Result<mpt_trie_type_1::partial_trie::HashedPartialTrie> {
-    let mut trie = mpt_trie_type_1::partial_trie::HashedPartialTrie::default();
+fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
+    let mut trie = HashedPartialTrie::default();
     for (key, leaf) in iter_leaves(node) {
-        let key = key.into_iter().fold(
-            mpt_trie_type_1::nibbles::Nibbles::default(),
-            |mut acc, el| {
-                acc.push_nibble_back(el as u8);
-                acc
-            },
-        );
         let value = match leaf {
             IterLeaf::Hash(Hash { raw_hash }) => {
                 mpt_trie_type_1::trie_ops::ValOrHash::Hash(raw_hash.into())
@@ -133,13 +155,14 @@ pub fn node2trie(node: Node) -> anyhow::Result<mpt_trie_type_1::partial_trie::Ha
             IterLeaf::Account(_) => bail!("unexpected Account when building storage trie"),
             IterLeaf::Code(_) => bail!("unexpected Code when building storage trie"),
         };
-        trie.insert(key, value)
+
+        trie.insert(nibbles2nibbles(key), value)
             .context("couldn't insert into trie")?;
     }
     Ok(trie)
 }
 
-pub enum IterLeaf {
+enum IterLeaf {
     Hash(Hash),
     Value(Value),
     Empty,
@@ -149,7 +172,7 @@ pub enum IterLeaf {
 
 /// Visit all the leaves of [`Node`], with paths to each leaf.
 #[allow(clippy::type_complexity)]
-pub fn iter_leaves(
+fn iter_leaves(
     node: Node,
 ) -> Either<iter::Once<(Vec<U4>, IterLeaf)>, Box<dyn Iterator<Item = (Vec<U4>, IterLeaf)>>> {
     match node {
@@ -181,4 +204,14 @@ pub fn iter_leaves(
         Node::Code(it) => Either::Left(iter::once((vec![], IterLeaf::Code(it)))),
         Node::Empty => Either::Left(iter::once((vec![], IterLeaf::Empty))),
     }
+}
+
+fn nibbles2nibbles(ours: Vec<U4>) -> mpt_trie_type_1::nibbles::Nibbles {
+    ours.into_iter().fold(
+        mpt_trie_type_1::nibbles::Nibbles::default(),
+        |mut acc, el| {
+            acc.push_nibble_back(el as u8);
+            acc
+        },
+    )
 }
