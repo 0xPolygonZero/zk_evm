@@ -183,6 +183,13 @@ mod type1 {
             }
             let instructions = wire::parse(&case.bytes).unwrap();
             let executions = execution::execute(instructions).unwrap();
+            assert_eq!(executions.len(), 1);
+            let reshaped = reshape::reshape(executions.first().clone()).unwrap();
+            dbg!(&reshaped);
+            assert_eq!(
+                reshaped.state.hash(),
+                primitive_types::H256::from_slice(&case.expected_state_root)
+            )
         }
     }
 }

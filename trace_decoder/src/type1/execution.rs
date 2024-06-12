@@ -76,13 +76,10 @@ pub enum Execution {
 pub fn execute(
     instructions: impl IntoIterator<Item = Instruction>,
 ) -> anyhow::Result<NonEmpty<Vec<Execution>>> {
-    let mut instructions = instructions
-        .into_iter()
-        .collect::<std::collections::VecDeque<_>>();
     let mut witnesses = vec![];
     let mut stack = vec![];
 
-    while let Some(instruction) = instructions.pop_front() {
+    for instruction in instructions {
         match instruction {
             Instruction::EmptyRoot => stack.push(Node::Empty),
             Instruction::Hash { raw_hash } => stack.push(Node::Hash(Hash { raw_hash })),
@@ -175,18 +172,6 @@ pub fn execute(
             }
             Instruction::NewTrie => witnesses.push(finish_stack(&mut stack)?),
         }
-        println!(
-            "stack: {:?}",
-            stack.iter().cloned().map(node2node).collect::<Vec<_>>()
-        );
-        println!(
-            "instructions: {:?}",
-            instructions
-                .iter()
-                .cloned()
-                .map(instruction2instruction)
-                .collect::<Vec<_>>()
-        );
     }
     witnesses.push(finish_stack(&mut stack)?);
 
@@ -216,83 +201,4 @@ fn pop2<T>(v: &mut Vec<T>) -> (Option<T>, Option<T>) {
     let right = v.pop();
     let left = v.pop();
     (left, right)
-}
-
-fn instruction2instruction(
-    ours: Instruction,
-) -> crate::compact::compact_prestate_processing::Instruction {
-    use crate::compact::compact_prestate_processing::Instruction as Theirs;
-    match ours {
-        Instruction::Leaf { key, value } => Theirs::Leaf(nibbles2nibbles(key.into()), value.into()),
-        Instruction::Extension { key } => Theirs::Extension(nibbles2nibbles(key.into())),
-        Instruction::Branch { mask } => Theirs::Branch(mask.try_into().unwrap()),
-        Instruction::Hash { raw_hash } => Theirs::Hash(raw_hash.into()),
-        Instruction::Code { raw_code } => Theirs::Code(raw_code.into()),
-        Instruction::AccountLeaf {
-            key,
-            nonce,
-            balance,
-            has_code,
-            has_storage,
-        } => Theirs::AccountLeaf(
-            nibbles2nibbles(key.into()),
-            nonce.unwrap_or_default().into(),
-            balance.unwrap_or_default(),
-            has_code,
-            has_storage,
-        ),
-        Instruction::EmptyRoot => Theirs::EmptyRoot,
-        Instruction::NewTrie => todo!(),
-    }
-}
-
-fn nibbles2nibbles(ours: Vec<U4>) -> mpt_trie_type_1::nibbles::Nibbles {
-    ours.into_iter().fold(
-        mpt_trie_type_1::nibbles::Nibbles::default(),
-        |mut acc, el| {
-            acc.push_nibble_front(el as u8);
-            acc
-        },
-    )
-}
-
-fn node2node(ours: Node) -> crate::compact::compact_prestate_processing::NodeEntry {
-    use crate::compact::compact_prestate_processing::{
-        AccountNodeCode, AccountNodeData, LeafNodeData, NodeEntry as Theirs, ValueNodeData,
-    };
-    match ours {
-        Node::Hash(Hash { raw_hash }) => Theirs::Hash(raw_hash.into()),
-        Node::Leaf(Leaf { key, value }) => Theirs::Leaf(
-            nibbles2nibbles(key.into()),
-            match value {
-                Either::Left(Value { raw_value }) => {
-                    LeafNodeData::Value(ValueNodeData(raw_value.into()))
-                }
-                Either::Right(Account {
-                    nonce,
-                    balance,
-                    storage,
-                    code,
-                }) => LeafNodeData::Account(AccountNodeData {
-                    nonce: nonce.into(),
-                    balance,
-                    storage_trie: storage.map(|it| super::reshape::node2trie(*it).unwrap()),
-                    account_node_code: code.map(|it| match it {
-                        Either::Left(Hash { raw_hash }) => {
-                            AccountNodeCode::HashNode(raw_hash.into())
-                        }
-                        Either::Right(Code { code }) => AccountNodeCode::CodeNode(code.into()),
-                    }),
-                }),
-            },
-        ),
-        Node::Extension(Extension { key, child }) => {
-            Theirs::Extension(nibbles2nibbles(key.into()), Box::new(node2node(*child)))
-        }
-        Node::Branch(Branch { children }) => {
-            Theirs::Branch(children.map(|it| it.map(|it| Box::new(node2node(*it)))))
-        }
-        Node::Code(Code { code }) => Theirs::Code(code.into()),
-        Node::Empty => Theirs::Empty,
-    }
 }

@@ -61,7 +61,7 @@ impl Visitor {
                     .state
                     .insert(
                         nibbles2nibbles(self.path.clone()),
-                        ValOrHash::Hash(raw_hash.into()),
+                        ValOrHash::Hash(raw_hash.into()), // expected this to be a value..
                     )
                     .context(format!(
                         "couldn't convert save state to trie at path {:?}",
@@ -141,11 +141,26 @@ impl Visitor {
     }
 }
 
-pub fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
+fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
     let mut visitor = Node2TrieVisitor::default();
     visitor.visit_node(node)?;
     let Node2TrieVisitor { path, trie } = visitor;
     assert_eq!(path, vec![]);
+
+    // let mut trie = HashedPartialTrie::default();
+    // for (k, v) in iter_leaves(node) {
+    //     trie.insert(
+    //         nibbles2nibbles(k),
+    //         match v {
+    //             IterLeaf::Hash(Hash { raw_hash }) =>
+    // ValOrHash::Hash(raw_hash.into()),             IterLeaf::Value(Value {
+    // raw_value }) => ValOrHash::Val(raw_value.into()),
+    // IterLeaf::Empty => continue,             IterLeaf::Account(_) =>
+    // bail!("unexpected Account node in storage trie"),
+    // IterLeaf::Code(_) => bail!("unexpected Code node in storage trie"),
+    //         },
+    //     )?;
+    // }
     Ok(trie)
 }
 
