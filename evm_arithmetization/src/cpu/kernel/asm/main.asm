@@ -45,9 +45,6 @@ global hash_initial_tries:
     // can check the value provided by the prover.
     // The trie data segment is already written by the linked lists
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
-    %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
-global debug_check_hash:
-    %assert_eq
 
     %set_initial_tries
     %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
