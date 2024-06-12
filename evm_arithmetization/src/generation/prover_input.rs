@@ -462,6 +462,7 @@ impl<F: Field> GenerationState<F> {
     fn run_next_insert_slot(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
+        log::debug!("le storage ll = {:?}", self.get_storage_linked_list());
         if let Some((([.., pred_ptr], _), _)) = self
             .get_storage_linked_list()?
             .zip(self.get_storage_linked_list()?.skip(1))

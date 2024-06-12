@@ -385,11 +385,11 @@ global before_jumpi:
     DUP1
     %add_const(4)
     MLOAD_GENERAL
-    %jump_neq_const(@U256_MAX, slot_found)
+    %jump_neq_const(@U256_MAX, slot_found_write)
     // The storage key is not in the list.
     PANIC
 
-slot_found:
+slot_found_write:
     // The slot was already in the list
     // stack: pred_ptr, addr, key, payload_ptr, retdest
     // Load the the payload pointer and access counter
@@ -549,16 +549,41 @@ global search_slot:
     DUP1
     %add_const(4)
     MLOAD_GENERAL
-    %jump_neq_const(@U256_MAX, slot_found)
+    %jump_neq_const(@U256_MAX, slot_found_no_write)
     // The storage key is not in the list.
     PANIC
 
+global debug_slot_not_found:
 slot_not_found:    
 // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
     %pop4
     SWAP1
     PUSH 1
     SWAP1
+    JUMP
+
+slot_found_no_write:
+    // The slot was already in the list
+    // stack: pred_ptr, addr, key, payload_ptr, retdest
+    // Load the the payload pointer and access counter
+    %add_const(2)
+    DUP1
+    MLOAD_GENERAL
+    // stack: orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
+    SWAP1
+    %increment
+    DUP1
+    MLOAD_GENERAL
+    %increment
+    // stack: access_ctr + 1, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest
+    SWAP1
+    DUP2
+    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
+    MSTORE_GENERAL
+    // stack: access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
+    // If access_ctr == 1 then this it's a cold access 
+    %eq_const(1)
+    %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
 
 

@@ -170,24 +170,28 @@ delete_removed_slots:
     // If we are here we have deleted all the slots for this key
     %stack (addr, root_ptr, storage_ptr_ptr, retdest) -> (retdest, root_ptr, storage_ptr_ptr)
     JUMP
+global debug_maybe_delete_this_slot:
 maybe_delete_this_slot:
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     %next_slot
     %eq_const(@U256_MAX) // Check if the node was deleted
+global debug_shoul_we_delete_this_slot:
     %jumpi(delete_this_slot)
     // The slot was not deleted, so we skip it.
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     SWAP2
-    %next_slot
+    %add_const(5)
     SWAP2
     %jump(delete_removed_slots)
+global debug_delete_this_slot:
 delete_this_slot:
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     %increment
     MLOAD_GENERAL
     %stack (key, addr, root_ptr, storage_ptr_ptr) -> (root_ptr, 64, key, after_mpt_delete_slot, addr, storage_ptr_ptr)
+global debug_before_deleting:
     %jump(mpt_delete)
 after_mpt_delete_slot:
     // stack: root_ptr', addr, storage_ptr_ptr
