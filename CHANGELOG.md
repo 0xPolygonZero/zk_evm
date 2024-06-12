@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Clone` to a few error types in `mpt_trie` ([#259](https://github.com/0xPolygonZero/zk_evm/pull/259))
 - cleanup: remove outdated segment ([#262](https://github.com/0xPolygonZero/zk_evm/pull/262))
 - fix: add G2 subgroup check for `ECPAIRING` ([#268](https://github.com/0xPolygonZero/zk_evm/pull/268))
+- add partial trie builder ([#258](https://github.com/0xPolygonZero/zk_evm/pull/258))
 
 ## [0.3.1] - 2024-04-22
 
