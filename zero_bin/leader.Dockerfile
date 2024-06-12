@@ -1,7 +1,6 @@
 FROM rustlang/rust:nightly-bullseye-slim as builder
 
-# Install jemalloc
-RUN apt-get update && apt-get install -y libjemalloc2 libjemalloc-dev make
+RUN apt-get update && apt-get install -y libjemalloc2 libjemalloc-dev make libssl-dev pkg-config
 
 RUN \
   mkdir -p ops/src     && touch ops/src/lib.rs && \
@@ -22,7 +21,7 @@ COPY leader/Cargo.toml ./leader/Cargo.toml
 
 COPY ./rust-toolchain.toml ./
 
-RUN cargo build --release --bin leader 
+RUN cargo build --release --bin leader
 
 COPY ops ./ops
 COPY common ./common
@@ -36,7 +35,7 @@ RUN \
   touch prover/src/lib.rs && \
   touch leader/src/main.rs
 
-RUN cargo build --release --bin leader 
+RUN cargo build --release --bin leader
 
 FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y ca-certificates libjemalloc2
