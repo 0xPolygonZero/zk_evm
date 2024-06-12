@@ -162,6 +162,7 @@ mod type1 {
     #[test]
     fn test() {
         use insta::assert_debug_snapshot;
+        use pretty_assertions::assert_eq;
 
         #[derive(serde::Deserialize)]
         struct Case {
@@ -181,15 +182,153 @@ mod type1 {
             if ix != 1 {
                 continue;
             }
+
+            let (their_instructions, their_execution, their_reshaped) =
+                crate::compact::compact_prestate_processing::testme(&case.bytes);
+
             let instructions = wire::parse(&case.bytes).unwrap();
+
+            assert_eq!(
+                their_instructions,
+                instructions
+                    .clone()
+                    .into_iter()
+                    .map(instruction2instruction)
+                    .collect::<Vec<_>>(),
+            );
+
             let executions = execution::execute(instructions).unwrap();
             assert_eq!(executions.len(), 1);
-            let reshaped = reshape::reshape(executions.first().clone()).unwrap();
+            let execution = executions.first().clone();
+
+            assert_eq!(their_execution, execution2node(execution.clone()));
+
+            let reshaped = reshape::reshape(execution).unwrap();
             dbg!(&reshaped);
             assert_eq!(
                 reshaped.state.hash(),
                 primitive_types::H256::from_slice(&case.expected_state_root)
             )
+        }
+    }
+
+    fn instruction2instruction(
+        ours: wire::Instruction,
+    ) -> crate::compact::compact_prestate_processing::Instruction {
+        use wire::Instruction;
+
+        use crate::compact::compact_prestate_processing::Instruction as Theirs;
+        match ours {
+            Instruction::Leaf { key, value } => {
+                Theirs::Leaf(nibbles2nibbles(key.into()), value.into())
+            }
+            Instruction::Extension { key } => Theirs::Extension(nibbles2nibbles(key.into())),
+            Instruction::Branch { mask } => Theirs::Branch(mask.try_into().unwrap()),
+            Instruction::Hash { raw_hash } => Theirs::Hash(raw_hash.into()),
+            Instruction::Code { raw_code } => Theirs::Code(raw_code.into()),
+            Instruction::AccountLeaf {
+                key,
+                nonce,
+                balance,
+                has_code,
+                has_storage,
+            } => Theirs::AccountLeaf(
+                nibbles2nibbles(key.into()),
+                nonce.unwrap_or_default().into(),
+                balance.unwrap_or_default(),
+                has_code,
+                has_storage,
+            ),
+            Instruction::EmptyRoot => Theirs::EmptyRoot,
+            Instruction::NewTrie => todo!(),
+        }
+    }
+
+    #[test]
+    fn nibble_test() {
+        macro_rules! u4 {
+            ($expr:expr) => {{
+                use $crate::type1::u4::U4;
+                const CONST: U4 = match U4::new($expr) {
+                    Some(it) => it,
+                    None => panic!(),
+                };
+                CONST
+            }};
+        }
+
+        let (a, b, c) = (u4!(1), u4!(2), u4!(3));
+        let mut ours = vec![a, b];
+        ours.splice(0..0, vec![c]);
+        // ours.append(&mut vec![c]);
+        let ours = nibbles2nibbles(ours);
+        let theirs = nibbles2nibbles(vec![a, b]).merge_nibbles(&nibbles2nibbles(vec![c]));
+        assert_eq!(ours, theirs)
+    }
+
+    fn nibbles2nibbles(ours: Vec<u4::U4>) -> mpt_trie_type_1::nibbles::Nibbles {
+        ours.into_iter().fold(
+            mpt_trie_type_1::nibbles::Nibbles::default(),
+            |mut acc, el| {
+                acc.push_nibble_front(el as u8);
+                acc
+            },
+        )
+    }
+
+    fn execution2node(
+        ours: execution::Execution,
+    ) -> crate::compact::compact_prestate_processing::NodeEntry {
+        use execution::*;
+        node2node(match ours {
+            Execution::Leaf(it) => Node::Leaf(it),
+            Execution::Extension(it) => Node::Extension(it),
+            Execution::Branch(it) => Node::Branch(it),
+            Execution::Empty => Node::Empty,
+        })
+    }
+
+    fn node2node(ours: execution::Node) -> crate::compact::compact_prestate_processing::NodeEntry {
+        use either::Either;
+        use execution::*;
+
+        use crate::compact::compact_prestate_processing::{
+            AccountNodeCode, AccountNodeData, LeafNodeData, NodeEntry as Theirs, ValueNodeData,
+        };
+        match ours {
+            Node::Hash(Hash { raw_hash }) => Theirs::Hash(raw_hash.into()),
+            Node::Leaf(Leaf { key, value }) => Theirs::Leaf(
+                nibbles2nibbles(key.into()),
+                match value {
+                    Either::Left(Value { raw_value }) => {
+                        LeafNodeData::Value(ValueNodeData(raw_value.into()))
+                    }
+                    Either::Right(Account {
+                        nonce,
+                        balance,
+                        storage,
+                        code,
+                    }) => LeafNodeData::Account(AccountNodeData {
+                        nonce: nonce.into(),
+                        balance,
+                        storage_trie: storage.map(|it| reshape::node2trie(*it).unwrap()),
+                        account_node_code: code.map(|it| match it {
+                            Either::Left(Hash { raw_hash }) => {
+                                AccountNodeCode::HashNode(raw_hash.into())
+                            }
+                            Either::Right(Code { code }) => AccountNodeCode::CodeNode(code.into()),
+                        }),
+                    }),
+                },
+            ),
+            Node::Extension(Extension { key, child }) => {
+                Theirs::Extension(nibbles2nibbles(key.into()), Box::new(node2node(*child)))
+            }
+            Node::Branch(Branch { children }) => {
+                Theirs::Branch(children.map(|it| it.map(|it| Box::new(node2node(*it)))))
+            }
+            Node::Code(Code { code }) => Theirs::Code(code.into()),
+            Node::Empty => Theirs::Empty,
         }
     }
 }

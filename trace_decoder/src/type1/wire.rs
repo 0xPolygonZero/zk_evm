@@ -284,19 +284,8 @@ fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, DecodeKeyErro
     }?;
     let mut ret = ret;
     ret.reverse(); // TODO(0xaatif): is this a bug?
-                   //    assert_eq!(ret, theirs(bytes));
     Ok(ret)
 }
-
-// fn theirs(bytes: &[u8]) -> Vec<U4> {
-//     let mut theirs =
-// crate::compact::compact_prestate_processing::key_bytes_to_nibbles(bytes);
-//     let mut collected = vec![];
-//     while theirs.count > 0 {
-//         collected.push(U4::new(theirs.pop_next_nibble_back()).unwrap())
-//     }
-//     collected
-// }
 
 fn array<'a, const N: usize, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<[u8; N], E> {
     take(N)

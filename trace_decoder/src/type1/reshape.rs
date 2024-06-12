@@ -13,7 +13,7 @@ use mpt_trie_type_1::{
 use nunny::NonEmpty;
 
 use super::execution::{Account, Branch, Code, Execution, Extension, Hash, Leaf, Node, Value};
-use super::u4::U4;
+use super::{nibbles2nibbles, u4::U4};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Reshape {
@@ -55,18 +55,23 @@ impl Visitor {
         ret
     }
     fn visit_node(&mut self, it: Node) -> anyhow::Result<()> {
+        println!(
+            "{:?}:\n\t{:?}",
+            super::node2node(it.clone()),
+            self.reshape.state
+        );
         match it {
             Node::Hash(Hash { raw_hash }) => {
-                self.reshape
-                    .state
-                    .insert(
-                        nibbles2nibbles(self.path.clone()),
-                        ValOrHash::Hash(raw_hash.into()), // expected this to be a value..
-                    )
-                    .context(format!(
-                        "couldn't convert save state to trie at path {:?}",
-                        self.path
-                    ))?;
+                // BUG HERE
+                insert(
+                    &mut self.reshape.state,
+                    self.path.clone(),
+                    ValOrHash::Hash(raw_hash.into()),
+                )
+                .context(format!(
+                    "couldn't convert save state to trie at path {:?}",
+                    self.path
+                ))?;
                 Ok(())
             }
             Node::Leaf(it) => self.visit_leaf(it),
@@ -94,7 +99,12 @@ impl Visitor {
         Ok(())
     }
     fn visit_leaf(&mut self, Leaf { key, value }: Leaf) -> anyhow::Result<()> {
-        let key = self.path.iter().copied().chain(key).collect::<Vec<_>>();
+        let key = self
+            .path
+            .iter()
+            .copied()
+            .chain(key.into_iter().rev())
+            .collect();
         let value = match value {
             Either::Left(Value { raw_value }) => rlp::encode(raw_value.as_vec()),
             Either::Right(Account {
@@ -130,18 +140,21 @@ impl Visitor {
             }),
         };
         // TODO(0xaatif): do consistency checks here.
-        self.reshape
-            .state
-            .insert(nibbles2nibbles(key), ValOrHash::Val(value.to_vec()))
-            .context(format!(
-                "couldn't save state to trie at path {:?}",
-                self.path
-            ))?;
+        insert(&mut self.reshape.state, key, ValOrHash::Val(value.to_vec())).context(format!(
+            "couldn't save state to trie at path {:?}",
+            self.path
+        ))?;
         Ok(())
     }
 }
 
-fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
+fn insert(trie: &mut HashedPartialTrie, k: Vec<U4>, v: ValOrHash) -> anyhow::Result<()> {
+    eprintln!("k = {:?}, v = {:?}", k, v);
+    trie.insert(nibbles2nibbles(k).reverse(), v)?;
+    Ok(())
+}
+
+pub fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
     let mut visitor = Node2TrieVisitor::default();
     visitor.visit_node(node)?;
     let Node2TrieVisitor { path, trie } = visitor;
@@ -267,14 +280,4 @@ fn iter_leaves(
         Node::Code(it) => Either::Left(iter::once((vec![], IterLeaf::Code(it)))),
         Node::Empty => Either::Left(iter::once((vec![], IterLeaf::Empty))),
     }
-}
-
-fn nibbles2nibbles(ours: Vec<U4>) -> mpt_trie_type_1::nibbles::Nibbles {
-    ours.into_iter().fold(
-        mpt_trie_type_1::nibbles::Nibbles::default(),
-        |mut acc, el| {
-            acc.push_nibble_front(el as u8);
-            acc
-        },
-    )
 }

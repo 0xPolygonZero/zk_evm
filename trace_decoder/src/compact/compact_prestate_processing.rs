@@ -248,7 +248,7 @@ impl From<Instruction> for WitnessEntry {
 }
 
 /// A node witness entry.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeEntry {
     /// A branch node.
     Branch([Option<Box<NodeEntry>>; 16]),
@@ -278,7 +278,7 @@ impl Display for NodeEntry {
 }
 
 /// A value of a node data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ValueNodeData(pub Vec<u8>);
 
 impl From<Vec<u8>> for ValueNodeData {
@@ -288,7 +288,7 @@ impl From<Vec<u8>> for ValueNodeData {
 }
 
 /// A leaf node data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LeafNodeData {
     /// A value node.
     Value(ValueNodeData),
@@ -297,7 +297,7 @@ pub enum LeafNodeData {
 }
 
 /// An account node code.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AccountNodeCode {
     /// A code node.
     CodeNode(Vec<u8>),
@@ -318,7 +318,7 @@ impl From<TrieRootHash> for AccountNodeCode {
 }
 
 /// An account node data.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AccountNodeData {
     /// The nonce of the account.
     pub nonce: Nonce,
@@ -386,42 +386,6 @@ impl ParserState {
         let p_state = Self { entries };
 
         Ok((header, p_state))
-    }
-
-    // TODO: Move behind a feature flag...
-    fn create_and_extract_header_debug(
-        witness_bytes_raw: Vec<u8>,
-    ) -> CompactParsingResult<(Header, Self)> {
-        let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
-        let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
-
-        let p_state = Self { entries };
-
-        Ok((header, p_state))
-    }
-
-    fn parse(mut self) -> CompactParsingResult<StateTrieExtractionOutput> {
-        let mut entry_buf = Vec::new();
-
-        loop {
-            let num_rules_applied = self.apply_rules_to_witness_entries(&mut entry_buf)?;
-
-            if num_rules_applied == 0 {
-                break;
-            }
-        }
-
-        let res = match self.entries.len() {
-            1 => create_partial_trie_from_remaining_witness_elem(self.entries.pop().unwrap()),
-
-            // Case for when nothing except the header is passed in.
-            0 => Ok(StateTrieExtractionOutput::default()),
-            _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
-                self.entries,
-            )),
-        }?;
-
-        Ok(res)
     }
 
     fn apply_rules_to_witness_entries(
@@ -1259,11 +1223,43 @@ pub struct ProcessedCompactOutput {
     pub witness_out: StateTrieExtractionOutput,
 }
 
-/// Processes the compact prestate into the trie format of `mpt_trie`.
-pub fn process_compact_prestate(
-    state: TrieCompact,
-) -> CompactParsingResult<ProcessedCompactOutput> {
-    process_compact_prestate_common(state, ParserState::create_and_extract_header)
+pub fn testme(bytes: &[u8]) -> (Vec<Instruction>, NodeEntry, StateTrieExtractionOutput) {
+    let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes.to_vec());
+    let (_header, entries) = witness_bytes
+        .process_into_instructions_and_header()
+        .unwrap();
+
+    let mut parser = ParserState { entries };
+
+    let instructions = parser
+        .entries
+        .intern
+        .iter()
+        .cloned()
+        .map(|it| it.into_instruction().unwrap())
+        .collect::<Vec<_>>();
+
+    let mut entry_buf = Vec::new();
+
+    loop {
+        let num_rules_applied = parser
+            .apply_rules_to_witness_entries(&mut entry_buf)
+            .unwrap();
+
+        if num_rules_applied == 0 {
+            break;
+        }
+    }
+
+    match parser.entries.len() {
+        1 => {
+            let execution = parser.entries.pop().unwrap().into_node().unwrap();
+            let reshaped =
+                create_partial_trie_from_remaining_witness_elem(execution.clone().into()).unwrap();
+            (instructions, execution, reshaped)
+        }
+        _ => panic!(),
+    }
 }
 
 /// Processes the compact prestate into the trie format of `mpt_trie`. Also
@@ -1272,15 +1268,33 @@ pub fn process_compact_prestate(
 pub fn process_compact_prestate_debug(
     state: TrieCompact,
 ) -> CompactParsingResult<ProcessedCompactOutput> {
-    process_compact_prestate_common(state, ParserState::create_and_extract_header_debug)
-}
+    let witness_bytes_raw = state.0;
+    let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(witness_bytes_raw);
+    let (header, instructions) = witness_bytes.process_into_instructions_and_header()?;
 
-fn process_compact_prestate_common(
-    state: TrieCompact,
-    create_and_extract_header_f: fn(Vec<u8>) -> CompactParsingResult<(Header, ParserState)>,
-) -> CompactParsingResult<ProcessedCompactOutput> {
-    let (header, parser) = create_and_extract_header_f(state.0)?;
-    let witness_out = parser.parse()?;
+    let mut parser = ParserState {
+        entries: instructions,
+    };
+
+    let mut entry_buf = Vec::new();
+
+    loop {
+        let num_rules_applied = parser.apply_rules_to_witness_entries(&mut entry_buf)?;
+
+        if num_rules_applied == 0 {
+            break;
+        }
+    }
+
+    let witness_out = match parser.entries.len() {
+        1 => create_partial_trie_from_remaining_witness_elem(parser.entries.pop().unwrap()),
+
+        // Case for when nothing except the header is passed in.
+        0 => Ok(StateTrieExtractionOutput::default()),
+        _ => Err(CompactParsingError::NonSingleEntryAfterProcessing(
+            parser.entries,
+        )),
+    }?;
 
     let out = ProcessedCompactOutput {
         header,
@@ -1292,6 +1306,7 @@ fn process_compact_prestate_common(
 
 // TODO: Move behind a feature flag just used for debugging (but probably not
 // `debug`)...
+#[cfg(test)]
 pub fn parse_just_to_instructions(bytes: Vec<u8>) -> CompactParsingResult<Vec<Instruction>> {
     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes);
     let (_, entries) = witness_bytes.process_into_instructions_and_header()?;
