@@ -27,10 +27,10 @@ use crate::{
     },
     types::{
         HashedAccountAddr, HashedNodeAddr, HashedStorageAddr, HashedStorageAddrNibbles,
-        OtherBlockData, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
-        ZERO_STORAGE_SLOT_VAL_RLPED,
+        TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED, ZERO_STORAGE_SLOT_VAL_RLPED,
     },
     utils::{hash, optional_field, optional_field_hex, update_val_if_some},
+    OtherBlockData,
 };
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon

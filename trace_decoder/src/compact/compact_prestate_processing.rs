@@ -26,8 +26,8 @@ use super::compact_to_partial_trie::{
 };
 use crate::{
     decoding::TrieType,
-    trace_protocol::TrieCompact,
     types::{HashedAccountAddr, TrieRootHash},
+    TrieCompact,
 };
 
 /// Result alias for any error that can occur when processing encoded compact

@@ -52,24 +52,3 @@ pub(crate) const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
 
 // This is just `rlp(0)`.
 pub(crate) const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
-
-/// Other data that is needed for proof gen.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct OtherBlockData {
-    /// Data that is specific to the block.
-    pub b_data: BlockLevelData,
-    /// State trie root hash at the checkpoint.
-    pub checkpoint_state_trie_root: TrieRootHash,
-}
-
-/// Data that is specific to a block and is constant for all txns in a given
-/// block.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct BlockLevelData {
-    /// All block data excluding block hashes and withdrawals.
-    pub b_meta: BlockMetadata,
-    /// Block hashes: the previous 256 block hashes and the current block hash.
-    pub b_hashes: BlockHashes,
-    /// Block withdrawal addresses and values.
-    pub withdrawals: Vec<(Address, U256)>,
-}

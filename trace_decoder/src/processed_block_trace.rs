@@ -6,25 +6,22 @@ use ethereum_types::{Address, H256, U256};
 use evm_arithmetization_type_1::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization_type_1::GenerationInputs;
 use mpt_trie_type_1::nibbles::Nibbles;
-use mpt_trie_type_1::partial_trie::{HashedPartialTrie, PartialTrie};
+use mpt_trie_type_1::partial_trie::PartialTrie;
 
 use crate::compact::compact_prestate_processing::{
-    process_compact_prestate_debug, CompactParsingError, CompactParsingResult,
-    PartialTriePreImages, ProcessedCompactOutput,
+    process_compact_prestate_debug, CompactParsingError, PartialTriePreImages,
+    ProcessedCompactOutput,
 };
 use crate::decoding::{TraceParsingError, TraceParsingResult};
-use crate::trace_protocol::{
-    BlockTrace, BlockTraceTriePreImages, CombinedPreImages, ContractCodeUsage,
-    SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages, TrieCompact,
-    TxnInfo,
-};
 use crate::types::{
     CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-    OtherBlockData, TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
 };
+use crate::OtherBlockData;
+use crate::{BlockTrace, BlockTraceTriePreImages, ContractCodeUsage, TxnInfo};
 
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
@@ -277,8 +274,8 @@ impl TxnInfo {
                     ContractCodeUsage::Write(c_bytes) => {
                         let c_hash = hash(&c_bytes);
 
-                        contract_code_accessed.insert(c_hash, c_bytes.0.clone());
-                        code_hash_resolver.insert_code(c_hash, c_bytes.0);
+                        contract_code_accessed.insert(c_hash, c_bytes.clone());
+                        code_hash_resolver.insert_code(c_hash, c_bytes);
                     }
                 }
             }
