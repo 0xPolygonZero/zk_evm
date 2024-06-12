@@ -197,6 +197,7 @@ pub(crate) fn read_state_rlp_value(
         get_trie(memory, slice[2].unwrap_or_default().as_usize(), |_, x| {
             Ok(rlp::encode(&read_storage_trie_value(x)).to_vec())
         })?;
+    log::debug!("storage_trie = {:#?}", storage_trie);
     let account = AccountRlp {
         nonce: slice[0].unwrap_or_default(),
         balance: slice[1].unwrap_or_default(),

@@ -114,11 +114,18 @@ global debug_kexit_info:
 
     // First we write the value to MPT data, and get a pointer to it.
     %get_trie_data_size
+global debug_value_ptr:
     // stack: value_ptr, slot, value, kexit_info
     SWAP2
     // stack: value, slot, value_ptr, kexit_info
     %append_to_trie_data
     // stack: slot, value_ptr, kexit_info
+
+    // DEBUG
+    DUP2 %mload_trie_data
+global debug_the_value:
+    POP
+    // ENDDEBUG
 
     %slot_to_storage_key
     %address

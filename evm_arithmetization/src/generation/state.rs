@@ -210,6 +210,27 @@ pub(crate) trait State<F: Field> {
         let checkpoint = self.checkpoint();
         let result = self.try_perform_instruction();
 
+        {
+            if self.get_clock() == 78246 {
+                let state_trie_ptr = u256_to_usize(
+                    self.get_generation_state()
+                        .memory
+                        .read_global_metadata(GlobalMetadata::StateTrieRoot),
+                )
+                .map_err(|_| anyhow!("State trie pointer is too large to fit in a usize."))?;
+                log::debug!(
+                    "Final state trie: {:?}",
+                    get_state_trie::<HashedPartialTrie>(
+                        &self.get_generation_state().memory,
+                        state_trie_ptr
+                    )
+                );
+                log::debug!(
+                    "storage linked list = {:?}",
+                    self.get_generation_state().get_storage_linked_list()
+                )
+            }
+        }
         match result {
             Ok(op) => {
                 self.apply_ops(checkpoint);

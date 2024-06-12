@@ -15,6 +15,7 @@ global mpt_delete:
     DUP1 %eq_const(@MPT_NODE_EXTENSION) %jumpi(mpt_delete_extension)
     DUP1 %eq_const(@MPT_NODE_LEAF)      %jumpi(mpt_delete_leaf)
          %eq_const(@MPT_NODE_EMPTY)     %jumpi(panic) // This should never happen.
+         
     PANIC
 
 mpt_delete_leaf:

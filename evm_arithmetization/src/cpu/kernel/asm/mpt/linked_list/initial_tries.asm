@@ -39,6 +39,7 @@ skip:
     %jump(mpt_set_payload)
 %%after:
     // We store account_ptr_ptr - 1, i.e. a pointer to the first node not in the initial state
+    %decrement
     %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
     POP
 %endmacro

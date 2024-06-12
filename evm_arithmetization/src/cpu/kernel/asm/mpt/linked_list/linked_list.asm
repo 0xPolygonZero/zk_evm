@@ -338,7 +338,8 @@ global remove_account:
     %add_const(@SEGMENT_STORAGE_LINKED_LIST)
 %endmacro
 
-/// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present.
+/// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present,
+/// or modify its payload if it was already present.
 /// Return `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 global insert_slot:
@@ -396,6 +397,11 @@ slot_found:
     DUP1
     MLOAD_GENERAL
     // stack: orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
+    DUP2
+    DUP6
+global debug_store_new_payload:
+    MSTORE_GENERAL // Store the new payload
+
     SWAP1
     %increment
     DUP1
