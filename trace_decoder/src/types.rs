@@ -1,16 +1,10 @@
-use ethereum_types::{Address, H256, U256};
-use evm_arithmetization_type_1::proof::{BlockHashes, BlockMetadata};
+use ethereum_types::{H256, U256};
 use mpt_trie_type_1::nibbles::Nibbles;
-use serde::{Deserialize, Serialize};
 
-/// A type alias for `[`[`U256`]`; 8]` of a bloom filter.
-pub type Bloom = [U256; 8];
 /// A type alias for [`H256`] of a code hash.
 pub type CodeHash = H256;
 /// A type alias for [`H256`] of an account address's hash.
 pub type HashedAccountAddr = H256;
-/// A type alias for [`Nibbles`] of an account address's hash.
-pub type HashedAccountAddrNibbles = Nibbles;
 /// A type alias for [`H256`] of a node address's hash.
 pub type HashedNodeAddr = H256;
 /// A type alias for [`H256`] of a storage address's hash.
@@ -19,17 +13,12 @@ pub type HashedStorageAddr = H256;
 pub type HashedStorageAddrNibbles = Nibbles;
 /// A type alias for [`H256`] of a storage address.
 pub type StorageAddr = H256;
-/// A type alias for [`H256`] of a storage address's nibbles.
-pub type StorageAddrNibbles = H256;
 /// A type alias for [`U256`] of a storage value.
 pub type StorageVal = U256;
 /// A type alias for [`H256`] of a trie root hash.
 pub type TrieRootHash = H256;
 /// A type alias for [`usize`] of a transaction's index within a block.
 pub type TxnIdx = usize;
-
-/// A function which turns a code hash into bytes.
-pub trait CodeHashResolveFunc = Fn(&CodeHash) -> Vec<u8>;
 
 // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 pub(crate) const EMPTY_CODE_HASH: H256 = H256([

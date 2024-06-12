@@ -155,81 +155,21 @@ pub fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
                     ValOrHash::Val(rlp::encode(raw_value.as_vec()).to_vec())
                 }
                 IterLeaf::Empty => continue,
-                IterLeaf::Account(_) => bail!("unexpected Account node in storage trie"),
-                IterLeaf::Code(_) => bail!("unexpected Code node in storage trie"),
+                IterLeaf::Account => bail!("unexpected Account node in storage trie"),
+                IterLeaf::Code => bail!("unexpected Code node in storage trie"),
             },
         )?;
     }
     Ok(trie)
 }
 
-#[derive(Default)]
-struct Node2TrieVisitor {
-    path: Vec<U4>,
-    trie: HashedPartialTrie,
-}
-
-impl Node2TrieVisitor {
-    fn with_path<T>(
-        &mut self,
-        path: impl IntoIterator<Item = U4>,
-        f: impl FnOnce(&mut Self) -> T,
-    ) -> T {
-        let len = self.path.len();
-        self.path.extend(path);
-        let ret = f(self);
-        self.path.truncate(len);
-        ret
-    }
-    fn visit_node(&mut self, node: Node) -> anyhow::Result<()> {
-        match node {
-            Node::Branch(Branch { children }) => {
-                for (ix, child) in children.into_iter().enumerate() {
-                    if let Some(child) = child {
-                        self.with_path(
-                            iter::once(U4::new(ix.try_into().unwrap()).unwrap()),
-                            |this| this.visit_node(*child),
-                        )?;
-                    }
-                }
-                Ok(())
-            }
-            Node::Code(_) => bail!("unexpected Code when building storage trie"),
-            Node::Hash(Hash { raw_hash }) => {
-                self.trie.insert(
-                    nibbles2nibbles(self.path.clone()),
-                    ValOrHash::Hash(raw_hash.into()),
-                )?;
-                Ok(())
-            }
-            Node::Leaf(Leaf {
-                key,
-                value: Either::Left(Value { raw_value }),
-            }) => self.with_path(key, |this| {
-                this.trie.insert(
-                    nibbles2nibbles(this.path.clone()),
-                    rlp::encode(raw_value.as_vec()).to_vec(),
-                )?;
-                Ok(())
-            }),
-            Node::Leaf(Leaf {
-                value: Either::Right(_account),
-                ..
-            }) => bail!("unexpected Account Leaf when building storage trie"),
-            Node::Extension(Extension { key, child }) => {
-                self.with_path(key, |this| this.visit_node(*child))
-            }
-            Node::Empty => Ok(()),
-        }
-    }
-}
-
 enum IterLeaf {
     Hash(Hash),
     Value(Value),
     Empty,
-    Account(Account),
-    Code(Code),
+    // we don't attach information to these variants because they're error cases
+    Account,
+    Code,
 }
 
 /// Visit all the leaves of [`Node`], with paths to each leaf.
@@ -241,7 +181,7 @@ fn iter_leaves(
         Node::Hash(it) => Either::Left(iter::once((vec![], IterLeaf::Hash(it)))),
         Node::Leaf(Leaf { key, value }) => match value {
             Either::Left(it) => Either::Left(iter::once((key.into(), IterLeaf::Value(it)))),
-            Either::Right(it) => Either::Left(iter::once((key.into(), IterLeaf::Account(it)))),
+            Either::Right(_) => Either::Left(iter::once((key.into(), IterLeaf::Account))),
         },
         Node::Extension(Extension {
             key: parent_key,
@@ -263,7 +203,7 @@ fn iter_leaves(
                     })
                 }),
         )),
-        Node::Code(it) => Either::Left(iter::once((vec![], IterLeaf::Code(it)))),
+        Node::Code(_) => Either::Left(iter::once((vec![], IterLeaf::Code))),
         Node::Empty => Either::Left(iter::once((vec![], IterLeaf::Empty))),
     }
 }

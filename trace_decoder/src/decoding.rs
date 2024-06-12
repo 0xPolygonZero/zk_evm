@@ -151,10 +151,6 @@ pub enum TraceParsingErrorReason {
     #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
     MissingAccountStorageTrie(HashedAccountAddr),
 
-    /// Failure due to trying to access a non-existent key in the trie.
-    #[error("Tried accessing a non-existent key ({1:x}) in the {0} trie (root hash: {2:x})")]
-    NonExistentTrieEntry(TrieType, Nibbles, TrieRootHash),
-
     /// Failure due to missing keys when creating a sub-partial trie.
     #[error("Missing key {0:x} when creating sub-partial tries (Trie type: {1})")]
     MissingKeysCreatingSubPartialTrie(Nibbles, TrieType),
@@ -529,6 +525,26 @@ impl ProcessedBlockTrace {
     /// allow the proof generation process to finish. Specifically, we need
     /// at least two entries to generate an agg proof, and we need an agg
     /// proof to generate a block proof. These entries do not mutate state.
+    ///
+    /// The IR is used to generate root proofs, then aggregation proofs and
+    /// finally block proofs. Because aggregation proofs require at least
+    /// two entries, we pad the vector of IRs thanks to additional dummy
+    /// payload intermediary representations whenever necessary.
+    ///
+    /// ### [Withdrawals](https://ethereum.org/staking/withdrawals) and Padding
+    ///
+    /// Withdrawals are all proven together in a dummy payload. A dummy payload
+    /// corresponds to the IR of a proof with no transaction. They must,
+    /// however, be proven last. The padding is therefore carried out as
+    /// follows: If there are no transactions in the block, we add two dummy
+    /// transactions. The withdrawals -- if any -- are added to the second
+    /// dummy transaction. If there is only one transaction in the block, we
+    /// add one dummy transaction. If there are withdrawals, the dummy
+    /// transaction is at the end. Otherwise, it is added at the start. If
+    /// there are two or more transactions:
+    /// - if there are no withdrawals, no dummy transactions are added
+    /// - if there are withdrawals, one dummy transaction is added at the end,
+    ///   with all the withdrawals in it.
     fn pad_gen_inputs_with_dummy_inputs_if_needed(
         gen_inputs: &mut Vec<GenerationInputs>,
         other_data: &OtherBlockData,

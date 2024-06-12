@@ -365,29 +365,12 @@ impl Header {
     }
 }
 
-// #[derive(Debug)]
-// pub struct CompactWitnessDecodingOutput {
-//     pub tries: PartialTriePreImages,
-//     pub code: Option<HashMap<CodeHash, Vec<u8>>>,
-// }
-
 #[derive(Debug)]
 struct ParserState {
     entries: WitnessEntries,
 }
 
 impl ParserState {
-    fn create_and_extract_header(
-        witness_bytes_raw: Vec<u8>,
-    ) -> CompactParsingResult<(Header, Self)> {
-        let witness_bytes = WitnessBytes::<CompactCursorFast>::new(witness_bytes_raw);
-        let (header, entries) = witness_bytes.process_into_instructions_and_header()?;
-
-        let p_state = Self { entries };
-
-        Ok((header, p_state))
-    }
-
     fn apply_rules_to_witness_entries(
         &mut self,
         entry_buf: &mut Vec<WitnessEntry>,
@@ -1223,6 +1206,7 @@ pub struct ProcessedCompactOutput {
     pub witness_out: StateTrieExtractionOutput,
 }
 
+#[cfg(test)]
 pub fn testme(bytes: &[u8]) -> (Vec<Instruction>, NodeEntry, StateTrieExtractionOutput) {
     let witness_bytes = WitnessBytes::<DebugCompactCursor>::new(bytes.to_vec());
     let (_header, entries) = witness_bytes

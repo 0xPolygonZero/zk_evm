@@ -14,8 +14,8 @@ use crate::compact::compact_prestate_processing::{
 };
 use crate::decoding::{TraceParsingError, TraceParsingResult};
 use crate::types::{
-    CodeHash, CodeHashResolveFunc, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles,
-    TrieRootHash, EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
+    CodeHash, HashedAccountAddr, HashedNodeAddr, HashedStorageAddrNibbles, TrieRootHash,
+    EMPTY_CODE_HASH, EMPTY_TRIE_HASH,
 };
 use crate::utils::{
     hash, print_value_and_hash_nodes_of_storage_trie, print_value_and_hash_nodes_of_trie,
@@ -41,7 +41,7 @@ impl BlockTrace {
         other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<GenerationInputs>>
     where
-        F: CodeHashResolveFunc,
+        F: Fn(&CodeHash) -> Vec<u8>,
     {
         let withdrawals = other_data.b_data.withdrawals.clone();
 
@@ -153,14 +153,14 @@ fn process_block_trace_trie_pre_images(
 #[derive(Debug)]
 pub struct ProcessingMeta<F>
 where
-    F: CodeHashResolveFunc,
+    F: Fn(&CodeHash) -> Vec<u8>,
 {
     resolve_code_hash_fn: F,
 }
 
 impl<F> ProcessingMeta<F>
 where
-    F: CodeHashResolveFunc,
+    F: Fn(&CodeHash) -> Vec<u8>,
 {
     /// Returns a `ProcessingMeta` given the provided code hash resolving
     /// function.
@@ -190,7 +190,7 @@ pub(crate) struct CodeHashResolving<F> {
     pub extra_code_hash_mappings: HashMap<CodeHash, Vec<u8>>,
 }
 
-impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
+impl<F: Fn(&CodeHash) -> Vec<u8>> CodeHashResolving<F> {
     fn resolve(&mut self, c_hash: &CodeHash) -> Vec<u8> {
         match self.extra_code_hash_mappings.get(c_hash) {
             Some(code) => code.clone(),
@@ -204,7 +204,7 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 }
 
 impl TxnInfo {
-    pub(crate) fn into_processed_txn_info<F: CodeHashResolveFunc>(
+    pub(crate) fn into_processed_txn_info<F: Fn(&CodeHash) -> Vec<u8>>(
         self,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
