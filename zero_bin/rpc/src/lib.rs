@@ -9,22 +9,27 @@ use anyhow::Context as _;
 use common::block_interval::BlockInterval;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
-use itertools::{Either, Itertools as _};
 use prover::{BlockProverInput, ProverInput};
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{
-    trace_protocol::{BlockTrace, BlockTraceTriePreImages, TxnInfo},
+    trace_protocol::{
+        BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TrieCompact, TxnInfo,
+    },
     types::{BlockLevelData, OtherBlockData},
 };
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "snake_case")]
-#[allow(clippy::large_enum_variant)]
-enum ZeroTrace {
-    Result(TxnInfo),
-    BlockWitness(BlockTraceTriePreImages),
+/// Transaction traces retrieved from Erigon zeroTracer.
+#[derive(Debug, Deserialize)]
+pub struct ZeroTxResult {
+    #[serde(rename(deserialize = "txHash"))]
+    pub tx_hash: alloy::primitives::TxHash,
+    pub result: TxnInfo,
 }
+
+/// Block witness retrieved from Erigon zeroTracer.
+#[derive(Debug, Deserialize)]
+pub struct ZeroBlockWitness(TrieCompact);
 
 /// When [fetching a block over RPC](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblockbynumber),
 /// we can choose the transaction format, between:
@@ -60,24 +65,19 @@ where
     TransportT: Transport + Clone,
 {
     // Grab trace information
-    /////////////////////////
-    let traces = provider
-        .raw_request::<_, Vec<ZeroTrace>>(
+    let tx_results = provider
+        .raw_request::<_, Vec<ZeroTxResult>>(
             "debug_traceBlockByNumber".into(),
             (target_block_id, json!({"tracer": "zeroTracer"})),
         )
         .await?;
 
-    let (txn_info, mut pre_images) =
-        traces
-            .into_iter()
-            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|it| match it {
-                ZeroTrace::Result(it) => Either::Left(it),
-                ZeroTrace::BlockWitness(it) => Either::Right(it),
-            });
+    // Grab block witness info (packed as combined trie pre-images)
+    let block_witness = provider
+        .raw_request::<_, ZeroBlockWitness>("eth_getWitness".into(), vec![target_block_id])
+        .await?;
 
     // Grab block info
-    //////////////////
     let target_block = provider
         .get_block(target_block_id, BLOCK_WITH_FULL_TRANSACTIONS)
         .await?
@@ -116,11 +116,13 @@ where
     .context("couldn't fill previous hashes")?;
 
     // Assemble
-    ///////////
     Ok(BlockProverInput {
         block_trace: BlockTrace {
-            trie_pre_images: pre_images.pop().context("trace had no BlockWitness")?,
-            txn_info,
+            trie_pre_images: BlockTraceTriePreImages::Combined(CombinedPreImages {
+                compact: block_witness.0,
+            }),
+            txn_info: tx_results.into_iter().map(|it| it.result).collect(),
+            code_db: Default::default(),
         },
         other_data: OtherBlockData {
             b_data: BlockLevelData {
