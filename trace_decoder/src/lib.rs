@@ -145,7 +145,7 @@ mod type1 {
     //! Based on [this specification](https://gist.github.com/mandrigin/ff7eccf30d0ef9c572bafcb0ab665cff#the-bytes-layout).
     //! Deviations are commented with `BUG`.
 
-    use mpt_trie_type_1::partial_trie::PartialTrie as _;
+    use mpt_trie_type_1::trie_ops::ValOrHash;
 
     /// Execution of [`Instruction`]s from the wire into a trie.
     ///
@@ -162,6 +162,7 @@ mod type1 {
     #[test]
     fn test() {
         use insta::assert_debug_snapshot;
+        use mpt_trie_type_1::partial_trie::PartialTrie as _;
         use pretty_assertions::assert_eq;
 
         #[derive(serde::Deserialize)]
@@ -177,16 +178,13 @@ mod type1 {
                 .unwrap()
                 .into_iter()
                 .enumerate()
-                .skip(1)
         {
-            if ix != 1 {
-                continue;
-            }
-
+            println!("case {}", ix);
             let (their_instructions, their_execution, their_reshaped) =
                 crate::compact::compact_prestate_processing::testme(&case.bytes);
 
             let instructions = wire::parse(&case.bytes).unwrap();
+            assert_debug_snapshot!(instructions);
 
             assert_eq!(
                 their_instructions,
@@ -198,17 +196,33 @@ mod type1 {
             );
 
             let executions = execution::execute(instructions).unwrap();
+            assert_debug_snapshot!(executions);
             assert_eq!(executions.len(), 1);
             let execution = executions.first().clone();
 
             assert_eq!(their_execution, execution2node(execution.clone()));
 
             let reshaped = reshape::reshape(execution).unwrap();
-            dbg!(&reshaped);
+            assert_debug_snapshot!(reshaped);
             assert_eq!(
                 reshaped.state.hash(),
                 primitive_types::H256::from_slice(&case.expected_state_root)
-            )
+            );
+
+            for (k, v) in reshaped.state.items() {
+                if let ValOrHash::Val(bytes) = v {
+                    let storage_root = rlp::decode::<
+                        evm_arithmetization_type_1::generation::mpt::AccountRlp,
+                    >(&bytes)
+                    .unwrap()
+                    .storage_root;
+                    if storage_root != crate::utils::hash(&[]) {
+                        assert!(reshaped
+                            .storage
+                            .contains_key(&primitive_types::H256::from_slice(&k.bytes_be())))
+                    }
+                }
+            }
         }
     }
 
@@ -244,36 +258,12 @@ mod type1 {
         }
     }
 
-    #[test]
-    fn nibble_test() {
-        macro_rules! u4 {
-            ($expr:expr) => {{
-                use $crate::type1::u4::U4;
-                const CONST: U4 = match U4::new($expr) {
-                    Some(it) => it,
-                    None => panic!(),
-                };
-                CONST
-            }};
-        }
-
-        let (a, b, c) = (u4!(1), u4!(2), u4!(3));
-        let mut ours = vec![a, b];
-        ours.splice(0..0, vec![c]);
-        // ours.append(&mut vec![c]);
-        let ours = nibbles2nibbles(ours);
-        let theirs = nibbles2nibbles(vec![a, b]).merge_nibbles(&nibbles2nibbles(vec![c]));
-        assert_eq!(ours, theirs)
-    }
-
     fn nibbles2nibbles(ours: Vec<u4::U4>) -> mpt_trie_type_1::nibbles::Nibbles {
-        ours.into_iter().fold(
-            mpt_trie_type_1::nibbles::Nibbles::default(),
-            |mut acc, el| {
-                acc.push_nibble_front(el as u8);
-                acc
-            },
-        )
+        let mut theirs = mpt_trie_type_1::nibbles::Nibbles::default();
+        for it in ours {
+            theirs.push_nibble_back(it as u8)
+        }
+        theirs
     }
 
     fn execution2node(

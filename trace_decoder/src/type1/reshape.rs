@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     iter,
 };
 
@@ -18,9 +18,8 @@ use super::{nibbles2nibbles, u4::U4};
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Reshape {
     pub state: HashedPartialTrie,
-    pub code: HashSet<NonEmpty<Vec<u8>>>,
-    // TODO(0xaatif): this should really be a set
-    pub storage: HashMap<primitive_types::H256, HashedPartialTrie>,
+    pub code: BTreeSet<NonEmpty<Vec<u8>>>,
+    pub storage: BTreeMap<primitive_types::H256, HashedPartialTrie>,
 }
 
 pub fn reshape(execution: Execution) -> anyhow::Result<Reshape> {
@@ -55,14 +54,8 @@ impl Visitor {
         ret
     }
     fn visit_node(&mut self, it: Node) -> anyhow::Result<()> {
-        println!(
-            "{:?}:\n\t{:?}",
-            super::node2node(it.clone()),
-            self.reshape.state
-        );
         match it {
             Node::Hash(Hash { raw_hash }) => {
-                // BUG HERE
                 insert(
                     &mut self.reshape.state,
                     self.path.clone(),
@@ -99,12 +92,7 @@ impl Visitor {
         Ok(())
     }
     fn visit_leaf(&mut self, Leaf { key, value }: Leaf) -> anyhow::Result<()> {
-        let key = self
-            .path
-            .iter()
-            .copied()
-            .chain(key.into_iter().rev())
-            .collect();
+        let key = self.path.iter().copied().chain(key).collect::<Vec<_>>();
         let value = match value {
             Either::Left(Value { raw_value }) => rlp::encode(raw_value.as_vec()),
             Either::Right(Account {
@@ -134,7 +122,10 @@ impl Visitor {
                         self.path
                     ))?;
                     let storage_root = storage.hash();
-                    self.reshape.storage.insert(storage_root, storage);
+                    self.reshape.storage.insert(
+                        primitive_types::H256::from_slice(&nibbles2nibbles(key.clone()).bytes_be()),
+                        storage,
+                    );
                     storage_root
                 },
             }),
@@ -149,31 +140,26 @@ impl Visitor {
 }
 
 fn insert(trie: &mut HashedPartialTrie, k: Vec<U4>, v: ValOrHash) -> anyhow::Result<()> {
-    eprintln!("k = {:?}, v = {:?}", k, v);
-    trie.insert(nibbles2nibbles(k).reverse(), v)?;
+    trie.insert(nibbles2nibbles(k), v)?;
     Ok(())
 }
 
 pub fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
-    let mut visitor = Node2TrieVisitor::default();
-    visitor.visit_node(node)?;
-    let Node2TrieVisitor { path, trie } = visitor;
-    assert_eq!(path, vec![]);
-
-    // let mut trie = HashedPartialTrie::default();
-    // for (k, v) in iter_leaves(node) {
-    //     trie.insert(
-    //         nibbles2nibbles(k),
-    //         match v {
-    //             IterLeaf::Hash(Hash { raw_hash }) =>
-    // ValOrHash::Hash(raw_hash.into()),             IterLeaf::Value(Value {
-    // raw_value }) => ValOrHash::Val(raw_value.into()),
-    // IterLeaf::Empty => continue,             IterLeaf::Account(_) =>
-    // bail!("unexpected Account node in storage trie"),
-    // IterLeaf::Code(_) => bail!("unexpected Code node in storage trie"),
-    //         },
-    //     )?;
-    // }
+    let mut trie = HashedPartialTrie::default();
+    for (k, v) in iter_leaves(node) {
+        trie.insert(
+            nibbles2nibbles(k),
+            match v {
+                IterLeaf::Hash(Hash { raw_hash }) => ValOrHash::Hash(raw_hash.into()),
+                IterLeaf::Value(Value { raw_value }) => {
+                    ValOrHash::Val(rlp::encode(raw_value.as_vec()).to_vec())
+                }
+                IterLeaf::Empty => continue,
+                IterLeaf::Account(_) => bail!("unexpected Account node in storage trie"),
+                IterLeaf::Code(_) => bail!("unexpected Code node in storage trie"),
+            },
+        )?;
+    }
     Ok(trie)
 }
 

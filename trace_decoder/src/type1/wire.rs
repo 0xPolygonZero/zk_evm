@@ -228,14 +228,14 @@ fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, DecodeKeyErro
         }
     }
 
-    let ret = match bytes.split_first() {
+    let v = match bytes.split_first() {
         // BUG: the previous implementation said that Erigon does this
-        (only, &[]) => Ok(nunny::vec![
+        (only, &[]) => nunny::vec![
             // U4::new(*only).ok_or(DecodeKeyError::ExcessNibbleBits)?
             // TODO(0xaatif): I don't like this line - I'm adding it because
             //                it's required by the simplest test vector
             U4::new(*only).unwrap_or_default()
-        ]),
+        ],
         (flags, /* mut */ rest) => {
             // check the flags
             let flags =
@@ -269,7 +269,7 @@ fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, DecodeKeyErro
             };
 
             // parse the rest of the bytes as nibbles
-            Ok(nunny::Vec::new(
+            nunny::Vec::new(
                 rest.iter()
                     .copied()
                     .flat_map(|packed| {
@@ -279,12 +279,10 @@ fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, DecodeKeyErro
                     .chain(tail)
                     .collect(),
             )
-            .expect("an empty `rest` must be caught by the Erigon special case"))
+            .expect("an empty `rest` must be caught by the Erigon special case")
         }
-    }?;
-    let mut ret = ret;
-    ret.reverse(); // TODO(0xaatif): is this a bug?
-    Ok(ret)
+    };
+    Ok(v)
 }
 
 fn array<'a, const N: usize, E: ParserError<'a>>(input: &mut &'a [u8]) -> PResult<[u8; N], E> {
