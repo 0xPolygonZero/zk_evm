@@ -1,5 +1,5 @@
 //! Defines various operations for
-//! [`PartialTrie`][crate::partial_trie::PartialTrie].
+//! [`PartialTrie`].
 
 use std::{fmt::Display, mem::size_of};
 
@@ -19,7 +19,7 @@ use crate::{
 pub type TrieOpResult<T> = Result<T, TrieOpError>;
 
 /// An error type for trie operation.
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum TrieOpError {
     /// An error that occurs when a hash node is found during an insert
     /// operation.
@@ -364,7 +364,7 @@ impl<T: PartialTrie> Node<T> {
     where
         K: Into<Nibbles>,
     {
-        let k = k.into();
+        let k: Nibbles = k.into();
         trace!("Deleting a leaf node with key {} if it exists", k);
 
         delete_intern(&self.clone(), k)?.map_or(Ok(None), |(updated_root, deleted_val)| {
@@ -390,6 +390,14 @@ impl<T: PartialTrie> Node<T> {
 
     pub(crate) fn trie_values(&self) -> impl Iterator<Item = ValOrHash> {
         self.trie_items().map(|(_, v)| v)
+    }
+
+    pub(crate) fn trie_has_item_by_key<K>(&self, k: K) -> bool
+    where
+        K: Into<Nibbles>,
+    {
+        let k = k.into();
+        self.trie_items().any(|(key, _)| key == k)
     }
 }
 
@@ -1101,6 +1109,28 @@ mod tests {
 
         let res = trie.delete(0x5678)?;
         assert!(res.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn existent_node_key_contains_returns_true() -> TrieOpResult<()> {
+        common_setup();
+
+        let mut trie = StandardTrie::default();
+        trie.insert(0x1234, vec![91])?;
+        assert!(trie.contains(0x1234));
+
+        Ok(())
+    }
+
+    #[test]
+    fn non_existent_node_key_contains_returns_false() -> TrieOpResult<()> {
+        common_setup();
+
+        let mut trie = StandardTrie::default();
+        trie.insert(0x1234, vec![91])?;
+        assert!(!trie.contains(0x5678));
 
         Ok(())
     }

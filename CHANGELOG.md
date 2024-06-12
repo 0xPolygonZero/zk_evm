@@ -8,7 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2024-06-12
+
 ### Changed
+- Some cleanup ([#190](https://github.com/0xPolygonZero/zk_evm/pull/190))
+- Silence jumpdest analysis logs ([#193](https://github.com/0xPolygonZero/zk_evm/pull/193))
+- Charge call value gas prior to call ([#199](https://github.com/0xPolygonZero/zk_evm/pull/199))
+- refactor: fix todos ([#162](https://github.com/0xPolygonZero/zk_evm/pull/162))
+- Remove print call in trace_decoder ([#208](https://github.com/0xPolygonZero/zk_evm/pull/208))
+- Update CODEOWNERS ([#224](https://github.com/0xPolygonZero/zk_evm/pull/224))
+- Fix access lists pointers check ([#217](https://github.com/0xPolygonZero/zk_evm/pull/217))
+- Add a few QoL useability functions to the interface ([#169](https://github.com/0xPolygonZero/zk_evm/pull/169))
+- Amortize `sha2` compression loop ([#231](https://github.com/0xPolygonZero/zk_evm/pull/231))
+- ci: add cargo audit job ([#236](https://github.com/0xPolygonZero/zk_evm/pull/236))
+- fix: Revert interpreter stack display ([#238](https://github.com/0xPolygonZero/zk_evm/pull/238))
+- Fix clippy `doc_lazy_continuation` ([#247](https://github.com/0xPolygonZero/zk_evm/pull/247))
+- perf: Improve `blake2` precompile ([#239](https://github.com/0xPolygonZero/zk_evm/pull/239))
+- fix: rustdoc and tests ([#255](https://github.com/0xPolygonZero/zk_evm/pull/255))
+- Native trace processing support ([#246](https://github.com/0xPolygonZero/zk_evm/pull/246))
+- Added `Clone` to a few error types in `mpt_trie` ([#259](https://github.com/0xPolygonZero/zk_evm/pull/259))
+- cleanup: remove outdated segment ([#262](https://github.com/0xPolygonZero/zk_evm/pull/262))
+- fix: add G2 subgroup check for `ECPAIRING` ([#268](https://github.com/0xPolygonZero/zk_evm/pull/268))
+- add partial trie builder ([#258](https://github.com/0xPolygonZero/zk_evm/pull/258))
 
 ## [0.3.1] - 2024-04-22
 

@@ -341,31 +341,14 @@ impl<F: Field> Interpreter<F> {
         }
     }
 
+    // As this relies on the underlying `GenerationState` method, stacks containing
+    // more than 10 elements will be truncated. As such, new tests that would need
+    // to access more elements would require special handling.
     pub(crate) fn stack(&self) -> Vec<U256> {
-        match self.stack_len().cmp(&1) {
-            Ordering::Greater => {
-                let mut stack = self.generation_state.memory.contexts[self.context()].segments
-                    [Segment::Stack.unscale()]
-                .content
-                .iter()
-                .filter_map(|&opt_elt| opt_elt)
-                .collect::<Vec<_>>();
-                stack.truncate(self.stack_len() - 1);
-                stack.push(
-                    self.stack_top()
-                        .expect("The stack is checked to be nonempty"),
-                );
-                stack
-            }
-            Ordering::Equal => {
-                vec![self
-                    .stack_top()
-                    .expect("The stack is checked to be nonempty")]
-            }
-            Ordering::Less => {
-                vec![]
-            }
-        }
+        let mut stack = self.generation_state.stack();
+        stack.reverse();
+
+        stack
     }
 
     fn stack_segment_mut(&mut self) -> &mut Vec<Option<U256>> {
@@ -517,7 +500,10 @@ impl<F: Field> State<F> for Interpreter<F> {
     }
 
     fn get_stack(&self) -> Vec<U256> {
-        self.stack()
+        let mut stack = self.stack();
+        stack.reverse();
+
+        stack
     }
 
     fn get_halt_offsets(&self) -> Vec<usize> {

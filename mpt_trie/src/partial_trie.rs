@@ -44,15 +44,7 @@ impl<N: PartialTrie> From<Node<N>> for WrappedNode<N> {
 
 /// A trait for any types that are Tries.
 pub trait PartialTrie:
-    Clone
-    + Debug
-    + Default
-    + Deref<Target = Node<Self>>
-    + DerefMut<Target = Node<Self>>
-    + Eq
-    + PartialEq
-    + TrieNodeIntern
-    + Sized
+    Clone + Debug + Default + DerefMut<Target = Node<Self>> + Eq + TrieNodeIntern
 {
     /// Creates a new partial trie from a node.
     fn new(n: Node<Self>) -> Self;
@@ -107,6 +99,11 @@ pub trait PartialTrie:
     /// Returns an iterator over the trie that returns all values for every
     /// `Leaf` and `Hash` node.
     fn values(&self) -> impl Iterator<Item = ValOrHash>;
+
+    /// Returns `true` if the trie contains an element with the given key.
+    fn contains<K>(&self, k: K) -> bool
+    where
+        K: Into<Nibbles>;
 }
 
 /// Part of the trait that is not really part of the public interface but
@@ -261,6 +258,13 @@ impl PartialTrie for StandardTrie {
     fn values(&self) -> impl Iterator<Item = ValOrHash> {
         self.0.trie_values()
     }
+
+    fn contains<K>(&self, k: K) -> bool
+    where
+        K: Into<Nibbles>,
+    {
+        self.0.trie_has_item_by_key(k)
+    }
 }
 
 impl TrieNodeIntern for StandardTrie {
@@ -380,6 +384,13 @@ impl PartialTrie for HashedPartialTrie {
 
     fn values(&self) -> impl Iterator<Item = ValOrHash> {
         self.node.trie_values()
+    }
+
+    fn contains<K>(&self, k: K) -> bool
+    where
+        K: Into<Nibbles>,
+    {
+        self.node.trie_has_item_by_key(k)
     }
 }
 

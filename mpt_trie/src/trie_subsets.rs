@@ -805,6 +805,24 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn sub_trie_existent_key_contains_returns_true() {
+        let trie = create_trie_with_large_entry_nodes(&[0x0]).unwrap();
+
+        let partial_trie = create_trie_subset(&trie, [0x1234]).unwrap();
+
+        assert!(partial_trie.contains(0x0));
+    }
+
+    #[test]
+    fn sub_trie_non_existent_key_contains_returns_false() {
+        let trie = create_trie_with_large_entry_nodes(&[0x0]).unwrap();
+
+        let partial_trie = create_trie_subset(&trie, [0x1234]).unwrap();
+
+        assert!(!partial_trie.contains(0x1));
+    }
+
     fn assert_all_keys_do_not_exist(trie: &TrieType, ks: impl Iterator<Item = Nibbles>) {
         for k in ks {
             assert!(trie.get(k).is_none());
