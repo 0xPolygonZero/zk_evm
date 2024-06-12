@@ -1,7 +1,7 @@
 [package]
 name = "proof_gen"
 description = "Generates block proofs from zero proof IR."
-version = "0.1.3"
+version = "0.2.0"
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
 edition.workspace = true
 license.workspace = true
@@ -17,4 +17,4 @@ plonky2 = { workspace = true }
 serde = { workspace = true }
 
 # Local dependencies
-evm_arithmetization = { version = "0.1.3", path = "../evm_arithmetization" }
+evm_arithmetization = { version = "0.2.0", path = "../evm_arithmetization" }
