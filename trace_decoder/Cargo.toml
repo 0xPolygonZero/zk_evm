@@ -34,6 +34,7 @@ either = "1.12.0"
 anyhow = "1.0.86"
 bitvec = "1.0.1"
 primitive-types = "0.12.2"
+itertools = "0.13.0"
 
 [dev-dependencies]
 # enable this feature if you're debugging binary decoding

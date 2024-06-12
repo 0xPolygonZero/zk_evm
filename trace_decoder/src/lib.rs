@@ -133,7 +133,7 @@ mod types;
 /// Defines useful functions necessary to the other modules.
 mod utils;
 
-pub fn type_1(
+pub fn legacy(
     block_trace: BlockTrace,
     other_block_data: OtherBlockData,
     resolver: impl Fn(&CodeHash) -> Vec<u8>,
@@ -141,11 +141,23 @@ pub fn type_1(
     block_trace.into_txn_proof_gen_ir(&ProcessingMeta::new(resolver), other_block_data)
 }
 
+pub use type1::type1 as new;
+
 mod type1 {
     //! Based on [this specification](https://gist.github.com/mandrigin/ff7eccf30d0ef9c572bafcb0ab665cff#the-bytes-layout).
     //! Deviations are commented with `BUG`.
 
-    use mpt_trie_type_1::trie_ops::ValOrHash;
+    use anyhow::{bail, Context as _};
+    use evm_arithmetization_type_1::generation::mpt::AccountRlp;
+    use itertools::{Itertools as _, Position};
+    use mpt_trie_type_1::{partial_trie::PartialTrie, trie_ops::ValOrHash};
+
+    use crate::{
+        compact::compact_prestate_processing::PartialTriePreImages,
+        processed_block_trace::{CodeHashResolving, ProcessedBlockTrace},
+        trace_protocol::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TrieCompact},
+        types::OtherBlockData,
+    };
 
     /// Execution of [`Instruction`]s from the wire into a trie.
     ///
@@ -158,6 +170,90 @@ mod type1 {
     ///
     /// Use of [`winnow`] is amenable to streaming off the wire.
     mod wire;
+
+    pub fn type1(
+        block_trace: BlockTrace,
+        other_block_data: OtherBlockData,
+        resolver: impl Fn(&primitive_types::H256) -> Vec<u8>,
+    ) -> anyhow::Result<Vec<evm_arithmetization_type_1::GenerationInputs>> {
+        // TODO(0xaatif): why is this like this?
+        let BlockTrace {
+            trie_pre_images:
+                BlockTraceTriePreImages::Combined(CombinedPreImages {
+                    compact: TrieCompact(bytes),
+                }),
+            txn_info,
+        } = block_trace;
+
+        let instructions =
+            wire::parse(&bytes).context("couldn't parse instructions from binary format")?;
+        let executions =
+            execution::execute(instructions).context("couldn't execute instructions")?;
+        if !executions.len() == 1 {
+            bail!(
+                "only a single execution is supported, not {}",
+                executions.len()
+            )
+        }
+        let execution = executions.into_vec().remove(0);
+        let reshape::Reshape {
+            state,
+            code,
+            storage,
+        } = reshape::reshape(execution).context("couldn't reshape execution")?;
+
+        let all_accounts = state
+            .items()
+            .filter_map(|(nibs, vh)| match vh {
+                ValOrHash::Val(v) => Some((
+                    primitive_types::H256::from(nibs),
+                    rlp::decode::<AccountRlp>(&v).ok()?,
+                )),
+                ValOrHash::Hash(_) => None,
+            })
+            .collect::<Vec<_>>();
+
+        let mut resolver = CodeHashResolving {
+            client_code_hash_resolve_f: resolver,
+            extra_code_hash_mappings: code
+                .into_iter()
+                .map(|it| (crate::utils::hash(&it), it.into()))
+                .collect(),
+        };
+
+        let gis = ProcessedBlockTrace {
+            tries: PartialTriePreImages {
+                state,
+                storage: storage.into_iter().collect(),
+            },
+            txn_info: txn_info
+                .into_iter()
+                .with_position()
+                .map(|(pos, txn_info)| {
+                    let extra_state_accesses = match pos {
+                        Position::First | Position::Middle => Vec::new(),
+                        Position::Last | Position::Only => other_block_data
+                            .b_data
+                            .withdrawals
+                            .iter()
+                            .map(|(addr, _)| crate::utils::hash(addr.as_bytes()))
+                            .collect(),
+                    };
+                    txn_info.into_processed_txn_info(
+                        &all_accounts,
+                        &extra_state_accesses,
+                        &mut resolver,
+                    )
+                })
+                .collect(),
+            // TODO(0xaatif): why is this duplicated?
+            withdrawals: other_block_data.b_data.withdrawals.clone(),
+        }
+        .into_txn_proof_gen_ir(other_block_data)
+        .context("couldn't process proof gen IR")?;
+
+        Ok(gis)
+    }
 
     #[test]
     fn test() {

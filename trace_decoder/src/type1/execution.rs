@@ -177,7 +177,7 @@ pub fn execute(
 
     NonEmpty::<Vec<_>>::new(witnesses)
         .ok()
-        .context("no instructions")
+        .context("no instructions to execute")
 }
 
 fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {

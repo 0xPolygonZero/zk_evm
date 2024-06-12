@@ -134,27 +134,22 @@ fn process_block_trace_trie_pre_images(
     block_trace_pre_images: BlockTraceTriePreImages,
 ) -> TraceParsingResult<ProcessedBlockTracePreImages> {
     match block_trace_pre_images {
-        BlockTraceTriePreImages::Combined(t) => process_combined_trie_pre_images(t),
+        BlockTraceTriePreImages::Combined(t) => {
+            let trie = t.compact;
+            let out = process_compact_prestate_debug(trie).map_err(TraceParsingError::from)?;
+
+            if !out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION) {
+                Err(TraceParsingError::from(
+                    CompactParsingError::IncompatibleVersion(
+                        COMPATIBLE_HEADER_VERSION,
+                        out.header.version,
+                    ),
+                ))?;
+            }
+
+            Ok(out.into())
+        }
     }
-}
-
-fn process_combined_trie_pre_images(
-    tries: CombinedPreImages,
-) -> TraceParsingResult<ProcessedBlockTracePreImages> {
-    Ok(process_compact_trie(tries.compact).map_err(TraceParsingError::from)?)
-}
-
-fn process_compact_trie(trie: TrieCompact) -> CompactParsingResult<ProcessedBlockTracePreImages> {
-    let out = process_compact_prestate_debug(trie)?;
-
-    if !out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION) {
-        return Err(CompactParsingError::IncompatibleVersion(
-            COMPATIBLE_HEADER_VERSION,
-            out.header.version,
-        ));
-    }
-
-    Ok(out.into())
 }
 
 /// Structure storing a function turning a `CodeHash` into bytes.
@@ -186,16 +181,16 @@ pub(crate) struct ProcessedTxnInfo {
     pub(crate) meta: TxnMetaState,
 }
 
-struct CodeHashResolving<F> {
+pub(crate) struct CodeHashResolving<F> {
     /// If we have not seen this code hash before, use the resolve function that
     /// the client passes down to us. This will likely be an rpc call/cache
     /// check.
-    client_code_hash_resolve_f: F,
+    pub client_code_hash_resolve_f: F,
 
     /// Code hash mappings that we have constructed from parsing the block
     /// trace. If there are any txns that create contracts, then they will also
     /// get added here as we process the deltas.
-    extra_code_hash_mappings: HashMap<CodeHash, Vec<u8>>,
+    pub extra_code_hash_mappings: HashMap<CodeHash, Vec<u8>>,
 }
 
 impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
@@ -212,7 +207,7 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 }
 
 impl TxnInfo {
-    fn into_processed_txn_info<F: CodeHashResolveFunc>(
+    pub(crate) fn into_processed_txn_info<F: CodeHashResolveFunc>(
         self,
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
