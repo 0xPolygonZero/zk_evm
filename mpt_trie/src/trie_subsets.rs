@@ -207,32 +207,33 @@ impl<N: PartialTrie> TrackedNodeInfo<N> {
     }
 }
 
-// TODO: Make this interface also work with &[ ... ]...
 /// Create a [`PartialTrie`] subset from a base trie given an iterator of keys
 /// of nodes that may or may not exist in the trie. All nodes traversed by the
 /// keys will not be hashed out in the trie subset. If the key does not exist in
 /// the trie at all, this is not considered an error and will still record which
 /// nodes were visited.
-pub fn create_trie_subset<N, K, I>(trie: &N, keys_involved: I) -> SubsetTrieResult<N>
+pub fn create_trie_subset<N, K>(
+    trie: &N,
+    keys_involved: impl IntoIterator<Item = K>,
+) -> SubsetTrieResult<N>
 where
     N: PartialTrie,
     K: Into<Nibbles>,
-    I: IntoIterator<Item = K>,
 {
     let mut tracked_trie = TrackedNode::new(trie);
     create_trie_subset_intern(&mut tracked_trie, keys_involved.into_iter())
 }
 
-// TODO: Make this interface also work with &[ ... ]...
 /// Create [`PartialTrie`] subsets from a given base `PartialTrie` given a
 /// iterator of keys per subset needed. See [`create_trie_subset`] for more
 /// info.
-pub fn create_trie_subsets<N, K, I, O>(base_trie: &N, keys_involved: O) -> SubsetTrieResult<Vec<N>>
+pub fn create_trie_subsets<N, K>(
+    base_trie: &N,
+    keys_involved: impl IntoIterator<Item = impl IntoIterator<Item = K>>,
+) -> SubsetTrieResult<Vec<N>>
 where
     N: PartialTrie,
     K: Into<Nibbles>,
-    I: IntoIterator<Item = K>,
-    O: IntoIterator<Item = I>,
 {
     let mut tracked_trie = TrackedNode::new(base_trie);
 
@@ -802,6 +803,24 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn sub_trie_existent_key_contains_returns_true() {
+        let trie = create_trie_with_large_entry_nodes(&[0x0]).unwrap();
+
+        let partial_trie = create_trie_subset(&trie, [0x1234]).unwrap();
+
+        assert!(partial_trie.contains(0x0));
+    }
+
+    #[test]
+    fn sub_trie_non_existent_key_contains_returns_false() {
+        let trie = create_trie_with_large_entry_nodes(&[0x0]).unwrap();
+
+        let partial_trie = create_trie_subset(&trie, [0x1234]).unwrap();
+
+        assert!(!partial_trie.contains(0x1));
     }
 
     fn assert_all_keys_do_not_exist(trie: &TrieType, ks: impl Iterator<Item = Nibbles>) {

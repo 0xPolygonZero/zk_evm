@@ -5,12 +5,29 @@ use std::fmt::{self, Display};
 
 use ethereum_types::H256;
 
-use super::common::get_key_piece_from_node_pulling_from_key_for_branches;
 use crate::{
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
     utils::{get_segment_from_node_and_key_piece, TriePath, TrieSegment},
 };
+
+/// Get the key piece from the given node if applicable.
+///
+/// Note that there is no specific [`Nibble`](crate::nibbles::Nibble) associated
+/// with a branch like there are [`Nibbles`] with [Extension][`Node::Extension`]
+/// and [Leaf][`Node::Leaf`] nodes, and the only way to get the `Nibble`
+/// "associated" with a branch is to look at the next `Nibble` in the current
+/// key as we traverse down it.
+fn get_key_piece_from_node_pulling_from_key_for_branches<T: PartialTrie>(
+    n: &Node<T>,
+    curr_key: &Nibbles,
+) -> Nibbles {
+    match n {
+        Node::Empty | Node::Hash(_) => Nibbles::default(),
+        Node::Branch { .. } => curr_key.get_next_nibbles(1),
+        Node::Extension { nibbles, child: _ } | Node::Leaf { nibbles, value: _ } => *nibbles,
+    }
+}
 
 /// Params controlling how much information is reported in the query output.
 ///
@@ -206,17 +223,13 @@ impl DebugQueryOutput {
         }
     }
 
-    // TODO: Make the output easier to read...
     fn fmt_query_header(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Query Result {{")?;
-
-        writeln!(f, "Queried Key: {}", self.k)?;
-        writeln!(f, "Node found: {}", self.node_found)?;
-
+        writeln!(f, "    Queried Key: {}", self.k)?;
+        writeln!(f, "    Node Found: {}", self.node_found)?;
         writeln!(f, "}}")
     }
 
-    // TODO: Make the output easier to read...
     fn fmt_node_based_on_debug_params(
         f: &mut fmt::Formatter<'_>,
         seg: &TrieSegment,
@@ -224,30 +237,25 @@ impl DebugQueryOutput {
         params: &DebugQueryParams,
     ) -> fmt::Result {
         let node_type = seg.node_type();
+        let mut components = Vec::new();
 
         if params.include_node_type {
-            write!(f, "{}", node_type)?;
+            components.push(format!("{}", node_type));
         }
-
-        write!(f, "(")?;
 
         if params.include_key_piece_per_node {
             if let Some(k_piece) = seg.get_key_piece_from_seg_if_present() {
-                write!(f, "key: {}", k_piece)?;
+                components.push(format!("Key: {}", k_piece));
             }
         }
 
         if params.include_node_specific_values {
             if let Some(extra_seg_info) = extra_seg_info {
-                if params.include_key_piece_per_node {
-                    write!(f, ", ")?;
-                }
-
-                write!(f, "Extra Seg Info: {}", extra_seg_info)?;
+                components.push(format!("Extra Seg Info: {}", extra_seg_info));
             }
         }
 
-        write!(f, ")")?;
+        write!(f, "({})", components.join(", "))?;
 
         Ok(())
     }

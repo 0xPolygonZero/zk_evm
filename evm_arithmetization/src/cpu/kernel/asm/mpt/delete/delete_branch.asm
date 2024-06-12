@@ -6,7 +6,6 @@
 //          - If there are more than one, update the branch node and return it.
 //          - If there is exactly one, transform the branch node into an leaf/extension node and return it.
 // Assumes that `num_nibbles>0` and that the value of the branch node is zero.
-// TODO: May need to revisit these assumptions depending on how the receipt trie is implemented.
 global mpt_delete_branch:
     // stack: node_type, node_payload_ptr, num_nibbles, key, retdest
     POP

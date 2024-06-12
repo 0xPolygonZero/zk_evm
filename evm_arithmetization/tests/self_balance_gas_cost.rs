@@ -123,17 +123,12 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
             code_hash,
             // Storage map: { 1 => 5 }
             storage_root: HashedPartialTrie::from(Node::Leaf {
-                // TODO: Could do keccak(pad32(1))
-                nibbles: Nibbles::from_str(
-                    "0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6",
-                )
-                .unwrap(),
+                nibbles: Nibbles::from_h256_be(keccak(pad32(1))),
                 value: vec![5],
             })
             .hash(),
             ..AccountRlp::default()
         };
-
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
         expected_state_trie_after.insert(
             beneficiary_nibbles,
@@ -189,6 +184,12 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)
+}
+
+fn pad32(byte: u8) -> Vec<u8> {
+    let mut data = vec![0; 31];
+    data.push(byte);
+    data
 }
 
 fn init_logger() {

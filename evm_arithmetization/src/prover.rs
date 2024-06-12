@@ -2,7 +2,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use hashbrown::HashMap;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
@@ -145,6 +144,7 @@ where
     // enabled.
     #[cfg(debug_assertions)]
     {
+        use hashbrown::HashMap;
         use starky::cross_table_lookup::debug_utils::check_ctls;
 
         use crate::verifier::debug_utils::get_memory_extra_looking_values;
@@ -177,6 +177,7 @@ where
 /// - `trace_poly_values` are the trace values for each STARK.
 /// - `trace_commitments` are the trace polynomials commitments for each STARK.
 /// - `ctl_data_per_table` group all the cross-table lookup data for each STARK.
+///
 /// Each STARK uses its associated data to generate a proof.
 fn prove_with_commitments<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
