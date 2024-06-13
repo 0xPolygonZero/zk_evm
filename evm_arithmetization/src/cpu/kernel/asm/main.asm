@@ -105,8 +105,7 @@ global perform_final_checks:
     // Check that we end up with the correct `cum_gas`, `txn_nb` and bloom filter.
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER) 
 global debug_check_gas:
-    //%assert_eq
-    %pop2
+    %assert_eq
 
     
     DUP3 %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER)
