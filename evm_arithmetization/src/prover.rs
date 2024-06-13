@@ -523,20 +523,20 @@ fn build_segment_data<F: RichField>(
     }
 }
 
-pub struct SegmentDataIterator {
+pub struct SegmentDataIterator<'a> {
     pub partial_next_data: Option<GenerationSegmentData>,
-    pub inputs: GenerationInputs,
+    pub inputs: &'a GenerationInputs,
     pub max_cpu_len_log: Option<usize>,
 }
 
 type F = GoldilocksField;
-impl Iterator for SegmentDataIterator {
+impl<'a> Iterator for SegmentDataIterator<'a> {
     type Item = (GenerationInputs, GenerationSegmentData);
 
     fn next(&mut self) -> Option<Self::Item> {
         let cur_and_next_data = generate_next_segment::<F>(
             self.max_cpu_len_log,
-            &self.inputs,
+            self.inputs,
             self.partial_next_data.clone(),
         );
 
