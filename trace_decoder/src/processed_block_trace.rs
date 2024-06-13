@@ -33,7 +33,7 @@ pub(crate) struct ProcessedBlockTrace {
     pub(crate) withdrawals: Vec<(Address, U256)>,
 }
 
-const COMPATIBLE_HEADER_VERSION: u8 = 1;
+const COMPATIBLE_HEADER_VERSIONS: [u8; 2] = [0, 1];
 
 impl BlockTrace {
     /// Processes and returns the [GenerationInputs] for all transactions in the
@@ -80,9 +80,17 @@ impl BlockTrace {
             })
             .collect();
 
+        let code_db = {
+            let mut code_db = self.code_db.unwrap_or_default();
+            if let Some(code_mappings) = pre_image_data.extra_code_hash_mappings {
+                code_db.extend(code_mappings);
+            }
+            code_db
+        };
+
         let mut code_hash_resolver = CodeHashResolving {
             client_code_hash_resolve_f: &p_meta.resolve_code_hash_fn,
-            extra_code_hash_mappings: pre_image_data.extra_code_hash_mappings.unwrap_or_default(),
+            extra_code_hash_mappings: code_db,
         };
 
         let last_tx_idx = self.txn_info.len().saturating_sub(1);
@@ -192,17 +200,26 @@ fn process_single_combined_storage_tries(
 }
 
 fn process_multiple_storage_tries(
-    _tries: HashMap<HashedAccountAddr, SeparateTriePreImage>,
+    tries: HashMap<HashedAccountAddr, SeparateTriePreImage>,
 ) -> HashMap<HashedAccountAddr, HashedPartialTrie> {
-    todo!()
+    tries
+        .into_iter()
+        .map(|(k, v)| match v {
+            SeparateTriePreImage::Uncompressed(_) => todo!(),
+            SeparateTriePreImage::Direct(t) => (k, t.0),
+        })
+        .collect()
 }
 
 fn process_compact_trie(trie: TrieCompact) -> CompactParsingResult<ProcessedBlockTracePreImages> {
     let out = process_compact_prestate_debug(trie)?;
 
-    if !out.header.version_is_compatible(COMPATIBLE_HEADER_VERSION) {
+    if !COMPATIBLE_HEADER_VERSIONS
+        .iter()
+        .any(|&v| out.header.version_is_compatible(v))
+    {
         return Err(CompactParsingError::IncompatibleVersion(
-            COMPATIBLE_HEADER_VERSION,
+            COMPATIBLE_HEADER_VERSIONS.to_vec(),
             out.header.version,
         ));
     }

@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-    CARGO_TERM_COLOR: always
+  CARGO_TERM_COLOR: always
 
 jobs:
   test_mpt_trie:
@@ -33,7 +33,7 @@ jobs:
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-            cache-on-failure: true
+          cache-on-failure: true
 
       - name: Test in mpt_trie subdirectory
         run: cargo test --manifest-path mpt_trie/Cargo.toml
@@ -83,7 +83,7 @@ jobs:
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-            cache-on-failure: true
+          cache-on-failure: true
 
       - name: Test in trace_decoder subdirectory
         run: cargo test --manifest-path trace_decoder/Cargo.toml
@@ -108,7 +108,7 @@ jobs:
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-            cache-on-failure: true
+          cache-on-failure: true
 
       - name: Test in proof_gen subdirectory
         run: cargo test --manifest-path proof_gen/Cargo.toml
@@ -133,7 +133,7 @@ jobs:
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-            cache-on-failure: true
+          cache-on-failure: true
 
       - name: Test in evm_arithmetization subdirectory
         run: cargo test --manifest-path evm_arithmetization/Cargo.toml
@@ -144,7 +144,7 @@ jobs:
           RUST_BACKTRACE: 1
 
   lints:
-    name: Formatting and Clippy
+    name: Rustdoc, Formatting and Clippy
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
@@ -155,15 +155,18 @@ jobs:
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
         with:
-            components: rustfmt, clippy
+          components: rustfmt, clippy
 
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-            cache-on-failure: true
+          cache-on-failure: true
 
       - name: Run cargo fmt
         run: cargo fmt --all --check
 
       - name: Run cargo clippy
         run: cargo clippy --all-features --all-targets -- -D warnings -A incomplete-features
+
+      - name: Rustdoc
+        run: cargo doc --all

@@ -111,6 +111,20 @@
     // stack:        z, z_
 %endmacro
 
+%macro sub_fp254_2
+    // stack: x, x_, y, y_
+    SWAP3
+    // stack: y_, x_, y, x
+    SWAP1
+    // stack: x_, y_, y, x
+    SUBFP254
+    // stack:     z_, y, x
+    SWAP2
+    // stack:     x, y, z_
+    SUBFP254
+    // stack:        z, z_
+%endmacro
+
 /// Given z = x + iy: Fp254_2, return complex conjugate z': Fp254_2
 /// where input is represented z.re, z.im and output as z'.im, z'.re
 /// cost: 9; note this returns y, x for the output x + yi
@@ -364,6 +378,108 @@
     // stack:
 %endmacro
 
+// cost: 2
+%macro dup_fp254_2_0
+    // stack:       f: 2
+    DUP2
+    DUP2
+    // stack: f: 2, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_2
+    // stack:       X: 2, f: 2
+    DUP4
+    DUP4
+    // stack: f: 2, X: 2, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_4
+    // stack:       X: 4, f: 2
+    DUP6
+    DUP6
+    // stack: f: 2, X: 4, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_6
+    // stack:       X: 6, f: 2
+    DUP8
+    DUP8
+    // stack: f: 2, X: 6, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_7
+    // stack:       X: 7, f: 2
+    DUP9
+    DUP9
+    // stack: f: 2, X: 7, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_8
+    // stack:       X: 8, f: 2
+    DUP10
+    DUP10
+    // stack: f: 2, X: 8, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_10
+    // stack:       X: 10, f: 2
+    DUP12
+    DUP12
+    // stack: f: 2, X: 10, f: 2
+%endmacro
+
+// cost: 2
+%macro dup_fp254_2_12
+    // stack:       X: 12, f: 2
+    DUP14
+    DUP14
+    // stack: f: 2, X: 12, f: 2
+%endmacro
+
+// cost: 4
+%macro dup_bn_g2
+    // stack: X: 2, Y: 2
+    %dup_fp254_2_2
+    %dup_fp254_2_2
+    // stack: X: 2, Y: 2, X: 2, Y: 2
+%endmacro
+
+%macro swap_bn_g2
+    // stack: P: 4, Q: 4
+    %stack (P: 4, Q: 4) -> (Q, P)
+    // stack: Q: 4, P: 4
+%endmacro
+
+%macro swap_bn_g2_2
+    // stack: P: 4, T: 4, Q: 4
+    %stack (P: 4, T: 4, Q: 4) -> (Q, T, P)
+    // stack: Q: 4, T: 4, P: 4
+%endmacro
+
+%macro swap_fp254_2
+    // stack:       X: 2, Y: 2
+    %stack (x, x_, y, y_) -> (y, y_, x, x_)
+    // stack:       Y: 2, X: 2
+%endmacro
+
+%macro swap_fp254_2_2
+    // stack:       X: 2, T: 2, Y: 2
+    %stack (x, x_, t, t_, y, y_) -> (y, y_, t, t_, x, x_)
+    // stack:       Y: 2, T: 2, X: 2
+%endmacro
+
+%macro swap_fp254_2_4
+    // stack:       X: 2, T: 4, Y: 2
+    %stack (x, x_, t0, t1, t2, t3, y, y_) -> (y, y_, t0, t1, t2, t3, x, x_)
+    // stack:       Y: 2, T: 4, X: 2
+%endmacro
+
 // cost: 6
 %macro dup_fp254_6_0
     // stack:       f: 6
@@ -374,7 +490,7 @@
     DUP6
     DUP6
     // stack: f: 6, f: 6
-%endmacro 
+%endmacro
 
 // cost: 6
 %macro dup_fp254_6_2
@@ -386,7 +502,7 @@
     DUP8
     DUP8
     // stack: f: 6, X: 2, f: 6
-%endmacro 
+%endmacro
 
 // cost: 6
 %macro dup_fp254_6_6

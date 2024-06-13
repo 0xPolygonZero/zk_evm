@@ -2,7 +2,7 @@
 name = "trace_decoder"
 description = "Processes trace payloads into Intermediate Representation (IR) format."
 authors = ["Polygon Zero <bgluth@polygon.technology>"]
-version = "0.3.1"
+version = "0.4.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
