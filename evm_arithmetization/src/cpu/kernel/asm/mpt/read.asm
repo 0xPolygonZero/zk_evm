@@ -106,7 +106,7 @@ global mpt_read_extension_not_found:
     // Not found; return 0.
     %stack (key_part, future_nibbles, key, node_payload_ptr, retdest) -> (retdest, 0)
     JUMP
-mpt_read_extension_found:
+global mpt_read_extension_found:
     // stack: key_part, future_nibbles, key, node_payload_ptr, retdest
     DUP2 %mul_const(4) SHL // key_part_shifted = (key_part << (future_nibbles * 4))
     // stack: key_part_shifted, future_nibbles, key, node_payload_ptr, retdest
@@ -142,7 +142,7 @@ global mpt_read_leaf_not_found:
     // Not found; return 0.
     %stack (node_payload_ptr, retdest) -> (retdest, 0)
     JUMP
-mpt_read_leaf_found:
+global mpt_read_leaf_found:
     // stack: node_payload_ptr, retdest
     %add_const(2) // The value pointer is located after num_nibbles and the key.
     // stack: value_ptr_ptr, retdest
