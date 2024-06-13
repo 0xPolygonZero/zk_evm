@@ -146,11 +146,12 @@
     DUP1 %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START)
     %decode_rlp_list_len
     %stack (rlp_addr, len) -> (len, len, rlp_addr, %%after)
-    %jumpi(decode_and_store_blob_versioned_hashes)
+
+    // EIP-4844: Blob transactions should have at least 1 versioned hash
+    %assert_nonzero(invalid_txn_2)
+
     // stack: len, rlp_addr, %%after
-    POP SWAP1 POP
-    // stack: rlp_addr
-    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START) DUP2 SUB %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN)
+    %jump(decode_and_store_blob_versioned_hashes)
 %%after:
 %endmacro
 
@@ -173,6 +174,16 @@ decode_and_store_blob_versioned_hashes_loop:
     DUP2 DUP2 EQ %jumpi(decode_and_store_blob_versioned_hashes_finish)
     // stack: rlp_addr, end_rlp_addr, store_addr
     %decode_rlp_scalar // blob_versioned_hashes[i]
+    // stack: rlp_addr, hash, end_rlp_addr, store_addr
+
+    // EIP-4844: Versioned hashes should have `VERSIONED_HASH_VERSION_KZG` as MSB
+    DUP2
+    %shr_const(248)
+    // stack: MSB, hash, end_rlp_addr, store_addr
+    %eq_const(1)
+    // stack: hash_is_valid?, rlp_addr, hash, end_rlp_addr, store_addr
+    %assert_nonzero(invalid_txn_3)
+
     // stack: rlp_addr, hash, end_rlp_addr, store_addr
     SWAP3 DUP1 SWAP2
     // stack: hash, store_addr, store_addr, end_rlp_addr, rlp_addr
