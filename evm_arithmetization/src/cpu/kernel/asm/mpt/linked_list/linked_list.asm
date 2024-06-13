@@ -82,10 +82,11 @@ global init_linked_lists:
 %macro get_valid_account_ptr
      // stack: ptr/4
     DUP1
+    PUSH 4
     %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // By construction, both @SEGMENT_ACCESSED_STORAGE_KEYS and the unscaled list len
     // must be multiples of 4
-    %div_const(4)
+    DIV
     // stack: @SEGMENT_ACCESSED_STORAGE_KEYS/4 + accessed_strg_keys_len/4, ptr/4, ptr/4
     %assert_gt
     %mul_const(4)
@@ -200,10 +201,7 @@ insert_new_account:
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_account_loaded
-    POP
-    PUSH 0
-    SWAP1
-    SWAP2
+    %stack (addr, payload_ptr, retdest) -> (0, retdest, payload_ptr)
     JUMP
 
 %macro search_account
@@ -504,13 +502,13 @@ global debug_yo_no_me_llamo_javier:
     SWAP2
     JUMP
 
-/// Search the pair (addres, storage_key) in the storage the linked list.
+/// Search the pair (address, storage_key) in the storage the linked list.
 /// Returns `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
 /// and this is the first access, or `0, original_ptr` if it was already present and accessed.
 // TODO: Not sure if this is correct, bc if a value is not found we need to return 0 but keep track of it for
 // having the right cold_access
 global search_slot:
-    // stack: addr, payload_ptr, retdest
+    // stack: addr, key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_slot)
     // stack: pred_ptr/5, addr, key, payload_ptr, retdest
     %get_valid_slot_ptr
@@ -557,11 +555,9 @@ global search_slot:
 
 global debug_slot_not_found:
 slot_not_found:    
-// stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
-    %pop4
-    SWAP1
-    PUSH 1
-    SWAP1
+    // stack: pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest
+    %stack (pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest)
+        -> (retdest, 1, payload_ptr)
     JUMP
 
 slot_found_no_write:
@@ -668,6 +664,8 @@ global remove_slot:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
+    // stack: cold_access, slot_ptr
+    POP
 %endmacro
 
 %macro first_account

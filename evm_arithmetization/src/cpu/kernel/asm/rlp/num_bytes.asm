@@ -3,13 +3,9 @@
 global num_bytes:
     // stack: x, retdest
     DUP1 ISZERO %jumpi(return_1)
-    // Non-deterministically guess the number of bits
-    PROVER_INPUT(num_bits)
-    %stack(num_bits, x) -> (num_bits, 1, x, num_bits)
-    SUB
-    SHR
-    // stack: 1, num_bits
-    %assert_eq_const(1)
+    // stack: x, retdest
+    %num_bits
+    // stack: num_bits, retdest
     // convert number of bits to number of bytes
     %add_const(7)
     %shr_const(3)
@@ -27,4 +23,16 @@ return_1:
     %stack (x) -> (x, %%after)
     %jump(num_bytes)
 %%after:
+%endmacro
+
+%macro num_bits
+    // Non-deterministically guess the number of bits
+    // stack: x
+    PROVER_INPUT(num_bits)
+    %stack (num_bits, x) -> (num_bits, x, num_bits)
+    %decrement
+    SHR
+    // stack: 1, num_bits
+    %assert_eq_const(1)
+    // stack: num_bits
 %endmacro

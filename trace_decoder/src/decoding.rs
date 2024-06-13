@@ -142,7 +142,7 @@ impl TraceParsingError {
 /// An error reason for trie parsing.
 #[derive(Debug, Error)]
 pub enum TraceParsingErrorReason {
-    /// Failure to decode an Ethereum [Account].
+    /// Failure to decode an Ethereum Account.
     #[error("Failed to decode RLP bytes ({0}) as an Ethereum account due to the error: {1}")]
     AccountDecode(String, String),
 
@@ -186,7 +186,7 @@ impl From<CompactParsingError> for TraceParsingError {
     }
 }
 
-/// An enum to cover all Ethereum trie types (see https://ethereum.github.io/yellowpaper/paper.pdf for details).
+/// An enum to cover all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
 #[derive(Debug)]
 pub enum TrieType {
     /// State trie.
@@ -581,7 +581,7 @@ impl ProcessedBlockTrace {
             let withdrawal_addrs =
                 withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
             last_inputs.tries.state_trie = create_minimal_state_partial_trie(
-                &last_inputs.tries.state_trie,
+                &final_trie_state.state,
                 withdrawal_addrs,
                 iter::empty(),
             )?;

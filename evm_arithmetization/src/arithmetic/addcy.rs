@@ -84,8 +84,9 @@ const GOLDILOCKS_INVERSE_65536: u64 = 18446462594437939201;
 ///
 /// If `N_LIMBS = 1`, then this amounts to verifying that either `x_0
 /// + y_0 = z_0` or `x_0 + y_0 == z_0 + cy*2^16` (this is `t` on line
-/// 127ff). Ok. Now assume the constraints are valid for `N_LIMBS =
-/// n-1`. Then by induction,
+/// 127ff). Ok. Now assume the constraints are valid for `N_LIMBS = n-1`.
+///
+/// Then by induction,
 ///
 /// \sum_{i=0}^{n-1} (x_i + y_i) * 2^(16*i) + (x_n + y_n)*2^(16*n) ==
 /// \sum_{i=0}^{n-1} z_i * 2^(16*i) + cy_{n-1}*2^(16*n) + z_n*2^(16*n)

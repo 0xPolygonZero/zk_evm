@@ -8,14 +8,11 @@ blake2_generate_new_hash_value:
     MLOAD_GENERAL
     // stack: h_i, i, retdest
     %blake2_internal_state_addr
-    // stack: addr, h_i, i, retdest
-    DUP3
+    DUP1
+    // stack: addr, addr, h_i, i, retdest
+    DUP4
     ADD
     MLOAD_GENERAL
-    // stack: v_i, h_i, i, retdest
-    %blake2_internal_state_addr
-    // stack: addr, v_i, h_i, i, retdest
-    SWAP1
     // stack: v_i, addr, h_i, i, retdest
     SWAP3
     // stack: i, addr, h_i, v_i, retdest

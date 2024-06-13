@@ -39,8 +39,8 @@ global panic:
 %endmacro
 
 %macro assert_lt(ret)
-    GE
-    %assert_zero($ret)
+    LT
+    %assert_nonzero($ret)
 %endmacro
 
 %macro assert_le
