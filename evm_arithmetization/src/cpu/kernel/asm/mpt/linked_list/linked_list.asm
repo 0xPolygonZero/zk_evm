@@ -662,6 +662,8 @@ global remove_slot:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
+    // stack: cold_access, slot_ptr
+    POP
 %endmacro
 
 %macro first_account
