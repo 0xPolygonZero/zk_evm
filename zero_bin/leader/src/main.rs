@@ -11,6 +11,7 @@ use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use tracing::info;
 
+use crate::jerigon::{jerigon_main, ProofParams};
 use crate::utils::get_package_version;
 
 mod cli;
@@ -93,6 +94,7 @@ async fn main() -> Result<()> {
             proof_output_dir,
             save_inputs_on_error,
             block_time,
+            keep_intermediate_proofs,
         } => {
             let previous_proof = get_previous_proof(previous_proof)?;
             let mut block_interval = BlockInterval::new(&block_interval)?;
@@ -106,15 +108,17 @@ async fn main() -> Result<()> {
             }
 
             info!("Proving interval {block_interval}");
-
-            jerigon::jerigon_main(
+            jerigon_main(
                 runtime,
                 &rpc_url,
                 block_interval,
-                checkpoint_block_number,
-                previous_proof,
-                proof_output_dir,
-                save_inputs_on_error,
+                ProofParams {
+                    checkpoint_block_number,
+                    previous_proof,
+                    proof_output_dir,
+                    save_inputs_on_error,
+                    keep_intermediate_proofs,
+                },
             )
             .await?;
         }

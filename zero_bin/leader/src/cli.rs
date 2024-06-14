@@ -54,6 +54,15 @@ pub(crate) enum Command {
         /// to determine the blockchain node polling interval.
         #[arg(short, long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
         block_time: u64,
+        /// Keep intermediate proofs. Default action is to
+        /// delete them after the final proof is generated.
+        #[arg(
+            short,
+            long,
+            env = "ZERO_BIN_KEEP_INTERMEDIATE_PROOFS",
+            default_value_t = false
+        )]
+        keep_intermediate_proofs: bool,
     },
     /// Reads input from HTTP and writes output to a directory.
     Http {
