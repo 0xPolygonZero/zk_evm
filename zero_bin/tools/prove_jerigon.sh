@@ -82,15 +82,15 @@ if [[ $5 == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
     cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand jerigon --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG > $OUT_LOG_PATH 2>&1
-    if grep 'Successfully generated witness for block' $OUT_LOG_PATH; then
-        echo "Success - Note this was just a test, not a proof"
+    if grep -q 'All proof witnesses have been generated successfully.' $OUT_LOG_PATH; then
+        echo -e "Success - Note this was just a test, not a proof"
         # Remove the log on success if we don't want to keep it.
         if [ $ALWAYS_WRITE_LOGS -ne 1 ]; then
             rm $OUT_LOG_PATH
         fi
         exit
     else
-        echo "Failed to create a witness"
+        echo "Failed to create proof witnesses. See ${OUT_LOG_PATH} for more details."
         exit 1
     fi
 else

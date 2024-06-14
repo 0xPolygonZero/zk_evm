@@ -10,15 +10,19 @@ use url::Url;
 pub enum Args {
     /// Fetch and generate prover input from the RPC endpoint.
     Fetch {
+        // Starting block of interval to fetch
+        #[arg(short, long)]
+        start_block: u64,
+        // End block of interval to fetch
+        #[arg(short, long)]
+        end_block: u64,
         /// The RPC URL.
         #[arg(short = 'u', long, value_hint = ValueHint::Url)]
         rpc_url: Url,
-        /// The block number.
+        /// The checkpoint block number. If not provided,
+        /// block before the `start_block` is the checkpoint
         #[arg(short, long)]
-        block_number: BlockId,
-        /// The checkpoint block number.
-        #[arg(short, long, default_value = "0")]
-        checkpoint_block_number: BlockId,
+        checkpoint_block_number: Option<BlockId>,
     },
 }
 
@@ -34,18 +38,24 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let Args::Fetch {
+        start_block,
+        end_block,
         rpc_url,
-        block_number,
         checkpoint_block_number,
     } = Args::parse();
+
+    let checkpoint_block_number = checkpoint_block_number.unwrap_or((start_block - 1).into());
+    let block_interval = BlockInterval::Range(start_block..end_block + 1);
+
+    // Retrieve prover input from the Erigon node
     let prover_input = rpc::prover_input(
         RootProvider::new_http(rpc_url),
-        BlockInterval::SingleBlockId(block_number),
+        block_interval,
         checkpoint_block_number,
     )
     .await?;
 
-    serde_json::to_writer_pretty(io::stdout(), &prover_input)?;
+    serde_json::to_writer_pretty(io::stdout(), &prover_input.blocks)?;
 
     Ok(())
 }

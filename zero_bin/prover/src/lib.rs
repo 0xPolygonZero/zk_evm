@@ -46,7 +46,6 @@ impl BlockProverInput {
         use anyhow::Context as _;
 
         let block_number = self.get_block_number();
-        info!("Proving block {block_number}");
 
         let other_data = self.other_data;
         let txs = self.block_trace.into_txn_proof_gen_ir(
@@ -113,8 +112,6 @@ impl BlockProverInput {
             .try_collect::<Vec<_>>()
             .await?;
 
-        info!("Successfully generated witness for block {block_number}.");
-
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
             b_height: block_number
@@ -131,13 +128,16 @@ pub struct ProverInput {
 }
 
 impl ProverInput {
+    /// Prove all the blocks in the input.
+    /// Return the list of block numbers that are proved and if the proof data
+    /// is not saved to disk, return the generated block proofs as well.
     pub async fn prove(
         self,
         runtime: &Runtime,
         previous_proof: Option<GeneratedBlockProof>,
         save_inputs_on_error: bool,
         proof_output_dir: Option<PathBuf>,
-    ) -> Result<Vec<BlockNumber>> {
+    ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
         let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
             previous_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
 
@@ -158,14 +158,20 @@ impl ProverInput {
                         let proof = proof?;
                         let block_number = proof.b_height;
 
-                        // Write latest generated proof to disk or stdout
-                        ProverInput::write_proof(proof_output_dir, &proof).await?;
+                        // Write latest generated proof to disk if proof_output_dir is provided
+                        let return_proof: Option<GeneratedBlockProof> =
+                            if proof_output_dir.is_some() {
+                                ProverInput::write_proof(proof_output_dir, &proof).await?;
+                                None
+                            } else {
+                                Some(proof.clone())
+                            };
 
                         if tx.send(proof).is_err() {
                             anyhow::bail!("Failed to send proof");
                         }
 
-                        Ok(block_number)
+                        Ok((block_number, return_proof))
                     })
                     .boxed();
 

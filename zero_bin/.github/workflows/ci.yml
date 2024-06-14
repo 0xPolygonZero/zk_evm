@@ -76,7 +76,7 @@ jobs:
       - name: Run the script
         run: |
           pushd tools
-          ./simple_test.sh
+          ./prove_stdio.sh artifacts/witness_b19240705.json
 
   simple_proof_witness_only:
     name: Execute bash script to generate the proof witness for a small block.
@@ -89,4 +89,17 @@ jobs:
       - name: Run the script
         run: |
           pushd tools
-          ./simple_test.sh test_only
+          ./prove_stdio.sh artifacts/witness_b19240705.json test_only
+
+  multi_blocks_proof_regular:
+    name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
+    runs-on: zero-ci
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run the script
+        run: |
+          pushd tools
+          ./prove_stdio.sh artifacts/witness_b2_b7.json

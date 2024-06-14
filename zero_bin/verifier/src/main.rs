@@ -17,16 +17,22 @@ fn main() -> Result<()> {
     let args = cli::Cli::parse();
     let file = File::open(args.file_path)?;
     let des = &mut Deserializer::from_reader(&file);
-    let input: GeneratedBlockProof = serde_path_to_error::deserialize(des)?;
+    let input_proofs: Vec<GeneratedBlockProof> = serde_path_to_error::deserialize(des)?;
 
     let verifer = args
         .prover_state_config
         .into_prover_state_manager()
         .verifier()?;
 
-    match verifer.verify(&input.intern) {
-        Ok(_) => info!("Proof verified successfully!"),
-        Err(e) => info!("Proof verification failed with error: {:?}", e),
+    if input_proofs.into_iter().all(|block_proof| {
+        verifer
+            .verify(&block_proof.intern)
+            .map_err(|e| {
+                info!("Proof verification failed with error: {:?}", e);
+            })
+            .is_ok()
+    }) {
+        info!("All proofs verified successfully!");
     };
 
     Ok(())
