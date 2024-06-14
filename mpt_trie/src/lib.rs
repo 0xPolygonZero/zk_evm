@@ -16,6 +16,7 @@
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
+pub mod builder;
 pub mod nibbles;
 pub mod partial_trie;
 pub mod special_query;
