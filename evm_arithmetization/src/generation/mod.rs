@@ -241,6 +241,14 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         "Trace lengths (before padding): {:?}",
         state.traces.get_lengths()
     );
+    log::debug!(
+        "Final accounts linked list: {:?}",
+        state.get_accounts_linked_list()
+    );
+    log::debug!(
+        "Final storage linked list: {:?}",
+        state.get_storage_linked_list()
+    );
 
     let read_metadata = |field| state.memory.read_global_metadata(field);
     let trie_roots_before = TrieRoots {

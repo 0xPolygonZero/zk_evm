@@ -126,7 +126,6 @@ global insert_account_to_linked_list:
     %jump_neq_const(@U256_MAX, account_found)
     // The storage key is not in the list.
     PANIC
-
 account_found:
     // The address was already in the list
     // stack: pred_ptr, addr, payload_ptr, retdest
@@ -150,7 +149,7 @@ account_found:
     %eq_const(1)
     %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
-
+//DEBUG
 insert_new_account:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     POP
@@ -201,7 +200,7 @@ insert_new_account:
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_account_loaded
-    %stack (addr, payload_ptr, retdest) -> (0, retdest, payload_ptr)
+    %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
     JUMP
 
 %macro search_account

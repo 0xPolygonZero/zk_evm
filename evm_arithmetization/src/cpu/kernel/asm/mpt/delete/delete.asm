@@ -14,11 +14,12 @@ global mpt_delete:
     DUP1 %eq_const(@MPT_NODE_BRANCH)    %jumpi(mpt_delete_branch)
     DUP1 %eq_const(@MPT_NODE_EXTENSION) %jumpi(mpt_delete_extension)
     DUP1 %eq_const(@MPT_NODE_LEAF)      %jumpi(mpt_delete_leaf)
+    global debug_delete_empty_node:
          %eq_const(@MPT_NODE_EMPTY)     %jumpi(panic) // This should never happen.
          
     PANIC
 
-mpt_delete_leaf:
+global mpt_delete_leaf:
     // stack: node_type, node_payload_ptr, num_nibbles, key, retdest
     %pop4
     PUSH 0 // empty node ptr
@@ -35,7 +36,7 @@ global delete_account:
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     // stack: state_root_prt, 64, key, delete_account_save, retdest
     %jump(mpt_delete)
-delete_account_save:
+global delete_account_save:
     // stack: updated_state_root_ptr, retdest
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     JUMP

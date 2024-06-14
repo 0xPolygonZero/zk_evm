@@ -272,7 +272,6 @@ fn prepare_interpreter_all_accounts<F: Field>(
     addr: [u8; 20],
     code: &[u8],
 ) -> Result<()> {
-    init_logger();
     // Load all MPTs.
     initialize_mpts(interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
@@ -305,6 +304,7 @@ fn prepare_interpreter_all_accounts<F: Field>(
 /// Tests an SSTORE within a code similar to the contract code in add11_yml.
 #[test]
 fn sstore() -> Result<()> {
+    init_logger();
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
@@ -339,10 +339,12 @@ fn sstore() -> Result<()> {
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
     interpreter.push(0xdeadbeefu32.into());
+    log::debug!("coma comida");
     interpreter.run()?;
 
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter_all_accounts(&mut interpreter, trie_inputs, addr, &code)?;
+    log::debug!("cpto");
 
     interpreter.run()?;
 
@@ -396,7 +398,7 @@ fn sstore() -> Result<()> {
 /// Tests an SLOAD within a code similar to the contract code in add11_yml.
 #[test]
 fn sload() -> Result<()> {
-    // We take the same `to` account as in add11_yml.
+    init_logger(); // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
     let addr_hashed = keccak(addr);

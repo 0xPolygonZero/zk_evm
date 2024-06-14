@@ -155,17 +155,21 @@ after_mpt_delete:
     %add_const(4)
     %jump(delete_removed_accounts)
 
-// Delete all slots in `storage_ptr_ptr` with address == `addr`.
+// Delete all slots in `storage_ptr_ptr` with address == `addr` and
+// address < @GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN.
 // Pre stack: addr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr, storage_ptr_ptr'.
-// TODO: If there are slots with the last address which where inserted
-// and/or deleted, they will aso processed in `delete_this_slot`. This
-// wouldn't represent any problem, but we should double-check.
 delete_removed_slots:
     DUP3
     MLOAD_GENERAL
     DUP2
     EQ
+    %mload_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
+    DUP5
+global debug_in_inital_storage:
+    LT
+    MUL // AND
+    // jump if we either change the address or reach the en of the initial linked list
     %jumpi(maybe_delete_this_slot)
     // If we are here we have deleted all the slots for this key
     %stack (addr, root_ptr, storage_ptr_ptr, retdest) -> (retdest, root_ptr, storage_ptr_ptr)

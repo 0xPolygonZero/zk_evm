@@ -102,10 +102,11 @@ pub(crate) enum GlobalMetadata {
     /// Segment::StorageLinkedList
     StorageLinkedListLen,
     InitialAccountsLinkedListLen,
+    InitialStorageLinkedListLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 50;
+    pub(crate) const COUNT: usize = 51;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -164,6 +165,7 @@ impl GlobalMetadata {
             Self::AccountsLinkedListLen,
             Self::StorageLinkedListLen,
             Self::InitialAccountsLinkedListLen,
+            Self::InitialStorageLinkedListLen,
         ]
     }
 
@@ -222,6 +224,7 @@ impl GlobalMetadata {
             Self::InitialAccountsLinkedListLen => {
                 "GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN"
             }
+            Self::InitialStorageLinkedListLen => "GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN",
         }
     }
 }
