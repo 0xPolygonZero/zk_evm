@@ -23,21 +23,21 @@ keccak-hash = { workspace = true }
 log = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }
 num = { workspace = true }
-num-bigint = "0.4.3"
-once_cell = "1.13.0"
-pest = "2.1.3"
-pest_derive = "2.1.0"
+num-bigint = { workspace = true }
+once_cell = { workspace = true }
+pest = { workspace = true }
+pest_derive = { workspace = true }
 plonky2 = { workspace = true }
 plonky2_util = { workspace = true }
 starky = { workspace = true }
 rand = { workspace = true }
-rand_chacha = "0.3.1"
+rand_chacha = { workspace = true }
 rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-static_assertions = "1.1.0"
-hashbrown = { version = "0.14.0" }
-tiny-keccak = "2.0.2"
+static_assertions = { workspace = true }
+hashbrown = { workspace = true }
+tiny-keccak = { workspace = true }
 serde_json = { workspace = true }
 
 # Local dependencies
@@ -47,10 +47,10 @@ mpt_trie = { workspace = true }
 jemallocator = "0.5.0"
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = { workspace = true }
 hex = { workspace = true }
-ripemd = "0.1.3"
-sha2 = "0.10.6"
+ripemd = { workspace = true }
+sha2 = { workspace = true }
 
 [features]
 default = ["parallel"]

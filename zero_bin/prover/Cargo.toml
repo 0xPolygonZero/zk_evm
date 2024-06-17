@@ -19,10 +19,10 @@ futures = { workspace = true }
 alloy.workspace = true
 tokio = {workspace = true}
 serde_json = {workspace = true}
-ruint = { version = "1.12.1", features = ["num-traits", "primitive-types"] }
+ruint = { workspace = true, features = ["num-traits", "primitive-types"] }
 ops = { path = "../ops" }
 common = { path = "../common" }
-num-traits = "0.2.19"
+num-traits = { workspace = true }
 
 [features]
 default = []

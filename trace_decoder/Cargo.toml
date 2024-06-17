@@ -11,10 +11,10 @@ keywords.workspace = true
 
 [dependencies]
 bytes = { workspace = true }
-ciborium = "0.2.1"
-ciborium-io = "0.2.1"
+ciborium = { workspace = true }
+ciborium-io = { workspace = true }
 enum-as-inner = { workspace = true }
-enumn = "0.1.12"
+enumn = { workspace = true }
 ethereum-types = { workspace = true }
 hex = { workspace = true }
 hex-literal = { workspace = true }
@@ -23,7 +23,7 @@ log = { workspace = true }
 rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true }
-serde_with = "3.4.0"
+serde_with = { workspace = true }
 thiserror = { workspace = true }
 
 # Local dependencies
@@ -31,8 +31,8 @@ mpt_trie = { workspace = true }
 evm_arithmetization = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.5.1"
-pretty_env_logger = "0.5.0"
+criterion = { workspace = true }
+pretty_env_logger = { workspace = true }
 serde_json = { workspace = true }
 
 [[bench]]

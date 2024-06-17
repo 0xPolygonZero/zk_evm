@@ -22,12 +22,12 @@ mpt_trie = { workspace = true }
 thiserror = { workspace = true }
 alloy.workspace = true
 futures = { workspace = true }
-hex = "0.4.3"
-hex-literal = "0.4.1"
+hex = { workspace = true }
+hex-literal = { workspace = true }
 itertools = "0.13.0"
-url = "2.5.0"
+url = { workspace = true }
 __compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
-tower = { version = "0.4" , features = ["retry"] }
+tower = { workspace = true, features = ["retry"] }
 
 # Local dependencies
 common = { path = "../common" }

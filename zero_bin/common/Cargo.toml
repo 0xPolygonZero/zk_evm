@@ -21,4 +21,4 @@ serde_json = { workspace = true }
 futures = { workspace = true }
 tokio = { workspace = true }
 alloy = { workspace = true }
-async-stream = "0.3.5"
+async-stream = { workspace = true }

@@ -22,8 +22,8 @@ serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 futures = { workspace = true }
 alloy.workspace = true
-axum = "0.7.4"
-toml = "0.8.12"
+axum = { workspace = true }
+toml = { workspace = true }
 
 # Local dependencies
 ops = { path = "../ops" }
