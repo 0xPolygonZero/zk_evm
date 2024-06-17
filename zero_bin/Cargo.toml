@@ -16,8 +16,9 @@ serde_json = "1.0.107"
 thiserror = "1.0.50"
 futures = "0.3.29"
 keccak-hash = "0.10.0"
-alloy = { git = "https://github.com/alloy-rs/alloy", features = [
+alloy = { git = "https://github.com/alloy-rs/alloy", tag='v0.1.1', default-features = false, features = [
     "consensus",
+    "reqwest",
     "json-rpc",
     "rlp",
     "rpc",
@@ -27,6 +28,7 @@ alloy = { git = "https://github.com/alloy-rs/alloy", features = [
     "providers",
     "transports",
     "transport-http",
+    "rpc-types-debug"
 ] }
 
 
