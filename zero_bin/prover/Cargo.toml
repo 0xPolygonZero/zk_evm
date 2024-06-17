@@ -1,0 +1,29 @@
+[package]
+name = "prover"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+proof_gen = { workspace = true }
+trace_decoder = { workspace = true }
+tracing = { workspace = true }
+paladin-core = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+alloy.workspace = true
+tokio = {workspace = true}
+serde_json = {workspace = true}
+ruint = { version = "1.12.1", features = ["num-traits", "primitive-types"] }
+ops = { path = "../ops" }
+common = { path = "../common" }
+num-traits = "0.2.19"
+
+[features]
+default = []
+test_only = ["ops/test_only"]
