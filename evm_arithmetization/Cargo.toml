@@ -18,7 +18,7 @@ env_logger = { workspace = true }
 ethereum-types = { workspace = true }
 hex = { workspace = true, optional = true }
 hex-literal = { workspace = true }
-itertools = "0.11.0"
+itertools = { workspace = true }
 keccak-hash = { workspace = true }
 log = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }

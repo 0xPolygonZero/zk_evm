@@ -24,12 +24,12 @@ alloy.workspace = true
 futures = { workspace = true }
 hex = { workspace = true }
 hex-literal = { workspace = true }
-itertools = "0.13.0"
+itertools = { workspace = true }
 url = { workspace = true }
 __compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 tower = { workspace = true, features = ["retry"] }
 
 # Local dependencies
-common = { path = "../common" }
-prover = { path = "../prover" }
+zero_bin_common ={ workspace = true }
+prover = { workspace = true }
 

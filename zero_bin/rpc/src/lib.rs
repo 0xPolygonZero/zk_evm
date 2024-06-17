@@ -6,7 +6,7 @@ use alloy::{
 };
 use anyhow::Context as _;
 use clap::ValueEnum;
-use common::block_interval::BlockInterval;
+use zero_bin_common::block_interval::BlockInterval;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
 use prover::ProverInput;

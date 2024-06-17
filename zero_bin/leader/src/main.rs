@@ -5,7 +5,7 @@ use anyhow::Result;
 use clap::Parser;
 use cli::Command;
 use client::RpcParams;
-use common::block_interval::BlockInterval;
+use zero_bin_common::block_interval::BlockInterval;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::Runtime;

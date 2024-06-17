@@ -20,8 +20,8 @@ alloy.workspace = true
 tokio = {workspace = true}
 serde_json = {workspace = true}
 ruint = { workspace = true, features = ["num-traits", "primitive-types"] }
-ops = { path = "../ops" }
-common = { path = "../common" }
+ops = { workspace = true }
+zero_bin_common ={ workspace = true }
 num-traits = { workspace = true }
 
 [features]

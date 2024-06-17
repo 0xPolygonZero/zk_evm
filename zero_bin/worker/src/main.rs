@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use common::prover_state::cli::CliProverStateConfig;
+use zero_bin_common::prover_state::cli::CliProverStateConfig;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::WorkerRuntime;

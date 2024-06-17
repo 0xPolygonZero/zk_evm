@@ -49,6 +49,7 @@ impl-codec = "0.6.0"
 impl-num-traits = "0.1.2"
 impl-rlp = "0.3.0"
 impl-serde = "0.4.0"
+itertools = "0.13.0"
 keccak-hash = "0.10.0"
 log = "0.4.20"
 mpt_trie = { path = "mpt_trie", version = "0.3.0" }
@@ -85,6 +86,12 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uint = "0.9.5"
 url = "2.5.0"
+
+# zero-bin releated deps
+ops = { path = "zero_bin/ops" }
+prover = { path = "zero_bin/prover" }
+rpc = { path = "zero_bin/rpc" }
+zero_bin_common = { path = "zero_bin/common" }
 
 # plonky2-related dependencies
 plonky2 = "0.2.2"

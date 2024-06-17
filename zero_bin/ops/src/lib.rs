@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
+use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 use evm_arithmetization::{proof::PublicValues, GenerationInputs};
 use keccak_hash::keccak;
 use paladin::{
@@ -29,7 +29,7 @@ impl Operation for TxProof {
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         let _span = TxProofSpan::new(&input);
         let proof = if self.save_inputs_on_error {
-            common::prover_state::p_manager()
+            zero_bin_common::prover_state::p_manager()
                 .generate_txn_proof(input.clone())
                 .map_err(|err| {
                     if let Err(write_err) = save_inputs_to_disk(
@@ -45,7 +45,7 @@ impl Operation for TxProof {
                     FatalError::from_anyhow(err, FatalStrategy::Terminate)
                 })?
         } else {
-            common::prover_state::p_manager()
+            zero_bin_common::prover_state::p_manager()
                 .generate_txn_proof(input)
                 .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?
         };

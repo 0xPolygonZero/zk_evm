@@ -18,5 +18,5 @@ clap = { workspace = true }
 tokio = { workspace = true }
 
 # Local dependencies
-ops = { path = "../ops" }
-common = { path = "../common" }
+ops ={ workspace = true }
+zero_bin_common ={ workspace = true }

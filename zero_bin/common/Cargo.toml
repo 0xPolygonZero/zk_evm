@@ -1,5 +1,5 @@
 [package]
-name = "common"
+name = "zero_bin_common"
 authors = ["Polygon Zero <zbrown@polygon.technology>"]
 version = "0.1.0"
 edition.workspace = true

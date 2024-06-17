@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
-use common::fs::generate_block_proof_file_name;
+use zero_bin_common::fs::generate_block_proof_file_name;
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use ops::TxProof;

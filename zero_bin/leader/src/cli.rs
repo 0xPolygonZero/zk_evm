@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use alloy::transports::http::reqwest::Url;
 use clap::{Parser, Subcommand, ValueHint};
-use common::prover_state::cli::CliProverStateConfig;
+use zero_bin_common::prover_state::cli::CliProverStateConfig;
 
 /// zero-bin leader config
 #[derive(Parser)]
