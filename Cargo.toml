@@ -1,30 +1,6 @@
 [workspace]
-members = ["mpt_trie", "proof_gen", "trace_decoder", "evm_arithmetization"]
+members = ["mpt_trie", "proof_gen", "trace_decoder", "evm_arithmetization", "zero_bin/leader", "zero_bin/worker", "zero_bin/common", "zero_bin/ops", "zero_bin/verifier", "zero_bin/rpc", "zero_bin/prover"]
 resolver = "2"
-
-[workspace.dependencies]
-bytes = "1.5.0"
-enum-as-inner = "0.6.0"
-env_logger = "0.10.0"
-ethereum-types = "0.14.1"
-hex = "0.4.3"
-hex-literal = "0.4.1"
-keccak-hash = "0.10.0"
-log = "0.4.20"
-num = "0.4.1"
-rand = "0.8.5"
-rlp = "0.5.2"
-rlp-derive = "0.1.0"
-serde = "1.0.166"
-serde_json = "1.0.96"
-thiserror = "1.0.49"
-
-# plonky2-related dependencies
-plonky2 = "0.2.2"
-plonky2_maybe_rayon = "0.2.0"
-plonky2_util = "0.2.0"
-starky = "0.4.0"
-
 
 [workspace.package]
 edition = "2021"
@@ -32,3 +8,54 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/0xPolygonZero/zk_evm"
 homepage = "https://github.com/0xPolygonZero/zk_evm"
 keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
+categories = ["cryptography::cryptocurrencies"]
+
+[workspace.dependencies]
+anyhow = "1.0.40"
+alloy = { git = "https://github.com/alloy-rs/alloy", tag='v0.1.1', default-features = false, features = [
+    "consensus",
+    "reqwest",
+    "json-rpc",
+    "rlp",
+    "rpc",
+    "rpc-client",
+    "rpc-types-eth",
+    "rpc-types-trace",
+    "providers",
+    "transports",
+    "transport-http",
+    "rpc-types-debug"
+] }
+bytes = "1.5.0"
+clap = { version = "4.4.6", features = ["derive", "env"] }
+dotenvy = "0.15.7"
+enum-as-inner = "0.6.0"
+env_logger = "0.10.0"
+ethereum-types = "0.14.1"
+evm_arithmetization = { path = "evm_arithmetization" }
+futures = "0.3.29"
+hex = "0.4.3"
+hex-literal = "0.4.1"
+keccak-hash = "0.10.0"
+log = "0.4.20"
+mpt_trie = { path = "mpt_trie", version = "0.3.0" }
+num = "0.4.1"
+paladin-core = "0.4.2"
+proof_gen = { path = "proof_gen", version = "0.2.0" }
+rand = "0.8.5"
+rlp = "0.5.2"
+rlp-derive = "0.1.0"
+serde = "1.0.166"
+serde_json = "1.0.96"
+serde_path_to_error = "0.1.14"
+thiserror = "1.0.49"
+tokio = { version = "1.33.0", features = ["full"] }
+trace_decoder = { path = "trace_decoder" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# plonky2-related dependencies
+plonky2 = "0.2.2"
+plonky2_maybe_rayon = "0.2.0"
+plonky2_util = "0.2.0"
+starky = "0.4.0"

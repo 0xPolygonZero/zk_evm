@@ -1,5 +1,6 @@
 [package]
 name = "verifier"
+authors = ["Polygon Zero <zbrown@polygon.technology>"]
 version = "0.1.0"
 edition = "2021"
 

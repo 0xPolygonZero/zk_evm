@@ -27,8 +27,8 @@ serde_with = "3.4.0"
 thiserror = { workspace = true }
 
 # Local dependencies
-mpt_trie = { version = "0.3.0", path = "../mpt_trie" }
-evm_arithmetization = { version = "0.2.0", path = "../evm_arithmetization" }
+mpt_trie = { workspace = true }
+evm_arithmetization = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.5.1"

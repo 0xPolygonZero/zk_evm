@@ -12,7 +12,7 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
-anyhow = "1.0.40"
+anyhow = { workspace = true }
 bytes = { workspace = true }
 env_logger = { workspace = true }
 ethereum-types = { workspace = true }
@@ -41,7 +41,7 @@ tiny-keccak = "2.0.2"
 serde_json = { workspace = true }
 
 # Local dependencies
-mpt_trie = { version = "0.3.0", path = "../mpt_trie" }
+mpt_trie = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = "0.5.0"
