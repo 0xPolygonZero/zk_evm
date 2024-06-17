@@ -2,7 +2,7 @@ use alloy::primitives::B256;
 use alloy::rpc::types::eth::BlockNumberOrTag;
 use alloy::{
     providers::Provider,
-    rpc::types::eth::{Block, BlockId, Withdrawal},
+    rpc::types::eth::{Block, BlockId, BlockTransactionsKind, Withdrawal},
     transports::Transport,
 };
 use anyhow::Context as _;
@@ -37,20 +37,20 @@ pub struct ZeroBlockWitness(TrieCompact);
 /// - Just the hash.
 ///
 /// We only need the latter.
-const BLOCK_WITH_FULL_TRANSACTIONS: bool = false;
+const BLOCK_WITH_HASHES_ONLY: BlockTransactionsKind = BlockTransactionsKind::Hashes;
 
 /// Retrieve block information from the provider
 pub async fn get_block<ProviderT, TransportT>(
     provider: &mut ProviderT,
     target_block_id: BlockId,
-    full_transaction_data: bool,
+    block_transaction_kind: BlockTransactionsKind,
 ) -> anyhow::Result<Block>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
     provider
-        .get_block(target_block_id, full_transaction_data)
+        .get_block(target_block_id, block_transaction_kind)
         .await?
         .context("block does not exist")
 }
@@ -79,7 +79,7 @@ where
 
     // Grab block info
     let target_block = provider
-        .get_block(target_block_id, BLOCK_WITH_FULL_TRANSACTIONS)
+        .get_block(target_block_id, BLOCK_WITH_HASHES_ONLY)
         .await?
         .context("target block does not exist")?;
     let target_block_number = target_block
@@ -101,7 +101,7 @@ where
                 let provider = &provider;
                 async move {
                     let block = provider
-                        .get_block(n.into(), BLOCK_WITH_FULL_TRANSACTIONS)
+                        .get_block(n.into(), BLOCK_WITH_HASHES_ONLY)
                         .await
                         .context("couldn't get block")?
                         .context("no such block")?;
@@ -181,14 +181,11 @@ where
     TransportT: Transport + Clone,
 {
     // Grab interval checkpoint block state trie
-    let checkpoint_state_trie_root = get_block(
-        &mut provider,
-        checkpoint_block_id,
-        BLOCK_WITH_FULL_TRANSACTIONS,
-    )
-    .await?
-    .header
-    .state_root;
+    let checkpoint_state_trie_root =
+        get_block(&mut provider, checkpoint_block_id, BLOCK_WITH_HASHES_ONLY)
+            .await?
+            .header
+            .state_root;
 
     let mut block_proofs = Vec::new();
     let mut block_interval = block_interval.into_bounded_stream()?;

@@ -44,10 +44,16 @@ async fn main() -> Result<()> {
         if let Some((major_minor, _)) = pkg_ver.as_ref().and_then(|s| s.rsplit_once('.')) {
             let circuits_version = format!("{}.x", major_minor);
             // Set the environment variable for the evm_arithmetization package version
-            env::set_var("EVM_ARITHMETIZATION_PKG_VER", circuits_version);
+            #[allow(unused_unsafe)]
+            unsafe {
+                env::set_var("EVM_ARITHMETIZATION_PKG_VER", circuits_version);
+            }
         } else {
             // Set to "NA" if version extraction fails
-            env::set_var("EVM_ARITHMETIZATION_PKG_VER", "NA");
+            #[allow(unused_unsafe)]
+            unsafe {
+                env::set_var("EVM_ARITHMETIZATION_PKG_VER", "NA");
+            }
         }
     }
 
