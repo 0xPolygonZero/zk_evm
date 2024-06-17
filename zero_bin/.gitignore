@@ -17,3 +17,6 @@ verifier_state_*
 
 # Ignore IntelliJ IDEA/RustRover/Clion metadata
 .idea/
+
+# System files
+.DS_Store

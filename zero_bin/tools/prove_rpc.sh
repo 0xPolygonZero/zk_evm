@@ -4,8 +4,11 @@
 # 1 --> Start block idx
 # 2 --> End block index (inclusive)
 # 3 --> Rpc endpoint:port (eg. http://35.246.1.96:8545)
-# 4 --> Ignore previous proofs (boolean)
-# 5 --> Test run only flag `test_only` (optional)
+# 4 --> Rpc type (eg. jerigon / native)
+# 5 --> Ignore previous proofs (boolean)
+# 6 --> Backoff in milliseconds (optional [default: 0])
+# 7 --> Number of retries (optional [default: 0])
+# 8 --> Test run only flag `test_only` (optional)
 
 export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=1
@@ -15,7 +18,7 @@ export RUST_LOG=info
 # https://github.com/dtolnay/linkme/pull/88
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
-if [[ $5 == "test_only" ]]; then
+if [[ $8 == "test_only" ]]; then
   # Circuit sizes don't matter in test_only mode, so we keep them minimal.
   export ARITHMETIC_CIRCUIT_SIZE="16..17"
   export BYTE_PACKING_CIRCUIT_SIZE="9..10"
@@ -42,7 +45,10 @@ TOT_BLOCKS=$(($2-$1+1))
 START_BLOCK=$1
 END_BLOCK=$2
 NODE_RPC_URL=$3
-IGNORE_PREVIOUS_PROOFS=$4
+NODE_RPC_TYPE=$4
+IGNORE_PREVIOUS_PROOFS=$5
+BACKOFF=${6:-0}
+RETRIES=${7:-0}
 
 
 mkdir -p $PROOF_OUTPUT_DIR
@@ -78,10 +84,10 @@ fi
 # If we set test_only flag, we'll generate a dummy
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
-if [[ $5 == "test_only" ]]; then
+if [[ $8 == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
-    cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand jerigon --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG > $OUT_LOG_PATH 2>&1
+    cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" > $OUT_LOG_PATH 2>&1
     if grep -q 'All proof witnesses have been generated successfully.' $OUT_LOG_PATH; then
         echo -e "Success - Note this was just a test, not a proof"
         # Remove the log on success if we don't want to keep it.
@@ -96,7 +102,7 @@ if [[ $5 == "test_only" ]]; then
 else
     # normal run
     echo "Proving blocks ${BLOCK_INTERVAL} now... (Total: ${TOT_BLOCKS})"
-    cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand jerigon --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG > $OUT_LOG_PATH 2>&1
+    cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" > $OUT_LOG_PATH 2>&1
 
     retVal=$?
     if [ $retVal -ne 0 ]; then

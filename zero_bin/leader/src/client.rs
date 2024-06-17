@@ -1,13 +1,22 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use alloy::providers::RootProvider;
+use alloy::transports::http::reqwest::Url;
 use anyhow::Result;
 use common::block_interval::BlockInterval;
 use common::fs::generate_block_proof_file_name;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
+use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing::{error, info, warn};
+
+#[derive(Debug)]
+pub struct RpcParams {
+    pub rpc_url: Url,
+    pub rpc_type: RpcType,
+    pub backoff: u64,
+    pub max_retries: u32,
+}
 
 #[derive(Debug, Default)]
 pub struct ProofParams {
@@ -18,17 +27,22 @@ pub struct ProofParams {
     pub keep_intermediate_proofs: bool,
 }
 
-/// The main function for the jerigon mode.
-pub(crate) async fn jerigon_main(
+/// The main function for the client.
+pub(crate) async fn client_main(
     runtime: Runtime,
-    rpc_url: &str,
+    rpc_params: RpcParams,
     block_interval: BlockInterval,
     mut params: ProofParams,
 ) -> Result<()> {
     let prover_input = rpc::prover_input(
-        RootProvider::new_http(rpc_url.parse()?),
+        &build_http_retry_provider(
+            rpc_params.rpc_url,
+            rpc_params.backoff,
+            rpc_params.max_retries,
+        ),
         block_interval,
         params.checkpoint_block_number.into(),
+        rpc_params.rpc_type,
     )
     .await?;
 
@@ -91,4 +105,14 @@ pub(crate) async fn jerigon_main(
     }
 
     Ok(())
+}
+
+impl From<super::cli::Command> for RpcType {
+    fn from(command: super::cli::Command) -> Self {
+        match command {
+            super::cli::Command::Native { .. } => RpcType::Native,
+            super::cli::Command::Jerigon { .. } => RpcType::Jerigon,
+            _ => panic!("Unsupported command type"),
+        }
+    }
 }

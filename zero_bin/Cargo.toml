@@ -17,7 +17,13 @@ thiserror = "1.0.50"
 futures = "0.3.29"
 keccak-hash = "0.10.0"
 alloy = { git = "https://github.com/alloy-rs/alloy", features = [
+    "consensus",
+    "json-rpc",
+    "rlp",
+    "rpc",
+    "rpc-client",
     "rpc-types-eth",
+    "rpc-types-trace",
     "providers",
     "transports",
     "transport-http",
@@ -26,9 +32,10 @@ alloy = { git = "https://github.com/alloy-rs/alloy", features = [
 
 # zk-evm dependencies
 plonky2 = "0.2.2"
-evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm.git", tag = "v0.4.0"  }
-trace_decoder = { git = "https://github.com/0xPolygonZero/zk_evm.git", tag = "v0.4.0"  }
-proof_gen = { git = "https://github.com/0xPolygonZero/zk_evm.git", tag = "v0.4.0"  }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm.git", tag = "v0.4.0" }
+mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm.git", tag = "v0.4.0" }
+trace_decoder = { git = "https://github.com/0xPolygonZero/zk_evm.git", tag = "v0.4.0" }
+proof_gen = { git = "https://github.com/0xPolygonZero/zk_evm.git", tag = "v0.4.0" }
 
 [workspace.package]
 edition = "2021"

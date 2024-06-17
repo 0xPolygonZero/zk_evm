@@ -4,6 +4,7 @@ use std::{fs::File, path::PathBuf};
 use anyhow::Result;
 use clap::Parser;
 use cli::Command;
+use client::RpcParams;
 use common::block_interval::BlockInterval;
 use dotenvy::dotenv;
 use ops::register;
@@ -11,13 +12,13 @@ use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use tracing::info;
 
-use crate::jerigon::{jerigon_main, ProofParams};
+use crate::client::{client_main, ProofParams};
 use crate::utils::get_package_version;
 
 mod cli;
+mod client;
 mod http;
 mod init;
-mod jerigon;
 mod stdio;
 mod utils;
 
@@ -68,7 +69,7 @@ async fn main() -> Result<()> {
 
     let runtime = Runtime::from_config(&args.paladin, register()).await?;
 
-    match args.command {
+    match args.command.clone() {
         Command::Stdio {
             previous_proof,
             save_inputs_on_error,
@@ -101,6 +102,20 @@ async fn main() -> Result<()> {
             save_inputs_on_error,
             block_time,
             keep_intermediate_proofs,
+            backoff,
+            max_retries,
+        }
+        | Command::Native {
+            rpc_url,
+            block_interval,
+            checkpoint_block_number,
+            previous_proof,
+            proof_output_dir,
+            save_inputs_on_error,
+            block_time,
+            keep_intermediate_proofs,
+            backoff,
+            max_retries,
         } => {
             let previous_proof = get_previous_proof(previous_proof)?;
             let mut block_interval = BlockInterval::new(&block_interval)?;
@@ -114,9 +129,14 @@ async fn main() -> Result<()> {
             }
 
             info!("Proving interval {block_interval}");
-            jerigon_main(
+            client_main(
                 runtime,
-                &rpc_url,
+                RpcParams {
+                    rpc_url,
+                    rpc_type: args.command.into(),
+                    backoff,
+                    max_retries,
+                },
                 block_interval,
                 ProofParams {
                     checkpoint_block_number,

@@ -85,6 +85,7 @@ Usage: leader [OPTIONS] <COMMAND>
 Commands:
   stdio    Reads input from stdin and writes output to stdout
   jerigon  Reads input from a Jerigon node and writes output to stdout
+  native   Reads input from a native node and writes output to stdout 
   http     Reads input from HTTP and writes output to a directory
   help     Print this message or the help of the given subcommand(s)
 
@@ -205,29 +206,79 @@ cargo r --release --bin leader jerigon --help
 
 Reads input from a Jerigon node and writes output to stdout
 
-Usage: leader jerigon [OPTIONS] --rpc-url <RPC_URL> --block-number <BLOCK_NUMBER>
+Usage: leader jerigon [OPTIONS] --rpc-url <RPC_URL> --block-interval <BLOCK_INTERVAL>
 
 Options:
   -u, --rpc-url <RPC_URL>
 
-  -b, --block-number <BLOCK_NUMBER>
-          The block number for which to generate a proof
+  -i, --block-interval <BLOCK_INTERVAL>
+          The block interval for which to generate a proof
   -c, --checkpoint-block-number <CHECKPOINT_BLOCK_NUMBER>
           The checkpoint block number [default: 0]
   -f, --previous-proof <PREVIOUS_PROOF>
           The previous proof output
-  -o, --proof-output-path <PROOF_OUTPUT_PATH>
-          If provided, write the generated proof to this file instead of stdout
+  -o, --proof-output-dir <PROOF_OUTPUT_DIR>
+          If provided, write the generated proofs to this directory instead of stdout
+  -s, --save-inputs-on-error
+          If true, save the public inputs to disk on error
+  -b, --block-time <BLOCK_TIME>
+          Network block time in milliseconds. This value is used to determine the blockchain node polling interval [env: ZERO_BIN_BLOCK_TIME=] [default: 2000]
+  -k, --keep-intermediate-proofs
+          Keep intermediate proofs. Default action is to delete them after the final proof is generated [env: ZERO_BIN_KEEP_INTERMEDIATE_PROOFS=]
+      --backoff <BACKOFF>
+          Backoff in milliseconds for request retries [default: 0]
+      --max-retries <MAX_RETRIES>
+          The maximum number of retries [default: 0]
   -h, --help
           Print help
-  -s, --save-inputs-on-error
-          If provided, save the public inputs to disk on error
 ```
 
 Prove a block.
 
 ```bash
 cargo r --release --bin leader -- -r in-memory jerigon -u <RPC_URL> -b 16 > ./output/proof_16.json
+```
+
+### Native
+
+The native command reads proof input from a native node and writes output to stdout.
+
+```
+cargo r --release --bin leader native --help
+
+Reads input from a native node and writes output to stdout
+
+Usage: leader native [OPTIONS] --rpc-url <RPC_URL> --block-interval <BLOCK_INTERVAL>
+
+Options:
+  -u, --rpc-url <RPC_URL>
+
+  -i, --block-interval <BLOCK_INTERVAL>
+          The block interval for which to generate a proof
+  -c, --checkpoint-block-number <CHECKPOINT_BLOCK_NUMBER>
+          The checkpoint block number [default: 0]
+  -f, --previous-proof <PREVIOUS_PROOF>
+          The previous proof output
+  -o, --proof-output-dir <PROOF_OUTPUT_DIR>
+          If provided, write the generated proofs to this directory instead of stdout
+  -s, --save-inputs-on-error
+          If true, save the public inputs to disk on error
+  -b, --block-time <BLOCK_TIME>
+          Network block time in milliseconds. This value is used to determine the blockchain node polling interval [env: ZERO_BIN_BLOCK_TIME=] [default: 2000]
+  -k, --keep-intermediate-proofs
+          Keep intermediate proofs. Default action is to delete them after the final proof is generated [env: ZERO_BIN_KEEP_INTERMEDIATE_PROOFS=]
+      --backoff <BACKOFF>
+          Backoff in milliseconds for request retries [default: 0]
+      --max-retries <MAX_RETRIES>
+          The maximum number of retries [default: 0]
+  -h, --help
+          Print help
+```
+
+Prove a block.
+
+```bash
+cargo r --release --bin leader -- -r in-memory native -u <RPC_URL> -b 16 > ./output/proof_16.json
 ```
 
 ### HTTP
@@ -343,7 +394,7 @@ Options:
 Example:
 
 ```bash
-cargo r --release --bin rpc fetch --rpc-url <RPC_URL> --block-number 16 > ./output/block-16.json
+cargo r --release --bin rpc fetch --start-block <START_BLOCK> --end-block <END_BLOCK> --rpc-url <RPC_URL> --block-number 16 > ./output/block-16.json
 ```
 
 ## Docker
@@ -364,16 +415,16 @@ For testing proof generation for blocks, the `testing` branch should be used.
 
 ### Proving Blocks
 
-If you want to generate a full block proof, you can use `tools/prove_jerigon.sh`:
+If you want to generate a full block proof, you can use `tools/prove_rpc.sh`:
 
 ```sh
-./prove_jerigon.sh <BLOCK_START> <BLOCK_END> <FULL_NODE_ENDPOINT> <IGNORE_PREVIOUS_PROOFS>
+./prove_rpc.sh <BLOCK_START> <BLOCK_END> <FULL_NODE_ENDPOINT> <RPC_TYPE> <IGNORE_PREVIOUS_PROOFS>
 ```
 
 Which may look like this:
 
 ```sh
-./prove_jerigon.sh 17 18 http://127.0.0.1:8545 false
+./prove_rpc.sh 17 18 http://127.0.0.1:8545 jerigon false
 ```
 
 Which will attempt to generate proofs for blocks `17` & `18` consecutively and incorporate the previous block proof during generation.
@@ -385,16 +436,16 @@ A few other notes:
 
 ### Generating Witnesses Only
 
-If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `tools/prove_jerigon.sh` in the `test_only` mode:
+If you want to test a block without the high CPU & memory requirements that come with creating a full proof, you can instead generate only the witness using `tools/prove_rpc.sh` in the `test_only` mode:
 
 ```sh
-./prove_jerigon.sh <START_BLOCK> <END_BLOCK> <FULL_NODE_ENDPOINT> <IGNORE_PREVIOUS_PROOFS> test_only
+./prove_rpc.sh <START_BLOCK> <END_BLOCK> <FULL_NODE_ENDPOINT> <RPC_TYPE> <IGNORE_PREVIOUS_PROOFS> <BACKOFF> <RETRIES> test_only
 ```
 
 Filled in:
 
 ```sh
-./prove_jerigon.sh 18299898 18299899 http://34.89.57.138:8545 true test_only
+./prove_rpc.sh 18299898 18299899 http://34.89.57.138:8545 jerigon true 0 0 test_only
 ```
 
 Finally, note that both of these testing scripts force proof generation to be sequential by allowing only one worker. Because of this, this is not a realistic representation of performance but makes the debugging logs much easier to follow.
