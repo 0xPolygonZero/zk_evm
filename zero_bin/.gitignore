@@ -7,3 +7,9 @@ circuits/
 # Folders containing logs from the utility scripts in tools/
 debug/
 proofs/
+
+# Files generated from the tools script tests
+test.out
+proofs.json
+verify.out
+leader.out

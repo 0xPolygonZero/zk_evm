@@ -6,6 +6,3 @@ Cargo.lock
 .idea/
 .vscode
 
-# Serialized generated prover & verifier state used by plonky2
-prover_state_*
-verifier_state_*
