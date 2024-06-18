@@ -97,7 +97,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uint = "0.9.5"
 url = "2.5.0"
 
-# zero-bin releated deps
+# zero-bin related dependencies
 ops = { path = "zero_bin/ops" }
 prover = { path = "zero_bin/prover" }
 rpc = { path = "zero_bin/rpc" }
