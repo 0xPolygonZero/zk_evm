@@ -1,0 +1,19 @@
+[package]
+name = "verifier"
+authors = ["Polygon Zero <zbrown@polygon.technology>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dotenvy = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_path_to_error = { workspace = true }
+proof_gen = { workspace = true }
+
+# Local dependencies
+zero_bin_common ={ path = "../common" }

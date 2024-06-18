@@ -118,6 +118,78 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
+  test_zero_bin:
+    name: Test zero_bin
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+            cache-on-failure: true
+
+      - name: Test in zero_bin subdirectory
+        run: |
+          cargo test --manifest-path zero_bin/common/Cargo.toml
+          cargo test --manifest-path zero_bin/leader/Cargo.toml
+          cargo test --manifest-path zero_bin/ops/Cargo.toml
+          cargo test --manifest-path zero_bin/prover/Cargo.toml
+          cargo test --manifest-path zero_bin/rpc/Cargo.toml
+          cargo test --manifest-path zero_bin/verifier/Cargo.toml
+          cargo test --manifest-path zero_bin/worker/Cargo.toml
+
+        env:
+          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
+          RUST_LOG: 1
+          CARGO_INCREMENTAL: 1
+          RUST_BACKTRACE: 1
+
+  simple_proof_regular:
+    name: Execute bash script to generate and verify a proof for a small block.
+    runs-on: zero-ci
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run the script
+        run: |
+          pushd zero_bin/tools
+          ./prove_stdio.sh artifacts/witness_b19240705.json
+
+  simple_proof_witness_only:
+    name: Execute bash script to generate the proof witness for a small block.
+    runs-on: zero-ci
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run the script
+        run: |
+          pushd zero_bin/tools
+          ./prove_stdio.sh artifacts/witness_b19240705.json test_only
+
+  multi_blocks_proof_regular:
+    name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
+    runs-on: zero-ci
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run the script
+        run: |
+          pushd zero_bin/tools
+          ./prove_stdio.sh artifacts/witness_b2_b7.json
+
   lints:
     name: Rustdoc, Formatting and Clippy
     runs-on: ubuntu-latest
