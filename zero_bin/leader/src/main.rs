@@ -5,12 +5,12 @@ use anyhow::Result;
 use clap::Parser;
 use cli::Command;
 use client::RpcParams;
-use zero_bin_common::block_interval::BlockInterval;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use tracing::info;
+use zero_bin_common::block_interval::BlockInterval;
 
 use crate::client::{client_main, ProofParams};
 use crate::utils::get_package_version;

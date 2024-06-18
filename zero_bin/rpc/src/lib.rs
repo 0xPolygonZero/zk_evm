@@ -6,11 +6,11 @@ use alloy::{
 };
 use anyhow::Context as _;
 use clap::ValueEnum;
-use zero_bin_common::block_interval::BlockInterval;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
 use prover::ProverInput;
 use trace_decoder::types::{BlockLevelData, OtherBlockData};
+use zero_bin_common::block_interval::BlockInterval;
 
 mod compat;
 pub mod jerigon;

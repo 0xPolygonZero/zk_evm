@@ -1,9 +1,9 @@
 use anyhow::Result;
 use clap::Parser;
-use zero_bin_common::prover_state::cli::CliProverStateConfig;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::WorkerRuntime;
+use zero_bin_common::prover_state::cli::CliProverStateConfig;
 
 mod init;
 

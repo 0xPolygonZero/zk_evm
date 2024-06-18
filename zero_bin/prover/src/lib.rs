@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
-use zero_bin_common::fs::generate_block_proof_file_name;
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use ops::TxProof;
@@ -21,6 +20,7 @@ use trace_decoder::{
     types::{CodeHash, OtherBlockData},
 };
 use tracing::info;
+use zero_bin_common::fs::generate_block_proof_file_name;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {

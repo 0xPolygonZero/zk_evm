@@ -3,12 +3,12 @@ use std::path::PathBuf;
 
 use alloy::transports::http::reqwest::Url;
 use anyhow::Result;
-use zero_bin_common::block_interval::BlockInterval;
-use zero_bin_common::fs::generate_block_proof_file_name;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing::{error, info, warn};
+use zero_bin_common::block_interval::BlockInterval;
+use zero_bin_common::fs::generate_block_proof_file_name;
 
 #[derive(Debug)]
 pub struct RpcParams {

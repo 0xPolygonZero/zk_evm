@@ -40,7 +40,7 @@ enumn = "0.1.12"
 env_logger = "0.10.0"
 ethereum-types = "0.14.1"
 eth_trie = "0.4.0"
-evm_arithmetization = { path = "evm_arithmetization" }
+evm_arithmetization = { path = "evm_arithmetization", version = "0.2.0" }
 futures = "0.3.29"
 hashbrown = "0.14.0"
 hex = "0.4.3"
@@ -81,7 +81,7 @@ tiny-keccak = "2.0.2"
 tokio = { version = "1.33.0", features = ["full"] }
 toml = "0.8.12"
 tower = "0.4"
-trace_decoder = { path = "trace_decoder" }
+trace_decoder = { path = "trace_decoder", version = "0.4.0" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uint = "0.9.5"

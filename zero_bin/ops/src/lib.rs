@@ -1,6 +1,5 @@
 use std::time::Instant;
 
-use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 use evm_arithmetization::{proof::PublicValues, GenerationInputs};
 use keccak_hash::keccak;
 use paladin::{
@@ -13,6 +12,7 @@ use proof_gen::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::{error, event, info_span, Level};
+use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
 

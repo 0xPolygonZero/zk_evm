@@ -2,10 +2,10 @@ use std::io;
 
 use alloy::rpc::types::eth::BlockId;
 use clap::{Parser, ValueHint};
-use zero_bin_common::block_interval::BlockInterval;
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
+use zero_bin_common::block_interval::BlockInterval;
 
 #[derive(Parser)]
 pub enum Cli {
