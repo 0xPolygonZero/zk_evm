@@ -1,5 +1,15 @@
 [workspace]
-members = ["mpt_trie", "proof_gen", "trace_decoder", "evm_arithmetization", "zero_bin/leader", "zero_bin/worker", "zero_bin/common", "zero_bin/ops", "zero_bin/verifier", "zero_bin/rpc", "zero_bin/prover"]
+members = ["mpt_trie",
+    "proof_gen",
+    "trace_decoder",
+    "evm_arithmetization",
+    "zero_bin/leader",
+    "zero_bin/worker",
+    "zero_bin/common",
+    "zero_bin/ops",
+    "zero_bin/verifier",
+    "zero_bin/rpc",
+    "zero_bin/prover"]
 resolver = "2"
 
 [workspace.package]
