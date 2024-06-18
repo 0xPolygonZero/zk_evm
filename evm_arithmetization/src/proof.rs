@@ -435,7 +435,7 @@ impl PublicValuesTarget {
         }
     }
 
-    /// Returns the public values in `pv0` or `pv1` depening on `condition`.
+    /// Returns the public values in `pv0` or `pv1` depending on `condition`.
     pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         condition: BoolTarget,
