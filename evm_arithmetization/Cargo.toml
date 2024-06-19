@@ -2,7 +2,10 @@
 name = "evm_arithmetization"
 description = "Implementation of STARKs for the Ethereum Virtual Machine"
 version = "0.2.0"
-authors = ["Daniel Lubarov <daniel@lubarov.com>", "William Borgeaud <williamborgeaud@gmail.com>"]
+authors = [
+    "Daniel Lubarov <daniel@lubarov.com>",
+    "William Borgeaud <williamborgeaud@gmail.com>",
+]
 readme = "README.md"
 categories = ["cryptography"]
 edition.workspace = true
@@ -43,9 +46,6 @@ serde_json = { workspace = true }
 # Local dependencies
 mpt_trie = { workspace = true }
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = "0.5.0"
-
 [dev-dependencies]
 criterion = { workspace = true }
 hex = { workspace = true }
@@ -58,7 +58,7 @@ asmtools = ["hex"]
 parallel = [
     "plonky2/parallel",
     "plonky2_maybe_rayon/parallel",
-    "starky/parallel"
+    "starky/parallel",
 ]
 
 [[bin]]
