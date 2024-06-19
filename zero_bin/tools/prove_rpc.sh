@@ -106,7 +106,7 @@ else
 
     retVal=$?
     if [ $retVal -ne 0 ]; then
-        # Some error occured.
+        # Some error occurred.
         echo "Block ${i} errored. See ${OUT_LOG_PATH} for more details."
         exit $retVal
     else

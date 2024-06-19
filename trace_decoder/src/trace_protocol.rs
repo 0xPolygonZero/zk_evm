@@ -4,7 +4,7 @@
 //! generation latency & throughput, the overall priority of this protocol is
 //! ease of implementation for clients. The flexibility comes from giving
 //! multiple ways to the client to provide the data for the protocol, where the
-//! implementors can pick whichever way is the most convenient for them.
+//! implementers can pick whichever way is the most convenient for them.
 //!
 //! It might not be obvious why we need traces for each txn in order to generate
 //! proofs. While it's true that we could just run all the txns of a block in an

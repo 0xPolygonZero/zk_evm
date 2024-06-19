@@ -312,7 +312,7 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns a non-jumpdest proof for the address on the top of the stack. A
     /// non-jumpdest proof is the closest address to the address on the top of
-    /// the stack, if the closses address is >= 32, or zero otherwise.
+    /// the stack, if the closest address is >= 32, or zero otherwise.
     fn run_next_non_jumpdest_proof(&mut self) -> Result<U256, ProgramError> {
         let code = self.get_current_code()?;
         let address = u256_to_usize(stack_peek(self, 0)?)?;
@@ -452,7 +452,7 @@ impl<F: Field> GenerationState<F> {
     pub(crate) fn get_addresses_access_list(&self) -> Result<AccList, ProgramError> {
         // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
         // virtual address in the segment. In order to get the length we need
-        // to substract `Segment::AccessedAddresses` as usize.
+        // to subtract `Segment::AccessedAddresses` as usize.
         let acc_addr_len =
             u256_to_usize(self.get_global_metadata(GlobalMetadata::AccessedAddressesLen))?
                 - Segment::AccessedAddresses as usize;
@@ -474,7 +474,7 @@ impl<F: Field> GenerationState<F> {
     pub(crate) fn get_storage_keys_access_list(&self) -> Result<AccList, ProgramError> {
         // GlobalMetadata::AccessedStorageKeysLen stores the value of the next available
         // virtual address in the segment. In order to get the length we need
-        // to substract Segment::AccessedStorageKeys as usize
+        // to subtract Segment::AccessedStorageKeys as usize
         let acc_storage_len = u256_to_usize(
             self.memory.get_with_init(MemoryAddress::new(
                 0,

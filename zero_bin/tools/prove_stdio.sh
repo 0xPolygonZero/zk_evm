@@ -8,7 +8,7 @@
 # 1 --> Input witness json file
 # 2 --> Test run only flag `test_only` (optional)
 
-# We're going to set the paralellism in line with the total cpu count
+# We're going to set the parallelism in line with the total cpu count
 num_procs=$(nproc)
 
 # Configured Rayon and Tokio with rough defaults

@@ -94,7 +94,7 @@ fn eval_packed_shl<P: PackedField>(
 }
 
 /// Evaluates the constraints for an SHR opcode.
-/// The logic is tha same as the one for DIV. The only difference is that
+/// The logic is the same as the one for DIV. The only difference is that
 /// the inputs are in `INPUT_REGISTER_1`  and `INPUT_REGISTER_2` instead of
 /// `INPUT_REGISTER_0` and `INPUT_REGISTER_1`.
 fn eval_packed_shr<P: PackedField>(
