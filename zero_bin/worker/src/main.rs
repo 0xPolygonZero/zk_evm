@@ -7,6 +7,10 @@ use zero_bin_common::prover_state::cli::CliProverStateConfig;
 
 mod init;
 
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static GLOBAL: Jemalloc = jemallocator::Jemalloc;
+
 #[derive(Parser, Debug)]
 struct Cli {
     #[clap(flatten)]
