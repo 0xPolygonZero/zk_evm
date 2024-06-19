@@ -7,9 +7,11 @@ use zero_bin_common::prover_state::cli::CliProverStateConfig;
 
 mod init;
 
+// TODO: https://github.com/0xPolygonZero/zk_evm/issues/302
+//       this should probably be removed.
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
-static GLOBAL: Jemalloc = jemallocator::Jemalloc;
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[derive(Parser, Debug)]
 struct Cli {
