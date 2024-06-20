@@ -40,6 +40,9 @@ fi
 # Force the working directory to always be the `tools/` directory. 
 TOOLS_DIR=$(dirname $(realpath "$0"))
 
+# Set the environment variable to let the binary know that we're running in the project workspace.
+export CARGO_WORKSPACE_DIR="${TOOLS_DIR}/../"
+
 PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
 OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b$1_$2.log"
 ALWAYS_WRITE_LOGS=0 # Change this to `1` if you always want logs to be written.

@@ -14,6 +14,9 @@ num_procs=$(nproc)
 # Force the working directory to always be the `tools/` directory. 
 TOOLS_DIR=$(dirname $(realpath "$0"))
 
+# Set the environment variable to let the binary know that we're running in the project workspace.
+export CARGO_WORKSPACE_DIR="${TOOLS_DIR}/../"
+
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
 export TOKIO_WORKER_THREADS=$num_procs
