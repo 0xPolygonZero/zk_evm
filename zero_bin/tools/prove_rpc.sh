@@ -38,7 +38,7 @@ else
 fi
 
 PROOF_OUTPUT_DIR="proofs"
-OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b${i}.log"
+OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b$1_$2.log"
 ALWAYS_WRITE_LOGS=0 # Change this to `1` if you always want logs to be written.
 TOT_BLOCKS=$(($2-$1+1))
 
