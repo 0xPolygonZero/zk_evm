@@ -53,18 +53,28 @@ jobs:
         run: |
           cd test-jerigon-network
           docker-compose -f docker-compose.yml up -d
-          echo "Jerigon network is up and running"
+          docker container wait smart-contracts
+          echo "Jerigon network is up and running, ready for testing"
 
-      # - name: Run jerigon test network with docker compose
-      #   uses: hoverkraft-tech/compose-action@v2.0.1
-      #   with:
-      #     compose-file: "./docker-compose.yml"    
-      #     cwd: "./test-jerigon-network"
-      #     up-flags: "-d"
-      #     down-flags: "--volumes"
-
-      - name: Test jerigon network
+      - name: Rpc test with curl
         run: |
-          curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc": "2.0", "method": "eth_blockNumber", "params": [], "id":83}' localhost:8545
+            curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc": "2.0", "method": "eth_blockNumber", "params": [], "id":83}' localhost:8545
         env:
-          RUST_LOG: info
+            RUST_LOG: info
+  
+      - name: Run prove blocks in test_only mode
+        run: |
+          cd zero_bin/tools
+          ./prove_rpc.sh 0x2 0x7 http://localhost:8546 jerigon true 0 0 test_only
+          echo "Proving blocks in test_only mode done"
+
+
+      - name: Run prove blocks in real mode
+        run: |
+          rm -rf debug/* proofs/* circuits/* ./proof.json test.out verify.out leader.out
+          RUN_VERIFICATION=true ./prove_rpc.sh 0x2 0x7 http://localhost:8546 jerigon true
+          echo "Proving blocks in real mode done"
+          
+    
+
+

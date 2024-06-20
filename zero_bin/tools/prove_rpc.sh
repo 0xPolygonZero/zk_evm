@@ -49,7 +49,7 @@ NODE_RPC_TYPE=$4
 IGNORE_PREVIOUS_PROOFS=$5
 BACKOFF=${6:-0}
 RETRIES=${7:-0}
-
+RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
 
 mkdir -p $PROOF_OUTPUT_DIR
 
@@ -122,3 +122,21 @@ fi
 
 
 
+# If we're running the verification, we'll do it here.
+if [ "$RUN_VERIFICATION" = true ]; then
+  echo "Running the verification"
+
+  proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
+  echo "Verifying the proof of the latest block in the interval:" $proof_file_name
+  echo [ > $PROOF_OUTPUT_DIR/proofs.json && cat $proof_file_name >> $PROOF_OUTPUT_DIR/proofs.json && echo ] >> $PROOF_OUTPUT_DIR/proofs.json
+  cargo r --release --bin verifier -- -f $PROOF_OUTPUT_DIR/proofs.json > $PROOF_OUTPUT_DIR/verify.out 2>&1
+
+  if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
+      echo "All proofs verified successfully!";
+  else
+      echo "there was an issue with proof verification";
+      exit 1
+  fi
+else
+  echo "Skipping verification..."
+fi
