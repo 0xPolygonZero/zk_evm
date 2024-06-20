@@ -11,6 +11,9 @@
 # We're going to set the parallelism in line with the total cpu count
 num_procs=$(nproc)
 
+# Force the working directory to always be the `tools/` directory. 
+TOOLS_DIR=$(dirname $(realpath "$0"))
+
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
 export TOKIO_WORKER_THREADS=$num_procs
@@ -80,12 +83,12 @@ fi
 cargo build --release --jobs "$num_procs"
 
 start_time=$(date +%s%N)
-../../target/release/leader --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee leader.out
+"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee leader.out
 end_time=$(date +%s%N)
 
 tail -n 1 leader.out > proofs.json
 
-../../target/release/verifier -f proofs.json | tee verify.out
+"${TOOLS_DIR}/../../target/release/verifier" -f proofs.json | tee verify.out
 
 if grep -q 'All proofs verified successfully!' verify.out; then
     duration_ns=$((end_time - start_time))
