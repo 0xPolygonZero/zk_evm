@@ -282,6 +282,6 @@ fn prover_to_disk(
 /// current directory.
 fn relative_circuit_dir_path() -> String {
     env::var(CARGO_WORKSPACE_DIR_ENV)
-        .map(|p| format!("{}/{}", p, CIRCUITS_DIR))
+        .map(|p| format!("{}tools/{}", p, CIRCUITS_DIR))
         .unwrap_or_else(|_| CIRCUITS_DIR.to_string())
 }
