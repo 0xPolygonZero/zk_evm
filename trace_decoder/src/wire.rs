@@ -20,13 +20,13 @@ use winnow::{
     combinator::{empty, eof, fail, preceded, repeat_till, trace},
     error::{ErrorKind, FromExternalError, StrContext},
     stream::Stream,
-    token::{any, take},
+    token::{any, one_of, take},
     Parser as _,
 };
 
 pub fn parse(input: &[u8]) -> anyhow::Result<NonEmpty<Vec<Instruction>>> {
     match preceded(
-        1u8,
+        one_of((0u8, 1u8)), // header
         repeat_till(1.., instruction, eof).map(|(it, _)| {
             NonEmpty::<Vec<_>>::new(it).expect("repeat_till should ensure non-empty collection")
         }),
