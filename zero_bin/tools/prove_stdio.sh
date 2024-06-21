@@ -86,12 +86,12 @@ fi
 cargo build --release --jobs "$num_procs"
 
 start_time=$(date +%s%N)
-"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee leader.out
+"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee "${TOOLS_DIR}/leader.out"
 end_time=$(date +%s%N)
 
-tail -n 1 leader.out > proofs.json
+tail -n 1 leader.out > "${TOOLS_DIR}/proofs.json"
 
-"${TOOLS_DIR}/../../target/release/verifier" -f proofs.json | tee verify.out
+"${TOOLS_DIR}/../../target/release/verifier" -f proofs.json | tee "${TOOLS_DIR}/verify.out"
 
 if grep -q 'All proofs verified successfully!' verify.out; then
     duration_ns=$((end_time - start_time))
