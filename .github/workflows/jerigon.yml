@@ -73,7 +73,7 @@ jobs:
         run: |
           cd zero_bin/tools
           rm -rf debug/* proofs/* circuits/* ./proof.json test.out verify.out leader.out
-          RUN_VERIFICATION=true ./prove_rpc.sh 0x5 0x7 http://localhost:8546 jerigon true
+          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./prove_rpc.sh 0x2 0x4 http://localhost:8546 jerigon true
           echo "Proving blocks in real mode done"
           
       - name: Shut down network
