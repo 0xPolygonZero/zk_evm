@@ -387,7 +387,7 @@ impl<F: Field> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
         if let Some(([_, ptr], _)) = self
             .get_addresses_access_list()?
-            .zip(self.get_addresses_access_list()?.skip(1))
+            .zip(self.get_addresses_access_list()?.skip(2))
             .find(|&(_, [next_addr, _])| next_addr == addr)
         {
             Ok(ptr / U256::from(2))

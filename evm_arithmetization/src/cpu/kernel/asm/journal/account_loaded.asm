@@ -11,7 +11,6 @@ global revert_account_loaded:
     POP
     %journal_load_1
     // stack: address, retdest
-    // TODO: remove 1 from the counter in the linked_lists.
     DUP1 %eq_const(@RIP160) %jumpi(ripemd)
     %jump(remove_accessed_addresses)
 

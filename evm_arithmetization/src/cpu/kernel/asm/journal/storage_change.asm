@@ -12,8 +12,8 @@ global revert_storage_change:
     DUP3 ISZERO %jumpi(delete)
     // stack: address, slot, prev_value, retdest
     %read_slot_linked_list
-    // stack: storage_found, cold_access, value_ptr, prev_value, retdest
-    %assert_eq_const(1) POP
+    // stack: cold_access, value_ptr, prev_value, retdest
+    POP DUP1 %assert_nonzero
     // stack: value_ptr, prev_value, retdest
     %mstore_trie_data
     JUMP
@@ -26,15 +26,3 @@ delete:
     SWAP1 %addr_to_state_key
     // stack: addr_key, slot_key, retdest
     %jump(remove_slot)
-
-new_storage_root:
-    // stack: new_storage_root_ptr, address, retdest
-    DUP2 %mpt_read_state_trie
-    // stack: account_ptr, new_storage_root_ptr, address, retdest
-
-    // Update account with our new storage root pointer.
-    %add_const(2)
-    // stack: account_storage_root_ptr_ptr, new_storage_root_ptr, address, retdest
-    %mstore_trie_data
-    // stack: address, retdest
-    POP JUMP
