@@ -1,5 +1,6 @@
 [workspace]
-members = ["mpt_trie",
+members = [
+    "mpt_trie",
     "smt_trie",
     "proof_gen",
     "trace_decoder",
@@ -11,8 +12,9 @@ members = ["mpt_trie",
     "zero_bin/ops",
     "zero_bin/verifier",
     "zero_bin/rpc",
-    "zero_bin/prover", 
-    "compat"]
+    "zero_bin/prover",
+    "compat",
+]
 resolver = "2"
 
 [workspace.package]
@@ -24,7 +26,7 @@ keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
 categories = ["cryptography::cryptocurrencies"]
 
 [workspace.dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", tag='v0.1.1', default-features = false, features = [
+alloy = { git = "https://github.com/alloy-rs/alloy", tag = 'v0.1.1', default-features = false, features = [
     "consensus",
     "reqwest",
     "json-rpc",
@@ -36,7 +38,7 @@ alloy = { git = "https://github.com/alloy-rs/alloy", tag='v0.1.1', default-featu
     "providers",
     "transports",
     "transport-http",
-    "rpc-types-debug"
+    "rpc-types-debug",
 ] }
 anyhow = "1.0.86"
 async-stream = "0.3.5"
@@ -120,3 +122,10 @@ quote = "1.0"
 syn = "2.0"
 trybuild = "1.0"
 zk_evm_proc_macro = { path = "proc_macro" }
+
+bitflags = "2.5.0"
+bitvec = "1.0.1"
+either = "1.12.0"
+nunny = "0.2.1"
+u4 = "0.1.0"
+winnow = "0.6.13"

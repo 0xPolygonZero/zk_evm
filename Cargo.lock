@@ -4591,28 +4591,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "smt_trie"
-version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/type2#24639a7562debf5c17f16067f9c330e2eb18c3ee"
-dependencies = [
- "bytes",
- "enum-as-inner",
- "ethereum-types",
- "hex",
- "hex-literal",
- "keccak-hash 0.10.0",
- "log",
- "num-traits",
- "parking_lot",
- "plonky2",
- "rand",
- "rlp",
- "serde",
- "thiserror",
- "uint",
-]
-
-[[package]]
 name = "socket2"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5102,7 +5080,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "smt_trie 0.1.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/type2)",
+ "smt_trie",
  "thiserror",
  "u4",
  "winnow 0.6.13",

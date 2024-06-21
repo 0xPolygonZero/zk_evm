@@ -23,15 +23,15 @@ serde_with = { workspace = true }
 thiserror = { workspace = true }
 mpt_trie = { workspace = true }
 evm_arithmetization = { workspace = true }
-nunny = { version = "0.2.1", features = ["serde"] }
+nunny = { workspace = true, features = ["serde"] }
 anyhow.workspace = true
-winnow = "0.6.13"
-bitflags = "2.5.0"
-bitvec = "1.0.1"
-u4 = "0.1.0"
-either = "1.12.0"
+winnow = { workspace = true }
+bitflags = { workspace = true }
+bitvec = { workspace = true }
+u4 = { workspace = true }
+either = { workspace = true }
 plonky2.workspace = true
-smt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/type2" } # TODO(0xaatif): this is insane
+smt_trie = { workspace = true } # TODO(0xaatif): this is insane
 itertools.workspace = true
 
 [dev-dependencies]
