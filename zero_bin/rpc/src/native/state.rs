@@ -9,6 +9,10 @@ use alloy::{
 use anyhow::Context as _;
 use futures::future::{try_join, try_join_all};
 use mpt_trie::{builder::PartialTrieBuilder, partial_trie::HashedPartialTrie};
+use trace_decoder::{
+    BlockTraceTriePreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
+    SeparateTriePreImages, TxnInfo,
+};
 
 use crate::Compat;
 
@@ -16,8 +20,8 @@ use crate::Compat;
 pub async fn process_state_witness<ProviderT, TransportT>(
     provider: &ProviderT,
     block: Block,
-    txn_infos: &[trace_decoder::TxnInfo],
-) -> anyhow::Result<trace_decoder::BlockTraceTriePreImages>
+    txn_infos: &[TxnInfo],
+) -> anyhow::Result<BlockTraceTriePreImages>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -38,22 +42,15 @@ where
     let (state, storage_proofs) =
         generate_state_witness(prev_state_root, state_access, provider, block_number).await?;
 
-    Ok(trace_decoder::BlockTraceTriePreImages::Separate(
-        trace_decoder::SeparateTriePreImages {
-            state: trace_decoder::SeparateTriePreImage::Direct(state.build()),
-            storage: trace_decoder::SeparateStorageTriesPreImage::MultipleTries(
-                storage_proofs
-                    .into_iter()
-                    .map(|(a, m)| {
-                        (
-                            a.compat(),
-                            trace_decoder::SeparateTriePreImage::Direct(m.build()),
-                        )
-                    })
-                    .collect(),
-            ),
-        },
-    ))
+    Ok(BlockTraceTriePreImages::Separate(SeparateTriePreImages {
+        state: SeparateTriePreImage::Direct(state.build()),
+        storage: SeparateStorageTriesPreImage::MultipleTries(
+            storage_proofs
+                .into_iter()
+                .map(|(a, m)| (a.compat(), SeparateTriePreImage::Direct(m.build())))
+                .collect(),
+        ),
+    }))
 }
 
 /// Iterate over the tx_infos and process the state access for each address.
@@ -62,7 +59,7 @@ where
 /// Returns a map from address to the set of storage keys accessed by that
 /// address.
 pub fn process_states_access(
-    tx_infos: &[trace_decoder::TxnInfo],
+    tx_infos: &[TxnInfo],
     block: &Block,
 ) -> anyhow::Result<HashMap<Address, HashSet<StorageKey>>> {
     let mut state_access = HashMap::<Address, HashSet<StorageKey>>::new();

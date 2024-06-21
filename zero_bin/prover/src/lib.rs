@@ -14,13 +14,14 @@ use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::oneshot;
+use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
-    pub block_trace: trace_decoder::BlockTrace,
-    pub other_data: trace_decoder::OtherBlockData,
+    pub block_trace: BlockTrace,
+    pub other_data: OtherBlockData,
 }
 
 impl BlockProverInput {

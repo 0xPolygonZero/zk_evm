@@ -5,11 +5,12 @@
 //! (<https://etherscan.io/block/19240650>) containing 201 transactions and 16 withdrawals.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use trace_decoder::{BlockTrace, OtherBlockData};
 
 #[derive(Clone, Debug, serde::Deserialize)]
 pub struct ProverInput {
-    pub block_trace: trace_decoder::BlockTrace,
-    pub other_data: trace_decoder::OtherBlockData,
+    pub block_trace: BlockTrace,
+    pub other_data: OtherBlockData,
 }
 
 fn criterion_benchmark(c: &mut Criterion) {

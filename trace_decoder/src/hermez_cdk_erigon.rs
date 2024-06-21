@@ -34,7 +34,7 @@ pub struct Frontend {
 
 /// # Panics
 /// - Liberally, both in this module and the [`smt_trie`] library. Therefore, do
-///   NOT call this function on untrusted inputs
+///   NOT call this function on untrusted inputs.
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
     let (node, code) = fold(instructions).context("couldn't fold smt from instructions")?;
     let (trie, collation) =

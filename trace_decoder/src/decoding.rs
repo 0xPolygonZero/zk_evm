@@ -469,7 +469,7 @@ impl ProcessedBlockTrace {
 
     /// If a branch collapse occurred after a delete, then we must ensure that
     /// the other single child that remains also is not hashed when passed into
-    /// plonky2. Returns the key to the remaining child if a collapse occured.
+    /// plonky2. Returns the key to the remaining child if a collapse occurred.
     fn delete_node_and_report_remaining_key_if_branch_collapsed(
         trie: &mut HashedPartialTrie,
         delete_k: &Nibbles,

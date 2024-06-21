@@ -9,6 +9,7 @@ use alloy::{
 use anyhow::Context as _;
 use futures::try_join;
 use prover::BlockProverInput;
+use trace_decoder::BlockTrace;
 
 mod state;
 mod txn;
@@ -40,7 +41,7 @@ where
 async fn process_block_trace<ProviderT, TransportT>(
     provider: &ProviderT,
     block_number: BlockId,
-) -> anyhow::Result<trace_decoder::BlockTrace>
+) -> anyhow::Result<BlockTrace>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -53,7 +54,7 @@ where
     let (code_db, txn_info) = txn::process_transactions(&block, provider).await?;
     let trie_pre_images = state::process_state_witness(provider, block, &txn_info).await?;
 
-    Ok(trace_decoder::BlockTrace {
+    Ok(BlockTrace {
         txn_info,
         code_db: Option::from(code_db).filter(|x| !x.is_empty()),
         trie_pre_images,

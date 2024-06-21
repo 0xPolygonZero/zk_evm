@@ -10,6 +10,7 @@ use compat::Compat;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
 use prover::ProverInput;
+use trace_decoder::{BlockLevelData, OtherBlockData};
 use zero_bin_common::block_interval::BlockInterval;
 
 pub mod jerigon;
@@ -70,7 +71,7 @@ async fn fetch_other_block_data<ProviderT, TransportT>(
     provider: ProviderT,
     target_block_id: BlockId,
     checkpoint_state_trie_root: B256,
-) -> anyhow::Result<trace_decoder::OtherBlockData>
+) -> anyhow::Result<OtherBlockData>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -134,8 +135,8 @@ where
             }
         });
 
-    let other_data = trace_decoder::OtherBlockData {
-        b_data: trace_decoder::BlockLevelData {
+    let other_data = OtherBlockData {
+        b_data: BlockLevelData {
             b_meta: BlockMetadata {
                 block_beneficiary: target_block.header.miner.compat(),
                 block_timestamp: target_block.header.timestamp.into(),

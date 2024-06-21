@@ -4,6 +4,7 @@ use alloy::{
 use prover::BlockProverInput;
 use serde::Deserialize;
 use serde_json::json;
+use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
 
 use super::fetch_other_block_data;
 
@@ -12,7 +13,7 @@ use super::fetch_other_block_data;
 pub struct ZeroTxResult {
     #[serde(rename(deserialize = "txHash"))]
     pub tx_hash: alloy::primitives::TxHash,
-    pub result: trace_decoder::TxnInfo,
+    pub result: TxnInfo,
 }
 
 /// Block witness retrieved from Erigon zeroTracer.
@@ -46,12 +47,10 @@ where
 
     // Assemble
     Ok(BlockProverInput {
-        block_trace: trace_decoder::BlockTrace {
-            trie_pre_images: trace_decoder::BlockTraceTriePreImages::Combined(
-                trace_decoder::CombinedPreImages {
-                    compact: block_witness.0,
-                },
-            ),
+        block_trace: BlockTrace {
+            trie_pre_images: BlockTraceTriePreImages::Combined(CombinedPreImages {
+                compact: block_witness.0,
+            }),
             txn_info: tx_results.into_iter().map(|it| it.result).collect(),
             code_db: Default::default(),
         },
