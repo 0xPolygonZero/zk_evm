@@ -11,7 +11,8 @@ members = ["mpt_trie",
     "zero_bin/ops",
     "zero_bin/verifier",
     "zero_bin/rpc",
-    "zero_bin/prover"]
+    "zero_bin/prover", 
+    "compat"]
 resolver = "2"
 
 [workspace.package]
@@ -44,6 +45,8 @@ bytes = "1.6.0"
 ciborium = "0.2.2"
 ciborium-io = "0.2.2"
 clap = { version = "4.5.7", features = ["derive", "env"] }
+compat = { path = "compat" }
+__compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 criterion = "0.5.1"
 dotenvy = "0.15.7"
 enum-as-inner = "0.6.0"

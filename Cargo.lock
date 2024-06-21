@@ -1337,6 +1337,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
 
 [[package]]
+name = "compat"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "primitive-types 0.12.2",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4058,6 +4066,7 @@ dependencies = [
  "alloy",
  "anyhow",
  "clap",
+ "compat",
  "evm_arithmetization",
  "futures",
  "mpt_trie",
@@ -5716,6 +5725,6 @@ version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.66",
+ "syn 2.0.68",
  "trybuild",
 ]
