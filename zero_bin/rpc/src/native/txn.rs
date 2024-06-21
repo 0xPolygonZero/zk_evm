@@ -21,7 +21,6 @@ use alloy::{
 };
 use anyhow::Context as _;
 use futures::stream::{FuturesOrdered, TryStreamExt};
-use trace_decoder::trace_protocol::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
 use super::CodeDb;
 use crate::Compat;
@@ -30,7 +29,7 @@ use crate::Compat;
 pub(super) async fn process_transactions<ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
-) -> anyhow::Result<(CodeDb, Vec<TxnInfo>)>
+) -> anyhow::Result<(CodeDb, Vec<trace_decoder::TxnInfo>)>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -58,7 +57,7 @@ where
 async fn process_transaction<ProviderT, TransportT>(
     provider: &ProviderT,
     tx: &Transaction,
-) -> anyhow::Result<(CodeDb, TxnInfo)>
+) -> anyhow::Result<(CodeDb, trace_decoder::TxnInfo)>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -67,7 +66,7 @@ where
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
 
-    let tx_meta = TxnMeta {
+    let tx_meta = trace_decoder::TxnMeta {
         byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
         new_txn_trie_node_byte: vec![],
         new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
@@ -84,7 +83,7 @@ where
 
     Ok((
         code_db,
-        TxnInfo {
+        trace_decoder::TxnInfo {
             meta: tx_meta,
             traces: tx_traces
                 .into_iter()
@@ -138,7 +137,7 @@ async fn process_tx_traces(
     mut access_list: HashMap<Address, HashSet<H256>>,
     read_trace: PreStateMode,
     diff_trace: DiffMode,
-) -> anyhow::Result<(CodeDb, HashMap<Address, TxnTrace>)> {
+) -> anyhow::Result<(CodeDb, HashMap<Address, trace_decoder::TxnTrace>)> {
     let DiffMode {
         pre: pre_trace,
         post: post_trace,
@@ -172,7 +171,7 @@ async fn process_tx_traces(
         let nonce = process_nonce(post_state, &code);
         let self_destructed = process_self_destruct(post_state, pre_state);
 
-        let result = TxnTrace {
+        let result = trace_decoder::TxnTrace {
             balance,
             nonce,
             storage_read,
@@ -192,12 +191,12 @@ async fn process_tx_traces(
 /// If a contract is created, the nonce is set to 1.
 fn process_nonce(
     post_state: Option<&AccountState>,
-    code_usage: &Option<ContractCodeUsage>,
+    code_usage: &Option<trace_decoder::ContractCodeUsage>,
 ) -> Option<U256> {
     post_state
         .and_then(|x| x.nonce.map(Into::into))
         .or_else(|| {
-            if let Some(ContractCodeUsage::Write(_)) = code_usage.as_ref() {
+            if let Some(trace_decoder::ContractCodeUsage::Write(_)) = code_usage.as_ref() {
                 Some(U256::from(1))
             } else {
                 None
@@ -257,7 +256,7 @@ async fn process_code(
     post_state: Option<&AccountState>,
     read_state: Option<&AccountState>,
     code_db: &mut CodeDb,
-) -> Option<ContractCodeUsage> {
+) -> Option<trace_decoder::ContractCodeUsage> {
     match (
         post_state.and_then(|x| x.code.as_ref()),
         read_state.and_then(|x| x.code.as_ref()),
@@ -265,13 +264,15 @@ async fn process_code(
         (Some(post_code), _) => {
             let code_hash = keccak256(post_code).compat();
             code_db.insert(code_hash, post_code.to_vec());
-            Some(ContractCodeUsage::Write(post_code.to_vec().into()))
+            Some(trace_decoder::ContractCodeUsage::Write(
+                post_code.to_vec().into(),
+            ))
         }
         (_, Some(read_code)) => {
             let code_hash = keccak256(read_code).compat();
             code_db.insert(code_hash, read_code.to_vec());
 
-            Some(ContractCodeUsage::Read(code_hash))
+            Some(trace_decoder::ContractCodeUsage::Read(code_hash))
         }
         _ => None,
     }

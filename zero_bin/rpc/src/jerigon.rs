@@ -4,9 +4,6 @@ use alloy::{
 use prover::BlockProverInput;
 use serde::Deserialize;
 use serde_json::json;
-use trace_decoder::trace_protocol::{
-    BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TrieCompact, TxnInfo,
-};
 
 use super::fetch_other_block_data;
 
@@ -15,12 +12,12 @@ use super::fetch_other_block_data;
 pub struct ZeroTxResult {
     #[serde(rename(deserialize = "txHash"))]
     pub tx_hash: alloy::primitives::TxHash,
-    pub result: TxnInfo,
+    pub result: trace_decoder::TxnInfo,
 }
 
 /// Block witness retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]
-pub struct ZeroBlockWitness(TrieCompact);
+pub struct ZeroBlockWitness(Vec<u8>);
 
 pub async fn block_prover_input<ProviderT, TransportT>(
     provider: ProviderT,
@@ -49,10 +46,12 @@ where
 
     // Assemble
     Ok(BlockProverInput {
-        block_trace: BlockTrace {
-            trie_pre_images: BlockTraceTriePreImages::Combined(CombinedPreImages {
-                compact: block_witness.0,
-            }),
+        block_trace: trace_decoder::BlockTrace {
+            trie_pre_images: trace_decoder::BlockTraceTriePreImages::Combined(
+                trace_decoder::CombinedPreImages {
+                    compact: block_witness.0,
+                },
+            ),
             txn_info: tx_results.into_iter().map(|it| it.result).collect(),
             code_db: Default::default(),
         },
