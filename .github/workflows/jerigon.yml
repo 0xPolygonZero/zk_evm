@@ -1,4 +1,4 @@
-name: Jerigon tests
+name: Jerigon Integration
 
 on:
   push:
