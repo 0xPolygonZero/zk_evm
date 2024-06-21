@@ -1,7 +1,7 @@
 [package]
 name = "trace_decoder"
-description = "Processes trace payloads into Intermediate Representation (IR) format."
-authors = ["Polygon Zero <bgluth@polygon.technology>"]
+description = "Ethereum node witness -> Prover input"
+authors = ["Polygon Zero"]
 version = "0.4.0"
 edition.workspace = true
 license.workspace = true
@@ -10,29 +10,30 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
-ciborium = { workspace = true }
-enum-as-inner = { workspace = true }
-enumn = { workspace = true }
-ethereum-types = { workspace = true }
-hex = { workspace = true }
-keccak-hash = { workspace = true }
-log = { workspace = true }
-rlp = { workspace = true }
-serde = { workspace = true }
-serde_with = { workspace = true }
-thiserror = { workspace = true }
-mpt_trie = { workspace = true }
-evm_arithmetization = { workspace = true }
-nunny = { workspace = true, features = ["serde"] }
 anyhow.workspace = true
-winnow = { workspace = true }
 bitflags = { workspace = true }
 bitvec = { workspace = true }
-u4 = { workspace = true }
+bytes = { workspace = true }
+ciborium = { workspace = true }
+ciborium-io = { workspace = true }
 either = { workspace = true }
-plonky2.workspace = true
-smt_trie = { workspace = true } # TODO(0xaatif): this is insane
+enum-as-inner = { workspace = true }
+ethereum-types = { workspace = true }
+evm_arithmetization = { workspace = true }
+hex = { workspace = true }
+hex-literal = { workspace = true }
 itertools.workspace = true
+keccak-hash = { workspace = true }
+log = { workspace = true }
+mpt_trie = { workspace = true }
+nunny = { workspace = true, features = ["serde"] }
+plonky2.workspace = true
+rlp = { workspace = true }
+serde = { workspace = true }
+smt_trie = { workspace = true }                    # TODO(0xaatif): this is insane
+thiserror = { workspace = true }
+u4 = { workspace = true }
+winnow = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
