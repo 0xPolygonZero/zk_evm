@@ -21,14 +21,21 @@ rlp = { workspace = true }
 serde = { workspace = true }
 serde_with = { workspace = true }
 thiserror = { workspace = true }
-
-# Local dependencies
 mpt_trie = { workspace = true }
 evm_arithmetization = { workspace = true }
+nunny = { version = "0.2.1", features = ["serde"] }
+anyhow.workspace = true
+winnow = "0.6.13"
+bitflags = "2.5.0"
+bitvec = "1.0.1"
+u4 = "0.1.0"
+either = "1.12.0"
+plonky2.workspace = true
+smt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/type2" } # TODO(0xaatif): this is insane
+itertools.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true }
-pretty_env_logger = { workspace = true }
 serde_json = { workspace = true }
 
 [[bench]]
