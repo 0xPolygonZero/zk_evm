@@ -237,22 +237,17 @@ fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, Error> {
     }
     let v = match bytes.split_first() {
         // BUG: the previous implementation said that Erigon does this
-        (only, &[]) => nunny::vec![
-            // U4::new(*only).ok_or(DecodeKeyError::ExcessNibbleBits)?
-            // TODO(0xaatif): I don't like this line - I'm adding it because
-            //                it's required by the simplest test vector
-            U4::new(*only).unwrap_or_default()
-        ],
-        (flags, /* mut */ rest) => {
+        (only, &[]) => nunny::vec![U4::new(*only).ok_or(Error("excess bits in single nibble"))?],
+        (flags, rest) => {
             // check the flags
             let flags = EncodeKeyFlags::from_bits(*flags)
                 .ok_or(Error("unrecognised bits in flags for key encoding"))?;
-            // BUG?: the previous implementation ignored this flag - perhaps it's
-            //       &-ed with the prior U4?
+            // BUG?: the previous implementation ignored this flag, and our tests fail
+            //       without it - perhaps it's &-ed with the prior U4?
             // if flags.contains(EncodeKeyFlags::TERMINATED) {
             //     match rest.split_last() {
             //         Some((0x10, new_rest)) => rest = new_rest,
-            //         _ => return Err(DecodeKeyError::Terminator),
+            //         _ => return Err(Error("bad terminator for key")),
             //     }
             // }
 
