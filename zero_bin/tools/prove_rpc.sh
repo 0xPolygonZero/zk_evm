@@ -94,9 +94,9 @@ if [[ $8 == "test_only" ]]; then
     command='cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
-        RESULT=$?
-        echo -e "Proof witness generation finished with result: $RESULT"
-        exit $RESULT
+        retVal=$?
+        echo -e "Proof witness generation finished with result: $retVal"
+        exit $retVal
     else
         eval $command > $OUT_LOG_PATH 2>&1
         if grep -q 'All proof witnesses have been generated successfully.' $OUT_LOG_PATH; then
@@ -117,9 +117,7 @@ else
     command='cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
-        RESULT=$?
-        echo -e "Proof generation finished with result: $RESULT"
-        exit $RESULT
+        echo -e "Proof generation finished with result: $?"
     else
         eval $command > $OUT_LOG_PATH 2>&1
         retVal=$?
