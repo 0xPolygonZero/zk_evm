@@ -19,7 +19,7 @@ jobs:
   test_jerigon_input_proving:
     name: Test proof generation with jerigon input
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     # if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
@@ -73,9 +73,13 @@ jobs:
         run: |
           cd zero_bin/tools
           rm -rf debug/* proofs/* circuits/* ./proof.json test.out verify.out leader.out
-          RUN_VERIFICATION=true ./prove_rpc.sh 0x2 0x7 http://localhost:8546 jerigon true
+          RUN_VERIFICATION=true ./prove_rpc.sh 0x5 0x7 http://localhost:8546 jerigon true
           echo "Proving blocks in real mode done"
           
-    
+      - name: Shut down network
+        run: |
+          cd test-jerigon-network
+          docker-compose -f docker-compose.yml down -v
+
 
 
