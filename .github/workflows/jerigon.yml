@@ -18,8 +18,8 @@ env:
 jobs:
   test_jerigon_input_proving:
     name: Test proof generation with jerigon input
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: zero-ci
+    timeout-minutes: 40
     # if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
@@ -65,7 +65,7 @@ jobs:
       - name: Run prove blocks in test_only mode
         run: |
           cd zero_bin/tools
-          ./prove_rpc.sh 0x2 0x7 http://localhost:8546 jerigon true 0 0 test_only
+          OUTPUT_TO_TERMINAL=true ./prove_rpc.sh 0x2 0x3 http://localhost:8546 jerigon true 0 0 test_only
           echo "Proving blocks in test_only mode done"
 
 
@@ -73,7 +73,7 @@ jobs:
         run: |
           cd zero_bin/tools
           rm -rf debug/* proofs/* circuits/* ./proof.json test.out verify.out leader.out
-          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./prove_rpc.sh 0x2 0x4 http://localhost:8546 jerigon true
+          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./prove_rpc.sh 0x6 0x7 http://localhost:8546 jerigon true
           echo "Proving blocks in real mode done"
           
       - name: Shut down network
