@@ -14,6 +14,11 @@ num_procs=$(nproc)
 # Force the working directory to always be the `tools/` directory. 
 TOOLS_DIR=$(dirname $(realpath "$0"))
 
+LEADER_OUT_PATH="${TOOLS_DIR}/leader.out"
+PROOFS_JSON_PATH="${TOOLS_DIR}/proofs.json"
+VERIFY_OUT_PATH="${TOOLS_DIR}/verify.out"
+TEST_OUT_PATH="${TOOLS_DIR}/test.out"
+
 # Set the environment variable to let the binary know that we're running in the project workspace.
 export CARGO_WORKSPACE_DIR="${TOOLS_DIR}/../"
 
@@ -73,12 +78,12 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee test.out
-    if grep -q 'All proof witnesses have been generated successfully.' test.out; then
+    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee $TEST_OUT_PATH
+    if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         exit
     else
-         echo "Failed to create proof witnesses. See test.out for more details."
+         echo "Failed to create proof witnesses. See \"zk_evm/tools/test.out\" for more details."
         exit 1
     fi
 fi
@@ -86,14 +91,14 @@ fi
 cargo build --release --jobs "$num_procs"
 
 start_time=$(date +%s%N)
-"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee "${TOOLS_DIR}/leader.out"
+"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee $LEADER_OUT_PATH
 end_time=$(date +%s%N)
 
-tail -n 1 leader.out > "${TOOLS_DIR}/proofs.json"
+tail -n 1 $LEADER_OUT_PATH > $PROOFS_JSON_PATH
 
-"${TOOLS_DIR}/../../target/release/verifier" -f proofs.json | tee "${TOOLS_DIR}/verify.out"
+"${TOOLS_DIR}/../../target/release/verifier" -f $PROOFS_JSON_PATH | tee $VERIFY_OUT_PATH
 
-if grep -q 'All proofs verified successfully!' verify.out; then
+if grep -q 'All proofs verified successfully!' $VERIFY_OUT_PATH; then
     duration_ns=$((end_time - start_time))
     duration_sec=$(echo "$duration_ns / 1000000000" | bc -l)
     echo "Success!"
