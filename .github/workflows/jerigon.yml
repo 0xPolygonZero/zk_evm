@@ -71,6 +71,7 @@ jobs:
 
       - name: Run prove blocks in real mode
         run: |
+          cd zero_bin/tools
           rm -rf debug/* proofs/* circuits/* ./proof.json test.out verify.out leader.out
           RUN_VERIFICATION=true ./prove_rpc.sh 0x2 0x7 http://localhost:8546 jerigon true
           echo "Proving blocks in real mode done"
