@@ -2,12 +2,14 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
+use evm_arithmetization::testing_utils::{
+    init_logger, preinitialized_state, preinitialized_state_with_updated_storage, set_account,
+};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -17,9 +19,6 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 use smt_trie::code::hash_bytecode_u256;
-use smt_trie::db::{Db, MemoryDb};
-use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
-use smt_trie::smt::Smt;
 use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
@@ -55,7 +54,7 @@ fn add11_yml() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
-    let mut state_smt_before = Smt::<MemoryDb>::default();
+    let mut state_smt_before = preinitialized_state();
     set_account(
         &mut state_smt_before,
         H160(beneficiary),
@@ -93,7 +92,7 @@ fn add11_yml() -> anyhow::Result<()> {
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
         block_gas_used: 0xa868u64.into(),
-        block_bloom: [0.into(); 8],
+        ..Default::default()
     };
 
     let mut contract_code = HashMap::new();
@@ -101,7 +100,7 @@ fn add11_yml() -> anyhow::Result<()> {
     contract_code.insert(code_hash, code.to_vec());
 
     let expected_state_smt_after = {
-        let mut smt = Smt::<MemoryDb>::default();
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -164,6 +163,7 @@ fn add11_yml() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
@@ -183,23 +183,4 @@ fn add11_yml() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
-}
-
-fn set_account<D: Db>(
-    smt: &mut Smt<D>,
-    addr: Address,
-    account: &AccountRlp,
-    storage: &HashMap<U256, U256>,
-) {
-    smt.set(key_balance(addr), account.balance);
-    smt.set(key_nonce(addr), account.nonce);
-    smt.set(key_code(addr), account.code_hash);
-    smt.set(key_code_length(addr), account.code_length);
-    for (&k, &v) in storage {
-        smt.set(key_storage(addr, k), v);
-    }
 }

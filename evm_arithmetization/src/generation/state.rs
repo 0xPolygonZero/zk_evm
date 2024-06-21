@@ -6,10 +6,8 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
-use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
-use smt_trie::utils::hashout2u;
+use smt_trie::code::hash_bytecode_u256;
 
 use super::mpt::{load_all_mpts, TrieRootPtrs};
 use super::TrieInputs;
@@ -171,7 +169,7 @@ pub(crate) trait State<F: RichField> {
                     }
                 } else {
                     #[cfg(not(test))]
-                    self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
+                    log::info!("CPU halted after {} cycles", self.get_clock());
                     return Ok(());
                 }
             }
@@ -270,12 +268,6 @@ pub(crate) trait State<F: RichField> {
         log::debug!("{}", msg);
     }
 
-    /// Logs `msg` in `info` mode.
-    #[inline]
-    fn log_info(&self, msg: String) {
-        log::info!("{}", msg);
-    }
-
     /// Logs `msg` at `level`.
     #[inline]
     fn log(&self, level: Level, msg: String) {
@@ -295,6 +287,8 @@ pub(crate) struct GenerationState<F: RichField> {
     pub(crate) rlp_prover_inputs: Vec<U256>,
 
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
+
+    pub(crate) ger_prover_inputs: Vec<U256>,
 
     /// The state trie only stores state keys, which are hashes of addresses,
     /// but sometimes it is useful to see the actual addresses for
@@ -336,6 +330,7 @@ impl<F: RichField> GenerationState<F> {
         let rlp_prover_inputs =
             all_rlp_prover_inputs_reversed(inputs.clone().signed_txn.as_ref().unwrap_or(&vec![]));
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
+        let ger_prover_inputs = all_ger_prover_inputs_reversed(&inputs.global_exit_roots);
         let bignum_modmul_result_limbs = Vec::new();
 
         let mut state = Self {
@@ -345,6 +340,7 @@ impl<F: RichField> GenerationState<F> {
             traces: Traces::default(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
+            ger_prover_inputs,
             state_key_to_address: HashMap::new(),
             bignum_modmul_result_limbs,
             trie_root_ptrs: TrieRootPtrs {
@@ -433,6 +429,7 @@ impl<F: RichField> GenerationState<F> {
             state_key_to_address: self.state_key_to_address.clone(),
             bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),
             withdrawal_prover_inputs: self.withdrawal_prover_inputs.clone(),
+            ger_prover_inputs: self.ger_prover_inputs.clone(),
             trie_root_ptrs: TrieRootPtrs {
                 state_root_ptr: 0,
                 txn_root_ptr: 0,
@@ -620,4 +617,17 @@ pub(crate) fn all_withdrawals_prover_inputs_reversed(withdrawals: &[(Address, U2
     withdrawal_prover_inputs.push(U256::MAX);
     withdrawal_prover_inputs.reverse();
     withdrawal_prover_inputs
+}
+
+/// Global exit roots prover input array is of the form `[N, timestamp1,
+/// root1,..., timestampN, rootN]`. Returns the reversed array.
+pub(crate) fn all_ger_prover_inputs_reversed(global_exit_roots: &[(U256, H256)]) -> Vec<U256> {
+    let mut ger_prover_inputs = vec![global_exit_roots.len().into()];
+    ger_prover_inputs.extend(
+        global_exit_roots
+            .iter()
+            .flat_map(|ger| [ger.0, ger.1.into_uint()]),
+    );
+    ger_prover_inputs.reverse();
+    ger_prover_inputs
 }

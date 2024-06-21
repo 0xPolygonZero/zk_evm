@@ -3,13 +3,10 @@ use std::str::FromStr;
 
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use hex_literal::hex;
-use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use smt_trie::code::hash_bytecode_u256;
-use smt_trie::db::MemoryDb;
-use smt_trie::smt::Smt;
 use smt_trie::utils::hashout2u;
 
 use super::account_code::set_account;
@@ -19,10 +16,17 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
+use crate::testing_utils::{
+    compute_beacon_roots_account_storage, init_logger, preinitialized_state,
+    preinitialized_state_with_updated_storage, set_beacon_roots_account,
+    set_global_exit_root_account,
+};
 use crate::GenerationInputs;
 
 #[test]
 fn test_add11_yml() {
+    init_logger();
+
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
@@ -48,7 +52,7 @@ fn test_add11_yml() {
         ..AccountRlp::default()
     };
 
-    let mut state_smt_before = Smt::<MemoryDb>::default();
+    let mut state_smt_before = preinitialized_state();
     set_account(
         &mut state_smt_before,
         H160(beneficiary),
@@ -86,11 +90,11 @@ fn test_add11_yml() {
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
         block_gas_used: 0xa868u64.into(),
-        block_bloom: [0.into(); 8],
+        ..Default::default()
     };
 
     let expected_state_smt_after = {
-        let mut smt = Smt::<MemoryDb>::default();
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -105,6 +109,13 @@ fn test_add11_yml() {
             code_hash,
             ..AccountRlp::default()
         };
+
+        let beacon_roots_storage = compute_beacon_roots_account_storage(
+            block_metadata.block_timestamp,
+            block_metadata.parent_beacon_block_root,
+        );
+        set_beacon_roots_account(&mut smt, &beacon_roots_storage);
+        set_global_exit_root_account(&mut smt, &HashMap::new());
 
         set_account(
             &mut smt,
@@ -152,9 +163,11 @@ fn test_add11_yml() {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
+
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
@@ -212,7 +225,7 @@ fn test_add11_yml_with_exception() {
         ..AccountRlp::default()
     };
 
-    let mut state_smt_before = Smt::<MemoryDb>::default();
+    let mut state_smt_before = preinitialized_state();
     set_account(
         &mut state_smt_before,
         H160(beneficiary),
@@ -244,10 +257,23 @@ hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ff
     let txn_gas_limit = 400_000;
     let gas_price = 10;
 
+    let block_metadata = BlockMetadata {
+        block_beneficiary: Address::from(beneficiary),
+        block_timestamp: 0x03e8.into(),
+        block_number: 1.into(),
+        block_difficulty: 0x020000.into(),
+        block_random: H256::from_uint(&0x020000.into()),
+        block_gaslimit: 0xff112233u32.into(),
+        block_chain_id: 1.into(),
+        block_base_fee: 0xa.into(),
+        block_gas_used: txn_gas_limit.into(),
+        ..Default::default()
+    };
+
     // Here, since the transaction fails, it consumes its gas limit, and does
     // nothing else.
     let expected_state_smt_after = {
-        let mut smt = Smt::<MemoryDb>::default();
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let beneficiary_account_after = beneficiary_account_before;
         let to_account_after = to_account_before;
         // This is the only account that changes: the nonce and the balance are updated.
@@ -281,10 +307,12 @@ hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ff
         logs: vec![],
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    );
+    receipts_trie
+        .insert(
+            Nibbles::from_str("0x80").unwrap(),
+            rlp::encode(&receipt_0).to_vec(),
+        )
+        .unwrap();
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
@@ -297,22 +325,10 @@ hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ff
         receipts_root: receipts_trie.hash(),
     };
 
-    let block_metadata = BlockMetadata {
-        block_beneficiary: Address::from(beneficiary),
-        block_timestamp: 0x03e8.into(),
-        block_number: 1.into(),
-        block_difficulty: 0x020000.into(),
-        block_random: H256::from_uint(&0x020000.into()),
-        block_gaslimit: 0xff112233u32.into(),
-        block_chain_id: 1.into(),
-        block_base_fee: 0xa.into(),
-        block_gas_used: txn_gas_limit.into(),
-        block_bloom: [0.into(); 8],
-    };
-
-    let tries_inputs = GenerationInputs {
+    let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code: contract_code.clone(),
@@ -330,7 +346,7 @@ hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ff
     let initial_offset = KERNEL.global_labels["main"];
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
-        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, tries_inputs);
+        Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
 
     let route_txn_label = KERNEL.global_labels["main"];
     // Switch context and initialize memory with the data we need for the tests.

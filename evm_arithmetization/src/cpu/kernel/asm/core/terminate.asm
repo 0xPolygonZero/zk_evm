@@ -98,7 +98,14 @@ selfdestruct_balance_is_zero:
     // stack: is_just_created, balance, address, recipient, kexit_info
     %jumpi(sys_selfdestruct_just_created)
 
-    // Send the balance to the recipient.
+    // EIP-6780: insert address into the selfdestruct set only if contract has been created
+    // during the current transaction.
+    // stack: balance, address, recipient, kexit_info
+    DUP2 %contract_just_created
+    // stack: is_just_created, balance, address, recipient, kexit_info
+    %jumpi(sys_selfdestruct_just_created)
+
+    // Send the balance to the recipient. 
     %stack (balance, address, recipient, kexit_info) ->
         (recipient, balance, address, recipient, balance, kexit_info)
     %add_eth

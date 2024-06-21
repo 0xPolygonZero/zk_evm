@@ -28,11 +28,12 @@ thiserror = { workspace = true }
 
 # Local dependencies
 # TODO: update decoder to take local versions again
-mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
-evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
+mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
 
 [dev-dependencies]
 criterion = "0.5.1"
+plonky2 = { workspace = true }
 pretty_env_logger = "0.5.0"
 serde_json = { workspace = true }
 

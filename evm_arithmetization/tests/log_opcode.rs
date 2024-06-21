@@ -3,7 +3,6 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bytes::Bytes;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
@@ -12,6 +11,10 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp}
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
+use evm_arithmetization::testing_utils::{
+    init_logger, preinitialized_state, preinitialized_state_with_updated_storage, set_account,
+    update_beacon_roots_account_storage,
+};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -21,9 +24,6 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 use smt_trie::code::hash_bytecode_u256;
-use smt_trie::db::{Db, MemoryDb};
-use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
-use smt_trie::smt::Smt;
 use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
@@ -53,7 +53,6 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         0x60, 99, 0x60, 98, 0x60, 5, 0x60, 27, 0xA2, // LOG2(27, 5, 98, 99)
         0x00,
     ];
-    println!("contract: {:02x?}", code);
     let code_gas = 3 + 3 + 3 // PUSHs and MSTORE
                  + 3 + 3 + 375 // PUSHs and LOG0
                  + 3 + 3 + 3 + 3 + 375 + 375*2 + 8*5 + 3// PUSHs, LOG2 and memory expansion
@@ -80,7 +79,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     // Initialize the state trie with three accounts.
-    let mut state_smt_before = Smt::<MemoryDb>::default();
+    let mut state_smt_before = preinitialized_state();
     set_account(
         &mut state_smt_before,
         H160(beneficiary),
@@ -148,8 +147,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         block_gaslimit: 0xffffffffu32.into(),
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
-        block_gas_used: 0.into(),
-        block_bloom: [0.into(); 8],
+        ..Default::default()
     };
 
     let mut contract_code = HashMap::new();
@@ -185,7 +183,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 
     // Update the state trie.
     let expected_state_smt_after = {
-        let mut smt = Smt::<MemoryDb>::default();
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -233,6 +231,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
@@ -306,7 +305,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     // `to_account`.
     let gas_price = 10;
     let txn_value = 0xau64;
-    let mut state_smt_before = Smt::<MemoryDb>::default();
+    let mut state_smt_before = preinitialized_state();
     set_account(
         &mut state_smt_before,
         H160(beneficiary),
@@ -367,7 +366,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             .unwrap(),
             U256::from_dec_str("2722259584404615024560450425766186844160").unwrap(),
         ],
-        block_random: Default::default(),
+        ..Default::default()
     };
 
     let beneficiary_account_after = AccountRlp {
@@ -391,7 +390,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     contract_code.insert(code_hash, code.to_vec());
 
     let expected_state_smt_after = {
-        let mut smt = Smt::<MemoryDb>::default();
+        let mut smt = preinitialized_state_with_updated_storage(&block_1_metadata, &[]);
 
         set_account(
             &mut smt,
@@ -448,6 +447,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let inputs_first = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after: tries_after,
         contract_code,
@@ -465,7 +465,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     // Preprocess all circuits.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 11..15, 13..18, 14..15, 10..11, 12..13, 17..20, 6..7],
+        &[16..17, 12..15, 14..17, 14..15, 10..11, 12..13, 17..20, 7..8],
         &config,
     );
 
@@ -551,7 +551,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
 
     // Update the state trie.
     let expected_state_smt_after = {
-        let mut smt = Smt::<MemoryDb>::default();
+        let mut smt = preinitialized_state_with_updated_storage(&block_1_metadata, &[]);
         set_account(
             &mut smt,
             H160(beneficiary),
@@ -575,9 +575,12 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         smt
     };
 
+    let mut state_smt_after_block2 = expected_state_smt_after.clone();
+
     transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec())?;
 
     let block_1_state_root = H256::from_uint(&hashout2u(expected_state_smt_after.root));
+    println!("{:x}", block_1_state_root);
 
     let trie_roots_after = TrieRoots {
         state_root: block_1_state_root,
@@ -588,6 +591,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: Some(txn_2.to_vec()),
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after: trie_roots_after.clone(),
         contract_code,
@@ -630,7 +634,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
 
     let block_2_metadata = BlockMetadata {
         block_beneficiary: Address::from(beneficiary),
-        block_timestamp: 0x03e8.into(),
+        block_timestamp: 0x03e9.into(),
         block_number: 2.into(),
         block_difficulty: 0x020000.into(),
         block_gaslimit: 0x445566u32.into(),
@@ -639,19 +643,26 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         ..Default::default()
     };
 
+    update_beacon_roots_account_storage(
+        &mut state_smt_after_block2,
+        block_2_metadata.block_timestamp,
+        block_2_metadata.parent_beacon_block_root,
+    );
+
     let mut contract_code = HashMap::new();
     contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
 
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: TrieInputs {
             state_smt: expected_state_smt_after.serialize(),
             transactions_trie: Node::Empty.into(),
             receipts_trie: Node::Empty.into(),
         },
         trie_roots_after: TrieRoots {
-            state_root: trie_roots_after.state_root,
+            state_root: H256::from_uint(&hashout2u(state_smt_after_block2.root)),
             transactions_root: HashedPartialTrie::from(Node::Empty).hash(),
             receipts_root: HashedPartialTrie::from(Node::Empty).hash(),
         },
@@ -666,19 +677,28 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
             cur_hash: block_2_hash,
         },
     };
+    let mut inputs2 = inputs.clone();
 
     let (root_proof, public_values) =
         all_circuits.prove_root(&all_stark, &config, inputs, &mut timing, None)?;
     all_circuits.verify_root(root_proof.clone())?;
 
-    // We can just duplicate the initial proof as the state didn't change.
+    // We cannot duplicate the proof here because even though there weren't any
+    // transactions, the state has mutated when updating the beacon roots contract.
+
+    inputs2.tries.state_smt = state_smt_after_block2.serialize();
+
+    let (root_proof2, public_values2) =
+        all_circuits.prove_root(&all_stark, &config, inputs2, &mut timing, None)?;
+    all_circuits.verify_root(root_proof2.clone())?;
+
     let (agg_proof, updated_agg_public_values) = all_circuits.prove_aggregation(
         false,
         &root_proof,
         public_values.clone(),
         false,
-        &root_proof,
-        public_values,
+        &root_proof2,
+        public_values2,
     )?;
     all_circuits.verify_aggregation(&agg_proof)?;
 
@@ -803,23 +823,4 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     );
 
     Ok(())
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
-}
-
-fn set_account<D: Db>(
-    smt: &mut Smt<D>,
-    addr: Address,
-    account: &AccountRlp,
-    storage: &HashMap<U256, U256>,
-) {
-    smt.set(key_balance(addr), account.balance);
-    smt.set(key_nonce(addr), account.nonce);
-    smt.set(key_code(addr), account.code_hash);
-    smt.set(key_code_length(addr), account.code_length);
-    for (&k, &v) in storage {
-        smt.set(key_storage(addr, k), v);
-    }
 }

@@ -5,21 +5,15 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use core::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
-use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::field::types::{Field, PrimeField64};
+use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
-use plonky2::hash::poseidon::Poseidon;
-use serde::Serialize;
-use smt_trie::code::poseidon_hash_padded_byte_vec;
-use smt_trie::smt::{hash_serialize, hash_serialize_u256};
-use smt_trie::utils::hashout2u;
+use smt_trie::smt::hash_serialize_u256;
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
@@ -58,6 +52,7 @@ pub(crate) struct Interpreter<F: Field + RichField> {
     /// halt_context
     pub(crate) halt_context: Option<usize>,
     /// Counts the number of appearances of each opcode. For debugging purposes.
+    #[allow(unused)]
     pub(crate) opcode_count: [usize; 0x100],
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
@@ -206,6 +201,18 @@ impl<F: RichField> Interpreter<F> {
                 h2u(inputs.block_hashes.cur_hash),
             ),
             (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+            (
+                GlobalMetadata::BlockBlobGasUsed,
+                metadata.block_blob_gas_used,
+            ),
+            (
+                GlobalMetadata::BlockExcessBlobGas,
+                metadata.block_excess_blob_gas,
+            ),
+            (
+                GlobalMetadata::ParentBeaconBlockRoot,
+                h2u(metadata.parent_beacon_block_root),
+            ),
             (GlobalMetadata::BlockGasUsedBefore, inputs.gas_used_before),
             (GlobalMetadata::BlockGasUsedAfter, inputs.gas_used_after),
             (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
@@ -367,18 +374,6 @@ impl<F: RichField> Interpreter<F> {
                 self.generation_state.registers.context,
                 BTreeSet::from([offset]),
             );
-        }
-    }
-
-    pub(crate) const fn stack_len(&self) -> usize {
-        self.generation_state.registers.stack_len
-    }
-
-    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
-        if self.stack_len() > 0 {
-            Ok(self.generation_state.registers.stack_top)
-        } else {
-            Err(ProgramError::StackUnderflow)
         }
     }
 
@@ -597,6 +592,7 @@ impl<F: RichField> Transition<F> for Interpreter<F> {
     }
 }
 
+#[cfg(debug_assertions)]
 fn get_mnemonic(opcode: u8) -> &'static str {
     match opcode {
         0x00 => "STOP",
@@ -656,7 +652,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x45 => "GASLIMIT",
         0x46 => "CHAINID",
         0x48 => "BASEFEE",
-        0x49 => "PROVER_INPUT",
+        0x4a => "BLOBBASEFEE",
         0x50 => "POP",
         0x51 => "MLOAD",
         0x52 => "MSTORE",
@@ -669,6 +665,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x59 => "MSIZE",
         0x5a => "GAS",
         0x5b => "JUMPDEST",
+        0x5e => "MCOPY",
         0x5f => "PUSH0",
         0x60 => "PUSH1",
         0x61 => "PUSH2",
@@ -772,6 +769,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0xdd => "MSTORE_32BYTES_30",
         0xde => "MSTORE_32BYTES_31",
         0xdf => "MSTORE_32BYTES_32",
+        0xee => "PROVER_INPUT",
         0xf0 => "CREATE",
         0xf1 => "CALL",
         0xf2 => "CALLCODE",

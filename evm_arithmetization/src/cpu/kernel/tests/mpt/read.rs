@@ -1,19 +1,15 @@
-use anyhow::{anyhow, Result};
-use ethereum_types::{BigEndianHash, H160, U256};
+use anyhow::Result;
+use ethereum_types::{H160, U256};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
-use plonky2::field::types::Field;
-use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
 use smt_trie::db::MemoryDb;
 use smt_trie::keys::key_balance;
-use smt_trie::smt::{Key, Smt};
+use smt_trie::smt::Smt;
 use smt_trie::utils::key2u;
 
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
-use crate::cpu::kernel::tests::mpt::{extension_to_leaf, test_account_1, test_account_1_rlp};
 use crate::generation::TrieInputs;
 
 #[test]

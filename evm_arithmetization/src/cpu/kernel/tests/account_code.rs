@@ -1,13 +1,9 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
+use ethereum_types::{Address, H160, U256};
 use hex_literal::hex;
-use keccak_hash::keccak;
-use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
 use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
@@ -20,7 +16,6 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::cpu::kernel::tests::mpt::nibbles_64;
 use crate::generation::mpt::{load_all_mpts, AccountRlp};
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
@@ -93,9 +88,6 @@ fn prepare_interpreter<F: RichField>(
 
     initialize_mpts(interpreter, &trie_inputs);
 
-    let k = nibbles_64(U256::from_big_endian(
-        keccak(address.to_fixed_bytes()).as_bytes(),
-    ));
     // Next, execute smt_insert_state.
     let trie_data = interpreter.get_trie_data_mut();
     if trie_data.is_empty() {
@@ -213,7 +205,9 @@ fn test_extcodecopy() -> Result<()> {
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
-    interpreter.push(0xdeadbeefu32.into());
+    interpreter
+        .push(0xdeadbeefu32.into())
+        .expect("The stack should not overflow");
     interpreter.run()?;
 
     let extcodecopy = KERNEL.global_labels["sys_extcodecopy"];
@@ -349,7 +343,9 @@ fn sstore() -> Result<()> {
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
-    interpreter.push(0xdeadbeefu32.into());
+    interpreter
+        .push(0xdeadbeefu32.into())
+        .expect("The stack should not overflow");
     interpreter.run()?;
 
     // Prepare the interpreter by inserting the account in the state trie.
@@ -437,7 +433,9 @@ fn sload() -> Result<()> {
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
-    interpreter.push(0xdeadbeefu32.into());
+    interpreter
+        .push(0xdeadbeefu32.into())
+        .expect("The stack should not overflow");
     interpreter.run()?;
 
     // Prepare the interpreter by inserting the account in the state trie.

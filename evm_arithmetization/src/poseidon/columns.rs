@@ -85,12 +85,6 @@ pub(crate) struct PoseidonColumnsView<T: Copy> {
     pub not_padding: T,
 }
 
-/// Returns the index of `i`-th input capacity element within the input.
-pub(crate) fn reg_input_capacity(i: usize) -> usize {
-    debug_assert!(i < POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE);
-    POSEIDON_SPONGE_RATE + i
-}
-
 /// Returns the index the `i`-th x^3 in the `round`-th round for full rounds.
 /// Note: the cubes of the two sets of full rounds are stored one after the
 /// other.
@@ -98,13 +92,6 @@ pub(crate) fn reg_cubed_full(round: usize, i: usize) -> usize {
     debug_assert!(i < POSEIDON_SPONGE_WIDTH);
     debug_assert!(round < 2 * HALF_N_FULL_ROUNDS);
     POSEIDON_SPONGE_WIDTH * round + i
-}
-
-/// Returns the index of the `i`-th output capacity element within
-/// `output_partial`.
-pub(crate) fn reg_output_capacity(i: usize) -> usize {
-    debug_assert!(i < POSEIDON_SPONGE_WIDTH - POSEIDON_SPONGE_RATE);
-    POSEIDON_SPONGE_RATE - POSEIDON_DIGEST + i
 }
 
 /// Returns the index of x^3 within for the `round`-th partial round.

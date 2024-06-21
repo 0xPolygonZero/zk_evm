@@ -1,22 +1,16 @@
 use core::ops::Deref;
-use std::collections::HashMap;
 
 use bytes::Bytes;
-use ethereum_types::{Address, BigEndianHash, H256, U256};
-use keccak_hash::keccak;
-use mpt_trie::nibbles::{Nibbles, NibblesIntern};
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
-use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::hash::hash_types::RichField;
+use ethereum_types::{Address, H256, U256};
+use mpt_trie::partial_trie::HashedPartialTrie;
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use smt_trie::code::{hash_bytecode_u256, hash_contract_bytecode};
-use smt_trie::utils::hashout2u;
+use smt_trie::code::hash_bytecode_u256;
 
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;
 use crate::util::h2u;
-use crate::witness::errors::{ProgramError, ProverInputError};
+use crate::witness::errors::ProgramError;
 use crate::Node;
 
 #[derive(RlpEncodable, RlpDecodable, Debug)]
@@ -81,16 +75,11 @@ impl LegacyReceiptRlp {
     }
 }
 
-pub(crate) fn state_smt_prover_inputs_reversed(trie_inputs: &TrieInputs) -> Vec<U256> {
-    let mut inputs = state_smt_prover_inputs(trie_inputs);
-    inputs.reverse();
-    inputs
-}
-
 pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     let txn_type = match rlp.first().ok_or(ProgramError::InvalidRlp)? {
         1 => 1,
         2 => 2,
+        3 => 3,
         _ => 0,
     };
 
@@ -130,25 +119,6 @@ pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     }
 
     Ok(parsed_receipt)
-}
-
-pub(crate) fn state_smt_prover_inputs(trie_inputs: &TrieInputs) -> Vec<U256> {
-    let len = trie_inputs.state_smt.len();
-    let mut v = vec![len.into()];
-    v.extend(trie_inputs.state_smt.iter());
-    v
-}
-
-fn parse_storage_value(value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
-    let value: U256 = rlp::decode(value_rlp).map_err(|_| ProgramError::InvalidRlp)?;
-    Ok(vec![value])
-}
-
-const fn empty_nibbles() -> Nibbles {
-    Nibbles {
-        count: 0,
-        packed: NibblesIntern::zero(),
-    }
 }
 
 fn load_mpt<F>(
@@ -254,6 +224,8 @@ pub(crate) fn load_all_mpts(
 }
 
 pub mod transaction_testing {
+    use ethereum_types::H160;
+
     use super::*;
 
     #[derive(RlpEncodable, RlpDecodable, Debug, Clone, PartialEq, Eq)]
@@ -327,6 +299,25 @@ pub mod transaction_testing {
         pub value: U256,
         pub data: Bytes,
         pub access_list: Vec<AccessListItemRlp>,
+        pub y_parity: U256,
+        pub r: U256,
+        pub s: U256,
+    }
+
+    #[derive(RlpEncodable, RlpDecodable, Debug, Clone, PartialEq, Eq)]
+    pub struct BlobTransactionRlp {
+        pub chain_id: u64,
+        pub nonce: U256,
+        pub max_priority_fee_per_gas: U256,
+        pub max_fee_per_gas: U256,
+        pub gas: U256,
+        // As per EIP-4844, blob transactions cannot have the form of a create transaction.
+        pub to: H160,
+        pub value: U256,
+        pub data: Bytes,
+        pub access_list: Vec<AccessListItemRlp>,
+        pub max_fee_per_blob_gas: U256,
+        pub blob_versioned_hashes: Vec<H256>,
         pub y_parity: U256,
         pub r: U256,
         pub s: U256,

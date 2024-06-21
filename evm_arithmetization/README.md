@@ -1,6 +1,6 @@
 # Provable Stateless ZK-EVM
 
-Included here is an implementation of a stateless, recursive ZK-EVM client implemented using Plonky2. It currently supports the full Merkle-Patricia Trie and has all Shanghai opcodes implemented.
+Included here is an implementation of a stateless, recursive ZK-EVM client implemented using Plonky2. It currently supports the full Merkle-Patricia Trie and has all Cancun opcodes implemented.
 
 ## Performance 
 
@@ -10,7 +10,8 @@ Furthermore the implementation itself is highly optimized to provide fast provin
 
 ## Ethereum Compatibility
 
-The aim of this module is to initially provide full ethereum compatibility. Today, all [EVM tests](https://github.com/0xPolygonZero/evm-tests) for the Shanghai hardfork are implemented. Work is progressing on supporting the upcoming [Cancun](https://github.com/0xPolygonZero/plonky2/labels/cancun) EVM changes. Furthermore, this prover uses the full ethereum state tree and hashing modes.
+The aim of this module is to initially provide full Ethereum compatibility.
+It is currently fully [Cancun](https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/cancun.md) HF compatible.
 
 ## Audits
 

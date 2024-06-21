@@ -1,9 +1,8 @@
 use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
-use smt_trie::code::{poseidon_hash_padded_byte_vec, poseidon_pad_byte_vec};
+use smt_trie::code::poseidon_hash_padded_byte_vec;
 use smt_trie::utils::hashout2u;
 
 use super::transition::Transition;
@@ -21,7 +20,6 @@ use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::memory::segments::Segment;
-use crate::poseidon::columns::POSEIDON_SPONGE_RATE;
 use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonSimpleOp};
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
@@ -38,7 +36,8 @@ use crate::{arithmetic, logic};
 pub(crate) enum Operation {
     Iszero,
     Not,
-    Syscall(u8, usize, bool), // (syscall number, minimum stack length, increases stack length)
+    /// (syscall number, minimum stack length, increases stack length)
+    Syscall(u8, usize, bool),
     Eq,
     BinaryLogic(logic::Op),
     BinaryArithmetic(arithmetic::BinaryOperator),
@@ -184,7 +183,7 @@ pub(crate) fn generate_poseidon<F: RichField, T: Transition<F>>(
     let generation_state = state.get_mut_generation_state();
     let [(x, _), (y, log_in1), (z, log_in2)] =
         stack_pop_with_log_and_fill::<3, _>(generation_state, &mut row)?;
-    let mut arr = [
+    let arr = [
         x.0[0], x.0[1], x.0[2], x.0[3], y.0[0], y.0[1], y.0[2], y.0[3], z.0[0], z.0[1], z.0[2],
         z.0[3],
     ]
@@ -213,7 +212,7 @@ pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
     let len = u256_to_usize(len)?;
 
     let base_address = MemoryAddress::new_bundle(addr)?;
-    let mut input = (0..len)
+    let input = (0..len)
         .map(|i| {
             let address = MemoryAddress {
                 virt: base_address.virt.saturating_add(i),
@@ -258,7 +257,7 @@ pub(crate) fn generate_prover_input<F: RichField, T: Transition<F>>(
     let pc = generation_state.registers.program_counter;
     let input_fn = &KERNEL.prover_inputs[&pc];
     let input = generation_state.prover_input(input_fn)?;
-    let opcode = 0x49.into();
+    let opcode = 0xee.into();
     // `ArithmeticStark` range checks `mem_channels[0]`, which contains
     // the top of the stack, `mem_channels[1]`, `mem_channels[2]` and
     // next_row's `mem_channels[0]` which contains the next top of the stack.

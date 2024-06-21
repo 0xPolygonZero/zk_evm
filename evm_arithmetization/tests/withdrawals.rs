@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
+use ethereum_types::{BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
+use evm_arithmetization::testing_utils::{
+    init_logger, preinitialized_state, preinitialized_state_with_updated_storage, set_account,
+};
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -15,9 +17,6 @@ use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 use rand::random;
 use smt_trie::code::hash_bytecode_u256;
-use smt_trie::db::{Db, MemoryDb};
-use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
-use smt_trie::smt::Smt;
 use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
@@ -32,9 +31,12 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
 
-    let block_metadata = BlockMetadata::default();
+    let block_metadata = BlockMetadata {
+        block_timestamp: 1.into(),
+        ..BlockMetadata::default()
+    };
 
-    let state_smt_before = Smt::<MemoryDb>::default();
+    let state_smt_before = preinitialized_state();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
@@ -45,7 +47,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let withdrawals = vec![(H160(random()), U256(random()))];
 
     let state_smt_after = {
-        let mut smt = Smt::<MemoryDb>::default();
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let account = AccountRlp {
             balance: withdrawals[0].1,
             ..AccountRlp::default()
@@ -63,6 +65,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals,
+        global_exit_roots: vec![],
         tries: TrieInputs {
             state_smt: state_smt_before.serialize(),
             transactions_trie,
@@ -86,22 +89,4 @@ fn test_withdrawals() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
-}
-fn set_account<D: Db>(
-    smt: &mut Smt<D>,
-    addr: Address,
-    account: &AccountRlp,
-    storage: &HashMap<U256, U256>,
-) {
-    smt.set(key_balance(addr), account.balance);
-    smt.set(key_nonce(addr), account.nonce);
-    smt.set(key_code(addr), account.code_hash);
-    smt.set(key_code_length(addr), account.code_length);
-    for (&k, &v) in storage {
-        smt.set(key_storage(addr, k), v);
-    }
 }

@@ -1,31 +1,27 @@
 use std::borrow::Borrow;
-use std::iter::once;
 use std::marker::PhantomData;
 
 use itertools::Itertools;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::{Field, PrimeField64};
+use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::poseidon::Poseidon;
 use plonky2::iop::ext_target::ExtensionTarget;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
-use plonky2_maybe_rayon::rayon::iter::{self, repeat};
-use smt_trie::code::poseidon_hash_padded_byte_vec;
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
 use starky::cross_table_lookup::TableWithColumns;
-use starky::evaluation_frame::{StarkEvaluationFrame, StarkFrame};
+use starky::evaluation_frame::StarkEvaluationFrame;
 use starky::lookup::{Column, Filter};
 use starky::stark::Stark;
 use starky::util::trace_rows_to_poly_values;
 
 use super::columns::{
-    reg_cubed_full, reg_cubed_partial, reg_full_sbox_0, reg_full_sbox_1, reg_input_capacity,
-    reg_output_capacity, reg_partial_sbox, PoseidonColumnsView, HALF_N_FULL_ROUNDS, NUM_COLUMNS,
-    N_PARTIAL_ROUNDS, POSEIDON_COL_MAP, POSEIDON_DIGEST, POSEIDON_SPONGE_RATE,
-    POSEIDON_SPONGE_WIDTH,
+    reg_cubed_full, reg_cubed_partial, reg_full_sbox_0, reg_full_sbox_1, reg_partial_sbox,
+    PoseidonColumnsView, HALF_N_FULL_ROUNDS, NUM_COLUMNS, N_PARTIAL_ROUNDS, POSEIDON_COL_MAP,
+    POSEIDON_DIGEST, POSEIDON_SPONGE_RATE, POSEIDON_SPONGE_WIDTH,
 };
 use crate::all_stark::{EvmStarkFrame, Table};
 use crate::witness::memory::MemoryAddress;
@@ -226,7 +222,7 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
     }
 
     fn generate_rows_for_general_op(&self, op: PoseidonGeneralOp) -> Vec<[F; NUM_COLUMNS]> {
-        let mut input_blocks = op.input.chunks_exact(FELT_MAX_BYTES * POSEIDON_SPONGE_RATE);
+        let input_blocks = op.input.chunks_exact(FELT_MAX_BYTES * POSEIDON_SPONGE_RATE);
         let mut rows: Vec<[F; NUM_COLUMNS]> =
             Vec::with_capacity(op.input.len() / (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE));
         let last_non_padding_elt = op.len % (FELT_MAX_BYTES * POSEIDON_SPONGE_RATE);
@@ -256,11 +252,10 @@ impl<F: RichField + Extendable<D>, const D: usize> PoseidonStark<F, D> {
                 tmp_row
             };
             row.not_padding = F::ONE;
-            for (i, (input_bytes_chunk, block_chunk)) in row
+            for (input_bytes_chunk, block_chunk) in row
                 .input_bytes
                 .iter_mut()
                 .zip_eq(block.chunks(FELT_MAX_BYTES))
-                .enumerate()
             {
                 input_bytes_chunk.copy_from_slice(
                     &block_chunk[1..]
@@ -763,7 +758,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
         // already_absorbed == i`
         let offset = builder.sub_extension(lv.len, already_absorbed_elements);
         for (i, &is_final_len) in lv.is_final_input_len.iter().enumerate() {
-            let mut index = builder.constant_extension(
+            let index = builder.constant_extension(
                 F::from_canonical_usize(FELT_MAX_BYTES * POSEIDON_SPONGE_RATE - i).into(),
             );
             let entry_match = builder.sub_extension(offset, index);
@@ -924,36 +919,15 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for PoseidonStark
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Borrow;
-
     use anyhow::Result;
-    use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-    use itertools::Itertools;
-    use plonky2::field::goldilocks_field::GoldilocksField;
-    use plonky2::field::polynomial::PolynomialValues;
-    use plonky2::field::types::{Field, PrimeField64, Sample};
-    use plonky2::fri::oracle::PolynomialBatch;
-    use plonky2::hash::poseidon::Poseidon;
-    use plonky2::iop::challenger::Challenger;
-    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2::timed;
-    use plonky2::util::timing::TimingTree;
+    use plonky2::{
+        field::{goldilocks_field::GoldilocksField, types::PrimeField64},
+        plonk::config::{GenericConfig, PoseidonGoldilocksConfig},
+    };
     use smt_trie::code::poseidon_hash_padded_byte_vec;
-    use smt_trie::smt::F;
-    use starky::config::StarkConfig;
-    use starky::cross_table_lookup::{CtlData, CtlZData};
-    use starky::lookup::{Column, GrandProductChallenge, GrandProductChallengeSet};
     use starky::stark_testing::{test_stark_circuit_constraints, test_stark_low_degree};
 
-    use crate::memory::segments::Segment;
-    use crate::poseidon::columns::{
-        PoseidonColumnsView, POSEIDON_DIGEST, POSEIDON_SPONGE_RATE, POSEIDON_SPONGE_WIDTH,
-    };
-    use crate::poseidon::poseidon_stark::{
-        PoseidonGeneralOp, PoseidonOp, PoseidonStark, FELT_MAX_BYTES,
-    };
-    use crate::prover::prove_single_table;
-    use crate::witness::memory::MemoryAddress;
+    use super::*;
 
     #[test]
     fn test_stark_degree() -> Result<()> {
@@ -1007,7 +981,7 @@ mod tests {
         let rows = stark.generate_trace_rows(vec![int_inputs], 8);
         assert_eq!(rows.len(), 8);
         let last_row: &PoseidonColumnsView<_> = rows[0].borrow();
-        let mut output: Vec<_> = (0..POSEIDON_DIGEST)
+        let output: Vec<_> = (0..POSEIDON_DIGEST)
             .map(|i| {
                 last_row.digest[2 * i] + F::from_canonical_u64(1 << 32) * last_row.digest[2 * i + 1]
             })
@@ -1027,9 +1001,5 @@ mod tests {
         );
 
         Ok(())
-    }
-
-    fn init_logger() {
-        let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "debug"));
     }
 }

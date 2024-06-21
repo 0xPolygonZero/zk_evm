@@ -45,7 +45,6 @@ remove_selfdestruct_list_found:
     // stack: last_addr, i, retdest
     MSTORE_GENERAL // Store the last address at the position of the removed address.
     JUMP
-
 remove_selfdestruct_not_found:
     // stack: i, len, addr, retdest
     %pop3

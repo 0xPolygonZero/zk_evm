@@ -8,6 +8,7 @@ use plonky2::field::packed::PackedField;
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
+use sha2::{Digest, Sha256};
 
 use crate::witness::errors::ProgramError;
 
@@ -118,17 +119,6 @@ pub(crate) fn h256_limbs<F: Field>(h256: H256) -> [F; 8] {
     let mut temp_h256 = h256.0;
     temp_h256.reverse();
     temp_h256
-        .chunks(4)
-        .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
-        .map(F::from_canonical_u32)
-        .collect_vec()
-        .try_into()
-        .unwrap()
-}
-
-/// Returns the 32-bit limbs of a `U160`.
-pub(crate) fn h160_limbs<F: Field>(h160: H160) -> [F; 5] {
-    h160.0
         .chunks(4)
         .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
         .map(F::from_canonical_u32)
@@ -254,4 +244,11 @@ pub(crate) fn get_h256<F: RichField>(slice: &[F]) -> H256 {
             .flat_map(|limb| limb.to_be_bytes())
             .collect_vec(),
     )
+}
+
+/// Standard Sha2 implementation.
+pub(crate) fn sha2(input: Vec<u8>) -> U256 {
+    let mut hasher = Sha256::new();
+    hasher.update(input);
+    U256::from(&hasher.finalize()[..])
 }

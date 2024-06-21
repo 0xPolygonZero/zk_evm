@@ -16,13 +16,16 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
+use evm_arithmetization::testing_utils::{
+    preinitialized_state, preinitialized_state_with_updated_storage,
+};
 use evm_arithmetization::Node;
 use hex_literal::hex;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use smt_trie::code::hash_bytecode_u256;
-use smt_trie::db::{Db, MemoryDb};
+use smt_trie::db::Db;
 use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
 use smt_trie::smt::Smt;
 use smt_trie::utils::hashout2u;
@@ -79,7 +82,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         code_length: code.len().into(),
     };
 
-    let mut state_smt_before = Smt::<MemoryDb>::default();
+    let mut state_smt_before = preinitialized_state();
     set_account(
         &mut state_smt_before,
         H160(sender),
@@ -106,17 +109,16 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
 
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::from(sender),
-        block_difficulty: 0x0.into(),
         block_number: 0x176.into(),
         block_chain_id: 0x301824.into(),
         block_timestamp: 0x664e63af.into(),
         block_gaslimit: 0x1c9c380.into(),
         block_gas_used: gas_used,
-        block_bloom: [0.into(); 8],
         block_base_fee: 0x11.into(),
         block_random: H256(hex!(
             "388bd2892c01ab13e22f713316cc2b5d3c3d963e1426c25a80c7878a1815f889"
         )),
+        ..Default::default()
     };
 
     let mut contract_code = HashMap::new();
@@ -130,7 +132,8 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     };
     let to_account_after = to_account_before;
 
-    let mut expected_state_smt_after = Smt::<MemoryDb>::default();
+    let mut expected_state_smt_after =
+        preinitialized_state_with_updated_storage(&block_metadata, &[]);
     set_account(
         &mut expected_state_smt_after,
         H160(sender),
@@ -176,6 +179,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         checkpoint_state_trie_root: H256(hex!(
             "fe07ff6d1ab215df17884b89112ccf2373597285a56c5902150313ad1a53ee57"
         )),
+        global_exit_roots: vec![],
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

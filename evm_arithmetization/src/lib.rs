@@ -181,7 +181,6 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::field_reassign_with_default)]
-#![allow(unused)]
 #![feature(let_chains)]
 
 // Individual STARK processing units
@@ -210,6 +209,7 @@ pub mod witness;
 // Utility modules
 pub mod curve_pairings;
 pub mod extension_tower;
+pub mod testing_utils;
 pub mod util;
 
 // Set up Jemalloc

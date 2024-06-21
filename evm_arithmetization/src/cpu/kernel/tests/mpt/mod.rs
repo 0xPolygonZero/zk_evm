@@ -1,3 +1,6 @@
+// TODO: Remove after code refactoring type-1 / type-2
+#![allow(unused)]
+
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::HashedPartialTrie;

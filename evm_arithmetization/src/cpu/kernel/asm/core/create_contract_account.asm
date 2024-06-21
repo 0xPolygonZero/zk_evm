@@ -32,7 +32,7 @@
     // stack: address
     PUSH 0
 %%do_insert:
-    // stack: new_acct_value, address
+    // stack: new_acct_value=existing_balance, address
     // Write the new account's data to MPT data, and get a pointer to it.
     // stack: new_acct_value, address
     PUSH 0 DUP3 %journal_add_nonce_change

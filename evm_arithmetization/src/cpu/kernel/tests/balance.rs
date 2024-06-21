@@ -1,11 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use ethereum_types::{Address, BigEndianHash, H256, U256};
-use keccak_hash::keccak;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
+use ethereum_types::{Address, U256};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use rand::{thread_rng, Rng};
 use smt_trie::db::MemoryDb;
@@ -17,9 +14,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::{initialize_mpts, set_account};
-use crate::cpu::kernel::tests::mpt::nibbles_64;
 use crate::generation::mpt::AccountRlp;
-use crate::Node;
 
 // Test account with a given code hash.
 fn test_account(balance: U256) -> AccountRlp {

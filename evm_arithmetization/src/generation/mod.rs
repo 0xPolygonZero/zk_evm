@@ -6,7 +6,6 @@ use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
@@ -34,12 +33,10 @@ pub(crate) mod rlp;
 pub(crate) mod state;
 mod trie_extractor;
 
-use plonky2::field::types::PrimeField64;
-use smt_trie::smt::{hash_serialize, hash_serialize_u256};
+use smt_trie::smt::hash_serialize_u256;
 
-use self::mpt::{load_all_mpts, TrieRootPtrs};
 use self::state::State;
-use crate::witness::util::{mem_write_log, stack_peek};
+use crate::witness::util::mem_write_log;
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -60,6 +57,8 @@ pub struct GenerationInputs {
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
+    /// Global exit roots pairs `(timestamp, root)`.
+    pub global_exit_roots: Vec<(U256, H256)>,
     pub tries: TrieInputs,
     /// Expected trie roots after the transactions are executed.
     pub trie_roots_after: TrieRoots,
@@ -139,6 +138,18 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
             h2u(inputs.block_hashes.cur_hash),
         ),
         (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+        (
+            GlobalMetadata::BlockBlobGasUsed,
+            metadata.block_blob_gas_used,
+        ),
+        (
+            GlobalMetadata::BlockExcessBlobGas,
+            metadata.block_excess_blob_gas,
+        ),
+        (
+            GlobalMetadata::ParentBeaconBlockRoot,
+            h2u(metadata.parent_beacon_block_root),
+        ),
         (GlobalMetadata::BlockGasUsedBefore, inputs.gas_used_before),
         (GlobalMetadata::BlockGasUsedAfter, inputs.gas_used_after),
         (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
