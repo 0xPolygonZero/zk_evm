@@ -20,7 +20,7 @@ jobs:
     name: Test proof generation with jerigon input
     runs-on: zero-ci
     timeout-minutes: 40
-    # if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
         run: |
           cd test-jerigon-network
           docker-compose -f docker-compose.yml up -d
-          docker container wait smart-contracts
+          docker logs -f smart-contracts
           echo "Jerigon network is up and running, ready for testing"
 
       - name: Rpc test with curl
@@ -66,7 +66,7 @@ jobs:
         run: |
           cd zero_bin/tools
           OUTPUT_TO_TERMINAL=true ./prove_rpc.sh 0x2 0x3 http://localhost:8546 jerigon true 0 0 test_only
-          echo "Proving blocks in test_only mode done"
+          echo "Proving blocks in test_only mode finished"
 
 
       - name: Run prove blocks in real mode
@@ -74,7 +74,7 @@ jobs:
           cd zero_bin/tools
           rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
           OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./prove_rpc.sh 0x4 0x5 http://localhost:8546 jerigon true
-          echo "Proving blocks in real mode done"
+          echo "Proving blocks in real mode finished"
           
       - name: Shut down network
         run: |
