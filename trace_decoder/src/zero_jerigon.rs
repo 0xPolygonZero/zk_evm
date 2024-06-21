@@ -439,5 +439,18 @@ fn test() {
         let instructions = crate::wire::parse(&case.bytes).unwrap();
         let frontend = frontend(instructions).unwrap();
         assert_eq!(case.expected_state_root, frontend.state.hash());
+
+        for (address, data) in frontend.state.items() {
+            if let ValOrHash::Val(bytes) = data {
+                let address = ethereum_types::H256::from_slice(&address.bytes_be());
+                let account =
+                    rlp::decode::<evm_arithmetization::generation::mpt::AccountRlp>(&bytes)
+                        .unwrap();
+                let storage_root = account.storage_root;
+                if storage_root != crate::processed_block_trace::EMPTY_TRIE_HASH {
+                    assert!(frontend.storage.contains_key(&address))
+                }
+            }
+        }
     }
 }
