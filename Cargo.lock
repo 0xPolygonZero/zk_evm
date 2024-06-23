@@ -1942,6 +1942,7 @@ dependencies = [
  "starky",
  "static_assertions",
  "tiny-keccak",
+ "zk_evm_derive",
 ]
 
 [[package]]
@@ -5874,6 +5875,15 @@ name = "zerovec-derive"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97cf56601ee5052b4417d90c8755c6683473c926039908196cf35d99f893ebe7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.66",
+]
+
+[[package]]
+name = "zk_evm_derive"
+version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -3,6 +3,7 @@ members = ["mpt_trie",
     "proof_gen",
     "trace_decoder",
     "evm_arithmetization",
+    "derive",
     "zero_bin/leader",
     "zero_bin/worker",
     "zero_bin/common",
@@ -108,3 +109,9 @@ plonky2 = "0.2.2"
 plonky2_maybe_rayon = "0.2.0"
 plonky2_util = "0.2.0"
 starky = "0.4.0"
+
+# proc macro related dependencies
+syn = "2.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+zk_evm_derive = { path = "derive" }
