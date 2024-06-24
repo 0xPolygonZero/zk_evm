@@ -42,7 +42,6 @@ bytes = "1.5.0"
 ciborium = "0.2.1"
 ciborium-io = "0.2.1"
 clap = { version = "4.4.6", features = ["derive", "env"] }
-__compat_primitive_types = "0.12.2"
 criterion = "0.5.1"
 dotenvy = "0.15.7"
 enum-as-inner = "0.6.0"
