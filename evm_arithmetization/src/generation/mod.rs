@@ -231,12 +231,6 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     let cpu_res = timed!(timing, "simulate CPU", simulate_cpu(&mut state));
 
-    if cpu_res.is_err() {
-        let _ = output_debug_tries(&state);
-
-        cpu_res?;
-    }
-
     log::info!(
         "Trace lengths (before padding): {:?}",
         state.traces.get_lengths()
@@ -250,6 +244,11 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         state.get_storage_linked_list()
     );
 
+    if cpu_res.is_err() {
+        let _ = output_debug_tries(&state);
+
+        cpu_res?;
+    }
     let read_metadata = |field| state.memory.read_global_metadata(field);
     let trie_roots_before = TrieRoots {
         state_root: H256::from_uint(&read_metadata(StateTrieRootDigestBefore)),

@@ -26,19 +26,9 @@ global mpt_delete_leaf:
     SWAP1 JUMP
 
 global delete_account:
-    %stack (address, retdest) -> (address, delete_account_save, retdest)
     %addr_to_state_key
-    DUP1
     %remove_account_from_linked_list
-    // stack: key, delete_account_save, retdest
-    PUSH 64
-    // stack: 64, key, delete_account_save, retdest
-    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-    // stack: state_root_prt, 64, key, delete_account_save, retdest
-    %jump(mpt_delete)
-global delete_account_save:
-    // stack: updated_state_root_ptr, retdest
-    %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+    // retdest
     JUMP
 
 %macro delete_account

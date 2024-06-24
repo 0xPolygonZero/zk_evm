@@ -113,6 +113,7 @@ global debug_check_txn_number:
     %assert_eq
     %pop3
     PUSH 1 // initial trie data length
+    
 global check_state_trie:
     %set_final_tries
     %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     
