@@ -23,7 +23,7 @@ type C = PoseidonGoldilocksConfig;
 
 /// Set this to true to cache blocks in `/tmp``.  This is intended mainly for
 /// developer experience and not for CI testing.
-const CACHE_TEST_BLOCKS: bool = false;
+const CACHE_TEST_BLOCKS: bool = true;
 
 /// Get `GenerationInputs` for a simple token transfer txn, where the block has
 /// the given timestamp.
