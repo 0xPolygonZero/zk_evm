@@ -97,7 +97,7 @@ pub enum TrieSegment {
     /// Extension node along with the key piece of the node.
     Extension(Nibbles),
 
-    /// Leaf node along wth the key piece of the node.
+    /// Leaf node along with the key piece of the node.
     Leaf(Nibbles),
 }
 

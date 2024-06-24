@@ -1,0 +1,20 @@
+[package]
+name = "verifier"
+authors = ["Polygon Zero <zbrown@polygon.technology>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dotenvy = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_path_to_error = { workspace = true }
+
+# Local dependencies
+zero_bin_common ={ path = "../common" }
+# TODO: update deps to take local versions again
+proof_gen = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
