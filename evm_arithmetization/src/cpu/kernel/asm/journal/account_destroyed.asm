@@ -43,8 +43,7 @@ revert_account_destroyed_contd:
     // Remove `prev_balance` from `target`'s balance.
     // stack: target, address, prev_balance, retdest
     %read_accounts_linked_list
-    // stack: cold_access, target_payload_ptr, address, prev_balance, retdest
-    POP 
+    // stack: target_payload_ptr, address, prev_balance, retdest
     DUP1 %assert_nonzero
     %add_const(1)
     // stack: target_balance_ptr, address, prev_balance, retdest
@@ -53,8 +52,7 @@ revert_account_destroyed_contd:
     SUB SWAP1 %mstore_trie_data
     // stack: address, prev_balance, retdest
     %read_accounts_linked_list
-    // stack: cold_access, account_payload_ptr, prev_balance, retdest
-    POP
+    // stack: account_payload_ptr, prev_balance, retdest
     DUP1 %assert_nonzero
     %increment
     // stack: account_balance_payload_ptr, prev_balance, retdest
