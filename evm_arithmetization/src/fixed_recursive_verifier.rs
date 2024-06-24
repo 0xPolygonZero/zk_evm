@@ -38,7 +38,6 @@ use starky::stark::Stark;
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
-use crate::private_public_values;
 use crate::proof::{
     AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
     PublicValues, PublicValuesTarget, TrieRoots, TrieRootsTarget,

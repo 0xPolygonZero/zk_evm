@@ -200,7 +200,6 @@ mod get_challenges;
 pub mod proof;
 pub mod prover;
 pub mod recursive_verifier;
-pub mod private_public_values;
 pub mod verifier;
 
 // Witness generation
