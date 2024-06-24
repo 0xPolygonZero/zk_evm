@@ -551,15 +551,14 @@ fn test_block_aggregation_binop_4_blocks() -> anyhow::Result<()> {
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
-    let aggproof01 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &bp[1], false)?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof01)?;
+    let aggproof01 = all_circuits.prove_two_to_one_block(&bp[0], false, &bp[1], false)?;
+    all_circuits.verify_two_to_one_block(&aggproof01)?;
 
-    let aggproof23 = all_circuits.prove_two_to_one_block_binop(&bp[2], false, &bp[3], false)?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof23)?;
+    let aggproof23 = all_circuits.prove_two_to_one_block(&bp[2], false, &bp[3], false)?;
+    all_circuits.verify_two_to_one_block(&aggproof23)?;
 
-    let aggproof0123 =
-        all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &aggproof23, true)?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof0123)?;
+    let aggproof0123 = all_circuits.prove_two_to_one_block(&aggproof01, true, &aggproof23, true)?;
+    all_circuits.verify_two_to_one_block(&aggproof0123)?;
 
     Ok(())
 }
@@ -595,8 +594,8 @@ fn test_block_aggregation_binop_same_block_twice() -> anyhow::Result<()> {
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
-    let aggproof_42_42 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &bp[1], false)?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof_42_42)?;
+    let aggproof_42_42 = all_circuits.prove_two_to_one_block(&bp[0], false, &bp[1], false)?;
+    all_circuits.verify_two_to_one_block(&aggproof_42_42)?;
 
     Ok(())
 }
@@ -640,12 +639,11 @@ fn test_block_aggregation_binop_foldleft() -> anyhow::Result<()> {
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
-    let aggproof01 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &bp[1], false)?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof01)?;
+    let aggproof01 = all_circuits.prove_two_to_one_block(&bp[0], false, &bp[1], false)?;
+    all_circuits.verify_two_to_one_block(&aggproof01)?;
 
-    let aggproof012 =
-        all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &bp[2], false)?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof012)?;
+    let aggproof012 = all_circuits.prove_two_to_one_block(&aggproof01, true, &bp[2], false)?;
+    all_circuits.verify_two_to_one_block(&aggproof012)?;
 
     Ok(())
 }
@@ -686,12 +684,11 @@ fn test_block_aggregation_binop_foldright() -> anyhow::Result<()> {
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
 
-    let aggproof12 = all_circuits.prove_two_to_one_block_binop(&bp[1], false, &bp[2], false)?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof12)?;
+    let aggproof12 = all_circuits.prove_two_to_one_block(&bp[1], false, &bp[2], false)?;
+    all_circuits.verify_two_to_one_block(&aggproof12)?;
 
-    let aggproof012 =
-        all_circuits.prove_two_to_one_block_binop(&bp[0], false, &aggproof12, true)?;
-    all_circuits.verify_two_to_one_block_binop(&aggproof012)?;
+    let aggproof012 = all_circuits.prove_two_to_one_block(&bp[0], false, &aggproof12, true)?;
+    all_circuits.verify_two_to_one_block(&aggproof012)?;
 
     Ok(())
 }
