@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
 
     let runtime = Runtime::from_config(&args.paladin, register()).await?;
 
-    match args.command.clone() {
+    match args.command {
         Command::Stdio {
             previous_proof,
             save_inputs_on_error,
@@ -93,20 +93,9 @@ async fn main() -> Result<()> {
 
             http::http_main(runtime, port, output_dir, save_inputs_on_error).await?;
         }
-        Command::Jerigon {
+        Command::Rpc {
             rpc_url,
-            block_interval,
-            checkpoint_block_number,
-            previous_proof,
-            proof_output_dir,
-            save_inputs_on_error,
-            block_time,
-            keep_intermediate_proofs,
-            backoff,
-            max_retries,
-        }
-        | Command::Native {
-            rpc_url,
+            rpc_type,
             block_interval,
             checkpoint_block_number,
             previous_proof,
@@ -133,7 +122,7 @@ async fn main() -> Result<()> {
                 runtime,
                 RpcParams {
                     rpc_url,
-                    rpc_type: args.command.into(),
+                    rpc_type,
                     backoff,
                     max_retries,
                 },
