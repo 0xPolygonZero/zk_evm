@@ -2,3 +2,7 @@
 # https://github.com/rust-lang/rust/pull/124129
 # https://github.com/dtolnay/linkme/pull/88
 rustflags = ["-Z", "linker-features=-lld"]
+
+[env]
+# If we're running in the project workspace, then we should set the workspace env var so we read/write to/from files relative to the workspace.
+CARGO_WORKSPACE_DIR = { value = "", relative = true }
