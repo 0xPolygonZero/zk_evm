@@ -419,10 +419,10 @@ fn get_test_block_proof(
     log::info!("{:#?}", dummy0);
     log::info!("Stage 1");
 
-    let (root_proof0, pv0) = all_circuits.prove_root(&all_stark, &config, inputs0, timing, None)?;
+    let (root_proof0, pv0) = all_circuits.prove_root(all_stark, config, inputs0, timing, None)?;
     all_circuits.verify_root(root_proof0.clone())?;
     let (dummy_proof0, dummy_pv0) =
-        all_circuits.prove_root(&all_stark, &config, dummy0, timing, None)?;
+        all_circuits.prove_root(all_stark, config, dummy0, timing, None)?;
     all_circuits.verify_root(dummy_proof0.clone())?;
 
     log::info!("Stage 2");
@@ -509,7 +509,7 @@ fn get_test_block_proof_cached(
         log::info!("Succesfully validated blockproof from {:#?}", path);
     }
 
-    return Ok(block_proof);
+    Ok(block_proof)
 }
 
 /// Aggregate a sequential /// proof containing three proofs with the structure
@@ -546,8 +546,7 @@ fn test_block_aggregation_binop_4_blocks() -> anyhow::Result<()> {
     log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp))
-        .collect::<anyhow::Result<()>>()?;
+        .try_for_each(|bp| all_circuits.verify_block(bp))?;
 
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
@@ -591,8 +590,7 @@ fn test_block_aggregation_binop_same_block_twice() -> anyhow::Result<()> {
     log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp))
-        .collect::<anyhow::Result<()>>()?;
+        .try_for_each(|bp| all_circuits.verify_block(bp))?;
 
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
@@ -637,8 +635,7 @@ fn test_block_aggregation_binop_foldleft() -> anyhow::Result<()> {
     log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp))
-        .collect::<anyhow::Result<()>>()?;
+        .try_for_each(|bp| all_circuits.verify_block(bp))?;
 
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
@@ -684,8 +681,7 @@ fn test_block_aggregation_binop_foldright() -> anyhow::Result<()> {
     log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp))
-        .collect::<anyhow::Result<()>>()?;
+        .try_for_each(|bp| all_circuits.verify_block(bp))?;
 
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
