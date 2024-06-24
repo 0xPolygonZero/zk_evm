@@ -390,9 +390,10 @@ where
         generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
     ) -> IoResult<()> {
         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
-        self.lhs.to_buffer(buffer);
-        self.rhs.to_buffer(buffer);
-        //buffer.write_target_hash(&self.mix_pv_hash)?;
+        self.lhs.to_buffer(buffer)?;
+        self.rhs.to_buffer(buffer)?;
+        buffer.write_target_vec(&self.dummy_pis)?;
+        buffer.write_target_hash(&self.mix_pv_hash)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
         Ok(())
     }
@@ -406,13 +407,14 @@ where
         let lhs = BlockBinopAggChildTarget::from_buffer(buffer)?;
         let rhs = BlockBinopAggChildTarget::from_buffer(buffer)?;
         let mix_pv_hash = buffer.read_target_hash()?;
+        let dummy_pis = buffer.read_target_vec()?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         Ok(Self {
             circuit,
             lhs,
             rhs,
             mix_pv_hash,
-            dummy_pis: todo!(),
+            dummy_pis,
             cyclic_vk,
         })
     }
@@ -426,16 +428,13 @@ struct BlockBinopAggChildTarget<const D: usize>
     is_agg: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
     block_proof: ProofWithPublicInputsTarget<D>,
-    //pv_hash: HashOutTarget,
 }
-
 
 impl<const D: usize> BlockBinopAggChildTarget<D> {
     fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         buffer.write_target_bool(self.is_agg)?;
         buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
         buffer.write_target_proof_with_public_inputs(&self.block_proof)?;
-        //buffer.write_target_hash(&self.pv_hash)?;
         Ok(())
     }
 
@@ -443,12 +442,10 @@ impl<const D: usize> BlockBinopAggChildTarget<D> {
         let is_agg = buffer.read_target_bool()?;
         let agg_proof = buffer.read_target_proof_with_public_inputs()?;
         let block_proof = buffer.read_target_proof_with_public_inputs()?;
-        let pv_hash = buffer.read_target_hash()?;
         Ok(Self {
             is_agg,
             agg_proof,
             block_proof,
-            //pv_hash,
         })
     }
 
