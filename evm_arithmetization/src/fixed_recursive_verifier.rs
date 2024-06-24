@@ -418,13 +418,10 @@ where
             cyclic_vk,
         })
     }
-
 }
 
-
 #[derive(Eq, PartialEq, Debug)]
-struct BlockBinopAggChildTarget<const D: usize>
-{
+struct BlockBinopAggChildTarget<const D: usize> {
     is_agg: BoolTarget,
     agg_proof: ProofWithPublicInputsTarget<D>,
     block_proof: ProofWithPublicInputsTarget<D>,
@@ -461,7 +458,6 @@ impl<const D: usize> BlockBinopAggChildTarget<D> {
         .collect()
     }
 }
-
 
 impl<F, C, const D: usize> AllRecursiveCircuits<F, C, D>
 where
@@ -537,7 +533,7 @@ where
         )?;
         let block =
             BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
-        let two_to_one_block = TwoToOneAggCircuitData::<F, C, D>::from_buffer(
+        let two_to_one_block = TwoToOneAggCircuitData::from_buffer(
             &mut buffer,
             gate_serializer,
             generator_serializer,
@@ -673,7 +669,10 @@ where
         let block = Self::create_block_circuit(&aggregation);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block);
         let two_to_one_block_binop = Self::create_two_to_one_block_circuit_binop(&by_table, &block);
-        debug_assert_eq!(&block.circuit.common, &two_to_one_block_binop.circuit.common);
+        debug_assert_eq!(
+            &block.circuit.common,
+            &two_to_one_block_binop.circuit.common
+        );
 
         Self {
             root,
@@ -901,15 +900,10 @@ where
         );
 
         // Pad to match the root circuit's degree.
-        log::info!("Before padding: Aggregation: {} vs Root: {}.", builder.num_gates(),root.circuit.common.degree_bits());
         while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
             builder.add_gate(NoopGate, vec![]);
         }
-        log::info!("After padding: Aggregation: {} vs Root: {}.", builder.num_gates(), root.circuit.common.degree_bits());
 
-        assert_eq!(count_public_inputs, builder.num_public_inputs());
-        log::info!("AGG circuit Expected: {}, actual: {}", root.circuit.common.num_public_inputs, builder.num_public_inputs());
-        assert_eq!(root.circuit.common.num_public_inputs, builder.num_public_inputs());
         let circuit = builder.build::<C>();
         AggregationCircuitData {
             circuit,
@@ -1481,11 +1475,6 @@ where
         pv0: PublicValues,
         pv1: PublicValues,
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
-        let ppp0 = PublicValues::from_public_inputs(&proof0.public_inputs);
-        let ppp1 = PublicValues::from_public_inputs(&proof1.public_inputs);
-        debug_assert_eq!(pv0, ppp0);
-        debug_assert_eq!(pv1, ppp1);
-
         let mut inputs = PartialWitness::new();
 
         inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.proof0, proof0);
@@ -1791,7 +1780,7 @@ where
         let mut witness = PartialWitness::new();
 
         let dummy_pis = &self.two_to_one_block_binop.dummy_pis;
-        witness.set_target_arr(&dummy_pis , &vec![F::ZERO; dummy_pis.len()]);
+        witness.set_target_arr(&dummy_pis, &vec![F::ZERO; dummy_pis.len()]);
 
         Self::set_dummy_if_necessary(
             &self.two_to_one_block_binop.lhs,
@@ -1841,7 +1830,8 @@ where
         check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
     }
 
-    /// Helper method to construct one of the two circuits representing unrelated proofs
+    /// Helper method to construct one of the two circuits representing
+    /// unrelated proofs
     ///
     /// # Arguments
     ///
@@ -1865,7 +1855,11 @@ where
         let block_proof = builder.add_virtual_proof_with_pis(block_common);
         builder
             .conditionally_verify_cyclic_proof::<C>(
-                is_agg, &agg_proof, &block_proof, &block_vk, block_common,
+                is_agg,
+                &agg_proof,
+                &block_proof,
+                &block_vk,
+                block_common,
             )
             .expect("Failed to build cyclic recursion circuit");
         assert_eq!(count_public_inputs, builder.num_public_inputs());
@@ -1890,13 +1884,14 @@ where
 
         let mut dummy_pis = vec![];
         // The magic numbers derived from failing assertion at end of this function.
-        while builder.num_public_inputs() < block.circuit.common.num_public_inputs-(2337-2269) {
+        while builder.num_public_inputs() < block.circuit.common.num_public_inputs - (2337 - 2269) {
             let target = builder.add_virtual_public_input();
             dummy_pis.push(target);
         }
 
         let cyclic_vk = builder.add_verifier_data_public_inputs();
-        // Avoid accidentally adding public inputs after calling [`add_verifier_data_public_inputs`].
+        // Avoid accidentally adding public inputs after calling
+        // [`add_verifier_data_public_inputs`].
         let count_public_inputs = builder.num_public_inputs();
 
         let lhs = Self::add_block_agg_child(&mut builder, &block);
