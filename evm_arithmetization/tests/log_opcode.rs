@@ -562,7 +562,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         signed_txn: Some(txn_2.to_vec()),
         withdrawals: vec![],
         tries: tries_before,
-        trie_roots_after,
+        trie_roots_after: trie_roots_after.clone(),
         contract_code,
         checkpoint_state_trie_root,
         block_metadata: block_1_metadata,
