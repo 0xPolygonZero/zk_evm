@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use alloy::{
     primitives::B256,
     providers::Provider,
@@ -63,6 +65,53 @@ where
     }
     Ok(ProverInput {
         blocks: block_proofs,
+    })
+}
+
+pub struct BenchmarkedProverInput {
+    pub proverinput: ProverInput,
+    pub fetch_times: Vec<Duration>,
+}
+
+pub async fn benchmark_prover_input<ProviderT, TransportT>(
+    provider: &ProviderT,
+    block_interval: BlockInterval,
+    checkpoint_block_id: BlockId,
+    rpc_type: RpcType,
+) -> anyhow::Result<BenchmarkedProverInput>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    // Grab interval checkpoint block state trie
+    let checkpoint_state_trie_root = provider
+        .get_block(checkpoint_block_id, BlockTransactionsKind::Hashes)
+        .await?
+        .context("block does not exist")?
+        .header
+        .state_root;
+
+    let mut block_proofs = Vec::new();
+    let mut block_interval = block_interval.into_bounded_stream()?;
+    let mut fetch_times = Vec::new();
+
+    while let Some(block_num) = block_interval.next().await {
+        let start = Instant::now();
+        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
+        let block_prover_input = match rpc_type {
+            RpcType::Jerigon => {
+                jerigon::block_prover_input(&provider, block_id, checkpoint_state_trie_root).await?
+            }
+            RpcType::Native => {
+                native::block_prover_input(&provider, block_id, checkpoint_state_trie_root).await?
+            }
+        };
+        fetch_times.push(start.elapsed());
+        block_proofs.push(block_prover_input);
+    }
+    Ok(BenchmarkedProverInput {
+        proverinput: ProverInput { blocks: block_proofs },
+        fetch_times,
     })
 }
 

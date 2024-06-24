@@ -28,6 +28,7 @@ itertools = { workspace = true }
 url = { workspace = true }
 __compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 tower = { workspace = true, features = ["retry"] }
+chrono = {workspace = true}
 
 # Local dependencies
 zero_bin_common ={ workspace = true }

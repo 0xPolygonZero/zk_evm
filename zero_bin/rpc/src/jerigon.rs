@@ -1,7 +1,9 @@
+use std::time::{Duration, Instant};
+
 use alloy::{
     primitives::B256, providers::Provider, rpc::types::eth::BlockId, transports::Transport,
 };
-use prover::BlockProverInput;
+use prover::{BlockProverInput, ProverInput};
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::trace_protocol::{
