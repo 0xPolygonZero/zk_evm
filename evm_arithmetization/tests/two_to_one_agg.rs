@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::{env, fs};
 use std::str::FromStr;
+use std::{env, fs};
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
@@ -17,16 +17,13 @@ use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
 
-// use std::error::Error;
-
 type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
-type PwPIS = ProofWithPublicInputs<F,C,D>;
 
-/// Set this to true to cache blocks in `/tmp``.  This is intended mainly for developer experience and not for CI testing.
-const CACHE_TEST_BLOCKS: bool = true;
-
+/// Set this to true to cache blocks in `/tmp``.  This is intended mainly for
+/// developer experience and not for CI testing.
+const CACHE_TEST_BLOCKS: bool = false;
 
 /// Get `GenerationInputs` for a simple token transfer txn, where the block has
 /// the given timestamp.
@@ -236,6 +233,15 @@ fn test_two_to_one_aggregation() -> anyhow::Result<()> {
     all_circuits.verify_two_to_one_aggregation(&proof)
 }
 
+fn eth_to_wei(eth: U256) -> U256 {
+    // 1 ether = 10^18 wei.
+    eth * U256::from(10).pow(18.into())
+}
+
+fn init_logger() {
+    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
+}
+
 /// Get `GenerationInputs` for a simple token transfer txn, where the block has
 /// the given timestamp.
 fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
@@ -265,7 +271,10 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     }
     .into();
     let checkpoint_state_trie_root = state_trie_before.hash();
-    assert_eq!(checkpoint_state_trie_root, hex!("ef46022eafbc33d70e6ea9c6aef1074c1ff7ad36417ffbc64307ad3a8c274b75").into());
+    assert_eq!(
+        checkpoint_state_trie_root,
+        hex!("ef46022eafbc33d70e6ea9c6aef1074c1ff7ad36417ffbc64307ad3a8c274b75").into()
+    );
 
     let tries_before = TrieInputs {
         state_trie: HashedPartialTrie::from(Node::Empty),
@@ -458,7 +467,7 @@ fn get_test_block_proof_cached(
     all_circuits: &AllRecursiveCircuits<GoldilocksField, PoseidonGoldilocksConfig, 2>,
     all_stark: &AllStark<GoldilocksField, 2>,
     config: &StarkConfig,
-) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>>{
+) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
     log::info!("Getting proof of block {}", timestamp);
 
     // 1. Setup path
@@ -468,12 +477,12 @@ fn get_test_block_proof_cached(
     log::info!("{:#?}", path);
 
     // 2. Read cached block from disc and return early.
-    if CACHE_TEST_BLOCKS && path.try_exists()? && fs::File::open(path.clone())?.metadata()?.len() > 0 {
+    if CACHE_TEST_BLOCKS
+        && path.try_exists()?
+        && fs::File::open(path.clone())?.metadata()?.len() > 0
+    {
         let raw_block = fs::read(path)?;
-        return ProofWithPublicInputs::from_bytes(
-            raw_block,
-            &all_circuits.block.circuit.common,
-        );
+        return ProofWithPublicInputs::from_bytes(raw_block, &all_circuits.block.circuit.common);
     }
 
     // 3. Compute new block proof.
@@ -494,10 +503,8 @@ fn get_test_block_proof_cached(
         // Todo: move to file with `from_bytes`
         let written_block = fs::read(path.clone())?;
         assert_eq!(&raw_block, &written_block);
-        let restored_block = ProofWithPublicInputs::from_bytes(
-            written_block,
-            &all_circuits.block.circuit.common,
-        )?;
+        let restored_block =
+            ProofWithPublicInputs::from_bytes(written_block, &all_circuits.block.circuit.common)?;
         assert_eq!(block_proof, restored_block);
         log::info!("Succesfully validated blockproof from {:#?}", path);
     }
@@ -505,68 +512,8 @@ fn get_test_block_proof_cached(
     return Ok(block_proof);
 }
 
-
-
-#[test]
-/// Run:  RUST_BACKTRACE=1 RUSTFLAGS="-Ctarget-cpu=native -g -Z threads 8"
-/// cargo test --release -- --nocapture three_to_one Aggregate a sequential
-/// proof containing three proofs with the structure `((A,B),C)`. We take the
-/// previous example and extend it.
-///
-///  A    B   C
-///   \  /   /
-///   (A,B) /
-///     \  /
-///   ((A,B),C)
-fn test_three_to_one_block_aggregation_ivc() -> anyhow::Result<()> {
-    init_logger();
-    log::info!("Meta Stage 0:  Setup");
-    let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
-
-    // Preprocess all circuits.
-    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
-        &all_stark,
-        &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
-        &config,
-    );
-
-    let mut timing = TimingTree::new("prove root first", log::Level::Info);
-
-    log::info!("Meta Stage 1:  Compute block proofs");
-    let some_timestamps = [127, 42, 65];
-    let unrelated_block_proofs = some_timestamps
-        .iter()
-        .map(|&ts| {
-            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
-        })
-        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
-
-    log::info!("Meta Stage 2:  Verify block proofs");
-    unrelated_block_proofs
-        .iter()
-        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
-
-    log::info!("Meta Stage 3:  Aggregate block proofs");
-    let bp = unrelated_block_proofs;
-
-    // let aggproof0 = all_circuits.prove_two_to_one_block_ivc(None, &bp[0])?;
-    // all_circuits.verify_two_to_one_block_ivc(&aggproof0)?;
-
-    // let aggproof01 = all_circuits.prove_two_to_one_block_ivc(Some(&aggproof0), &bp[1])?;
-    // all_circuits.verify_two_to_one_block_ivc(&aggproof01)?;
-
-    // let aggproof012 = all_circuits.prove_two_to_one_block_ivc(Some(&aggproof01), &bp[2])?;
-    // all_circuits.verify_two_to_one_block_ivc(&aggproof012)?;
-    assert!(false, "Hoooray!!, 3-block aggregation was verified");
-    Ok(())
-}
-
-
-
-/// Run:  RUST_BACKTRACE=1 RUSTFLAGS="-Ctarget-cpu=native -g -Z threads 8"
-/// cargo test --release -- --nocapture four_to_one
-/// Aggregate a sequential /// proof containing three proofs with the structure `((A,B),(C,D))`.
+/// Aggregate a sequential /// proof containing three proofs with the structure
+/// `((A,B),(C,D))`.
 ///
 ///  A    B    C    D    Blockproofs (base case)
 ///   \  /      \  /
@@ -593,15 +540,14 @@ fn test_block_aggregation_binop_4_blocks() -> anyhow::Result<()> {
     let some_timestamps = [127, 42, 65, 43];
     let unrelated_block_proofs = some_timestamps
         .iter()
-        .map(|&ts| {
-            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
-        })
-        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
+        .map(|&ts| get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config))
+        .collect::<anyhow::Result<Vec<ProofWithPublicInputs<F, C, D>>>>()?;
 
     log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
+        .map(|bp| all_circuits.verify_block(bp))
+        .collect::<anyhow::Result<()>>()?;
 
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
@@ -612,13 +558,12 @@ fn test_block_aggregation_binop_4_blocks() -> anyhow::Result<()> {
     let aggproof23 = all_circuits.prove_two_to_one_block_binop(&bp[2], false, &bp[3], false)?;
     all_circuits.verify_two_to_one_block_binop(&aggproof23)?;
 
-    let aggproof0123 = all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &aggproof23, true)?;
+    let aggproof0123 =
+        all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &aggproof23, true)?;
     all_circuits.verify_two_to_one_block_binop(&aggproof0123)?;
 
     Ok(())
 }
-
-
 
 #[test]
 fn test_block_aggregation_binop_same_block_twice() -> anyhow::Result<()> {
@@ -640,15 +585,14 @@ fn test_block_aggregation_binop_same_block_twice() -> anyhow::Result<()> {
     let some_timestamps = [42, 42];
     let unrelated_block_proofs = some_timestamps
         .iter()
-        .map(|&ts| {
-            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
-        })
-        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
+        .map(|&ts| get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config))
+        .collect::<anyhow::Result<Vec<ProofWithPublicInputs<F, C, D>>>>()?;
 
     log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
+        .map(|bp| all_circuits.verify_block(bp))
+        .collect::<anyhow::Result<()>>()?;
 
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
@@ -659,10 +603,8 @@ fn test_block_aggregation_binop_same_block_twice() -> anyhow::Result<()> {
     Ok(())
 }
 
-
-/// Run:  RUST_BACKTRACE=1 RUSTFLAGS="-Ctarget-cpu=native -g -Z threads 8"
-/// cargo test --release -- --nocapture four_to_one
-/// Aggregate a sequential /// proof containing three proofs with the structure `((A,B),(C,D))`.
+/// Aggregate a sequential /// proof containing three proofs with the structure
+/// `((A,B),(C,D))`.
 ///
 ///  A    B    C     Blockproofs (base case)
 ///   \  /    /
@@ -689,15 +631,14 @@ fn test_block_aggregation_binop_foldleft() -> anyhow::Result<()> {
     let some_timestamps = [65, 127, 42];
     let unrelated_block_proofs = some_timestamps
         .iter()
-        .map(|&ts| {
-            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
-        })
-        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
+        .map(|&ts| get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config))
+        .collect::<anyhow::Result<Vec<ProofWithPublicInputs<F, C, D>>>>()?;
 
     log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
+        .map(|bp| all_circuits.verify_block(bp))
+        .collect::<anyhow::Result<()>>()?;
 
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
@@ -705,14 +646,13 @@ fn test_block_aggregation_binop_foldleft() -> anyhow::Result<()> {
     let aggproof01 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &bp[1], false)?;
     all_circuits.verify_two_to_one_block_binop(&aggproof01)?;
 
-    let aggproof012 = all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &bp[2], false)?;
+    let aggproof012 =
+        all_circuits.prove_two_to_one_block_binop(&aggproof01, true, &bp[2], false)?;
     all_circuits.verify_two_to_one_block_binop(&aggproof012)?;
 
     Ok(())
 }
 
-
-///
 ///  A    B    C    Blockproofs (base case)
 ///   \   \   /
 ///    \  (B,C)     Two-to-one block aggregation proofs
@@ -738,15 +678,14 @@ fn test_block_aggregation_binop_foldright() -> anyhow::Result<()> {
     let some_timestamps = [65, 127, 42];
     let unrelated_block_proofs = some_timestamps
         .iter()
-        .map(|&ts| {
-            get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config)
-        })
-        .collect::<anyhow::Result<Vec<PwPIS>>>()?;
+        .map(|&ts| get_test_block_proof_cached(ts, &mut timing, &all_circuits, &all_stark, &config))
+        .collect::<anyhow::Result<Vec<ProofWithPublicInputs<F, C, D>>>>()?;
 
     log::info!("Meta Stage 2:  Verify block proofs");
     unrelated_block_proofs
         .iter()
-        .map(|bp| all_circuits.verify_block(bp)).collect::<anyhow::Result<()>>()?;
+        .map(|bp| all_circuits.verify_block(bp))
+        .collect::<anyhow::Result<()>>()?;
 
     log::info!("Meta Stage 3:  Aggregate block proofs");
     let bp = unrelated_block_proofs;
@@ -754,25 +693,9 @@ fn test_block_aggregation_binop_foldright() -> anyhow::Result<()> {
     let aggproof12 = all_circuits.prove_two_to_one_block_binop(&bp[1], false, &bp[2], false)?;
     all_circuits.verify_two_to_one_block_binop(&aggproof12)?;
 
-    let aggproof012 = all_circuits.prove_two_to_one_block_binop(&bp[0], false, &aggproof12, true)?;
+    let aggproof012 =
+        all_circuits.prove_two_to_one_block_binop(&bp[0], false, &aggproof12, true)?;
     all_circuits.verify_two_to_one_block_binop(&aggproof012)?;
 
     Ok(())
-}
-
-
-
-
-
-
-
-
-
-fn eth_to_wei(eth: U256) -> U256 {
-    // 1 ether = 10^18 wei.
-    eth * U256::from(10).pow(18.into())
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }
