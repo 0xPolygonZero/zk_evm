@@ -108,26 +108,3 @@ plonky2 = "0.2.2"
 plonky2_maybe_rayon = "0.2.0"
 plonky2_util = "0.2.0"
 starky = "0.4.0"
-
-[profile.release]
-debug=true
-incremental=true
-debug-assertions=true
-lto=false
-overflow-checks=false
-
-[profile.test]
-opt-level=3
-debug=true
-incremental=true
-debug-assertions=true
-lto=false
-overflow-checks=false
-
-[profile.dev]
-opt-level=3
-debug=true
-incremental=true
-debug-assertions=true
-lto=false
-overflow-checks=false
