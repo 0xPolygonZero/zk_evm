@@ -172,7 +172,7 @@ fn dummy_inputs(inputs: &GenerationInputs) -> GenerationInputs {
             )),
             storage_tries: vec![],
         },
-        trie_roots_after: inputs.trie_roots_after,
+        trie_roots_after: inputs.trie_roots_after.clone(),
         checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
         contract_code: Default::default(),
         block_metadata: inputs.block_metadata.clone(),

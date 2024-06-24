@@ -97,7 +97,7 @@ impl PublicValues {
 }
 
 /// Trie hashes.
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrieRoots {
     /// State trie hash.
     pub state_root: H256,
