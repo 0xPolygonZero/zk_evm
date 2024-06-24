@@ -538,7 +538,11 @@ where
             gate_serializer,
             generator_serializer,
         )?;
-        let two_to_one_block_binop = todo!();
+        let two_to_one_block_binop = TwoToOneBlockBinopAggCircuitData::from_buffer(
+            &mut buffer,
+            gate_serializer,
+            generator_serializer,
+        )?;
 
         let by_table = match skip_tables {
             true => (0..NUM_TABLES)
@@ -668,7 +672,7 @@ where
         let two_to_one_aggregation = Self::create_two_to_one_agg_circuit(&aggregation);
         let block = Self::create_block_circuit(&aggregation);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block);
-        let two_to_one_block_binop = Self::create_two_to_one_block_circuit_binop(&by_table, &block);
+        let two_to_one_block_binop = Self::create_two_to_one_block_circuit_binop(&block);
         debug_assert_eq!(
             &block.circuit.common,
             &two_to_one_block_binop.circuit.common
@@ -1872,7 +1876,6 @@ where
     }
 
     fn create_two_to_one_block_circuit_binop(
-        by_table: &[RecursiveCircuitsForTable<F, C, D>; NUM_TABLES],
         block: &BlockCircuitData<F, C, D>,
     ) -> TwoToOneBlockBinopAggCircuitData<F, C, D>
     where
