@@ -1683,7 +1683,8 @@ where
         }
     }
 
-    /// This aggregates block proofs in a manner similar to a binary operator.
+    /// Aggregates two block or aggregation proofs in a manner similar to a
+    /// binary operator.
     /// Visually:  `(lhs, lhs_is_agg) BinOp (rhs, rhs_is_agg)`.
     ///
     /// # Arguments
@@ -1695,7 +1696,7 @@ where
     ///
     /// # Outputs
     ///
-    /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
+    /// Returns a [`ProofWithPublicInputs<F, C, D>`].
     pub fn prove_two_to_one_block(
         &self,
         lhs: &ProofWithPublicInputs<F, C, D>,
@@ -1738,7 +1739,7 @@ where
         Ok(proof)
     }
 
-    /// Method to verify an existing proof
+    /// Verifies an existing block aggregation proof
     ///
     /// # Arguments
     ///
@@ -1756,8 +1757,8 @@ where
         check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
     }
 
-    /// Helper method to construct one of the two circuits representing
-    /// unrelated proofs
+    /// Setup a new part of a circuit to handle a new unrelated proof.
+    /// Helper method for [`create_two_to_one_block_circuit`].
     ///
     /// # Arguments
     ///
@@ -1768,7 +1769,7 @@ where
     /// # Outputs
     ///
     /// Returns a [`TwoToOneBlockChildTarget<D>`] object.
-    fn add_block_child(
+    fn add_two_to_one_block_child(
         builder: &mut CircuitBuilder<F, D>,
         block_circuit_data: &BlockCircuitData<F, C, D>,
     ) -> TwoToOneBlockChildTarget<D> {
@@ -1776,7 +1777,8 @@ where
         let block_common = &block_circuit_data.circuit.common;
         let block_vk = builder.constant_verifier_data(&block_circuit_data.circuit.verifier_only);
         let is_agg = builder.add_virtual_bool_target_safe();
-        // block_common should be use for agg_proof because they are similar
+        // Note: `block_common` should also be used for `agg_proof` here because they
+        // are equal, and `agg_proof` is not available yet.
         let agg_proof = builder.add_virtual_proof_with_pis(block_common);
         let block_proof = builder.add_virtual_proof_with_pis(block_common);
         builder
@@ -1793,23 +1795,34 @@ where
             is_agg,
             agg_proof,
             block_proof,
-            // pv_hash,
         }
     }
 
+    /// Create two-to-one block aggregation circuit.
+    ///
+    /// # Arguments
+    ///
+    /// - `block_circuit`: circuit data for the block circuit, that constitues
+    ///   the base case for aggregation.
+    ///
+    /// # Outputs
+    ///
+    /// Returns a [`TwoToOneBlockCircuitData<F, C, D>`].
     fn create_two_to_one_block_circuit(
-        block: &BlockCircuitData<F, C, D>,
+        block_circuit: &BlockCircuitData<F, C, D>,
     ) -> TwoToOneBlockCircuitData<F, C, D>
     where
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
         C::Hasher: AlgebraicHasher<F>,
     {
-        let mut builder = CircuitBuilder::<F, D>::new(block.circuit.common.config.clone());
+        let mut builder = CircuitBuilder::<F, D>::new(block_circuit.circuit.common.config.clone());
 
         let mut dummy_pis = vec![];
-        // The magic numbers derived from failing assertion at end of this function.
-        while builder.num_public_inputs() < block.circuit.common.num_public_inputs - (2337 - 2269) {
+        // The magic numbers were derived from the assertion at end of this function.
+        while builder.num_public_inputs()
+            < block_circuit.circuit.common.num_public_inputs - (2337 - 2269)
+        {
             let target = builder.add_virtual_public_input();
             dummy_pis.push(target);
         }
@@ -1819,8 +1832,8 @@ where
         // [`add_verifier_data_public_inputs`].
         let count_public_inputs = builder.num_public_inputs();
 
-        let lhs = Self::add_block_child(&mut builder, &block);
-        let rhs = Self::add_block_child(&mut builder, &block);
+        let lhs = Self::add_two_to_one_block_child(&mut builder, &block_circuit);
+        let rhs = Self::add_two_to_one_block_child(&mut builder, &block_circuit);
 
         let lhs_public_values = lhs.public_values(&mut builder);
         let rhs_public_values = rhs.public_values(&mut builder);
@@ -1839,7 +1852,7 @@ where
         );
 
         debug_assert_eq!(
-            block.circuit.common.num_public_inputs,
+            block_circuit.circuit.common.num_public_inputs,
             builder.num_public_inputs(),
             "The block aggregation circuit and the block circuit must agree on the number of public inputs."
         );

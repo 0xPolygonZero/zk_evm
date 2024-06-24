@@ -500,7 +500,6 @@ fn get_test_block_proof_cached(
         fs::write(path.clone(), &raw_block)?;
         log::info!("Succesfully wrote blockproof to {:#?}", path);
 
-        // Todo: move to file with `from_bytes`
         let written_block = fs::read(path.clone())?;
         assert_eq!(&raw_block, &written_block);
         let restored_block =
