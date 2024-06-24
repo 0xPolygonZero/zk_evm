@@ -1,9 +1,10 @@
+use std::path::PathBuf;
 use std::time::Instant;
 use std::{future::Future, time::Duration};
-use std::path::PathBuf;
 
 use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use ops::TxProof;
@@ -22,7 +23,6 @@ use trace_decoder::{
 };
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
-use chrono::{DateTime, Utc};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
@@ -143,7 +143,10 @@ impl BlockProverInput {
             );
             let end_time: DateTime<Utc> = Utc::now();
             let total_dur: Duration = prep_start.elapsed();
-            info!("Successfully proved block {block_number} (in {} secs)", total_dur.as_secs_f64());
+            info!(
+                "Successfully proved block {block_number} (in {} secs)",
+                total_dur.as_secs_f64()
+            );
             // Return the block proof
             Ok(BenchmarkedGeneratedBlockProof {
                 proof: block_proof.0,
@@ -161,7 +164,6 @@ impl BlockProverInput {
         } else {
             anyhow::bail!("AggProof is is not GeneratedAggProof")
         }
-
     }
 
     #[cfg(not(feature = "test_only"))]
@@ -266,11 +268,9 @@ impl ProverInput {
         save_inputs_on_error: bool,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
-
         let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
             previous_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
 
-        
         let results: FuturesOrdered<_> = self
             .blocks
             .into_iter()
@@ -324,11 +324,9 @@ impl ProverInput {
         save_inputs_on_error: bool,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<BenchmarkedGeneratedBlockProof>)>> {
-
         let mut prev: Option<BoxFuture<Result<BenchmarkedGeneratedBlockProof>>> =
             previous_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
 
-        
         let results: FuturesOrdered<_> = self
             .blocks
             .into_iter()
@@ -349,7 +347,8 @@ impl ProverInput {
                         // Write latest generated proof to disk if proof_output_dir is provided
                         let return_proof: Option<BenchmarkedGeneratedBlockProof> =
                             if proof_output_dir.is_some() {
-                                ProverInput::write_proof(proof_output_dir, &benchmarkproof.proof).await?;
+                                ProverInput::write_proof(proof_output_dir, &benchmarkproof.proof)
+                                    .await?;
                                 None
                             } else {
                                 Some(benchmarkproof.clone())

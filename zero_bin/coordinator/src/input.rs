@@ -1,6 +1,6 @@
 //! This module contains a lot of the important input structs
-use zero_bin_common::block_interval::BlockInterval;
 use serde::{Deserialize, Serialize};
+use zero_bin_common::block_interval::BlockInterval;
 
 use crate::{benchmarking::BenchmarkOutputConfig, fetch::Checkpoint};
 

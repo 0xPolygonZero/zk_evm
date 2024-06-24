@@ -8,7 +8,6 @@ use std::{
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use anyhow::Result;
-use zero_bin_common::prover_state;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::{
@@ -17,6 +16,7 @@ use paladin::{
 };
 // use leader::init;
 use tracing::{debug, error, info, warn};
+use zero_bin_common::prover_state;
 
 pub mod benchmarking;
 pub mod fetch;
@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
     // Load in the environment
     debug!("Loading dotenv");
     dotenv().ok();
-    
+
     leader::init::tracing();
 
     // Loading the logger

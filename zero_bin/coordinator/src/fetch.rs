@@ -4,9 +4,9 @@ use alloy::{
     rpc::types::{BlockId, BlockNumberOrTag},
 };
 use anyhow::Error;
-use zero_bin_common::block_interval::BlockInterval;
 use rpc::{benchmark_prover_input, BenchmarkedProverInput};
 use tracing::info;
+use zero_bin_common::block_interval::BlockInterval;
 
 use super::input::BlockSource;
 

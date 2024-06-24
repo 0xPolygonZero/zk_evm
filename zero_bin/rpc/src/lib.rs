@@ -110,7 +110,9 @@ where
         block_proofs.push(block_prover_input);
     }
     Ok(BenchmarkedProverInput {
-        proverinput: ProverInput { blocks: block_proofs },
+        proverinput: ProverInput {
+            blocks: block_proofs,
+        },
         fetch_times,
     })
 }

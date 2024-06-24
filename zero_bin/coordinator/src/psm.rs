@@ -2,10 +2,10 @@
 
 use std::env;
 
+use tracing::{error, info, warn};
 use zero_bin_common::prover_state::{
     circuit::CircuitConfig, CircuitPersistence, ProverStateManager, TableLoadStrategy,
 };
-use tracing::{error, info, warn};
 
 pub const PSM_CIRCUIT_TABLE_LOAD_STRAT_ENVKEY: &str = "PSM_TABLE_LOAD_STRAT";
 pub const PSM_CIRCUIT_PERSISTENCE_ENVKEY: &str = "PSM_CIRCUIT_PERSISTENCE";
