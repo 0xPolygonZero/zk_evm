@@ -1922,7 +1922,7 @@ dependencies = [
  "itertools 0.13.0",
  "keccak-hash 0.10.0",
  "log",
- "mpt_trie",
+ "mpt_trie 0.3.0",
  "num",
  "num-bigint",
  "once_cell",
@@ -1934,6 +1934,42 @@ dependencies = [
  "rand",
  "rand_chacha",
  "ripemd",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "serde_json",
+ "sha2",
+ "smt_trie",
+ "starky",
+ "static_assertions",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "evm_arithmetization"
+version = "0.2.0"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#b7cea483f41dffc5bb3f4951ba998f285bed1f96"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "env_logger",
+ "ethereum-types",
+ "hashbrown 0.14.5",
+ "hex-literal",
+ "itertools 0.13.0",
+ "keccak-hash 0.10.0",
+ "log",
+ "mpt_trie 0.3.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "num",
+ "num-bigint",
+ "once_cell",
+ "pest",
+ "pest_derive",
+ "plonky2",
+ "plonky2_maybe_rayon",
+ "plonky2_util",
+ "rand",
+ "rand_chacha",
  "rlp",
  "rlp-derive",
  "serde",
@@ -2916,7 +2952,7 @@ dependencies = [
  "futures",
  "ops",
  "paladin-core",
- "proof_gen",
+ "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "prover",
  "rpc",
  "serde",
@@ -3098,6 +3134,30 @@ dependencies = [
  "rlp-derive",
  "serde",
  "serde_json",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
+name = "mpt_trie"
+version = "0.3.0"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#b7cea483f41dffc5bb3f4951ba998f285bed1f96"
+dependencies = [
+ "bytes",
+ "enum-as-inner",
+ "ethereum-types",
+ "hex",
+ "impl-codec",
+ "impl-num-traits",
+ "impl-rlp",
+ "impl-serde",
+ "keccak-hash 0.10.0",
+ "log",
+ "num",
+ "num-traits",
+ "parking_lot",
+ "rlp",
+ "serde",
  "thiserror",
  "uint",
 ]
@@ -3329,10 +3389,10 @@ dependencies = [
 name = "ops"
 version = "0.1.0"
 dependencies = [
- "evm_arithmetization",
+ "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "keccak-hash 0.10.0",
  "paladin-core",
- "proof_gen",
+ "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "serde",
  "tracing",
  "zero_bin_common",
@@ -3870,7 +3930,20 @@ name = "proof_gen"
 version = "0.2.0"
 dependencies = [
  "ethereum-types",
- "evm_arithmetization",
+ "evm_arithmetization 0.2.0",
+ "log",
+ "paste",
+ "plonky2",
+ "serde",
+]
+
+[[package]]
+name = "proof_gen"
+version = "0.2.0"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#b7cea483f41dffc5bb3f4951ba998f285bed1f96"
+dependencies = [
+ "ethereum-types",
+ "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "log",
  "paste",
  "plonky2",
@@ -3907,12 +3980,12 @@ dependencies = [
  "num-traits",
  "ops",
  "paladin-core",
- "proof_gen",
+ "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "ruint",
  "serde",
  "serde_json",
  "tokio",
- "trace_decoder",
+ "trace_decoder 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "tracing",
  "zero_bin_common",
 ]
@@ -4171,12 +4244,12 @@ dependencies = [
  "alloy",
  "anyhow",
  "clap",
- "evm_arithmetization",
+ "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "futures",
  "hex",
  "hex-literal",
  "itertools 0.13.0",
- "mpt_trie",
+ "mpt_trie 0.3.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "primitive-types 0.12.2",
  "prover",
  "serde",
@@ -4184,7 +4257,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower",
- "trace_decoder",
+ "trace_decoder 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -4665,6 +4738,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
+name = "smt_trie"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "enum-as-inner",
+ "eth_trie",
+ "ethereum-types",
+ "hex",
+ "hex-literal",
+ "keccak-hash 0.10.0",
+ "log",
+ "num-traits",
+ "parking_lot",
+ "plonky2",
+ "pretty_env_logger",
+ "rand",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
 name = "socket2"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5135,18 +5233,42 @@ dependencies = [
  "enum-as-inner",
  "enumn",
  "ethereum-types",
- "evm_arithmetization",
+ "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "hex",
  "hex-literal",
  "keccak-hash 0.10.0",
  "log",
- "mpt_trie",
+ "mpt_trie 0.3.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "plonky2",
  "pretty_env_logger",
  "rlp",
  "rlp-derive",
  "serde",
  "serde_json",
+ "serde_with",
+ "thiserror",
+]
+
+[[package]]
+name = "trace_decoder"
+version = "0.4.0"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#b7cea483f41dffc5bb3f4951ba998f285bed1f96"
+dependencies = [
+ "bytes",
+ "ciborium",
+ "ciborium-io",
+ "enum-as-inner",
+ "enumn",
+ "ethereum-types",
+ "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "hex",
+ "hex-literal",
+ "keccak-hash 0.10.0",
+ "log",
+ "mpt_trie 0.3.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "rlp",
+ "rlp-derive",
+ "serde",
  "serde_with",
  "thiserror",
 ]
@@ -5330,7 +5452,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dotenvy",
- "proof_gen",
+ "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "serde",
  "serde_json",
  "serde_path_to_error",
@@ -5787,10 +5909,10 @@ dependencies = [
  "anyhow",
  "async-stream",
  "clap",
- "evm_arithmetization",
+ "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "futures",
  "plonky2",
- "proof_gen",
+ "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
  "serde",
  "serde_json",
  "thiserror",

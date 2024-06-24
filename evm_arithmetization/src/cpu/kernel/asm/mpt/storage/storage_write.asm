@@ -104,6 +104,13 @@ sstore_after_refund:
     EQ %jumpi(sstore_noop)
 
     // stack: current_value, slot, value, kexit_info
+    DUP1 ISZERO
+    // stack: current_value==0, current_value, slot, value, kexit_info
+    DUP4 MUL
+    // stack: value & current_value==0, current_value, slot, value, kexit_info
+    %jumpi(new_storage_slot)
+global not_new_storage_slot:
+    // stack: current_value, slot, value, kexit_info
     DUP2 %address %journal_add_storage_change
     // stack: slot, value, kexit_info
 
@@ -111,32 +118,12 @@ sstore_after_refund:
     // stack: slot, value, kexit_info
     DUP2 ISZERO %jumpi(sstore_delete)
 
-    // First we write the value to MPT data, and get a pointer to it.
-    %get_trie_data_size
-    // stack: value_ptr, slot, value, kexit_info
-    SWAP2
-    // stack: value, slot, value_ptr, kexit_info
-    %append_to_trie_data
-    // stack: slot, value_ptr, kexit_info
-
-    // Next, call mpt_insert on the current account's storage root.
-    %stack (slot, value_ptr) -> (slot, value_ptr, after_storage_insert)
-    %slot_to_storage_key
-    // stack: storage_key, value_ptr, after_storage_insert, kexit_info
-    PUSH 64 // storage_key has 64 nibbles
-    %current_storage_trie
-    // stack: storage_root_ptr, 64, storage_key, value_ptr, after_storage_insert, kexit_info
-    %jump(mpt_insert)
-
-after_storage_insert:
-    // stack: new_storage_root_ptr, kexit_info
-    %current_account_data
-    // stack: account_ptr, new_storage_root_ptr, kexit_info
-
-    // Update the copied account with our new storage root pointer.
-    %add_const(2)
-    // stack: account_storage_root_ptr_ptr, new_storage_root_ptr, kexit_info
-    %mstore_trie_data
+    // stack: slot, value, kexit_info
+    %address
+    // stack: addr, slot, value, kexit_info
+    %key_storage
+    // stack: storage_key, value, kexit_info
+    %smt_insert_state
     // stack: kexit_info
     EXIT_KERNEL
 
@@ -148,12 +135,41 @@ sstore_noop:
 // Delete the slot from the storage trie.
 sstore_delete:
     // stack: slot, value, kexit_info
-    SWAP1 POP
-    PUSH after_storage_insert SWAP1
-    // stack: slot, after_storage_insert, kexit_info
-    %slot_to_storage_key
-    // stack: storage_key, after_storage_insert, kexit_info
-    PUSH 64 // storage_key has 64 nibbles
-    %current_storage_trie
-    // stack: storage_root_ptr, 64, storage_key, after_storage_insert, kexit_info
-    %jump(mpt_delete)
+    %address
+    // stack: address, slot, value, kexit_info
+    %key_storage
+    // stack: key_storage, value, kexit_info
+    %smt_delete_state
+    // stack: value, kexit_info
+    POP EXIT_KERNEL
+
+%macro insert_new_storage_slot
+    // stack: address, slot
+    %mload_global_metadata(@GLOBAL_METADATA_NEW_STORAGE_SLOTS_LEN)
+    // stack: list_len, address, slot
+    DUP1 %add_const(@SEGMENT_NEW_STORAGE_SLOTS)
+    // stack: index, list_len, address, slot
+    DUP1 %add_const(1)
+    %stack (index_plus_1, index, list_len, address, slot) -> (address, index, slot, index_plus_1, list_len)
+    MSTORE_GENERAL MSTORE_GENERAL
+    // stack: list_len
+    %add_const(2)
+    // stack: list_len+2
+    %mstore_global_metadata(@GLOBAL_METADATA_NEW_STORAGE_SLOTS_LEN)
+    // stack: (empty)
+%endmacro
+
+new_storage_slot:
+    // stack: current_value, slot, value, kexit_info
+    %address DUP1 %contract_just_created
+    // stack: contract_just_created, address, current_value, slot, value, kexit_info
+    %jumpi(new_storage_slot_new_contract)
+    // stack: address, current_value, slot, value, kexit_info
+    POP %jump(not_new_storage_slot)
+new_storage_slot_new_contract:
+    // stack: address, current_value, slot, value, kexit_info
+    DUP3 SWAP1
+    // stack: address, slot, current_value, slot, value, kexit_info
+    %insert_new_storage_slot
+    // stack: current_value, slot, value, kexit_info
+    %jump(not_new_storage_slot)

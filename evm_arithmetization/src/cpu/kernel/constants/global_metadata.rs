@@ -89,7 +89,7 @@ pub(crate) enum GlobalMetadata {
     ContractCreation,
     IsPrecompileFromEoa,
     CallStackDepth,
-    /// Transaction logs list length
+    /// Transaction logs list length.
     LogsLen,
     LogsDataLen,
     LogsPayloadLen,
@@ -111,10 +111,13 @@ pub(crate) enum GlobalMetadata {
     BlobVersionedHashesRlpLen,
     // Number of blob versioned hashes contained in the current type-3 transaction.
     BlobVersionedHashesLen,
+
+    /// Number of used storage slots in newly created contracts.
+    NewStorageSlotsLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 55;
+    pub(crate) const COUNT: usize = 56;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -178,6 +181,7 @@ impl GlobalMetadata {
             Self::BlobVersionedHashesRlpStart,
             Self::BlobVersionedHashesRlpLen,
             Self::BlobVersionedHashesLen,
+            Self::NewStorageSlotsLen,
         ]
     }
 
@@ -239,6 +243,7 @@ impl GlobalMetadata {
             Self::BlobVersionedHashesRlpStart => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START",
             Self::BlobVersionedHashesRlpLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN",
             Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",
+            Self::NewStorageSlotsLen => "GLOBAL_METADATA_NEW_STORAGE_SLOTS_LEN",
         }
     }
 }

@@ -9,75 +9,54 @@ global set_global_exit_roots:
     // stack: (empty)
     PUSH start_txn
     // stack: retdest
+    PUSH @GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY
+    // stack: addr, retdest
     PROVER_INPUT(ger)
-    // stack: num_ger, retdest
+    // stack: num_ger, addr, retdest
     PUSH 0
 ger_loop:
-    // stack: i, num_ger, retdest
+    // stack: i, num_ger, addr, 
     DUP2 DUP2 EQ %jumpi(ger_loop_end)
     PROVER_INPUT(ger)
-    // stack: timestamp, i, num_ger, retdest
+    // stack: timestamp, i, num_ger, addr, retdest
     PUSH @GLOBAL_EXIT_ROOT_STORAGE_POS
     PROVER_INPUT(ger)
-    // stack: root, GLOBAL_EXIT_ROOT_STORAGE_POS, timestamp, i, num_ger, retdest
+    // stack: root, GLOBAL_EXIT_ROOT_STORAGE_POS, timestamp, i, num_ger, addr, retdest
     PUSH @SEGMENT_KERNEL_GENERAL
-    // stack: addr, root, GLOBAL_EXIT_ROOT_STORAGE_POS, timestamp, i, num_ger, retdest
+    // stack: addr, root, GLOBAL_EXIT_ROOT_STORAGE_POS, timestamp, i, num_ger, addr, retdest
     MSTORE_32BYTES_32
-    // stack: addr, GLOBAL_EXIT_ROOT_STORAGE_POS, timestamp, i, num_ger, retdest
+    // stack: addr, GLOBAL_EXIT_ROOT_STORAGE_POS, timestamp, i, num_ger, addr, retdest
     MSTORE_32BYTES_32
-    // stack: addr, timestamp, i, num_ger, retdest
+    // stack: addr, timestamp, i, num_ger, addr, retdest
     POP
-    // stack: timestamp, i, num_ger, retdest
+    // stack: timestamp, i, num_ger, addr, retdest
     PUSH 64 PUSH @SEGMENT_KERNEL_GENERAL
-    // stack: addr, len, timestamp, i, num_ger, retdest
+    // stack: addr, len, timestamp, i, num_ger, addr, retdest
     KECCAK_GENERAL
-    // stack: slot, timestamp, i, num_ger, retdest
+    // stack: slot, timestamp, i, num_ger, addr, retdest
 
 write_timestamp_to_storage:
-    // stack: slot, timestamp, i, num_ger, retdest
-    // First we write the value to MPT data, and get a pointer to it.
-    %get_trie_data_size
-    // stack: value_ptr, slot, timestamp, i, num_ger, retdest
-    SWAP2
-    // stack: timestamp, slot, value_ptr, i, num_ger, retdest
-    %append_to_trie_data
-    // stack: slot, value_ptr, i, num_ger, retdest
-
-    // Next, call mpt_insert on the current account's storage root.
-    %stack (slot, value_ptr) -> (slot, value_ptr, after_timestamp_storage_insert)
-    %slot_to_storage_key
-    // stack: storage_key, value_ptr, after_timestamp_storage_insert
-    PUSH 64 // storage_key has 64 nibbles
-    %get_storage_trie(@GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY)
-    // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
-    %stack (storage_root_ptr, num_nibbles, storage_key) -> (storage_root_ptr, num_nibbles, storage_key, after_read, storage_root_ptr, num_nibbles, storage_key)
-    %jump(mpt_read)
-after_read:
+    // stack: slot, timestamp, i, num_ger, addr, retdest
+    DUP5
+    // stack: addr, slot, timestamp, i, num_ger, addr, retdest
+    %key_storage
+    // stack: storage_key, timestamp, i, num_ger, addr, retdest
     // If the current value is non-zero, do nothing.
-    // stack: current_value_ptr, storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
-    %mload_trie_data %jumpi(do_nothing)
-    // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert
-    %jump(mpt_insert)
+    DUP1 %smt_read_state %mload_trie_data %jumpi(do_nothing)
 
-after_timestamp_storage_insert:
-    // stack: new_storage_root_ptr, i, num_ger, retdest
-    %get_account_data(@GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY)
-    // stack: account_ptr, new_storage_root_ptr
-    // Update the copied account with our new storage root pointer.
-    %add_const(2)
-    // stack: account_storage_root_ptr_ptr, new_storage_root_ptr
-    %mstore_trie_data
-
-    // stack: i, num_ger, retdest
+    // stack: storage_key, timestamp, i, num_ger, addr, retdest
+    %smt_insert_state
+    // stack: i, num_ger, addr, retdest
     %increment
     %jump(ger_loop)
 
 ger_loop_end:
-    // stack: i, num_ger, retdest
-    %pop2 JUMP
+    // stack: i, num_ger, addr, retdest
+    %pop3 JUMP
 
 do_nothing:
-    // stack: storage_root_ptr, 64, storage_key, value_ptr, after_timestamp_storage_insert, i, num_ger, retdest
-    %pop7
-    // stack: retdest
-    JUMP
+    // stack: storage_key, timestamp, i, num_ger, addr, retdest
+    %pop2
+    // stack: i, num_ger, addr, retdest
+    %increment
+    %jump(ger_loop)

@@ -14,11 +14,8 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
-trace_decoder = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
-evm_arithmetization = { workspace = true }
-mpt_trie = { workspace = true }
 thiserror = { workspace = true }
 alloy.workspace = true
 futures = { workspace = true }
@@ -32,4 +29,7 @@ tower = { workspace = true, features = ["retry"] }
 # Local dependencies
 zero_bin_common ={ workspace = true }
 prover = { workspace = true }
-
+# TODO: update deps to take local versions again
+mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
+trace_decoder = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }

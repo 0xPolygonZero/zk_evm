@@ -24,17 +24,9 @@ extcodehash_dead:
 
 global extcodehash:
     // stack: address, retdest
-    %mpt_read_state_trie
-    // stack: account_ptr, retdest
-    DUP1 ISZERO %jumpi(retzero)
-    %add_const(3)
-    // stack: codehash_ptr, retdest
-    %mload_trie_data
+    %key_code %smt_read_state %mload_trie_data
     // stack: codehash, retdest
     SWAP1 JUMP
-retzero:
-    %stack (account_ptr, retdest) -> (retdest, 0)
-    JUMP
 
 %macro extcodehash
     %stack (address) -> (address, %%after)
@@ -44,7 +36,7 @@ retzero:
 
 %macro ext_code_empty
     %extcodehash
-    %eq_const(@EMPTY_STRING_HASH)
+    %eq_const(@EMPTY_STRING_POSEIDON_HASH)
 %endmacro
 
 %macro extcodesize
@@ -76,11 +68,9 @@ global sys_extcodesize:
 
 global extcodesize:
     // stack: address, retdest
-    %next_context_id
-    // stack: codesize_ctx, address, retdest
-    SWAP1
-    // stack: address, codesize_ctx, retdest
-    %jump(load_code)
+    %key_code_length %smt_read_state %mload_trie_data
+    // stack: codesize, retdest
+    SWAP1 JUMP
 
 // Loads the code at `address` into memory, in the code segment of the given context, starting at offset 0.
 // Checks that the hash of the loaded code corresponds to the `codehash` in the state trie.
@@ -96,14 +86,8 @@ load_code_ctd:
     DUP1 ISZERO %jumpi(load_code_non_existent_account)
     // Load the code non-deterministically in memory and return the length.
     PROVER_INPUT(account_code)
-    %stack (code_size, codehash, ctx, retdest) -> (ctx, code_size, codehash, retdest, code_size)
-    // Check that the hash of the loaded code equals `codehash`.
-    // ctx == DST, as SEGMENT_CODE == offset == 0.
-    KECCAK_GENERAL
-    // stack: shouldbecodehash, codehash, retdest, code_size
-    %assert_eq
-    // stack: retdest, code_size
-    JUMP
+    // stack: padded_code_size, codehash, ctx, retdest
+    %jump(poseidon_hash_code)
 
 load_code_non_existent_account:
     // Write 0 at address 0 for soundness: SEGMENT_CODE == 0, hence ctx == addr.
@@ -133,4 +117,25 @@ load_code_padded_ctd:
     PUSH 0
     MSTORE_GENERAL
     // stack: retdest, code_size
+    JUMP
+global poseidon_hash_code:
+    // stack: padded_code_size, codehash, ctx, retdest
+    // %stack (padded_code_size, codehash, ctx) -> (0, 0, padded_code_size, ctx, codehash)
+    %stack (padded_code_size, codehash, ctx) -> (ctx, padded_code_size, codehash, padded_code_size, ctx)
+    POSEIDON_GENERAL
+    %assert_eq
+    // stack: padded_code_size, ctx, retdest
+    %decrement
+remove_padding_loop:
+    // stack: offset, ctx, retdest
+    DUP2 DUP2 ADD DUP1 MLOAD_GENERAL
+    // stack: code[offset], offset+ctx, offset, ctx, retdest
+    SWAP1 PUSH 0 MSTORE_GENERAL
+    // stack: code[offset], offset, ctx, retdest
+    %and_const(1) %jumpi(remove_padding_after)
+    // stack: offset, ctx, retdest
+    %decrement %jump(remove_padding_loop)
+
+remove_padding_after:
+    %stack (offset, ctx, retdest) -> (retdest, offset)
     JUMP

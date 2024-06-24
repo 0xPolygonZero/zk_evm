@@ -6,19 +6,18 @@ use ethereum_types::{BigEndianHash, H256};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ACCOUNT,
+    init_logger, preinitialized_state, preinitialized_state_with_updated_storage,
 };
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
-use keccak_hash::keccak;
 use log::info;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
 use plonky2::util::timing::TimingTree;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -42,57 +41,35 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let (state_trie, storage_tries) = preinitialized_state_and_storage_tries()?;
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    let state_smt = preinitialized_state();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
 
-    let state_trie_after: HashedPartialTrie = {
-        let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
-        update_beacon_roots_account_storage(
-            &mut beacon_roots_account_storage,
-            block_metadata.block_timestamp,
-            block_metadata.parent_beacon_block_root,
-        )?;
-        let beacon_roots_account =
-            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
-
-        state_trie_after.insert(
-            beacon_roots_account_nibbles(),
-            rlp::encode(&beacon_roots_account).to_vec(),
-        )?;
-        state_trie_after.insert(
-            ger_account_nibbles(),
-            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        )?;
-
-        state_trie_after
-    };
-
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
+
+    let state_smt_after = preinitialized_state_with_updated_storage(&block_metadata, &[]);
 
     // No transactions, but the beacon roots contract has been updated.
     let trie_roots_after = TrieRoots {
-        state_root: state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
     let mut initial_block_hashes = vec![H256::default(); 256];
-    initial_block_hashes[255] = H256::from_uint(&0x200.into());
+    initial_block_hashes[255] = H256::from_uint(&hashout2u(state_smt.root));
     let inputs1 = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: TrieInputs {
-            state_trie: state_trie.clone(),
+            state_smt: state_smt.serialize(),
             transactions_trie: transactions_trie.clone(),
             receipts_trie: receipts_trie.clone(),
-            storage_tries: storage_tries.clone(),
         },
-        trie_roots_after,
+        trie_roots_after: trie_roots_after.clone(),
         contract_code: contract_code.clone(),
-        checkpoint_state_trie_root: state_trie.hash(),
+        checkpoint_state_trie_root: H256::from_uint(&hashout2u(state_smt.root)),
         block_metadata: block_metadata.clone(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
@@ -107,7 +84,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
         // Minimal ranges to prove an empty list
-        &[16..17, 11..13, 13..15, 14..15, 9..10, 12..13, 17..18],
+        &[16..17, 11..12, 13..14, 14..15, 9..11, 12..13, 17..18, 6..7],
         &config,
     );
 
@@ -152,27 +129,19 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
 
     // We cannot duplicate the proof here because even though there weren't any
     // transactions, the state has mutated when updating the beacon roots contract.
-    let trie_roots_after = TrieRoots {
-        state_root: state_trie_after.hash(),
-        transactions_root: transactions_trie.hash(),
-        receipts_root: receipts_trie.hash(),
-    };
+
     let inputs2 = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: TrieInputs {
-            state_trie: state_trie_after,
+            state_smt: state_smt_after.serialize(),
             transactions_trie,
             receipts_trie,
-            storage_tries: vec![(
-                H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
-                beacon_roots_account_storage,
-            )],
         },
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: state_trie.hash(),
+        checkpoint_state_trie_root: H256::from_uint(&hashout2u(state_smt.root)),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

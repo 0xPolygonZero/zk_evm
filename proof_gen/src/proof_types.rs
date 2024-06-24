@@ -1,9 +1,10 @@
 //! This module defines the various proof types used throughout the block proof
 //! generation process.
 
-use evm_arithmetization::{proof::PublicValues, BlockHeight};
+use evm_arithmetization::proof::PublicValues;
 use serde::{Deserialize, Serialize};
 
+// use trace_decoder::types::BlockHeight;
 use crate::types::PlonkyProofIntern;
 
 /// A transaction proof along with its public values, for proper connection with
@@ -34,7 +35,7 @@ pub struct GeneratedAggProof {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedBlockProof {
     /// Associated block height.
-    pub b_height: BlockHeight,
+    pub b_height: u64, // TODO: replace by BlockHeight once trace_decoder is updated
     /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }

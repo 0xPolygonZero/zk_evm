@@ -11,6 +11,8 @@ use plonky2::{
     util::timing::TimingTree,
 };
 
+// TODO: bring back import from trace_decoder once SMT logic is implemented
+// use trace_decoder::types::TxnProofGenIR;
 use crate::{
     proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
     prover_state::ProverState,

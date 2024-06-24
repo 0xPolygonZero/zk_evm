@@ -2,25 +2,24 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
+    init_logger, preinitialized_state, preinitialized_state_with_updated_storage, set_account,
 };
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
-use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -39,14 +38,6 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("1000000000000000000000000000000000000000");
 
-    let beneficiary_state_key = keccak(beneficiary);
-    let sender_state_key = keccak(sender);
-    let to_hashed = keccak(to);
-
-    let beneficiary_nibbles = Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
-
     let code = [
         0x5a, 0x47, 0x5a, 0x90, 0x50, 0x90, 0x03, 0x60, 0x02, 0x90, 0x03, 0x60, 0x01, 0x55, 0x00,
     ];
@@ -62,7 +53,7 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     + 3 // SUB
     + 3 // PUSH1
     + 22100; // SSTORE
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     let beneficiary_account_before = AccountRlp {
         nonce: 1.into(),
@@ -77,22 +68,30 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    )?;
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
-
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    let mut state_smt_before = preinitialized_state();
+    set_account(
+        &mut state_smt_before,
+        H160(beneficiary),
+        &beneficiary_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(sender),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_before,
+        &HashMap::new(),
+    );
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
     };
 
     let txn = hex!("f861800a8405f5e10094100000000000000000000000000000000000000080801ba07e09e26678ed4fac08a249ebe8ed680bf9051a5e14ad223e4b2b9d26e0208f37a05f6e3f188e3e6eab7d7d3b6568f5eac7d687b08d307d3154ccd8c87b4630509b");
@@ -112,10 +111,11 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
-    let expected_state_trie_after = {
+    let expected_state_smt_after = {
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -127,41 +127,29 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
         };
         let to_account_after = AccountRlp {
             code_hash,
-            // Storage map: { 1 => 5 }
-            storage_root: HashedPartialTrie::from(Node::Leaf {
-                nibbles: Nibbles::from_h256_be(keccak(pad32(1))),
-                value: vec![5],
-            })
-            .hash(),
             ..AccountRlp::default()
         };
 
-        update_beacon_roots_account_storage(
-            &mut beacon_roots_account_storage,
-            block_metadata.block_timestamp,
-            block_metadata.parent_beacon_block_root,
-        )?;
-        let beacon_roots_account =
-            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+        set_account(
+            &mut smt,
+            H160(beneficiary),
+            &beneficiary_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(sender),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(to),
+            &to_account_after,
+            &HashMap::from([(1.into(), 5.into())]), // Storage map: { 1 => 5 }
+        );
 
-        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after.insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_after).to_vec(),
-        )?;
-        expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
-        expected_state_trie_after.insert(
-            beacon_roots_account_nibbles(),
-            rlp::encode(&beacon_roots_account).to_vec(),
-        )?;
-        expected_state_trie_after.insert(
-            ger_account_nibbles(),
-            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        )?;
-
-        expected_state_trie_after
+        smt
     };
 
     let receipt_0 = LegacyReceiptRlp {
@@ -182,7 +170,7 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     .into();
 
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -209,10 +197,4 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_proof(&all_stark, proof, &config)
-}
-
-fn pad32(byte: u8) -> Vec<u8> {
-    let mut data = vec![0; 31];
-    data.push(byte);
-    data
 }

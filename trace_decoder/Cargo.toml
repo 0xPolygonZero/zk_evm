@@ -27,8 +27,9 @@ serde_with = { workspace = true }
 thiserror = { workspace = true }
 
 # Local dependencies
-mpt_trie = { workspace = true }
-evm_arithmetization = { workspace = true }
+# TODO: update decoder to take local versions again
+mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
 
 [dev-dependencies]
 criterion = { workspace = true }

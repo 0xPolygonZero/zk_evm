@@ -1,44 +1,41 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use ethereum_types::{Address, BigEndianHash, H256};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use hex_literal::hex;
-use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::utils::hashout2u;
 
+use super::account_code::set_account;
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use crate::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
+    compute_beacon_roots_account_storage, init_logger, preinitialized_state,
+    preinitialized_state_with_updated_storage, set_beacon_roots_account,
+    set_global_exit_root_account,
 };
 use crate::GenerationInputs;
 
 #[test]
 fn test_add11_yml() {
+    init_logger();
+
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
-    let beneficiary_state_key = keccak(beneficiary);
-    let sender_state_key = keccak(sender);
-    let to_hashed = keccak(to);
-
-    let beneficiary_nibbles = Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
-
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x60, 0x00, 0x55, 0x00];
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
     let beneficiary_account_before = AccountRlp {
@@ -55,34 +52,33 @@ fn test_add11_yml() {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) =
-        preinitialized_state_and_storage_tries().unwrap();
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before
-        .insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_before).to_vec(),
-        )
-        .unwrap();
-    state_trie_before
-        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
-        .unwrap();
-    state_trie_before
-        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
-        .unwrap();
-
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    let mut state_smt_before = preinitialized_state();
+    set_account(
+        &mut state_smt_before,
+        H160(beneficiary),
+        &beneficiary_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(sender),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_before,
+        &HashMap::new(),
+    );
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
-
-    let gas_used = 0xa868u64.into();
 
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::from(beneficiary),
@@ -93,11 +89,12 @@ fn test_add11_yml() {
         block_gaslimit: 0xff112233u32.into(),
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
-        block_gas_used: gas_used,
+        block_gas_used: 0xa868u64.into(),
         ..Default::default()
     };
 
-    let expected_state_trie_after = {
+    let expected_state_smt_after = {
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -110,53 +107,41 @@ fn test_add11_yml() {
         let to_account_after = AccountRlp {
             balance: 0xde0b6b3a76586a0u64.into(),
             code_hash,
-            // Storage map: { 0 => 2 }
-            storage_root: HashedPartialTrie::from(Node::Leaf {
-                nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
-                value: vec![2],
-            })
-            .hash(),
             ..AccountRlp::default()
         };
-        update_beacon_roots_account_storage(
-            &mut beacon_roots_account_storage,
+
+        let beacon_roots_storage = compute_beacon_roots_account_storage(
             block_metadata.block_timestamp,
             block_metadata.parent_beacon_block_root,
-        )
-        .unwrap();
-        let beacon_roots_account =
-            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+        );
+        set_beacon_roots_account(&mut smt, &beacon_roots_storage);
+        set_global_exit_root_account(&mut smt, &HashMap::new());
 
-        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after
-            .insert(
-                beneficiary_nibbles,
-                rlp::encode(&beneficiary_account_after).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
-            .unwrap();
-        expected_state_trie_after
-            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
-            .unwrap();
-        expected_state_trie_after
-            .insert(
-                beacon_roots_account_nibbles(),
-                rlp::encode(&beacon_roots_account).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
-            .insert(
-                ger_account_nibbles(),
-                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
+        set_account(
+            &mut smt,
+            H160(beneficiary),
+            &beneficiary_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(sender),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(to),
+            &to_account_after,
+            &HashMap::from([(U256::zero(), 2.into())]), // Storage map: { 0 => 2 }
+        );
+
+        smt
     };
+
     let receipt_0 = LegacyReceiptRlp {
         status: true,
-        cum_gas_used: gas_used,
+        cum_gas_used: 0xa868u64.into(),
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
@@ -174,7 +159,7 @@ fn test_add11_yml() {
     .into();
 
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -185,23 +170,27 @@ fn test_add11_yml() {
         global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
-        contract_code: contract_code.clone(),
+        contract_code,
         block_metadata,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
-        gas_used_after: gas_used,
+        gas_used_after: 0xa868u64.into(),
         block_hashes: BlockHashes {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
     };
 
-    let initial_stack = vec![];
     let initial_offset = KERNEL.global_labels["main"];
+    let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
 
+    let route_txn_label = KERNEL.global_labels["main"];
+    // Switch context and initialize memory with the data we need for the tests.
+    interpreter.generation_state.registers.program_counter = route_txn_label;
+    interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
     interpreter.set_is_kernel(true);
     interpreter.run().expect("Proving add11 failed.");
 }
@@ -210,23 +199,16 @@ fn test_add11_yml() {
 fn test_add11_yml_with_exception() {
     // In this test, we make sure that the user code throws a stack underflow
     // exception.
+
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
-    let beneficiary_state_key = keccak(beneficiary);
-    let sender_state_key = keccak(sender);
-    let to_hashed = keccak(to);
-
-    let beneficiary_nibbles = Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
-
     let code = [0x60, 0x01, 0x60, 0x01, 0x01, 0x8e, 0x00];
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
     let beneficiary_account_before = AccountRlp {
@@ -243,32 +225,35 @@ fn test_add11_yml_with_exception() {
         ..AccountRlp::default()
     };
 
-    let (mut state_trie_before, mut storage_tries) =
-        preinitialized_state_and_storage_tries().unwrap();
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before
-        .insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_before).to_vec(),
-        )
-        .unwrap();
-    state_trie_before
-        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
-        .unwrap();
-    state_trie_before
-        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
-        .unwrap();
-
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    let mut state_smt_before = preinitialized_state();
+    set_account(
+        &mut state_smt_before,
+        H160(beneficiary),
+        &beneficiary_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(sender),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_before,
+        &HashMap::new(),
+    );
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
     };
 
-    let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
+    let txn =
+hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16"
+);
     let txn_gas_limit = 400_000;
     let gas_price = 10;
 
@@ -286,53 +271,33 @@ fn test_add11_yml_with_exception() {
     };
 
     // Here, since the transaction fails, it consumes its gas limit, and does
-    // nothing else. The beacon roots contract is still updated prior transaction
-    // execution.
-    let expected_state_trie_after = {
+    // nothing else.
+    let expected_state_smt_after = {
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let beneficiary_account_after = beneficiary_account_before;
+        let to_account_after = to_account_before;
         // This is the only account that changes: the nonce and the balance are updated.
         let sender_account_after = AccountRlp {
             balance: sender_account_before.balance - txn_gas_limit * gas_price,
             nonce: 1.into(),
             ..AccountRlp::default()
         };
-        let to_account_after = to_account_before;
 
-        update_beacon_roots_account_storage(
-            &mut beacon_roots_account_storage,
-            block_metadata.block_timestamp,
-            block_metadata.parent_beacon_block_root,
-        )
-        .unwrap();
-        let beacon_roots_account =
-            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+        set_account(
+            &mut smt,
+            H160(beneficiary),
+            &beneficiary_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(sender),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(&mut smt, H160(to), &to_account_after, &HashMap::new());
 
-        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after
-            .insert(
-                beneficiary_nibbles,
-                rlp::encode(&beneficiary_account_after).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
-            .unwrap();
-        expected_state_trie_after
-            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
-            .unwrap();
-        expected_state_trie_after
-            .insert(
-                beacon_roots_account_nibbles(),
-                rlp::encode(&beacon_roots_account).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
-            .insert(
-                ger_account_nibbles(),
-                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-            )
-            .unwrap();
-        expected_state_trie_after
+        smt
     };
 
     let receipt_0 = LegacyReceiptRlp {
@@ -355,7 +320,7 @@ fn test_add11_yml_with_exception() {
     .into();
 
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -378,11 +343,15 @@ fn test_add11_yml_with_exception() {
         },
     };
 
-    let initial_stack = vec![];
     let initial_offset = KERNEL.global_labels["main"];
+    let initial_stack = vec![];
     let mut interpreter: Interpreter<F> =
         Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
 
+    let route_txn_label = KERNEL.global_labels["main"];
+    // Switch context and initialize memory with the data we need for the tests.
+    interpreter.generation_state.registers.program_counter = route_txn_label;
+    interpreter.set_context_metadata_field(0, ContextMetadata::GasLimit, 1_000_000.into());
     interpreter.set_is_kernel(true);
     interpreter
         .run()

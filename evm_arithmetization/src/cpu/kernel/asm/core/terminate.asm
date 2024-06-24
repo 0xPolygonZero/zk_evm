@@ -87,14 +87,16 @@ global sys_selfdestruct:
 
     // Set the balance of the address to 0.
     // stack: balance, address, recipient, kexit_info
-    PUSH 0
-    // stack: 0, balance, address, recipient, kexit_info
-    DUP3 %mpt_read_state_trie
-    // stack: account_ptr, 0, balance, address, recipient, kexit_info
-    %add_const(1)
-    // stack: balance_ptr, 0, balance, address, recipient, kexit_info
-    %mstore_trie_data
-
+    DUP1 ISZERO %jumpi(selfdestruct_balance_is_zero)
+    DUP2 %key_balance %smt_delete_state
+    // stack: balance, address, recipient, kexit_info
+selfdestruct_balance_is_zero:
+    // EIP-6780: insert address into the selfdestruct set only if contract has been created
+    // during the current transaction.
+    // stack: balance, address, recipient, kexit_info
+    DUP2 %contract_just_created
+    // stack: is_just_created, balance, address, recipient, kexit_info
+    %jumpi(sys_selfdestruct_just_created)
 
     // EIP-6780: insert address into the selfdestruct set only if contract has been created
     // during the current transaction.
@@ -237,9 +239,6 @@ global terminate_common:
 
     // stack: parent_pc, success, leftover_gas
     JUMP
-
-
-
 
 // Returns 1 if the address is present in SEGMENT_CREATED_CONTRACTS, meaning that it has been
 // created during this transaction. Returns 0 otherwise.

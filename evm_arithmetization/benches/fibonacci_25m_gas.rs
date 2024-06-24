@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use evm_arithmetization::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
@@ -17,16 +17,18 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
+    preinitialized_state, preinitialized_state_with_updated_storage,
 };
 use evm_arithmetization::Node;
 use hex_literal::hex;
-use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::db::Db;
+use smt_trie::keys::{key_balance, key_code, key_code_length, key_nonce, key_storage};
+use smt_trie::smt::Smt;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 
@@ -55,12 +57,6 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     let sender = hex!("8943545177806ED17B9F23F0a21ee5948eCaa776");
     let to = hex!("159271B89fea49aF29DFaf8b4eCE7D042D5d6f07");
 
-    let sender_state_key = keccak(sender);
-    let to_state_key = keccak(to);
-
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
-
     let push1 = get_push_opcode(1);
     let push4 = get_push_opcode(4);
     let add = get_opcode("ADD");
@@ -71,36 +67,39 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     let code = [
         push1, 1, push1, 1, jumpdest, dup2, add, swap1, push4, 0, 0, 0, 4, jump,
     ];
-    let code_hash = keccak(code);
-
-    let empty_trie_root = HashedPartialTrie::from(Node::Empty).hash();
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     let sender_account_before = AccountRlp {
         nonce: 169.into(),
         balance: U256::from_dec_str("999999999998417410153631615")?,
-        storage_root: empty_trie_root,
-        code_hash: keccak(vec![]),
+        code_hash: hash_bytecode_u256(vec![]),
+        code_length: 0.into(),
     };
     let to_account_before = AccountRlp {
         nonce: 1.into(),
         balance: 0.into(),
-        storage_root: empty_trie_root,
         code_hash,
+        code_length: code.len().into(),
     };
 
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
-
-    storage_tries.push((sender_state_key, Node::Empty.into()));
-    storage_tries.push((to_state_key, Node::Empty.into()));
+    let mut state_smt_before = preinitialized_state();
+    set_account(
+        &mut state_smt_before,
+        H160(sender),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_before,
+        &HashMap::new(),
+    );
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
     };
 
     let gas_used = U256::from(0x17d7840_u32);
@@ -123,7 +122,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
     let sender_account_after = AccountRlp {
@@ -133,25 +132,20 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     };
     let to_account_after = to_account_before;
 
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after
-        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
-
-    update_beacon_roots_account_storage(
-        &mut beacon_roots_account_storage,
-        block_metadata.block_timestamp,
-        block_metadata.parent_beacon_block_root,
-    )?;
-    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
-    expected_state_trie_after.insert(
-        beacon_roots_account_nibbles(),
-        rlp::encode(&beacon_roots_account).to_vec(),
-    )?;
-    expected_state_trie_after.insert(
-        ger_account_nibbles(),
-        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-    )?;
+    let mut expected_state_smt_after =
+        preinitialized_state_with_updated_storage(&block_metadata, &[]);
+    set_account(
+        &mut expected_state_smt_after,
+        H160(sender),
+        &sender_account_after,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut expected_state_smt_after,
+        H160(to),
+        &to_account_after,
+        &HashMap::new(),
+    );
 
     let receipt_0 = LegacyReceiptRlp {
         status: false,
@@ -171,7 +165,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     .into();
 
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -195,6 +189,21 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
             cur_hash: H256::default(),
         },
     })
+}
+
+fn set_account<D: Db>(
+    smt: &mut Smt<D>,
+    addr: Address,
+    account: &AccountRlp,
+    storage: &HashMap<U256, U256>,
+) {
+    smt.set(key_balance(addr), account.balance);
+    smt.set(key_nonce(addr), account.nonce);
+    smt.set(key_code(addr), account.code_hash);
+    smt.set(key_code_length(addr), account.code_length);
+    for (&k, &v) in storage {
+        smt.set(key_storage(addr, k), v);
+    }
 }
 
 fn init_logger() {

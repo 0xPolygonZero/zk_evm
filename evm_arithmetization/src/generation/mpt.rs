@@ -1,26 +1,24 @@
 use core::ops::Deref;
-use std::collections::HashMap;
 
 use bytes::Bytes;
-use ethereum_types::{Address, BigEndianHash, H256, U256};
-use keccak_hash::keccak;
-use mpt_trie::nibbles::{Nibbles, NibblesIntern};
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
+use ethereum_types::{Address, H256, U256};
+use mpt_trie::partial_trie::HashedPartialTrie;
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use smt_trie::code::hash_bytecode_u256;
 
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;
 use crate::util::h2u;
-use crate::witness::errors::{ProgramError, ProverInputError};
+use crate::witness::errors::ProgramError;
 use crate::Node;
 
 #[derive(RlpEncodable, RlpDecodable, Debug)]
 pub struct AccountRlp {
     pub nonce: U256,
     pub balance: U256,
-    pub storage_root: H256,
-    pub code_hash: H256,
+    pub code_hash: U256,
+    pub code_length: U256,
 }
 
 #[derive(Clone, Debug)]
@@ -30,13 +28,23 @@ pub struct TrieRootPtrs {
     pub receipt_root_ptr: usize,
 }
 
+impl Default for TrieRootPtrs {
+    fn default() -> Self {
+        Self {
+            state_root_ptr: 2,
+            txn_root_ptr: 0,
+            receipt_root_ptr: 0,
+        }
+    }
+}
+
 impl Default for AccountRlp {
     fn default() -> Self {
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
-            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-            code_hash: keccak([]),
+            code_hash: hash_bytecode_u256(vec![]),
+            code_length: U256::zero(),
         }
     }
 }
@@ -111,18 +119,6 @@ pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     }
 
     Ok(parsed_receipt)
-}
-
-fn parse_storage_value(value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
-    let value: U256 = rlp::decode(value_rlp).map_err(|_| ProgramError::InvalidRlp)?;
-    Ok(vec![value])
-}
-
-const fn empty_nibbles() -> Nibbles {
-    Nibbles {
-        count: 0,
-        packed: NibblesIntern::zero(),
-    }
 }
 
 fn load_mpt<F>(
@@ -203,132 +199,12 @@ where
     }
 }
 
-fn load_state_trie(
-    trie: &HashedPartialTrie,
-    key: Nibbles,
-    trie_data: &mut Vec<U256>,
-    storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
-) -> Result<usize, ProgramError> {
-    let node_ptr = trie_data.len();
-    let type_of_trie = PartialTrieType::of(trie) as u32;
-    if type_of_trie > 0 {
-        trie_data.push(type_of_trie.into());
-    }
-    match trie.deref() {
-        Node::Empty => Ok(0),
-        Node::Hash(h) => {
-            trie_data.push(h2u(*h));
-
-            Ok(node_ptr)
-        }
-        Node::Branch { children, value } => {
-            if !value.is_empty() {
-                return Err(ProgramError::ProverInputError(
-                    ProverInputError::InvalidMptInput,
-                ));
-            }
-            // First, set children pointers to 0.
-            let first_child_ptr = trie_data.len();
-            trie_data.extend(vec![U256::zero(); 16]);
-            // Then, set value pointer to 0.
-            trie_data.push(U256::zero());
-
-            // Now, load all children and update their pointers.
-            for (i, child) in children.iter().enumerate() {
-                let extended_key = key.merge_nibbles(&Nibbles {
-                    count: 1,
-                    packed: i.into(),
-                });
-                let child_ptr =
-                    load_state_trie(child, extended_key, trie_data, storage_tries_by_state_key)?;
-
-                trie_data[first_child_ptr + i] = child_ptr.into();
-            }
-
-            Ok(node_ptr)
-        }
-        Node::Extension { nibbles, child } => {
-            trie_data.push(nibbles.count.into());
-            trie_data.push(
-                nibbles
-                    .try_into()
-                    .map_err(|_| ProgramError::IntegerTooLarge)?,
-            );
-            // Set `value_ptr_ptr`.
-            trie_data.push((trie_data.len() + 1).into());
-            let extended_key = key.merge_nibbles(nibbles);
-            let child_ptr =
-                load_state_trie(child, extended_key, trie_data, storage_tries_by_state_key)?;
-            if child_ptr == 0 {
-                trie_data.push(0.into());
-            }
-
-            Ok(node_ptr)
-        }
-        Node::Leaf { nibbles, value } => {
-            let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
-            let AccountRlp {
-                nonce,
-                balance,
-                storage_root,
-                code_hash,
-            } = account;
-
-            let storage_hash_only = HashedPartialTrie::new(Node::Hash(storage_root));
-            let merged_key = key.merge_nibbles(nibbles);
-            let storage_trie: &HashedPartialTrie = storage_tries_by_state_key
-                .get(&merged_key)
-                .copied()
-                .unwrap_or(&storage_hash_only);
-
-            assert_eq!(storage_trie.hash(), storage_root,
-                "In TrieInputs, an account's storage_root didn't match the associated storage trie hash");
-
-            trie_data.push(nibbles.count.into());
-            trie_data.push(
-                nibbles
-                    .try_into()
-                    .map_err(|_| ProgramError::IntegerTooLarge)?,
-            );
-            // Set `value_ptr_ptr`.
-            trie_data.push((trie_data.len() + 1).into());
-
-            trie_data.push(nonce);
-            trie_data.push(balance);
-            // Storage trie ptr.
-            let storage_ptr_ptr = trie_data.len();
-            trie_data.push((trie_data.len() + 2).into());
-            trie_data.push(code_hash.into_uint());
-            let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value)?;
-            if storage_ptr == 0 {
-                trie_data[storage_ptr_ptr] = 0.into();
-            }
-
-            Ok(node_ptr)
-        }
-    }
-}
-
 pub(crate) fn load_all_mpts(
     trie_inputs: &TrieInputs,
 ) -> Result<(TrieRootPtrs, Vec<U256>), ProgramError> {
-    let mut trie_data = vec![U256::zero()];
-    let storage_tries_by_state_key = trie_inputs
-        .storage_tries
-        .iter()
-        .map(|(hashed_address, storage_trie)| {
-            let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
-                .expect("An H256 is 32 bytes long");
-            (key, storage_trie)
-        })
-        .collect();
+    let mut trie_data = trie_inputs.state_smt.clone();
 
-    let state_root_ptr = load_state_trie(
-        &trie_inputs.state_trie,
-        empty_nibbles(),
-        &mut trie_data,
-        &storage_tries_by_state_key,
-    )?;
+    let state_root_ptr = 2;
 
     let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
         let mut parsed_txn = vec![U256::from(rlp.len())];

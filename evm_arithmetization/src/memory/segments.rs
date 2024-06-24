@@ -77,10 +77,12 @@ pub(crate) enum Segment {
     CreatedContracts = 34 << SEGMENT_SCALING_FACTOR,
     /// Blob versioned hashes specified in a type-3 transaction.
     TxnBlobVersionedHashes = 35 << SEGMENT_SCALING_FACTOR,
+    /// List of used storage slots in newly created contracts.
+    NewStorageSlots = 36 << SEGMENT_SCALING_FACTOR,
 }
 
 impl Segment {
-    pub(crate) const COUNT: usize = 36;
+    pub(crate) const COUNT: usize = 37;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
     pub(crate) const fn unscale(&self) -> usize {
@@ -125,6 +127,7 @@ impl Segment {
             Self::TransientStorage,
             Self::CreatedContracts,
             Self::TxnBlobVersionedHashes,
+            Self::NewStorageSlots,
         ]
     }
 
@@ -167,6 +170,7 @@ impl Segment {
             Segment::TransientStorage => "SEGMENT_TRANSIENT_STORAGE",
             Segment::CreatedContracts => "SEGMENT_CREATED_CONTRACTS",
             Segment::TxnBlobVersionedHashes => "SEGMENT_TXN_BLOB_VERSIONED_HASHES",
+            Segment::NewStorageSlots => "SEGMENT_NEW_STORAGE_SLOTS",
         }
     }
 
@@ -208,6 +212,7 @@ impl Segment {
             Segment::TransientStorage => 256,
             Segment::CreatedContracts => 256,
             Segment::TxnBlobVersionedHashes => 256,
+            Segment::NewStorageSlots => 256,
         }
     }
 }

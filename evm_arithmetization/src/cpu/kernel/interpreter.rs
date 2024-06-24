@@ -12,6 +12,8 @@ use ethereum_types::{BigEndianHash, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
+use smt_trie::smt::hash_serialize_u256;
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
@@ -40,7 +42,7 @@ use crate::{arithmetic, keccak, logic};
 /// Halt interpreter execution whenever a jump to this offset is done.
 const DEFAULT_HALT_OFFSET: usize = 0xdeadbeef;
 
-pub(crate) struct Interpreter<F: Field> {
+pub(crate) struct Interpreter<F: Field + RichField> {
     /// The interpreter holds a `GenerationState` to keep track of the memory
     /// and registers.
     pub(crate) generation_state: GenerationState<F>,
@@ -62,7 +64,7 @@ pub(crate) struct Interpreter<F: Field> {
 
 /// Simulates the CPU execution from `state` until the program counter reaches
 /// `final_label` in the current context.
-pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
+pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
     final_label: &str,
     state: &GenerationState<F>,
 ) -> Option<HashMap<usize, Vec<usize>>> {
@@ -90,7 +92,7 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
     }
 }
 
-impl<F: Field> Interpreter<F> {
+impl<F: RichField> Interpreter<F> {
     /// Returns an instance of `Interpreter` given `GenerationInputs`, and
     /// assuming we are initializing with the `KERNEL` code.
     pub(crate) fn new_with_generation_inputs(
@@ -220,7 +222,7 @@ impl<F: Field> Interpreter<F> {
             ),
             (
                 GlobalMetadata::StateTrieRootDigestBefore,
-                h2u(tries.state_trie.hash()),
+                hash_serialize_u256(&tries.state_smt),
             ),
             (
                 GlobalMetadata::TransactionTrieRootDigestBefore,
@@ -405,7 +407,7 @@ impl<F: Field> Interpreter<F> {
     }
 }
 
-impl<F: Field> State<F> for Interpreter<F> {
+impl<F: RichField> State<F> for Interpreter<F> {
     //// Returns a `GenerationStateCheckpoint` to save the current registers and
     /// reset memory operations to the empty vector.
     fn checkpoint(&mut self) -> GenerationStateCheckpoint {
@@ -548,7 +550,7 @@ impl<F: Field> State<F> for Interpreter<F> {
     }
 }
 
-impl<F: Field> Transition<F> for Interpreter<F> {
+impl<F: RichField> Transition<F> for Interpreter<F> {
     fn generate_jumpdest_analysis(&mut self, dst: usize) -> bool {
         if self.is_jumpdest_analysis && !self.generation_state.registers.is_kernel {
             self.add_jumpdest_offset(dst);
@@ -625,6 +627,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x1d => "SAR",
         0x20 => "KECCAK256",
         0x21 => "KECCAK_GENERAL",
+        0x22 => "POSEIDON",
         0x30 => "ADDRESS",
         0x31 => "BALANCE",
         0x32 => "ORIGIN",

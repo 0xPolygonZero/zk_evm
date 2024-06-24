@@ -20,7 +20,11 @@ global main:
 
     // Initialize the RLP DATA pointer to its initial position, 
     // skipping over the preinitialized empty node.
+    // Because hashing with the SMT doesn't require RLP encoding,
+    // we shift the initial pointer by MAX_RLP_BLOB_SIZE to not
+    // overwrite any transaction field.
     PUSH @INITIAL_TXN_RLP_ADDR
+    %add_const(@MAX_RLP_BLOB_SIZE)
     %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
 
     // Encode constant nodes
@@ -37,10 +41,10 @@ global main:
 global hash_initial_tries:
     // We compute the length of the trie data segment in `mpt_hash` so that we
     // can check the value provided by the prover.
-    // We initialize the segment length with 1 because the segment contains 
+    // We initialize the segment length with 2 because the segment contains 
     // the null pointer `0` when the tries are empty.
-    PUSH 1
-    %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)     %assert_eq
+    PUSH 2
+    %smt_hash_state %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)           %assert_eq
     // stack: trie_data_len
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_BEFORE)      %assert_eq
     // stack: trie_data_len
@@ -99,7 +103,7 @@ global perform_final_checks:
     %pop3
     PUSH 1 // initial trie data length
 global check_state_trie:
-    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
+    %smt_hash_state        %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
 global check_txn_trie:
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq
 global check_receipt_trie:

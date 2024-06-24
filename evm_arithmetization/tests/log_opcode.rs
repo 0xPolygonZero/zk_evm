@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bytes::Bytes;
-use ethereum_types::{Address, BigEndianHash, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
 };
@@ -12,19 +12,19 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
+    init_logger, preinitialized_state, preinitialized_state_with_updated_storage, set_account,
+    update_beacon_roots_account_storage,
 };
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
-use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -44,14 +44,6 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     // Private key: DCDFF53B4F013DBCDC717F89FE3BF4D8B10512AAE282B48E01D7530470382701
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
-    let beneficiary_state_key = keccak(beneficiary);
-    let sender_state_key = keccak(sender);
-    let to_hashed = keccak(to);
-
-    let beneficiary_nibbles = Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
-
     // For the first code transaction code, we consider two LOG opcodes. The first
     // deals with 0 topics and empty data. The second deals with two topics, and
     // data of length 5, stored in memory.
@@ -61,14 +53,13 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         0x60, 99, 0x60, 98, 0x60, 5, 0x60, 27, 0xA2, // LOG2(27, 5, 98, 99)
         0x00,
     ];
-    println!("contract: {:02x?}", code);
     let code_gas = 3 + 3 + 3 // PUSHs and MSTORE
                  + 3 + 3 + 375 // PUSHs and LOG0
                  + 3 + 3 + 3 + 3 + 375 + 375*2 + 8*5 + 3// PUSHs, LOG2 and memory expansion
     ;
     let gas_used = 21_000 + code_gas;
 
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     // Set accounts before the transaction.
     let beneficiary_account_before = AccountRlp {
@@ -88,16 +79,25 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     // Initialize the state trie with three accounts.
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    )?;
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
-
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    let mut state_smt_before = preinitialized_state();
+    set_account(
+        &mut state_smt_before,
+        H160(beneficiary),
+        &beneficiary_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(sender),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_before,
+        &HashMap::new(),
+    );
 
     // We now add two receipts with logs and data. This updates the receipt trie as
     // well.
@@ -129,10 +129,9 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     )?;
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: receipts_trie.clone(),
-        storage_tries,
     };
 
     // Prove a transaction which carries out two LOG opcodes.
@@ -152,34 +151,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
-
-    // Update the state and receipt tries after the transaction, so that we have the
-    // correct expected tries: Update accounts
-    let beneficiary_account_after = AccountRlp {
-        nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-
-    let sender_balance_after = sender_balance_before - gas_used * txn_gas_price;
-    let sender_account_after = AccountRlp {
-        balance: sender_balance_after.into(),
-        nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-    let to_account_after = AccountRlp {
-        balance: 9000000000u64.into(),
-        code_hash,
-        ..AccountRlp::default()
-    };
-
-    update_beacon_roots_account_storage(
-        &mut beacon_roots_account_storage,
-        block_metadata.block_timestamp,
-        block_metadata.parent_beacon_block_root,
-    )?;
-    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
     // Update the receipt trie.
     let first_log = LogRlp {
@@ -209,18 +182,39 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
 
     // Update the state trie.
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_after).to_vec(),
-    )?;
-    expected_state_trie_after
-        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
-    expected_state_trie_after.insert(
-        beacon_roots_account_nibbles(),
-        rlp::encode(&beacon_roots_account).to_vec(),
-    )?;
+    let expected_state_smt_after = {
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
+        let beneficiary_account_after = AccountRlp {
+            nonce: 1.into(),
+            ..AccountRlp::default()
+        };
+        let sender_account_after = AccountRlp {
+            balance: (sender_balance_before - gas_used * txn_gas_price).into(),
+            nonce: 1.into(),
+            ..AccountRlp::default()
+        };
+        let to_account_after = AccountRlp {
+            balance: 9000000000u64.into(),
+            code_hash,
+            ..AccountRlp::default()
+        };
+
+        set_account(
+            &mut smt,
+            H160(beneficiary),
+            &beneficiary_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(sender),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(&mut smt, H160(to), &to_account_after, &HashMap::new());
+
+        smt
+    };
 
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
@@ -229,7 +223,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     .into();
 
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -257,17 +251,6 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;
     timing.filter(Duration::from_millis(100)).print();
 
-    // Assert that the proof leads to the correct state and receipt roots.
-    assert_eq!(
-        proof.public_values.trie_roots_after.state_root,
-        expected_state_trie_after.hash()
-    );
-
-    assert_eq!(
-        proof.public_values.trie_roots_after.receipts_root,
-        receipts_trie.hash()
-    );
-
     verify_proof(&all_stark, proof, &config)
 }
 
@@ -289,10 +272,8 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
                  + 3 + 3 + 3 + 3 + 375 + 375*2 + 8*5 // PUSHs and LOG2
                  + 3 // Memory expansion
     ;
-
     let gas_used = 21_000 + code_gas;
-
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     // First transaction.
     let all_stark = AllStark::<F, D>::default();
@@ -302,16 +283,6 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let sender_first = hex!("af1276cbb260bb13deddb4209ae99ae6e497f446");
     let to_first = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552e89");
-
-    let beneficiary_state_key = keccak(beneficiary);
-    let sender_state_key = keccak(sender_first);
-    let to_hashed = keccak(to_first);
-    let to_hashed_2 = keccak(to);
-
-    let beneficiary_nibbles = Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
-    let to_second_nibbles = Nibbles::from_bytes_be(to_hashed_2.as_bytes()).unwrap();
 
     let beneficiary_account_before = AccountRlp {
         nonce: 1.into(),
@@ -334,25 +305,38 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     // `to_account`.
     let gas_price = 10;
     let txn_value = 0xau64;
-    let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    )?;
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
-    state_trie_before.insert(
-        to_second_nibbles,
-        rlp::encode(&to_account_second_before).to_vec(),
-    )?;
-    let checkpoint_state_trie_root = state_trie_before.hash();
+    let mut state_smt_before = preinitialized_state();
+    set_account(
+        &mut state_smt_before,
+        H160(beneficiary),
+        &beneficiary_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(sender_first),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to_first),
+        &to_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_second_before,
+        &HashMap::new(),
+    );
+
+    let checkpoint_state_trie_root = H256::from_uint(&hashout2u(state_smt_before.root));
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries,
     };
 
     let txn = hex!("f85f800a82520894095e7baea6a6c7c4c2dfeb977efac326af552d870a8026a0122f370ed4023a6c253350c6bfb87d7d7eb2cd86447befee99e0a26b70baec20a07100ab1b3977f2b4571202b9f4b68850858caf5469222794600b5ce1cfb348ad");
@@ -401,33 +385,35 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         ..AccountRlp::default()
     };
 
-    update_beacon_roots_account_storage(
-        &mut beacon_roots_account_storage,
-        block_1_metadata.block_timestamp,
-        block_1_metadata.parent_beacon_block_root,
-    )?;
-    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
-
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_after).to_vec(),
-    )?;
-    expected_state_trie_after
-        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
-    expected_state_trie_after.insert(
-        to_second_nibbles,
-        rlp::encode(&to_account_second_before).to_vec(),
-    )?;
-    expected_state_trie_after.insert(
-        beacon_roots_account_nibbles(),
-        rlp::encode(&beacon_roots_account).to_vec(),
-    )?;
+    let expected_state_smt_after = {
+        let mut smt = preinitialized_state_with_updated_storage(&block_1_metadata, &[]);
+
+        set_account(
+            &mut smt,
+            H160(beneficiary),
+            &beneficiary_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(sender_first),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(&mut smt, H160(to_first), &to_account_after, &HashMap::new());
+        set_account(
+            &mut smt,
+            H160(to),
+            &to_account_second_before,
+            &HashMap::new(),
+        );
+
+        smt
+    };
 
     // Compute new receipt trie.
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
@@ -449,7 +435,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     .into();
 
     let tries_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.clone().hash(),
     };
@@ -479,7 +465,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     // Preprocess all circuits.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 12..15, 14..18, 14..15, 9..10, 12..13, 17..20],
+        &[16..17, 12..15, 14..17, 14..15, 10..11, 12..13, 17..20, 7..8],
         &config,
     );
 
@@ -497,13 +483,12 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     // Prove second transaction. In this second transaction, the code with logs is
     // executed.
 
-    let state_trie_before = expected_state_trie_after;
+    let state_smt_before = expected_state_smt_after;
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: transactions_trie.clone(),
         receipts_trie: receipts_trie.clone(),
-        storage_tries: vec![],
     };
 
     // Prove a transaction which carries out two LOG opcodes.
@@ -511,7 +496,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     let txn_2 = hex!("f860010a830186a094095e7baea6a6c7c4c2dfeb977efac326af552e89808025a04a223955b0bd3827e3740a9a427d0ea43beb5bafa44a0204bf0a3306c8219f7ba0502c32d78f233e9e7ce9f5df3b576556d5d49731e0678fd5a068cdf359557b5b");
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
 
     // Update the state and receipt tries after the transaction, so that we have the
@@ -562,34 +547,40 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     };
 
     let receipt_nibbles = Nibbles::from_str("0x01").unwrap(); // RLP(1) = 0x1
-
     receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
 
     // Update the state trie.
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_after).to_vec(),
-    )?;
-    expected_state_trie_after
-        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
-    expected_state_trie_after.insert(
-        to_second_nibbles,
-        rlp::encode(&to_account_second_after).to_vec(),
-    )?;
+    let expected_state_smt_after = {
+        let mut smt = preinitialized_state_with_updated_storage(&block_1_metadata, &[]);
+        set_account(
+            &mut smt,
+            H160(beneficiary),
+            &beneficiary_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(sender_first),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(&mut smt, H160(to_first), &to_account_after, &HashMap::new());
+        set_account(
+            &mut smt,
+            H160(to),
+            &to_account_second_after,
+            &HashMap::new(),
+        );
 
-    // Copy without the beacon roots account for the next block.
-    let mut state_trie_after_block2 = expected_state_trie_after.clone();
+        smt
+    };
 
-    expected_state_trie_after.insert(
-        beacon_roots_account_nibbles(),
-        rlp::encode(&beacon_roots_account).to_vec(),
-    )?;
+    let mut state_smt_after_block2 = expected_state_smt_after.clone();
 
     transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec())?;
 
-    let block_1_state_root = expected_state_trie_after.hash();
+    let block_1_state_root = H256::from_uint(&hashout2u(expected_state_smt_after.root));
+    println!("{:x}", block_1_state_root);
 
     let trie_roots_after = TrieRoots {
         state_root: block_1_state_root,
@@ -652,37 +643,26 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
-
-    let initial_beacon_roots_account_storage = beacon_roots_account_storage.clone();
     update_beacon_roots_account_storage(
-        &mut beacon_roots_account_storage,
+        &mut state_smt_after_block2,
         block_2_metadata.block_timestamp,
         block_2_metadata.parent_beacon_block_root,
-    )?;
-    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+    );
 
-    state_trie_after_block2.insert(
-        beacon_roots_account_nibbles(),
-        rlp::encode(&beacon_roots_account).to_vec(),
-    )?;
+    let mut contract_code = HashMap::new();
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
 
     let inputs = GenerationInputs {
         signed_txn: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: TrieInputs {
-            state_trie: expected_state_trie_after,
+            state_smt: expected_state_smt_after.serialize(),
             transactions_trie: Node::Empty.into(),
             receipts_trie: Node::Empty.into(),
-            storage_tries: vec![(
-                H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
-                initial_beacon_roots_account_storage,
-            )],
         },
         trie_roots_after: TrieRoots {
-            state_root: state_trie_after_block2.hash(),
+            state_root: H256::from_uint(&hashout2u(state_smt_after_block2.root)),
             transactions_root: HashedPartialTrie::from(Node::Empty).hash(),
             receipts_root: HashedPartialTrie::from(Node::Empty).hash(),
         },
@@ -705,11 +685,8 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
 
     // We cannot duplicate the proof here because even though there weren't any
     // transactions, the state has mutated when updating the beacon roots contract.
-    inputs2.tries.storage_tries = vec![(
-        H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
-        beacon_roots_account_storage,
-    )];
-    inputs2.tries.state_trie = state_trie_after_block2;
+
+    inputs2.tries.state_smt = state_smt_after_block2.serialize();
 
     let (root_proof2, public_values2) =
         all_circuits.prove_root(&all_stark, &config, inputs2, &mut timing, None)?;
