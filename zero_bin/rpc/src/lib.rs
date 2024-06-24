@@ -19,6 +19,8 @@ pub mod retry;
 
 use compat::Compat;
 
+const PREVIOUS_HASHES_SIZE: usize = 256;
+
 /// The RPC type.
 #[derive(ValueEnum, Clone, Debug)]
 pub enum RpcType {
@@ -86,32 +88,54 @@ where
         .context("target block is missing field `number`")?;
     let chain_id = provider.get_chain_id().await?;
 
-    let mut prev_hashes = [alloy::primitives::B256::ZERO; 256];
-    let concurrency = prev_hashes.len();
-    futures::stream::iter(
-        prev_hashes
-            .iter_mut()
-            .rev() // fill RTL
-            .zip(std::iter::successors(Some(target_block_number), |it| {
-                it.checked_sub(1)
-            }))
-            .map(|(dst, n)| {
+    let previous_block_numbers =
+        std::iter::successors(Some(target_block_number as i128), |&it| it.checked_sub(1))
+            .skip(1)
+            .take(PREVIOUS_HASHES_SIZE)
+            .filter(|i| *i >= 0)
+            .collect::<Vec<_>>();
+    let concurrency = previous_block_numbers.len();
+    let collected_hashes = futures::stream::iter(
+        previous_block_numbers
+            .chunks(2) // from genesis to target
+            .map(|block_numbers| {
                 let provider = &provider;
+                let block_num = &block_numbers[0];
+                let previos_block_num = if block_numbers.len() > 1 {
+                    Some(block_numbers[1])
+                } else {
+                    None
+                };
                 async move {
                     let block = provider
-                        .get_block(n.into(), BlockTransactionsKind::Hashes)
+                        .get_block((*block_num as u64).into(), BlockTransactionsKind::Hashes)
                         .await
                         .context("couldn't get block")?
                         .context("no such block")?;
-                    *dst = block.header.parent_hash;
-                    anyhow::Ok(())
+                    anyhow::Ok([
+                        (block.header.hash, Some(*block_num)),
+                        (Some(block.header.parent_hash), previos_block_num),
+                    ])
                 }
             }),
     )
     .buffered(concurrency)
-    .try_collect::<()>()
+    .try_collect::<Vec<_>>()
     .await
     .context("couldn't fill previous hashes")?;
+
+    let mut prev_hashes = [B256::ZERO; PREVIOUS_HASHES_SIZE];
+    collected_hashes
+        .into_iter()
+        .flatten()
+        .filter(|(_, block_num)| block_num.is_some_and(|v| v as u64 != target_block_number))
+        .for_each(|(hash, block_num)| {
+            if let (Some(hash), Some(block_num)) = (hash, block_num) {
+                prev_hashes
+                    [PREVIOUS_HASHES_SIZE - (target_block_number - block_num as u64) as usize] =
+                    hash;
+            }
+        });
 
     let other_data = OtherBlockData {
         b_data: BlockLevelData {
