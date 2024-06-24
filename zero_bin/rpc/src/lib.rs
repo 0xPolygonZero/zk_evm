@@ -97,13 +97,14 @@ where
     let concurrency = previous_block_numbers.len();
     let collected_hashes = futures::stream::iter(
         previous_block_numbers
-            .chunks(2) // from genesis to target
+            .chunks(2) // we get hash for previous and current block with one request
             .map(|block_numbers| {
                 let provider = &provider;
                 let block_num = &block_numbers[0];
                 let previos_block_num = if block_numbers.len() > 1 {
                     Some(block_numbers[1])
                 } else {
+                    // For genesis block
                     None
                 };
                 async move {
@@ -131,6 +132,7 @@ where
         .filter(|(_, block_num)| block_num.is_some_and(|v| v as u64 != target_block_number))
         .for_each(|(hash, block_num)| {
             if let (Some(hash), Some(block_num)) = (hash, block_num) {
+                // Most recent previous block hash is expected at the end of the array
                 prev_hashes
                     [PREVIOUS_HASHES_SIZE - (target_block_number - block_num as u64) as usize] =
                     hash;
