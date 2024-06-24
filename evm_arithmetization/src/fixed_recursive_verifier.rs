@@ -1707,14 +1707,14 @@ where
         let mut witness = PartialWitness::new();
 
         let dummy_pis = &self.two_to_one_block.dummy_pis;
-        witness.set_target_arr(&dummy_pis, &vec![F::ZERO; dummy_pis.len()]);
+        witness.set_target_arr(dummy_pis, &vec![F::ZERO; dummy_pis.len()]);
 
         Self::set_dummy_if_necessary(
             &self.two_to_one_block.lhs,
             lhs_is_agg,
             &self.two_to_one_block.circuit,
             &mut witness,
-            &lhs,
+            lhs,
         );
 
         Self::set_dummy_if_necessary(
@@ -1722,7 +1722,7 @@ where
             rhs_is_agg,
             &self.two_to_one_block.circuit,
             &mut witness,
-            &rhs,
+            rhs,
         );
 
         witness.set_verifier_data_target(
@@ -1832,8 +1832,8 @@ where
         // [`add_verifier_data_public_inputs`].
         let count_public_inputs = builder.num_public_inputs();
 
-        let lhs = Self::add_two_to_one_block_child(&mut builder, &block_circuit);
-        let rhs = Self::add_two_to_one_block_child(&mut builder, &block_circuit);
+        let lhs = Self::add_two_to_one_block_child(&mut builder, block_circuit);
+        let rhs = Self::add_two_to_one_block_child(&mut builder, block_circuit);
 
         let lhs_public_values = lhs.public_values(&mut builder);
         let rhs_public_values = rhs.public_values(&mut builder);
