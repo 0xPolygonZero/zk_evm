@@ -89,8 +89,7 @@ where
     let chain_id = provider.get_chain_id().await?;
 
     let previous_block_numbers =
-        std::iter::successors(Some(target_block_number as i128), |&it| it.checked_sub(1))
-            .skip(1)
+        std::iter::successors(Some(target_block_number as i128 - 1), |&it| Some(it - 1))
             .take(PREVIOUS_HASHES_SIZE)
             .filter(|i| *i >= 0)
             .collect::<Vec<_>>();
@@ -129,7 +128,7 @@ where
     collected_hashes
         .into_iter()
         .flatten()
-        .filter(|(_, block_num)| block_num.is_some_and(|v| v as u64 != target_block_number))
+        .filter(|(_, block_num)| block_num.is_some())
         .for_each(|(hash, block_num)| {
             if let (Some(hash), Some(block_num)) = (hash, block_num) {
                 // Most recent previous block hash is expected at the end of the array
