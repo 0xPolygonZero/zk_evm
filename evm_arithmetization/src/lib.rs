@@ -211,14 +211,7 @@ pub mod extension_tower;
 pub mod testing_utils;
 pub mod util;
 
-// Set up Jemalloc
-#[cfg(not(target_env = "msvc"))]
-use jemallocator::Jemalloc;
 use mpt_trie::partial_trie::HashedPartialTrie;
-
-#[cfg(not(target_env = "msvc"))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
 
 // Public definitions and re-exports
 

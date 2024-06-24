@@ -19,22 +19,22 @@ enum-as-inner = { workspace = true }
 ethereum-types = { workspace = true }
 hex = { workspace = true }
 keccak-hash = { workspace = true }
-parking_lot = { version = "0.12.1", features = ["serde"] }
+parking_lot = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 log = { workspace = true }
 num = { workspace = true, optional = true }
-num-traits = "0.2.15"
-uint = "0.9.5"
+num-traits = { workspace = true }
+uint = { workspace = true }
 rlp = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
-impl-rlp = "0.3.0"
-impl-codec = "0.6.0"
-impl-serde = "0.4.0"
-impl-num-traits = "0.1.2"
+impl-rlp = { workspace = true }
+impl-codec = { workspace = true }
+impl-serde = { workspace = true }
+impl-num-traits = { workspace = true }
 
 [dev-dependencies]
-eth_trie = "0.4.0"
-pretty_env_logger = "0.5.0"
+eth_trie = { workspace = true }
+pretty_env_logger = { workspace = true }
 rand = { workspace = true }
 rlp-derive = { workspace = true }
 serde_json = { workspace = true }

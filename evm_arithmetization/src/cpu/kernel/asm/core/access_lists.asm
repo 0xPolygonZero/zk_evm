@@ -12,7 +12,7 @@
 // Initialize SEGMENT_ACCESSED_ADDRESSES
 global init_access_lists:
     // stack: (empty)
-    // Store @U256_MAX at the beggining of the segment
+    // Store @U256_MAX at the beginning of the segment
     PUSH @SEGMENT_ACCESSED_ADDRESSES // ctx == virt == 0
     DUP1
     PUSH @U256_MAX
@@ -29,7 +29,7 @@ global init_access_lists:
     // stack: (empty)
 
     // Initialize SEGMENT_ACCESSED_STORAGE_KEYS
-    // Store @U256_MAX at the beggining of the segment
+    // Store @U256_MAX at the beginning of the segment
     PUSH @SEGMENT_ACCESSED_STORAGE_KEYS // ctx == virt == 0
     DUP1
     PUSH @U256_MAX
@@ -65,7 +65,7 @@ global init_access_lists:
 
 // Multiply the value at the top of the stack, denoted by ptr/2, by 2
 // and abort if ptr/2 >= mem[@GLOBAL_METADATA_ACCESSED_ADDRESSES_LEN]/2
-// In this way 2*ptr/2 must be pointing to the begining of a node.
+// In this way 2*ptr/2 must be pointing to the beginning of a node.
 %macro get_valid_addr_ptr
     // stack: ptr/2
     DUP1
@@ -170,7 +170,7 @@ insert_new_address:
 /// Otherwise it guesses the node before the address (pred)
 /// such that (pred)->(next)->(next_next), where the (next) node
 /// stores the address. It writes the link (pred)->(next_next)
-/// and (next) is marked as deleted by writting U256_MAX in its 
+/// and (next) is marked as deleted by writing U256_MAX in its 
 /// next node pointer.
 global remove_accessed_addresses:
     // stack: addr, retdest
