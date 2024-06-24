@@ -19,7 +19,7 @@ pub mod retry;
 
 use compat::Compat;
 
-const PREVIOUS_HASHES_SIZE: usize = 256;
+const PREVIOUS_HASHES_COUNT: usize = 256;
 
 /// The RPC type.
 #[derive(ValueEnum, Clone, Debug)]
@@ -90,7 +90,7 @@ where
 
     let previous_block_numbers =
         std::iter::successors(Some(target_block_number as i128 - 1), |&it| Some(it - 1))
-            .take(PREVIOUS_HASHES_SIZE)
+            .take(PREVIOUS_HASHES_COUNT)
             .filter(|i| *i >= 0)
             .collect::<Vec<_>>();
     let concurrency = previous_block_numbers.len();
@@ -124,7 +124,7 @@ where
     .await
     .context("couldn't fill previous hashes")?;
 
-    let mut prev_hashes = [B256::ZERO; PREVIOUS_HASHES_SIZE];
+    let mut prev_hashes = [B256::ZERO; PREVIOUS_HASHES_COUNT];
     collected_hashes
         .into_iter()
         .flatten()
@@ -133,7 +133,7 @@ where
             if let (Some(hash), Some(block_num)) = (hash, block_num) {
                 // Most recent previous block hash is expected at the end of the array
                 prev_hashes
-                    [PREVIOUS_HASHES_SIZE - (target_block_number - block_num as u64) as usize] =
+                    [PREVIOUS_HASHES_COUNT - (target_block_number - block_num as u64) as usize] =
                     hash;
             }
         });
