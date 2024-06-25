@@ -304,60 +304,6 @@ where
     }
 }
 
-/// Data for the two-to-one aggregation circuit, which is used to generate a
-/// proof of two unrelated block proofs.
-#[derive(Eq, PartialEq, Debug)]
-pub struct TwoToOneAggCircuitData<F, C, const D: usize>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
-    pub circuit: CircuitData<F, C, D>,
-    proof0: ProofWithPublicInputsTarget<D>,
-    proof1: ProofWithPublicInputsTarget<D>,
-    pv0: PublicValuesTarget,
-    pv1: PublicValuesTarget,
-}
-
-impl<F, C, const D: usize> TwoToOneAggCircuitData<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
-    fn to_buffer(
-        &self,
-        buffer: &mut Vec<u8>,
-        gate_serializer: &dyn GateSerializer<F, D>,
-        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
-    ) -> IoResult<()> {
-        buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
-        buffer.write_target_proof_with_public_inputs(&self.proof0)?;
-        buffer.write_target_proof_with_public_inputs(&self.proof1)?;
-        self.pv0.to_buffer(buffer)?;
-        self.pv1.to_buffer(buffer)?;
-        Ok(())
-    }
-
-    fn from_buffer(
-        buffer: &mut Buffer,
-        gate_serializer: &dyn GateSerializer<F, D>,
-        generator_serializer: &dyn WitnessGeneratorSerializer<F, D>,
-    ) -> IoResult<Self> {
-        let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
-        let agg_proof0 = buffer.read_target_proof_with_public_inputs()?;
-        let agg_proof1 = buffer.read_target_proof_with_public_inputs()?;
-        let pv0 = PublicValuesTarget::from_buffer(buffer)?;
-        let pv1 = PublicValuesTarget::from_buffer(buffer)?;
-        Ok(Self {
-            circuit,
-            proof0: agg_proof0,
-            proof1: agg_proof1,
-            pv0,
-            pv1,
-        })
-    }
-}
-
 /// Data for the two-to-one block circuit, which is used to generate a
 /// proof of two unrelated proofs.
 #[derive(Eq, PartialEq, Debug)]
