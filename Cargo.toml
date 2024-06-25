@@ -1,5 +1,6 @@
 [workspace]
 members = ["mpt_trie",
+    "smt_trie",
     "proof_gen",
     "trace_decoder",
     "evm_arithmetization",
