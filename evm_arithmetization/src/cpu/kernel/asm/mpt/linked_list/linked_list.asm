@@ -473,7 +473,7 @@ insert_new_slot_with_value:
     // Here, (addr > pred_addr) || (pred_ptr == @SEGMENT_ACCOUNTS_LINKED_LIST).
     // We should have (addr < next_addr), meaning the new value can be inserted between pred_ptr and next_ptr.
     LT
-    %jumpi(next_node_ok)
+    %jumpi(next_node_ok_with_value)
     // If addr <= next_addr, then it addr must be equal to next_addr
     // stack: next_addr, next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
     DUP5
