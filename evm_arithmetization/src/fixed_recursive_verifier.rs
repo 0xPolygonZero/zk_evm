@@ -980,6 +980,120 @@ where
         }
     }
 
+    /// Create two-to-one block aggregation circuit.
+    ///
+    /// # Arguments
+    ///
+    /// - `block_circuit`: circuit data for the block circuit, that constitues
+    ///   the base case for aggregation.
+    ///
+    /// # Outputs
+    ///
+    /// Returns a [`TwoToOneBlockCircuitData<F, C, D>`].
+    fn create_two_to_one_block_circuit(
+        block_circuit: &BlockCircuitData<F, C, D>,
+    ) -> TwoToOneBlockCircuitData<F, C, D>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        let mut builder = CircuitBuilder::<F, D>::new(block_circuit.circuit.common.config.clone());
+
+        let mut dummy_pis = vec![];
+        // The magic numbers were derived from the assertion at end of this function.
+        while builder.num_public_inputs()
+            < block_circuit.circuit.common.num_public_inputs - (2337 - 2269)
+        {
+            let target = builder.add_virtual_public_input();
+            dummy_pis.push(target);
+        }
+
+        let cyclic_vk = builder.add_verifier_data_public_inputs();
+        // Avoid accidentally adding public inputs after calling
+        // [`add_verifier_data_public_inputs`].
+        #[cfg(debug_assertions)]
+        let count_public_inputs = builder.num_public_inputs();
+
+        let lhs = Self::add_two_to_one_block_child(&mut builder, block_circuit);
+        let rhs = Self::add_two_to_one_block_child(&mut builder, block_circuit);
+
+        let lhs_public_values = lhs.public_values(&mut builder);
+        let rhs_public_values = rhs.public_values(&mut builder);
+
+        let lhs_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(lhs_public_values);
+        let rhs_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(rhs_public_values);
+        let mut mix_vec = vec![];
+        mix_vec.extend(&lhs_pv_hash.elements);
+        mix_vec.extend(&rhs_pv_hash.elements);
+        let mix_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+
+        debug_assert_eq!(
+            count_public_inputs,
+            builder.num_public_inputs(),
+            "Public inputs were registered after calling `add_verifier_data_public_inputs`."
+        );
+
+        debug_assert_eq!(
+            block_circuit.circuit.common.num_public_inputs,
+            builder.num_public_inputs(),
+            "The block aggregation circuit and the block circuit must agree on the number of public inputs."
+        );
+
+        let circuit = builder.build::<C>();
+        TwoToOneBlockCircuitData {
+            circuit,
+            lhs,
+            rhs,
+            mix_pv_hash,
+            dummy_pis,
+            cyclic_vk,
+        }
+    }
+
+
+    /// Setup a new part of a circuit to handle a new unrelated proof.
+    /// Helper method for [`create_two_to_one_block_circuit`].
+    ///
+    /// # Arguments
+    ///
+    /// - `builder`: The circuit builder object.
+    /// - `block_circuit_data`: Circuit data describing the blocks that can be
+    ///   aggregated.
+    ///
+    /// # Outputs
+    ///
+    /// Returns a [`TwoToOneBlockChildTarget<D>`] object.
+    fn add_two_to_one_block_child(
+        builder: &mut CircuitBuilder<F, D>,
+        block_circuit_data: &BlockCircuitData<F, C, D>,
+    ) -> TwoToOneBlockChildTarget<D> {
+        #[cfg(debug_assertions)]
+        let count_public_inputs = builder.num_public_inputs();
+        let block_common = &block_circuit_data.circuit.common;
+        let block_vk = builder.constant_verifier_data(&block_circuit_data.circuit.verifier_only);
+        let is_agg = builder.add_virtual_bool_target_safe();
+        // Note: `block_common` should also be used for `agg_proof` here because they
+        // are equal, and `agg_proof` is not available yet.
+        let agg_proof = builder.add_virtual_proof_with_pis(block_common);
+        let block_proof = builder.add_virtual_proof_with_pis(block_common);
+        builder
+            .conditionally_verify_cyclic_proof::<C>(
+                is_agg,
+                &agg_proof,
+                &block_proof,
+                &block_vk,
+                block_common,
+            )
+            .expect("Failed to build cyclic recursion circuit");
+        debug_assert_eq!(count_public_inputs, builder.num_public_inputs());
+        TwoToOneBlockChildTarget {
+            is_agg,
+            agg_proof,
+            block_proof,
+        }
+    }
+
     /// Connect the 256 block hashes between two blocks
     fn connect_block_hashes(
         builder: &mut CircuitBuilder<F, D>,
