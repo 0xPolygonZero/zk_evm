@@ -45,7 +45,7 @@ use anyhow::Result;
 pub(crate) fn get_package_version(package_name: &str) -> Result<Option<String>> {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let zero_bin_path = Path::new(manifest_dir)
-        .join("../") // Adjust the path according to your workspace structure
+        .join("../../") // Adjust the path according to your workspace structure
         .canonicalize()?;
 
     let cargo_lock_path = zero_bin_path.join("Cargo.lock");
