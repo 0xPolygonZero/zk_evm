@@ -70,8 +70,20 @@ global init_linked_lists:
     // stack: cold_access
 %endmacro
 
+%macro insert_account_with_overwrite
+    %stack (addr, ptr) -> (addr, ptr, %%after)
+    %jump(insert_account_with_overwrite)
+%%after:
+    // stack: cold_access
+%endmacro
+
 %macro insert_account_to_linked_list_no_return
     %insert_account_to_linked_list
+    %pop2
+%endmacro
+
+%macro insert_account_with_overwrite_no_return
+    %insert_account_with_overwrite
     %pop2
 %endmacro
 
@@ -201,6 +213,61 @@ global insert_new_account:
     // stack: addr, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_account_loaded
     %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    JUMP
+
+global insert_account_with_overwrite:
+    // stack: addr, payload_ptr, retdest
+    PROVER_INPUT(linked_list::insert_account)
+    // stack: pred_ptr/4, addr, payload_ptr, retdest
+    %get_valid_account_ptr
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    DUP1
+    MLOAD_GENERAL
+    DUP1
+    // stack: pred_addr, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    DUP4 GT
+    DUP3 %eq_const(@SEGMENT_ACCOUNTS_LINKED_LIST)
+    ADD // OR
+    // If the predesessor is strictly smaller or the predecessor is the special
+    // node with key @U256_MAX (and hence we're inserting a new minimum), then
+    // we need to insert a new node.
+    %jumpi(insert_new_account)
+    // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
+    // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
+    DUP3
+    %assert_eq
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    // Check that this is not a deleted node
+    DUP1
+    %add_const(3)
+    MLOAD_GENERAL
+    %jump_neq_const(@U256_MAX, account_found_with_overwrite)
+    // The storage key is not in the list.
+    PANIC
+
+account_found_with_overwrite:
+    // The address was already in the list
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    // Load the the payload pointer and access counter
+    %increment
+    DUP1
+    // stack: payload_ptr_ptr, pred_ptr+1, addr, payload_ptr, retdest
+    DUP4 MSTORE_GENERAL
+    %increment
+    DUP1
+    MLOAD_GENERAL
+    %increment
+    // stack: access_ctr + 1, access_ctr_ptr, addr, payload_ptr, retdest
+    SWAP1
+    DUP2
+    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, addr, payload_ptr, retdest
+    MSTORE_GENERAL
+    // stack: access_ctr + 1, addr, payload_ptr, retdest
+    // If access_ctr == 1 then this it's a cold access 
+    %eq_const(1)
+    %stack (cold_access, addr, payload_ptr, retdest) -> (retdest, cold_access, payload_ptr)
     JUMP
 
 %macro search_account
