@@ -75,7 +75,7 @@ fi
 
 # Define block interval
 if [ $START_BLOCK == $END_BLOCK ]; then
-      BLOCK_INTERVAL=$((16#${START_BLOCK#"0x"}))
+    BLOCK_INTERVAL=$START_BLOCK
 else
     BLOCK_INTERVAL=$START_BLOCK..=$END_BLOCK
 fi
@@ -87,7 +87,7 @@ fi
 if [[ $8 == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
-    cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" > $OUT_LOG_PATH 2>&1
+    cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" > $OUT_LOG_PATH 2>&1
     if grep -q 'All proof witnesses have been generated successfully.' $OUT_LOG_PATH; then
         echo -e "Success - Note this was just a test, not a proof"
         # Remove the log on success if we don't want to keep it.
@@ -102,7 +102,7 @@ if [[ $8 == "test_only" ]]; then
 else
     # normal run
     echo "Proving blocks ${BLOCK_INTERVAL} now... (Total: ${TOT_BLOCKS})"
-    cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" > $OUT_LOG_PATH 2>&1
+    cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" > $OUT_LOG_PATH 2>&1
 
     retVal=$?
     if [ $retVal -ne 0 ]; then

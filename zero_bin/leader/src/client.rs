@@ -106,13 +106,3 @@ pub(crate) async fn client_main(
 
     Ok(())
 }
-
-impl From<super::cli::Command> for RpcType {
-    fn from(command: super::cli::Command) -> Self {
-        match command {
-            super::cli::Command::Native { .. } => RpcType::Native,
-            super::cli::Command::Jerigon { .. } => RpcType::Jerigon,
-            _ => panic!("Unsupported command type"),
-        }
-    }
-}
