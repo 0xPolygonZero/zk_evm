@@ -54,7 +54,7 @@ pub(crate) fn initialize_mpts<F: Field>(
         interpreter
             .generation_state
             .memory
-            .set(trie_addr, data.into());
+            .set(trie_addr, data.unwrap_or_default().into());
     }
 }
 

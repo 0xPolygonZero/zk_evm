@@ -189,6 +189,7 @@ fn test_erc721() -> anyhow::Result<()> {
         },
     };
 
+    log::debug!("state hash ={:?}", inputs.tries.state_trie.hash());
     log::debug!("Expected final trie = {:#?}", expected_state_trie_after);
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;

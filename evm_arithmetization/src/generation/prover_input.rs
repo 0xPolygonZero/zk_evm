@@ -5,11 +5,15 @@ use std::str::FromStr;
 use anyhow::{bail, Error};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
+use mpt_trie::partial_trie::HashedPartialTrie;
 use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::LinkedList;
+use super::mpt::load_state_mpt;
+use super::state::State;
+use super::trie_extractor::get_state_trie;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
@@ -73,11 +77,34 @@ impl<F: Field> GenerationState<F> {
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let trie = input_fn.0[1].as_str();
         match trie {
-            "state" => self
-                .trie_root_ptrs
-                .state_root_ptr
-                .ok_or(ProgramError::ProverInputError(InvalidInput))
-                .map(U256::from),
+            "state" => match self.trie_root_ptrs.state_root_ptr {
+                Some(state_root_ptr) => Ok(state_root_ptr),
+                None => {
+                    log::debug!(
+                        "trie_data_len before: = {:?}",
+                        self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                            .content
+                            .len()
+                    );
+                    let n = load_state_mpt(
+                        &self.inputs.tries,
+                        &mut self.memory.contexts[0].segments[Segment::TrieData.unscale()].content,
+                    )?;
+                    log::debug!(
+                        "state_trie before = {:?}",
+                        get_state_trie::<HashedPartialTrie>(&self.memory, n)
+                    );
+                    log::debug!(
+                        "trie_data_len after = {:?}",
+                        self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                            .content
+                            .len()
+                    );
+                    log::debug!("and n = {:?} ", n);
+                    Ok(n)
+                }
+            }
+            .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             "trie_data_size" => Ok(U256::from(

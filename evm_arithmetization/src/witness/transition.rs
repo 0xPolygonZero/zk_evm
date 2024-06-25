@@ -1,17 +1,22 @@
 use ethereum_types::U256;
 use log::log_enabled;
+use mpt_trie::partial_trie::HashedPartialTrie;
+use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
 
 use super::util::{mem_read_gp_with_log_and_fill, stack_pop_with_log_and_fill};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
 use crate::generation::state::State;
+use crate::generation::trie_extractor::get_state_trie;
 use crate::memory::segments::Segment;
+use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::gas::gas_to_charge;
 use crate::witness::memory::MemoryAddress;
@@ -19,7 +24,6 @@ use crate::witness::operation::*;
 use crate::witness::state::RegistersState;
 use crate::witness::util::mem_read_code_with_log_and_fill;
 use crate::{arithmetic, logic};
-
 pub(crate) fn read_code_memory<F: Field, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
@@ -287,6 +291,23 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
             state.get_generation_state().stack(),
         ),
     );
+    if state.get_clock() <= 65945 && state.get_clock() >= 64176 {
+        log::debug!(
+            "state_trie before = {:?}",
+            get_state_trie::<HashedPartialTrie>(
+                &state.get_generation_state().memory,
+                u256_to_usize(
+                    state
+                        .get_generation_state()
+                        .memory
+                        .read_global_metadata(GlobalMetadata::StateTrieRoot)
+                )
+                .unwrap()
+            )
+            .unwrap()
+            .hash()
+        );
+    }
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }

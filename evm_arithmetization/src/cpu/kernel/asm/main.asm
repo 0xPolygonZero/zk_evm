@@ -32,9 +32,7 @@ global main:
     PROVER_INPUT(trie_ptr::trie_data_size)
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
    
-    // Initialize the state, transaction and receipt trie root pointers.
-    PROVER_INPUT(trie_ptr::state)
-    %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+    // Initialize the transaction and receipt trie root pointers.
     PROVER_INPUT(trie_ptr::txn)
     %mstore_global_metadata(@GLOBAL_METADATA_TXN_TRIE_ROOT)
     PROVER_INPUT(trie_ptr::receipt)
@@ -46,10 +44,10 @@ global hash_initial_tries:
     // The trie data segment is already written by the linked lists
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
-    %set_initial_tries
-    %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
-    global debug_check_hash_after_setting_payloads:
-    %assert_eq
+    // %set_initial_tries
+    // %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
+    // global debug_check_hash_after_setting_payloads:
+    // %assert_eq
 
 
     // stack: trie_data_len
@@ -112,6 +110,18 @@ global debug_check_gas:
 global debug_check_txn_number:
     %assert_eq
     %pop3
+
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+    PROVER_INPUT(trie_ptr::state)
+    %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+    %mpt_hash_state_trie  
+    SWAP1 %set_trie_data_size
+    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
+global debug_check_initial_trie:
+    %assert_eq
+
+    %set_initial_tries
+
     PUSH 1 // initial trie data length
     
 global check_state_trie:

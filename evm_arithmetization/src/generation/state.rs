@@ -320,8 +320,7 @@ impl<F: Field> GenerationState<F> {
         let (trie_roots_ptrs, trie_data) =
             load_all_mpts(trie_inputs).expect("Invalid MPT data for preinitialization");
 
-        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
-            trie_data.iter().map(|&val| Some(val)).collect();
+        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content = trie_data;
 
         trie_roots_ptrs
     }
@@ -338,8 +337,7 @@ impl<F: Field> GenerationState<F> {
             state_leaves.iter().map(|&val| Some(val)).collect();
         self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()].content =
             storage_leaves.iter().map(|&val| Some(val)).collect();
-        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
-            trie_data.iter().map(|&val| Some(val)).collect();
+        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content = trie_data;
 
         trie_roots_ptrs
     }
