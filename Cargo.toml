@@ -85,6 +85,7 @@ serde = "1.0.166"
 serde_json = "1.0.96"
 serde_path_to_error = "0.1.14"
 serde_with = "3.4.0"
+smt_trie = { path = "smt_trie", version = "0.1.0" }
 sha2 = "0.10.6"
 static_assertions = "1.1.0"
 thiserror = "1.0.49"
