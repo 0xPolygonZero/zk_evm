@@ -241,7 +241,7 @@ impl<const D: usize> AggregationChildTarget<D> {
         Ok(Self {
             is_agg,
             agg_proof,
-            evm_proof,
+            base_proof: evm_proof,
         })
     }
 
@@ -250,7 +250,7 @@ impl<const D: usize> AggregationChildTarget<D> {
         builder: &mut CircuitBuilder<F, D>,
     ) -> PublicValuesTarget {
         let agg_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
-        let evm_pv = PublicValuesTarget::from_public_inputs(&self.evm_proof.public_inputs);
+        let evm_pv = PublicValuesTarget::from_public_inputs(&self.base_proof.public_inputs);
         PublicValuesTarget::select(builder, self.is_agg, agg_pv, evm_pv)
     }
 
@@ -905,7 +905,7 @@ where
         AggregationChildTarget {
             is_agg,
             agg_proof,
-            evm_proof,
+            base_proof: evm_proof,
         }
     }
 
@@ -1409,11 +1409,11 @@ where
 
         agg_inputs.set_bool_target(self.aggregation.lhs.is_agg, lhs_is_agg);
         agg_inputs.set_proof_with_pis_target(&self.aggregation.lhs.agg_proof, lhs_proof);
-        agg_inputs.set_proof_with_pis_target(&self.aggregation.lhs.evm_proof, lhs_proof);
+        agg_inputs.set_proof_with_pis_target(&self.aggregation.lhs.base_proof, lhs_proof);
 
         agg_inputs.set_bool_target(self.aggregation.rhs.is_agg, rhs_is_agg);
         agg_inputs.set_proof_with_pis_target(&self.aggregation.rhs.agg_proof, rhs_proof);
-        agg_inputs.set_proof_with_pis_target(&self.aggregation.rhs.evm_proof, rhs_proof);
+        agg_inputs.set_proof_with_pis_target(&self.aggregation.rhs.base_proof, rhs_proof);
 
         agg_inputs.set_verifier_data_target(
             &self.aggregation.cyclic_vk,
@@ -1767,7 +1767,7 @@ where
                 proof,
             );
         }
-        agg_inputs.set_proof_with_pis_target(&agg_child.block_proof, proof);
+        agg_inputs.set_proof_with_pis_target(&agg_child.base_proof, proof);
     }
 }
 /// A map between initial degree sizes and their associated shrinking recursion
