@@ -305,7 +305,7 @@ where
 }
 
 /// Data for the two-to-one aggregation circuit, which is used to generate a
-/// proof of two unrelated proofs.
+/// proof of two unrelated block proofs.
 #[derive(Eq, PartialEq, Debug)]
 pub struct TwoToOneAggCircuitData<F, C, const D: usize>
 where
@@ -826,6 +826,7 @@ where
         let mut builder = CircuitBuilder::<F, D>::new(root.circuit.common.config.clone());
         let public_values = add_virtual_public_values(&mut builder);
         let cyclic_vk = builder.add_verifier_data_public_inputs();
+        #[cfg(debug_assertions)]
         let count_public_inputs = builder.num_public_inputs();
         let lhs = Self::add_agg_child(&mut builder, root);
         let rhs = Self::add_agg_child(&mut builder, root);
@@ -1662,7 +1663,7 @@ where
         Ok(proof)
     }
 
-    /// Verifies an existing block aggregation proof
+    /// Verifies an existing block aggregation proof.
     ///
     /// # Arguments
     ///
@@ -1696,6 +1697,7 @@ where
         builder: &mut CircuitBuilder<F, D>,
         block_circuit_data: &BlockCircuitData<F, C, D>,
     ) -> TwoToOneBlockChildTarget<D> {
+        #[cfg(debug_assertions)]
         let count_public_inputs = builder.num_public_inputs();
         let block_common = &block_circuit_data.circuit.common;
         let block_vk = builder.constant_verifier_data(&block_circuit_data.circuit.verifier_only);
@@ -1713,7 +1715,7 @@ where
                 block_common,
             )
             .expect("Failed to build cyclic recursion circuit");
-        assert_eq!(count_public_inputs, builder.num_public_inputs());
+        debug_assert_eq!(count_public_inputs, builder.num_public_inputs());
         TwoToOneBlockChildTarget {
             is_agg,
             agg_proof,
@@ -1753,6 +1755,7 @@ where
         let cyclic_vk = builder.add_verifier_data_public_inputs();
         // Avoid accidentally adding public inputs after calling
         // [`add_verifier_data_public_inputs`].
+        #[cfg(debug_assertions)]
         let count_public_inputs = builder.num_public_inputs();
 
         let lhs = Self::add_two_to_one_block_child(&mut builder, block_circuit);
@@ -1771,7 +1774,7 @@ where
         debug_assert_eq!(
             count_public_inputs,
             builder.num_public_inputs(),
-            "Public inputs were registered after called `add_verifier_data_public_inputs`"
+            "Public inputs were registered after calling `add_verifier_data_public_inputs`."
         );
 
         debug_assert_eq!(
@@ -1849,7 +1852,7 @@ where
                 agg_inputs,
                 &agg_child.agg_proof,
                 proof,
-            )
+            );
         }
         agg_inputs.set_proof_with_pis_target(&agg_child.block_proof, proof);
     }
