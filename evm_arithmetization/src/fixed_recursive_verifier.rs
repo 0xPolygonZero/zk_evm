@@ -1632,15 +1632,13 @@ where
         )
     }
 
-    /// Aggregates two block or aggregation proofs in a manner similar to a
-    /// binary operator.
-    /// Visually:  `(lhs, lhs_is_agg) BinOp (rhs, rhs_is_agg)`.
+    /// Aggregates two proofs in manner similar to [`prove_aggregation`].
     ///
     /// # Arguments
     ///
-    /// - `lhs`: a proof of either a block or previous aggregation proof.
+    /// - `lhs`: a proof of either a block or previous aggregation.
     /// - `lhs_is_agg`: specify which case `lhs` was.
-    /// - `rhs`: a proof of either a block or previous aggregation proof.
+    /// - `rhs`: a proof of either a block or previous aggregation.
     /// - `rhs_is_agg`: specify which case `rhs` was.
     ///
     /// # Outputs
