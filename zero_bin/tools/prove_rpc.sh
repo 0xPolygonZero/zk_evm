@@ -75,7 +75,7 @@ fi
 
 # Define block interval
 if [ $START_BLOCK == $END_BLOCK ]; then
-      BLOCK_INTERVAL=$((16#${START_BLOCK#"0x"}))
+    BLOCK_INTERVAL=$START_BLOCK
 else
     BLOCK_INTERVAL=$START_BLOCK..=$END_BLOCK
 fi
