@@ -9,19 +9,19 @@ pub(crate) fn try_derive(ast: DeriveInput) -> Result<proc_macro2::TokenStream> {
     let is_struct = matches!(ast.data, Data::Struct(_));
     ensure!(is_struct, &ast, "expected `struct`");
 
-    // Check that the struct is `#[repr(C)]`
+    // Check that the struct is `#[repr(C)]`.
     let repr_c = is_repr_c(&ast.attrs);
     ensure!(repr_c, &ast, "column struct must be `#[repr(C)]`");
 
     // The name of the struct.
     let name = &ast.ident;
 
-    // Safety: `u8` is guaranteed to have a `size_of` of 1.
+    // SAFETY: `u8` is guaranteed to have a `size_of` of 1.
     // https://doc.rust-lang.org/reference/type-layout.html#primitive-data-layout
     let num_columns = quote!(::core::mem::size_of::<#name<u8>>());
 
-    // Safety:
-    // A repr(C) struct generic over T has the same layout as an array [T; N] if:
+    // SAFETY: A struct generic over T has the same layout as an array [T; N] if:
+    // - The struct is `#[repr(C)]`.
     // - Every field of the struct is either T or a type with the same alignment as
     //   T and a size of `size_of::<T>() * M` where M <= N. i.e. every field is one
     //   of T, [T; M], or a type with the same layout as [T; M].

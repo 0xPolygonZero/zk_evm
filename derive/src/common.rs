@@ -9,7 +9,7 @@ macro_rules! span_err {
 }
 pub(crate) use span_err;
 
-/// Checks the condition and returns early with the given error message if
+/// Checks the condition and returns early with a prefixed error message if
 /// false.
 macro_rules! ensure {
     ($cond:expr, $ast:expr, $msg:literal $(,)?) => {
