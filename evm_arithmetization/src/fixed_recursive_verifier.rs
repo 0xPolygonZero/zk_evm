@@ -72,9 +72,6 @@ where
     /// The aggregation circuit, which verifies two proofs that can either be
     /// root or aggregation proofs.
     pub aggregation: AggregationCircuitData<F, C, D>,
-    /// The two-to-one aggregation circuit, which verifies two unrelated
-    /// aggregation proofs.
-    pub two_to_one_aggregation: TwoToOneAggCircuitData<F, C, D>,
     /// The block circuit, which verifies an aggregation root proof and an
     /// optional previous block proof.
     pub block: BlockCircuitData<F, C, D>,
@@ -525,11 +522,6 @@ where
             gate_serializer,
             generator_serializer,
         )?;
-        let two_to_one_aggregation = TwoToOneAggCircuitData::from_buffer(
-            &mut buffer,
-            gate_serializer,
-            generator_serializer,
-        )?;
         let block =
             BlockCircuitData::from_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         let two_to_one_block = TwoToOneBlockCircuitData::from_buffer(
@@ -571,7 +563,6 @@ where
         Ok(Self {
             root,
             aggregation,
-            two_to_one_aggregation,
             block,
             two_to_one_block,
             by_table,
@@ -662,7 +653,6 @@ where
         ];
         let root = Self::create_root_circuit(&by_table, stark_config);
         let aggregation = Self::create_aggregation_circuit(&root);
-        let two_to_one_aggregation = Self::create_two_to_one_agg_circuit(&aggregation);
         let block = Self::create_block_circuit(&aggregation);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block);
         debug_assert_eq!(&block.circuit.common, &two_to_one_block.circuit.common);
@@ -670,7 +660,6 @@ where
         Self {
             root,
             aggregation,
-            two_to_one_aggregation,
             block,
             two_to_one_block,
             by_table,
@@ -1447,49 +1436,6 @@ where
         )
     }
 
-    /// Create a two-to-one aggregation proof, combining two unrelated
-    /// aggregation proofs into a single one.
-    ///
-    /// # Arguments
-    ///
-    /// - `proof0`: the first aggregation proof.
-    /// - `proof1`: the second aggregation proof.
-    /// - `pv0`: the public values associated to first proof.
-    /// - `pv1`: the public values associated to second proof.
-    ///
-    /// # Outputs
-    ///
-    /// This method outputs a [`ProofWithPublicInputs<F, C, D>`].
-    pub fn prove_two_to_one_aggregation(
-        &self,
-        proof0: &ProofWithPublicInputs<F, C, D>,
-        proof1: &ProofWithPublicInputs<F, C, D>,
-        pv0: PublicValues,
-        pv1: PublicValues,
-    ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
-        let mut inputs = PartialWitness::new();
-
-        inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.proof0, proof0);
-        inputs.set_proof_with_pis_target(&self.two_to_one_aggregation.proof1, proof1);
-
-        set_public_value_targets(&mut inputs, &self.two_to_one_aggregation.pv0, &pv0).map_err(
-            |_| anyhow::Error::msg("Invalid conversion when setting public values targets."),
-        )?;
-        set_public_value_targets(&mut inputs, &self.two_to_one_aggregation.pv1, &pv1).map_err(
-            |_| anyhow::Error::msg("Invalid conversion when setting public values targets."),
-        )?;
-
-        let proof = self.two_to_one_aggregation.circuit.prove(inputs)?;
-        Ok(proof)
-    }
-
-    pub fn verify_two_to_one_aggregation(
-        &self,
-        proof: &ProofWithPublicInputs<F, C, D>,
-    ) -> anyhow::Result<()> {
-        self.two_to_one_aggregation.circuit.verify(proof.clone())
-    }
-
     /// Create a final block proof, once all transactions of a given block have
     /// been combined into a single aggregation proof.
     ///
@@ -1658,29 +1604,6 @@ where
             &self.block.circuit.verifier_only,
             &self.block.circuit.common,
         )
-    }
-
-    fn create_two_to_one_agg_circuit(
-        agg: &AggregationCircuitData<F, C, D>,
-    ) -> TwoToOneAggCircuitData<F, C, D> {
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
-        let pv0 = add_virtual_public_values(&mut builder);
-        let pv1 = add_virtual_public_values(&mut builder);
-        let agg_proof0 = builder.add_virtual_proof_with_pis(&agg.circuit.common);
-        let agg_proof1 = builder.add_virtual_proof_with_pis(&agg.circuit.common);
-        let agg_verifier_data = builder.constant_verifier_data(&agg.circuit.verifier_only);
-        builder.verify_proof::<C>(&agg_proof0, &agg_verifier_data, &agg.circuit.common);
-        builder.verify_proof::<C>(&agg_proof1, &agg_verifier_data, &agg.circuit.common);
-
-        let circuit = builder.build::<C>();
-
-        TwoToOneAggCircuitData {
-            circuit,
-            proof0: agg_proof0,
-            proof1: agg_proof1,
-            pv0,
-            pv1,
-        }
     }
 
     /// Aggregates two block or aggregation proofs in a manner similar to a
