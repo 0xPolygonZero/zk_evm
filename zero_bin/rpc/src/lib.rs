@@ -128,7 +128,6 @@ where
     collected_hashes
         .into_iter()
         .flatten()
-        .filter(|(_, block_num)| block_num.is_some())
         .for_each(|(hash, block_num)| {
             if let (Some(hash), Some(block_num)) = (hash, block_num) {
                 // Most recent previous block hash is expected at the end of the array
