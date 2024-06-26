@@ -58,6 +58,12 @@ no_more_accounts:
 global insert_all_slots:
     DUP2
     MLOAD_GENERAL
+    // stack: next_addr, addr, storage_ptr_ptr, root_ptr, retdest
+    DUP1
+    DUP3
+    GT // If addr > next_addr it means was deleted
+    // addr > next_addr, next_addr, addr, storage_ptr_ptr, root_ptr, retdest
+    %jumpi(skip_deleted_slot)
     DUP2
     EQ // Check that the node addres is the same as `addr`
     %jumpi(insert_next_slot)
@@ -65,6 +71,14 @@ global insert_all_slots:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     %stack (addr, storage_ptr_ptr, root_ptr, retdest) -> (retdest, storage_ptr_ptr, root_ptr)
     JUMP
+
+skip_deleted_slot:
+    POP
+    SWAP1
+    %next_slot
+    SWAP1
+    %jump(insert_all_slots)
+
 insert_next_slot:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     DUP2
