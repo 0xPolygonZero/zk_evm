@@ -64,9 +64,10 @@ global deduct_eth_insufficient_balance:
 // Post stack: (empty)
 global add_eth:
     // stack: addr, amount, retdest
+    DUP1 %insert_touched_addresses
+    // stack: addr, amount, retdest
     DUP2 ISZERO %jumpi(add_eth_zero_amount)
     // stack: addr, amount, retdest
-    DUP1 %insert_touched_addresses
     DUP1 %mpt_read_state_trie
     // stack: account_ptr, addr, amount, retdest
     DUP1 ISZERO %jumpi(add_eth_new_account) // If the account pointer is null, we need to create the account.
