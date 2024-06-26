@@ -111,8 +111,22 @@ global sys_selfdestruct:
 
 sys_selfdestruct_journal_add:
     // stack: address, recipient, balance, kexit_info
-    %journal_add_account_destroyed
+    DUP3 ISZERO
 
+    // If balance is 0, we didn't perform any transfer, hence shouldn't
+    // add a new journal entry.
+
+    // stack: balance=0, address, recipient, balance, kexit_info
+    %jumpi(skip_journal_entry)
+    // stack: address, recipient, balance, kexit_info
+    %journal_add_account_destroyed
+    %jump(sys_selfdestruct_exit)
+
+skip_journal_entry:
+    // stack: address, recipient, balance, kexit_info
+    %pop3
+
+sys_selfdestruct_exit:
     // stack: kexit_info
     %leftover_gas
     // stack: leftover_gas
