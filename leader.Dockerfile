@@ -11,6 +11,7 @@ RUN sed -i 's#\[workspace\]#\[workspace\]\nmembers = \["zero_bin\/leader", "zero
 COPY Cargo.lock .
 COPY ./rust-toolchain.toml ./
 RUN cat ./Cargo.toml
+COPY ./.env ./.env
 
 COPY proof_gen proof_gen
 COPY mpt_trie mpt_trie
@@ -39,10 +40,17 @@ RUN \
 ENV RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 RUN cargo build --release --bin leader
+RUN cargo build --release --bin rpc
 
-RUN ls -la ./target/release
 
 FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y ca-certificates libjemalloc2
 COPY --from=builder ./target/release/leader /usr/local/bin/leader
+COPY --from=builder ./target/release/rpc /usr/local/bin/rpc
+COPY --from=builder ./.env /.env
+
+# Workaround for the issue with the Cargo.lock search path
+# Related to issue https://github.com/0xPolygonZero/zk_evm/issues/311
+RUN mkdir -p zero_bin/leader
+
 ENTRYPOINT ["/usr/local/bin/leader"]
