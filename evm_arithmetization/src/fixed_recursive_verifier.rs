@@ -155,15 +155,6 @@ where
     }
 }
 
-impl<F, C, const D: usize> HasCircuitData<F,C,D> for RootCircuitData<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
-    fn circuit_data(&self) -> &CircuitData<F, C, D> {
-        &self.circuit
-    }
-}
 /// Data for the aggregation circuit, which is used to compress two proofs into
 /// one. Each inner proof can be either an EVM root proof or another aggregation
 /// proof.
@@ -340,17 +331,6 @@ where
     dummy_pis: Vec<Target>,
     cyclic_vk: VerifierCircuitTarget,
 }
-
-impl<F, C, const D: usize> HasCircuitData<F,C,D> for BlockCircuitData<F, C, D>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
- {
-    fn circuit_data(&self) -> &CircuitData<F, C, D> {
-        &self.circuit
-    }
- }
-
 
 impl<F, C, const D: usize> TwoToOneBlockCircuitData<F, C, D>
 where
@@ -770,8 +750,8 @@ where
         let cyclic_vk = builder.add_verifier_data_public_inputs();
         #[cfg(debug_assertions)]
         let count_public_inputs = builder.num_public_inputs();
-        let lhs = Self::add_agg_child(&mut builder, root);
-        let rhs = Self::add_agg_child(&mut builder, root);
+        let lhs = Self::add_agg_child(&mut builder, &root.circuit);
+        let rhs = Self::add_agg_child(&mut builder, &root.circuit);
 
         let lhs_public_values = lhs.public_values(&mut builder);
         let rhs_public_values = rhs.public_values(&mut builder);
@@ -882,30 +862,33 @@ where
     /// # Arguments
     ///
     /// - `builder`: The circuit builder object.
-    /// - `block_circuit_data`: Circuit data describing the blocks that can be
-    ///   aggregated.
+    /// - `base_circuit`: Circuit data describing the circuit of the base proof.
     ///
     /// # Outputs
     ///
     /// Returns a [`TwoToOneBlockChildTarget<D>`] object.
-    fn add_agg_child<T: HasCircuitData<F, C, D>>(
+    fn add_agg_child(
         builder: &mut CircuitBuilder<F, D>,
-        root: &T,
+        base_circuit: &CircuitData<F, C, D>,
     ) -> AggregationChildTarget<D> {
-        let common = &root.circuit_data().common;
-        let root_vk = builder.constant_verifier_data(&root.circuit_data().verifier_only);
+        let common = &base_circuit.common;
+        let base_vk = builder.constant_verifier_data(&base_circuit.verifier_only);
         let is_agg = builder.add_virtual_bool_target_safe();
         let agg_proof = builder.add_virtual_proof_with_pis(common);
-        let evm_proof = builder.add_virtual_proof_with_pis(common);
+        let base_proof = builder.add_virtual_proof_with_pis(common);
         builder
             .conditionally_verify_cyclic_proof::<C>(
-                is_agg, &agg_proof, &evm_proof, &root_vk, common,
+                is_agg,
+                &agg_proof,
+                &base_proof,
+                &base_vk,
+                common,
             )
             .expect("Failed to build cyclic recursion circuit");
         AggregationChildTarget {
             is_agg,
             agg_proof,
-            base_proof: evm_proof,
+            base_proof,
         }
     }
 
@@ -1036,8 +1019,8 @@ where
         #[cfg(debug_assertions)]
         let count_public_inputs = builder.num_public_inputs();
 
-        let lhs = Self::add_agg_child(&mut builder, block_circuit);
-        let rhs = Self::add_agg_child(&mut builder, block_circuit);
+        let lhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
+        let rhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
 
         let lhs_public_values = lhs.public_values_vec(&mut builder);
         let rhs_public_values = rhs.public_values_vec(&mut builder);
@@ -2036,12 +2019,4 @@ fn shrinking_config() -> CircuitConfig {
         num_routed_wires: 40,
         ..CircuitConfig::standard_recursion_config()
     }
-}
-
-trait HasCircuitData<F, C, const D: usize>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-{
-    fn circuit_data(&self) -> &CircuitData<F, C, D>;
 }
