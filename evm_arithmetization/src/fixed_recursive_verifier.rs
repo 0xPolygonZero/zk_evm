@@ -12,7 +12,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{HashOut, HashOutTarget, RichField};
+use plonky2::hash::hash_types::{HashOut, HashOutTarget, RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -1009,9 +1009,28 @@ where
         let mut builder = CircuitBuilder::<F, D>::new(block_circuit.circuit.common.config.clone());
 
         let mut dummy_pis = vec![];
-        // The magic numbers were derived from the assertion at end of this function.
-        while builder.num_public_inputs()
-            < block_circuit.circuit.common.num_public_inputs - (2337 - 2269)
+        // The magic numbers were derived from the assertion at end of this function. 2337-2269 = 68
+        let magic_number = block_circuit.circuit.common.num_public_inputs - (2337 - 2269);
+
+        // while builder.num_public_inputs() < block_circuit.circuit.common.num_public_inputs - (2337 - 2269){}
+
+
+        dbg!(block_circuit.circuit.verifier_only.constants_sigmas_cap.len());
+        dbg!(<C::Hasher>::HASH_SIZE);
+        dbg!(NUM_HASH_OUT_ELTS);
+        dbg!(builder.num_public_inputs());
+        dbg!(block_circuit.circuit.common.num_public_inputs );
+        dbg!(builder.config.fri_config.cap_height);
+        dbg!(builder.config.fri_config.num_cap_elements());
+        dbg!(1<<builder.config.fri_config.cap_height);
+        dbg!(block_circuit.circuit.verifier_only.circuit_digest.elements.len() );
+        dbg!(block_circuit.circuit.common.config.fri_config.cap_height);
+
+        let mut padding = block_circuit.circuit.verifier_only.circuit_digest.elements.len() + (1<< block_circuit.circuit.common.config.fri_config.cap_height)*(NUM_HASH_OUT_ELTS);
+        dbg!(padding);
+
+
+        for _ in 0..padding
         {
             let target = builder.add_virtual_public_input();
             dummy_pis.push(target);
