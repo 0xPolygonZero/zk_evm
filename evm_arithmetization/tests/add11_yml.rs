@@ -165,8 +165,10 @@ fn add11_yml() -> anyhow::Result<()> {
         },
     };
 
-    let bytes =
-        std::fs::read("/Users/agonzalez/Downloads/variedContext_d10g0v0_Shanghai.json").unwrap();
+    let bytes = std::fs::read(
+        "/Users/agonzalez/Downloads/vitalikTransactionTestParis_d0g0v0_Shanghai.json",
+    )
+    .unwrap();
     let inputs = serde_json::from_slice(&bytes).unwrap();
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);
