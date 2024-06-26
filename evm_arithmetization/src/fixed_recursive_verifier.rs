@@ -1014,7 +1014,6 @@ where
 
         // while builder.num_public_inputs() < block_circuit.circuit.common.num_public_inputs - (2337 - 2269){}
 
-
         dbg!(block_circuit.circuit.verifier_only.constants_sigmas_cap.len());
         dbg!(<C::Hasher>::HASH_SIZE);
         dbg!(NUM_HASH_OUT_ELTS);
@@ -1026,15 +1025,20 @@ where
         dbg!(block_circuit.circuit.verifier_only.circuit_digest.elements.len() );
         dbg!(block_circuit.circuit.common.config.fri_config.cap_height);
 
-        let mut padding = block_circuit.circuit.verifier_only.circuit_digest.elements.len() + (1<< block_circuit.circuit.common.config.fri_config.cap_height)*(NUM_HASH_OUT_ELTS);
-        dbg!(padding);
+        // The number of PIS that will be added after padding by `builder.add_verifier_data_public_inputs()`.
+        let verification_key_len = block_circuit.circuit.verifier_only.circuit_digest.elements.len() + (1<< block_circuit.circuit.common.config.fri_config.cap_height)*(NUM_HASH_OUT_ELTS);
 
+        // We need to pad by PIS to match the count of PIS of the `base_proof`.
+        let mut padding = block_circuit.circuit.common.num_public_inputs;
+        padding -= verification_key_len;
+        padding -= builder.num_public_inputs();
 
         for _ in 0..padding
         {
             let target = builder.add_virtual_public_input();
             dummy_pis.push(target);
         }
+        assert!(false);
 
         let cyclic_vk = builder.add_verifier_data_public_inputs();
         // Avoid accidentally adding public inputs after calling
