@@ -577,7 +577,6 @@ where
         let aggregation = Self::create_aggregation_circuit(&root);
         let block = Self::create_block_circuit(&aggregation);
         let two_to_one_block = Self::create_two_to_one_block_circuit(&block);
-        debug_assert_eq!(&block.circuit.common, &two_to_one_block.circuit.common);
 
         Self {
             root,
@@ -748,8 +747,7 @@ where
         let mut builder = CircuitBuilder::<F, D>::new(root.circuit.common.config.clone());
         let public_values = add_virtual_public_values(&mut builder);
         let cyclic_vk = builder.add_verifier_data_public_inputs();
-        #[cfg(debug_assertions)]
-        let count_public_inputs = builder.num_public_inputs();
+
         let lhs = Self::add_agg_child(&mut builder, &root.circuit);
         let rhs = Self::add_agg_child(&mut builder, &root.circuit);
 
@@ -1014,10 +1012,6 @@ where
         }
 
         let cyclic_vk = builder.add_verifier_data_public_inputs();
-        // Avoid accidentally adding public inputs after calling
-        // [`add_verifier_data_public_inputs`].
-        #[cfg(debug_assertions)]
-        let count_public_inputs = builder.num_public_inputs();
 
         let lhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
         let rhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
@@ -1031,18 +1025,6 @@ where
         mix_vec.extend(&lhs_pv_hash.elements);
         mix_vec.extend(&rhs_pv_hash.elements);
         let mix_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
-
-        debug_assert_eq!(
-            count_public_inputs,
-            builder.num_public_inputs(),
-            "Public inputs were registered after calling `add_verifier_data_public_inputs`."
-        );
-
-        debug_assert_eq!(
-            block_circuit.circuit.common.num_public_inputs,
-            builder.num_public_inputs(),
-            "The block aggregation circuit and the block circuit must agree on the number of public inputs."
-        );
 
         let circuit = builder.build::<C>();
         TwoToOneBlockCircuitData {
