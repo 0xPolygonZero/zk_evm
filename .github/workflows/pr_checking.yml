@@ -16,7 +16,7 @@ jobs:
       github.event.pull_request.author_association != 'MEMBER' &&
       (
         contains(fromJSON(secrets.RESTRICTED_KEYWORDS), github.event.pull_request.title) ||
-        contains(fromJSON(secrets.RESTRICTED_KEYWORDS), github.event.pull_request.description
+        contains(fromJSON(secrets.RESTRICTED_KEYWORDS), github.event.pull_request.description)
       ) }}
     steps:
       - run: gh pr close
