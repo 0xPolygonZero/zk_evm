@@ -176,8 +176,6 @@ fn get_test_block_proof(
     all_stark: &AllStark<GoldilocksField, 2>,
     config: &StarkConfig,
 ) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
-    log::info!("Stage 0");
-    log::info!("Generating proof of block {}", timestamp);
     let inputs0 = empty_transfer(timestamp)?;
     let inputs = inputs0.clone();
     let dummy0 = GenerationInputs {
@@ -202,9 +200,6 @@ fn get_test_block_proof(
         block_metadata: inputs.block_metadata.clone(),
         block_hashes: inputs.block_hashes.clone(),
     };
-    log::info!("{:#?}", inputs0);
-    log::info!("{:#?}", dummy0);
-    log::info!("Stage 1");
 
     let (root_proof0, pv0) = all_circuits.prove_root(all_stark, config, inputs0, timing, None)?;
     all_circuits.verify_root(root_proof0.clone())?;
@@ -212,7 +207,6 @@ fn get_test_block_proof(
         all_circuits.prove_root(all_stark, config, dummy0, timing, None)?;
     all_circuits.verify_root(dummy_proof0.clone())?;
 
-    log::info!("Stage 2");
     let (agg_proof0, pv0) = all_circuits.prove_aggregation(
         false,
         &root_proof0,
@@ -222,10 +216,8 @@ fn get_test_block_proof(
         dummy_pv0,
     )?;
 
-    log::info!("Stage 3:  Verify aggregation");
     all_circuits.verify_aggregation(&agg_proof0)?;
 
-    log::info!("Stage 4:  Check public values");
     // Test retrieved public values from the proof public inputs.
     let retrieved_public_values0 = PublicValues::from_public_inputs(&agg_proof0.public_inputs);
     assert_eq!(retrieved_public_values0, pv0);
@@ -234,7 +226,6 @@ fn get_test_block_proof(
         pv0.extra_block_data.checkpoint_state_trie_root
     );
 
-    log::info!("Stage 5:  Prove Block");
     let (block_proof0, block_public_values) = all_circuits.prove_block(
         None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
         &agg_proof0,
