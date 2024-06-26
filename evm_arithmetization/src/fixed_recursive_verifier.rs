@@ -1700,49 +1700,48 @@ where
         check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
     }
 
-
-    /// Used in the case of a non aggregation transaction child.
-    /// Creates dummy public inputs to set the cyclic vk to the aggregation
-    /// circuit values, so that both aggregation and non-aggregation parts
-    /// of the child share the same vk. This is possible because only the
-    /// aggregation inner circuit is checked against its vk.
+    /// Creates dummy public inputs with correct verifier key at the end.  Used
+    /// by [`set_dummy_if_necessary`].  It cyclic vk to the aggregation circuit
+    /// values, so that both aggregation and non-aggregation parts of the child
+    /// share the same vk. This is possible because only the aggregation inner
+    /// circuit is checked against its vk.
     fn set_dummy_proof_with_cyclic_vk_pis(
         circuit_agg: &CircuitData<F, C, D>,
         witness: &mut PartialWitness<F>,
-        agg_proof: &ProofWithPublicInputsTarget<D>,
-        proof: &ProofWithPublicInputs<F, C, D>,
+        agg_proof_with_pis: &ProofWithPublicInputsTarget<D>,
+        base_proof_with_pis: &ProofWithPublicInputs<F, C, D>,
     ) {
         let ProofWithPublicInputs {
-            proof,
-            public_inputs,
-        } = proof;
+            proof: base_proof,
+            public_inputs: base_public_inputs,
+        } = base_proof_with_pis;
         let ProofWithPublicInputsTarget {
-            proof: proof_targets,
-            public_inputs: pi_targets,
-        } = agg_proof;
+            proof: agg_proof_targets,
+            public_inputs: agg_pi_targets,
+        } = agg_proof_with_pis;
 
         // The proof remains the same.
-        witness.set_proof_target(proof_targets, proof);
+        witness.set_proof_target(agg_proof_targets, base_proof);
 
-        let num_pis = circuit_agg.common.num_public_inputs;
-        let mut dummy_pis = vec![F::ZERO; num_pis];
         let cyclic_verifying_data = &circuit_agg.verifier_only;
         let mut cyclic_vk = cyclic_verifying_data.circuit_digest.to_vec();
         cyclic_vk.append(&mut cyclic_verifying_data.constants_sigmas_cap.flatten());
 
-        let cyclic_vk_len = cyclic_vk.len();
-        for i in 0..cyclic_vk_len {
-            dummy_pis[num_pis - cyclic_vk_len + i] = cyclic_vk[i];
-        }
+        let mut dummy_pis = vec![F::ZERO; circuit_agg.common.num_public_inputs - cyclic_vk.len()];
+        dummy_pis.append(&mut cyclic_vk);
 
         // Set dummy public inputs.
-        for (&pi_t, pi) in pi_targets.iter().zip_eq(dummy_pis) {
+        for (&pi_t, pi) in agg_pi_targets.iter().zip_eq(dummy_pis) {
             witness.set_target(pi_t, pi);
         }
     }
 
-    /// If the lhs is not an aggregation, we set the cyclic vk to a dummy value,
-    /// so that it corresponds to the aggregation cyclic vk.
+    /// If the [`AggregationChild`] is a base proof and not an aggregation
+    /// proof, we need to manually set the public inputs vector of the otherwise
+    /// inert `agg_proof`, so that they correspond to the `cyclic_vk` of the
+    /// aggregation circuit.  The cyclic prover expects to find the `cyclic_vk`
+    /// targets in the very end of the public inputs vector, and so it does not
+    /// matter what the preceding values are.
     fn set_dummy_if_necessary(
         agg_child: &AggregationChildTarget<D>,
         is_agg: bool,
