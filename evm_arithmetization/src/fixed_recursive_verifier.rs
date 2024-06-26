@@ -374,9 +374,6 @@ where
     }
 }
 
-
-
-
 impl<F, C, const D: usize> AllRecursiveCircuits<F, C, D>
 where
     F: RichField + Extendable<D>,
