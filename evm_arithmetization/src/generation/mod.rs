@@ -235,6 +235,19 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         "Trace lengths (before padding): {:?}",
         state.traces.get_lengths()
     );
+
+    let final_state_trie: HashedPartialTrie = get_state_trie(
+        &state.memory,
+        u256_to_usize(
+            state
+                .memory
+                .read_global_metadata(GlobalMetadata::StateTrieRoot),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    log::debug!("Final state trie: {:?}", final_state_trie);
+
     log::debug!(
         "Final accounts linked list: {:?}",
         state.get_accounts_linked_list()
