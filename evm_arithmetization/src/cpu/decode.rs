@@ -148,6 +148,13 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
             .sum()
     };
 
+    // Manually check that the fp254 opertions are kernel-only instructions.
+    yield_constr.constraint((P::ONES - kernel_mode) * lv.op.fp254_op);
+
+    // Manually check that SUBMOD is a kernel-only instruction. SUBMOD is
+    // differentiated by its second bit set to 1.
+    yield_constr.constraint(lv.op.ternary_op * lv.opcode_bits[1] * (P::ONES - kernel_mode));
+
     // Manually check lv.op.m_op_constr
     let opcode = opcode_high_bits(8);
     yield_constr.constraint((P::ONES - kernel_mode) * lv.op.m_op_general);
@@ -304,14 +311,25 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         yield_constr.constraint(builder, constr);
     }
 
+    let one_extension = builder.constant_extension(F::Extension::ONE);
+    let is_not_kernel_mode = builder.sub_extension(one_extension, kernel_mode);
+
+    // Manually check that the fp254 opertions are kernel-only instructions.
+    let constr = builder.mul_extension(is_not_kernel_mode, lv.op.fp254_op);
+    yield_constr.constraint(builder, constr);
+
+    // Manually check that SUBMOD is a kernel-only instruction. SUBMOD is
+    // differentiated by its second bit set to 1.
+    let submod_op = builder.mul_extension(lv.op.ternary_op, lv.opcode_bits[1]);
+    let constr = builder.mul_extension(submod_op, is_not_kernel_mode);
+    yield_constr.constraint(builder, constr);
+
     // Manually check lv.op.m_op_constr
     let opcode = opcode_high_bits_circuit(builder, lv, 8);
 
     let mload_opcode = builder.constant_extension(F::Extension::from_canonical_usize(0xfb_usize));
     let mstore_opcode = builder.constant_extension(F::Extension::from_canonical_usize(0xfc_usize));
 
-    let one_extension = builder.constant_extension(F::Extension::ONE);
-    let is_not_kernel_mode = builder.sub_extension(one_extension, kernel_mode);
     let constr = builder.mul_extension(is_not_kernel_mode, lv.op.m_op_general);
     yield_constr.constraint(builder, constr);
 
