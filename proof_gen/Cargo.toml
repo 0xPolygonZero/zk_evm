@@ -12,9 +12,9 @@ keywords.workspace = true
 [dependencies]
 ethereum-types = { workspace = true }
 log = { workspace = true }
-paste = "1.0.14"
+paste = { workspace = true }
 plonky2 = { workspace = true }
 serde = { workspace = true }
 
 # Local dependencies
-evm_arithmetization = { version = "0.2.0", path = "../evm_arithmetization" }
+evm_arithmetization = { workspace = true }

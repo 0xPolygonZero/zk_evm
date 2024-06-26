@@ -1,0 +1,23 @@
+[package]
+name = "ops"
+version = "0.1.0"
+authors = ["Polygon Zero <zbrown@polygon.technology>"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+paladin-core = { workspace = true }
+serde = { workspace = true }
+evm_arithmetization = { workspace = true }
+proof_gen = { workspace = true }
+tracing = { workspace = true }
+keccak-hash = { workspace = true }
+
+zero_bin_common ={ path = "../common" }
+
+[features]
+default = []
+test_only = []

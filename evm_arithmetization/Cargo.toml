@@ -2,7 +2,10 @@
 name = "evm_arithmetization"
 description = "Implementation of STARKs for the Ethereum Virtual Machine"
 version = "0.2.0"
-authors = ["Daniel Lubarov <daniel@lubarov.com>", "William Borgeaud <williamborgeaud@gmail.com>"]
+authors = [
+    "Daniel Lubarov <daniel@lubarov.com>",
+    "William Borgeaud <williamborgeaud@gmail.com>",
+]
 readme = "README.md"
 categories = ["cryptography"]
 edition.workspace = true
@@ -12,45 +15,42 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
-anyhow = "1.0.40"
+anyhow = { workspace = true }
 bytes = { workspace = true }
 env_logger = { workspace = true }
 ethereum-types = { workspace = true }
 hex = { workspace = true, optional = true }
 hex-literal = { workspace = true }
-itertools = "0.11.0"
+itertools = { workspace = true }
 keccak-hash = { workspace = true }
 log = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }
 num = { workspace = true }
-num-bigint = "0.4.3"
-once_cell = "1.13.0"
-pest = "2.1.3"
-pest_derive = "2.1.0"
+num-bigint = { workspace = true }
+once_cell = { workspace = true }
+pest = { workspace = true }
+pest_derive = { workspace = true }
 plonky2 = { workspace = true }
 plonky2_util = { workspace = true }
 starky = { workspace = true }
 rand = { workspace = true }
-rand_chacha = "0.3.1"
+rand_chacha = { workspace = true }
 rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-static_assertions = "1.1.0"
-hashbrown = { version = "0.14.0" }
-tiny-keccak = "2.0.2"
+static_assertions = { workspace = true }
+hashbrown = { workspace = true }
+tiny-keccak = { workspace = true }
 serde_json = { workspace = true }
 
 # Local dependencies
-mpt_trie = { version = "0.3.0", path = "../mpt_trie" }
-
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = "0.5.0"
+mpt_trie = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = { workspace = true }
 hex = { workspace = true }
-ripemd = "0.1.3"
-sha2 = "0.10.6"
+ripemd = { workspace = true }
+sha2 = { workspace = true }
 
 [features]
 default = ["parallel"]
@@ -58,7 +58,7 @@ asmtools = ["hex"]
 parallel = [
     "plonky2/parallel",
     "plonky2_maybe_rayon/parallel",
-    "starky/parallel"
+    "starky/parallel",
 ]
 
 [[bin]]
@@ -68,6 +68,11 @@ required-features = ["asmtools"]
 [[bench]]
 name = "stack_manipulation"
 harness = false
+
+[[bench]]
+name = "fibonacci_25m_gas"
+harness = false
+
 
 # Display math equations properly in documentation
 [package.metadata.docs.rs]
