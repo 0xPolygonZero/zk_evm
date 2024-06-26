@@ -111,10 +111,10 @@ global sys_selfdestruct:
 
 sys_selfdestruct_journal_add:
     // stack: address, recipient, balance, kexit_info
-    DUP3 ISZERO
+    DUP2 %is_non_existent
 
-    // If balance is 0, we didn't perform any transfer, hence shouldn't
-    // add a new journal entry.
+    // If balance is 0, we didn't perform any transfer. Hence, if the recipient
+    // didn't exist before we shouldn't add a new journal entry.
 
     // stack: balance=0, address, recipient, balance, kexit_info
     %jumpi(skip_journal_entry)
