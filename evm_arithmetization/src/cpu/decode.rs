@@ -148,16 +148,16 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
             .sum()
     };
 
-    // Manually check that the fp254 opertions are kernel-only instructions.
-    yield_constr.constraint((P::ONES - kernel_mode) * lv.op.fp254_op);
+    // Manually check that the fp254 operations are kernel-only instructions.
+    yield_constr.constraint((kernel_mode - P::ONES) * lv.op.fp254_op);
 
     // Manually check that SUBMOD is a kernel-only instruction. SUBMOD is
     // differentiated by its second bit set to 1.
-    yield_constr.constraint(lv.op.ternary_op * lv.opcode_bits[1] * (P::ONES - kernel_mode));
+    yield_constr.constraint(lv.op.ternary_op * lv.opcode_bits[1] * (kernel_mode - P::ONES));
 
     // Manually check lv.op.m_op_constr
     let opcode = opcode_high_bits(8);
-    yield_constr.constraint((P::ONES - kernel_mode) * lv.op.m_op_general);
+    yield_constr.constraint((kernel_mode - P::ONES) * lv.op.m_op_general);
 
     let m_op_constr = (opcode - P::Scalar::from_canonical_usize(0xfb_usize))
         * (opcode - P::Scalar::from_canonical_usize(0xfc_usize))
@@ -168,7 +168,7 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
     // KECCAK_GENERAL is a kernel-only instruction, but not JUMPDEST.
     // JUMPDEST is differentiated from KECCAK_GENERAL by its second bit set to 1.
     yield_constr.constraint(
-        (P::ONES - kernel_mode) * lv.op.jumpdest_keccak_general * (P::ONES - lv.opcode_bits[1]),
+        (kernel_mode - P::ONES) * lv.op.jumpdest_keccak_general * (P::ONES - lv.opcode_bits[1]),
     );
 
     // Check the JUMPDEST and KERNEL_GENERAL opcodes.
@@ -197,7 +197,7 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
 
     // Manually check lv.op.m_op_32bytes.
     // Both are kernel-only.
-    yield_constr.constraint((P::ONES - kernel_mode) * lv.op.m_op_32bytes);
+    yield_constr.constraint((kernel_mode - P::ONES) * lv.op.m_op_32bytes);
 
     // Check the MSTORE_32BYTES and MLOAD-32BYTES opcodes.
     let opcode_high_three = opcode_high_bits(3);
@@ -213,7 +213,7 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
         * lv.op.push_prover_input;
     yield_constr.constraint(push_prover_input_constr);
     let prover_input_constr =
-        lv.op.push_prover_input * (lv.opcode_bits[5] - P::ONES) * (P::ONES - kernel_mode);
+        lv.op.push_prover_input * (lv.opcode_bits[5] - P::ONES) * (kernel_mode - P::ONES);
     yield_constr.constraint(prover_input_constr);
 }
 
@@ -311,17 +311,14 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         yield_constr.constraint(builder, constr);
     }
 
-    let one_extension = builder.constant_extension(F::Extension::ONE);
-    let is_not_kernel_mode = builder.sub_extension(one_extension, kernel_mode);
-
-    // Manually check that the fp254 opertions are kernel-only instructions.
-    let constr = builder.mul_extension(is_not_kernel_mode, lv.op.fp254_op);
+    // Manually check that the fp254 operations are kernel-only instructions.
+    let constr = builder.mul_sub_extension(kernel_mode, lv.op.fp254_op, lv.op.fp254_op);
     yield_constr.constraint(builder, constr);
 
     // Manually check that SUBMOD is a kernel-only instruction. SUBMOD is
     // differentiated by its second bit set to 1.
     let submod_op = builder.mul_extension(lv.op.ternary_op, lv.opcode_bits[1]);
-    let constr = builder.mul_extension(submod_op, is_not_kernel_mode);
+    let constr = builder.mul_sub_extension(kernel_mode, submod_op, submod_op);
     yield_constr.constraint(builder, constr);
 
     // Manually check lv.op.m_op_constr
@@ -330,7 +327,7 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     let mload_opcode = builder.constant_extension(F::Extension::from_canonical_usize(0xfb_usize));
     let mstore_opcode = builder.constant_extension(F::Extension::from_canonical_usize(0xfc_usize));
 
-    let constr = builder.mul_extension(is_not_kernel_mode, lv.op.m_op_general);
+    let constr = builder.mul_sub_extension(kernel_mode, lv.op.m_op_general, lv.op.m_op_general);
     yield_constr.constraint(builder, constr);
 
     let mload_constr = builder.sub_extension(opcode, mload_opcode);
@@ -352,7 +349,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     let mut kernel_general_filter = builder.sub_extension(one, lv.opcode_bits[1]);
     kernel_general_filter =
         builder.mul_extension(lv.op.jumpdest_keccak_general, kernel_general_filter);
-    let constr = builder.mul_extension(is_not_kernel_mode, kernel_general_filter);
+    let constr =
+        builder.mul_sub_extension(kernel_mode, kernel_general_filter, kernel_general_filter);
     yield_constr.constraint(builder, constr);
 
     // Check the JUMPDEST and KERNEL_GENERAL opcodes.
@@ -393,7 +391,7 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 
     // Manually check lv.op.m_op_32bytes.
     // Both are kernel-only.
-    let constr = builder.mul_extension(is_not_kernel_mode, lv.op.m_op_32bytes);
+    let constr = builder.mul_sub_extension(kernel_mode, lv.op.m_op_32bytes, lv.op.m_op_32bytes);
     yield_constr.constraint(builder, constr);
 
     // Check the MSTORE_32BYTES and MLOAD-32BYTES opcodes.
@@ -425,6 +423,6 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         lv.opcode_bits[5],
         lv.op.push_prover_input,
     );
-    let constr = builder.mul_extension(prover_input_filter, is_not_kernel_mode);
+    let constr = builder.mul_sub_extension(kernel_mode, prover_input_filter, prover_input_filter);
     yield_constr.constraint(builder, constr);
 }
