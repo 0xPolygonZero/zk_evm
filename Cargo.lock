@@ -2977,7 +2977,6 @@ dependencies = [
  "impl-serde",
  "keccak-hash 0.10.0",
  "log",
- "num",
  "num-traits",
  "parking_lot",
  "pretty_env_logger",
@@ -4550,15 +4549,11 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 name = "smt_trie"
 version = "0.1.0"
 dependencies = [
- "eth_trie",
  "ethereum-types",
  "hex-literal",
  "plonky2",
- "pretty_env_logger",
  "rand",
- "rlp-derive",
  "serde",
- "serde_json",
 ]
 
 [[package]]
