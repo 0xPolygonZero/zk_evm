@@ -1,13 +1,16 @@
-name: Docker_build_push
+name: Docker Build & Push
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, main]
   release:
     types: [created]
   # TODO to debug build and push, remove before merge
   pull_request:
     branches: [develop]
+
+
+
 
 env:
   REGISTRY: ghcr.io
@@ -16,7 +19,7 @@ env:
 
 jobs:
   docker:
-    name: Build and push leader and worker docker image to GitHub Container Registry
+    name: Build and push leader and worker docker images to GitHub Container Registry
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -42,7 +45,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: | 
-            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LEADER }}, enable=true
+            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LEADER }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -66,7 +69,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}, enable=false
+            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
