@@ -10,18 +10,14 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
-bytes = { workspace = true }
 ciborium = { workspace = true }
-ciborium-io = { workspace = true }
 enum-as-inner = { workspace = true }
 enumn = { workspace = true }
 ethereum-types = { workspace = true }
 hex = { workspace = true }
-hex-literal = { workspace = true }
 keccak-hash = { workspace = true }
 log = { workspace = true }
 rlp = { workspace = true }
-rlp-derive = { workspace = true }
 serde = { workspace = true }
 serde_with = { workspace = true }
 thiserror = { workspace = true }

@@ -12,7 +12,6 @@ categories.workspace = true
 paladin-core = { workspace = true }
 anyhow = { workspace = true }
 dotenvy = { workspace = true }
-tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }

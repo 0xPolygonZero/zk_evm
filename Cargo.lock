@@ -1024,7 +1024,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.11.0",
  "lazy_static",
  "lazycell",
  "log",
@@ -2670,15 +2670,6 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
-dependencies = [
- "either",
-]
-
-[[package]]
-name = "itertools"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
@@ -2845,7 +2836,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e310b3a6b5907f99202fcdb4960ff45b93735d7c7d96b760fcff8db2dc0e103d"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.5",
 ]
 
 [[package]]
@@ -3766,7 +3757,6 @@ dependencies = [
 name = "proof_gen"
 version = "0.2.0"
 dependencies = [
- "ethereum-types",
  "evm_arithmetization",
  "log",
  "paste",
@@ -4070,19 +4060,14 @@ dependencies = [
  "clap",
  "evm_arithmetization",
  "futures",
- "hex",
- "hex-literal",
- "itertools 0.13.0",
  "mpt_trie",
  "primitive-types 0.12.2",
  "prover",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
  "tower",
  "trace_decoder",
- "tracing",
  "tracing-subscriber",
  "url",
  "zero_bin_common",
@@ -4565,25 +4550,15 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 name = "smt_trie"
 version = "0.1.0"
 dependencies = [
- "bytes",
- "enum-as-inner",
  "eth_trie",
  "ethereum-types",
- "hex",
  "hex-literal",
- "keccak-hash 0.10.0",
- "log",
- "num-traits",
- "parking_lot",
  "plonky2",
  "pretty_env_logger",
  "rand",
- "rlp",
  "rlp-derive",
  "serde",
  "serde_json",
- "thiserror",
- "uint",
 ]
 
 [[package]]
@@ -5055,22 +5030,18 @@ checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 name = "trace_decoder"
 version = "0.4.0"
 dependencies = [
- "bytes",
  "ciborium",
- "ciborium-io",
  "criterion",
  "enum-as-inner",
  "enumn",
  "ethereum-types",
  "evm_arithmetization",
  "hex",
- "hex-literal",
  "keccak-hash 0.10.0",
  "log",
  "mpt_trie",
  "pretty_env_logger",
  "rlp",
- "rlp-derive",
  "serde",
  "serde_json",
  "serde_with",
@@ -5260,7 +5231,6 @@ dependencies = [
  "clap",
  "dotenvy",
  "proof_gen",
- "serde",
  "serde_json",
  "serde_path_to_error",
  "tracing",
@@ -5630,7 +5600,6 @@ dependencies = [
  "ops",
  "paladin-core",
  "tokio",
- "tracing",
  "tracing-subscriber",
  "zero_bin_common",
 ]
