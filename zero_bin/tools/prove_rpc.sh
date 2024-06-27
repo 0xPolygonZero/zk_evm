@@ -50,6 +50,10 @@ IGNORE_PREVIOUS_PROOFS=$5
 BACKOFF=${6:-0}
 RETRIES=${7:-0}
 
+# Sometimes we need to override file logging, e.g. in the CI run
+OUTPUT_TO_TERMINAL="${OUTPUT_TO_TERMINAL:-false}"
+# Only generate proof by default
+RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
 
 mkdir -p $PROOF_OUTPUT_DIR
 
@@ -75,7 +79,7 @@ fi
 
 # Define block interval
 if [ $START_BLOCK == $END_BLOCK ]; then
-      BLOCK_INTERVAL=$((16#${START_BLOCK#"0x"}))
+    BLOCK_INTERVAL=$START_BLOCK
 else
     BLOCK_INTERVAL=$START_BLOCK..=$END_BLOCK
 fi
@@ -87,38 +91,66 @@ fi
 if [[ $8 == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
-    cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" > $OUT_LOG_PATH 2>&1
-    if grep -q 'All proof witnesses have been generated successfully.' $OUT_LOG_PATH; then
-        echo -e "Success - Note this was just a test, not a proof"
-        # Remove the log on success if we don't want to keep it.
-        if [ $ALWAYS_WRITE_LOGS -ne 1 ]; then
-            rm $OUT_LOG_PATH
-        fi
-        exit
+    command='cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    if [ "$OUTPUT_TO_TERMINAL" = true ]; then
+        eval $command
+        retVal=$?
+        echo -e "Proof witness generation finished with result: $retVal"
+        exit $retVal
     else
-        echo "Failed to create proof witnesses. See ${OUT_LOG_PATH} for more details."
-        exit 1
+        eval $command > $OUT_LOG_PATH 2>&1
+        if grep -q 'All proof witnesses have been generated successfully.' $OUT_LOG_PATH; then
+            echo -e "Success - Note this was just a test, not a proof"
+            # Remove the log on success if we don't want to keep it.
+            if [ $ALWAYS_WRITE_LOGS -ne 1 ]; then
+                rm $OUT_LOG_PATH
+            fi
+            exit
+        else
+            echo "Failed to create proof witnesses. See ${OUT_LOG_PATH} for more details."
+            exit 1
+        fi
     fi
 else
     # normal run
     echo "Proving blocks ${BLOCK_INTERVAL} now... (Total: ${TOT_BLOCKS})"
-    cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" > $OUT_LOG_PATH 2>&1
-
-    retVal=$?
-    if [ $retVal -ne 0 ]; then
-        # Some error occurred.
-        echo "Block ${i} errored. See ${OUT_LOG_PATH} for more details."
-        exit $retVal
+    command='cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    if [ "$OUTPUT_TO_TERMINAL" = true ]; then
+        eval $command
+        echo -e "Proof generation finished with result: $?"
     else
-        # Remove the log on success if we don't want to keep it.
-        if [ $ALWAYS_WRITE_LOGS -ne 1 ]; then
-            rm $OUT_LOG_PATH
+        eval $command > $OUT_LOG_PATH 2>&1
+        retVal=$?
+        if [ $retVal -ne 0 ]; then
+            # Some error occurred.
+            echo "Block ${i} errored. See ${OUT_LOG_PATH} for more details."
+            exit $retVal
+        else
+            # Remove the log on success if we don't want to keep it.
+            if [ $ALWAYS_WRITE_LOGS -ne 1 ]; then
+                rm $OUT_LOG_PATH
+            fi
         fi
+        echo "Successfully generated ${TOT_BLOCKS} proofs!"
     fi
-
-    echo "Successfully generated ${TOT_BLOCKS} proofs!"
 fi
 
 
+# If we're running the verification, we'll do it here.
+if [ "$RUN_VERIFICATION" = true ]; then
+  echo "Running the verification"
 
+  proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
+  echo "Verifying the proof of the latest block in the interval:" $proof_file_name
+  echo [ > $PROOF_OUTPUT_DIR/proofs.json && cat $proof_file_name >> $PROOF_OUTPUT_DIR/proofs.json && echo ] >> $PROOF_OUTPUT_DIR/proofs.json
+  cargo r --release --bin verifier -- -f $PROOF_OUTPUT_DIR/proofs.json > $PROOF_OUTPUT_DIR/verify.out 2>&1
 
+  if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
+      echo "All proofs verified successfully!";
+  else
+      echo "there was an issue with proof verification";
+      exit 1
+  fi
+else
+  echo "Skipping verification..."
+fi
