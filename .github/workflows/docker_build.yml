@@ -24,4 +24,12 @@ jobs:
 
       - name: Run leader docker container
         run: |
-          docker run -it leader:${{ github.ref_name }} --help
+          docker run leader:${{ github.ref_name }} --help
+
+      - name: Build worker docker container
+        run: |
+          docker build --progress plain -t worker:${{ github.ref_name }} -f worker.Dockerfile .
+
+      - name: Run worker docker container
+        run: |
+          docker run worker:${{ github.ref_name }} --help

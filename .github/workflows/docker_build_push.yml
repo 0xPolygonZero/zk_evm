@@ -9,9 +9,6 @@ on:
   pull_request:
     branches: [develop]
 
-
-
-
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME_LEADER: ${{ github.repository }}-leader
