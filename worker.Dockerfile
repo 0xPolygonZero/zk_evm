@@ -35,3 +35,4 @@ FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y ca-certificates libjemalloc2
 COPY --from=builder ./target/release/worker /usr/local/bin/worker
 ENTRYPOINT ["/usr/local/bin/worker"]
+
