@@ -150,9 +150,6 @@ async fn main() -> Result<()> {
 fn load_dotenvy_vars_if_present() {
     match dotenv() {
         Ok(_) | Err(dotenvy::Error::Io(io::Error { .. })) => (),
-        Err(e) => warn!(
-            "Found local `.env` file but was unable to parse it! (err: {})",
-            e.to_string()
-        ),
+        Err(e) => warn!("Found local `.env` file but was unable to parse it! (err: {e})",),
     }
 }
