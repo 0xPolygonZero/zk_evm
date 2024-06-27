@@ -869,7 +869,7 @@ global debug_after_valid_ptr:
     // stack: pred_ptr, addr, retdest
     // Now, while the next address is `addr`, remove the slot.
 
-global remove_all_slots_loop:
+remove_all_slots_loop:
     // stack: pred_ptr, addr, retdest
     %add_const(4) MLOAD_GENERAL DUP1
     // stack: cur_ptr, cur_ptr, addr, retdest
@@ -884,7 +884,7 @@ global remove_all_slots_loop:
     // stack: cur_ptr, addr, retdest
     %jump(remove_all_slots_loop)
 
-global remove_all_slots_end:
+remove_all_slots_end:
     // stack: cur_addr, cur_ptr, addr, retdest
     %pop3 JUMP
 

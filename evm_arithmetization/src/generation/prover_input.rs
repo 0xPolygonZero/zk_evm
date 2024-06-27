@@ -525,7 +525,7 @@ impl<F: Field> GenerationState<F> {
         if let Some(([.., ptr], _)) = self
             .get_storage_linked_list()?
             .zip(self.get_storage_linked_list()?.skip(2))
-            .find(|&(_, [next_addr, next_key, ..])| next_addr == addr)
+            .find(|&(_, [next_addr, next_key, ..])| next_addr == addr || next_addr == U256::MAX)
         {
             Ok((ptr - U256::from(Segment::StorageLinkedList as usize))
                 / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
