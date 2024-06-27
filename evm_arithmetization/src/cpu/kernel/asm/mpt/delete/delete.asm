@@ -27,8 +27,12 @@ global mpt_delete_leaf:
 
 global delete_account:
     %addr_to_state_key
+    DUP1
     %remove_account_from_linked_list
-    // retdest
+    // stack: addr_to_state_key, retdest
+
+    // Now we also need to remove all the storage nodes associated with the deleted account.
+    %remove_all_account_slots
     JUMP
 
 %macro delete_account

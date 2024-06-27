@@ -853,9 +853,46 @@ global remove_slot:
     %pop2
     JUMP
 
-/// Search the account addr and payload pointer into the linked list.
-/// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Called when an account is deleted: it deletes all slots associated with the account.
+global remove_all_account_slots:
+    // stack: addr, retdest
+    PROVER_INPUT(linked_list::remove_address_slots)
+    // pred_ptr/5, retdest
+    %get_valid_slot_ptr
+
+global debug_after_valid_ptr:
+    // stack: pred_ptr, addr, retdest
+    // First, check that the previous address is not `addr`
+    DUP1 MLOAD_GENERAL
+    // stack: pred_addr, pred_ptr, addr, retdest
+    DUP3 EQ %jumpi(panic)
+    // stack: pred_ptr, addr, retdest
+    // Now, while the next address is `addr`, remove the slot.
+
+global remove_all_slots_loop:
+    // stack: pred_ptr, addr, retdest
+    %add_const(4) MLOAD_GENERAL DUP1
+    // stack: cur_ptr, cur_ptr, addr, retdest
+    DUP1 %eq_const(@U256_MAX) %jumpi(remove_all_slots_end)
+    MLOAD_GENERAL
+    // stack: cur_addr, cur_ptr, addr, retdest
+    DUP1 DUP4 EQ ISZERO %jumpi(remove_all_slots_end)
+    // stack: cur_addr, cur_ptr, addr, retdest
+    DUP2 %increment MLOAD_GENERAL SWAP1
+    // stack: cur_addr, cur_key, cur_ptr, addr, retdest
+    %remove_slot
+    // stack: cur_ptr, addr, retdest
+    %jump(remove_all_slots_loop)
+
+global remove_all_slots_end:
+    // stack: cur_addr, cur_ptr, addr, retdest
+    %pop3 JUMP
+
+%macro remove_all_account_slots
+    %stack (addr) -> (addr, %%after)
+    %jump(remove_all_account_slots)
+%%after:
+%endmacro
 
 %macro read_accounts_linked_list
     %stack (addr) -> (addr, 0, %%after)
