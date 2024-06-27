@@ -31,6 +31,10 @@ global main:
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     PROVER_INPUT(trie_ptr::trie_data_size)
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+
+    // Store the inital accounts and slots for hashing later
+    %store_initial_accounts
+    %store_initial_slots
    
     // Initialize the transaction and receipt trie root pointers.
     PROVER_INPUT(trie_ptr::txn)

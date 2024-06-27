@@ -32,9 +32,9 @@ skip:
 %macro set_initial_tries
     PUSH %%after
     PUSH @SEGMENT_STORAGE_LINKED_LIST
-    %add_const(7) // The first node is the special node, of size 5, so the first payload is at position 5 + 2.
+    %add_const(8) // The first node is the special node, of size 5, so the first payload is at position 5 + 3.
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
-    %add_const(5) // The first node is the special node, of size 4, so the first payload is at position 4 + 1.
+    %add_const(6) // The first node is the special node, of size 4, so the first payload is at position 4 + 2.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     %jump(mpt_set_payload)
 %%after:
@@ -154,7 +154,9 @@ after_set_storage_payload:
     %stack
         (new_storage_root_ptr_ptr, new_payload_ptr, storage_ptr_ptr_p, storage_root_ptr, payload_ptr_ptr, account_ptr_ptr) ->
         (new_storage_root_ptr_ptr, storage_root_ptr, payload_ptr_ptr, new_payload_ptr, account_ptr_ptr, storage_ptr_ptr_p)
+global debug_sera_aca:
     %mstore_trie_data // The account in the linked list has no storage root so we need to manually set it.
+global debug_sera_aca_signo_de_interrogacion:
     %mstore_trie_data // Set the leaf payload pointing to next account in the linked list.
     // stack: account_ptr_ptr, storage_ptr_ptr', retdest
     %add_const(4) // The next pointer is at distance 4
@@ -171,6 +173,7 @@ set_payload_storage_leaf:
     DUP2
     MLOAD_GENERAL
     SWAP1
+global debug_o_quizas_aca:
     %mstore_trie_data
     // stack: storage_ptr_ptr, retdest
     %add_const(5) // The next pointer is at distance 5
