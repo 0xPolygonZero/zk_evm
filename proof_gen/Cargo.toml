@@ -10,7 +10,6 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
-ethereum-types = { workspace = true }
 log = { workspace = true }
 paste = { workspace = true }
 plonky2 = { workspace = true }
