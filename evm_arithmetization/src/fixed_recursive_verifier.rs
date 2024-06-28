@@ -9,6 +9,7 @@ use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
+use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
@@ -1997,4 +1998,14 @@ fn shrinking_config() -> CircuitConfig {
         num_routed_wires: 40,
         ..CircuitConfig::standard_recursion_config()
     }
+}
+
+pub fn extract_aggregation_hash<F, C, const D: usize>(proof: &ProofWithPublicInputs<F, C, D>) -> HashOut<F>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    C::Hasher: AlgebraicHasher<F>,
+{
+    let elements: [F;NUM_HASH_OUT_ELTS] = proof.public_inputs[0..NUM_HASH_OUT_ELTS].try_into().expect("Malformed proof");
+    HashOut::<F>::try_from(elements).expect("Malformed proof")
 }
