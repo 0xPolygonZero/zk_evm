@@ -3,7 +3,6 @@ use std::str::FromStr;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
-use evm_arithmetization::fixed_recursive_verifier::extract_aggregation_hash;
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
@@ -13,6 +12,7 @@ use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig, Hasher};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
@@ -299,7 +299,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
         for i in hashes.len()/2..hashes.len()-1 {
                 hashes[i] = two_to_one(hashes[i/2], hashes[i/2+1]);
         }
-        assert_eq!(extract_aggregation_hash(&aggproof0123), hashes[hashes.len()-2]);
+        assert_eq!(&aggproof0123.public_inputs[..NUM_HASH_OUT_ELTS], hashes[hashes.len()-2].elements, "Merkle root of verification tree did not match.");
         return Ok(()) // TODO REMOVE THIS
 
     }
