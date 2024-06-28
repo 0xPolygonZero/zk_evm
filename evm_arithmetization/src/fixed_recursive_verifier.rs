@@ -330,6 +330,7 @@ where
     rhs: AggregationChildTarget<D>,
     mix_pv_hash: HashOutTarget,
     dummy_pis: Vec<Target>,
+    vk_len: usize,
     cyclic_vk: VerifierCircuitTarget,
 }
 
@@ -371,6 +372,7 @@ where
             mix_pv_hash,
             dummy_pis,
             cyclic_vk,
+            vk_len: todo!(),
         })
     }
 }
@@ -1013,6 +1015,8 @@ where
             dummy_pis.push(target);
         }
 
+        let user_pis_len = builder.num_public_inputs();
+
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         let lhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
@@ -1021,11 +1025,11 @@ where
         let lhs_public_values = lhs.public_values_vec(&mut builder);
         let rhs_public_values = rhs.public_values_vec(&mut builder);
 
-        let lhs_base_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(lhs_public_values.to_owned()).elements;
-        let rhs_base_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(rhs_public_values.to_owned()).elements;
-
         let lhs_agg_pv_hash = &lhs_public_values[..NUM_HASH_OUT_ELTS];
         let rhs_agg_pv_hash = &rhs_public_values[..NUM_HASH_OUT_ELTS];
+
+        let lhs_base_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(lhs_public_values[..user_pis_len].to_owned()).elements;
+        let rhs_base_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(rhs_public_values[..user_pis_len].to_owned()).elements;
 
         let lhs_hash : Vec<Target> = zip_eq(
             lhs_agg_pv_hash,
@@ -1054,9 +1058,10 @@ where
             circuit,
             lhs,
             rhs,
-            mix_pv_hash,
+            mix_pv_hash: mix_pv_hash_output,
             dummy_pis,
             cyclic_vk,
+            vk_len: verification_key_len,
         }
     }
 
@@ -1678,11 +1683,27 @@ where
             &self.two_to_one_block.circuit.verifier_only,
         );
 
+
+        let verification_key_len = self.two_to_one_block.vk_len;
+
+        // // The number of PIS that will be added after padding by
+        // // `builder.add_verifier_data_public_inputs()`.
+        // let verification_key_len = block_circuit
+        //     .circuit
+        //     .verifier_only
+        //     .circuit_digest
+        //     .elements
+        //     .len()
+        //     + (1 << block_circuit.circuit.common.config.fri_config.cap_height)
+        //         * (NUM_HASH_OUT_ELTS);
+
+        let user_pis_len = lhs.public_inputs.len() - verification_key_len;
+
         let lhs_pv_hash = if lhs_is_agg {
             let elements = lhs.public_inputs[..NUM_HASH_OUT_ELTS].try_into().expect("wrong length");
             HashOut { elements }
         } else {
-            C::InnerHasher::hash_no_pad(&lhs.public_inputs)
+            C::InnerHasher::hash_no_pad(&lhs.public_inputs[..user_pis_len])
         };
 
         let rhs_pv_hash = if rhs_is_agg {
@@ -1690,7 +1711,7 @@ where
             let elements = rhs.public_inputs[..NUM_HASH_OUT_ELTS].try_into().expect("wrong length");
             HashOut { elements }
         } else {
-            C::InnerHasher::hash_no_pad(&rhs.public_inputs)
+            C::InnerHasher::hash_no_pad(&rhs.public_inputs[..user_pis_len])
         };
 
         let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
