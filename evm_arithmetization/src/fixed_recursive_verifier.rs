@@ -1028,22 +1028,20 @@ where
         let lhs_agg_pv_hash = &lhs_public_values[..NUM_HASH_OUT_ELTS];
         let rhs_agg_pv_hash = &rhs_public_values[..NUM_HASH_OUT_ELTS];
 
-        let lhs_base_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(lhs_public_values[..user_pis_len].to_owned()).elements;
-        let rhs_base_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(rhs_public_values[..user_pis_len].to_owned()).elements;
+        let lhs_base_pv_hash = builder
+            .hash_n_to_hash_no_pad::<C::InnerHasher>(lhs_public_values[..user_pis_len].to_owned())
+            .elements;
+        let rhs_base_pv_hash = builder
+            .hash_n_to_hash_no_pad::<C::InnerHasher>(rhs_public_values[..user_pis_len].to_owned())
+            .elements;
 
-        let lhs_hash : Vec<Target> = zip_eq(
-            lhs_agg_pv_hash,
-            lhs_base_pv_hash,
-        )
-        .map(|(&agg_target, base_target)| builder.select(lhs.is_agg, agg_target, base_target))
-        .collect();
+        let lhs_hash: Vec<Target> = zip_eq(lhs_agg_pv_hash, lhs_base_pv_hash)
+            .map(|(&agg_target, base_target)| builder.select(lhs.is_agg, agg_target, base_target))
+            .collect();
 
-        let rhs_hash : Vec<Target> = zip_eq(
-            rhs_agg_pv_hash,
-            rhs_base_pv_hash,
-        )
-        .map(|(&agg_target, base_target)| builder.select(rhs.is_agg, agg_target, base_target))
-        .collect();
+        let rhs_hash: Vec<Target> = zip_eq(rhs_agg_pv_hash, rhs_base_pv_hash)
+            .map(|(&agg_target, base_target)| builder.select(rhs.is_agg, agg_target, base_target))
+            .collect();
 
         let mut mix_vec = vec![];
         mix_vec.extend(&lhs_hash);
@@ -1683,7 +1681,6 @@ where
             &self.two_to_one_block.circuit.verifier_only,
         );
 
-
         let verification_key_len = self.two_to_one_block.vk_len;
 
         // // The number of PIS that will be added after padding by
@@ -1698,23 +1695,34 @@ where
         //         * (NUM_HASH_OUT_ELTS);
 
         let user_pis_len = lhs.public_inputs.len() - verification_key_len;
+        log::info!("user_pis_len: {user_pis_len}");
 
-        let lhs_pv_hash = if lhs_is_agg {
-            let elements = lhs.public_inputs[..NUM_HASH_OUT_ELTS].try_into().expect("wrong length");
-            HashOut { elements }
-        } else {
-            C::InnerHasher::hash_no_pad(&lhs.public_inputs[..user_pis_len])
+        let lelements = lhs.public_inputs[..NUM_HASH_OUT_ELTS]
+            .try_into()
+            .expect("wrong length");
+        let lhsagg = HashOut {
+            elements: lelements,
         };
+        let lhsbase = C::InnerHasher::hash_no_pad(&lhs.public_inputs[..user_pis_len]);
+        let lhs_pv_hash = if lhs_is_agg { lhsagg } else { lhsbase };
 
-        let rhs_pv_hash = if rhs_is_agg {
-            //extract_aggregation_hash(&rhs.public_inputs)
-            let elements = rhs.public_inputs[..NUM_HASH_OUT_ELTS].try_into().expect("wrong length");
-            HashOut { elements }
-        } else {
-            C::InnerHasher::hash_no_pad(&rhs.public_inputs[..user_pis_len])
+        let relements = rhs.public_inputs[..NUM_HASH_OUT_ELTS]
+            .try_into()
+            .expect("wrong length");
+        let rhsagg = HashOut {
+            elements: relements,
         };
+        let rhsbase = C::InnerHasher::hash_no_pad(&rhs.public_inputs[..user_pis_len]);
+        let rhs_pv_hash = if rhs_is_agg { rhsagg } else { rhsbase };
+        log::info!("lhsPIS: {:?}", lhs.public_inputs);
+        log::info!("rhsPIS: {:?}", rhs.public_inputs);
 
         let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
+        log::info!("lhsagg:  {lhsagg:?}");
+        log::info!("lhsbase: {lhsbase:?}");
+        log::info!("rhsagg:  {rhsagg:?}");
+        log::info!("rhsbase: {rhsbase:?}");
+        log::info!("mix:     {mix_pv_hash:?}");
         witness.set_hash_target(self.two_to_one_block.mix_pv_hash, mix_pv_hash);
 
         let proof = self.two_to_one_block.circuit.prove(witness)?;
@@ -2059,12 +2067,12 @@ fn shrinking_config() -> CircuitConfig {
     }
 }
 
-pub fn extract_aggregation_hash<F, C, const D: usize>(proof: &ProofWithPublicInputs<F, C, D>) -> HashOut<F>
-where
-    F: RichField + Extendable<D>,
-    C: GenericConfig<D, F = F>,
-    C::Hasher: AlgebraicHasher<F>,
+pub fn extract_aggregation_hash<F>(public_inputs: &Vec<F>) -> &[F; NUM_HASH_OUT_ELTS]
+// where
+//     F: Sized + Default + Copy,
 {
-    let elements: [F;NUM_HASH_OUT_ELTS] = proof.public_inputs[0..NUM_HASH_OUT_ELTS].try_into().expect("Malformed proof");
-    HashOut::<F>::try_from(elements).expect("Malformed proof")
+    // let mut res = [Default::default(); NUM_HASH_OUT_ELTS];
+    // res.clone_from_slice(&public_inputs[0..NUM_HASH_OUT_ELTS]);
+    // res
+    public_inputs[0..NUM_HASH_OUT_ELTS].try_into().expect("Public Inputs were malformed")
 }

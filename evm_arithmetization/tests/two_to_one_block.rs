@@ -13,7 +13,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
-use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig, Hasher};
+use plonky2::plonk::config::{GenericConfig, Hasher, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
 
@@ -291,17 +291,41 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
         all_circuits.verify_two_to_one_block(&aggproof0123)?;
 
         let hash_no_pad = <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::hash_no_pad;
-        let two_to_one= <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::two_to_one;
+        let two_to_one = <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::two_to_one;
 
-        let mut hashes : Vec<_> = bp.iter().map(|bp| hash_no_pad(&bp.public_inputs)).collect();
-        hashes.extend_from_within(0..hashes.len());
-        (hashes.len());
-        for i in hashes.len()/2..hashes.len()-1 {
-                hashes[i] = two_to_one(hashes[i/2], hashes[i/2+1]);
+        log::info!("Leaf hashes");
+        let mut hashes: Vec<_> = bp
+            .iter()
+            .map(|bp| {
+                log::info!(
+                    "bppis: {:?} + vk: {:?} total_len: {}, vk_len: {}",
+                    &bp.public_inputs,
+                    &bp.public_inputs[2201..],
+                    &bp.public_inputs.len(),
+                    &bp.public_inputs.len() - 2201
+                );
+                hash_no_pad(&bp.public_inputs[..2201])
+            })
+            .collect();
+        for (i, h) in hashes.iter().enumerate() {
+            log::info!("{}:\n{:?}", i, h);
         }
-        assert_eq!(&aggproof0123.public_inputs[..NUM_HASH_OUT_ELTS], hashes[hashes.len()-2].elements, "Merkle root of verification tree did not match.");
-        return Ok(()) // TODO REMOVE THIS
 
+        log::info!("Inner hashes");
+        hashes.extend_from_within(0..hashes.len());
+        assert_eq!(hashes.len(), 8);
+        let half = hashes.len() / 2;
+        for i in 0..half - 1 {
+            hashes[i + half] = two_to_one(hashes[2 * i], hashes[2 * i + 1]);
+            log::info!("{i} lhs: {:?}", hashes[2 * i]);
+            log::info!("{i} rhs: {:?}", hashes[2 * i + 1]);
+            log::info!("{i} mix: {:?}", hashes[half + i]);
+        }
+        assert_eq!(
+            &aggproof0123.public_inputs[..NUM_HASH_OUT_ELTS],
+            hashes[hashes.len() - 2].elements,
+            "Merkle root of verification tree did not match."
+        );
     }
 
     {
