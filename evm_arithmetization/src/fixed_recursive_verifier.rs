@@ -992,7 +992,8 @@ where
 
         // We need to pad by PIS to match the count of PIS of the `base_proof`.
         let mut padding = block_circuit.circuit.common.num_public_inputs;
-        // The number of PIS that will be added after padding by `builder.add_verifier_data_public_inputs()`.
+        // The number of PIS that will be added *after* padding by
+        // [`add_verifier_data_public_inputs()`].
         padding -= verification_key_len(&block_circuit.circuit);
         // Account for `mix_pv_hash`.
         padding -= builder.num_public_inputs();
