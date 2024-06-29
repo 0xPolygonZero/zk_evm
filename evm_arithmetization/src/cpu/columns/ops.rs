@@ -2,11 +2,11 @@ use core::borrow::{Borrow, BorrowMut};
 use core::mem::{size_of, transmute};
 use core::ops::{Deref, DerefMut};
 
-use crate::util::transmute_no_compile_time_size_checks;
+use zk_evm_proc_macro::{Columns, DerefColumns};
 
 /// Structure representing the flags for the various opcodes.
 #[repr(C)]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Columns, DerefColumns, Clone, Copy, Eq, PartialEq, Debug)]
 pub(crate) struct OpsColumnsView<T: Copy> {
     /// Combines ADD, MUL, SUB, DIV, MOD, LT, GT and BYTE flags.
     pub binary_op: T,
@@ -50,40 +50,3 @@ pub(crate) struct OpsColumnsView<T: Copy> {
 /// Number of columns in Cpu Stark.
 /// `u8` is guaranteed to have a `size_of` of 1.
 pub(crate) const NUM_OPS_COLUMNS: usize = size_of::<OpsColumnsView<u8>>();
-
-impl<T: Copy> From<[T; NUM_OPS_COLUMNS]> for OpsColumnsView<T> {
-    fn from(value: [T; NUM_OPS_COLUMNS]) -> Self {
-        unsafe { transmute_no_compile_time_size_checks(value) }
-    }
-}
-
-impl<T: Copy> From<OpsColumnsView<T>> for [T; NUM_OPS_COLUMNS] {
-    fn from(value: OpsColumnsView<T>) -> Self {
-        unsafe { transmute_no_compile_time_size_checks(value) }
-    }
-}
-
-impl<T: Copy> Borrow<OpsColumnsView<T>> for [T; NUM_OPS_COLUMNS] {
-    fn borrow(&self) -> &OpsColumnsView<T> {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> BorrowMut<OpsColumnsView<T>> for [T; NUM_OPS_COLUMNS] {
-    fn borrow_mut(&mut self) -> &mut OpsColumnsView<T> {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> Deref for OpsColumnsView<T> {
-    type Target = [T; NUM_OPS_COLUMNS];
-    fn deref(&self) -> &Self::Target {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> DerefMut for OpsColumnsView<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { transmute(self) }
-    }
-}
