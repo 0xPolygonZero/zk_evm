@@ -330,7 +330,6 @@ where
     rhs: AggregationChildTarget<D>,
     mix_pv_hash: HashOutTarget,
     dummy_pis: Vec<Target>,
-    vk_len: usize,
     cyclic_vk: VerifierCircuitTarget,
 }
 
@@ -372,7 +371,6 @@ where
             mix_pv_hash,
             dummy_pis,
             cyclic_vk,
-            vk_len: todo!(),
         })
     }
 }
@@ -989,25 +987,17 @@ where
     {
         let mut builder = CircuitBuilder::<F, D>::new(block_circuit.circuit.common.config.clone());
 
-        let mix_pv_hash_output = builder.add_virtual_hash();
-        builder.register_public_inputs(&mix_pv_hash_output.elements);
+        let mix_pv_hash = builder.add_virtual_hash();
+        builder.register_public_inputs(&mix_pv_hash.elements);
 
         // The number of PIS that will be added after padding by
         // `builder.add_verifier_data_public_inputs()`.
-        let verification_key_len = block_circuit
-            .circuit
-            .verifier_only
-            .circuit_digest
-            .elements
-            .len()
-            + (1 << block_circuit.circuit.common.config.fri_config.cap_height)
-                * (NUM_HASH_OUT_ELTS);
+        let verification_key_len = verification_key_len(&block_circuit.circuit);
 
         // We need to pad by PIS to match the count of PIS of the `base_proof`.
         let mut padding = block_circuit.circuit.common.num_public_inputs;
         padding -= verification_key_len;
         padding -= builder.num_public_inputs();
-        //padding -= mix_pv_hash_output.elements.len();
 
         let mut dummy_pis = vec![];
         for _ in 0..padding {
@@ -1047,19 +1037,18 @@ where
         mix_vec.extend(&lhs_hash);
         mix_vec.extend(&rhs_hash);
 
-        let mix_pv_hash = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+        let mix_pv_hash_intermediate = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
 
-        builder.connect_hashes(mix_pv_hash_output, mix_pv_hash);
+        builder.connect_hashes(mix_pv_hash, mix_pv_hash_intermediate);
 
         let circuit = builder.build::<C>();
         TwoToOneBlockCircuitData {
             circuit,
             lhs,
             rhs,
-            mix_pv_hash: mix_pv_hash_output,
+            mix_pv_hash,
             dummy_pis,
             cyclic_vk,
-            vk_len: verification_key_len,
         }
     }
 
@@ -1681,20 +1670,11 @@ where
             &self.two_to_one_block.circuit.verifier_only,
         );
 
-        // TODO
-        let verification_key_len = self.two_to_one_block.vk_len;
-
-        // // The number of PIS that will be added after padding by
-        // // `builder.add_verifier_data_public_inputs()`.
-        // let verification_key_len = block_circuit
-        //     .circuit
-        //     .verifier_only
-        //     .circuit_digest
-        //     .elements
-        //     .len()
-        //     + (1 << block_circuit.circuit.common.config.fri_config.cap_height)
-        //         * (NUM_HASH_OUT_ELTS);
-
+        // The number of PIS that will be added after padding by
+        // [`builder.add_verifier_data_public_inputs`].
+        let verification_key_len = verification_key_len(&self.block.circuit);
+        assert_eq!(verification_key_len, 68);
+        debug_assert_eq!(lhs.public_inputs.len(), rhs.public_inputs.len());
         let user_pis_len = lhs.public_inputs.len() - verification_key_len;
         log::info!("user_pis_len: {user_pis_len}");
 
@@ -2059,9 +2039,21 @@ fn shrinking_config() -> CircuitConfig {
     }
 }
 
-pub fn extract_two_to_one_block_hash<F>(public_inputs: &Vec<F>) -> &[F; NUM_HASH_OUT_ELTS]
-{
+/// Extracts the two-to-one block aggregation hash from a predefined location.
+pub fn extract_two_to_one_block_hash<F>(public_inputs: &[F]) -> &[F; NUM_HASH_OUT_ELTS] {
     public_inputs[0..NUM_HASH_OUT_ELTS]
         .try_into()
-        .expect("Public Inputs were malformed")
+        .expect("Public inputs vector was malformed.")
+}
+
+/// Computes the length added to the public inputs vector by
+/// [`CircuitBuilder::add_verifier_data_public_inputs`].
+pub fn verification_key_len<F, C, const D: usize>(circuit: &CircuitData<F, C, D>) -> usize
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    C::Hasher: AlgebraicHasher<F>,
+{
+    circuit.verifier_only.circuit_digest.elements.len()
+        + (1 << circuit.common.config.fri_config.cap_height) * (NUM_HASH_OUT_ELTS)
 }
