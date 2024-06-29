@@ -14,7 +14,7 @@ use trace_decoder::trace_protocol::{
     SeparateTriePreImages, TrieDirect, TxnInfo,
 };
 
-use crate::compat::Compat;
+use crate::Compat;
 
 /// Processes the state witness for the given block.
 pub async fn process_state_witness<ProviderT, TransportT>(

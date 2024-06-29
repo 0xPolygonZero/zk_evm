@@ -21,10 +21,11 @@ mpt_trie = { workspace = true }
 alloy.workspace = true
 futures = { workspace = true }
 url = { workspace = true }
-__compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
+__compat_primitive_types = { workspace = true }
 tower = { workspace = true, features = ["retry"] }
 
 # Local dependencies
-zero_bin_common ={ workspace = true }
+compat = { workspace = true }
+zero_bin_common = { workspace = true }
 prover = { workspace = true }
 
