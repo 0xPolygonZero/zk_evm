@@ -272,14 +272,14 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     }
 
     {
-        // Aggregate a sequential proof containing three proofs with the structure
-        // `((A,B),(C,D))`.
+        // Binary tree reduction
         //
         //  A    B    C    D    Blockproofs (base case)
         //   \  /      \  /
         //  (A, B)    (C, D)    Two-to-one block aggregation proofs
         //     \       /
         //   ((A,B), (C,D))     Two-to-one block aggregation proofs
+
         let aggproof01 = all_circuits.prove_two_to_one_block(&bp[0], false, &bp[1], false)?;
         all_circuits.verify_two_to_one_block(&aggproof01)?;
 
@@ -302,15 +302,15 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
             log::info!("Leaf hashes");
             let mut hashes: Vec<_> = bp
                 .iter()
-                .map(|bp| {
+                .map(|block_proof| {
                     log::info!(
                         "bppis: {:?} + vk: {:?} total_len: {}, vk_len: {}",
-                        &bp.public_inputs,
-                        &bp.public_inputs[user_pis_len..],
-                        &bp.public_inputs.len(),
-                        &bp.public_inputs.len() - user_pis_len
+                        &block_proof.public_inputs,
+                        &block_proof.public_inputs[user_pis_len..],
+                        &block_proof.public_inputs.len(),
+                        &block_proof.public_inputs.len() - user_pis_len
                     );
-                    hash_no_pad(&bp.public_inputs[..user_pis_len])
+                    hash_no_pad(&block_proof.public_inputs[..user_pis_len])
                 })
                 .collect();
             for (i, h) in hashes.iter().enumerate() {
@@ -339,14 +339,14 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
 
     {
         // Foldleft
-        // Aggregate a sequential /// proof containing three proofs with the structure
-        // `((A,B),(C,D))`.
         //
-        //  A    B    C     Blockproofs (base case)
-        //   \  /    /
-        //  (A, B)  /       Two-to-one block aggregation proofs
-        //     \   /
-        //  ((A,B), C)      Two-to-one block aggregation proofs
+        //  A    B    C    D    Blockproofs (base case)
+        //   \  /    /    /
+        //  (A, B)  /    /      Two-to-one block aggregation proofs
+        //     \   /    /
+        //  ((A,B), C) /        Two-to-one block aggregation proofs
+        //       \    /
+        //  (((A,B),C),D)       Two-to-one block aggregation proofs
 
         let aggproof01 = all_circuits.prove_two_to_one_block(&bp[0], false, &bp[1], false)?;
         all_circuits.verify_two_to_one_block(&aggproof01)?;
@@ -361,11 +361,14 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
 
     {
         // Foldright
-        //  A    B    C    Blockproofs (base case)
-        //   \   \   /
-        //    \  (B,C)     Two-to-one block aggregation proofs
-        //     \  /
-        //  (A,(B, C))     Two-to-one block aggregation proofs
+        //
+        //  A    B    C    D    Blockproofs (base case)
+        //   \    \   \   /
+        //    \    \   (C,D)    Two-to-one block aggregation proofs
+        //     \     \  /
+        //      \ (B,(C, D))    Two-to-one block aggregation proofs
+        //       \   /
+        //     (A,(B,(C,D)))    Two-to-one block aggregation proofs
 
         let aggproof23 = all_circuits.prove_two_to_one_block(&bp[2], false, &bp[3], false)?;
         all_circuits.verify_two_to_one_block(&aggproof23)?;
