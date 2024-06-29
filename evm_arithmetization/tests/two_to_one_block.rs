@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use evm_arithmetization::fixed_recursive_verifier::extract_two_to_one_block_hash;
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
@@ -12,7 +13,6 @@ use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use plonky2::plonk::config::{GenericConfig, Hasher, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
@@ -290,42 +290,51 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
             all_circuits.prove_two_to_one_block(&aggproof01, true, &aggproof23, true)?;
         all_circuits.verify_two_to_one_block(&aggproof0123)?;
 
-        let hash_no_pad = <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::hash_no_pad;
-        let two_to_one = <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::two_to_one;
+        {
+            // Compute Merkle root from public inputs of block proofs.
+            let hash_no_pad =
+                <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::hash_no_pad;
+            let two_to_one =
+                <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::two_to_one;
+            // TODO: compute this
+            let user_pis_len = 2201;
 
-        log::info!("Leaf hashes");
-        let mut hashes: Vec<_> = bp
-            .iter()
-            .map(|bp| {
-                log::info!(
-                    "bppis: {:?} + vk: {:?} total_len: {}, vk_len: {}",
-                    &bp.public_inputs,
-                    &bp.public_inputs[2201..],
-                    &bp.public_inputs.len(),
-                    &bp.public_inputs.len() - 2201
-                );
-                hash_no_pad(&bp.public_inputs[..2201])
-            })
-            .collect();
-        for (i, h) in hashes.iter().enumerate() {
-            log::info!("{}:\n{:?}", i, h);
-        }
+            log::info!("Leaf hashes");
+            let mut hashes: Vec<_> = bp
+                .iter()
+                .map(|bp| {
+                    log::info!(
+                        "bppis: {:?} + vk: {:?} total_len: {}, vk_len: {}",
+                        &bp.public_inputs,
+                        &bp.public_inputs[user_pis_len..],
+                        &bp.public_inputs.len(),
+                        &bp.public_inputs.len() - user_pis_len
+                    );
+                    hash_no_pad(&bp.public_inputs[..user_pis_len])
+                })
+                .collect();
+            for (i, h) in hashes.iter().enumerate() {
+                log::info!("{}:\n{:?}", i, h);
+            }
 
-        log::info!("Inner hashes");
-        hashes.extend_from_within(0..hashes.len());
-        assert_eq!(hashes.len(), 8);
-        let half = hashes.len() / 2;
-        for i in 0..half - 1 {
-            hashes[i + half] = two_to_one(hashes[2 * i], hashes[2 * i + 1]);
-            log::info!("{i} lhs: {:?}", hashes[2 * i]);
-            log::info!("{i} rhs: {:?}", hashes[2 * i + 1]);
-            log::info!("{i} mix: {:?}", hashes[half + i]);
+            log::info!("Inner hashes");
+            hashes.extend_from_within(0..hashes.len());
+            assert_eq!(hashes.len(), 8);
+            let half = hashes.len() / 2;
+            for i in 0..half - 1 {
+                hashes[half + i] = two_to_one(hashes[2 * i], hashes[2 * i + 1]);
+                log::info!("{i} lhs: {:?}", hashes[2 * i]);
+                log::info!("{i} rhs: {:?}", hashes[2 * i + 1]);
+                log::info!("{i} mix: {:?}", hashes[half + i]);
+            }
+            let merkle_root = hashes[hashes.len() - 2].elements;
+
+            assert_eq!(
+                extract_two_to_one_block_hash(&aggproof0123.public_inputs),
+                &merkle_root,
+                "Merkle root of verifier's verification tree did not match merkle root in public inputs."
+            );
         }
-        assert_eq!(
-            &aggproof0123.public_inputs[..NUM_HASH_OUT_ELTS],
-            hashes[hashes.len() - 2].elements,
-            "Merkle root of verification tree did not match."
-        );
     }
 
     {

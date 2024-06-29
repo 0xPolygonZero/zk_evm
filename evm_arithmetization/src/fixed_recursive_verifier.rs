@@ -1025,8 +1025,8 @@ where
         let lhs_public_values = lhs.public_values_vec(&mut builder);
         let rhs_public_values = rhs.public_values_vec(&mut builder);
 
-        let lhs_agg_pv_hash = &lhs_public_values[..NUM_HASH_OUT_ELTS];
-        let rhs_agg_pv_hash = &rhs_public_values[..NUM_HASH_OUT_ELTS];
+        let lhs_agg_pv_hash = extract_two_to_one_block_hash(&lhs_public_values);
+        let rhs_agg_pv_hash = extract_two_to_one_block_hash(&rhs_public_values);
 
         let lhs_base_pv_hash = builder
             .hash_n_to_hash_no_pad::<C::InnerHasher>(lhs_public_values[..user_pis_len].to_owned())
@@ -1681,6 +1681,7 @@ where
             &self.two_to_one_block.circuit.verifier_only,
         );
 
+        // TODO
         let verification_key_len = self.two_to_one_block.vk_len;
 
         // // The number of PIS that will be added after padding by
@@ -1697,32 +1698,23 @@ where
         let user_pis_len = lhs.public_inputs.len() - verification_key_len;
         log::info!("user_pis_len: {user_pis_len}");
 
-        let lelements = lhs.public_inputs[..NUM_HASH_OUT_ELTS]
-            .try_into()
-            .expect("wrong length");
-        let lhsagg = HashOut {
-            elements: lelements,
+        let lhs_pv_hash = if lhs_is_agg {
+            HashOut {
+                elements: *extract_two_to_one_block_hash(&lhs.public_inputs),
+            }
+        } else {
+            C::InnerHasher::hash_no_pad(&lhs.public_inputs[..user_pis_len])
         };
-        let lhsbase = C::InnerHasher::hash_no_pad(&lhs.public_inputs[..user_pis_len]);
-        let lhs_pv_hash = if lhs_is_agg { lhsagg } else { lhsbase };
 
-        let relements = rhs.public_inputs[..NUM_HASH_OUT_ELTS]
-            .try_into()
-            .expect("wrong length");
-        let rhsagg = HashOut {
-            elements: relements,
+        let rhs_pv_hash = if rhs_is_agg {
+            HashOut {
+                elements: *extract_two_to_one_block_hash(&rhs.public_inputs),
+            }
+        } else {
+            C::InnerHasher::hash_no_pad(&rhs.public_inputs[..user_pis_len])
         };
-        let rhsbase = C::InnerHasher::hash_no_pad(&rhs.public_inputs[..user_pis_len]);
-        let rhs_pv_hash = if rhs_is_agg { rhsagg } else { rhsbase };
-        log::info!("lhsPIS: {:?}", lhs.public_inputs);
-        log::info!("rhsPIS: {:?}", rhs.public_inputs);
 
         let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
-        log::info!("lhsagg:  {lhsagg:?}");
-        log::info!("lhsbase: {lhsbase:?}");
-        log::info!("rhsagg:  {rhsagg:?}");
-        log::info!("rhsbase: {rhsbase:?}");
-        log::info!("mix:     {mix_pv_hash:?}");
         witness.set_hash_target(self.two_to_one_block.mix_pv_hash, mix_pv_hash);
 
         let proof = self.two_to_one_block.circuit.prove(witness)?;
@@ -2067,12 +2059,9 @@ fn shrinking_config() -> CircuitConfig {
     }
 }
 
-pub fn extract_aggregation_hash<F>(public_inputs: &Vec<F>) -> &[F; NUM_HASH_OUT_ELTS]
-// where
-//     F: Sized + Default + Copy,
+pub fn extract_two_to_one_block_hash<F>(public_inputs: &Vec<F>) -> &[F; NUM_HASH_OUT_ELTS]
 {
-    // let mut res = [Default::default(); NUM_HASH_OUT_ELTS];
-    // res.clone_from_slice(&public_inputs[0..NUM_HASH_OUT_ELTS]);
-    // res
-    public_inputs[0..NUM_HASH_OUT_ELTS].try_into().expect("Public Inputs were malformed")
+    public_inputs[0..NUM_HASH_OUT_ELTS]
+        .try_into()
+        .expect("Public Inputs were malformed")
 }
