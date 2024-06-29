@@ -11,12 +11,12 @@
 //! and [`DerefMut`] with target `[T; N]` where `N` is the number of fields in
 //! the struct.
 //!
-//! These implementations employ unsafe code and as such place a burden on the
-//! user to ensure their safe usage. Please see the respective macro
-//! implementations to understand the conditions that should be upheld by any
-//! struct deriving [`Columns`] or [`DerefColumns`]. In short, the struct must
-//! be `#[repr(C)]` and all fields must be one of `T`, `[T; M]`, or a type with
-//! the same layout as `[T; M]`.
+//! These implementations employ unsafe code and place a burden on the user to
+//! ensure their safe usage. Please see the respective macro implementations to
+//! understand the conditions that should be upheld by any struct deriving
+//! [`Columns`] or [`DerefColumns`]. In short, the struct must be `#[repr(C)]`
+//! and all fields must be one of `T`, `[T; M]`, or a type with the same layout
+//! as `[T; M]`.
 //!
 //! [`Borrow`]: ::core::borrow::Borrow
 //! [`BorrowMut`]: ::core::borrow::BorrowMut

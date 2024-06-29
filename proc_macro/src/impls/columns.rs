@@ -22,9 +22,7 @@ pub(crate) fn try_derive(ast: DeriveInput) -> Result<proc_macro2::TokenStream> {
 
     // SAFETY: A struct generic over T has the same layout as an array [T; N] if:
     // - The struct is `#[repr(C)]`.
-    // - Every field of the struct is either T or a type with the same alignment as
-    //   T and a size of `size_of::<T>() * M` where M <= N. i.e. every field is one
-    //   of T, [T; M], or a type with the same layout as [T; M].
+    // - Every field is one of T, [T; M], or a type with the same layout as [T; M],
     // - The total number of elements of type T is N.
     // https://doc.rust-lang.org/reference/type-layout.html#reprc-structs
     // https://doc.rust-lang.org/reference/type-layout.html#array-layout
