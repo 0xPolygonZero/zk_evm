@@ -298,42 +298,24 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
                 <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::hash_no_pad;
             let two_to_one =
                 <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::two_to_one;
-            // TODO: compute this
 
+            // We do not want to include the verification key in the hash.
             let verification_key_len = verification_key_len(&all_circuits.block.circuit);
 
-            log::info!("Leaf hashes");
+            // Leaves
             let mut hashes: Vec<_> = bp
                 .iter()
                 .map(|block_proof| {
                     let user_pis_len = block_proof.public_inputs.len() - verification_key_len;
-                    log::info!("{:#?}", user_pis_len);
-                    log::info!("{:#?}", verification_key_len);
-                    log::info!("{:#?}", block_proof.public_inputs.len());
-                    assert_eq!(user_pis_len, 2201);
-                    log::info!(
-                        "bppis: {:?} + vk: {:?} total_len: {}, vk_len: {}",
-                        &block_proof.public_inputs,
-                        &block_proof.public_inputs[user_pis_len..],
-                        block_proof.public_inputs.len(),
-                        block_proof.public_inputs.len() - user_pis_len
-                    );
                     hash_no_pad(&block_proof.public_inputs[..user_pis_len])
                 })
                 .collect();
-            for (i, h) in hashes.iter().enumerate() {
-                log::info!("{}:\n{:?}", i, h);
-            }
 
-            log::info!("Inner hashes");
+            // Inner nodes
             hashes.extend_from_within(0..hashes.len());
-            assert_eq!(hashes.len(), 8);
             let half = hashes.len() / 2;
             for i in 0..half - 1 {
                 hashes[half + i] = two_to_one(hashes[2 * i], hashes[2 * i + 1]);
-                log::info!("{i} lhs: {:?}", hashes[2 * i]);
-                log::info!("{i} rhs: {:?}", hashes[2 * i + 1]);
-                log::info!("{i} mix: {:?}", hashes[half + i]);
             }
             let merkle_root = hashes[hashes.len() - 2].elements;
 

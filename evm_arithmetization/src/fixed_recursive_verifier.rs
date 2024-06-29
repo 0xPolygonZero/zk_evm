@@ -328,7 +328,7 @@ where
     pub circuit: CircuitData<F, C, D>,
     lhs: AggregationChildTarget<D>,
     rhs: AggregationChildTarget<D>,
-    mix_pv_hash: HashOutTarget,
+    mix_hash: HashOutTarget,
     dummy_pis: Vec<Target>,
     cyclic_vk: VerifierCircuitTarget,
 }
@@ -348,7 +348,7 @@ where
         self.lhs.to_buffer(buffer)?;
         self.rhs.to_buffer(buffer)?;
         buffer.write_target_vec(&self.dummy_pis)?;
-        buffer.write_target_hash(&self.mix_pv_hash)?;
+        buffer.write_target_hash(&self.mix_hash)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
         Ok(())
     }
@@ -361,14 +361,14 @@ where
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
         let lhs = AggregationChildTarget::from_buffer(buffer)?;
         let rhs = AggregationChildTarget::from_buffer(buffer)?;
-        let mix_pv_hash = buffer.read_target_hash()?;
+        let mix_hash = buffer.read_target_hash()?;
         let dummy_pis = buffer.read_target_vec()?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         Ok(Self {
             circuit,
             lhs,
             rhs,
-            mix_pv_hash,
+            mix_hash,
             dummy_pis,
             cyclic_vk,
         })
@@ -987,16 +987,14 @@ where
     {
         let mut builder = CircuitBuilder::<F, D>::new(block_circuit.circuit.common.config.clone());
 
-        let mix_pv_hash = builder.add_virtual_hash();
-        builder.register_public_inputs(&mix_pv_hash.elements);
-
-        // The number of PIS that will be added after padding by
-        // `builder.add_verifier_data_public_inputs()`.
-        let verification_key_len = verification_key_len(&block_circuit.circuit);
+        let mix_hash = builder.add_virtual_hash();
+        builder.register_public_inputs(&mix_hash.elements);
 
         // We need to pad by PIS to match the count of PIS of the `base_proof`.
         let mut padding = block_circuit.circuit.common.num_public_inputs;
-        padding -= verification_key_len;
+        // The number of PIS that will be added after padding by `builder.add_verifier_data_public_inputs()`.
+        padding -= verification_key_len(&block_circuit.circuit);
+        // Account for `mix_pv_hash`.
         padding -= builder.num_public_inputs();
 
         let mut dummy_pis = vec![];
@@ -1006,7 +1004,6 @@ where
         }
 
         let user_pis_len = builder.num_public_inputs();
-
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         let lhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
@@ -1037,16 +1034,16 @@ where
         mix_vec.extend(&lhs_hash);
         mix_vec.extend(&rhs_hash);
 
-        let mix_pv_hash_intermediate = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+        let mix_hash_intermediate = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
 
-        builder.connect_hashes(mix_pv_hash, mix_pv_hash_intermediate);
+        builder.connect_hashes(mix_hash, mix_hash_intermediate);
 
         let circuit = builder.build::<C>();
         TwoToOneBlockCircuitData {
             circuit,
             lhs,
             rhs,
-            mix_pv_hash,
+            mix_hash,
             dummy_pis,
             cyclic_vk,
         }
@@ -1670,15 +1667,14 @@ where
             &self.two_to_one_block.circuit.verifier_only,
         );
 
-        // The number of PIS that will be added after padding by
-        // [`builder.add_verifier_data_public_inputs`].
         let verification_key_len = verification_key_len(&self.block.circuit);
-        assert_eq!(verification_key_len, 68);
         debug_assert_eq!(lhs.public_inputs.len(), rhs.public_inputs.len());
+        // The number of PIS that we want to hash in case of a block proof.
         let user_pis_len = lhs.public_inputs.len() - verification_key_len;
-        log::info!("user_pis_len: {user_pis_len}");
 
-        let lhs_pv_hash = if lhs_is_agg {
+        // If `lhs_is_agg` we read the hash verbatim from the public inputs.
+        // Otherwise we hash the block proof's Public Values from PIS.
+        let lhs_hash = if lhs_is_agg {
             HashOut {
                 elements: *extract_two_to_one_block_hash(&lhs.public_inputs),
             }
@@ -1686,7 +1682,7 @@ where
             C::InnerHasher::hash_no_pad(&lhs.public_inputs[..user_pis_len])
         };
 
-        let rhs_pv_hash = if rhs_is_agg {
+        let rhs_hash = if rhs_is_agg {
             HashOut {
                 elements: *extract_two_to_one_block_hash(&rhs.public_inputs),
             }
@@ -1694,8 +1690,8 @@ where
             C::InnerHasher::hash_no_pad(&rhs.public_inputs[..user_pis_len])
         };
 
-        let mix_pv_hash = C::InnerHasher::two_to_one(lhs_pv_hash, rhs_pv_hash);
-        witness.set_hash_target(self.two_to_one_block.mix_pv_hash, mix_pv_hash);
+        let mix_hash = C::InnerHasher::two_to_one(lhs_hash, rhs_hash);
+        witness.set_hash_target(self.two_to_one_block.mix_hash, mix_hash);
 
         let proof = self.two_to_one_block.circuit.prove(witness)?;
         Ok(proof)
