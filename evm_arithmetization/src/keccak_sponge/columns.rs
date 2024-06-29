@@ -2,7 +2,7 @@ use core::borrow::{Borrow, BorrowMut};
 use core::mem::{size_of, transmute};
 use core::ops::Range;
 
-use zk_evm_derive::Columns;
+use zk_evm_proc_macro::Columns;
 
 use crate::util::indices_arr;
 

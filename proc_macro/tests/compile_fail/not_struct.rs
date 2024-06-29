@@ -1,4 +1,4 @@
-use zk_evm_derive::Columns;
+use zk_evm_proc_macro::Columns;
 
 #[repr(C)]
 #[derive(Columns)]

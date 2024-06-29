@@ -4,7 +4,7 @@ use core::mem::{size_of, transmute};
 use core::ops::{Index, IndexMut};
 
 use plonky2::field::types::Field;
-use zk_evm_derive::Columns;
+use zk_evm_proc_macro::Columns;
 
 use crate::cpu::columns::general::CpuGeneralColumnsView;
 use crate::cpu::columns::ops::OpsColumnsView;

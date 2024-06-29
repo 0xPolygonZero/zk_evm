@@ -151,8 +151,8 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
-  test_zk_evm_derive:
-    name: Test zk_evm_derive
+  test_zk_evm_proc_macro:
+    name: Test zk_evm_proc_macro
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
@@ -168,8 +168,8 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Test in derive subdirectory
-        run: cargo test --manifest-path derive/Cargo.toml
+      - name: Test in proc_macro subdirectory
+        run: cargo test --manifest-path proc_macro/Cargo.toml
         env:
           RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
           RUST_LOG: 1

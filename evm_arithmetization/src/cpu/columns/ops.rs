@@ -2,7 +2,7 @@ use core::borrow::{Borrow, BorrowMut};
 use core::mem::{size_of, transmute};
 use core::ops::{Deref, DerefMut};
 
-use zk_evm_derive::{Columns, DerefColumns};
+use zk_evm_proc_macro::{Columns, DerefColumns};
 
 /// Structure representing the flags for the various opcodes.
 #[repr(C)]

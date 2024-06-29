@@ -1,6 +1,6 @@
-use zk_evm_derive::DerefColumns;
+use zk_evm_proc_macro::Columns;
 
-#[derive(DerefColumns)]
+#[derive(Columns)]
 struct Columns<T> {
     a: T,
     b: [T; 3],

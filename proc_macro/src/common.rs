@@ -4,7 +4,7 @@ use syn::{token, Attribute, Meta};
 /// Prefixes an error message and generates a `syn::Error` from the message.
 macro_rules! span_err {
     ($ast:expr, $msg:literal $(,)?) => {
-        ::syn::Error::new_spanned($ast, ::core::concat!("zk_evm_derive error: ", $msg))
+        ::syn::Error::new_spanned($ast, ::core::concat!("zk_evm_proc_macro error: ", $msg))
     };
 }
 pub(crate) use span_err;

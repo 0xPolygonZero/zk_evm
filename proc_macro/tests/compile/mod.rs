@@ -1,6 +1,6 @@
 mod test_impls;
 
-use zk_evm_derive::{Columns, DerefColumns};
+use zk_evm_proc_macro::{Columns, DerefColumns};
 
 #[repr(C)]
 pub struct NestedColumns<T> {
