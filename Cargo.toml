@@ -112,10 +112,10 @@ rpc = { path = "zero_bin/rpc" }
 zero_bin_common = { path = "zero_bin/common" }
 
 # plonky2-related dependencies
-plonky2 = "0.2.2"
-plonky2_maybe_rayon = "0.2.0"
-plonky2_util = "0.2.0"
-starky = "0.4.0"
+plonky2 = { path = "../plonky2/plonky2"}
+plonky2_maybe_rayon = { path = "../plonky2/maybe_rayon"}
+plonky2_util = { path = "../plonky2/util"}
+starky = { path = "../plonky2/starky"}
 
 # proc macro related dependencies
 proc-macro2 = "1.0"
