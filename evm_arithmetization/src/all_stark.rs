@@ -120,6 +120,33 @@ impl Table {
             Self::MemAfter,
         ]
     }
+
+    /// Returns all STARK table indices in descending order of their padded
+    /// trace degrees.
+    pub(crate) const fn all_sorted() -> [Self; NUM_TABLES] {
+        [
+            Self::Memory,
+            Self::MemBefore,
+            Self::MemAfter,
+            Self::Cpu,
+            Self::Arithmetic,
+            Self::BytePacking,
+            Self::Keccak,
+            Self::Logic,
+            Self::KeccakSponge,
+        ]
+    }
+
+    /// Returns the ordered position of the tables. This is the inverse of
+    /// `all_sorted()`.
+    pub(crate) const fn table_to_sorted_index() -> [usize; NUM_TABLES] {
+        [4, 5, 3, 6, 8, 7, 0, 1, 2]
+    }
+
+    /// Returns all STARK padded trace degrees in descending order.
+    pub(crate) const fn all_degree_logs() -> [usize; NUM_TABLES] {
+        [23, 22, 22, 20, 19, 19, 19, 17, 14]
+    }
 }
 
 /// Returns all the `CrossTableLookups` used for proving the EVM.

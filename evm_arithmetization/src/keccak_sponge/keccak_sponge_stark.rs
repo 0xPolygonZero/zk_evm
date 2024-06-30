@@ -4,6 +4,7 @@ use core::marker::PhantomData;
 use core::mem::size_of;
 
 use itertools::Itertools;
+use num::integer::div_ceil;
 use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::packed::PackedField;
 use plonky2::field::polynomial::PolynomialValues;
