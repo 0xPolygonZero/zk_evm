@@ -14,11 +14,12 @@ use trace_decoder::trace_protocol::{
     SeparateTriePreImages, TrieDirect, TxnInfo,
 };
 
+use crate::zero_bin_provider::CachedProvider;
 use crate::Compat;
 
 /// Processes the state witness for the given block.
 pub async fn process_state_witness<ProviderT, TransportT>(
-    provider: &ProviderT,
+    cached_provider: &CachedProvider<ProviderT, TransportT>,
     block: Block,
     txn_infos: &[TxnInfo],
 ) -> anyhow::Result<BlockTraceTriePreImages>
@@ -32,15 +33,15 @@ where
         .header
         .number
         .context("Block number not returned with block")?;
-    let prev_state_root = provider
+    let prev_state_root = cached_provider
         .get_block((block_number - 1).into(), BlockTransactionsKind::Hashes)
         .await?
-        .context("Failed to get previous block")?
         .header
         .state_root;
 
     let (state, storage_proofs) =
-        generate_state_witness(prev_state_root, state_access, provider, block_number).await?;
+        generate_state_witness(prev_state_root, state_access, cached_provider, block_number)
+            .await?;
 
     Ok(BlockTraceTriePreImages::Separate(SeparateTriePreImages {
         state: SeparateTriePreImage::Direct(TrieDirect(state.build())),
@@ -97,7 +98,7 @@ pub fn process_states_access(
 async fn generate_state_witness<ProviderT, TransportT>(
     prev_state_root: B256,
     accounts_state: HashMap<Address, HashSet<StorageKey>>,
-    provider: &ProviderT,
+    cached_provider: &CachedProvider<ProviderT, TransportT>,
     block_number: u64,
 ) -> anyhow::Result<(
     PartialTrieBuilder<HashedPartialTrie>,
@@ -111,7 +112,7 @@ where
     let mut storage_proofs = HashMap::<B256, PartialTrieBuilder<HashedPartialTrie>>::new();
 
     let (account_proofs, next_account_proofs) =
-        fetch_proof_data(accounts_state, provider, block_number).await?;
+        fetch_proof_data(accounts_state, cached_provider, block_number).await?;
 
     // Insert account proofs
     for (address, proof) in account_proofs.into_iter() {
@@ -146,7 +147,7 @@ where
 /// Fetches the proof data for the given accounts and associated storage keys.
 async fn fetch_proof_data<ProviderT, TransportT>(
     accounts_state: HashMap<Address, HashSet<StorageKey>>,
-    provider: &ProviderT,
+    provider: &CachedProvider<ProviderT, TransportT>,
     block_number: u64,
 ) -> anyhow::Result<(
     Vec<(Address, EIP1186AccountProofResponse)>,
@@ -161,6 +162,7 @@ where
         .into_iter()
         .map(|(address, keys)| async move {
             let proof = provider
+                .as_provider()
                 .get_proof(address, keys.into_iter().collect())
                 .block_id((block_number - 1).into())
                 .await
@@ -173,6 +175,7 @@ where
         .into_iter()
         .map(|(address, keys)| async move {
             let proof = provider
+                .as_provider()
                 .get_proof(address, keys.into_iter().collect())
                 .block_id(block_number.into())
                 .await
