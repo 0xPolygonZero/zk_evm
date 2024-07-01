@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y libjemalloc2 libjemalloc-dev make libss
 
 RUN mkdir -p zero_bin
 COPY Cargo.toml .
-# Cleanup all workspace members and add again selected crates
+# Cleanup all workspace members and add selected crates again
 RUN sed -i '/members =/{:a;N;/]/!ba};//d' Cargo.toml
 RUN sed -i 's#\[workspace\]#\[workspace\]\nmembers = \["zero_bin\/leader", "zero_bin\/prover", "zero_bin\/rpc", "zero_bin\/common", \
  "zero_bin\/ops"\, "evm_arithmetization", "trace_decoder", "mpt_trie"\]#' Cargo.toml
