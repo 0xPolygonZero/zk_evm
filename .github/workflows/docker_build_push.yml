@@ -1,0 +1,83 @@
+name: Docker Build & Push
+
+on:
+  push:
+    branches: [develop, main]
+  release:
+    types: [created]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_LEADER: ${{ github.repository }}-leader
+  IMAGE_NAME_WORKER: ${{ github.repository }}-worker
+
+jobs:
+  docker:
+    name: Build and push leader and worker docker images to GitHub Container Registry
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Leader Docker
+        id: meta_leader
+        uses: docker/metadata-action@v5
+        with:
+          images: | 
+            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LEADER }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Push to GitHub Container Registry - Leader
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./leader.Dockerfile
+          push: true
+          # platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta_leader.outputs.tags }}
+          labels: ${{ steps.meta_leader.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Extract metadata (tags, labels) for Worker Docker
+        id: meta_worker
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Push to GitHub Container Registry - Worker
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./worker.Dockerfile
+          push: true
+          # platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta_worker.outputs.tags }}
+          labels: ${{ steps.meta_worker.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
