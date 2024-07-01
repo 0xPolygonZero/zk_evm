@@ -40,7 +40,7 @@ where
         .as_transactions()
         .context("No transactions in block")?
         .iter()
-        .map(|tx| super::txn::process_transaction(provider, tx))
+        .map(|tx| process_transaction(provider, tx))
         .collect::<FuturesOrdered<_>>()
         .try_fold(
             (HashMap::new(), Vec::new()),

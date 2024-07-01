@@ -23,6 +23,7 @@ futures = { workspace = true }
 url = { workspace = true }
 __compat_primitive_types = { workspace = true }
 tower = { workspace = true, features = ["retry"] }
+lru = { workspace = true }
 
 # Local dependencies
 compat = { workspace = true }

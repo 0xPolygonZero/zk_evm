@@ -2,6 +2,7 @@ use std::io;
 
 use alloy::rpc::types::eth::BlockId;
 use clap::{Parser, ValueHint};
+use rpc::zero_bin_provider::CachedProvider;
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
@@ -53,9 +54,15 @@ impl Cli {
                     checkpoint_block_number.unwrap_or((start_block - 1).into());
                 let block_interval = BlockInterval::Range(start_block..end_block + 1);
 
+                let cached_provider = CachedProvider::new(build_http_retry_provider(
+                    rpc_url.clone(),
+                    backoff,
+                    max_retries,
+                ));
+
                 // Retrieve prover input from the Erigon node
                 let prover_input = rpc::prover_input(
-                    &build_http_retry_provider(rpc_url, backoff, max_retries),
+                    &cached_provider,
                     block_interval,
                     checkpoint_block_number,
                     rpc_type,

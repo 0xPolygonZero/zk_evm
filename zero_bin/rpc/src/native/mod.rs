@@ -6,10 +6,11 @@ use alloy::{
     rpc::types::eth::{BlockId, BlockTransactionsKind},
     transports::Transport,
 };
-use anyhow::Context as _;
 use futures::try_join;
 use prover::BlockProverInput;
 use trace_decoder::trace_protocol::BlockTrace;
+
+use crate::zero_bin_provider::CachedProvider;
 
 mod state;
 mod txn;
@@ -18,7 +19,7 @@ type CodeDb = HashMap<__compat_primitive_types::H256, Vec<u8>>;
 
 /// Fetches the prover input for the given BlockId.
 pub async fn block_prover_input<ProviderT, TransportT>(
-    provider: &ProviderT,
+    provider: &CachedProvider<ProviderT, TransportT>,
     block_number: BlockId,
     checkpoint_state_trie_root: B256,
 ) -> anyhow::Result<BlockProverInput>
@@ -27,8 +28,8 @@ where
     TransportT: Transport + Clone,
 {
     let (block_trace, other_data) = try_join!(
-        process_block_trace(&provider, block_number),
-        crate::fetch_other_block_data(&provider, block_number, checkpoint_state_trie_root,)
+        process_block_trace(provider, block_number),
+        crate::fetch_other_block_data(provider, block_number, checkpoint_state_trie_root,)
     )?;
 
     Ok(BlockProverInput {
@@ -39,20 +40,20 @@ where
 
 /// Processes the block with the given block number and returns the block trace.
 async fn process_block_trace<ProviderT, TransportT>(
-    provider: &ProviderT,
+    cached_provider: &CachedProvider<ProviderT, TransportT>,
     block_number: BlockId,
 ) -> anyhow::Result<BlockTrace>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let block = provider
+    let block = cached_provider
         .get_block(block_number, BlockTransactionsKind::Full)
-        .await?
-        .context("target block does not exist")?;
+        .await?;
 
-    let (code_db, txn_info) = txn::process_transactions(&block, provider).await?;
-    let trie_pre_images = state::process_state_witness(provider, block, &txn_info).await?;
+    let (code_db, txn_info) =
+        txn::process_transactions(&block, cached_provider.as_provider()).await?;
+    let trie_pre_images = state::process_state_witness(cached_provider, block, &txn_info).await?;
 
     Ok(BlockTrace {
         txn_info,

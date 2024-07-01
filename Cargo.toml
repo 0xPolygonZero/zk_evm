@@ -101,6 +101,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uint = "0.9.5"
 url = "2.5.2"
+lru = "0.12.3"
 
 # zero-bin related dependencies
 ops = { path = "zero_bin/ops" }
