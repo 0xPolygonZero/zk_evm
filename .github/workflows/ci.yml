@@ -176,10 +176,6 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
-  simple_proof_regular:
-    name: Execute bash script to generate and verify a proof for a small block.
-    runs-on: zero-ci
-
   # TODO: Update artifact files
   # simple_proof_regular:
   #   name: Execute bash script to generate and verify a proof for a small block.
