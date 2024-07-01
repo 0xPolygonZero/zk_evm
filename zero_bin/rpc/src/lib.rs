@@ -89,11 +89,20 @@ where
         .context("target block is missing field `number`")?;
     let chain_id = cached_provider.as_provider().get_chain_id().await?;
 
+    // For one block, we will fetch 128 previous blocks to get hashes instead of
+    // 256. But for two consecutive blocks (odd and even) we will fetch 256
+    // previous blocks in total. To overcome this, we add offset so that we
+    // always start fetching from the odd block and eventually skip additional
+    // block for even target_block_number.
+    let odd_offset: i128 = target_block_number as i128 % 2;
+
     let previous_block_numbers =
-        std::iter::successors(Some(target_block_number as i128 - 1), |&it| Some(it - 1))
-            .take(PREVIOUS_HASHES_COUNT)
-            .filter(|i| *i >= 0)
-            .collect::<Vec<_>>();
+        std::iter::successors(Some(target_block_number as i128 - 1 + odd_offset), |&it| {
+            Some(it - 1)
+        })
+        .take(PREVIOUS_HASHES_COUNT)
+        .filter(|i| *i >= 0)
+        .collect::<Vec<_>>();
     let concurrency = previous_block_numbers.len();
     let collected_hashes = futures::stream::iter(
         previous_block_numbers
@@ -128,6 +137,7 @@ where
     collected_hashes
         .into_iter()
         .flatten()
+        .skip(odd_offset as usize)
         .for_each(|(hash, block_num)| {
             if let (Some(hash), Some(block_num)) = (hash, block_num) {
                 // Most recent previous block hash is expected at the end of the array
