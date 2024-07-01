@@ -386,9 +386,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for LogicStark<F,
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
+    use itertools::Itertools;
+    use plonky2::field::goldilocks_field::GoldilocksField;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use rand::{Rng, SeedableRng};
+    use rand_chacha::ChaCha8Rng;
     use starky::stark_testing::{test_stark_circuit_constraints, test_stark_low_degree};
 
+    use super::*;
     use crate::logic::LogicStark;
 
     #[test]
@@ -415,5 +420,49 @@ mod tests {
             f: Default::default(),
         };
         test_stark_circuit_constraints::<F, C, S, D>(stark)
+    }
+
+    #[test]
+    fn test_generate_eval_consistency() {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type S = LogicStark<F, D>;
+
+        let mut rng = ChaCha8Rng::seed_from_u64(0x6feb51b7ec230f25);
+        const N_ITERS: usize = 1000;
+
+        for _ in 0..N_ITERS {
+            for op in [Op::And, Op::Or, Op::Xor] {
+                // generate a trace row from an operation on random values
+                let operation = Operation::new(op, U256(rng.gen()), U256(rng.gen()));
+                let expected = operation.result;
+                let row = operation.into_row::<F>();
+                let lv = EvmStarkFrame::from_values(&row, &[F::ZERO; NUM_COLUMNS], &[]);
+
+                let stark = S::default();
+                let mut constraint_consumer = ConstraintConsumer::new(
+                    vec![GoldilocksField(2), GoldilocksField(3), GoldilocksField(5)],
+                    F::ONE,
+                    F::ONE,
+                    F::ONE,
+                );
+
+                stark.eval_packed_generic(&lv, &mut constraint_consumer);
+                for acc in constraint_consumer.accumulators() {
+                    assert_eq!(acc, F::ZERO);
+                }
+
+                let expected_limbs = expected.as_ref().iter().flat_map(|&limb| {
+                    [
+                        F::from_canonical_u32(limb as u32),
+                        F::from_canonical_u32((limb >> 32) as u32),
+                    ]
+                });
+                assert!(expected_limbs
+                    .zip_eq(&row[LOGIC_COL_MAP.result[0]..])
+                    .all(|(x, &y)| x == y));
+            }
+        }
     }
 }
