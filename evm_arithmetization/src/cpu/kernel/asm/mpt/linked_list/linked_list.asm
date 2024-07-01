@@ -246,6 +246,7 @@ global insert_new_account:
     %increment
     DUP1
     DUP5
+    %clone_account
     MSTORE_GENERAL
     %increment
     DUP1
@@ -446,7 +447,7 @@ loop_store_initial_slots:
     MLOAD_GENERAL
 global debug_payload_ptr:
     // stack: payload_ptr, cpy_ptr, current_node_ptr, retdest
-    %mload_trie_data // nonce
+    %mload_trie_data
     %append_to_trie_data
     // stack: cpy_ptr, current_node_ptr, retdest
     DUP2
@@ -611,6 +612,7 @@ next_node_ok_with_value:
     %increment
     DUP1
     DUP6
+    %clone_slot
     MSTORE_GENERAL
     // stack: new_ptr + 3, next_ptr, addr, key, new_payload_ptr, retdest
     %increment
