@@ -15,7 +15,7 @@ use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{MerkleCapTarget, RichField};
+use plonky2::hash::hash_types::{MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -49,7 +49,10 @@ use crate::proof::{
     FinalPublicValues, MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget,
     TrieRoots, TrieRootsTarget, TARGET_HASH_SIZE,
 };
-use crate::prover::{check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData};
+use crate::prover::{
+    check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData,
+    SegmentDataIterator,
+};
 use crate::recursive_verifier::{
     add_common_recursion_gates, add_virtual_public_values, get_memory_extra_looking_sum_circuit,
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
@@ -64,12 +67,14 @@ use crate::witness::state::RegistersState;
 /// this size.
 const THRESHOLD_DEGREE_BITS: usize = 13;
 
+#[derive(Clone)]
 pub struct ProverOutputData<F, C, const D: usize>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
     C::Hasher: AlgebraicHasher<F>,
 {
+    pub is_dummy: bool,
     pub proof_with_pis: ProofWithPublicInputs<F, C, D>,
     pub public_values: PublicValues,
 }
@@ -187,7 +192,7 @@ where
 {
     pub circuit: CircuitData<F, C, D>,
     lhs: AggregationChildTarget<D>,
-    rhs: AggregationChildTarget<D>,
+    rhs: AggregationChildWithDummyTarget<D>,
     public_values: PublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
 }
@@ -220,7 +225,7 @@ where
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         let public_values = PublicValuesTarget::from_buffer(buffer)?;
         let lhs = AggregationChildTarget::from_buffer(buffer)?;
-        let rhs = AggregationChildTarget::from_buffer(buffer)?;
+        let rhs = AggregationChildWithDummyTarget::from_buffer(buffer)?;
         Ok(Self {
             circuit,
             lhs,
@@ -268,6 +273,52 @@ impl<const D: usize> AggregationChildTarget<D> {
             PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs, len_mem_cap);
         let segment_pv =
             PublicValuesTarget::from_public_inputs(&self.proof.public_inputs, len_mem_cap);
+        PublicValuesTarget::select(builder, self.is_agg, agg_pv, segment_pv)
+    }
+}
+
+#[derive(Eq, PartialEq, Debug)]
+struct AggregationChildWithDummyTarget<const D: usize> {
+    is_agg: BoolTarget,
+    is_dummy: BoolTarget,
+    agg_proof: ProofWithPublicInputsTarget<D>,
+    real_proof: ProofWithPublicInputsTarget<D>,
+}
+
+impl<const D: usize> AggregationChildWithDummyTarget<D> {
+    fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        buffer.write_target_bool(self.is_agg)?;
+        buffer.write_target_bool(self.is_dummy)?;
+        buffer.write_target_proof_with_public_inputs(&self.agg_proof)?;
+        buffer.write_target_proof_with_public_inputs(&self.real_proof)?;
+        Ok(())
+    }
+
+    fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let is_agg = buffer.read_target_bool()?;
+        let is_dummy = buffer.read_target_bool()?;
+        let agg_proof = buffer.read_target_proof_with_public_inputs()?;
+        let real_proof = buffer.read_target_proof_with_public_inputs()?;
+        Ok(Self {
+            is_agg,
+            is_dummy,
+            agg_proof,
+            real_proof,
+        })
+    }
+
+    // `len_mem_cap` is the length of the Merkle
+    // caps for `MemBefore` and `MemAfter`.
+    fn public_values<F: RichField + Extendable<D>>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        len_mem_cap: usize,
+    ) -> PublicValuesTarget {
+        let agg_pv =
+            PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs, len_mem_cap);
+        let segment_pv =
+            PublicValuesTarget::from_public_inputs(&self.real_proof.public_inputs, len_mem_cap);
+
         PublicValuesTarget::select(builder, self.is_agg, agg_pv, segment_pv)
     }
 }
@@ -802,28 +853,24 @@ where
         let public_values = add_virtual_public_values(&mut builder, cap_before_len);
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
+        // The right hand side child might be dummy.
         let lhs_segment = Self::add_segment_agg_child(&mut builder, root);
-        let rhs_segment = Self::add_segment_agg_child(&mut builder, root);
+        let rhs_segment =
+            Self::add_segment_agg_child_with_dummy(&mut builder, root, lhs_segment.proof.clone());
 
         let lhs_pv = lhs_segment.public_values(&mut builder, cap_before_len);
         let rhs_pv = rhs_segment.public_values(&mut builder, cap_before_len);
 
-        // All the block metadata is the same for both segments. It is also the case for
-        // extra_block_data.
+        let is_dummy = rhs_segment.is_dummy;
+        let one = builder.one();
+        let is_not_dummy = builder.sub(one, is_dummy.target);
+        let is_not_dummy = BoolTarget::new_unsafe(is_not_dummy);
+
+        // Always connect the lhs to the aggregation public values.
         TrieRootsTarget::connect(
             &mut builder,
             public_values.trie_roots_before,
             lhs_pv.trie_roots_before,
-        );
-        TrieRootsTarget::connect(
-            &mut builder,
-            public_values.trie_roots_after,
-            rhs_pv.trie_roots_after,
-        );
-        TrieRootsTarget::connect(
-            &mut builder,
-            public_values.trie_roots_before,
-            rhs_pv.trie_roots_before,
         );
         TrieRootsTarget::connect(
             &mut builder,
@@ -833,17 +880,7 @@ where
         BlockMetadataTarget::connect(
             &mut builder,
             public_values.block_metadata,
-            rhs_pv.block_metadata,
-        );
-        BlockMetadataTarget::connect(
-            &mut builder,
-            public_values.block_metadata,
             lhs_pv.block_metadata,
-        );
-        BlockHashesTarget::connect(
-            &mut builder,
-            public_values.block_hashes,
-            rhs_pv.block_hashes,
         );
         BlockHashesTarget::connect(
             &mut builder,
@@ -853,41 +890,96 @@ where
         ExtraBlockDataTarget::connect(
             &mut builder,
             public_values.extra_block_data,
-            rhs_pv.extra_block_data,
-        );
-        ExtraBlockDataTarget::connect(
-            &mut builder,
-            public_values.extra_block_data,
             lhs_pv.extra_block_data,
-        );
-
-        // Connect registers and merkle caps between segments.
-        RegistersDataTarget::connect(
-            &mut builder,
-            public_values.registers_after.clone(),
-            rhs_pv.registers_after.clone(),
         );
         RegistersDataTarget::connect(
             &mut builder,
             public_values.registers_before.clone(),
             lhs_pv.registers_before.clone(),
         );
-        RegistersDataTarget::connect(
-            &mut builder,
-            lhs_pv.registers_after,
-            rhs_pv.registers_before.clone(),
-        );
         MemCapTarget::connect(
             &mut builder,
             public_values.mem_before.clone(),
             lhs_pv.mem_before.clone(),
         );
-        MemCapTarget::connect(
+
+        // If the rhs is a real proof, all the block metadata must be the same for both
+        // segments. It is also the case for the extra block data.
+        TrieRootsTarget::conditional_assert_eq(
             &mut builder,
-            public_values.mem_after.clone(),
-            rhs_pv.mem_after,
+            is_not_dummy,
+            public_values.trie_roots_before,
+            rhs_pv.trie_roots_before,
         );
-        MemCapTarget::connect(&mut builder, lhs_pv.mem_after, rhs_pv.mem_before);
+        TrieRootsTarget::conditional_assert_eq(
+            &mut builder,
+            is_not_dummy,
+            public_values.trie_roots_after,
+            rhs_pv.trie_roots_after,
+        );
+        BlockMetadataTarget::conditional_assert_eq(
+            &mut builder,
+            is_not_dummy,
+            public_values.block_metadata,
+            rhs_pv.block_metadata,
+        );
+        BlockHashesTarget::conditional_assert_eq(
+            &mut builder,
+            is_not_dummy,
+            public_values.block_hashes,
+            rhs_pv.block_hashes,
+        );
+        ExtraBlockDataTarget::conditional_assert_eq(
+            &mut builder,
+            is_not_dummy,
+            public_values.extra_block_data,
+            rhs_pv.extra_block_data,
+        );
+
+        // If the rhs is a real proof: Connect registers and merkle caps between
+        // segments.
+        RegistersDataTarget::conditional_assert_eq(
+            &mut builder,
+            is_not_dummy,
+            public_values.registers_after.clone(),
+            rhs_pv.registers_after.clone(),
+        );
+        RegistersDataTarget::conditional_assert_eq(
+            &mut builder,
+            is_not_dummy,
+            lhs_pv.registers_after.clone(),
+            rhs_pv.registers_before.clone(),
+        );
+        MemCapTarget::conditional_assert_eq(
+            &mut builder,
+            is_not_dummy,
+            public_values.mem_after.clone(),
+            rhs_pv.mem_after.clone(),
+        );
+        MemCapTarget::conditional_assert_eq(
+            &mut builder,
+            is_not_dummy,
+            lhs_pv.mem_after.clone(),
+            rhs_pv.mem_before.clone(),
+        );
+
+        // If the rhs is a dummy, then the lhs must be a segment.
+        let constr = builder.mul(is_dummy.target, lhs_segment.is_agg.target);
+        builder.assert_zero(constr);
+
+        // If the rhs is a dummy, then the aggregation PVs are equal to the lhs PVs.
+        MemCapTarget::conditional_assert_eq(
+            &mut builder,
+            is_dummy,
+            public_values.mem_after.clone(),
+            lhs_pv.mem_after,
+        );
+        RegistersDataTarget::conditional_assert_eq(
+            &mut builder,
+            is_dummy,
+            public_values.registers_after.clone(),
+            lhs_pv.registers_after,
+        );
 
         // Pad to match the root circuit's degree.
         while log2_ceil(builder.num_gates()) < root.circuit.common.degree_bits() {
@@ -1186,6 +1278,36 @@ where
         }
     }
 
+    fn add_segment_agg_child_with_dummy(
+        builder: &mut CircuitBuilder<F, D>,
+        root: &RootCircuitData<F, C, D>,
+        dummy_proof: ProofWithPublicInputsTarget<D>,
+    ) -> AggregationChildWithDummyTarget<D> {
+        let common = &root.circuit.common;
+        let root_vk = builder.constant_verifier_data(&root.circuit.verifier_only);
+        let is_agg = builder.add_virtual_bool_target_safe();
+        let agg_proof = builder.add_virtual_proof_with_pis(common);
+        let is_dummy = builder.add_virtual_bool_target_safe();
+        let real_proof = builder.add_virtual_proof_with_pis(common);
+
+        let segment_proof = builder.select_proof_with_pis(is_dummy, &dummy_proof, &real_proof);
+        builder
+            .conditionally_verify_cyclic_proof::<C>(
+                is_agg,
+                &agg_proof,
+                &segment_proof,
+                &root_vk,
+                common,
+            )
+            .expect("Failed to build cyclic recursion circuit");
+        AggregationChildWithDummyTarget {
+            is_agg,
+            is_dummy,
+            agg_proof,
+            real_proof,
+        }
+    }
+
     fn add_txn_agg_child(
         builder: &mut CircuitBuilder<F, D>,
         segment_agg: &SegmentAggregationCircuitData<F, C, D>,
@@ -1424,6 +1546,7 @@ where
         let root_proof = self.root.circuit.prove(root_inputs)?;
 
         Ok(ProverOutputData {
+            is_dummy: false,
             proof_with_pis: root_proof,
             public_values: all_proof.public_values,
         })
@@ -1440,19 +1563,32 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
-        let mut all_data_segments =
-            generate_all_data_segments::<F>(Some(max_cpu_len_log), &generation_inputs)?;
-        let mut proofs = Vec::with_capacity(all_data_segments.len());
-        for mut data in all_data_segments {
+        let mut it_segment_data = SegmentDataIterator {
+            inputs: &generation_inputs,
+            partial_next_data: None,
+            max_cpu_len_log: Some(max_cpu_len_log),
+        };
+
+        let mut proofs = vec![];
+
+        for mut next_data in it_segment_data {
             let proof = self.prove_segment(
                 all_stark,
                 config,
                 generation_inputs.clone(),
-                &mut data,
+                &mut next_data.1,
                 timing,
                 abort_signal.clone(),
             )?;
             proofs.push(proof);
+        }
+
+        // Since aggregations require at least two segment proofs, add a dummy proof if
+        // there is only one proof.
+        if proofs.len() == 1 {
+            let mut first_proof = proofs[0].clone();
+            first_proof.is_dummy = true;
+            proofs.push(first_proof);
         }
 
         Ok(proofs)
@@ -1567,34 +1703,29 @@ where
     ///
     /// - `lhs_is_agg`: a boolean indicating whether the left child proof is an
     ///   aggregation proof or a regular segment proof.
-    /// - `lhs_proof`: the left child proof.
-    /// - `lhs_public_values`: the public values associated to the right child
-    ///   proof.
+    /// - `lhs_proof`: the left child prover output data.
     /// - `rhs_is_agg`: a boolean indicating whether the right child proof is an
     ///   aggregation proof or a regular transaction proof.
-    /// - `rhs_proof`: the right child proof.
-    /// - `rhs_public_values`: the public values associated to the right child
-    ///   proof.
+    /// - `rhs_proof`: the right child prover output data.
     ///
     /// # Outputs
     ///
-    /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
-    /// its [`PublicValues`]. Only the proof with public inputs is necessary
-    /// for a verifier to assert correctness of the computation,
-    /// but the public values are output for the prover convenience, as these
-    /// are necessary during proof aggregation.
+    /// This method outputs a [`ProverOutputData<F, C, D>`]. Only the proof with
+    /// public inputs is necessary for a verifier to assert correctness of
+    /// the computation, but the public values and `is_dummy` are output for the
+    /// prover convenience, as these are necessary during proof aggregation.
     pub fn prove_segment_aggregation(
         &self,
         lhs_is_agg: bool,
-        lhs_proof: &ProofWithPublicInputs<F, C, D>,
-        lhs_public_values: PublicValues,
-
+        lhs_prover_output: &ProverOutputData<F, C, D>,
         rhs_is_agg: bool,
-        rhs_proof: &ProofWithPublicInputs<F, C, D>,
-        rhs_public_values: PublicValues,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+        rhs_prover_output: &ProverOutputData<F, C, D>,
+    ) -> anyhow::Result<ProverOutputData<F, C, D>> {
         let mut agg_inputs = PartialWitness::new();
 
+        let lhs_proof = &lhs_prover_output.proof_with_pis;
+        let rhs_proof = &rhs_prover_output.proof_with_pis;
+        let rhs_is_dummy = rhs_prover_output.is_dummy;
         Self::set_dummy_if_necessary(
             &self.segment_aggregation.lhs,
             lhs_is_agg,
@@ -1603,12 +1734,25 @@ where
             lhs_proof,
         );
 
-        Self::set_dummy_if_necessary(
+        let len_mem_cap = self
+            .segment_aggregation
+            .public_values
+            .mem_before
+            .mem_cap
+            .0
+            .len();
+
+        // If rhs is dummy, the rhs proof is also set to be the lhs.
+        let real_rhs_proof = if rhs_is_dummy { lhs_proof } else { rhs_proof };
+
+        Self::set_dummy_if_necessary_with_dummy(
             &self.segment_aggregation.rhs,
             rhs_is_agg,
+            rhs_is_dummy,
             &self.segment_aggregation.circuit,
             &mut agg_inputs,
-            rhs_proof,
+            real_rhs_proof,
+            len_mem_cap,
         );
 
         agg_inputs.set_verifier_data_target(
@@ -1617,24 +1761,34 @@ where
         );
 
         // Aggregates both `PublicValues` from the provided proofs into a single one.
+
+        let lhs_public_values = &lhs_prover_output.public_values;
+        let rhs_public_values = &rhs_prover_output.public_values;
+
+        let real_public_values = if rhs_is_dummy {
+            lhs_public_values.clone()
+        } else {
+            rhs_public_values.clone()
+        };
+
         let agg_public_values = PublicValues {
-            trie_roots_before: lhs_public_values.trie_roots_before,
-            trie_roots_after: rhs_public_values.trie_roots_after,
+            trie_roots_before: lhs_public_values.trie_roots_before.clone(),
+            trie_roots_after: real_public_values.trie_roots_after,
             extra_block_data: ExtraBlockData {
                 checkpoint_state_trie_root: lhs_public_values
                     .extra_block_data
                     .checkpoint_state_trie_root,
                 txn_number_before: lhs_public_values.extra_block_data.txn_number_before,
-                txn_number_after: rhs_public_values.extra_block_data.txn_number_after,
+                txn_number_after: real_public_values.extra_block_data.txn_number_after,
                 gas_used_before: lhs_public_values.extra_block_data.gas_used_before,
-                gas_used_after: rhs_public_values.extra_block_data.gas_used_after,
+                gas_used_after: real_public_values.extra_block_data.gas_used_after,
             },
-            block_metadata: rhs_public_values.block_metadata,
-            block_hashes: rhs_public_values.block_hashes,
-            registers_before: lhs_public_values.registers_before,
-            registers_after: rhs_public_values.registers_after,
-            mem_before: lhs_public_values.mem_before,
-            mem_after: rhs_public_values.mem_after,
+            block_metadata: real_public_values.block_metadata,
+            block_hashes: real_public_values.block_hashes,
+            registers_before: lhs_public_values.registers_before.clone(),
+            registers_after: real_public_values.registers_after,
+            mem_before: lhs_public_values.mem_before.clone(),
+            mem_after: real_public_values.mem_after,
         };
 
         set_public_value_targets(
@@ -1647,7 +1801,12 @@ where
         })?;
 
         let aggregation_proof = self.segment_aggregation.circuit.prove(agg_inputs)?;
-        Ok((aggregation_proof, agg_public_values))
+        let agg_output = ProverOutputData {
+            is_dummy: false,
+            proof_with_pis: aggregation_proof,
+            public_values: agg_public_values,
+        };
+        Ok(agg_output)
     }
 
     pub fn verify_segment_aggregation(
@@ -1812,6 +1971,34 @@ where
             )
         }
         agg_inputs.set_proof_with_pis_target(&agg_child.proof, proof);
+    }
+
+    /// If the proof is not an aggregation, we set the cyclic vk to a dummy
+    /// value, so that it corresponds to the aggregation cyclic vk. If the proof
+    /// is dummy, we set `is_dummy` to `true`. Note that only the rhs can be
+    /// dummy.
+    fn set_dummy_if_necessary_with_dummy(
+        agg_child: &AggregationChildWithDummyTarget<D>,
+        is_agg: bool,
+        is_dummy: bool,
+        circuit: &CircuitData<F, C, D>,
+        agg_inputs: &mut PartialWitness<F>,
+        proof: &ProofWithPublicInputs<F, C, D>,
+        len_mem_cap: usize,
+    ) {
+        agg_inputs.set_bool_target(agg_child.is_agg, is_agg);
+        agg_inputs.set_bool_target(agg_child.is_dummy, is_dummy);
+        if is_agg {
+            agg_inputs.set_proof_with_pis_target(&agg_child.agg_proof, proof);
+        } else {
+            Self::set_dummy_proof_with_cyclic_vk_pis(
+                circuit,
+                agg_inputs,
+                &agg_child.agg_proof,
+                proof,
+            );
+        }
+        agg_inputs.set_proof_with_pis_target(&agg_child.real_proof, proof);
     }
 
     /// Create a final block proof, once all transactions of a given block have

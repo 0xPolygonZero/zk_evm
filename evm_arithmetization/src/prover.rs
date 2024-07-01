@@ -5,6 +5,7 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
+use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
@@ -25,7 +26,7 @@ use starky::stark::Stark;
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
-use crate::generation::state::GenerationState;
+use crate::generation::state::{GenerationState, State};
 use crate::generation::{generate_traces, GenerationInputs};
 use crate::get_challenges::observe_public_values;
 use crate::memory::segments::Segment;
@@ -54,6 +55,11 @@ pub struct GenerationSegmentData {
 }
 
 impl GenerationSegmentData {
+    /// Indicates if this segment is a dummy one.
+    pub fn is_dummy(&self) -> bool {
+        self.is_dummy
+    }
+
     /// Retrieves the index of this segment.
     pub fn segment_index(&self) -> usize {
         self.segment_index
@@ -517,6 +523,87 @@ fn build_segment_data<F: RichField>(
     }
 }
 
+pub struct SegmentDataIterator<'a> {
+    pub partial_next_data: Option<GenerationSegmentData>,
+    pub inputs: &'a GenerationInputs,
+    pub max_cpu_len_log: Option<usize>,
+}
+
+type F = GoldilocksField;
+impl<'a> Iterator for SegmentDataIterator<'a> {
+    type Item = (GenerationInputs, GenerationSegmentData);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let cur_and_next_data = generate_next_segment::<F>(
+            self.max_cpu_len_log,
+            self.inputs,
+            self.partial_next_data.clone(),
+        );
+
+        if cur_and_next_data.is_some() {
+            let (data, next_data) = cur_and_next_data.expect("Data cannot be `None`");
+            self.partial_next_data = next_data;
+            Some((self.inputs.clone(), data))
+        } else {
+            None
+        }
+    }
+}
+
+/// Returns the data for the current segment, as well as the data -- except
+/// registers_after -- for the next segment.
+pub(crate) fn generate_next_segment<F: RichField>(
+    max_cpu_len_log: Option<usize>,
+    inputs: &GenerationInputs,
+    partial_segment_data: Option<GenerationSegmentData>,
+) -> Option<(GenerationSegmentData, Option<GenerationSegmentData>)> {
+    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+        KERNEL.global_labels["init"],
+        vec![],
+        inputs,
+        max_cpu_len_log,
+    );
+
+    // Get the (partial) current segment data, if it is provided. Otherwise,
+    // initialize it.
+    let mut segment_data = if let Some(partial) = partial_segment_data {
+        if partial.registers_after.program_counter == KERNEL.global_labels["halt"] {
+            return None;
+        }
+        interpreter
+            .get_mut_generation_state()
+            .set_segment_data(&partial);
+        interpreter.generation_state.memory = partial.memory.clone();
+        partial
+    } else {
+        build_segment_data(0, None, None, None, &interpreter)
+    };
+
+    let segment_index = segment_data.segment_index;
+
+    // Run the interpreter to get `registers_after` and the partial data for the
+    // next segment.
+    if let Ok((updated_registers, mem_after)) =
+        set_registers_and_run(segment_data.registers_after, &mut interpreter)
+    {
+        // Set `registers_after` correctly and push the data.
+        let before_registers = segment_data.registers_after;
+
+        let partial_segment_data = Some(build_segment_data(
+            segment_index + 1,
+            Some(updated_registers),
+            Some(updated_registers),
+            mem_after,
+            &interpreter,
+        ));
+
+        segment_data.registers_after = updated_registers;
+        Some((segment_data, partial_segment_data))
+    } else {
+        None
+    }
+}
+
 /// Returns a vector containing the data required to generate all the segments
 /// of a transaction.
 pub fn generate_all_data_segments<F: RichField>(
@@ -553,39 +640,6 @@ pub fn generate_all_data_segments<F: RichField>(
             mem_after,
             &interpreter,
         );
-    }
-
-    // We need at least two segments to prove a segment aggregation.
-    if all_seg_data.len() == 1 {
-        let mut interpreter = Interpreter::<F>::new_dummy_with_generation_inputs(
-            KERNEL.global_labels["init"],
-            vec![],
-            inputs,
-        );
-
-        let dummy_seg = GenerationSegmentData {
-            is_dummy: true,
-            registers_before: RegistersState::new(),
-            registers_after: RegistersState::new(),
-            max_cpu_len_log: interpreter.get_max_cpu_len_log(),
-            ..all_seg_data[0].clone()
-        };
-        let (updated_registers, mem_after) =
-            set_registers_and_run(dummy_seg.registers_after, &mut interpreter)?;
-        let mut mem_after = mem_after
-            .expect("The interpreter was running, so it should have returned a MemoryState");
-        // During the interpreter initialization, we set the trie data and initialize
-        // `RlpRaw`. But we do not want to pass this information to the first actual
-        // segment in `MemBefore` since the values are not actually accessed in the
-        // dummy generation.
-        mem_after.contexts[0].segments[Segment::RlpRaw.unscale()].content = vec![];
-        mem_after.contexts[0].segments[Segment::TrieData.unscale()].content = vec![];
-        all_seg_data[0].memory = mem_after;
-
-        all_seg_data.insert(0, dummy_seg);
-
-        // We need to update the index of the non-dummy segment, now at position 1.
-        all_seg_data[1].segment_index += 1;
     }
 
     Ok(all_seg_data)

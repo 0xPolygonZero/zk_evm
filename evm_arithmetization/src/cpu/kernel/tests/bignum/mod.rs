@@ -9,7 +9,6 @@ use itertools::Itertools;
 use num::{BigUint, One, Zero};
 use num_bigint::RandBigInt;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
-use plonky2_util::ceil_div_usize;
 use rand::Rng;
 
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -90,7 +89,7 @@ fn max_bignum(bit_size: usize) -> BigUint {
 }
 
 fn bignum_len(a: &BigUint) -> usize {
-    ceil_div_usize(a.bits() as usize, BIGNUM_LIMB_BITS)
+    (a.bits() as usize).div_ceil(BIGNUM_LIMB_BITS)
 }
 
 fn run_test(fn_label: &str, memory: Vec<U256>, stack: Vec<U256>) -> Result<(Vec<U256>, Vec<U256>)> {

@@ -77,13 +77,9 @@ pub(crate) trait State<F: Field> {
     fn get_context(&self) -> usize;
 
     /// Checks whether we have reached the maximal cpu length.
-    fn at_end_segment(&self, opt_max_cpu_len: Option<usize>, is_dummy: bool) -> bool {
-        if let Some(max_cpu_len_log) = opt_max_cpu_len {
-            if is_dummy {
-                self.get_clock() == max_cpu_len_log - NUM_EXTRA_CYCLES_AFTER
-            } else {
-                self.get_clock() == (1 << max_cpu_len_log) - NUM_EXTRA_CYCLES_AFTER
-            }
+    fn at_end_segment(&self, opt_cycle_limit: Option<usize>) -> bool {
+        if let Some(cycle_limit) = opt_cycle_limit {
+            self.get_clock() == cycle_limit
         } else {
             false
         }
@@ -92,10 +88,8 @@ pub(crate) trait State<F: Field> {
     /// Checks whether we have reached the `halt` label in kernel mode.
     fn at_halt(&self) -> bool {
         let halt = KERNEL.global_labels["halt"];
-        let halt_final = KERNEL.global_labels["halt_final"];
         let registers = self.get_registers();
-        registers.is_kernel
-            && (registers.program_counter == halt || registers.program_counter == halt_final)
+        registers.is_kernel && (registers.program_counter == halt)
     }
 
     /// Returns the context in which the jumpdest analysis should end.
@@ -176,12 +170,14 @@ pub(crate) trait State<F: Field> {
     fn run_cpu(
         &mut self,
         max_cpu_len_log: Option<usize>,
-        is_dummy: bool,
     ) -> anyhow::Result<(RegistersState, Option<MemoryState>)>
     where
         Self: Transition<F>,
     {
         let halt_offsets = self.get_halt_offsets();
+
+        let cycle_limit =
+            max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
 
         let mut final_registers = RegistersState::default();
         let final_mem = self.get_active_memory();
@@ -192,7 +188,7 @@ pub(crate) trait State<F: Field> {
             let pc = registers.program_counter;
 
             let halt_final = registers.is_kernel && halt_offsets.contains(&pc);
-            if running && (self.at_halt() || self.at_end_segment(max_cpu_len_log, is_dummy)) {
+            if running && (self.at_halt() || self.at_end_segment(cycle_limit)) {
                 running = false;
                 final_registers = registers;
 

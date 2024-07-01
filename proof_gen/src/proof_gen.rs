@@ -3,10 +3,13 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{prover::GenerationSegmentData, AllStark, GenerationInputs, StarkConfig};
+use evm_arithmetization::{
+    fixed_recursive_verifier::ProverOutputData, prover::GenerationSegmentData, AllStark,
+    GenerationInputs, StarkConfig,
+};
+use hashbrown::HashMap;
 use plonky2::{
     gates::noop::NoopGate,
-    iop::witness::PartialWitness,
     plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
     util::timing::TimingTree,
 };
@@ -17,7 +20,7 @@ use crate::{
         SegmentAggregatableProof, TxnAggregatableProof,
     },
     prover_state::ProverState,
-    types::{Config, Field, PlonkyProofIntern, EXTENSION_DEGREE},
+    types::{Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
 
 /// A type alias for `Result<T, ProofGenError>`.
@@ -70,22 +73,45 @@ pub fn generate_segment_proof(
 /// Generates an aggregation proof from two child proofs.
 ///
 /// Note that the child proofs may be either transaction or aggregation proofs.
+///
+/// If a transaction only contains a single segment, this function must still be
+/// called to generate a `GeneratedSegmentAggProof`. In that case, you can set
+/// `has_dummy` to `true`, and provide an arbitrary proof for the right child.
 pub fn generate_segment_agg_proof(
     p_state: &ProverState,
     lhs_child: &SegmentAggregatableProof,
     rhs_child: &SegmentAggregatableProof,
+    has_dummy: bool,
 ) -> ProofGenResult<GeneratedSegmentAggProof> {
-    let (intern, p_vals) = p_state
+    if has_dummy {
+        assert!(
+            !lhs_child.is_agg(),
+            "Cannot have a dummy segment with an aggregation."
+        );
+    }
+
+    let lhs_prover_output_data = ProverOutputData {
+        is_dummy: false,
+        proof_with_pis: lhs_child.intern().clone(),
+        public_values: lhs_child.public_values(),
+    };
+    let rhs_prover_output_data = ProverOutputData {
+        is_dummy: has_dummy,
+        proof_with_pis: rhs_child.intern().clone(),
+        public_values: rhs_child.public_values(),
+    };
+    let agg_output_data = p_state
         .state
         .prove_segment_aggregation(
             lhs_child.is_agg(),
-            lhs_child.intern(),
-            lhs_child.public_values(),
+            &lhs_prover_output_data,
             rhs_child.is_agg(),
-            rhs_child.intern(),
-            rhs_child.public_values(),
+            &rhs_prover_output_data,
         )
         .map_err(|err| err.to_string())?;
+
+    let p_vals = agg_output_data.public_values;
+    let intern = agg_output_data.proof_with_pis;
 
     Ok(GeneratedSegmentAggProof { p_vals, intern })
 }
@@ -154,13 +180,6 @@ pub fn dummy_proof() -> ProofGenResult<PlonkyProofIntern> {
     builder.add_gate(NoopGate, vec![]);
     let circuit_data = builder.build::<_>();
 
-    let inputs = PartialWitness::new();
-
-    plonky2::plonk::prover::prove::<Field, Config, EXTENSION_DEGREE>(
-        &circuit_data.prover_only,
-        &circuit_data.common,
-        inputs,
-        &mut TimingTree::default(),
-    )
-    .map_err(|e| ProofGenError(e.to_string()))
+    plonky2::recursion::dummy_circuit::dummy_proof(&circuit_data, HashMap::default())
+        .map_err(|e| ProofGenError(e.to_string()))
 }

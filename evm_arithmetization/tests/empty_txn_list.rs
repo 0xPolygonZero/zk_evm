@@ -79,17 +79,7 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
         // Minimal ranges to prove an empty list
-        &[
-            16..17,
-            8..10,
-            7..11,
-            4..15,
-            8..11,
-            4..13,
-            11..18,
-            8..18,
-            7..17,
-        ],
+        &[16..17, 8..9, 8..10, 5..8, 8..9, 4..6, 16..17, 16..17, 7..17],
         &config,
     );
 
@@ -188,42 +178,43 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     );
 
     // We can duplicate the proofs here because the state hasn't mutated.
-    let (segmented_agg_proof, segmented_agg_public_values) = all_circuits
-        .prove_segment_aggregation(
-            false,
-            &segment_proofs_data[0].proof_with_pis,
-            segment_proofs_data[0].public_values.clone(),
-            false,
-            &segment_proofs_data[1].proof_with_pis,
-            segment_proofs_data[1].public_values.clone(),
-        )?;
-    all_circuits.verify_segment_aggregation(&segmented_agg_proof)?;
+    let aggregation_output_data = all_circuits.prove_segment_aggregation(
+        false,
+        &segment_proofs_data[0],
+        false,
+        &segment_proofs_data[1],
+    )?;
+    all_circuits.verify_segment_aggregation(&aggregation_output_data.proof_with_pis)?;
 
-    let (segmented_agg_proof, segmented_agg_public_values) = all_circuits
-        .prove_segment_aggregation(
-            true,
-            &segmented_agg_proof,
-            segmented_agg_public_values,
-            false,
-            &segment_proofs_data[2].proof_with_pis,
-            segment_proofs_data[2].public_values.clone(),
-        )?;
-    all_circuits.verify_segment_aggregation(&segmented_agg_proof)?;
+    let aggregation_output_data = all_circuits.prove_segment_aggregation(
+        true,
+        &aggregation_output_data,
+        false,
+        &segment_proofs_data[2],
+    )?;
+    all_circuits.verify_segment_aggregation(&aggregation_output_data.proof_with_pis)?;
 
     // Test retrieved public values from the proof public inputs.
     let retrieved_public_values = PublicValues::from_public_inputs(
-        &segmented_agg_proof.public_inputs,
-        segmented_agg_public_values.mem_before.mem_cap.len(),
+        &aggregation_output_data.proof_with_pis.public_inputs,
+        aggregation_output_data
+            .public_values
+            .mem_before
+            .mem_cap
+            .len(),
     );
-    assert_eq!(retrieved_public_values, segmented_agg_public_values);
+    assert_eq!(
+        retrieved_public_values,
+        aggregation_output_data.public_values
+    );
 
     let (txn_proof, txn_public_values) = all_circuits.prove_transaction_aggregation(
         false,
-        &segmented_agg_proof,
-        segmented_agg_public_values.clone(),
+        &aggregation_output_data.proof_with_pis,
+        aggregation_output_data.public_values.clone(),
         false,
-        &segmented_agg_proof,
-        segmented_agg_public_values,
+        &aggregation_output_data.proof_with_pis,
+        aggregation_output_data.public_values,
     )?;
     all_circuits.verify_txn_aggregation(&txn_proof)?;
 

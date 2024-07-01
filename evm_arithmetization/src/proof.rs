@@ -378,7 +378,19 @@ pub struct RegistersData {
     /// Gas used so far.
     pub gas_used: U256,
 }
+
+pub(crate) enum RegistersIdx {
+    ProgramCounter = 0,
+    IsKernel = 1,
+    StackLen = 2,
+    StackTop = 3,
+    Context = 4,
+    GasUsed = 5,
+}
+
 impl RegistersData {
+    pub(crate) const SIZE: usize = 6;
+
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == RegistersDataTarget::SIZE);
 
@@ -859,6 +871,28 @@ impl TrieRootsTarget {
             builder.connect(tr0.receipts_root[i], tr1.receipts_root[i]);
         }
     }
+
+    /// If `condition`, asserts that `tr0 == tr1`.
+    pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        tr0: Self,
+        tr1: Self,
+    ) {
+        for i in 0..8 {
+            builder.conditional_assert_eq(condition.target, tr0.state_root[i], tr1.state_root[i]);
+            builder.conditional_assert_eq(
+                condition.target,
+                tr0.transactions_root[i],
+                tr1.transactions_root[i],
+            );
+            builder.conditional_assert_eq(
+                condition.target,
+                tr0.receipts_root[i],
+                tr1.receipts_root[i],
+            );
+        }
+    }
 }
 
 /// Circuit version of `BlockMetadata`.
@@ -979,6 +1013,45 @@ impl BlockMetadataTarget {
             builder.connect(bm0.block_bloom[i], bm1.block_bloom[i])
         }
     }
+
+    /// If `condition`, asserts that `bm0 == bm1`.
+    pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        bm0: Self,
+        bm1: Self,
+    ) {
+        for i in 0..5 {
+            builder.conditional_assert_eq(
+                condition.target,
+                bm0.block_beneficiary[i],
+                bm1.block_beneficiary[i],
+            );
+        }
+        builder.conditional_assert_eq(condition.target, bm0.block_timestamp, bm1.block_timestamp);
+        builder.conditional_assert_eq(condition.target, bm0.block_number, bm1.block_number);
+        builder.conditional_assert_eq(condition.target, bm0.block_difficulty, bm1.block_difficulty);
+        for i in 0..8 {
+            builder.conditional_assert_eq(
+                condition.target,
+                bm0.block_random[i],
+                bm1.block_random[i],
+            );
+        }
+        builder.conditional_assert_eq(condition.target, bm0.block_gaslimit, bm1.block_gaslimit);
+        builder.conditional_assert_eq(condition.target, bm0.block_chain_id, bm1.block_chain_id);
+        for i in 0..2 {
+            builder.conditional_assert_eq(
+                condition.target,
+                bm0.block_base_fee[i],
+                bm1.block_base_fee[i],
+            )
+        }
+        builder.conditional_assert_eq(condition.target, bm0.block_gas_used, bm1.block_gas_used);
+        for i in 0..64 {
+            builder.conditional_assert_eq(condition.target, bm0.block_bloom[i], bm1.block_bloom[i])
+        }
+    }
 }
 
 /// Circuit version of `BlockHashes`.
@@ -1044,6 +1117,21 @@ impl BlockHashesTarget {
             builder.connect(bm0.cur_hash[i], bm1.cur_hash[i]);
         }
     }
+
+    /// If `condition`, asserts that `bm0 == bm1`.
+    pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        bm0: Self,
+        bm1: Self,
+    ) {
+        for i in 0..2048 {
+            builder.conditional_assert_eq(condition.target, bm0.prev_hashes[i], bm1.prev_hashes[i]);
+        }
+        for i in 0..8 {
+            builder.conditional_assert_eq(condition.target, bm0.cur_hash[i], bm1.cur_hash[i]);
+        }
+    }
 }
 
 /// Circuit version of `ExtraBlockData`.
@@ -1070,7 +1158,7 @@ pub struct ExtraBlockDataTarget {
 
 impl ExtraBlockDataTarget {
     /// Number of `Target`s required for the extra block data.
-    const SIZE: usize = 12;
+    pub const SIZE: usize = 12;
 
     /// Extracts the extra block data `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.
@@ -1135,6 +1223,30 @@ impl ExtraBlockDataTarget {
         builder.connect(ed0.gas_used_before, ed1.gas_used_before);
         builder.connect(ed0.gas_used_after, ed1.gas_used_after);
     }
+
+    /// If `condition`, asserts that `ed0 == ed1`.
+    pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        ed0: Self,
+        ed1: Self,
+    ) {
+        for i in 0..8 {
+            builder.conditional_assert_eq(
+                condition.target,
+                ed0.checkpoint_state_trie_root[i],
+                ed1.checkpoint_state_trie_root[i],
+            );
+        }
+        builder.conditional_assert_eq(
+            condition.target,
+            ed0.txn_number_before,
+            ed1.txn_number_before,
+        );
+        builder.conditional_assert_eq(condition.target, ed0.txn_number_after, ed1.txn_number_after);
+        builder.conditional_assert_eq(condition.target, ed0.gas_used_before, ed1.gas_used_before);
+        builder.conditional_assert_eq(condition.target, ed0.gas_used_after, ed1.gas_used_after);
+    }
 }
 
 /// Circuit version of `RegistersData`.
@@ -1158,7 +1270,7 @@ pub struct RegistersDataTarget {
 
 impl RegistersDataTarget {
     /// Number of `Target`s required for the extra block data.
-    const SIZE: usize = 13;
+    pub const SIZE: usize = 13;
 
     /// Extracts the extra block data `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.
@@ -1215,6 +1327,23 @@ impl RegistersDataTarget {
         }
         builder.connect(rd0.context, rd1.context);
         builder.connect(rd0.gas_used, rd1.gas_used);
+    }
+
+    /// If `condition`, asserts that `rd0 == rd1`.
+    pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        rd0: Self,
+        rd1: Self,
+    ) {
+        builder.conditional_assert_eq(condition.target, rd0.program_counter, rd1.program_counter);
+        builder.conditional_assert_eq(condition.target, rd0.is_kernel, rd1.is_kernel);
+        builder.conditional_assert_eq(condition.target, rd0.stack_len, rd1.stack_len);
+        for i in 0..8 {
+            builder.conditional_assert_eq(condition.target, rd0.stack_top[i], rd1.stack_top[i]);
+        }
+        builder.conditional_assert_eq(condition.target, rd0.context, rd1.context);
+        builder.conditional_assert_eq(condition.target, rd0.gas_used, rd1.gas_used);
     }
 }
 
@@ -1280,6 +1409,24 @@ impl MemCapTarget {
         for i in 0..mc0.mem_cap.0.len() {
             for j in 0..NUM_HASH_OUT_ELTS {
                 builder.connect(mc0.mem_cap.0[i].elements[j], mc1.mem_cap.0[i].elements[j]);
+            }
+        }
+    }
+
+    /// If `condition`, asserts that `mc0 == mc1`.
+    pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        mc0: Self,
+        mc1: Self,
+    ) {
+        for i in 0..mc0.mem_cap.0.len() {
+            for j in 0..NUM_HASH_OUT_ELTS {
+                builder.conditional_assert_eq(
+                    condition.target,
+                    mc0.mem_cap.0[i].elements[j],
+                    mc1.mem_cap.0[i].elements[j],
+                );
             }
         }
     }
