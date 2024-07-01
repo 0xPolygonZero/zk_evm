@@ -434,7 +434,7 @@ mod tests {
 
         for _ in 0..N_ITERS {
             for op in [Op::And, Op::Or, Op::Xor] {
-                // generate a trace row from an operation on random values
+                // Generate a trace row from an operation on random values.
                 let operation = Operation::new(op, U256(rng.gen()), U256(rng.gen()));
                 let expected = operation.result;
                 let row = operation.into_row::<F>();
@@ -448,17 +448,21 @@ mod tests {
                     F::ONE,
                 );
 
+                // Evaluate constraints.
                 stark.eval_packed_generic(&lv, &mut constraint_consumer);
                 for acc in constraint_consumer.accumulators() {
                     assert_eq!(acc, F::ZERO);
                 }
 
+                // Split each expected U256 limb into two.
                 let expected_limbs = expected.as_ref().iter().flat_map(|&limb| {
                     [
                         F::from_canonical_u32(limb as u32),
                         F::from_canonical_u32((limb >> 32) as u32),
                     ]
                 });
+
+                // Check that the result limbs match the expected limbs.
                 assert!(expected_limbs
                     .zip_eq(&row[LOGIC_COL_MAP.result[0]..])
                     .all(|(x, &y)| x == y));
