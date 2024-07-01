@@ -328,8 +328,6 @@ where
     pub circuit: CircuitData<F, C, D>,
     lhs: AggregationChildTarget<D>,
     rhs: AggregationChildTarget<D>,
-    mix_hash: HashOutTarget,
-    dummy_pis: Vec<Target>,
     cyclic_vk: VerifierCircuitTarget,
 }
 
@@ -347,8 +345,6 @@ where
         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
         self.lhs.to_buffer(buffer)?;
         self.rhs.to_buffer(buffer)?;
-        buffer.write_target_vec(&self.dummy_pis)?;
-        buffer.write_target_hash(&self.mix_hash)?;
         buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
         Ok(())
     }
@@ -361,15 +357,11 @@ where
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
         let lhs = AggregationChildTarget::from_buffer(buffer)?;
         let rhs = AggregationChildTarget::from_buffer(buffer)?;
-        let mix_hash = buffer.read_target_hash()?;
-        let dummy_pis = buffer.read_target_vec()?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         Ok(Self {
             circuit,
             lhs,
             rhs,
-            mix_hash,
-            dummy_pis,
             cyclic_vk,
         })
     }
@@ -998,10 +990,9 @@ where
         // Account for `mix_pv_hash`.
         padding -= builder.num_public_inputs();
 
-        let mut dummy_pis = vec![];
         for _ in 0..padding {
-            let target = builder.add_virtual_public_input();
-            dummy_pis.push(target);
+            let target = builder.zero();
+            builder.register_public_input(target);
         }
 
         let user_pis_len = builder.num_public_inputs();
@@ -1044,8 +1035,6 @@ where
             circuit,
             lhs,
             rhs,
-            mix_hash,
-            dummy_pis,
             cyclic_vk,
         }
     }
@@ -1644,9 +1633,6 @@ where
     ) -> anyhow::Result<ProofWithPublicInputs<F, C, D>> {
         let mut witness = PartialWitness::new();
 
-        let dummy_pis = &self.two_to_one_block.dummy_pis;
-        witness.set_target_arr(dummy_pis, &vec![F::ZERO; dummy_pis.len()]);
-
         Self::set_dummy_if_necessary(
             &self.two_to_one_block.lhs,
             lhs_is_agg,
@@ -1667,32 +1653,6 @@ where
             &self.two_to_one_block.cyclic_vk,
             &self.two_to_one_block.circuit.verifier_only,
         );
-
-        let verification_key_len = verification_key_len(&self.block.circuit);
-        debug_assert_eq!(lhs.public_inputs.len(), rhs.public_inputs.len());
-        // The number of PIS that we want to hash in case of a block proof.
-        let user_pis_len = lhs.public_inputs.len() - verification_key_len;
-
-        // If `lhs_is_agg` we read the hash verbatim from the public inputs.
-        // Otherwise we hash the block proof's Public Values from PIS.
-        let lhs_hash = if lhs_is_agg {
-            HashOut {
-                elements: *extract_two_to_one_block_hash(&lhs.public_inputs),
-            }
-        } else {
-            C::InnerHasher::hash_no_pad(&lhs.public_inputs[..user_pis_len])
-        };
-
-        let rhs_hash = if rhs_is_agg {
-            HashOut {
-                elements: *extract_two_to_one_block_hash(&rhs.public_inputs),
-            }
-        } else {
-            C::InnerHasher::hash_no_pad(&rhs.public_inputs[..user_pis_len])
-        };
-
-        let mix_hash = C::InnerHasher::two_to_one(lhs_hash, rhs_hash);
-        witness.set_hash_target(self.two_to_one_block.mix_hash, mix_hash);
 
         let proof = self.two_to_one_block.circuit.prove(witness)?;
         Ok(proof)
