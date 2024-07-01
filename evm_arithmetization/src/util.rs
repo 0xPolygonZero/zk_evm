@@ -137,14 +137,6 @@ pub(crate) const fn indices_arr<const N: usize>() -> [usize; N] {
     indices_arr
 }
 
-pub(crate) unsafe fn transmute_no_compile_time_size_checks<T, U>(value: T) -> U {
-    debug_assert_eq!(size_of::<T>(), size_of::<U>());
-    // Need ManuallyDrop so that `value` is not dropped by this function.
-    let value = ManuallyDrop::new(value);
-    // Copy the bit pattern. The original value is no longer safe to use.
-    transmute_copy(&value)
-}
-
 pub(crate) fn addmod(x: U256, y: U256, m: U256) -> U256 {
     if m.is_zero() {
         return m;

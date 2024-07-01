@@ -46,6 +46,7 @@ serde_json = { workspace = true }
 
 # Local dependencies
 mpt_trie = { workspace = true }
+zk_evm_proc_macro = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

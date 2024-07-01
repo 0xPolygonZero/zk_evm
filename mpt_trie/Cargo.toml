@@ -22,7 +22,6 @@ keccak-hash = { workspace = true }
 parking_lot = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 log = { workspace = true }
-num = { workspace = true, optional = true }
 num-traits = { workspace = true }
 uint = { workspace = true }
 rlp = { workspace = true }
@@ -41,7 +40,7 @@ serde_json = { workspace = true }
 
 [features]
 default = ["trie_debug"]
-trie_debug = ["num"]
+trie_debug = []
 
 [lib]
 doc-scrape-examples = true
