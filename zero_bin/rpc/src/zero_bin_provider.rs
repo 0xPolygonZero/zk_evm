@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 
 const CACHE_SIZE: usize = 1024;
 
-/// Wrapper around alloy provider to cache hashes, blocks and other
+/// Wrapper around alloy provider to cache blocks and other
 /// frequently used data.
 pub struct CachedProvider<ProviderT, TransportT> {
     provider: ProviderT,
