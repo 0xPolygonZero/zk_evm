@@ -3971,6 +3971,7 @@ dependencies = [
  "compat",
  "evm_arithmetization",
  "futures",
+ "hex",
  "mpt_trie",
  "primitive-types 0.12.2",
  "prover",
