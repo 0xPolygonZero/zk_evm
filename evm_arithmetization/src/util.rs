@@ -1,5 +1,3 @@
-use core::mem::{size_of, transmute_copy, ManuallyDrop};
-
 use ethereum_types::{H160, H256, U256};
 use itertools::Itertools;
 use num::BigUint;
