@@ -11,10 +11,10 @@ keywords.workspace = true
 
 [dependencies]
 bytes = { workspace = true }
-ciborium = "0.2.1"
-ciborium-io = "0.2.1"
+ciborium = { workspace = true }
+ciborium-io = { workspace = true }
 enum-as-inner = { workspace = true }
-enumn = "0.1.12"
+enumn = { workspace = true }
 ethereum-types = { workspace = true }
 hex = { workspace = true }
 hex-literal = { workspace = true }
@@ -23,14 +23,20 @@ log = { workspace = true }
 rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true }
-serde_with = "3.4.0"
+serde_with = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 plonky2 = { workspace = true }
 
 # Local dependencies
-mpt_trie = { version = "0.3.0", path = "../mpt_trie" }
-evm_arithmetization = { version = "0.2.0", path = "../evm_arithmetization" }
+mpt_trie = { workspace = true }
+evm_arithmetization = { workspace = true }
 
 [dev-dependencies]
-pretty_env_logger = "0.5.0"
+criterion = { workspace = true }
+pretty_env_logger = { workspace = true }
+serde_json = { workspace = true }
+
+[[bench]]
+name = "block_processing"
+harness = false

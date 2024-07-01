@@ -30,6 +30,7 @@ global main:
     PROVER_INPUT(linked_list::storage_linked_list_len)
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     PROVER_INPUT(trie_ptr::trie_data_size)
+global debug_trie_data_size_1:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
     // Store the inital accounts and slots for hashing later
@@ -46,7 +47,7 @@ global hash_initial_tries:
     // We compute the length of the trie data segment in `mpt_hash` so that we
     // can check the value provided by the prover.
     // The trie data segment is already written by the linked lists
-    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+    %get_trie_data_size
 
     // %set_initial_tries
     // %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
@@ -60,7 +61,8 @@ global hash_initial_tries:
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_BEFORE)  %assert_eq
     // stack: trie_data_full_len
 
-    %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+global debug_trie_size_here:
+    %set_trie_data_size
 
 global start_txn:
     // stack: (empty)
@@ -115,16 +117,18 @@ global debug_check_txn_number:
     %assert_eq
     %pop3
 
-    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
     PROVER_INPUT(trie_ptr::state)
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-    %mpt_hash_state_trie  
+global debug_the_trie_that_works:
+   %set_initial_tries
+   %get_trie_data_size
+global debug_old_len:
+    %mpt_hash_state_trie
+global debug_new_len:  
     SWAP1 %set_trie_data_size
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
 global debug_check_initial_trie:
     %assert_eq
-
-    %set_initial_tries
 
     PUSH 1 // initial trie data length
     

@@ -246,6 +246,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     )
     .unwrap();
     log::debug!("Final state trie: {:?}", final_state_trie);
+    log::debug!("Final state trie hash: {:?}", final_state_trie.hash());
     log::debug!(
         "Final accounts linked list: {:?}",
         state.get_accounts_linked_list()

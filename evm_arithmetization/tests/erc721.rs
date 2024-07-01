@@ -98,13 +98,13 @@ fn test_erc721() -> anyhow::Result<()> {
             ..contract_account()?
         };
         let contract_rlp = vec![
-            248, 68, 128, 128, 160, 21, 52, 201, 120, 135, 151, 240, 89, 222, 226, 171, 199, 255,
-            87, 189, 219, 149, 32, 147, 208, 175, 248, 2, 82, 224, 19, 247, 121, 120, 120, 158,
-            114, 160, 108, 86, 199, 147, 155, 81, 154, 182, 112, 252, 61, 74, 85, 168, 162, 62,
-            164, 186, 205, 30, 25, 127, 235, 17, 118, 229, 147, 70, 202, 97, 137, 184,
+            248, 68, 128, 128, 160, 170, 228, 246, 195, 175, 195, 151, 238, 191, 55, 177, 52, 189,
+            63, 57, 60, 183, 166, 42, 180, 177, 68, 248, 100, 159, 53, 229, 131, 170, 243, 88, 168,
+            160, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 2,
         ];
         let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
-        log::debug!("constract_account_after = {:#?}", contract_account_after);
+        log::debug!("constract_account_after = {:#?}", contract_account());
         log::debug!("contracto = {:#?}", contracto);
         log::debug!("rlp = {:?}", rlp::encode(&contract_account_after).to_vec());
         log::debug!("contrc_storage_trie = {:#?}", contract_storage_after());

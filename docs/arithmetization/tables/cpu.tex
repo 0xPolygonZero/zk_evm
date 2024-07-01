@@ -37,7 +37,7 @@ privileged instructions.
 
 \paragraph*{Operation flags:} Boolean flags. During CPU cycles phase, each row executes a single instruction, which sets one and only one operation flag. No flag is set during
 padding. The decoding constraints ensure that the flag set corresponds to the opcode being read.
-There isn't a 1-to-1 correspondance between instructions and flags. For efficiency, the same flag can be set by different, unrelated instructions (e.g. \texttt{eq\_iszero}, which represents
+There isn't a 1-to-1 correspondence between instructions and flags. For efficiency, the same flag can be set by different, unrelated instructions (e.g. \texttt{eq\_iszero}, which represents
 the \texttt{EQ} and the \texttt{ISZERO} instructions). When there is a need to differentiate them in constraints, we filter them with their respective opcode: since the first bit of \texttt{EQ}'s opcode
 (resp. \texttt{ISZERO}'s opcode) is 0 (resp. 1), we can filter a constraint for an EQ instruction with \texttt{eq\_iszero * (1 - opcode\_bits[0])}
 (resp. \texttt{eq\_iszero * opcode\_bits[0]}).

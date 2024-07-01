@@ -103,9 +103,10 @@ loop_store_initial_accounts:
     %append_to_trie_data
     %increment
     // stack: code_hash_ptr, cpy_ptr, current_node_ptr, retdest
+global debug_loading_code_hash:
     %mload_trie_data // code_hash
+global debug_code_hash:
     %append_to_trie_data
-    %increment
     // stack: cpy_ptr, current_node_ptr, retdest
     DUP2
     %add_const(2)
@@ -127,8 +128,20 @@ store_initial_accounts_end:
     // stack: cold_access
 %endmacro
 
+%macro insert_account_with_overwrite
+    %stack (addr, ptr) -> (addr, ptr, %%after)
+    %jump(insert_account_with_overwrite)
+%%after:
+    // stack: cold_access
+%endmacro
+
 %macro insert_account_to_linked_list_no_return
     %insert_account_to_linked_list
+    %pop2
+%endmacro
+
+%macro insert_account_with_overwrite_no_return
+    %insert_account_with_overwrite
     %pop2
 %endmacro
 
@@ -245,6 +258,61 @@ global insert_new_account:
     // stack: addr, payload_ptr, retdest
     // TODO: Don't for get to %journal_add_account_loaded
     %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    JUMP
+
+global insert_account_with_overwrite:
+    // stack: addr, payload_ptr, retdest
+    PROVER_INPUT(linked_list::insert_account)
+    // stack: pred_ptr/4, addr, payload_ptr, retdest
+    %get_valid_account_ptr
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    DUP1
+    MLOAD_GENERAL
+    DUP1
+    // stack: pred_addr, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    DUP4 GT
+    DUP3 %eq_const(@SEGMENT_ACCOUNTS_LINKED_LIST)
+    ADD // OR
+    // If the predesessor is strictly smaller or the predecessor is the special
+    // node with key @U256_MAX (and hence we're inserting a new minimum), then
+    // we need to insert a new node.
+    %jumpi(insert_new_account)
+    // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
+    // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
+    DUP3
+    %assert_eq
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    // Check that this is not a deleted node
+    DUP1
+    %add_const(3)
+    MLOAD_GENERAL
+    %jump_neq_const(@U256_MAX, account_found_with_overwrite)
+    // The storage key is not in the list.
+    PANIC
+
+account_found_with_overwrite:
+    // The address was already in the list
+    // stack: pred_ptr, addr, payload_ptr, retdest
+    // Load the the payload pointer and access counter
+    %increment
+    DUP1
+    // stack: payload_ptr_ptr, pred_ptr+1, addr, payload_ptr, retdest
+    DUP4 MSTORE_GENERAL
+    %increment
+    DUP1
+    MLOAD_GENERAL
+    %increment
+    // stack: access_ctr + 1, access_ctr_ptr, addr, payload_ptr, retdest
+    SWAP1
+    DUP2
+    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, addr, payload_ptr, retdest
+    MSTORE_GENERAL
+    // stack: access_ctr + 1, addr, payload_ptr, retdest
+    // If access_ctr == 1 then this it's a cold access 
+    %eq_const(1)
+    %stack (cold_access, addr, payload_ptr, retdest) -> (retdest, cold_access, payload_ptr)
     JUMP
 
 %macro search_account
@@ -495,7 +563,7 @@ insert_new_slot_with_value:
     // Here, (addr > pred_addr) || (pred_ptr == @SEGMENT_ACCOUNTS_LINKED_LIST).
     // We should have (addr < next_addr), meaning the new value can be inserted between pred_ptr and next_ptr.
     LT
-    %jumpi(next_node_ok)
+    %jumpi(next_node_ok_with_value)
     // If addr <= next_addr, then it addr must be equal to next_addr
     // stack: next_addr, next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
     DUP5
@@ -846,9 +914,46 @@ global remove_slot:
     %pop2
     JUMP
 
-/// Search the account addr and payload pointer into the linked list.
-/// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Called when an account is deleted: it deletes all slots associated with the account.
+global remove_all_account_slots:
+    // stack: addr, retdest
+    PROVER_INPUT(linked_list::remove_address_slots)
+    // pred_ptr/5, retdest
+    %get_valid_slot_ptr
+
+global debug_after_valid_ptr:
+    // stack: pred_ptr, addr, retdest
+    // First, check that the previous address is not `addr`
+    DUP1 MLOAD_GENERAL
+    // stack: pred_addr, pred_ptr, addr, retdest
+    DUP3 EQ %jumpi(panic)
+    // stack: pred_ptr, addr, retdest
+    // Now, while the next address is `addr`, remove the slot.
+
+global remove_all_slots_loop:
+    // stack: pred_ptr, addr, retdest
+    %add_const(4) MLOAD_GENERAL DUP1
+    // stack: cur_ptr, cur_ptr, addr, retdest
+    DUP1 %eq_const(@U256_MAX) %jumpi(remove_all_slots_end)
+    MLOAD_GENERAL
+    // stack: cur_addr, cur_ptr, addr, retdest
+    DUP1 DUP4 EQ ISZERO %jumpi(remove_all_slots_end)
+    // stack: cur_addr, cur_ptr, addr, retdest
+    DUP2 %increment MLOAD_GENERAL SWAP1
+    // stack: cur_addr, cur_key, cur_ptr, addr, retdest
+    %remove_slot
+    // stack: cur_ptr, addr, retdest
+    %jump(remove_all_slots_loop)
+
+global remove_all_slots_end:
+    // stack: cur_addr, cur_ptr, addr, retdest
+    %pop3 JUMP
+
+%macro remove_all_account_slots
+    %stack (addr) -> (addr, %%after)
+    %jump(remove_all_account_slots)
+%%after:
+%endmacro
 
 %macro read_accounts_linked_list
     %stack (addr) -> (addr, 0, %%after)

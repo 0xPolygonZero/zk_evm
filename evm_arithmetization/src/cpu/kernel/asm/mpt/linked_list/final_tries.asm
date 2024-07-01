@@ -65,6 +65,7 @@ global insert_all_slots:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     %stack (addr, storage_ptr_ptr, root_ptr, retdest) -> (retdest, storage_ptr_ptr, root_ptr)
     JUMP
+
 insert_next_slot:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     DUP2
@@ -113,8 +114,9 @@ global debug_maybe_delete_slots:
     MLOAD_GENERAL
     // stack: key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP2
-    %increment
-    MLOAD_GENERAL // get payload_ptr
+    %add_const(2)
+    MLOAD_GENERAL // get intitial payload_ptr
+global debug_inital_payload_ptr:
     %add_const(2) // storage_root_ptr_ptr = payload_ptr + 2
     DUP1
     %mload_trie_data
@@ -156,12 +158,13 @@ after_mpt_delete:
     %jump(delete_removed_accounts)
 
 // Delete all slots in `storage_ptr_ptr` with address == `addr` and
-// address < @GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN.
+// `storage_ptr_ptr` < @GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN.
 // Pre stack: addr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr, storage_ptr_ptr'.
 delete_removed_slots:
     DUP3
     MLOAD_GENERAL
+    // stack: address, addr, root_ptr, storage_ptr_ptr, retdest
     DUP2
     EQ
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)

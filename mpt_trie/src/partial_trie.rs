@@ -107,7 +107,7 @@ pub trait PartialTrie:
 }
 
 /// Part of the trait that is not really part of the public interface but
-/// implementor of other node types still need to implement.
+/// implementer of other node types still need to implement.
 pub trait TrieNodeIntern {
     /// Returns the hash of the rlp encoding of self.
     fn hash_intern(&self) -> EncodedNode;

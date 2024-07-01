@@ -38,11 +38,11 @@ skip:
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     %jump(mpt_set_payload)
 %%after:
-    // We store account_ptr_ptr - 1, i.e. a pointer to the first node not in the initial state.
-    %decrement
-    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
-    // We store storage_ptr_ptr - 2, i.e. a pointer to the first node not in the initial state.
+    // We store account_ptr_ptr - 2, i.e. a pointer to the first node not in the initial state.
     %sub_const(2)
+    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
+    // We store storage_ptr_ptr - 3, i.e. a pointer to the first node not in the initial state.
+    %sub_const(3)
     %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
 %endmacro
 

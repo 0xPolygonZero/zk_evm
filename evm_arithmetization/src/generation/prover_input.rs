@@ -91,7 +91,7 @@ impl<F: Field> GenerationState<F> {
                         &mut self.memory.contexts[0].segments[Segment::TrieData.unscale()].content,
                     )?;
                     log::debug!(
-                        "state_trie before = {:?}",
+                        "state_trie before: = {:?}",
                         get_state_trie::<HashedPartialTrie>(&self.memory, n)
                     );
                     log::debug!(
@@ -313,6 +313,7 @@ impl<F: Field> GenerationState<F> {
             "remove_account" => self.run_next_remove_account(),
             "insert_slot" => self.run_next_insert_slot(),
             "remove_slot" => self.run_next_remove_slot(),
+            "remove_address_slots" => self.run_next_remove_address_slots(),
             "accounts_linked_list_len" => Ok((Segment::AccountsLinkedList as usize
                 + self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
                     .content
@@ -538,6 +539,20 @@ impl<F: Field> GenerationState<F> {
             .get_storage_linked_list()?
             .zip(self.get_storage_linked_list()?.skip(2))
             .find(|&(_, [next_addr, next_key, ..])| next_addr == addr && next_key == key)
+        {
+            Ok((ptr - U256::from(Segment::StorageLinkedList as usize))
+                / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
+        } else {
+            Ok((Segment::StorageLinkedList as usize).into())
+        }
+    }
+
+    fn run_next_remove_address_slots(&self) -> Result<U256, ProgramError> {
+        let addr = stack_peek(self, 0)?;
+        if let Some(([.., ptr], _)) = self
+            .get_storage_linked_list()?
+            .zip(self.get_storage_linked_list()?.skip(2))
+            .find(|&(_, [next_addr, next_key, ..])| next_addr == addr)
         {
             Ok((ptr - U256::from(Segment::StorageLinkedList as usize))
                 / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
