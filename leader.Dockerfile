@@ -7,7 +7,7 @@ COPY Cargo.toml .
 # Cleanup all workspace members and add selected crates again
 RUN sed -i '/members =/{:a;N;/]/!ba};//d' Cargo.toml
 RUN sed -i 's#\[workspace\]#\[workspace\]\nmembers = \["zero_bin\/leader", "zero_bin\/prover", "zero_bin\/rpc", "zero_bin\/common", \
- "zero_bin\/ops"\, "evm_arithmetization", "trace_decoder", "mpt_trie"\]#' Cargo.toml
+ "zero_bin\/ops"\, "evm_arithmetization", "trace_decoder", "mpt_trie", "proc_macro", "compat"\]#' Cargo.toml
 COPY Cargo.lock .
 COPY ./rust-toolchain.toml ./
 RUN cat ./Cargo.toml
@@ -15,6 +15,8 @@ COPY ./.env ./.env
 
 COPY proof_gen proof_gen
 COPY mpt_trie mpt_trie
+COPY proc_macro proc_macro
+COPY compat compat
 COPY trace_decoder trace_decoder
 COPY evm_arithmetization evm_arithmetization
 COPY zero_bin/common zero_bin/common
@@ -32,7 +34,9 @@ RUN \
   touch zero_bin/prover/src/lib.rs && \
   touch evm_arithmetization/src/lib.rs && \
   touch trace_decoder/src/lib.rs && \
-  touch mpt_trie/src/lib.rs
+  touch mpt_trie/src/lib.rs && \
+  touch proc_macro/src/lib.rs && \
+  touch compat/src/lib.rs
 
 # Disable the lld linker for now, as it's causing issues with the linkme package.
 # https://github.com/rust-lang/rust/pull/124129
