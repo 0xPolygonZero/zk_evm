@@ -34,7 +34,7 @@ pub(crate) async fn client_main(
     block_interval: BlockInterval,
     mut params: ProofParams,
 ) -> Result<()> {
-    let cached_provider = rpc::zero_bin_provider::CachedProvider::new(build_http_retry_provider(
+    let cached_provider = rpc::provider::CachedProvider::new(build_http_retry_provider(
         rpc_params.rpc_url.clone(),
         rpc_params.backoff,
         rpc_params.max_retries,

@@ -10,7 +10,7 @@ use futures::try_join;
 use prover::BlockProverInput;
 use trace_decoder::trace_protocol::BlockTrace;
 
-use crate::zero_bin_provider::CachedProvider;
+use crate::provider::CachedProvider;
 
 mod state;
 mod txn;

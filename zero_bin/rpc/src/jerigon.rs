@@ -9,7 +9,7 @@ use trace_decoder::trace_protocol::{
 };
 
 use super::fetch_other_block_data;
-use crate::zero_bin_provider::CachedProvider;
+use crate::provider::CachedProvider;
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]
