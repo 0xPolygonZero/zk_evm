@@ -13,10 +13,6 @@
 export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=1
 export RUST_LOG=info
-# Disable the lld linker for now, as it's causing issues with the linkme package.
-# https://github.com/rust-lang/rust/pull/124129
-# https://github.com/dtolnay/linkme/pull/88
-export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 if [[ $8 == "test_only" ]]; then
   # Circuit sizes don't matter in test_only mode, so we keep them minimal.

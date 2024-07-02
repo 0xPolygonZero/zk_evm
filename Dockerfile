@@ -1,48 +1,93 @@
 # syntax=docker/dockerfile:1
+# This is loosely based on `docker init`'s rust template.
+# For a completely clean build, run something like this:
+# ```
+# docker build --build-arg=PROFILE=dev --build-arg=ENTRYPOINT=leader --no-cache
+# ```
 
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/engine/reference/builder/
+#############
+# Build stage
+#############
+# - `/src` is the repo directory.
+# - `/artifacts` is $CARGO_TARGET_DIR.
+# - `/output` is where the binaries go.
 
-################################################################################
-# Create a stage for building the application.
+ARG BUILD_BASE=rustlang/rust:nightly-bullseye-slim
+FROM ${BUILD_BASE} AS build
 
-ARG RUST_VERSION=1.81.0-nightly
-ARG APP_NAME=
-FROM rust:${RUST_VERSION}-slim-bullseye AS build
-ARG APP_NAME
-WORKDIR /app
+# Install build dependencies.
+RUN apt-get update && apt-get install -y \
+    # for jemalloc
+    libjemalloc-dev \
+    libjemalloc2 \
+    make \
+    # for openssl
+    libssl-dev \
+    pkg-config \
+    # clean the image
+    && rm -rf /var/lib/apt/lists/*
+
+ARG PROFILE=release
+# forward the docker argument so that the script below can read it
+ENV PROFILE=${PROFILE}
 
 # Build the application.
-# Leverage a cache mount to /usr/local/cargo/registry/
-# for downloaded dependencies and a cache mount to /app/target/ for 
-# compiled dependencies which will speed up subsequent builds.
-# Leverage a bind mount to the src directory to avoid having to copy the
-# source code into the container. Once built, copy the executable to an
-# output directory before the cache mounted /app/target is unmounted.
-RUN --mount=type=bind,source=src,target=src \
-    --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
-    --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
-    --mount=type=cache,target=/app/target/ \
+RUN \
+    # mount the repository so we don't have to COPY it in
+    --mount=type=bind,source=.,target=/src \
+    # cache artifacts and the cargo registry to speed up subsequent builds
+    --mount=type=cache,target=/artifacts \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
+    # run the build
     <<EOF
-set -e
-cargo build --locked --release
-cp ./target/release/$APP_NAME /bin/server
+set -eux
+
+# need to change workdir instead of using --manifest-path because we need
+# .cargo/config.toml
+cd /src
+
+# use the cache mount
+# (we will not be able to to write to e.g `/src/target` because it is bind-mounted)
+CARGO_TARGET_DIR=/artifacts cargo build --locked "--profile=${PROFILE}" --all
+
+# narrow the find call to SUBDIR because if we just copy out all executables
+# we will break the cache invariant
+if [ "$PROFILE" = "dev" ]; then
+    SUBDIR=debug # edge case
+else
+    SUBDIR=$PROFILE
+fi
+
+# maxdepth because binaries are in the root
+# - other folders contain build scripts etc.
+mkdir /output
+find "/artifacts/$SUBDIR" -maxdepth 1 -type f -executable -exec cp '{}' /output \; -print
+
 EOF
 
-################################################################################
-# Create a new stage for running the application that contains the minimal
-# runtime dependencies for the application. This often uses a different base
-# image from the build stage where the necessary files are copied from the build
-# stage.
-#
-# The example below uses the debian bullseye image as the foundation for running the app.
-# By specifying the "bullseye-slim" tag, it will also use whatever happens to be the
-# most recent version of that tag when you build your Dockerfile. If
-# reproducability is important, consider using a digest
-# (e.g., debian@sha256:ac707220fbd7b67fc19b112cee8170b41a9e97f703f588b2cdbbcdcecdd8af57).
+##################
+# Final executable
+##################
 FROM debian:bullseye-slim AS final
+
+# Install runtime dependencies.
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libjemalloc2 \
+    libssl-dev \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /output/* /usr/local/bin/
+
+# can't refer to docker args in an ENTRYPOINT directive, so go through a symlink
+ARG ENTRYPOINT
+RUN ln --symbolic --verbose -- "$(which ${ENTRYPOINT})" /entrypoint
+ENTRYPOINT [ "tini", "--", "/entrypoint" ]
+
+# TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/356
+#                this is bad practice
+COPY .env /
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
@@ -54,14 +99,6 @@ RUN adduser \
     --shell "/sbin/nologin" \
     --no-create-home \
     --uid "${UID}" \
-    appuser
-USER appuser
+    user
+USER user
 
-# Copy the executable from the "build" stage.
-COPY --from=build /bin/server /bin/
-
-# Expose the port that the application listens on.
-EXPOSE 1000
-
-# What the container should run when it is started.
-CMD ["/bin/server"]
