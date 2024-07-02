@@ -1,0 +1,209 @@
+
+hull:
+  config:
+    general:
+      fullnameOverride: zero-bin
+    specific:
+      version: develop
+  objects:
+    serviceaccount:
+      default:
+        enabled: true
+        annotations:
+          iam.gke.io/gcp-service-account: immutable-prod-k8s@immutable-418115.iam.gserviceaccount.com
+    deployment:
+      leader:
+        replicas: 1
+        pod:
+          containers:
+            leader:
+              image:
+                repository: us.gcr.io/immutable-418115/zero-bin-leader
+                tag: _HT*hull.config.specific.version
+                imagePullPolicy: Always
+              env:
+                AMQP_URI:
+                  valueFrom: 
+                    secretKeyRef:
+                      staticName: true
+                      name: rmq-credentials
+                      key: amqp_uri
+                PALADIN_AMQP_URI:
+                  valueFrom: 
+                    secretKeyRef:
+                      staticName: true
+                      name: rmq-credentials
+                      key: amqp_uri
+                PALADIN_RUNTIME:
+                  value: AMQP
+                SERVER_ADDR:
+                  value: 0.0.0.0:8080
+                ARITHMETIC_CIRCUIT_SIZE:
+                  value: 16..23
+                BYTE_PACKING_CIRCUIT_SIZE:
+                  value: 9..21
+                CPU_CIRCUIT_SIZE:
+                  value: 12..25
+                KECCAK_CIRCUIT_SIZE:
+                  value: 14..20
+                KECCAK_SPONGE_CIRCUIT_SIZE:
+                  value: 9..15
+                LOGIC_CIRCUIT_SIZE:
+                  value: 12..18
+                MEMORY_CIRCUIT_SIZE:
+                  value: 17..28
+                RUST_LOG:
+                  value: info
+              ports:
+                http:
+                  containerPort: 8080
+              resources:
+                limits:
+                  cpu: 2
+                  memory: 6Gi
+                requests:
+                  cpu: 1
+                  memory: 2Gi
+              command:
+                - coordinator
+              livenessProbe:
+                httpGet:
+                  path: /health
+                  port: 8080
+                initialDelaySeconds: 60
+                periodSeconds: 5
+              readinessProbe:
+                httpGet:
+                  path: /health
+                  port: 8080
+                initialDelaySeconds: 10
+                periodSeconds: 5
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+                  - key: workload
+                    operator: In
+                    values:
+                    - zk          
+          tolerations:
+            - key: "workload"
+              operator: "Equal"
+              value: "zk"
+              effect: "NoSchedule"
+      worker:
+        replicas: 1
+        pod:
+          containers:
+            worker:
+              image:
+                repository: us.gcr.io/immutable-418115/zero-bin-worker
+                tag: _HT*hull.config.specific.version
+              imagePullPolicy: Always
+              env:
+                AMQP_URI:
+                  valueFrom: 
+                    secretKeyRef:
+                      staticName: true
+                      name: rmq-credentials
+                      key: amqp_uri
+                RUST_LOG:
+                  value: info
+                RUST_BACKTRACE:
+                  value: full
+                ARITHMETIC_CIRCUIT_SIZE:
+                  value: 16..23
+                BYTE_PACKING_CIRCUIT_SIZE:
+                  value: 9..21
+                CPU_CIRCUIT_SIZE:
+                  value: 12..25
+                KECCAK_CIRCUIT_SIZE:
+                  value: 14..20
+                KECCAK_SPONGE_CIRCUIT_SIZE:
+                  value: 9..15
+                LOGIC_CIRCUIT_SIZE:
+                  value: 12..18
+                MEMORY_CIRCUIT_SIZE:
+                  value: 17..28
+              resources:
+                limits:
+                  cpu: 5
+                  memory: 32Gi
+                requests:
+                  cpu: 5
+                  memory: 32Gi
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+                  - key: workload
+                    operator: In
+                    values:
+                    - zk
+          tolerations:
+            - key: "workload"
+              operator: "Equal"
+              value: "zk"
+              effect: "NoSchedule"
+    service:
+      leader:
+        type: LoadBalancer
+        ports:
+          http:
+            port: 8080
+            targetPort: 8080
+    poddisruptionbudget:
+      leader:
+        maxUnavailable: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: leader
+            app.kubernetes.io/instance: zero-bin
+            app.kubernetes.io/name: zero-bin
+      worker:
+        maxUnavailable: 1
+        selector:
+          matchLabels:
+            app.kubernetes.io/component: worker
+            app.kubernetes.io/instance: zero-bin
+            app.kubernetes.io/name: zero-bin
+    horizontalpodautoscaler:
+      worker:
+        enabled: false
+        scaleTargetRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: worker
+        minReplicas: 10
+        maxReplicas: 20
+        behavior:
+          scaleDown:
+            stabilizationWindowSeconds: 300
+        metrics:
+        - type: Resource
+          resource:
+            name: rabbitmq_queue_messages_ready_rate
+            target:
+              type: AverageValue
+              averageValue: 3
+    customresource:
+      worker-scaled-obj:
+        enabled: false
+        staticName: true
+        apiVersion: keda.sh/v1alpha1
+        kind: ScaledObject
+        spec:
+          minReplicaCount: 10
+          maxReplicaCount: 20
+          scaleTargetRef:
+            name: zero-bin-worker
+          triggers:
+          - type: prometheus
+            metricType: Value
+            metadata:
+              serverAddress: http://promstack-prometheus-server.monitoring.svc.cluster.local
+              query: rabbitmq_queue_messages_ready
+              threshold: "5"
+
