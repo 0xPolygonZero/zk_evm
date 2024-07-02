@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -8,6 +10,7 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
+use evm_arithmetization::prover::testing::simulate_execution;
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -164,18 +167,47 @@ fn add11_yml() -> anyhow::Result<()> {
             cur_hash: H256::default(),
         },
     };
+    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stRandom/randomStatetest163_d0g0v0_Shanghai.json");
+    visit_dirs(dir)?;
+    // let bytes =
+    // std::fs::read("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/
+    // stTimeConsuming/static_Call50000_sha256_d0g0v0_Shanghai.json").unwrap();
+    //             let inputs = serde_json::from_slice(&bytes).unwrap();
 
-    let bytes = std::fs::read(
-        "/Users/agonzalez/Downloads/vitalikTransactionTestParis_d0g0v0_Shanghai.json",
-    )
-    .unwrap();
-    let inputs = serde_json::from_slice(&bytes).unwrap();
+    //             let mut timing = TimingTree::new("prove", log::Level::Debug);
+    //             // let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut
+    // timing,             // None)?;
+    //             simulate_execution::<F>(inputs)?;
+    //             timing.filter(Duration::from_millis(100)).print();
 
-    let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;
-    timing.filter(Duration::from_millis(100)).print();
+    Ok(())
+    // verify_proof(&all_stark, proof, &config)
+}
 
-    verify_proof(&all_stark, proof, &config)
+fn visit_dirs(dir: &Path) -> anyhow::Result<()> {
+    if dir == Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stTimeConsuming")
+    {
+        return Ok(());
+    }
+    if dir.is_dir() {
+        log::info!("Found directory: {:?}", dir);
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            visit_dirs(&path)?; // Recurse into the subdirectory
+        }
+    } else if dir.is_file() {
+        log::info!("Found file: {:?}", dir);
+        let bytes = std::fs::read(dir).unwrap();
+        let inputs = serde_json::from_slice(&bytes).unwrap();
+
+        let mut timing = TimingTree::new("prove", log::Level::Debug);
+        // let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing,
+        // None)?;
+        simulate_execution::<F>(inputs)?;
+        timing.filter(Duration::from_millis(100)).print();
+    }
+    Ok(())
 }
 
 fn init_logger() {

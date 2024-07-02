@@ -291,23 +291,6 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
             state.get_generation_state().stack(),
         ),
     );
-    if state.get_clock() <= 65945 && state.get_clock() >= 64176 {
-        log::debug!(
-            "state_trie before = {:?}",
-            get_state_trie::<HashedPartialTrie>(
-                &state.get_generation_state().memory,
-                u256_to_usize(
-                    state
-                        .get_generation_state()
-                        .memory
-                        .read_global_metadata(GlobalMetadata::StateTrieRoot)
-                )
-                .unwrap()
-            )
-            .unwrap()
-            .hash()
-        );
-    }
 
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
