@@ -1,0 +1,12 @@
+apiVersion: v2
+name: zero-bin
+description: zero bin
+type: application
+
+# This is the chart version. It is mostly irrelevant since we only use helm to
+# templatize the project and argo to keep track of it
+version: 1.0.0
+dependencies:
+  - name: hull
+    version: 1.29.7
+    repository: https://vidispine.github.io/hull
