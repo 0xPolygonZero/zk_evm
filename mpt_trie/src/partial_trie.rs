@@ -44,15 +44,7 @@ impl<N: PartialTrie> From<Node<N>> for WrappedNode<N> {
 
 /// A trait for any types that are Tries.
 pub trait PartialTrie:
-    Clone
-    + Debug
-    + Default
-    + Deref<Target = Node<Self>>
-    + DerefMut<Target = Node<Self>>
-    + Eq
-    + PartialEq
-    + TrieNodeIntern
-    + Sized
+    Clone + Debug + Default + DerefMut<Target = Node<Self>> + Eq + TrieNodeIntern
 {
     /// Creates a new partial trie from a node.
     fn new(n: Node<Self>) -> Self;
@@ -115,7 +107,7 @@ pub trait PartialTrie:
 }
 
 /// Part of the trait that is not really part of the public interface but
-/// implementor of other node types still need to implement.
+/// implementer of other node types still need to implement.
 pub trait TrieNodeIntern {
     /// Returns the hash of the rlp encoding of self.
     fn hash_intern(&self) -> EncodedNode;

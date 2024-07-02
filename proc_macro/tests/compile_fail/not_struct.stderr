@@ -1,0 +1,10 @@
+error: zk_evm_proc_macro error: expected `struct`
+ --> tests/compile_fail/not_struct.rs:3:1
+  |
+3 | / #[repr(C)]
+4 | | #[derive(Columns)]
+5 | | enum Maybe<T> {
+6 | |     Nothing,
+7 | |     Just(T),
+8 | | }
+  | |_^

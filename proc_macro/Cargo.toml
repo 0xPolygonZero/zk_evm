@@ -1,0 +1,22 @@
+[package]
+name = "zk_evm_proc_macro"
+version = "0.1.0"
+publish = false
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+proc-macro = true
+
+[[test]]
+name = "tests"
+path = "tests/compiletest.rs"
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }
+
+[dev-dependencies]
+trybuild = { workspace = true }

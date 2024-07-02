@@ -1563,6 +1563,7 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
+        println!("Entering prove all segments");
         let mut it_segment_data = SegmentDataIterator {
             inputs: &generation_inputs,
             partial_next_data: None,
