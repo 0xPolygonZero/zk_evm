@@ -1,5 +1,7 @@
 #!/bin/bash
 # ------------------------------------------------------------------------------
+set -exo pipefail
+
 # Run prover with the parsed input from the standard terminal.
 # To generate the json input file, use the `rpc` tool, for example:
 # `cargo run --bin rpc -- fetch --rpc-url http://127.0.0.1:8546 --start-block 2 --end-block 5 > witness.json`
