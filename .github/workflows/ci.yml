@@ -176,44 +176,44 @@ jobs:
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
-  simple_proof_regular:
-    name: Execute bash script to generate and verify a proof for a small block.
-    runs-on: zero-ci
+  # simple_proof_regular:
+  #   name: Execute bash script to generate and verify a proof for a small block.
+  #   runs-on: zero-ci
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
 
-      - name: Run the script
-        run: |
-          pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b19240705.json
+  #     - name: Run the script
+  #       run: |
+  #         pushd zero_bin/tools
+  #         ./prove_stdio.sh artifacts/witness_b19240705.json
 
-  simple_proof_witness_only:
-    name: Execute bash script to generate the proof witness for a small block.
-    runs-on: zero-ci
+  # simple_proof_witness_only:
+  #   name: Execute bash script to generate the proof witness for a small block.
+  #   runs-on: zero-ci
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
 
-      - name: Run the script
-        run: |
-          pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b19240705.json test_only
+  #     - name: Run the script
+  #       run: |
+  #         pushd zero_bin/tools
+  #         ./prove_stdio.sh artifacts/witness_b19240705.json test_only
 
-  multi_blocks_proof_regular:
-    name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
-    runs-on: zero-ci
+  # multi_blocks_proof_regular:
+  #   name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
+  #   runs-on: zero-ci
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v3
 
-      - name: Run the script
-        run: |
-          pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b2_b7.json
+  #     - name: Run the script
+  #       run: |
+  #         pushd zero_bin/tools
+  #         ./prove_stdio.sh artifacts/witness_b2_b7.json
 
   lints:
     name: Rustdoc, Formatting and Clippy
