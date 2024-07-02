@@ -61,7 +61,13 @@ fi
 # maxdepth because binaries are in the root
 # - other folders contain build scripts etc.
 mkdir /output
-find "/artifacts/$SUBDIR" -maxdepth 1 -type f -executable -exec cp '{}' /output \; -print
+find "/artifacts/$SUBDIR" \
+    -maxdepth 1 \
+    -type f \
+    -executable \
+    -not -name '*.so' \
+    -exec cp '{}' /output \; \
+    -print
 
 EOF
 
@@ -79,6 +85,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /output/* /usr/local/bin/
+RUN <<EOF
+set -eux
+: smoke test executables
+find /usr/local/bin -type f -executable -print0 \
+    | xargs --null --replace tini -- {} --help
+EOF
 
 # can't refer to docker args in an ENTRYPOINT directive, so go through a symlink
 ARG ENTRYPOINT
