@@ -34,12 +34,14 @@ pub(crate) async fn client_main(
     block_interval: BlockInterval,
     mut params: ProofParams,
 ) -> Result<()> {
+    let cached_provider = rpc::provider::CachedProvider::new(build_http_retry_provider(
+        rpc_params.rpc_url.clone(),
+        rpc_params.backoff,
+        rpc_params.max_retries,
+    ));
+
     let prover_input = rpc::prover_input(
-        &build_http_retry_provider(
-            rpc_params.rpc_url,
-            rpc_params.backoff,
-            rpc_params.max_retries,
-        ),
+        &cached_provider,
         block_interval,
         params.checkpoint_block_number.into(),
         rpc_params.rpc_type,
