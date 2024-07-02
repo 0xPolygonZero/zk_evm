@@ -8,7 +8,7 @@ use evm_arithmetization::fixed_recursive_verifier::{
 };
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::proof::{BlockMetadata, PublicValues, TrieRoots};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -147,26 +147,18 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         receipts_root: receipts_trie.hash(),
     };
 
-    let tries_after = TrieRoots {
+    let trie_roots_after = TrieRoots {
         state_root: tries_before.state_trie.hash(),
         transactions_root: tries_before.transactions_trie.hash(),
         receipts_root: tries_before.receipts_trie.hash(),
     };
     let inputs = GenerationInputs {
-        signed_txn: None,
-        withdrawals: vec![],
         tries: tries_before.clone(),
-        trie_roots_after: tries_after,
+        trie_roots_after,
         contract_code,
         checkpoint_state_trie_root: tries_before.state_trie.hash(),
         block_metadata,
-        txn_number_before: 0.into(),
-        gas_used_before: 0.into(),
-        gas_used_after: 0.into(),
-        block_hashes: BlockHashes {
-            prev_hashes: vec![H256::default(); 256],
-            cur_hash: H256::default(),
-        },
+        ..Default::default()
     };
 
     Ok(inputs)
@@ -174,7 +166,6 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
 
 fn get_test_block_proof(
     timestamp: u64,
-    timing: &mut TimingTree,
     all_circuits: &AllRecursiveCircuits<GoldilocksField, PoseidonGoldilocksConfig, 2>,
     all_stark: &AllStark<GoldilocksField, 2>,
     config: &StarkConfig,
@@ -204,6 +195,7 @@ fn get_test_block_proof(
         block_hashes: inputs.block_hashes.clone(),
     };
 
+    let timing = &mut TimingTree::new(&format!("Blockproof {timestamp}"), log::Level::Info);
     let (root_proof0, pv0) = all_circuits.prove_root(all_stark, config, inputs0, timing, None)?;
     all_circuits.verify_root(root_proof0.clone())?;
     let (dummy_proof0, dummy_pv0) =
@@ -254,11 +246,10 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
         &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
         &config,
     );
-    let mut timing = TimingTree::new("prove root first", log::Level::Info);
 
     let unrelated_block_proofs = some_timestamps
         .iter()
-        .map(|&ts| get_test_block_proof(ts, &mut timing, &all_circuits, &all_stark, &config))
+        .map(|&ts| get_test_block_proof(ts, &all_circuits, &all_stark, &config))
         .collect::<anyhow::Result<Vec<ProofWithPublicInputs<F, C, D>>>>()?;
 
     unrelated_block_proofs

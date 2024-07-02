@@ -9,11 +9,10 @@ use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::extension::Extendable;
-use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
 use plonky2::gates::noop::NoopGate;
-use plonky2::hash::hash_types::{HashOut, HashOutTarget, RichField, NUM_HASH_OUT_ELTS};
+use plonky2::hash::hash_types::{RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -21,7 +20,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{
     CircuitConfig, CircuitData, CommonCircuitData, VerifierCircuitData, VerifierCircuitTarget,
 };
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut, Hasher};
+use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
 use plonky2::recursion::dummy_circuit::cyclic_base_proof;
@@ -246,7 +245,7 @@ impl<const D: usize> AggregationChildTarget<D> {
         PublicValuesTarget::select(builder, self.is_agg, agg_pv, evm_pv)
     }
 
-    fn public_values_vec<F: RichField + Extendable<D>>(
+    fn public_inputs<F: RichField + Extendable<D>>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
     ) -> Vec<Target> {
@@ -398,6 +397,8 @@ where
         self.aggregation
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         self.block
+            .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
+        self.two_to_one_block
             .to_buffer(&mut buffer, gate_serializer, generator_serializer)?;
         if !skip_tables {
             for table in &self.by_table {
@@ -979,8 +980,7 @@ where
     {
         let mut builder = CircuitBuilder::<F, D>::new(block_circuit.circuit.common.config.clone());
 
-        let mix_hash = builder.add_virtual_hash();
-        builder.register_public_inputs(&mix_hash.elements);
+        let mix_hash = builder.add_virtual_hash_public_input();
 
         // We need to pad by PIS to match the count of PIS of the `base_proof`.
         let mut padding = block_circuit.circuit.common.num_public_inputs;
@@ -1001,8 +1001,8 @@ where
         let lhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
         let rhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
 
-        let lhs_public_values = lhs.public_values_vec(&mut builder);
-        let rhs_public_values = rhs.public_values_vec(&mut builder);
+        let lhs_public_values = lhs.public_inputs(&mut builder);
+        let rhs_public_values = rhs.public_inputs(&mut builder);
 
         let lhs_agg_pv_hash = extract_two_to_one_block_hash(&lhs_public_values);
         let rhs_agg_pv_hash = extract_two_to_one_block_hash(&rhs_public_values);
@@ -1026,9 +1026,9 @@ where
         mix_vec.extend(&lhs_hash);
         mix_vec.extend(&rhs_hash);
 
-        let mix_hash_intermediate = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
+        let mix_hash_virtual = builder.hash_n_to_hash_no_pad::<C::InnerHasher>(mix_vec);
 
-        builder.connect_hashes(mix_hash, mix_hash_intermediate);
+        builder.connect_hashes(mix_hash, mix_hash_virtual);
 
         let circuit = builder.build::<C>();
         TwoToOneBlockCircuitData {
@@ -1671,7 +1671,7 @@ where
         &self,
         proof: &ProofWithPublicInputs<F, C, D>,
     ) -> anyhow::Result<()> {
-        self.two_to_one_block.circuit.verify(proof.clone());
+        self.two_to_one_block.circuit.verify(proof.clone())?;
         let verifier_data = &self.two_to_one_block.circuit.verifier_data();
         check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
     }
@@ -1689,7 +1689,7 @@ where
     ) {
         let ProofWithPublicInputs {
             proof: base_proof,
-            public_inputs: base_public_inputs,
+            public_inputs: _,
         } = base_proof_with_pis;
         let ProofWithPublicInputsTarget {
             proof: agg_proof_targets,
