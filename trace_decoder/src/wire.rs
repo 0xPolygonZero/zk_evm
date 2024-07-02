@@ -39,7 +39,7 @@ pub fn parse(input: &[u8]) -> anyhow::Result<NonEmpty<Vec<Instruction>>> {
 }
 
 /// Names are taken from the spec.
-/// Spec also requires sequences to be non-empty
+/// Spec also requires sequences to be non-empty.
 ///
 /// CBOR supports unsigned integers up to `2^64 -1`[^1], so we use [`u64`]
 /// for directly read integers.
@@ -51,8 +51,8 @@ pub enum Instruction {
         key: NonEmpty<Vec<U4>>,
         value: NonEmpty<Vec<u8>>,
     },
-    // BUG: the spec has `EXTENSION` and `ACCOUNT_LEAF` inconsistent
-    // between the instruction list and encoding list
+    /// BUG(spec): `EXTENSION` and `ACCOUNT_LEAF` are inconsistent
+    ///            between the instruction list and encoding list
     Extension {
         key: NonEmpty<Vec<U4>>,
     },
@@ -68,13 +68,13 @@ pub enum Instruction {
     AccountLeaf {
         key: NonEmpty<Vec<U4>>,
         nonce: Option<u64>,
-        // BUG: see decode site
+        /// BUG(spec): see decode site [`account_leaf`].
         balance: Option<U256>,
         has_code: bool,
         has_storage: bool,
     },
     SmtLeaf(SmtLeaf),
-    // BUG: see parse site
+    /// BUG(spec): see parse site [`instruction`].
     EmptyRoot,
     NewTrie,
 }
@@ -95,13 +95,13 @@ pub enum SmtLeafType {
     CodeLength,
 }
 
-/// A single place to swap out the error type if required
+/// A single place to swap out the error type if required.
 type PResult<T> = winnow::PResult<T, winnow::error::ContextError>;
 
 fn instruction(input: &mut &[u8]) -> PResult<Instruction> {
     let start = input.checkpoint();
     let opcode = any(input)?;
-    // I don't like the `winnow::combinator::dispatch!` macro
+    // this is [`winnow::combinator::dispatch`] without the macro magic
     match opcode {
         0x00 => trace(
             "leaf",
@@ -117,8 +117,8 @@ fn instruction(input: &mut &[u8]) -> PResult<Instruction> {
             trace("code", cbor.map(|raw_code| Instruction::Code { raw_code })).parse_next(input)
         }
         0x05 => trace("account_leaf", account_leaf).parse_next(input),
-        // BUG: this opcode is is undocumented, but the previous version of
-        //      this code had it, and our tests fail without it
+        // BUG(spec): this opcode is undocumented, but the previous version of
+        //            this code had it, and our tests fail without it.
         0x06 => trace("empty_root", empty.value(Instruction::EmptyRoot)).parse_next(input),
         0x07 => trace("smt_leaf", smt_leaf).parse_next(input),
         0xBB => trace("new_trie", empty.value(Instruction::NewTrie)).parse_next(input),
@@ -158,8 +158,9 @@ fn account_leaf(input: &mut &[u8]) -> PResult<Instruction> {
             false => None,
         },
         balance: match flags.contains(AccountLeafFlags::ENCODES_BALANCE) {
-            // BUG: the spec says CBOR(balance), where we'd expect CBOR integer,
-            //      but actually we read a cbor vec, and decode that as BE
+            // BUG(spec): the spec says CBOR(balance), where we'd expect CBOR
+            //            integer, but actually we read a cbor vec, and decode
+            //            that as BE
             true => Some(
                 trace(
                     "balance",
@@ -173,8 +174,9 @@ fn account_leaf(input: &mut &[u8]) -> PResult<Instruction> {
         has_code: {
             let has_code = flags.contains(AccountLeafFlags::HAS_CODE);
             if has_code {
-                // BUG: this field is undocumented, but the previous version of
-                //      this code had it, and our tests fail without it
+                // BUG(spec): this field is undocumented, but the previous
+                //            version of this code had it, and our tests fail
+                //            without it
                 trace("code_length", cbor::<u64>).parse_next(input)?;
             }
             has_code
@@ -236,14 +238,15 @@ fn decode_key(bytes: &NonEmpty<[u8]>) -> Result<NonEmpty<Vec<U4>>, Error> {
         }
     }
     let v = match bytes.split_first() {
-        // BUG: the previous implementation said that Erigon does this
+        // BUG(spec): the previous implementation said that Erigon does this
         (only, &[]) => nunny::vec![U4::new(*only).ok_or(Error("excess bits in single nibble"))?],
         (flags, rest) => {
             // check the flags
             let flags = EncodeKeyFlags::from_bits(*flags)
                 .ok_or(Error("unrecognised bits in flags for key encoding"))?;
-            // BUG?: the previous implementation ignored this flag, and our tests fail
-            //       without it - perhaps it's &-ed with the prior U4?
+            // BUG(spec)?: the previous implementation ignored this flag, and
+            //             our tests fail without it - perhaps it's &-ed with
+            //             the prior U4?
             // if flags.contains(EncodeKeyFlags::TERMINATED) {
             //     match rest.split_last() {
             //         Some((0x10, new_rest)) => rest = new_rest,

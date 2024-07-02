@@ -73,8 +73,7 @@ fn fold(
             other => Some(other),
         });
     let folded = fold1(&mut instructions)?.context("no instructions to fold")?;
-    // this will allow trailing Code instructions, which isn't as strict as we
-    // might like to be
+    // this is lenient WRT trailing Code instructions
     ensure!(instructions.count() == 0, "leftover instructions");
     Ok((folded, code))
 }

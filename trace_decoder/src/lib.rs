@@ -64,6 +64,8 @@
 //!   all the withdrawals in it.
 
 #![deny(rustdoc::broken_intra_doc_links)]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
 
 /// The broad overview is as follows:
 ///
@@ -75,6 +77,9 @@
 /// 3. The frontend ([`hermez_cdk_erigon::Frontend`] or
 ///    [`zero_jerigon::Frontend`]) is passed to the "backend", which lowers to
 ///    [`evm_arithmetization::GenerationInputs`].
+///
+/// Deviations from the specification are signalled with `BUG(spec)` in the
+/// code.
 const _DEVELOPER_DOCS: () = ();
 
 /// Defines the main functions used to generate the IR.
@@ -283,6 +288,8 @@ pub struct BlockLevelData {
     pub withdrawals: Vec<(Address, U256)>,
 }
 
+/// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+///                document this once we have the API finalized
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,

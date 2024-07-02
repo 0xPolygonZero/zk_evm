@@ -97,7 +97,7 @@ struct Branch {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Node {
     Hash(Hash),
-    // BUG: these are documented, but never constructed during execution
+    // BUG(spec): these are documented, but never constructed during execution
     // Value(Value),
     // Account(Account),
     Leaf(Leaf),
