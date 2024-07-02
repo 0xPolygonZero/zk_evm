@@ -13,6 +13,7 @@ use crate::cpu::kernel::tests::mpt::{
 };
 use crate::generation::mpt::AccountRlp;
 use crate::generation::TrieInputs;
+use crate::memory::segments::Segment;
 use crate::Node;
 
 #[test]
@@ -180,6 +181,29 @@ fn test_state_trie(
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
+    // Set initial tries.
+    interpreter
+        .push(0xDEADBEEFu32.into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push((Segment::StorageLinkedList as usize + 7).into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push((Segment::AccountsLinkedList as usize + 5).into())
+        .expect("The stack should not overflow");
+    interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
+
+    // Now, set the payload.
+    interpreter.generation_state.registers.program_counter =
+        KERNEL.global_labels["mpt_set_payload"];
+
+    interpreter.run()?;
+
+    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 1;
+    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
+    interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
+    interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
+
     // Next, execute mpt_insert_state_trie.
     interpreter.generation_state.registers.program_counter = mpt_insert_state_trie;
     let trie_data = interpreter.get_trie_data_mut();
@@ -215,6 +239,14 @@ fn test_state_trie(
         "Expected empty stack after insert, found {:?}",
         interpreter.stack()
     );
+
+    // Now, run `set_final_tries` so that the trie roots are correct.
+    interpreter
+        .push(0xDEADBEEFu32.into())
+        .expect("The stack should not overflow");
+    interpreter.generation_state.registers.program_counter =
+        KERNEL.global_labels["set_final_tries"];
+    interpreter.run()?;
 
     // Now, execute mpt_hash_state_trie.
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;

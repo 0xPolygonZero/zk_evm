@@ -205,25 +205,32 @@ after_mpt_delete_slot:
     %stack (storage_ptr_ptr_p, addr, root_ptr_p) -> (addr, root_ptr_p, storage_ptr_ptr_p)
     %jump(delete_removed_slots)
 
-%macro set_final_tries
-    PUSH %%after
+global set_final_tries:
+    PUSH set_final_tries_after
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     %add_const(5) // Skip the first node.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
     %add_const(4) // Skip the first node.
     %jump(delete_removed_accounts)
-%%after:
+set_final_tries_after:
     // stack: new_state_root
-    PUSH %%after_after SWAP1
-    // stack: new_state_root, %%after_after
+    PUSH set_final_tries_after_after SWAP1
+    // stack: new_state_root, set_final_tries_after_after
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     %next_slot
     SWAP1
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
     %next_account
     %jump(insert_all_accounts)
-%%after_after:
+set_final_tries_after_after:
     //stack: new_state_root
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+    JUMP
+
+%macro set_final_tries
+    // stack: (empty)
+    PUSH %%after
+    %jump(set_final_tries)
+%%after:
 %endmacro
