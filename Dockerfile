@@ -89,7 +89,7 @@ RUN <<EOF
 set -eux
 : smoke test executables
 find /usr/local/bin -type f -executable -print0 \
-    | xargs --null --replace tini -- {} --help
+    | xargs --null --replace --verbose tini -- {} --help
 EOF
 
 # can't refer to docker args in an ENTRYPOINT directive, so go through a symlink
