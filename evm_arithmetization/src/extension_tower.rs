@@ -1,6 +1,7 @@
 use core::fmt::Debug;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
+use anyhow::{anyhow, Result};
 use ethereum_types::{U256, U512};
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
@@ -125,6 +126,13 @@ pub(crate) const BLS_BASE: U512 = U512([
     0x0,
 ]);
 
+pub(crate) const BLS_SCALAR: U256 = U256([
+    0xffffffff00000001,
+    0x53bda402fffe5bfe,
+    0x3339d80809a1d805,
+    0x73eda753299d7d48,
+]);
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub(crate) struct BLS381 {
     pub val: U512,
@@ -179,6 +187,9 @@ impl Sub for BLS381 {
     }
 }
 
+// The square root implementation for BLS12-381 as well as the
+// `lexicographically_largest` method have been taken from
+// <https://github.com/zkcrypto/bls12_381>.
 impl BLS381 {
     fn lsh_128(self) -> BLS381 {
         let b128: U512 = U512([0, 0, 1, 0, 0, 0, 0, 0]);
@@ -194,6 +205,83 @@ impl BLS381 {
 
     fn lsh_512(self) -> BLS381 {
         self.lsh_256().lsh_256()
+    }
+
+    pub fn sqrt(&self) -> Result<Self> {
+        // Uses Shank's method, as p = 3 (mod 4). This means
+        // we only need to exponentiate by (p+1)/4. This only
+        // works for elements that are actually quadratic residue,
+        // so we check that we got the correct result at the end.
+
+        const MODULUS_MINUS_ONE_DIV_FOUR: [bool; 379] = [
+            true, true, false, true, false, true, false, true, false, true, false, true, false,
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+            true, true, true, true, true, false, true, true, true, true, true, true, true, true,
+            false, false, true, true, true, false, true, true, true, true, true, true, true, true,
+            true, true, true, true, true, true, true, true, true, true, true, false, false, true,
+            false, true, false, true, false, false, false, true, true, false, true, false, true,
+            true, true, true, true, true, true, true, true, true, true, true, true, true, true,
+            true, true, false, true, false, true, false, true, false, true, true, true, true,
+            false, false, false, false, false, true, false, false, true, false, false, false, true,
+            true, false, true, true, true, true, false, false, false, false, true, true, false,
+            true, false, true, true, false, true, true, true, true, false, false, false, false,
+            false, true, false, true, false, true, false, false, true, false, true, true, false,
+            false, false, false, true, true, false, false, true, true, true, false, false, true,
+            true, false, true, true, true, true, true, true, false, true, false, true, false,
+            false, true, false, false, false, true, false, true, false, false, false, false, true,
+            true, true, false, false, true, true, true, true, false, false, true, false, false,
+            false, false, true, true, true, false, true, false, false, true, false, true, true,
+            true, false, true, true, true, false, false, false, true, false, false, true, true,
+            false, true, true, true, false, true, false, true, true, false, false, true, true,
+            false, true, false, true, true, true, false, true, false, false, true, false, true,
+            true, false, false, false, false, true, false, false, true, true, false, true, true,
+            false, true, true, true, true, false, false, true, false, true, true, true, false,
+            true, true, false, false, false, true, true, false, true, false, false, true, false,
+            false, true, false, true, true, false, false, true, false, true, true, false, false,
+            true, true, true, true, true, true, true, true, true, true, false, true, false, false,
+            true, true, true, false, false, false, true, false, true, false, true, true, true,
+            true, false, false, false, true, false, false, false, true, false, false, false, false,
+            false, false, false, false, true, false, true, true,
+        ];
+
+        let mut root = BLS381::UNIT;
+        let mut sq = *self;
+        for bit in MODULUS_MINUS_ONE_DIV_FOUR {
+            if bit {
+                root = root * sq;
+            }
+            sq = sq * sq;
+        }
+
+        // Check that the element is a quadratic residue.
+        if root * root != *self {
+            return Err(anyhow!(
+                "The element does not have a square root in this field."
+            ));
+        }
+
+        Ok(root)
+    }
+
+    /// Returns whether or not this element is strictly lexicographically
+    /// larger than its negation.
+    pub fn lexicographically_largest(&self) -> bool {
+        // This can be determined by checking if the element is larger than
+        // (p - 1) / 2.
+
+        const MODULUS_MINUS_ONE_DIV_TWO: U512 = U512([
+            0xdcff7fffffffd556,
+            0x0f55ffff58a9ffff,
+            0xb39869507b587b12,
+            0xb23ba5c279c2895f,
+            0x258dd3db21a5d66b,
+            0x0d0088f51cbff34d,
+            0x0000000000000000,
+            0x0000000000000000,
+        ]);
+
+        self.val > MODULUS_MINUS_ONE_DIV_TWO
     }
 }
 
@@ -238,7 +326,7 @@ impl FieldExt for BLS381 {
         let mut current = self;
         let mut product = BLS381 { val: U512::one() };
 
-        for j in 0..512 {
+        for j in 0..384 {
             if exp.bit(j) {
                 product = product * current;
             }
@@ -393,7 +481,7 @@ impl<T: FieldExt> Div for Fp2<T> {
 /// adjoin in the subsequent cubic extension.
 /// For BN254 this is 9+i, and for BLS381 it is 1+i.
 /// It also defines the relevant FROB constants,
-/// given by t^(p^n) and t^(p^2n) for various n,
+/// given by t^(p^n) and (t^2)^(p^n) for various n,
 /// used to compute the frobenius operations.
 pub trait Adj: Sized {
     fn mul_adj(self) -> Self;
@@ -805,8 +893,442 @@ impl Adj for Fp2<BLS381> {
             im: self.re + self.im,
         }
     }
-    const FROB_T: [[Fp2<BLS381>; 6]; 2] = [[Fp2::<BLS381>::ZERO; 6]; 2];
-    const FROB_Z: [Fp2<BLS381>; 12] = [Fp2::<BLS381>::ZERO; 12];
+
+    const FROB_T: [[Fp2<BLS381>; 6]; 2] = [
+        [
+            Fp2 {
+                re: BLS381 { val: U512::one() },
+                im: BLS381 { val: U512::zero() },
+            },
+            Fp2 {
+                re: BLS381 { val: U512::zero() },
+                im: BLS381 {
+                    val: U512([
+                        0x8bfd00000000aaac,
+                        0x409427eb4f49fffd,
+                        0x897d29650fb85f9b,
+                        0xaa0d857d89759ad4,
+                        0xec02408663d4de85,
+                        0x1a0111ea397fe699,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+            },
+            Fp2 {
+                re: BLS381 {
+                    val: U512([
+                        0x2e01fffffffefffe,
+                        0xde17d813620a0002,
+                        0xddb3a93be6f89688,
+                        0xba69c6076a0f77ea,
+                        0x5f19672fdf76ce51,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+                im: BLS381 { val: U512::zero() },
+            },
+            Fp2 {
+                re: BLS381 { val: U512::zero() },
+                im: BLS381 { val: U512::one() },
+            },
+            Fp2 {
+                re: BLS381 {
+                    val: U512([
+                        0x8bfd00000000aaac,
+                        0x409427eb4f49fffd,
+                        0x897d29650fb85f9b,
+                        0xaa0d857d89759ad4,
+                        0xec02408663d4de85,
+                        0x1a0111ea397fe699,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+                im: BLS381 { val: U512::zero() },
+            },
+            Fp2 {
+                re: BLS381 { val: U512::zero() },
+                im: BLS381 {
+                    val: U512([
+                        0x2e01fffffffefffe,
+                        0xde17d813620a0002,
+                        0xddb3a93be6f89688,
+                        0xba69c6076a0f77ea,
+                        0x5f19672fdf76ce51,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                },
+            },
+        ],
+        [
+            Fp2 {
+                re: BLS381 { val: U512::one() },
+                im: BLS381 { val: U512::zero() },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x8bfd00000000aaad,
+                            0x409427eb4f49fffd,
+                            0x897d29650fb85f9b,
+                            0xaa0d857d89759ad4,
+                            0xec02408663d4de85,
+                            0x1a0111ea397fe699,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: { BLS381 { val: U512::zero() } },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x8bfd00000000aaac,
+                            0x409427eb4f49fffd,
+                            0x897d29650fb85f9b,
+                            0xaa0d857d89759ad4,
+                            0xec02408663d4de85,
+                            0x1a0111ea397fe699,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: { BLS381 { val: U512::zero() } },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0xb9feffffffffaaaa,
+                            0x1eabfffeb153ffff,
+                            0x6730d2a0f6b0f624,
+                            0x64774b84f38512bf,
+                            0x4b1ba7b6434bacd7,
+                            0x1a0111ea397fe69a,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: { BLS381 { val: U512::zero() } },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x2e01fffffffefffe,
+                            0xde17d813620a0002,
+                            0xddb3a93be6f89688,
+                            0xba69c6076a0f77ea,
+                            0x5f19672fdf76ce51,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: { BLS381 { val: U512::zero() } },
+            },
+            Fp2 {
+                re: {
+                    BLS381 {
+                        val: U512([
+                            0x2e01fffffffeffff,
+                            0xde17d813620a0002,
+                            0xddb3a93be6f89688,
+                            0xba69c6076a0f77ea,
+                            0x5f19672fdf76ce51,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    }
+                },
+                im: { BLS381 { val: U512::zero() } },
+            },
+        ],
+    ];
+
+    const FROB_Z: [Fp2<BLS381>; 12] = [
+        Fp2 {
+            re: { BLS381 { val: U512::one() } },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x8d0775ed92235fb8,
+                        0xf67ea53d63e7813d,
+                        0x7b2443d784bab9c4,
+                        0xfd603fd3cbd5f4f,
+                        0xc231beb4202c0d1f,
+                        0x1904d3bf02bb0667,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0x2cf78a126ddc4af3,
+                        0x282d5ac14d6c7ec2,
+                        0xec0c8ec971f63c5f,
+                        0x54a14787b6c7b36f,
+                        0x88e9e902231f9fb8,
+                        0xfc3e2b36c4e032,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x2e01fffffffeffff,
+                        0xde17d813620a0002,
+                        0xddb3a93be6f89688,
+                        0xba69c6076a0f77ea,
+                        0x5f19672fdf76ce51,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0xf1ee7b04121bdea2,
+                        0x304466cf3e67fa0a,
+                        0xef396489f61eb45e,
+                        0x1c3dedd930b1cf60,
+                        0xe2e9c448d77a2cd9,
+                        0x135203e60180a68e,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0xc81084fbede3cc09,
+                        0xee67992f72ec05f4,
+                        0x77f76e17009241c5,
+                        0x48395dabc2d3435e,
+                        0x6831e36d6bd17ffe,
+                        0x6af0e0437ff400b,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x2e01fffffffefffe,
+                        0xde17d813620a0002,
+                        0xddb3a93be6f89688,
+                        0xba69c6076a0f77ea,
+                        0x5f19672fdf76ce51,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x1ee605167ff82995,
+                        0x5871c1908bd478cd,
+                        0xdb45f3536814f0bd,
+                        0x70df3560e77982d0,
+                        0x6bd3ad4afa99cc91,
+                        0x144e4211384586c1,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0x9b18fae980078116,
+                        0xc63a3e6e257f8732,
+                        0x8beadf4d8e9c0566,
+                        0xf39816240c0b8fee,
+                        0xdf47fa6b48b1e045,
+                        0x5b2cfd9013a5fd8,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0xb9feffffffffaaaa,
+                        0x1eabfffeb153ffff,
+                        0x6730d2a0f6b0f624,
+                        0x64774b84f38512bf,
+                        0x4b1ba7b6434bacd7,
+                        0x1a0111ea397fe69a,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x2cf78a126ddc4af3,
+                        0x282d5ac14d6c7ec2,
+                        0xec0c8ec971f63c5f,
+                        0x54a14787b6c7b36f,
+                        0x88e9e902231f9fb8,
+                        0xfc3e2b36c4e032,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0x8d0775ed92235fb8,
+                        0xf67ea53d63e7813d,
+                        0x7b2443d784bab9c4,
+                        0xfd603fd3cbd5f4f,
+                        0xc231beb4202c0d1f,
+                        0x1904d3bf02bb0667,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x8bfd00000000aaac,
+                        0x409427eb4f49fffd,
+                        0x897d29650fb85f9b,
+                        0xaa0d857d89759ad4,
+                        0xec02408663d4de85,
+                        0x1a0111ea397fe699,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0xc81084fbede3cc09,
+                        0xee67992f72ec05f4,
+                        0x77f76e17009241c5,
+                        0x48395dabc2d3435e,
+                        0x6831e36d6bd17ffe,
+                        0x6af0e0437ff400b,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0xf1ee7b04121bdea2,
+                        0x304466cf3e67fa0a,
+                        0xef396489f61eb45e,
+                        0x1c3dedd930b1cf60,
+                        0xe2e9c448d77a2cd9,
+                        0x135203e60180a68e,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x8bfd00000000aaad,
+                        0x409427eb4f49fffd,
+                        0x897d29650fb85f9b,
+                        0xaa0d857d89759ad4,
+                        0xec02408663d4de85,
+                        0x1a0111ea397fe699,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: { BLS381 { val: U512::zero() } },
+        },
+        Fp2 {
+            re: {
+                BLS381 {
+                    val: U512([
+                        0x9b18fae980078116,
+                        0xc63a3e6e257f8732,
+                        0x8beadf4d8e9c0566,
+                        0xf39816240c0b8fee,
+                        0xdf47fa6b48b1e045,
+                        0x5b2cfd9013a5fd8,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+            im: {
+                BLS381 {
+                    val: U512([
+                        0x1ee605167ff82995,
+                        0x5871c1908bd478cd,
+                        0xdb45f3536814f0bd,
+                        0x70df3560e77982d0,
+                        0x6bd3ad4afa99cc91,
+                        0x144e4211384586c1,
+                        0x0000000000000000,
+                        0x0000000000000000,
+                    ]),
+                }
+            },
+        },
+    ];
 }
 
 /// The degree 3 field extension Fp6 over Fp2 is given by adjoining t, where t^3
@@ -921,7 +1443,7 @@ where
     Fp2<T>: Adj,
 {
     /// This function multiplies an Fp6 element by t, and hence shifts the
-    /// bases, where the t^2 coefficient picks up a factor of 1+i as the 1
+    /// bases, where the t^2 coefficient picks up a factor of t^3 as the 1
     /// coefficient of the output
     fn sh(self) -> Fp6<T> {
         Fp6 {
@@ -929,6 +1451,27 @@ where
             t1: self.t0,
             t2: self.t1,
         }
+    }
+
+    pub fn mul_by_1(&self, c1: Fp2<T>) -> Fp6<T> {
+        let t = Fp6::<T> {
+            t0: self.t0 * c1,
+            t1: self.t1 * c1,
+            t2: self.t2 * c1,
+        };
+
+        t.sh()
+    }
+
+    pub fn mul_by_01(&self, c0: Fp2<T>, c1: Fp2<T>) -> Fp6<T> {
+        let a_a = self.t0 * c0;
+        let b_b = self.t1 * c1;
+
+        let t0 = (self.t2 * c1).mul_adj() + a_a;
+        let t1 = (c0 + c1) * (self.t0 + self.t1) - a_a - b_b;
+        let t2 = self.t2 * c0 + b_b;
+
+        Fp6::<T> { t0, t1, t2 }
     }
 }
 
@@ -940,10 +1483,10 @@ where
     /// The nth frobenius endomorphism of a p^q field is given by mapping
     ///     x to x^(p^n)
     /// which sends a + bt + ct^2: Fp6 to
-    ///     a^(p^n) + b^(p^n) * t^(p^n) + c^(p^n) * t^(2p^n)
+    ///     a^(p^n) + b^(p^n) * t^(p^n) + c^(p^n) * (t^2)^(p^n)
     /// The Fp2 coefficients are determined by the comment in the conj method,
     /// while the values of
-    ///     t^(p^n) and t^(2p^n)
+    ///     t^(p^n) and (t^2)^(p^n)
     /// are precomputed in the constant arrays FROB_T1 and FROB_T2
     pub(crate) fn frob(self, n: usize) -> Fp6<T> {
         let n = n % 6;
@@ -1183,7 +1726,7 @@ where
     T: FieldExt,
     Fp2<T>: Adj,
 {
-    fn conj(self) -> Fp12<T> {
+    pub fn conj(self) -> Fp12<T> {
         Fp12 {
             z0: self.z0,
             z1: -self.z1,
@@ -1196,6 +1739,20 @@ where
     T: FieldExt,
     Fp2<T>: Adj,
 {
+    pub fn mul_by_014(&self, c0: Fp2<T>, c1: Fp2<T>, c4: Fp2<T>) -> Fp12<T> {
+        let aa = self.z0.mul_by_01(c0, c1);
+        let bb = self.z1.mul_by_1(c4);
+        let o = c1 + c4;
+        let z1 = self.z1 + self.z0;
+        let z1 = z1.mul_by_01(c0, o);
+        let z1 = z1 - aa - bb;
+        let z0 = bb;
+        let z0 = z0.sh();
+        let z0 = z0 + aa;
+
+        Fp12::<T> { z0, z1 }
+    }
+
     /// The nth frobenius endomorphism of a p^q field is given by mapping
     ///     x to x^(p^n)
     /// which sends a + bz: Fp12 to
@@ -1318,5 +1875,568 @@ where
         let z0 = Fp6::<T>::from_stack(&stack[0..field_size]);
         let z1 = Fp6::<T>::from_stack(&stack[field_size..2 * field_size]);
         Fp12 { z0, z1 }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bls_fp6_frobenius() {
+        // f == 2
+        let f = Fp6::<BLS381> {
+            t0: Fp2::<BLS381>::UNIT + Fp2::<BLS381>::UNIT,
+            t1: Fp2::<BLS381>::ZERO,
+            t2: Fp2::<BLS381>::ZERO,
+        };
+
+        for i in 0..6 {
+            assert_eq!(f, f.frob(i));
+        }
+
+        // f == t
+        let f = Fp6::<BLS381> {
+            t0: Fp2::<BLS381>::ZERO,
+            t1: Fp2::<BLS381>::UNIT,
+            t2: Fp2::<BLS381>::ZERO,
+        };
+
+        let expected = [
+            f,
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381> {
+                    re: BLS381 { val: U512::zero() },
+                    im: BLS381 {
+                        val: U512([
+                            0x8bfd00000000aaac,
+                            0x409427eb4f49fffd,
+                            0x897d29650fb85f9b,
+                            0xaa0d857d89759ad4,
+                            0xec02408663d4de85,
+                            0x1a0111ea397fe699,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                },
+                t2: Fp2::<BLS381>::ZERO,
+            },
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381> {
+                    re: BLS381 {
+                        val: U512([
+                            0x2e01fffffffefffe,
+                            0xde17d813620a0002,
+                            0xddb3a93be6f89688,
+                            0xba69c6076a0f77ea,
+                            0x5f19672fdf76ce51,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                    im: BLS381 { val: U512::zero() },
+                },
+                t2: Fp2::<BLS381>::ZERO,
+            },
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381> {
+                    re: BLS381::ZERO,
+                    im: BLS381::UNIT,
+                },
+                t2: Fp2::<BLS381>::ZERO,
+            },
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381> {
+                    re: BLS381 {
+                        val: U512([
+                            0x8bfd00000000aaac,
+                            0x409427eb4f49fffd,
+                            0x897d29650fb85f9b,
+                            0xaa0d857d89759ad4,
+                            0xec02408663d4de85,
+                            0x1a0111ea397fe699,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                    im: BLS381 { val: U512::zero() },
+                },
+                t2: Fp2::<BLS381>::ZERO,
+            },
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381> {
+                    re: BLS381 { val: U512::zero() },
+                    im: BLS381 {
+                        val: U512([
+                            0x2e01fffffffefffe,
+                            0xde17d813620a0002,
+                            0xddb3a93be6f89688,
+                            0xba69c6076a0f77ea,
+                            0x5f19672fdf76ce51,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                },
+                t2: Fp2::<BLS381>::ZERO,
+            },
+        ];
+
+        for i in 0..6 {
+            assert_eq!(expected[i], f.frob(i));
+        }
+
+        // f == t^2
+        let f = Fp6::<BLS381> {
+            t0: Fp2::<BLS381>::ZERO,
+            t1: Fp2::<BLS381>::ZERO,
+            t2: Fp2::<BLS381>::UNIT,
+        };
+
+        let expected = [
+            f,
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381>::ZERO,
+                t2: Fp2::<BLS381> {
+                    re: BLS381 {
+                        val: U512([
+                            0x8bfd00000000aaad,
+                            0x409427eb4f49fffd,
+                            0x897d29650fb85f9b,
+                            0xaa0d857d89759ad4,
+                            0xec02408663d4de85,
+                            0x1a0111ea397fe699,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                    im: BLS381 { val: U512::zero() },
+                },
+            },
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381>::ZERO,
+                t2: Fp2::<BLS381> {
+                    re: BLS381 {
+                        val: U512([
+                            0x8bfd00000000aaac,
+                            0x409427eb4f49fffd,
+                            0x897d29650fb85f9b,
+                            0xaa0d857d89759ad4,
+                            0xec02408663d4de85,
+                            0x1a0111ea397fe699,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                    im: BLS381 { val: U512::zero() },
+                },
+            },
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381>::ZERO,
+                t2: Fp2::<BLS381> {
+                    re: BLS381 {
+                        val: U512([
+                            0xb9feffffffffaaaa,
+                            0x1eabfffeb153ffff,
+                            0x6730d2a0f6b0f624,
+                            0x64774b84f38512bf,
+                            0x4b1ba7b6434bacd7,
+                            0x1a0111ea397fe69a,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                    im: BLS381 { val: U512::zero() },
+                },
+            },
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381>::ZERO,
+                t2: Fp2::<BLS381> {
+                    re: BLS381 {
+                        val: U512([
+                            0x2e01fffffffefffe,
+                            0xde17d813620a0002,
+                            0xddb3a93be6f89688,
+                            0xba69c6076a0f77ea,
+                            0x5f19672fdf76ce51,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                    im: BLS381 { val: U512::zero() },
+                },
+            },
+            Fp6::<BLS381> {
+                t0: Fp2::<BLS381>::ZERO,
+                t1: Fp2::<BLS381>::ZERO,
+                t2: Fp2::<BLS381> {
+                    re: BLS381 {
+                        val: U512([
+                            0x2e01fffffffeffff,
+                            0xde17d813620a0002,
+                            0xddb3a93be6f89688,
+                            0xba69c6076a0f77ea,
+                            0x5f19672fdf76ce51,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                            0x0000000000000000,
+                        ]),
+                    },
+                    im: BLS381 { val: U512::zero() },
+                },
+            },
+        ];
+
+        for i in 0..6 {
+            assert_eq!(expected[i], f.frob(i));
+        }
+    }
+
+    #[test]
+    fn test_bls_fp12_frobenius() {
+        // f == 2
+        let f = Fp12::<BLS381> {
+            z0: Fp6::<BLS381>::UNIT + Fp6::<BLS381>::UNIT,
+            z1: Fp6::<BLS381>::ZERO,
+        };
+
+        for i in 0..6 {
+            assert_eq!(f, f.frob(i));
+        }
+
+        // f == z
+        let f = Fp12::<BLS381> {
+            z0: Fp6::<BLS381>::ZERO,
+            z1: Fp6::<BLS381>::UNIT,
+        };
+
+        let expected = [
+            f,
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0x8d0775ed92235fb8,
+                                0xf67ea53d63e7813d,
+                                0x7b2443d784bab9c4,
+                                0xfd603fd3cbd5f4f,
+                                0xc231beb4202c0d1f,
+                                0x1904d3bf02bb0667,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 {
+                            val: U512([
+                                0x2cf78a126ddc4af3,
+                                0x282d5ac14d6c7ec2,
+                                0xec0c8ec971f63c5f,
+                                0x54a14787b6c7b36f,
+                                0x88e9e902231f9fb8,
+                                0xfc3e2b36c4e032,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0x2e01fffffffeffff,
+                                0xde17d813620a0002,
+                                0xddb3a93be6f89688,
+                                0xba69c6076a0f77ea,
+                                0x5f19672fdf76ce51,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 { val: U512::zero() },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0xf1ee7b04121bdea2,
+                                0x304466cf3e67fa0a,
+                                0xef396489f61eb45e,
+                                0x1c3dedd930b1cf60,
+                                0xe2e9c448d77a2cd9,
+                                0x135203e60180a68e,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 {
+                            val: U512([
+                                0xc81084fbede3cc09,
+                                0xee67992f72ec05f4,
+                                0x77f76e17009241c5,
+                                0x48395dabc2d3435e,
+                                0x6831e36d6bd17ffe,
+                                0x6af0e0437ff400b,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0x2e01fffffffefffe,
+                                0xde17d813620a0002,
+                                0xddb3a93be6f89688,
+                                0xba69c6076a0f77ea,
+                                0x5f19672fdf76ce51,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 { val: U512::zero() },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0x1ee605167ff82995,
+                                0x5871c1908bd478cd,
+                                0xdb45f3536814f0bd,
+                                0x70df3560e77982d0,
+                                0x6bd3ad4afa99cc91,
+                                0x144e4211384586c1,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 {
+                            val: U512([
+                                0x9b18fae980078116,
+                                0xc63a3e6e257f8732,
+                                0x8beadf4d8e9c0566,
+                                0xf39816240c0b8fee,
+                                0xdf47fa6b48b1e045,
+                                0x5b2cfd9013a5fd8,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0xb9feffffffffaaaa,
+                                0x1eabfffeb153ffff,
+                                0x6730d2a0f6b0f624,
+                                0x64774b84f38512bf,
+                                0x4b1ba7b6434bacd7,
+                                0x1a0111ea397fe69a,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 { val: U512::zero() },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0x2cf78a126ddc4af3,
+                                0x282d5ac14d6c7ec2,
+                                0xec0c8ec971f63c5f,
+                                0x54a14787b6c7b36f,
+                                0x88e9e902231f9fb8,
+                                0xfc3e2b36c4e032,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 {
+                            val: U512([
+                                0x8d0775ed92235fb8,
+                                0xf67ea53d63e7813d,
+                                0x7b2443d784bab9c4,
+                                0xfd603fd3cbd5f4f,
+                                0xc231beb4202c0d1f,
+                                0x1904d3bf02bb0667,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0x8bfd00000000aaac,
+                                0x409427eb4f49fffd,
+                                0x897d29650fb85f9b,
+                                0xaa0d857d89759ad4,
+                                0xec02408663d4de85,
+                                0x1a0111ea397fe699,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 { val: U512::zero() },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0xc81084fbede3cc09,
+                                0xee67992f72ec05f4,
+                                0x77f76e17009241c5,
+                                0x48395dabc2d3435e,
+                                0x6831e36d6bd17ffe,
+                                0x6af0e0437ff400b,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 {
+                            val: U512([
+                                0xf1ee7b04121bdea2,
+                                0x304466cf3e67fa0a,
+                                0xef396489f61eb45e,
+                                0x1c3dedd930b1cf60,
+                                0xe2e9c448d77a2cd9,
+                                0x135203e60180a68e,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0x8bfd00000000aaad,
+                                0x409427eb4f49fffd,
+                                0x897d29650fb85f9b,
+                                0xaa0d857d89759ad4,
+                                0xec02408663d4de85,
+                                0x1a0111ea397fe699,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 { val: U512::zero() },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+            Fp12::<BLS381> {
+                z0: Fp6::<BLS381>::ZERO,
+                z1: Fp6::<BLS381> {
+                    t0: Fp2::<BLS381> {
+                        re: BLS381 {
+                            val: U512([
+                                0x9b18fae980078116,
+                                0xc63a3e6e257f8732,
+                                0x8beadf4d8e9c0566,
+                                0xf39816240c0b8fee,
+                                0xdf47fa6b48b1e045,
+                                0x5b2cfd9013a5fd8,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                        im: BLS381 {
+                            val: U512([
+                                0x1ee605167ff82995,
+                                0x5871c1908bd478cd,
+                                0xdb45f3536814f0bd,
+                                0x70df3560e77982d0,
+                                0x6bd3ad4afa99cc91,
+                                0x144e4211384586c1,
+                                0x0000000000000000,
+                                0x0000000000000000,
+                            ]),
+                        },
+                    },
+                    t1: Fp2::<BLS381>::ZERO,
+                    t2: Fp2::<BLS381>::ZERO,
+                },
+            },
+        ];
+
+        for i in 0..12 {
+            assert_eq!(expected[i], f.frob(i));
+        }
     }
 }

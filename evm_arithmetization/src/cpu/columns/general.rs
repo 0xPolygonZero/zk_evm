@@ -78,7 +78,6 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
 }
 
 impl<T: Copy + PartialEq> PartialEq<Self> for CpuGeneralColumnsView<T> {
-    #[allow(clippy::unconditional_recursion)] // false positive
     fn eq(&self, other: &Self) -> bool {
         let self_arr: &[T; NUM_SHARED_COLUMNS] = self.borrow();
         let other_arr: &[T; NUM_SHARED_COLUMNS] = other.borrow();

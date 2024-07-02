@@ -32,7 +32,8 @@ use crate::{arithmetic, logic};
 pub(crate) enum Operation {
     Iszero,
     Not,
-    Syscall(u8, usize, bool), // (syscall number, minimum stack length, increases stack length)
+    /// (syscall number, minimum stack length, increases stack length)
+    Syscall(u8, usize, bool),
     Eq,
     BinaryLogic(logic::Op),
     BinaryArithmetic(arithmetic::BinaryOperator),
@@ -173,7 +174,7 @@ pub(crate) fn generate_prover_input<F: Field, T: Transition<F>>(
     let pc = generation_state.registers.program_counter;
     let input_fn = &KERNEL.prover_inputs[&pc];
     let input = generation_state.prover_input(input_fn)?;
-    let opcode = 0x49.into();
+    let opcode = 0xee.into();
     // `ArithmeticStark` range checks `mem_channels[0]`, which contains
     // the top of the stack, `mem_channels[1]`, `mem_channels[2]` and
     // next_row's `mem_channels[0]` which contains the next top of the stack.

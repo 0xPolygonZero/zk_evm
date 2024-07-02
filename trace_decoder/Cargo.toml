@@ -28,6 +28,7 @@ evm_arithmetization = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+plonky2 = { workspace = true }
 pretty_env_logger = { workspace = true }
 serde_json = { workspace = true }
 

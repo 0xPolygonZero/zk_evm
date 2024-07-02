@@ -15,6 +15,9 @@ global main:
     // Initialize accessed addresses and storage keys lists
     %init_access_lists
 
+    // Initialize transient storage length
+    %init_transient_storage_len
+
     // Initialize the RLP DATA pointer to its initial position, 
     // skipping over the preinitialized empty node.
     PUSH @INITIAL_TXN_RLP_ADDR
@@ -37,7 +40,7 @@ global hash_initial_tries:
     // We initialize the segment length with 1 because the segment contains 
     // the null pointer `0` when the tries are empty.
     PUSH 1
-    %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)    %assert_eq
+    %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)     %assert_eq
     // stack: trie_data_len
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_BEFORE)      %assert_eq
     // stack: trie_data_len
@@ -45,10 +48,13 @@ global hash_initial_tries:
     // stack: trie_data_full_len
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
+    // If txn_idx == 0, update the beacon_root and exit roots.
+    %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+    ISZERO
+    %jumpi(set_beacon_root)
+
 global start_txn:
     // stack: (empty)
-    // The special case of an empty trie (i.e. for the first transaction)
-    // is handled outside of the kernel.
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
     // stack: txn_nb
     DUP1 %scalar_to_rlp

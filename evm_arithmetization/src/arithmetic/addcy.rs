@@ -171,7 +171,6 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
     eval_packed_generic_addcy(yield_constr, is_gt, in0, aux, in1, out, false);
 }
 
-#[allow(clippy::needless_collect)]
 pub(crate) fn eval_ext_circuit_addcy<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
     yield_constr: &mut RecursiveConstraintConsumer<F, D>,

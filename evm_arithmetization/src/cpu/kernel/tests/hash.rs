@@ -4,22 +4,15 @@ use ethereum_types::U256;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::{thread_rng, Rng};
 use ripemd::{Digest, Ripemd160};
-use sha2::Sha256;
 
 use super::{run_interpreter_with_memory, InterpreterMemoryInitialization};
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::memory::segments::Segment::KernelGeneral;
+use crate::util::sha2;
 
 /// Standard RipeMD implementation.
 fn ripemd(input: Vec<u8>) -> U256 {
     let mut hasher = Ripemd160::new();
-    hasher.update(input);
-    U256::from(&hasher.finalize()[..])
-}
-
-/// Standard Sha2 implementation.
-fn sha2(input: Vec<u8>) -> U256 {
-    let mut hasher = Sha256::new();
     hasher.update(input);
     U256::from(&hasher.finalize()[..])
 }

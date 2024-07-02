@@ -16,6 +16,11 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::simulate_execution;
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use evm_arithmetization::Node;
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -83,18 +88,19 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         code_hash,
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
+
+    storage_tries.push((sender_state_key, Node::Empty.into()));
+    storage_tries.push((to_state_key, Node::Empty.into()));
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![
-            (sender_state_key, Node::Empty.into()),
-            (to_state_key, Node::Empty.into()),
-        ],
+        storage_tries,
     };
 
     let gas_used = U256::from(0x17d7840_u32);
@@ -104,17 +110,16 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
 
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::from(sender),
-        block_difficulty: 0x0.into(),
         block_number: 0x176.into(),
         block_chain_id: 0x301824.into(),
         block_timestamp: 0x664e63af.into(),
         block_gaslimit: 0x1c9c380.into(),
         block_gas_used: gas_used,
-        block_bloom: [0.into(); 8],
         block_base_fee: 0x11.into(),
         block_random: H256(hex!(
             "388bd2892c01ab13e22f713316cc2b5d3c3d963e1426c25a80c7878a1815f889"
         )),
+        ..Default::default()
     };
 
     let mut contract_code = HashMap::new();
@@ -132,6 +137,21 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     expected_state_trie_after
         .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
+
+    update_beacon_roots_account_storage(
+        &mut beacon_roots_account_storage,
+        block_metadata.block_timestamp,
+        block_metadata.parent_beacon_block_root,
+    )?;
+    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+    expected_state_trie_after.insert(
+        beacon_roots_account_nibbles(),
+        rlp::encode(&beacon_roots_account).to_vec(),
+    )?;
+    expected_state_trie_after.insert(
+        ger_account_nibbles(),
+        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+    )?;
 
     let receipt_0 = LegacyReceiptRlp {
         status: false,
@@ -165,6 +185,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         checkpoint_state_trie_root: H256(hex!(
             "fe07ff6d1ab215df17884b89112ccf2373597285a56c5902150313ad1a53ee57"
         )),
+        global_exit_roots: vec![],
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

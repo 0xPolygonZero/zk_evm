@@ -60,6 +60,7 @@ process_receipt_after_bloom:
     // stack: first_txn_byte, receipt_ptr, payload_len, status, new_cum_gas, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     DUP1 %eq_const(1) %jumpi(receipt_nonzero_type)
     DUP1 %eq_const(2) %jumpi(receipt_nonzero_type)
+    DUP1 %eq_const(3) %jumpi(receipt_nonzero_type)
     // If we are here, we are dealing with a legacy transaction, and we do not need to write the type.
     POP
 

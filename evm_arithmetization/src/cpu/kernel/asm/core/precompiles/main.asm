@@ -10,15 +10,16 @@
 
 global handle_precompiles:
     // stack: address, retdest, new_ctx, (old stack)
-    DUP1 %eq_const(@ECREC)  %jumpi(precompile_ecrec)
-    DUP1 %eq_const(@SHA256) %jumpi(precompile_sha256)
-    DUP1 %eq_const(@RIP160) %jumpi(precompile_rip160)
-    DUP1 %eq_const(@ID)     %jumpi(precompile_id)
-    DUP1 %eq_const(@EXPMOD) %jumpi(precompile_expmod)
-    DUP1 %eq_const(@BN_ADD) %jumpi(precompile_bn_add)
-    DUP1 %eq_const(@BN_MUL) %jumpi(precompile_bn_mul)
-    DUP1 %eq_const(@SNARKV) %jumpi(precompile_snarkv)
-    %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
+    DUP1 %eq_const(@ECREC)    %jumpi(precompile_ecrec)
+    DUP1 %eq_const(@SHA256)   %jumpi(precompile_sha256)
+    DUP1 %eq_const(@RIP160)   %jumpi(precompile_rip160)
+    DUP1 %eq_const(@ID)       %jumpi(precompile_id)
+    DUP1 %eq_const(@EXPMOD)   %jumpi(precompile_expmod)
+    DUP1 %eq_const(@BN_ADD)   %jumpi(precompile_bn_add)
+    DUP1 %eq_const(@BN_MUL)   %jumpi(precompile_bn_mul)
+    DUP1 %eq_const(@SNARKV)   %jumpi(precompile_snarkv)
+    DUP1 %eq_const(@BLAKE2_F) %jumpi(precompile_blake2_f)
+    %eq_const(@KZG_PEVAL)     %jumpi(precompile_kzg_peval)
     // stack: retdest
     JUMP
 
@@ -51,7 +52,7 @@ global handle_precompiles_from_eoa:
     // stack: addr, retdest
     %create_context
     // stack: new_ctx, addr, retdest
-    %non_intrinisic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit
     // stack: new_ctx, addr, retdest
 
     // Set calldatasize and copy txn data to calldata.

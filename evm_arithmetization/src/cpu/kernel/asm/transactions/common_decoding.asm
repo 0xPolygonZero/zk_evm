@@ -133,6 +133,69 @@
 %%after:
 %endmacro
 
+%macro decode_and_store_max_fee_per_blob_gas
+    // stack: rlp_addr
+    %decode_rlp_scalar
+    %stack (rlp_addr, max_fee_per_blob_gas) -> (max_fee_per_blob_gas, rlp_addr)
+    %mstore_txn_field(@TXN_FIELD_MAX_FEE_PER_BLOB_GAS)
+    // stack: rlp_addr
+%endmacro
+
+%macro decode_and_store_blob_versioned_hashes
+    // stack: rlp_addr
+    DUP1 %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START)
+    %decode_rlp_list_len
+    %stack (rlp_addr, len) -> (len, len, rlp_addr, %%after)
+
+    // EIP-4844: Blob transactions should have at least 1 versioned hash
+    %assert_nonzero(invalid_txn_2)
+
+    // stack: len, rlp_addr, %%after
+    %jump(decode_and_store_blob_versioned_hashes)
+%%after:
+%endmacro
+
+// The blob versioned hashes are just a list of hashes.
+global decode_and_store_blob_versioned_hashes:
+    // stack: len, rlp_addr
+    // Store the list length
+    DUP1 %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN)
+
+    // stack: len, rlp_addr
+    DUP2 ADD
+    // stack: end_rlp_addr, rlp_addr
+    // Store the RLP length.
+    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START) DUP2 SUB %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN)
+    // stack: end_rlp_addr, rlp_addr
+    PUSH @SEGMENT_TXN_BLOB_VERSIONED_HASHES // initial address to write to
+    SWAP2
+decode_and_store_blob_versioned_hashes_loop:
+    // stack: rlp_addr, end_rlp_addr, store_addr
+    DUP2 DUP2 EQ %jumpi(decode_and_store_blob_versioned_hashes_finish)
+    // stack: rlp_addr, end_rlp_addr, store_addr
+    %decode_rlp_scalar // blob_versioned_hashes[i]
+    // stack: rlp_addr, hash, end_rlp_addr, store_addr
+
+    // EIP-4844: Versioned hashes should have `VERSIONED_HASH_VERSION_KZG` as MSB
+    DUP2
+    %shr_const(248)
+    // stack: MSB, hash, end_rlp_addr, store_addr
+    %eq_const(1)
+    // stack: hash_is_valid?, rlp_addr, hash, end_rlp_addr, store_addr
+    %assert_nonzero(invalid_txn_3)
+
+    // stack: rlp_addr, hash, end_rlp_addr, store_addr
+    SWAP3 DUP1 SWAP2
+    // stack: hash, store_addr, store_addr, end_rlp_addr, rlp_addr
+    MSTORE_GENERAL
+    // stack: store_addr, end_rlp_addr, rlp_addr
+    %increment SWAP2
+    // stack: rlp_addr, end_rlp_addr, store_addr' 
+    %jump(decode_and_store_blob_versioned_hashes_loop)
+decode_and_store_blob_versioned_hashes_finish:
+    %stack (rlp_addr, end_rlp_addr, store_addr, retdest) -> (retdest, rlp_addr)
+    JUMP
+
 %macro decode_and_store_y_parity
     // stack: rlp_addr
     %decode_rlp_scalar

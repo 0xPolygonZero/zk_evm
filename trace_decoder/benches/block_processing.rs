@@ -1,8 +1,9 @@
 //! Benchmarks the processing by the decoder of a block witness obtained from a
 //! node into a sequence of prover inputs ready to be sent to a prover.
 //!
-//! The block being processed here is the 19240650th Ethereum block
-//! (<https://etherscan.io/block/19240650>) containing 201 transactions and 16 withdrawals.
+//! The block being processed here is the 19778575th Ethereum block
+//! (<https://etherscan.io/block/19778575>) containing 201 transactions and 16 withdrawals
+//! for a total of 24,479,837 gas.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use serde::{Deserialize, Serialize};
@@ -26,7 +27,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let bytes = std::fs::read("benches/block_input.json").unwrap();
     let prover_input: ProverInput = serde_json::from_slice(&bytes).unwrap();
 
-    c.bench_function("Block 19240650 processing", |b| {
+    c.bench_function("Block 19778575 processing", |b| {
         b.iter_batched(
             || prover_input.clone(),
             |pi| {

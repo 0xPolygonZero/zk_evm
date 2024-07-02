@@ -26,8 +26,8 @@
 
 %macro is_precompile
     // stack: addr
-    DUP1 %ge_const(@ECREC) SWAP1 %le_const(@BLAKE2_F)
-    // stack: addr>=1, addr<=9
+    DUP1 %ge_const(@ECREC) SWAP1 %le_const(@KZG_PEVAL)
+    // stack: addr>=1, addr<=10
     MUL // Cheaper than AND
 %endmacro
 

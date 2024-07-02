@@ -72,9 +72,15 @@ fn test_jumpdest_analysis() -> Result<()> {
 
     // Run jumpdest analysis with context = 3
     interpreter.generation_state.registers.context = CONTEXT;
-    interpreter.push(0xDEADBEEFu32.into());
-    interpreter.push(code_len.into());
-    interpreter.push(U256::from(CONTEXT) << CONTEXT_SCALING_FACTOR);
+    interpreter
+        .push(0xDEADBEEFu32.into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push(code_len.into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push(U256::from(CONTEXT) << CONTEXT_SCALING_FACTOR)
+        .expect("The stack should not overflow");
 
     // We need to manually pop the jumpdest_table and push its value on the top of
     // the stack
@@ -86,7 +92,9 @@ fn test_jumpdest_analysis() -> Result<()> {
         .get_mut(&CONTEXT)
         .unwrap()
         .pop();
-    interpreter.push(41.into());
+    interpreter
+        .push(41.into())
+        .expect("The stack should not overflow");
 
     interpreter.run()?;
     assert_eq!(interpreter.stack(), vec![]);
@@ -195,14 +203,14 @@ fn test_verify_non_jumpdest() -> Result<()> {
         code[i] -= 1;
 
         // We check that all non jumpdests are indeed non jumpdests
-        for (j, &opcode) in code
-            .iter()
-            .enumerate()
-            .filter(|&(j, _)| j != 1 && j != 5 && j != 7)
-        {
+        for j in (0..code.len()).filter(|&i| i != 1 && i != 5 && i != 7) {
             interpreter.generation_state.registers.program_counter = verify_non_jumpdest;
-            interpreter.push(0xDEADBEEFu32.into());
-            interpreter.push(j.into());
+            interpreter
+                .push(0xDEADBEEFu32.into())
+                .expect("The stack should not overflow");
+            interpreter
+                .push(j.into())
+                .expect("The stack should not overflow");
             interpreter.run()?;
             assert!(interpreter.stack().is_empty());
             assert_eq!(interpreter.get_jumpdest_bit(j), U256::zero());

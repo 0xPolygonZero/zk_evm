@@ -5045,6 +5045,7 @@ dependencies = [
  "keccak-hash 0.10.0",
  "log",
  "mpt_trie",
+ "plonky2",
  "pretty_env_logger",
  "rlp",
  "serde",

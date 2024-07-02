@@ -277,6 +277,48 @@ global sys_basefee:
     SWAP1
     EXIT_KERNEL
 
+global sys_blobhash:
+    // stack: kexit_info, index
+    %charge_gas_const(@GAS_HASH_OPCODE)
+    // stack: kexit_info, index
+    %blobhash
+    // stack: blobhash, kexit_info
+    SWAP1
+    EXIT_KERNEL
+
+%macro blobhash
+    // stack: kexit_info, index
+    SWAP1
+    // stack: index, kexit_info
+    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN)
+    DUP2
+    LT ISZERO // == GE
+    // stack: index >= len, index, kexit_info
+    %jumpi(%%index_too_big)
+    PUSH @SEGMENT_TXN_BLOB_VERSIONED_HASHES
+    %build_kernel_address
+    // stack: read_addr, kexit_info
+    MLOAD_GENERAL
+    %jump(%%end)
+%%index_too_big:
+    // The index is larger than the list, just push 0.
+    // stack: index, kexit_info
+    POP
+    PUSH 0
+    // stack: 0, kexit_info
+%%end:
+    // stack: blobhash, kexit_info
+%endmacro
+
+global sys_blobbasefee:
+    // stack: kexit_info
+    %charge_gas_const(@GAS_BASE)
+    // stack: kexit_info
+    PROVER_INPUT(blobbasefee)
+    // stack: blobbasefee, kexit_info
+    SWAP1
+    EXIT_KERNEL
+
 global sys_blockhash:
     // stack: kexit_info, block_number
     %charge_gas_const(@GAS_BLOCKHASH)
@@ -434,3 +476,7 @@ global sys_prevrandao:
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_RANDOM)
     %stack (random, kexit_info) -> (kexit_info, random)
     EXIT_KERNEL
+
+%macro parent_beacon_block_root
+    %mload_global_metadata(@GLOBAL_METADATA_PARENT_BEACON_BLOCK_ROOT)
+%endmacro

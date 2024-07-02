@@ -45,7 +45,7 @@ global memcpy_bytes:
     %lt_const(0x21)
     // stack: count <= 32, DST, SRC, count, retdest
     %jumpi(memcpy_bytes_finish)
-    
+
     // We will pack 32 bytes into a U256 from the source, and then unpack it at the destination.
     // Copy the next chunk of bytes.
     // stack: DST, SRC, count, retdest
@@ -102,5 +102,56 @@ memcpy_finish:
 %macro memcpy_bytes
     %stack (dst, src, count) -> (dst, src, count, %%after)
     %jump(memcpy_bytes)
+%%after:
+%endmacro
+
+// Similar logic to memcpy_bytes, but proceeding the sequence in the backwards direction.
+// Note that this is slightly heavier than the regular `memcpy_bytes`.
+global memcpy_bytes_backwards:
+    // stack: DST, SRC, count, retdest
+
+    // Handle small case
+    DUP3
+    // stack: count, DST, SRC, count, retdest
+    %lt_const(0x21)
+    // stack: count <= 32, DST, SRC, count, retdest
+    %jumpi(memcpy_bytes_finish)
+
+    // We will pack 32 bytes into a U256 from the source, and then unpack it at the destination.
+    // Copy the next chunk of bytes.
+    // stack: DST, SRC, count, retdest
+    PUSH 0x20
+    DUP3
+    // stack: SRC, 32, DST, SRC, count, retdest
+    MLOAD_32BYTES
+    // stack: value, DST, SRC, count, retdest
+    SWAP1
+    // stack: DST, value, SRC, count, retdest
+    MSTORE_32BYTES_32
+    // stack: DST'', SRC, count, retdest
+
+    // Decrement count by 32.
+    SWAP2
+    %sub_const(0x20)
+    SWAP2
+
+    // Decrement DST'' by 32 (from `MSTORE_32BYTES_32` increment) + min(32, count') for the next chunk.
+    // Decrement SRC by min(32, count').
+    // stack: DST'', SRC, count', retdest
+    DUP3 PUSH 0x20 %min
+    // stack: min(32, count'), DST'', SRC, count', retdest
+    DUP1 %add_const(0x20)
+    // stack: 32 + min(32, count'), min(32, count'), DST'', SRC, count', retdest
+    SWAP3 SUB
+    // stack: SRC' = SRC-min(32, count'), DST'', 32 + min(32, count'), count', retdest
+    SWAP2 SWAP1 SUB
+    // stack: DST' = DST''-(32+min(32, count')), SRC', count', retdest
+
+    // Continue the loop.
+    %jump(memcpy_bytes_backwards)
+
+%macro memcpy_bytes_backwards
+    %stack (dst, src, count) -> (dst, src, count, %%after)
+    %jump(memcpy_bytes_backwards)
 %%after:
 %endmacro
