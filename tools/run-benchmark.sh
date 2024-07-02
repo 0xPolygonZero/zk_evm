@@ -28,6 +28,8 @@ NUM_WORKERS_LIMIT=200
 IMX_RPC="http://35.208.84.178:8545"
 INTERNAL_RPC="http://35.208.68.173:8545"
 RPC_ADDRESS=""
+SUBFOLDER_NAME=""
+ENVIRONMENT="${ENVIRONMENT:-test}"
 
 # parameters
 machine_type=$1
@@ -60,8 +62,10 @@ fi
 
 if [[ $RPC_ENDPOINT == "IMX_RPC" ]]; then
   RPC_ADDRESS=$IMX_RPC
+  SUBFOLDER_NAME="external"
 elif [[ $RPC_ENDPOINT == "INTERNAL_RPC" ]]; then
   RPC_ADDRESS=$INTERNAL_RPC
+  SUBFOLDER_NAME="internal"
 else
   echo "error: Wrong RPC endpoint" >&2; exit 1
 fi
@@ -183,8 +187,9 @@ done
 ######################
 
 # Build out the request parameters
+folder_name=$(printf "%s/%s" "$ENVIRONMENT" "$SUBFOLDER_NAME")
 csv_file_name=$(printf "%s.%s.%s.%s.%s.%scpu.%sworkers.csv" "$other_args" "$block_start" "$block_end" "$machine_type" "$CPU_PLATFORM" "$cpu_request" "$num_workers")
-post_body=$(printf '{"block_interval":"%s..=%s","block_source":{"ZeroBinRpc":{"rpc_url":"%s"}},"benchmark_output":{"GoogleCloudStorageCsv":{"file_name":"%s","bucket":"zkevm-csv"}}}' "$block_start" "$block_end" "$RPC_ADDRESS" "$csv_file_name")
+post_body=$(printf '{"block_interval":"%s..=%s","block_source":{"ZeroBinRpc":{"rpc_url":"%s"}},"benchmark_output":{"GoogleCloudStorageCsv":{"file_name":"%s/%s","bucket":"zkevm-csv"}}}' "$block_start" "$block_end" "$RPC_ADDRESS" "$folder_name" "$csv_file_name")
 
 # Run the benchmark test
 echo "Triggering benchmark test..."
