@@ -211,7 +211,6 @@ global insert_new_account:
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr, payload_ptr, retdest
-    // TODO: Don't for get to %journal_add_account_loaded
     %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
     JUMP
 
@@ -717,7 +716,6 @@ global debug_yo_no_me_llamo_javier:
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     // stack: addr, key, payload_ptr, retdest
-    // TODO: Don't for get to %journal_add_storage_loaded!!!
     %pop2
     PUSH 0
     SWAP1
