@@ -82,5 +82,6 @@ jobs:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_WORKLOAD_IDENTITY_ID: ${{ secrets.GCP_WORKLOAD_IDENTITY_ID }}
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          ENVIRONMENT: production
         run: >
           ./tools/run-benchmark.sh ${{ inputs.machine_type }} ${{ inputs.num_workers }} ${{ inputs.cpu_request }} ${{ inputs.cpu_limit }} ${{ inputs.memory }} ${{ inputs.memory }} ${{ inputs.block_start }} ${{ inputs.block_end }} ${{ inputs.other_args }} ${{ inputs.rpc_endpoint }}
