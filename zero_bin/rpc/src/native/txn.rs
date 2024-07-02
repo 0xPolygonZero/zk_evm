@@ -24,7 +24,7 @@ use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::trace_protocol::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
 use super::CodeDb;
-use crate::compat::Compat;
+use crate::Compat;
 
 /// Processes the transactions in the given block and updates the code db.
 pub(super) async fn process_transactions<ProviderT, TransportT>(

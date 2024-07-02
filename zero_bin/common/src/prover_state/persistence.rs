@@ -17,9 +17,10 @@ use super::{
     Config, RecursiveCircuitsForTableSize, SIZE,
 };
 
-const CIRCUITS_FOLDER: &str = "./circuits";
+const CIRCUITS_DIR: &str = "circuits/";
 const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
+const CARGO_WORKSPACE_DIR_ENV: &str = "CARGO_WORKSPACE_DIR";
 
 fn get_serializers() -> (
     DefaultGateSerializer,
@@ -72,9 +73,11 @@ pub(crate) trait DiskResource {
         p: &Self::PathConstrutor,
         r: &Self::Resource,
     ) -> Result<(), DiskResourceError<Self::Error>> {
+        let circuits_dir = relative_circuit_dir_path();
+
         // Create the base folder if non-existent.
-        if std::fs::metadata(CIRCUITS_FOLDER).is_err() {
-            std::fs::create_dir(CIRCUITS_FOLDER).map_err(|_| {
+        if std::fs::metadata(&circuits_dir).is_err() {
+            std::fs::create_dir(&circuits_dir).map_err(|_| {
                 DiskResourceError::IoError::<Self::Error>(std::io::Error::other(
                     "Could not create circuits folder",
                 ))
@@ -104,7 +107,7 @@ impl DiskResource for BaseProverResource {
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_base_{}_{}",
-            CIRCUITS_FOLDER,
+            &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
             env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
             p.get_configuration_digest()
@@ -140,7 +143,7 @@ impl DiskResource for MonolithicProverResource {
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_monolithic_{}_{}",
-            CIRCUITS_FOLDER,
+            &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
             env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
             p.get_configuration_digest()
@@ -175,7 +178,7 @@ impl DiskResource for RecursiveCircuitResource {
     fn path((circuit_type, size): &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_{}_{}_{}",
-            CIRCUITS_FOLDER,
+            &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
             env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
             circuit_type.as_short_str(),
@@ -219,7 +222,7 @@ impl DiskResource for VerifierResource {
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_{}_{}",
-            CIRCUITS_FOLDER,
+            &relative_circuit_dir_path(),
             VERIFIER_STATE_FILE_PREFIX,
             env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
             p.get_configuration_digest()
@@ -272,4 +275,13 @@ fn prover_to_disk(
     }
 
     Ok(())
+}
+
+/// If we're running in the cargo workspace, then always use the `circuits`
+/// directory that lives in `tools/`. Otherwise, just use `circuits` in the
+/// current directory.
+fn relative_circuit_dir_path() -> String {
+    env::var(CARGO_WORKSPACE_DIR_ENV)
+        .map(|p| format!("{}/{}", p, CIRCUITS_DIR))
+        .unwrap_or_else(|_| CIRCUITS_DIR.to_string())
 }

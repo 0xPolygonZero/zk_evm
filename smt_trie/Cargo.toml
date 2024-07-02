@@ -14,26 +14,8 @@ keywords.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bytes = { workspace = true }
-enum-as-inner = { workspace = true }
 ethereum-types = { workspace = true }
-hex = { workspace = true }
 hex-literal = { workspace = true }
-keccak-hash = { workspace = true }
-log = { workspace = true }
-num-traits = { workspace = true }
-parking_lot = { workspace = true, features = ["serde"] }
 plonky2 = { workspace = true }
 rand = { workspace = true }
-rlp = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
-thiserror = { workspace = true }
-uint = { workspace = true }
-
-
-[dev-dependencies]
-eth_trie = "0.4.0"
-pretty_env_logger = "0.5.0"
-rlp-derive = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
