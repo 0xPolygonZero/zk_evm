@@ -549,12 +549,19 @@ impl<F: Field> GenerationState<F> {
 
     fn run_next_remove_address_slots(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some(([.., ptr], _)) = self
+        if let Some((([.., pred_ptr], _), _)) = self
             .get_storage_linked_list()?
+            .zip(self.get_storage_linked_list()?.skip(1))
             .zip(self.get_storage_linked_list()?.skip(2))
-            .find(|&(_, [next_addr, next_key, ..])| next_addr == addr)
+            .find(
+                |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
+                    let prev_is_less = (prev_addr < addr || prev_addr == U256::MAX);
+                    let next_is_larger_or_equal = next_addr >= addr;
+                    prev_is_less && next_is_larger_or_equal
+                },
+            )
         {
-            Ok((ptr - U256::from(Segment::StorageLinkedList as usize))
+            Ok((pred_ptr - U256::from(Segment::StorageLinkedList as usize))
                 / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {
             Ok((Segment::StorageLinkedList as usize).into())
