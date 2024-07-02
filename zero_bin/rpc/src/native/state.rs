@@ -1,8 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use __compat_primitive_types::U256;
 use alloy::{
-    primitives::{keccak256, Address, StorageKey, B256},
+    primitives::{keccak256, Address, StorageKey, B256, B64, U256},
     providers::Provider,
     rpc::types::eth::{Block, BlockTransactionsKind, EIP1186AccountProofResponse},
     transports::Transport,
@@ -110,9 +109,9 @@ fn insert_beacon_roots_update(
 
     let mut keys = HashSet::new();
     for slot in slots {
-        let mut bytes = [0; 32];
-        U256::from(slot).to_big_endian(&mut bytes);
-        keys.insert(keccak256(bytes));
+        // let mut bytes = [0; 32];
+        // U256::from(slot).to_big_endian(&mut bytes);
+        keys.insert(U256::from(slot).into());
     }
     state_access.insert(BEACON_ROOTS_CONTRACT_STATE_KEY.1.into(), keys);
 
