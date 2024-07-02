@@ -2,7 +2,7 @@ use std::io;
 
 use alloy::rpc::types::eth::BlockId;
 use clap::{Parser, ValueHint};
-use rpc::zero_bin_provider::CachedProvider;
+use rpc::provider::CachedProvider;
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;

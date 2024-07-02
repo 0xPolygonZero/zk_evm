@@ -15,10 +15,10 @@ use zero_bin_common::block_interval::BlockInterval;
 
 pub mod jerigon;
 pub mod native;
+pub mod provider;
 pub mod retry;
-pub mod zero_bin_provider;
 
-use crate::zero_bin_provider::CachedProvider;
+use crate::provider::CachedProvider;
 
 const PREVIOUS_HASHES_COUNT: usize = 256;
 
