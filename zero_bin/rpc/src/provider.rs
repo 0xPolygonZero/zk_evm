@@ -13,7 +13,7 @@ const CACHE_SIZE: usize = 1024;
 pub struct CachedProvider<ProviderT, TransportT> {
     provider: ProviderT,
     blocks_by_number: Arc<Mutex<lru::LruCache<u64, Block>>>,
-    blocks_by_hash: Arc<Mutex<lru::LruCache<BlockHash, Block>>>,
+    blocks_by_hash: Arc<Mutex<lru::LruCache<BlockHash, u64>>>,
     _phantom: std::marker::PhantomData<TransportT>,
 }
 
@@ -51,12 +51,19 @@ where
         kind: BlockTransactionsKind,
     ) -> anyhow::Result<Block> {
         let cached_block = match id {
-            BlockId::Hash(hash) => self
-                .blocks_by_hash
-                .lock()
-                .await
-                .get(&hash.block_hash)
-                .cloned(),
+            BlockId::Hash(hash) => {
+                let block_num = self
+                    .blocks_by_hash
+                    .lock()
+                    .await
+                    .get(&hash.block_hash)
+                    .copied();
+                if let Some(block_num) = block_num {
+                    self.blocks_by_number.lock().await.get(&block_num).cloned()
+                } else {
+                    None
+                }
+            }
             BlockId::Number(alloy::rpc::types::BlockNumberOrTag::Number(number)) => {
                 self.blocks_by_number.lock().await.get(&number).cloned()
             }
@@ -71,14 +78,15 @@ where
                 .get_block(id, kind)
                 .await?
                 .context(format!("target block {:?} does not exist", id))?;
-            if let Some(hash) = block.header.hash {
-                self.blocks_by_hash.lock().await.put(hash, block.clone());
-            }
-            if let Some(number) = block.header.number {
+
+            if let Some(block_num) = block.header.number {
                 self.blocks_by_number
                     .lock()
                     .await
-                    .put(number, block.clone());
+                    .put(block_num, block.clone());
+                if let Some(hash) = block.header.hash {
+                    self.blocks_by_hash.lock().await.put(hash, block_num);
+                }
             }
             Ok(block)
         }
