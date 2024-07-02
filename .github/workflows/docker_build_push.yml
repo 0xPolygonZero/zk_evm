@@ -38,7 +38,7 @@ jobs:
         id: meta_leader
         uses: docker/metadata-action@v5
         with:
-          images: | 
+          images: |
             name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LEADER }}
           tags: |
             type=ref,event=branch
@@ -49,8 +49,7 @@ jobs:
       - name: Push to GitHub Container Registry - Leader
         uses: docker/build-push-action@v3
         with:
-          context: .
-          file: ./leader.Dockerfile
+          build-args: ["ENTRYPOINT=leader"]
           push: true
           # platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta_leader.outputs.tags }}
@@ -73,8 +72,7 @@ jobs:
       - name: Push to GitHub Container Registry - Worker
         uses: docker/build-push-action@v3
         with:
-          context: .
-          file: ./worker.Dockerfile
+          build-args: ["ENTRYPOINT=worker"]
           push: true
           # platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta_worker.outputs.tags }}
