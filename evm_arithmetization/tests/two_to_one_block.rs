@@ -3,7 +3,9 @@ use std::str::FromStr;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
-use evm_arithmetization::fixed_recursive_verifier::{extract_block_public_values, extract_two_to_one_block_hash};
+use evm_arithmetization::fixed_recursive_verifier::{
+    extract_block_public_values, extract_two_to_one_block_hash,
+};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockMetadata, PublicValues, TrieRoots};
