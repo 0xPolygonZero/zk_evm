@@ -167,7 +167,25 @@ fn add11_yml() -> anyhow::Result<()> {
             cur_hash: H256::default(),
         },
     };
-    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stRandom/randomStatetest163_d0g0v0_Shanghai.json");
+
+    let good = vec![
+        248, 74, 1, 134, 15, 255, 255, 251, 152, 107, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255,
+        131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227,
+        99, 180, 33, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192,
+        229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
+    ];
+    let good: AccountRlp = rlp::decode(&good).unwrap();
+    log::debug!("good = {:#?}", good);
+    let bad = vec![
+        248, 74, 134, 16, 0, 0, 0, 0, 0, 128, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69,
+        230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180,
+        33, 160, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0,
+    ];
+    let bad: AccountRlp = rlp::decode(&bad).unwrap();
+    log::debug!("bad = {:#?}", bad);
+
+    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests//stExample/basefeeExample_d0g0v0_Shanghai.json");
     visit_dirs(dir)?;
     // let bytes =
     // std::fs::read("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/
