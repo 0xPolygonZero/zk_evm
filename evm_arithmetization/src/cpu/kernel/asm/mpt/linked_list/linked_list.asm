@@ -90,11 +90,13 @@ loop_store_initial_accounts:
     // stack: nonce_ptr, cpy_ptr, current_node_ptr, retdest
     DUP1
     %mload_trie_data // nonce
+global debug_storing_nonce:
     %append_to_trie_data
     %increment
     // stack: balance_ptr, cpy_ptr, current_node_ptr, retdest
     DUP1
     %mload_trie_data // balance
+global debug_storing_balance:
     %append_to_trie_data
     %increment // The storage_root_ptr is not really necessary
     // stack: storage_root_ptr_ptr, cpy_ptr, current_node_ptr, retdest
@@ -298,22 +300,9 @@ account_found_with_overwrite:
     // stack: pred_ptr, addr, payload_ptr, retdest
     // Load the the payload pointer and access counter
     %increment
-    DUP1
-    // stack: payload_ptr_ptr, pred_ptr+1, addr, payload_ptr, retdest
-    DUP4 MSTORE_GENERAL
-    %increment
-    DUP1
-    MLOAD_GENERAL
-    %increment
-    // stack: access_ctr + 1, access_ctr_ptr, addr, payload_ptr, retdest
-    SWAP1
-    DUP2
-    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, addr, payload_ptr, retdest
-    MSTORE_GENERAL
-    // stack: access_ctr + 1, addr, payload_ptr, retdest
-    // If access_ctr == 1 then this it's a cold access 
-    %eq_const(1)
-    %stack (cold_access, addr, payload_ptr, retdest) -> (retdest, cold_access, payload_ptr)
+    // stack: payload_ptr_ptr, addr, payload_ptr, retdest
+    DUP3 MSTORE_GENERAL
+    %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
     JUMP
 
 %macro search_account

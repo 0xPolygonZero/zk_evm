@@ -10,9 +10,6 @@
 global process_type_2_txn:
     // stack: retdest
     // Initial rlp address offset of 1 (skipping over the 0x02 byte)
-    %mload_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
-global debug_inital_rlp_data_size:
-    POP
     PUSH 1
     PUSH @INITIAL_TXN_RLP_ADDR
     %build_kernel_address
@@ -38,9 +35,6 @@ global debug_initial_txn_rlp_addr:
     %decode_and_store_s
 
     // stack: rlp_addr, retdest
-%mload_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
-global debug_rlp_data_size_before_alloc:
-    POP
 global debug_before_alloc_rlp_block:
     POP
     // stack: retdest
