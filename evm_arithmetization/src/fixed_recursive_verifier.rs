@@ -228,11 +228,11 @@ impl<const D: usize> AggregationChildTarget<D> {
     fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
         let is_agg = buffer.read_target_bool()?;
         let agg_proof = buffer.read_target_proof_with_public_inputs()?;
-        let evm_proof = buffer.read_target_proof_with_public_inputs()?;
+        let base_proof = buffer.read_target_proof_with_public_inputs()?;
         Ok(Self {
             is_agg,
             agg_proof,
-            base_proof: evm_proof,
+            base_proof,
         })
     }
 
@@ -241,8 +241,8 @@ impl<const D: usize> AggregationChildTarget<D> {
         builder: &mut CircuitBuilder<F, D>,
     ) -> PublicValuesTarget {
         let agg_pv = PublicValuesTarget::from_public_inputs(&self.agg_proof.public_inputs);
-        let evm_pv = PublicValuesTarget::from_public_inputs(&self.base_proof.public_inputs);
-        PublicValuesTarget::select(builder, self.is_agg, agg_pv, evm_pv)
+        let base_pv = PublicValuesTarget::from_public_inputs(&self.base_proof.public_inputs);
+        PublicValuesTarget::select(builder, self.is_agg, agg_pv, base_pv)
     }
 
     fn public_inputs<F: RichField + Extendable<D>>(
@@ -253,7 +253,7 @@ impl<const D: usize> AggregationChildTarget<D> {
             &self.agg_proof.public_inputs,
             &self.base_proof.public_inputs,
         )
-        .map(|(&agg_pv, &block_pv)| builder.select(self.is_agg, agg_pv, block_pv))
+        .map(|(&agg_pv, &base_pv)| builder.select(self.is_agg, agg_pv, base_pv))
         .collect()
     }
 }
@@ -845,8 +845,7 @@ where
         builder.connect(lhs.gas_used_after, rhs.gas_used_before);
     }
 
-    /// Setup a new part of a circuit to handle a new unrelated proof.
-    /// Helper method for [`create_two_to_one_block_circuit`].
+    /// Extend a circuit to verify one of two proofs.
     ///
     /// # Arguments
     ///
@@ -964,7 +963,7 @@ where
     ///
     /// # Arguments
     ///
-    /// - `block_circuit`: circuit data for the block circuit, that constitues
+    /// - `block_circuit`: circuit data for the block circuit, that constitutes
     ///   the base case for aggregation.
     ///
     /// # Outputs
@@ -990,28 +989,30 @@ where
         // Account for `mix_pv_hash`.
         padding -= builder.num_public_inputs();
 
+        let zero = builder.zero();
         for _ in 0..padding {
-            let target = builder.zero();
-            builder.register_public_input(target);
+            builder.register_public_input(zero);
         }
 
-        let user_pis_len = builder.num_public_inputs();
         let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         let lhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
         let rhs = Self::add_agg_child(&mut builder, &block_circuit.circuit);
 
-        let lhs_public_values = lhs.public_inputs(&mut builder);
-        let rhs_public_values = rhs.public_inputs(&mut builder);
+        let lhs_public_inputs = lhs.public_inputs(&mut builder);
+        let rhs_public_inputs = rhs.public_inputs(&mut builder);
 
-        let lhs_agg_pv_hash = extract_two_to_one_block_hash(&lhs_public_values);
-        let rhs_agg_pv_hash = extract_two_to_one_block_hash(&rhs_public_values);
+        let lhs_public_values = extract_block_public_values(&lhs_public_inputs);
+        let rhs_public_values = extract_block_public_values(&rhs_public_inputs);
+
+        let lhs_agg_pv_hash = extract_two_to_one_block_hash(&lhs_public_inputs);
+        let rhs_agg_pv_hash = extract_two_to_one_block_hash(&rhs_public_inputs);
 
         let lhs_base_pv_hash = builder
-            .hash_n_to_hash_no_pad::<C::InnerHasher>(lhs_public_values[..user_pis_len].to_owned())
+            .hash_n_to_hash_no_pad::<C::InnerHasher>(lhs_public_values.to_vec())
             .elements;
         let rhs_base_pv_hash = builder
-            .hash_n_to_hash_no_pad::<C::InnerHasher>(rhs_public_values[..user_pis_len].to_owned())
+            .hash_n_to_hash_no_pad::<C::InnerHasher>(rhs_public_values.to_vec())
             .elements;
 
         let lhs_hash: Vec<Target> = zip_eq(lhs_agg_pv_hash, lhs_base_pv_hash)
@@ -1997,8 +1998,15 @@ fn shrinking_config() -> CircuitConfig {
 }
 
 /// Extracts the two-to-one block aggregation hash from a predefined location.
-pub fn extract_two_to_one_block_hash<F>(public_inputs: &[F]) -> &[F; NUM_HASH_OUT_ELTS] {
+pub fn extract_two_to_one_block_hash<T>(public_inputs: &[T]) -> &[T; NUM_HASH_OUT_ELTS] {
     public_inputs[0..NUM_HASH_OUT_ELTS]
+        .try_into()
+        .expect("Public inputs vector was malformed.")
+}
+
+/// Extracts the two-to-one block aggregation hash from a predefined location.
+pub fn extract_block_public_values<T>(public_inputs: &[T]) -> &[T; PublicValuesTarget::SIZE] {
+    public_inputs[0..PublicValuesTarget::SIZE]
         .try_into()
         .expect("Public inputs vector was malformed.")
 }

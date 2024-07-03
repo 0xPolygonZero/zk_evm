@@ -3,9 +3,7 @@ use std::str::FromStr;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
-use evm_arithmetization::fixed_recursive_verifier::{
-    extract_two_to_one_block_hash, verification_key_len,
-};
+use evm_arithmetization::fixed_recursive_verifier::{extract_block_public_values, extract_two_to_one_block_hash};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockMetadata, PublicValues, TrieRoots};
@@ -290,15 +288,12 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
             let two_to_one =
                 <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::two_to_one;
 
-            // We do not want to include the verification key in the hash.
-            let verification_key_len = verification_key_len(&all_circuits.block.circuit);
-
             // Leaves
             let mut hashes: Vec<_> = bp
                 .iter()
                 .map(|block_proof| {
-                    let user_pis_len = block_proof.public_inputs.len() - verification_key_len;
-                    hash_no_pad(&block_proof.public_inputs[..user_pis_len])
+                    let public_values = extract_block_public_values(&block_proof.public_inputs);
+                    hash_no_pad(public_values)
                 })
                 .collect();
 
