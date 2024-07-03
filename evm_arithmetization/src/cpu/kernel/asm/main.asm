@@ -130,7 +130,6 @@ global debug_new_len:
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
 global debug_check_initial_trie:
     %assert_eq
-    %jump(panic)
 
     PUSH 1 // initial trie data length
     
