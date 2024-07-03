@@ -48,12 +48,6 @@ pub(crate) async fn client_main(
     )
     .await?;
 
-    if cfg!(feature = "test_only") {
-        info!("All proof witnesses have been generated successfully.");
-    } else {
-        info!("All proofs have been generated successfully.");
-    }
-
     // If `keep_intermediate_proofs` is not set we only keep the last block
     // proof from the interval. It contains all the necessary information to
     // verify the whole sequence.
@@ -69,6 +63,12 @@ pub(crate) async fn client_main(
         .await;
     runtime.close().await?;
     let proved_blocks = proved_blocks?;
+
+    if cfg!(feature = "test_only") {
+        info!("All proof witnesses have been generated successfully.");
+    } else {
+        info!("All proofs have been generated successfully.");
+    }
 
     if params.keep_intermediate_proofs {
         if params.proof_output_dir.is_some() {
