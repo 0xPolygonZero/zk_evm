@@ -117,7 +117,7 @@ impl<F: Field> Interpreter<F> {
             jumpdest_table: HashMap::new(),
             is_jumpdest_analysis: false,
             clock: 0,
-        };
+        }; 
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
         interpreter.generation_state.registers.stack_len = initial_stack_len;

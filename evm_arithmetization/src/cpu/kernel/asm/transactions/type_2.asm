@@ -10,9 +10,13 @@
 global process_type_2_txn:
     // stack: retdest
     // Initial rlp address offset of 1 (skipping over the 0x02 byte)
+    %mload_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
+global debug_inital_rlp_data_size:
+    POP
     PUSH 1
     PUSH @INITIAL_TXN_RLP_ADDR
     %build_kernel_address
+global debug_initial_txn_rlp_addr:
     // stack: rlp_addr, retdest
     %decode_rlp_list_len
     // We don't actually need the length.
@@ -34,6 +38,10 @@ global process_type_2_txn:
     %decode_and_store_s
 
     // stack: rlp_addr, retdest
+%mload_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
+global debug_rlp_data_size_before_alloc:
+    POP
+global debug_before_alloc_rlp_block:
     POP
     // stack: retdest
 
@@ -42,6 +50,7 @@ global process_type_2_txn:
 // keccak256(0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, destination, amount, data, access_list]))
 type_2_compute_signed_data:
     %alloc_rlp_block
+global debug_rlp_addr_start:
     // stack: rlp_addr_start, retdest
     %mload_txn_field(@TXN_FIELD_CHAIN_ID)
     // stack: chain_id, rlp_start, retdest
@@ -61,6 +70,7 @@ type_2_compute_signed_data:
     %mload_txn_field(@TXN_FIELD_MAX_FEE_PER_GAS)
     %encode_rlp_scalar_swapped_inputs
     // stack: rlp_addr, rlp_start, retdest
+global debug_rlp_addr_2:
 
     %mload_txn_field(@TXN_FIELD_GAS_LIMIT)
     %encode_rlp_scalar_swapped_inputs
@@ -79,6 +89,7 @@ zero_to:
 after_to:
     %mload_txn_field(@TXN_FIELD_VALUE)
     %encode_rlp_scalar_swapped_inputs
+global debug_rlp_addr_3:
     // stack: rlp_addr, rlp_start, retdest
 
     // Encode txn data.
@@ -140,6 +151,7 @@ store_origin:
     %jumpi(panic)
 
     // stack: address, retdest
+global debug_mstore_txn_field_origin_2:
     %mstore_txn_field(@TXN_FIELD_ORIGIN)
     // stack: retdest
     %jump(process_normalized_txn)

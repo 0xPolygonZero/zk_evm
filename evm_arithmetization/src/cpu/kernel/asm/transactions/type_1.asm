@@ -133,6 +133,7 @@ store_origin:
     %jumpi(panic)
 
     // stack: address, retdest
+global debug_mstore_txn_field_origin_1:
     %mstore_txn_field(@TXN_FIELD_ORIGIN)
     // stack: retdest
     %jump(process_normalized_txn)

@@ -18,6 +18,7 @@ global main:
     // Initialize the RLP DATA pointer to its initial position, 
     // skipping over the preinitialized empty node.
     PUSH @INITIAL_TXN_RLP_ADDR
+    %add_const(@MAX_RLP_BLOB_SIZE)
     %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
 
     // Encode constant nodes
@@ -129,6 +130,7 @@ global debug_new_len:
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
 global debug_check_initial_trie:
     %assert_eq
+    %jump(panic)
 
     PUSH 1 // initial trie data length
     

@@ -167,7 +167,24 @@ fn add11_yml() -> anyhow::Result<()> {
             cur_hash: H256::default(),
         },
     };
-    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stRandom/randomStatetest163_d0g0v0_Shanghai.json");
+
+    let contract_rlp = vec![
+        248, 68, 128, 10, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248,
+        110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 197, 210,
+        70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130,
+        39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
+    ];
+    let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
+    log::debug!("contracto ok = {:#?}", contracto);
+    let contract_rlp = vec![
+        248, 68, 10, 128, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248,
+        110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
+    log::debug!("contracto not ok = {:#?}", contracto);
+
+    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stCreateTest/CreateCollisionToEmpty2_d0g0v0_Shanghai.json");
     visit_dirs(dir)?;
     // let bytes =
     // std::fs::read("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/
