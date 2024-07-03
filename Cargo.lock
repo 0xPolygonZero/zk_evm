@@ -3820,6 +3820,7 @@ dependencies = [
  "num-traits",
  "ops",
  "paladin-core",
+ "plonky2",
  "proof_gen",
  "ruint",
  "serde",

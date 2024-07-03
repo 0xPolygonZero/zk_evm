@@ -129,7 +129,7 @@ impl BlockProverInput {
         max_cpu_len_log: usize,
         _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         batch_size: usize,
-        save_inputs_on_error: bool,
+        _save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
         use evm_arithmetization::prover::testing::simulate_all_segments_interpreter;
         use plonky2::field::goldilocks_field::GoldilocksField;

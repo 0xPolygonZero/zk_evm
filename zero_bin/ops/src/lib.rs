@@ -64,19 +64,20 @@ impl Operation for SegmentProof {
     type Output = ();
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let _span = TxProofSpan::new(&input);
+        let gen_input = input.0;
+        let _span = TxProofSpan::new(&gen_input);
 
         if self.save_inputs_on_error {
             evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                input.clone(),
+                gen_input.clone(),
             )
             .map_err(|err| {
                 if let Err(write_err) = save_inputs_to_disk(
                     format!(
                         "b{}_txn_{}_input.log",
-                        input.block_metadata.block_number, input.txn_number_before
+                        gen_input.block_metadata.block_number, gen_input.txn_number_before
                     ),
-                    input,
+                    gen_input,
                 ) {
                     error!("Failed to save txn proof input to disk: {:?}", write_err);
                 }
@@ -85,7 +86,7 @@ impl Operation for SegmentProof {
             })?;
         } else {
             evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                input.0.clone(),
+                gen_input.clone(),
             )
             .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
         }
