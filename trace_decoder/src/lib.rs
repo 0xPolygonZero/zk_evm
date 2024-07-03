@@ -85,14 +85,14 @@ const _DEVELOPER_DOCS: () = ();
 /// Defines the main functions used to generate the IR.
 mod decoding;
 // TODO(0xaatif): add backend/prod support
-#[cfg(test)]
-#[allow(dead_code)]
-mod hermez_cdk_erigon;
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
 mod processed_block_trace;
+mod type1;
+#[cfg(test)]
+#[allow(dead_code)]
+mod type2;
 mod wire;
-mod zero_jerigon;
 
 use std::collections::HashMap;
 
@@ -331,11 +331,11 @@ pub fn entrypoint(
         BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
             let instructions =
                 wire::parse(&compact).context("couldn't parse instructions from binary format")?;
-            let zero_jerigon::Frontend {
+            let type1::Frontend {
                 state,
                 code,
                 storage,
-            } = zero_jerigon::frontend(instructions)?;
+            } = type1::frontend(instructions)?;
             ProcessedBlockTracePreImages {
                 tries: PartialTriePreImages {
                     state,

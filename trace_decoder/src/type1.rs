@@ -1,4 +1,4 @@
-//! Frontend for the witness format emitted by the [`0xPolygonZero/erigon`](https://github.com/0xPolygonZero/erigon)
+//! Frontend for the witness format emitted by e.g the [`0xPolygonZero/erigon`](https://github.com/0xPolygonZero/erigon)
 //! Ethereum node (a.k.a "jerigon").
 
 use std::{

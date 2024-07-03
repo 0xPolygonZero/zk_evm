@@ -1,4 +1,4 @@
-//! Frontend for the witness format emitted by [`0xPolygonHermez/cdk-erigon`](https://github.com/0xPolygonHermez/cdk-erigon/)
+//! Frontend for the witness format emitted by e.g [`0xPolygonHermez/cdk-erigon`](https://github.com/0xPolygonHermez/cdk-erigon/)
 //! Ethereum node.
 
 use std::{
