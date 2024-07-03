@@ -117,7 +117,7 @@ pub(crate) struct CpuExceptionView<T: Copy> {
     /// Exception code as little-endian bits.
     pub(crate) exc_code_bits: [T; 3],
     /// Reserve the unused columns.
-    _padding_columns: [T; UNION_FIELD_SIZE - 3],
+    _padding_columns: [T; NUM_UNION_COLUMNS - 3],
 }
 
 /// View of the `CpuGeneralColumns` storing pseudo-inverses used to prove logic
@@ -143,7 +143,7 @@ pub(crate) struct CpuJumpsView<T: Copy> {
     /// Pseudoinverse of `cond.iter().sum()`. Used to check `should_jump`.
     pub(crate) cond_sum_pinv: T,
     /// Reserve the unused columns.
-    _padding_columns: [T; UNION_FIELD_SIZE - 2],
+    _padding_columns: [T; NUM_UNION_COLUMNS - 2],
 }
 
 /// View of the first `CpuGeneralColumns` storing a pseudoinverse used to prove
@@ -155,7 +155,7 @@ pub(crate) struct CpuShiftView<T: Copy> {
     /// sum(displacement[1..]) or zero if the sum is zero.
     pub(crate) high_limb_sum_inv: T,
     /// Reserve the unused columns.
-    _padding_columns: [T; UNION_FIELD_SIZE - 1],
+    _padding_columns: [T; NUM_UNION_COLUMNS - 1],
 }
 
 /// View of the last four `CpuGeneralColumns` storing stack-related variables.
@@ -176,7 +176,7 @@ pub(crate) struct CpuStackView<T: Copy> {
     /// stack overflow.
     pub(crate) stack_len_bounds_aux: T,
     /// Reserve the unused columns.
-    _padding_columns: [T; UNION_FIELD_SIZE - 8],
+    _padding_columns: [T; NUM_UNION_COLUMNS - 8],
 }
 
 /// Number of columns shared by all the views of `CpuGeneralColumnsView`.
@@ -187,8 +187,8 @@ pub(crate) const NUM_SHARED_COLUMNS: usize = size_of::<CpuGeneralColumnsView<u8>
 /// We assert that this is the same as [`NUM_SHARED_COLUMNS`], but we define
 /// it in order to determine the number of padding columns to add to each field
 /// without creating a cycle for rustc.
-const UNION_FIELD_SIZE: usize = size_of::<CpuLogicView<u8>>();
-const_assert!(UNION_FIELD_SIZE == NUM_SHARED_COLUMNS);
+const NUM_UNION_COLUMNS: usize = size_of::<CpuLogicView<u8>>();
+const_assert!(NUM_UNION_COLUMNS == NUM_SHARED_COLUMNS);
 
 /// Assert that each field of the [`CpuGeneralColumnsView`] union contains the
 /// correct number of columns.
