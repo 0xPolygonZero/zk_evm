@@ -31,7 +31,7 @@ impl Operation for SegmentProof {
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
         let input = all_data.0.clone();
-        let _span = TxProofSpan::new(&input);
+        let _span = SegmentProofSpan::new(&input, all_data.1.segment_index());
         let proof = if self.save_inputs_on_error {
             zero_bin_common::prover_state::p_manager()
                 .generate_segment_proof(all_data)
@@ -65,7 +65,7 @@ impl Operation for SegmentProof {
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         let gen_input = input.0;
-        let _span = TxProofSpan::new(&gen_input);
+        let _span = SegmentProofSpan::new(&gen_input, input.1.segment_index());
 
         if self.save_inputs_on_error {
             evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
@@ -99,18 +99,21 @@ impl Operation for SegmentProof {
 ///
 /// - When created, it starts a span with the transaction proof id.
 /// - When dropped, it logs the time taken by the transaction proof.
-struct TxProofSpan {
+struct SegmentProofSpan {
     _span: tracing::span::EnteredSpan,
     start: Instant,
     descriptor: String,
 }
 
-impl TxProofSpan {
+impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
-    fn get_id(ir: &GenerationInputs) -> String {
+    fn get_id(ir: &GenerationInputs, segment_index: usize) -> String {
         format!(
-            "b{} - {}",
-            ir.block_metadata.block_number, ir.txn_number_before
+            "b{} - {}_{} ({})",
+            ir.block_metadata.block_number,
+            ir.txn_number_before,
+            ir.txn_number_before + ir.signed_txns.len(),
+            segment_index
         )
     }
 
@@ -135,8 +138,8 @@ impl TxProofSpan {
     /// Create a new transaction proof span.
     ///
     /// When dropped, it logs the time taken by the transaction proof.
-    fn new(ir: &GenerationInputs) -> Self {
-        let id = Self::get_id(ir);
+    fn new(ir: &GenerationInputs, segment_index: usize) -> Self {
+        let id = Self::get_id(ir, segment_index);
         let span = info_span!("p_gen", id).entered();
         let start = Instant::now();
         let descriptor = Self::get_descriptor(ir);
@@ -148,11 +151,11 @@ impl TxProofSpan {
     }
 }
 
-impl Drop for TxProofSpan {
+impl Drop for SegmentProofSpan {
     fn drop(&mut self) {
         event!(
             Level::INFO,
-            "txn proof ({}) took {:?}",
+            "segment proof ({}) took {:?}",
             self.descriptor,
             self.start.elapsed()
         );

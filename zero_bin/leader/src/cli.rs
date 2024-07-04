@@ -29,7 +29,7 @@ pub(crate) enum Command {
         previous_proof: Option<PathBuf>,
         #[arg(short, long, default_value_t = 20)]
         max_cpu_len_log: usize,
-        #[arg(short, long, default_value_t = 2)]
+        #[arg(short, long, default_value_t = 1)]
         batch_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
@@ -59,7 +59,7 @@ pub(crate) enum Command {
         /// The log of the max number of CPU cycles per proof.
         #[arg(short, long, default_value_t = 20)]
         max_cpu_len_log: usize,
-        #[arg(short, long, default_value_t = 2)]
+        #[arg(short, long, default_value_t = 1)]
         batch_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
@@ -94,7 +94,7 @@ pub(crate) enum Command {
         output_dir: PathBuf,
         #[arg(short, long, default_value_t = 20)]
         max_cpu_len_log: usize,
-        #[arg(short, long, default_value_t = 2)]
+        #[arg(short, long, default_value_t = 1)]
         batch_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]

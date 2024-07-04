@@ -5,10 +5,7 @@ use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
-use paladin::{
-    directive::{Directive, IndexedStream},
-    runtime::Runtime,
-};
+use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -47,6 +44,7 @@ impl BlockProverInput {
         use anyhow::Context as _;
         use evm_arithmetization::prover::SegmentDataIterator;
         use futures::{stream::FuturesUnordered, FutureExt};
+        use paladin::directive::{Directive, IndexedStream};
 
         let block_number = self.get_block_number();
         info!("Proving block {block_number}");
