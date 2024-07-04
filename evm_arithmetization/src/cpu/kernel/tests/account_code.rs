@@ -78,12 +78,15 @@ pub(crate) fn initialize_mpts<F: Field>(
     let len_addr =
         MemoryAddress::new_bundle((GlobalMetadata::TrieDataSize as usize).into()).unwrap();
 
-    let to_set = [
-        (state_addr, trie_root_ptrs.state_root_ptr.unwrap().into()),
+    let mut to_set = vec![];
+    if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
+        to_set.push( (state_addr, state_root_ptr.into()));
+    }
+    to_set.extend([
         (txn_addr, trie_root_ptrs.txn_root_ptr.into()),
         (receipts_addr, trie_root_ptrs.receipt_root_ptr.into()),
         (len_addr, trie_data.len().into()),
-    ];
+    ]);
 
     interpreter.set_memory_multi_addresses(&to_set);
 
