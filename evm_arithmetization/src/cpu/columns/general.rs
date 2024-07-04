@@ -165,7 +165,10 @@ pub(crate) struct CpuShiftView<T: Copy> {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct CpuStackView<T: Copy> {
-    _unused: [T; 4],
+    /// Reserve the unused columns at the beginning. This allows `Self` to
+    /// coexist with any view that uses only the first four columns (i.e. all
+    /// except `CpuLogicView`).
+    _unused: [T; NUM_UNION_COLUMNS - 4],
     /// Pseudoinverse of `stack_len - num_pops`.
     pub(crate) stack_inv: T,
     /// stack_inv * stack_len.
@@ -175,8 +178,6 @@ pub(crate) struct CpuStackView<T: Copy> {
     /// Pseudoinverse of `nv.stack_len - (MAX_USER_STACK_SIZE + 1)` to check for
     /// stack overflow.
     pub(crate) stack_len_bounds_aux: T,
-    /// Reserve the unused columns.
-    _padding_columns: [T; NUM_UNION_COLUMNS - 8],
 }
 
 /// Number of columns shared by all the views of `CpuGeneralColumnsView`.
