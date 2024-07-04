@@ -9,6 +9,5 @@ global revert_account_created:
     POP
     %journal_load_1
     // stack: address, retdest
-    %addr_to_state_key
-    %remove_account_from_linked_list
+    %delete_account
     JUMP

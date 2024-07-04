@@ -488,7 +488,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
         let [addr_in_list, key_in_list] =
             addresses_and_keys[i as usize].map(|x| U256::from(x.0.as_slice()));
         interpreter.push(retaddr);
-        interpreter.push(U256::zero());
+        interpreter.push(addr_in_list + delta_ptr);
         interpreter.push(key_in_list);
         interpreter.push(addr_in_list);
         interpreter.generation_state.registers.program_counter = insert_slot_label;

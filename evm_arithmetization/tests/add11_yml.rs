@@ -151,7 +151,7 @@ fn add11_yml() -> anyhow::Result<()> {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
-    let _inputs = GenerationInputs {
+    let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
         tries: tries_before,
