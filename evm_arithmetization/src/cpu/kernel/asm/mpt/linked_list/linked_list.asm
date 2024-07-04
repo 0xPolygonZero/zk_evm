@@ -865,30 +865,38 @@ global debug_after_valid_ptr:
     // stack: pred_addr, pred_ptr, addr, retdest
     DUP3 EQ %jumpi(panic)
     // stack: pred_ptr, addr, retdest
-    // Now, while the next address is `addr`, remove the slot.
-    %add_const(4) MLOAD_GENERAL
-
-remove_all_slots_loop:
-    // stack: cur_ptr, addr, retdest
     DUP1
-    // stack: cur_ptr, cur_ptr, addr, retdest
+
+// Now, while the next address is `addr`, remove the next slot.
+remove_all_slots_loop:
+    // stack: pred_ptr, pred_ptr, addr, retdest
+    %add_const(4) DUP1 MLOAD_GENERAL
+    // stack: cur_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
     DUP1 %eq_const(@U256_MAX) %jumpi(remove_all_slots_end)
-    %add_const(4) MLOAD_GENERAL SWAP1 DUP1
-    // stack: cur_ptr, cur_ptr, next_ptr, addr, retdest
+    DUP1 %add_const(4) MLOAD_GENERAL 
+    // stack: next_ptr, cur_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
+    SWAP1 DUP1
+    // stack: cur_ptr, cur_ptr, next_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
     MLOAD_GENERAL
-    // stack: cur_addr, cur_ptr, next_ptr, addr, retdest
-    DUP1 DUP5 EQ ISZERO %jumpi(remove_all_slots_pop_and_end)
-    // stack: cur_addr, cur_ptr, next_ptr, addr, retdest
-    SWAP1 %increment MLOAD_GENERAL SWAP1
-    // stack: cur_addr, cur_key, next_ptr, addr, retdest
-    %remove_slot
-    // stack: next_ptr, addr, retdest
+    DUP6 EQ ISZERO %jumpi(remove_all_slots_pop_and_end)
+    
+    // Remove slot: update the value in cur_ptr_ptr, and set cur_ptr+4 to @U256_MAX.
+    // stack: cur_ptr, next_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
+    SWAP2 SWAP1
+    // stack: next_ptr, cur_ptr_ptr, cur_ptr, pred_ptr, addr, retdest
+    MSTORE_GENERAL
+    // stack: cur_ptr, pred_ptr, addr, retdest
+    %add_const(4) PUSH @U256_MAX
+    MSTORE_GENERAL
+    // stack: pred_ptr, addr, retdest
+    DUP1
     %jump(remove_all_slots_loop)
+
 remove_all_slots_pop_and_end:
     POP
 remove_all_slots_end:
     // stack: cur_addr, cur_ptr, addr, retdest
-    %pop3 JUMP
+    %pop4 JUMP
 
 %macro remove_all_account_slots
     %stack (addr) -> (addr, %%after)
