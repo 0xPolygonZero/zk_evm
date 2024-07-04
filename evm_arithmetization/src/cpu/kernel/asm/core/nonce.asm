@@ -28,7 +28,6 @@ global increment_nonce:
     DUP1 ISZERO %jumpi(increment_nonce_no_such_account)
     // stack: nonce_ptr, address, retdest
     DUP1
-global debug_nonce_ptr:
     %mload_trie_data
     // stack: nonce, nonce_ptr, address, retdest
     DUP1 DUP4 %journal_add_nonce_change

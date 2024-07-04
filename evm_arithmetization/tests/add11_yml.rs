@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -10,7 +8,6 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
-use evm_arithmetization::prover::testing::simulate_execution;
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -168,63 +165,11 @@ fn add11_yml() -> anyhow::Result<()> {
         },
     };
 
-    let contract_rlp = vec![
-        248, 68, 128, 10, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248,
-        110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 197, 210,
-        70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130,
-        39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
-    ];
-    let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
-    log::debug!("contracto ok = {:#?}", contracto);
-    let contract_rlp = vec![
-        248, 68, 10, 128, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248,
-        110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    ];
-    let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
-    log::debug!("contracto not ok = {:#?}", contracto);
+    let mut timing = TimingTree::new("prove", log::Level::Debug);
+    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;
+    timing.filter(Duration::from_millis(100)).print();
 
-    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stCallCodes/callcallcodecallcode_011_SuicideEnd_d0g0v0_Shanghai.json");
-    visit_dirs(dir)?;
-    // let bytes =
-    // std::fs::read("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/
-    // stTimeConsuming/static_Call50000_sha256_d0g0v0_Shanghai.json").unwrap();
-    //             let inputs = serde_json::from_slice(&bytes).unwrap();
-
-    //             let mut timing = TimingTree::new("prove", log::Level::Debug);
-    //             // let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut
-    // timing,             // None)?;
-    //             simulate_execution::<F>(inputs)?;
-    //             timing.filter(Duration::from_millis(100)).print();
-
-    Ok(())
-    // verify_proof(&all_stark, proof, &config)
-}
-
-fn visit_dirs(dir: &Path) -> anyhow::Result<()> {
-    if dir == Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stTimeConsuming")
-    {
-        return Ok(());
-    }
-    if dir.is_dir() {
-        log::info!("Found directory: {:?}", dir);
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            visit_dirs(&path)?; // Recurse into the subdirectory
-        }
-    } else if dir.is_file() {
-        log::info!("Found file: {:?}", dir);
-        let bytes = std::fs::read(dir).unwrap();
-        let inputs = serde_json::from_slice(&bytes).unwrap();
-
-        let mut timing = TimingTree::new("prove", log::Level::Debug);
-        // let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing,
-        // None)?;
-        simulate_execution::<F>(inputs)?;
-        timing.filter(Duration::from_millis(100)).print();
-    }
-    Ok(())
+    verify_proof(&all_stark, proof, &config)
 }
 
 fn init_logger() {

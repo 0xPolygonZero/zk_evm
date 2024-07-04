@@ -90,13 +90,11 @@ loop_store_initial_accounts:
     // stack: nonce_ptr, cpy_ptr, current_node_ptr, retdest
     DUP1
     %mload_trie_data // nonce
-global debug_storing_nonce:
     %append_to_trie_data
     %increment
     // stack: balance_ptr, cpy_ptr, current_node_ptr, retdest
     DUP1
     %mload_trie_data // balance
-global debug_storing_balance:
     %append_to_trie_data
     %increment // The storage_root_ptr is not really necessary
     // stack: storage_root_ptr_ptr, cpy_ptr, current_node_ptr, retdest
@@ -105,15 +103,12 @@ global debug_storing_balance:
     %append_to_trie_data
     %increment
     // stack: code_hash_ptr, cpy_ptr, current_node_ptr, retdest
-global debug_loading_code_hash:
     %mload_trie_data // code_hash
-global debug_code_hash:
     %append_to_trie_data
     // stack: cpy_ptr, current_node_ptr, retdest
     DUP2
     %add_const(2)
     SWAP1
-global debug_store_account_cpy_ptr:
     MSTORE_GENERAL // Store cpy_ptr
     %next_account
     %jump(loop_store_initial_accounts)
@@ -421,7 +416,6 @@ global store_initial_slots:
     PUSH  @SEGMENT_STORAGE_LINKED_LIST
     %next_slot
 
-global debug_el_loooooop:
 loop_store_initial_slots:
     // stack: current_node_ptr
     %get_trie_data_size
@@ -433,7 +427,6 @@ loop_store_initial_slots:
     DUP2
     %add_const(2)
     MLOAD_GENERAL
-global debug_payload_ptr:
     // stack: payload_ptr, cpy_ptr, current_node_ptr, retdest
     %mload_trie_data
     %append_to_trie_data
@@ -698,7 +691,6 @@ slot_found_write:
     // stack: orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
     SWAP1
     DUP5
-global debug_store_new_payload:
     MSTORE_GENERAL // Store the new payload
     // TODO: remove the unused cold access
     %stack (orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, 0, orig_payload_ptr)
@@ -837,8 +829,6 @@ global search_slot:
     %jump_neq_const(@U256_MAX, slot_found_no_write)
     // The storage key is not in the list.
     PANIC
-
-global debug_slot_not_found:
 slot_not_found:    
     // stack: pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest
     %stack (pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest)
@@ -909,8 +899,6 @@ global remove_all_account_slots:
     PROVER_INPUT(linked_list::remove_address_slots)
     // pred_ptr/5, retdest
     %get_valid_slot_ptr
-
-global debug_after_valid_ptr:
     // stack: pred_ptr, addr, retdest
     // First, check that the previous address is not `addr`
     DUP1 MLOAD_GENERAL

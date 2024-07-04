@@ -90,24 +90,11 @@ fn test_erc721() -> anyhow::Result<()> {
             balance: owner_account.balance - gas_used * 0xa,
             ..owner_account
         };
-        log::debug!("owner_account_after = {:#?}", owner_account_after);
-        log::debug!("rlp = {:?}", rlp::encode(&owner_account_after).to_vec());
         state_trie_after.insert(owner_nibbles, rlp::encode(&owner_account_after).to_vec())?;
         let contract_account_after = AccountRlp {
             storage_root: contract_storage_after()?.hash(),
             ..contract_account()?
         };
-        let contract_rlp = vec![
-            248, 68, 128, 128, 160, 170, 228, 246, 195, 175, 195, 151, 238, 191, 55, 177, 52, 189,
-            63, 57, 60, 183, 166, 42, 180, 177, 68, 248, 100, 159, 53, 229, 131, 170, 243, 88, 168,
-            160, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 2,
-        ];
-        let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
-        log::debug!("constract_account_after = {:#?}", contract_account());
-        log::debug!("contracto = {:#?}", contracto);
-        log::debug!("rlp = {:?}", rlp::encode(&contract_account_after).to_vec());
-        log::debug!("contrc_storage_trie = {:#?}", contract_storage_after());
         state_trie_after.insert(
             contract_nibbles,
             rlp::encode(&contract_account_after).to_vec(),
@@ -189,8 +176,6 @@ fn test_erc721() -> anyhow::Result<()> {
         },
     };
 
-    log::debug!("state hash ={:?}", inputs.tries.state_trie.hash());
-    log::debug!("Expected final trie = {:#?}", expected_state_trie_after);
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;
     timing.filter(Duration::from_millis(100)).print();

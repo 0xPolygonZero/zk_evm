@@ -12,22 +12,18 @@ global insert_all_accounts:
     DUP1
     %eq_const(@U256_MAX)
     %jumpi(no_more_accounts)
-global debug_next_account:
     DUP4
     %increment
-global debug_before_loading_account_ptr:
     MLOAD_GENERAL
     // stack: account_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %add_const(2)
     DUP1
-global debug_before_loading_storage_root_ptr:
     %mload_trie_data
     // stack: storage_root_ptr, storage_root_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %stack
         (storage_root_ptr, storage_root_ptr_ptr, key, storage_ptr_ptr) ->
         (key, storage_ptr_ptr, storage_root_ptr, after_insert_all_slots, storage_root_ptr_ptr, key)
     %jump(insert_all_slots)
-global debug_after_insert_all_slots:
 after_insert_all_slots:
     // stack: storage_ptr_ptr', storage_root_ptr', storage_root_ptr_ptr, key, root_ptr, account_ptr_ptr, retdest
     SWAP2
@@ -96,7 +92,6 @@ global delete_removed_accounts:
     // We assume that the size of the initial accounts linked list, containing the accounts
     // of the initial state, was store at `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
-global debug_inital_accounts_linked_list_len:
     // The inital accounts linked was store at addresses smaller than `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
     // If we also know that `@SEGMENT_ACCOUNT_LINKED_LIST <= account_ptr_ptr`, for deleting node at `addr_ptr_ptr` it
     // suffices to check that `account_ptr_ptr` != `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`
@@ -107,7 +102,6 @@ global debug_inital_accounts_linked_list_len:
     %next_account
     %eq_const(@U256_MAX) // Check if the next node pointer is @U256_MAX, the node was deleted
     %jumpi(delete_account)
-global debug_maybe_delete_slots:
     // The account is still there so we need to delete any removed slot
     // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP1
@@ -116,16 +110,13 @@ global debug_maybe_delete_slots:
     DUP2
     %add_const(2)
     MLOAD_GENERAL // get intitial payload_ptr
-global debug_inital_payload_ptr:
     %add_const(2) // storage_root_ptr_ptr = payload_ptr + 2
     DUP1
     %mload_trie_data
     %stack
         (storage_root_ptr, storage_root_ptr_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr) ->
         (key, storage_root_ptr, storage_ptr_ptr, after_delete_removed_slots, storage_root_ptr_ptr, account_ptr_ptr, root_ptr)
-global debug_delete_removed_slots:
     %jump(delete_removed_slots)
-global debug_after_delete_removed_slots:
 after_delete_removed_slots:
     // stack: storage_root_ptr', storage_ptr_ptr', storage_root_ptr_ptr, account_ptr_ptr, root_ptr, retdest
     SWAP1 SWAP2
@@ -142,7 +133,6 @@ delete_removed_accounts_end:
     // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     %stack (account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest) -> (retdest, root_ptr)
     JUMP
-global debug_delete_account:
 delete_account:
     // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP1
@@ -169,7 +159,6 @@ delete_removed_slots:
     EQ
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
     DUP5
-global debug_in_inital_storage:
     LT
     MUL // AND
     // jump if we either change the address or reach the en of the initial linked list
@@ -177,13 +166,11 @@ global debug_in_inital_storage:
     // If we are here we have deleted all the slots for this key
     %stack (addr, root_ptr, storage_ptr_ptr, retdest) -> (retdest, root_ptr, storage_ptr_ptr)
     JUMP
-global debug_maybe_delete_this_slot:
 maybe_delete_this_slot:
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     %next_slot
     %eq_const(@U256_MAX) // Check if the node was deleted
-global debug_shoul_we_delete_this_slot:
     %jumpi(delete_this_slot)
     // The slot was not deleted, so we skip it.
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
@@ -191,14 +178,12 @@ global debug_shoul_we_delete_this_slot:
     %add_const(5)
     SWAP2
     %jump(delete_removed_slots)
-global debug_delete_this_slot:
 delete_this_slot:
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     %increment
     MLOAD_GENERAL
     %stack (key, addr, root_ptr, storage_ptr_ptr) -> (root_ptr, 64, key, after_mpt_delete_slot, addr, storage_ptr_ptr)
-global debug_before_deleting:
     %jump(mpt_delete)
 after_mpt_delete_slot:
     // stack: root_ptr', addr, storage_ptr_ptr

@@ -31,7 +31,6 @@ global main:
     PROVER_INPUT(linked_list::storage_linked_list_len)
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     PROVER_INPUT(trie_ptr::trie_data_size)
-global debug_trie_data_size_1:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
     // Store the inital accounts and slots for hashing later
@@ -50,19 +49,12 @@ global hash_initial_tries:
     // The trie data segment is already written by the linked lists
     %get_trie_data_size
 
-    // %set_initial_tries
-    // %mpt_hash_state_trie  %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
-    // global debug_check_hash_after_setting_payloads:
-    // %assert_eq
-
-
     // stack: trie_data_len
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_BEFORE)      %assert_eq
     // stack: trie_data_len
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_BEFORE)  %assert_eq
     // stack: trie_data_full_len
 
-global debug_trie_size_here:
     %set_trie_data_size
 
 global start_txn:
@@ -109,34 +101,28 @@ global perform_final_checks:
     // stack: cum_gas, txn_counter, num_nibbles, txn_nb
     // Check that we end up with the correct `cum_gas`, `txn_nb` and bloom filter.
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER) 
-global debug_check_gas:
     %assert_eq
 
     
     DUP3 %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER)
-global debug_check_txn_number:
     %assert_eq
     %pop3
 
     PROVER_INPUT(trie_ptr::state)
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-global debug_the_trie_that_works:
-   %set_initial_tries
-   %get_trie_data_size
-global debug_old_len:
+    %set_initial_tries
+    %get_trie_data_size
     %mpt_hash_state_trie
-global debug_new_len:  
+
     SWAP1 %set_trie_data_size
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
-global debug_check_initial_trie:
     %assert_eq
 
     PUSH 1 // initial trie data length
     
 global check_state_trie:
     %set_final_tries
-    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     
-global debug_check_final_trie:
+    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
     %assert_eq
 global check_txn_trie:
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq

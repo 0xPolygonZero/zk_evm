@@ -80,28 +80,10 @@ impl<F: Field> GenerationState<F> {
             "state" => match self.trie_root_ptrs.state_root_ptr {
                 Some(state_root_ptr) => Ok(state_root_ptr),
                 None => {
-                    log::debug!(
-                        "trie_data_len before: = {:?}",
-                        self.memory.contexts[0].segments[Segment::TrieData.unscale()]
-                            .content
-                            .len()
-                    );
-                    let n = load_state_mpt(
+                    load_state_mpt(
                         &self.inputs.tries,
                         &mut self.memory.contexts[0].segments[Segment::TrieData.unscale()].content,
-                    )?;
-                    log::debug!(
-                        "state_trie before: = {:?}",
-                        get_state_trie::<HashedPartialTrie>(&self.memory, n)
-                    );
-                    log::debug!(
-                        "trie_data_len after = {:?}",
-                        self.memory.contexts[0].segments[Segment::TrieData.unscale()]
-                            .content
-                            .len()
-                    );
-                    log::debug!("and n = {:?} ", n);
-                    Ok(n)
+                    )
                 }
             }
             .map(U256::from),
@@ -308,8 +290,6 @@ impl<F: Field> GenerationState<F> {
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
-        log::debug!("Current accounts ll = {:?}", self.get_accounts_linked_list());
-        log::debug!("Current storage ll = {:?}", self.get_storage_linked_list());
         match input_fn.0[1].as_str() {
             "insert_account" => self.run_next_insert_account(),
             "remove_account" => self.run_next_remove_account(),
@@ -492,7 +472,6 @@ impl<F: Field> GenerationState<F> {
     fn run_next_insert_slot(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        log::debug!("le storage ll = {:?}", self.get_storage_linked_list());
         if let Some((([.., pred_ptr], _), _)) = self
             .get_storage_linked_list()?
             .zip(self.get_storage_linked_list()?.skip(1))
