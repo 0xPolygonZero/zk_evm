@@ -19,8 +19,8 @@ jobs:
         uses: actions/checkout@v4
 
       - run: |
-          docker build --progress=plain --build-arg=PROFILE=dev --build-arg=ENTRYPOINT=leader --tag scratch .
-          docker run --rm scratch --help
-
-          docker build --progress=plain --build-arg=PROFILE=dev --build-arg=ENTRYPOINT=worker --tag scratch .
-          docker run --rm scratch --help
+          docker build --progress=plain --build-arg=PROFILE=dev --tag scratch .
+          docker run --rm --init --entrypoint leader scratch --help
+          docker run --rm --init --entrypoint worker scratch --help
+          docker run --rm --init --entrypoint rpc scratch --help
+          docker run --rm --init --entrypoint verifier scratch --help

@@ -2,7 +2,7 @@
 # This is loosely based on `docker init`'s rust template.
 # For a completely clean build, run something like this:
 # ```
-# docker build --build-arg=PROFILE=dev --build-arg=ENTRYPOINT=leader --no-cache
+# docker build --build-arg=PROFILE=dev --no-cache
 # ```
 
 #############
@@ -80,26 +80,10 @@ FROM debian:bullseye-slim AS final
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libjemalloc2 \
-    libssl-dev \
-    tini \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /output/* /usr/local/bin/
-RUN <<EOF
-set -eux
-: smoke test executables
-find /usr/local/bin -type f -executable -print0 \
-    | xargs --null --replace --verbose tini -- {} --help
-EOF
-
-# can't refer to docker args in an ENTRYPOINT directive, so go through a symlink
-ARG ENTRYPOINT
-RUN ln --symbolic --verbose -- "$(which ${ENTRYPOINT})" /entrypoint
-ENTRYPOINT [ "tini", "--", "/entrypoint" ]
-
-# TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/356
-#                this is bad practice
-COPY .env /
+# this keeps this build target agnostic to the build profile
+COPY --from=build ["/output/rpc", "/output/leader", "/output/worker", "/output/verifier", "/usr/local/bin/"]
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#user
