@@ -866,22 +866,26 @@ global debug_after_valid_ptr:
     DUP3 EQ %jumpi(panic)
     // stack: pred_ptr, addr, retdest
     // Now, while the next address is `addr`, remove the slot.
+    %add_const(4) MLOAD_GENERAL
 
 remove_all_slots_loop:
-    // stack: pred_ptr, addr, retdest
-    %add_const(4) MLOAD_GENERAL DUP1
+    // stack: cur_ptr, addr, retdest
+    DUP1
     // stack: cur_ptr, cur_ptr, addr, retdest
     DUP1 %eq_const(@U256_MAX) %jumpi(remove_all_slots_end)
+    %add_const(4) MLOAD_GENERAL SWAP1 DUP1
+    // stack: cur_ptr, cur_ptr, next_ptr, addr, retdest
     MLOAD_GENERAL
-    // stack: cur_addr, cur_ptr, addr, retdest
-    DUP1 DUP4 EQ ISZERO %jumpi(remove_all_slots_end)
-    // stack: cur_addr, cur_ptr, addr, retdest
-    DUP2 %increment MLOAD_GENERAL SWAP1
-    // stack: cur_addr, cur_key, cur_ptr, addr, retdest
+    // stack: cur_addr, cur_ptr, next_ptr, addr, retdest
+    DUP1 DUP5 EQ ISZERO %jumpi(remove_all_slots_pop_and_end)
+    // stack: cur_addr, cur_ptr, next_ptr, addr, retdest
+    SWAP1 %increment MLOAD_GENERAL SWAP1
+    // stack: cur_addr, cur_key, next_ptr, addr, retdest
     %remove_slot
-    // stack: cur_ptr, addr, retdest
+    // stack: next_ptr, addr, retdest
     %jump(remove_all_slots_loop)
-
+remove_all_slots_pop_and_end:
+    POP
 remove_all_slots_end:
     // stack: cur_addr, cur_ptr, addr, retdest
     %pop3 JUMP
