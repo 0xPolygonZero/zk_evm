@@ -113,19 +113,19 @@ hull:
                 RUST_BACKTRACE:
                   value: full
                 ARITHMETIC_CIRCUIT_SIZE:
-                  value: 16..23
+                  value: 16..21
                 BYTE_PACKING_CIRCUIT_SIZE:
                   value: 9..21
                 CPU_CIRCUIT_SIZE:
-                  value: 12..25
+                  value: 12..23
                 KECCAK_CIRCUIT_SIZE:
-                  value: 14..20
+                  value: 14..19
                 KECCAK_SPONGE_CIRCUIT_SIZE:
                   value: 9..15
                 LOGIC_CIRCUIT_SIZE:
                   value: 12..18
                 MEMORY_CIRCUIT_SIZE:
-                  value: 17..28
+                  value: 17..25
               resources:
                 limits:
                   cpu: 5
