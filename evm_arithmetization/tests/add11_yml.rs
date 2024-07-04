@@ -184,7 +184,7 @@ fn add11_yml() -> anyhow::Result<()> {
     let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
     log::debug!("contracto not ok = {:#?}", contracto);
 
-    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stSStoreTest/InitCollisionParis_d2g0v0_Shanghai.json");
+    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stCallCodes/callcallcodecallcode_011_SuicideEnd_d0g0v0_Shanghai.json");
     visit_dirs(dir)?;
     // let bytes =
     // std::fs::read("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/
