@@ -8,8 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_LEADER: ${{ github.repository }}-leader
-  IMAGE_NAME_WORKER: ${{ github.repository }}-worker
 
 jobs:
   docker:
@@ -34,12 +32,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Leader Docker
+      - name: Extract metadata (tags, labels)
         id: meta_leader
         uses: docker/metadata-action@v5
         with:
           images: |
-            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LEADER }}
+            name=${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -55,15 +53,3 @@ jobs:
           labels: ${{ steps.meta_leader.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Extract metadata (tags, labels) for Worker Docker
-        id: meta_worker
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
