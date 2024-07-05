@@ -12,8 +12,8 @@ global revert_storage_change:
     DUP3 ISZERO %jumpi(delete)
     // stack: address, slot, prev_value, retdest
     %insert_slot_with_value
-    // stack: cold_access, value_ptr
-    %pop2
+    // stack: value_ptr
+    POP
     JUMP
 
 delete:

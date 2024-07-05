@@ -67,24 +67,24 @@ global init_linked_lists:
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(insert_account_to_linked_list)
 %%after:
-    // stack: cold_access
+    // stack: payload_ptr
 %endmacro
 
 %macro insert_account_with_overwrite
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(insert_account_with_overwrite)
 %%after:
-    // stack: cold_access
+    // stack: payload_ptr
 %endmacro
 
 %macro insert_account_to_linked_list_no_return
     %insert_account_to_linked_list
-    %pop2
+    POP
 %endmacro
 
 %macro insert_account_with_overwrite_no_return
     %insert_account_with_overwrite
-    %pop2
+    POP
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/4, by 4
@@ -105,8 +105,7 @@ global init_linked_lists:
 %endmacro
 
 /// Inserts the account addr and payload pointer into the linked list if it is not already present.
-/// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `payload_ptr` if the account was inserted, `original_ptr` if it was already present.
 global insert_account_to_linked_list:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -146,20 +145,9 @@ global account_found:
     DUP1
     MLOAD_GENERAL
     // stack: orig_payload_ptr, pred_ptr + 1, addr, payload_ptr, retdest
-    SWAP1
-    %increment
-    DUP1
-    MLOAD_GENERAL
-    %increment
-    // stack: access_ctr + 1, access_ctr_ptr, orig_payload_ptr, addr, payload_ptr, retdest
-    SWAP1
-    DUP2
-    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, orig_payload_ptr, addr, payload_ptr, retdest
-    MSTORE_GENERAL
-    // stack: access_ctr + 1, orig_payload_ptr, addr, payload_ptr, retdest
-    // If access_ctr == 1 then this it's a cold access 
-    %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
+    
+    // TODO: we don't update `access_ctr` anymore as unused, consider removing / replacing
+    %stack (orig_payload_ptr, pred_ptr, addr, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
     JUMP
 //DEBUG
 global insert_new_account:
@@ -211,7 +199,7 @@ global insert_new_account:
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr, payload_ptr, retdest
-    %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    %stack (addr, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 global insert_account_with_overwrite:
@@ -254,37 +242,28 @@ account_found_with_overwrite:
     DUP1
     // stack: payload_ptr_ptr, pred_ptr+1, addr, payload_ptr, retdest
     DUP4 MSTORE_GENERAL
-    %increment
-    DUP1
-    MLOAD_GENERAL
-    %increment
-    // stack: access_ctr + 1, access_ctr_ptr, addr, payload_ptr, retdest
-    SWAP1
-    DUP2
-    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, addr, payload_ptr, retdest
-    MSTORE_GENERAL
-    // stack: access_ctr + 1, addr, payload_ptr, retdest
-    // If access_ctr == 1 then this it's a cold access 
-    %eq_const(1)
-    %stack (cold_access, addr, payload_ptr, retdest) -> (retdest, cold_access, payload_ptr)
+
+    // stack: pred_ptr+1, addr, payload_ptr, retdest
+    // TODO: we don't update `access_ctr` anymore as unused, consider removing / replacing
+    
+    %stack (pred_ptr, addr, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 %macro search_account
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(search_account)
 %%after:
-    // stack: cold_access
+    // stack:
 %endmacro
 
 %macro search_account_no_return
     %search_account
-    %pop2
+    POP
 %endmacro
 
 
 /// Search the account addr andin the linked list.
-/// Return `1, payload_ptr` if the account was not found, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `payload_ptr` if the account was not found, `original_ptr` if it was already present.
 global search_account:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -319,10 +298,7 @@ global search_account:
 
 account_not_found:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
-    %pop3
-    SWAP1
-    PUSH 1
-    SWAP1
+    %stack (pred_addr, pred_ptr, addr, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 %macro remove_account_from_linked_list
@@ -375,12 +351,12 @@ global remove_account:
     %stack (addr, key, ptr) -> (addr, key, ptr, %%after)
     %jump(insert_slot)
 %%after:
-    // stack: cold_access, value_ptr
+    // stack: value_ptr
 %endmacro
 
 %macro insert_slot_no_return
     %insert_slot
-    %pop2
+    POP
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/5, by 5
@@ -406,8 +382,7 @@ global remove_account:
 
 /// Inserts the pair (addres, storage_key) and a new payload pointer into the linked list if it is not already present,
 /// or modify its payload if it was already present.
-/// Return `1, new_payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `new_payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global insert_slot_with_value:
     // stack: addr, key, value, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -535,10 +510,7 @@ global debug_yo_no_me_llamo_javier_with_value:
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     // stack: addr, key, new_payload_ptr, retdest
-    %pop2
-    PUSH 0
-    SWAP1
-    SWAP2
+    %stack (addr, key, new_payload_ptr, retdest) -> (retdest, new_payload_ptr)
     JUMP
 
 slot_found_write_value:
@@ -547,8 +519,7 @@ slot_found_write_value:
     %stack (payload_ptr, addr, key, value) -> (payload_ptr, value, payload_ptr)
     %mstore_trie_data
     // stack: payload_ptr, retdest
-    // the cold_access is no longer used here, so we can set any value.
-    %stack (payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    %stack (payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 %macro insert_slot_with_value
@@ -557,7 +528,7 @@ slot_found_write_value:
     SWAP1 %addr_to_state_key
     %jump(insert_slot_with_value)
 %%after:
-    // stack: cold_access, value_ptr
+    // stack: value_ptr
 %endmacro
 
 /// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present,
@@ -621,24 +592,15 @@ slot_found_write:
     // stack: orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
     DUP2
     DUP6
+    // stack: payload_ptr, pred_ptr + 2, orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
 global debug_store_new_payload:
     MSTORE_GENERAL // Store the new payload
+    // stack: orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
 
-    SWAP1
-    %increment
-    DUP1
-    MLOAD_GENERAL
-    %increment
-    // stack: access_ctr + 1, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest
-    SWAP1
-    DUP2
-    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
-global debug_no_me_llamo_popotan:
-    MSTORE_GENERAL
+    // TODO: we don't update `access_ctr` anymore as unused, consider removing / replacing
+
     // stack: access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
-    // If access_ctr == 1 then this it's a cold access 
-    %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
+    %stack (orig_payload_ptr, pred_ptr, addr, key, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
     JUMP
 insert_new_slot:
     // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
@@ -719,17 +681,11 @@ global debug_yo_no_me_llamo_javier:
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     // stack: addr, key, payload_ptr, retdest
-    %pop2
-    PUSH 0
-    SWAP1
-    SWAP2
+    %stack (addr, key, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 /// Search the pair (address, storage_key) in the storage the linked list.
-/// Returns `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
-// TODO: Not sure if this is correct, bc if a value is not found we need to return 0 but keep track of it for
-// having the right cold_access
+/// Returns `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global search_slot:
     // stack: addr, key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -780,7 +736,7 @@ global debug_slot_not_found:
 slot_not_found:    
     // stack: pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest
     %stack (pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest)
-        -> (retdest, 1, payload_ptr)
+        -> (retdest, payload_ptr)
     JUMP
 
 slot_found_no_write:
@@ -791,20 +747,10 @@ slot_found_no_write:
     DUP1
     MLOAD_GENERAL
     // stack: orig_payload_ptr, pred_ptr + 2, addr, key, payload_ptr, retdest
-    SWAP1
-    %increment
-    DUP1
-    MLOAD_GENERAL
-    %increment
-    // stack: access_ctr + 1, access_ctr_ptr, orig_payload_ptr, addr, key, payload_ptr, retdest
-    SWAP1
-    DUP2
-    // stack: access_ctr + 1, access_ctr_ptr, access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
-    MSTORE_GENERAL
-    // stack: access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
-    // If access_ctr == 1 then this it's a cold access 
-    %eq_const(1)
-    %stack (cold_access, orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
+
+    // TODO: we don't update `access_ctr` anymore as unused, consider removing / replacing
+
+    %stack (orig_payload_ptr, pred_ptr, addr, key, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
     JUMP
 
 
@@ -912,8 +858,7 @@ remove_all_slots_end:
     %addr_to_state_key
     %jump(search_account)
 %%after:
-    // stack: cold_access, account_ptr
-    POP
+    // stack: account_ptr
 %endmacro
 
 %macro read_storage_linked_list
@@ -924,8 +869,7 @@ remove_all_slots_end:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: cold_access, slot_ptr
-    POP
+    // stack: slot_ptr
 %endmacro
 
 %macro read_storage_linked_list_w_addr
@@ -936,8 +880,7 @@ remove_all_slots_end:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: cold_access, slot_ptr
-    POP
+    // stack: slot_ptr
 %endmacro
 
 %macro first_account
