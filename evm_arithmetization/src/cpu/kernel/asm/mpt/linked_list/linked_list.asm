@@ -388,13 +388,16 @@ global remove_account:
 // In this way @SEGMENT_STORAGE_LINKED_LIST + 5*ptr/5 must be pointing to the beginning of a node.
 // TODO: Maybe we should check here if the node have been deleted.
 %macro get_valid_slot_ptr
-     // stack: ptr/5
+    // stack: ptr/5
     DUP1
+    PUSH 5
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
+    // stack: segment, 5, ptr/5, ptr/5
     %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
-    %sub_const(@SEGMENT_STORAGE_LINKED_LIST)
-    // By construction, the unscaled list len
-    // must be multiple of 5
-    %div_const(5)
+    SUB
+    // stack: accessed_strg_keys_len, 5, ptr/5, ptr/5
+    // By construction, the unscaled list len must be multiple of 5
+    DIV
     // stack: accessed_strg_keys_len/5, ptr/5, ptr/5
     %assert_gt
     %mul_const(5)
