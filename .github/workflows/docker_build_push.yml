@@ -33,7 +33,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels)
-        id: meta_leader
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -49,7 +49,7 @@ jobs:
         with:
           push: true
           # platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta_leader.outputs.tags }}
-          labels: ${{ steps.meta_leader.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
