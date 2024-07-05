@@ -42,9 +42,11 @@ static_assertions = { workspace = true }
 hashbrown = { workspace = true }
 tiny-keccak = { workspace = true }
 serde_json = { workspace = true }
+serde-big-array = { workspace = true }
 
 # Local dependencies
 mpt_trie = { workspace = true }
+zk_evm_proc_macro = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

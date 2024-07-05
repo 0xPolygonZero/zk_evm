@@ -9,7 +9,9 @@ use tracing::info;
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(
     runtime: Runtime,
+    max_cpu_len_log: usize,
     previous: Option<GeneratedBlockProof>,
+    batch_size: usize,
     save_inputs_on_error: bool,
 ) -> Result<()> {
     let mut buffer = String::new();
@@ -21,7 +23,14 @@ pub(crate) async fn stdio_main(
     };
 
     let proved_blocks = prover_input
-        .prove(&runtime, previous, save_inputs_on_error, None)
+        .prove(
+            &runtime,
+            max_cpu_len_log,
+            previous,
+            batch_size,
+            save_inputs_on_error,
+            None,
+        )
         .await;
     runtime.close().await?;
     let proved_blocks = proved_blocks?;

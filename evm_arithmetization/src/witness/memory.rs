@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use ethereum_types::U256;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 use crate::cpu::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 
@@ -126,7 +128,9 @@ impl MemoryOp {
         kind: MemoryOpKind,
         value: U256,
     ) -> Self {
-        let timestamp = clock * NUM_CHANNELS + channel.index();
+        // Since the CPU clock starts at 1, and the `clock` value is the CPU length, the
+        // timestamps is: `timestamp = clock * NUM_CHANNELS + 1 + channel`
+        let timestamp = clock * NUM_CHANNELS + 1 + channel.index();
         MemoryOp {
             filter: true,
             timestamp,
@@ -160,7 +164,7 @@ impl MemoryOp {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct MemoryState {
     pub(crate) contexts: Vec<MemoryContextState>,
     pub(crate) preinitialized_segments: HashMap<Segment, MemorySegmentState>,
@@ -293,8 +297,9 @@ impl Default for MemoryState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct MemoryContextState {
+    #[serde(with = "BigArray")]
     /// The content of each memory segment.
     pub(crate) segments: [MemorySegmentState; Segment::COUNT],
 }
@@ -307,7 +312,7 @@ impl Default for MemoryContextState {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub(crate) struct MemorySegmentState {
     pub(crate) content: Vec<Option<U256>>,
 }

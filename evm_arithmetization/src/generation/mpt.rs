@@ -8,6 +8,7 @@ use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde::{Deserialize, Serialize};
 
 use super::linked_list::empty_list_mem;
 use super::prover_input::{ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE};
@@ -26,7 +27,7 @@ pub struct AccountRlp {
     pub code_hash: H256,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TrieRootPtrs {
     pub state_root_ptr: Option<usize>,
     pub txn_root_ptr: usize,

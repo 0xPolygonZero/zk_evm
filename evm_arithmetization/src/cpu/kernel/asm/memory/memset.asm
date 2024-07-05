@@ -32,13 +32,12 @@ memset_finish:
     %jumpi(memset_bytes_empty)
 
     // stack: DST, final_count, retdest
-    DUP2
     PUSH 0
-    DUP3
-    // stack: DST, 0, final_count, DST, final_count, retdest
+    SWAP1
+    // stack: DST, 0, final_count, retdest
     %mstore_unpacking
-    // stack: DST, final_count, retdest
-    %pop3
+    // stack: DST', retdest
+    POP
     // stack: retdest
     JUMP
 

@@ -1,0 +1,35 @@
+name: Docker Build & Run
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+    branches:
+      - "**"
+
+jobs:
+  docker:
+    name: Build and run leader and worker docker images for regression check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build leader docker container
+        run: |
+          docker build --progress plain -t leader:${{ github.ref_name }} -f leader.Dockerfile .
+
+      - name: Run leader docker container
+        run: |
+          docker run --rm leader:${{ github.ref_name }} --help
+
+      - name: Build worker docker container
+        run: |
+          docker build --progress plain -t worker:${{ github.ref_name }} -f worker.Dockerfile .
+
+      - name: Run worker docker container
+        run: |
+          docker run --rm worker:${{ github.ref_name }} --help

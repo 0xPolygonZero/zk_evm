@@ -3,18 +3,24 @@
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use evm_arithmetization::{AllStark, GenerationInputs, StarkConfig};
+use evm_arithmetization::{
+    fixed_recursive_verifier::ProverOutputData, prover::GenerationSegmentData, AllStark,
+    GenerationInputs, StarkConfig,
+};
+use hashbrown::HashMap;
 use plonky2::{
     gates::noop::NoopGate,
-    iop::witness::PartialWitness,
     plonk::{circuit_builder::CircuitBuilder, circuit_data::CircuitConfig},
     util::timing::TimingTree,
 };
 
 use crate::{
-    proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
+    proof_types::{
+        GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedSegmentProof, GeneratedTxnAggProof,
+        SegmentAggregatableProof, TxnAggregatableProof,
+    },
     prover_state::ProverState,
-    types::{Config, Field, PlonkyProofIntern, EXTENSION_DEGREE},
+    types::{Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
 
 /// A type alias for `Result<T, ProofGenError>`.
@@ -41,36 +47,86 @@ impl From<String> for ProofGenError {
 }
 
 /// Generates a transaction proof from some IR data.
-pub fn generate_txn_proof(
+pub fn generate_segment_proof(
     p_state: &ProverState,
     gen_inputs: GenerationInputs,
+    segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> ProofGenResult<GeneratedTxnProof> {
-    let (intern, p_vals) = p_state
+) -> ProofGenResult<GeneratedSegmentProof> {
+    let output_data = p_state
         .state
-        .prove_root(
+        .prove_segment(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
             gen_inputs,
+            segment_data,
             &mut TimingTree::default(),
             abort_signal,
         )
         .map_err(|err| err.to_string())?;
 
-    Ok(GeneratedTxnProof { p_vals, intern })
+    let p_vals = output_data.public_values;
+    let intern = output_data.proof_with_pis;
+    Ok(GeneratedSegmentProof { p_vals, intern })
 }
 
 /// Generates an aggregation proof from two child proofs.
 ///
 /// Note that the child proofs may be either transaction or aggregation proofs.
-pub fn generate_agg_proof(
+///
+/// If a transaction only contains a single segment, this function must still be
+/// called to generate a `GeneratedSegmentAggProof`. In that case, you can set
+/// `has_dummy` to `true`, and provide an arbitrary proof for the right child.
+pub fn generate_segment_agg_proof(
     p_state: &ProverState,
-    lhs_child: &AggregatableProof,
-    rhs_child: &AggregatableProof,
-) -> ProofGenResult<GeneratedAggProof> {
-    let (intern, p_vals) = p_state
+    lhs_child: &SegmentAggregatableProof,
+    rhs_child: &SegmentAggregatableProof,
+    has_dummy: bool,
+) -> ProofGenResult<GeneratedSegmentAggProof> {
+    if has_dummy {
+        assert!(
+            !lhs_child.is_agg(),
+            "Cannot have a dummy segment with an aggregation."
+        );
+    }
+
+    let lhs_prover_output_data = ProverOutputData {
+        is_dummy: false,
+        proof_with_pis: lhs_child.intern().clone(),
+        public_values: lhs_child.public_values(),
+    };
+    let rhs_prover_output_data = ProverOutputData {
+        is_dummy: has_dummy,
+        proof_with_pis: rhs_child.intern().clone(),
+        public_values: rhs_child.public_values(),
+    };
+    let agg_output_data = p_state
         .state
-        .prove_aggregation(
+        .prove_segment_aggregation(
+            lhs_child.is_agg(),
+            &lhs_prover_output_data,
+            rhs_child.is_agg(),
+            &rhs_prover_output_data,
+        )
+        .map_err(|err| err.to_string())?;
+
+    let p_vals = agg_output_data.public_values;
+    let intern = agg_output_data.proof_with_pis;
+
+    Ok(GeneratedSegmentAggProof { p_vals, intern })
+}
+
+/// Generates a transaction aggregation proof from two child proofs.
+///
+/// Note that the child proofs may be either transaction or aggregation proofs.
+pub fn generate_transaction_agg_proof(
+    p_state: &ProverState,
+    lhs_child: &TxnAggregatableProof,
+    rhs_child: &TxnAggregatableProof,
+) -> ProofGenResult<GeneratedTxnAggProof> {
+    let (b_proof_intern, p_vals) = p_state
+        .state
+        .prove_transaction_aggregation(
             lhs_child.is_agg(),
             lhs_child.intern(),
             lhs_child.public_values(),
@@ -80,7 +136,10 @@ pub fn generate_agg_proof(
         )
         .map_err(|err| err.to_string())?;
 
-    Ok(GeneratedAggProof { p_vals, intern })
+    Ok(GeneratedTxnAggProof {
+        p_vals,
+        intern: b_proof_intern,
+    })
 }
 
 /// Generates a block proof.
@@ -90,7 +149,7 @@ pub fn generate_agg_proof(
 pub fn generate_block_proof(
     p_state: &ProverState,
     prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
-    curr_block_agg_proof: &GeneratedAggProof,
+    curr_block_agg_proof: &GeneratedTxnAggProof,
 ) -> ProofGenResult<GeneratedBlockProof> {
     let b_height = curr_block_agg_proof
         .p_vals
@@ -121,13 +180,6 @@ pub fn dummy_proof() -> ProofGenResult<PlonkyProofIntern> {
     builder.add_gate(NoopGate, vec![]);
     let circuit_data = builder.build::<_>();
 
-    let inputs = PartialWitness::new();
-
-    plonky2::plonk::prover::prove::<Field, Config, EXTENSION_DEGREE>(
-        &circuit_data.prover_only,
-        &circuit_data.common,
-        inputs,
-        &mut TimingTree::default(),
-    )
-    .map_err(|e| ProofGenError(e.to_string()))
+    plonky2::recursion::dummy_circuit::dummy_proof(&circuit_data, HashMap::default())
+        .map_err(|e| ProofGenError(e.to_string()))
 }

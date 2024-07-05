@@ -26,20 +26,31 @@ fn criterion_benchmark(c: &mut Criterion) {
     let bytes = std::fs::read("benches/block_input.json").unwrap();
     let prover_input: ProverInput = serde_json::from_slice(&bytes).unwrap();
 
-    c.bench_function("Block 19240650 processing", |b| {
-        b.iter_batched(
-            || prover_input.clone(),
-            |pi| {
-                pi.block_trace
-                    .into_txn_proof_gen_ir(
-                        &ProcessingMeta::new(resolve_code_hash_fn),
-                        prover_input.other_data.clone(),
-                    )
-                    .unwrap()
-            },
-            BatchSize::LargeInput,
-        )
-    });
+    let batch_sizes = vec![1, 2, 4, 8];
+
+    let mut group = c.benchmark_group("Benchmark group");
+
+    for batch_size in batch_sizes {
+        let batch_size_string =
+            format!("Block 19240650 processing, with batch_size = {batch_size}");
+        group.bench_function(batch_size_string, |b| {
+            b.iter_batched(
+                || prover_input.clone(),
+                |pi| {
+                    pi.block_trace
+                        .into_txn_proof_gen_ir(
+                            &ProcessingMeta::new(resolve_code_hash_fn),
+                            prover_input.other_data.clone(),
+                            batch_size,
+                        )
+                        .unwrap()
+                },
+                BatchSize::LargeInput,
+            )
+        });
+    }
+
+    group.finish()
 }
 
 criterion_group!(

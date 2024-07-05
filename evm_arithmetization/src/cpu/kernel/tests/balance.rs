@@ -35,7 +35,7 @@ fn test_balance() -> Result<()> {
     let balance = U256(rng.gen());
     let account = test_account(balance);
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
     let address: Address = rng.gen();
     // Prepare the interpreter by inserting the account in the state trie.
     prepare_interpreter(&mut interpreter, address, &account)?;

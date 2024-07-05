@@ -37,7 +37,13 @@ else
   export MEMORY_CIRCUIT_SIZE="17..28"
 fi
 
-PROOF_OUTPUT_DIR="proofs"
+# Force the working directory to always be the `tools/` directory. 
+TOOLS_DIR=$(dirname $(realpath "$0"))
+
+# Set the environment variable to let the binary know that we're running in the project workspace.
+export CARGO_WORKSPACE_DIR="${TOOLS_DIR}/../"
+
+PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
 OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b$1_$2.log"
 ALWAYS_WRITE_LOGS=0 # Change this to `1` if you always want logs to be written.
 TOT_BLOCKS=$(($2-$1+1))
@@ -56,7 +62,6 @@ OUTPUT_TO_TERMINAL="${OUTPUT_TO_TERMINAL:-false}"
 RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
 
 mkdir -p $PROOF_OUTPUT_DIR
-
 
 if [ $IGNORE_PREVIOUS_PROOFS ]; then
     # Set checkpoint height to previous block number for the first block in range

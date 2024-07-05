@@ -11,6 +11,17 @@
 # We're going to set the parallelism in line with the total cpu count
 num_procs=$(nproc)
 
+# Force the working directory to always be the `tools/` directory. 
+TOOLS_DIR=$(dirname $(realpath "$0"))
+
+LEADER_OUT_PATH="${TOOLS_DIR}/leader.out"
+PROOFS_JSON_PATH="${TOOLS_DIR}/proofs.json"
+VERIFY_OUT_PATH="${TOOLS_DIR}/verify.out"
+TEST_OUT_PATH="${TOOLS_DIR}/test.out"
+
+# Set the environment variable to let the binary know that we're running in the project workspace.
+export CARGO_WORKSPACE_DIR="${TOOLS_DIR}/../"
+
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
 export TOKIO_WORKER_THREADS=$num_procs
@@ -40,17 +51,31 @@ if [[ $TEST_ONLY == "test_only" ]]; then
     export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
     export LOGIC_CIRCUIT_SIZE="12..13"
     export MEMORY_CIRCUIT_SIZE="17..18"
+    export MEMORY_BEFORE_CIRCUIT_SIZE="17..18"
+    export MEMORY_AFTER_CIRCUIT_SIZE="17..18"
 else
     if [[ $INPUT_FILE == *"witness_b19240705"* ]]; then
       # These sizes are configured specifically for block 19240705. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b19240705.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..19"
-        export BYTE_PACKING_CIRCUIT_SIZE="16..19"
+        export BYTE_PACKING_CIRCUIT_SIZE="15..19"
         export CPU_CIRCUIT_SIZE="18..21"
-        export KECCAK_CIRCUIT_SIZE="15..18"
-        export KECCAK_SPONGE_CIRCUIT_SIZE="10..13"
-        export LOGIC_CIRCUIT_SIZE="13..17"
-        export MEMORY_CIRCUIT_SIZE="20..23"
+        export KECCAK_CIRCUIT_SIZE="13..17"
+        export KECCAK_SPONGE_CIRCUIT_SIZE="8..13"
+        export LOGIC_CIRCUIT_SIZE="11..16"
+        export MEMORY_CIRCUIT_SIZE="19..23"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="7..18"
+        export MEMORY_AFTER_CIRCUIT_SIZE="7..18"
+    elif [[ $INPUT_FILE == *"witness_b2_b7.json"* ]]; then
+        export ARITHMETIC_CIRCUIT_SIZE="13..17"
+        export BYTE_PACKING_CIRCUIT_SIZE="13..15"
+        export CPU_CIRCUIT_SIZE="16..17"
+        export KECCAK_CIRCUIT_SIZE="9..12"
+        export KECCAK_SPONGE_CIRCUIT_SIZE="7..9"
+        export LOGIC_CIRCUIT_SIZE="10..12"
+        export MEMORY_CIRCUIT_SIZE="18..20"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="15..17"
+        export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
     else
         export ARITHMETIC_CIRCUIT_SIZE="16..23"
         export BYTE_PACKING_CIRCUIT_SIZE="9..21"
@@ -59,6 +84,8 @@ else
         export KECCAK_SPONGE_CIRCUIT_SIZE="9..15"
         export LOGIC_CIRCUIT_SIZE="12..18"
         export MEMORY_CIRCUIT_SIZE="17..28"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="7..27"
+        export MEMORY_AFTER_CIRCUIT_SIZE="7..28"
     fi
 fi
 
@@ -67,12 +94,12 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee test.out
-    if grep -q 'All proof witnesses have been generated successfully.' test.out; then
+    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee $TEST_OUT_PATH
+    if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         exit
     else
-         echo "Failed to create proof witnesses. See test.out for more details."
+         echo "Failed to create proof witnesses. See \"zk_evm/tools/test.out\" for more details."
         exit 1
     fi
 fi
@@ -80,14 +107,14 @@ fi
 cargo build --release --jobs "$num_procs"
 
 start_time=$(date +%s%N)
-../../target/release/leader --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee leader.out
+"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee $LEADER_OUT_PATH
 end_time=$(date +%s%N)
 
-tail -n 1 leader.out > proofs.json
+tail -n 1 $LEADER_OUT_PATH > $PROOFS_JSON_PATH
 
-../../target/release/verifier -f proofs.json | tee verify.out
+"${TOOLS_DIR}/../../target/release/verifier" -f $PROOFS_JSON_PATH | tee $VERIFY_OUT_PATH
 
-if grep -q 'All proofs verified successfully!' verify.out; then
+if grep -q 'All proofs verified successfully!' $VERIFY_OUT_PATH; then
     duration_ns=$((end_time - start_time))
     duration_sec=$(echo "$duration_ns / 1000000000" | bc -l)
     echo "Success!"

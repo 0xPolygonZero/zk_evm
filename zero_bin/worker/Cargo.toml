@@ -12,7 +12,6 @@ categories.workspace = true
 paladin-core = { workspace = true }
 anyhow = { workspace = true }
 dotenvy = { workspace = true }
-tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 tokio = { workspace = true }
@@ -22,4 +21,4 @@ ops = { workspace = true }
 zero_bin_common = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = "0.5.0"
+jemallocator = "0.5.4"

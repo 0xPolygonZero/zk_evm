@@ -147,14 +147,6 @@ pub(crate) const fn indices_arr<const N: usize>() -> [usize; N] {
     indices_arr
 }
 
-pub(crate) unsafe fn transmute_no_compile_time_size_checks<T, U>(value: T) -> U {
-    debug_assert_eq!(size_of::<T>(), size_of::<U>());
-    // Need ManuallyDrop so that `value` is not dropped by this function.
-    let value = ManuallyDrop::new(value);
-    // Copy the bit pattern. The original value is no longer safe to use.
-    transmute_copy(&value)
-}
-
 pub(crate) fn addmod(x: U256, y: U256, m: U256) -> U256 {
     if m.is_zero() {
         return m;
@@ -253,5 +245,17 @@ pub(crate) fn get_h256<F: RichField>(slice: &[F]) -> H256 {
             .map(|x| x.to_canonical_u64() as u32)
             .flat_map(|limb| limb.to_be_bytes())
             .collect_vec(),
+    )
+}
+
+pub(crate) fn get_u256<F: RichField>(slice: &[F; 8]) -> U256 {
+    U256(
+        (0..4)
+            .map(|i| {
+                slice[2 * i].to_canonical_u64() + (slice[2 * i + 1].to_noncanonical_u64() << 32)
+            })
+            .collect::<Vec<u64>>()
+            .try_into()
+            .unwrap(),
     )
 }

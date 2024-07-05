@@ -4,13 +4,15 @@ members = ["mpt_trie",
     "proof_gen",
     "trace_decoder",
     "evm_arithmetization",
+    "proc_macro",
     "zero_bin/leader",
     "zero_bin/worker",
     "zero_bin/common",
     "zero_bin/ops",
     "zero_bin/verifier",
     "zero_bin/rpc",
-    "zero_bin/prover"]
+    "zero_bin/prover", 
+    "compat"]
 resolver = "2"
 
 [workspace.package]
@@ -36,23 +38,25 @@ alloy = { git = "https://github.com/alloy-rs/alloy", tag='v0.1.1', default-featu
     "transport-http",
     "rpc-types-debug"
 ] }
-anyhow = "1.0.40"
+anyhow = "1.0.86"
 async-stream = "0.3.5"
-axum = "0.7.4"
-bytes = "1.5.0"
-ciborium = "0.2.1"
-ciborium-io = "0.2.1"
-clap = { version = "4.4.6", features = ["derive", "env"] }
+axum = "0.7.5"
+bytes = "1.6.0"
+ciborium = "0.2.2"
+ciborium-io = "0.2.2"
+clap = { version = "4.5.7", features = ["derive", "env"] }
+compat = { path = "compat" }
+__compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 criterion = "0.5.1"
 dotenvy = "0.15.7"
 enum-as-inner = "0.6.0"
-enumn = "0.1.12"
-env_logger = "0.10.0"
+enumn = "0.1.13"
+env_logger = "0.11.3"
 ethereum-types = "0.14.1"
 eth_trie = "0.4.0"
 evm_arithmetization = { path = "evm_arithmetization", version = "0.2.0" }
-futures = "0.3.29"
-hashbrown = "0.14.0"
+futures = "0.3.30"
+hashbrown = "0.14.5"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 impl-codec = "0.6.0"
@@ -61,17 +65,17 @@ impl-rlp = "0.3.0"
 impl-serde = "0.4.0"
 itertools = "0.13.0"
 keccak-hash = "0.10.0"
-log = "0.4.20"
+log = "0.4.21"
 mpt_trie = { path = "mpt_trie", version = "0.3.0" }
-num = "0.4.1"
-num-bigint = "0.4.3"
+num = "0.4.3"
+num-bigint = "0.4.5"
 num-traits = "0.2.19"
-once_cell = "1.13.0"
+once_cell = "1.19.0"
 paladin-core = "0.4.2"
-parking_lot = "0.12.1"
-paste = "1.0.14"
-pest = "2.1.3"
-pest_derive = "2.1.0"
+parking_lot = "0.12.3"
+paste = "1.0.15"
+pest = "2.7.10"
+pest_derive = "2.7.10"
 pretty_env_logger = "0.5.0"
 proof_gen = { path = "proof_gen", version = "0.2.0" }
 rand = "0.8.5"
@@ -79,24 +83,25 @@ rand_chacha = "0.3.1"
 ripemd = "0.1.3"
 rlp = "0.5.2"
 rlp-derive = "0.1.0"
-ruint = "1.12.1"
-serde = "1.0.166"
-serde_json = "1.0.96"
-serde_path_to_error = "0.1.14"
-serde_with = "3.4.0"
+ruint = "1.12.3"
+serde = "1.0.203"
+serde-big-array = "0.5.1"
+serde_json = "1.0.118"
+serde_path_to_error = "0.1.16"
+serde_with = "3.8.1"
 smt_trie = { path = "smt_trie", version = "0.1.0" }
-sha2 = "0.10.6"
+sha2 = "0.10.8"
 static_assertions = "1.1.0"
-thiserror = "1.0.49"
+thiserror = "1.0.61"
 tiny-keccak = "2.0.2"
-tokio = { version = "1.33.0", features = ["full"] }
-toml = "0.8.12"
+tokio = { version = "1.38.0", features = ["full"] }
+toml = "0.8.14"
 tower = "0.4"
 trace_decoder = { path = "trace_decoder", version = "0.4.0" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uint = "0.9.5"
-url = "2.5.0"
+url = "2.5.2"
 
 # zero-bin related dependencies
 ops = { path = "zero_bin/ops" }
@@ -105,7 +110,14 @@ rpc = { path = "zero_bin/rpc" }
 zero_bin_common = { path = "zero_bin/common" }
 
 # plonky2-related dependencies
-plonky2 = "0.2.2"
+plonky2 = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
 plonky2_maybe_rayon = "0.2.0"
-plonky2_util = "0.2.0"
-starky = "0.4.0"
+plonky2_util = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
+starky = { git = "https://github.com/0xPolygonZero/plonky2.git", rev = "dc77c77f2b06500e16ad4d7f1c2b057903602eed" }
+
+# proc macro related dependencies
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "2.0"
+trybuild = "1.0"
+zk_evm_proc_macro = { path = "proc_macro" }
