@@ -140,7 +140,7 @@ global insert_account_to_linked_list:
 global account_found:
     // The address was already in the list
     // stack: pred_ptr, addr, payload_ptr, retdest
-    // Load the the payload pointer and access counter
+    // Load the payload pointer
     %increment
     DUP1
     MLOAD_GENERAL
@@ -237,7 +237,7 @@ global insert_account_with_overwrite:
 account_found_with_overwrite:
     // The address was already in the list
     // stack: pred_ptr, addr, payload_ptr, retdest
-    // Load the the payload pointer and access counter
+    // Load the payload pointer
     %increment
     DUP1
     // stack: payload_ptr_ptr, pred_ptr+1, addr, payload_ptr, retdest
@@ -490,27 +490,23 @@ global debug_yo_no_me_llamo_javier_with_value:
     DUP1
     %get_trie_data_size
     // stack: new_payload_ptr, new_ptr+2, new_ptr+2, next_ptr, addr, key, value, retdest
-    %stack (new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr, key, value) -> (value, new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr, key, new_payload_ptr)
+    %stack (new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr, key, value, retdest)
+        -> (value, new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, retdest, new_payload_ptr)
     %append_to_trie_data
     MSTORE_GENERAL
 
-    // stack: new_ptr + 2, next_ptr, addr, key, new_payload_ptr, retdest
-    // Store the counter
-    %increment
+    // stack: new_ptr + 2, next_ptr, retdest, new_payload_ptr
+    // TODO: We skip counter update as it is unused.
+    %add_const(2)
+    // stack: new_next_ptr=new_ptr + 4, next_ptr, payload_ptr, retdest
     DUP1
-    PUSH 0
-    MSTORE_GENERAL
-    // stack: new_ptr + 3, next_ptr, addr, key, new_payload_ptr, retdest
-    %increment
-    DUP1
-    // stack: new_next_ptr, new_next_ptr, next_ptr, addr, key, new_payload_ptr, retdest
+    // stack: new_next_ptr, new_next_ptr, next_ptr, retdest, new_payload_ptr
     SWAP2
     MSTORE_GENERAL
-    // stack: new_next_ptr, addr, key, new_payload_ptr, retdest
+    // stack: new_next_ptr, retdest, new_payload_ptr
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
-    // stack: addr, key, new_payload_ptr, retdest
-    %stack (addr, key, new_payload_ptr, retdest) -> (retdest, new_payload_ptr)
+    // stack: retdest, new_payload_ptr
     JUMP
 
 slot_found_write_value:
@@ -533,8 +529,7 @@ slot_found_write_value:
 
 /// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present,
 /// or modify its payload if it was already present.
-/// Return `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global insert_slot:
     // stack: addr, key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -599,7 +594,6 @@ global debug_store_new_payload:
 
     // TODO: we don't update `access_ctr` anymore as unused, consider removing / replacing
 
-    // stack: access_ctr + 1, orig_payload_ptr, addr, key, payload_ptr, retdest
     %stack (orig_payload_ptr, pred_ptr, addr, key, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
     JUMP
 insert_new_slot:
@@ -666,13 +660,9 @@ global debug_yo_no_me_llamo_javier:
     MSTORE_GENERAL
 
     // stack: new_ptr + 2, next_ptr, addr, key, payload_ptr, retdest
-    // Store the counter
-    %increment
-    DUP1
-    PUSH 0
-    MSTORE_GENERAL
-    // stack: new_ptr + 3, next_ptr, addr, key, payload_ptr, retdest
-    %increment
+    // TODO: We skip counter update as it is unused.
+    %add_const(2)
+    // stack: new_next_ptr=new_ptr + 4, next_ptr, addr, key, payload_ptr, retdest
     DUP1
     // stack: new_next_ptr, new_next_ptr, next_ptr, addr, key, payload_ptr, retdest
     SWAP2
