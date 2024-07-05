@@ -895,7 +895,7 @@ remove_all_slots_loop:
 remove_all_slots_pop_and_end:
     POP
 remove_all_slots_end:
-    // stack: cur_addr, cur_ptr, addr, retdest
+    // stack: next_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
     %pop4 JUMP
 
 %macro remove_all_account_slots
