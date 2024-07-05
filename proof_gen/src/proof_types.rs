@@ -1,10 +1,15 @@
 //! This module defines the various proof types used throughout the block proof
 //! generation process.
 
-use evm_arithmetization::{proof::PublicValues, BlockHeight};
+use evm_arithmetization::{
+    fixed_recursive_verifier::{extract_block_public_values, extract_two_to_one_block_hash},
+    proof::PublicValues,
+    BlockHeight,
+};
+use plonky2::plonk::config::Hasher as _;
 use serde::{Deserialize, Serialize};
 
-use crate::types::PlonkyProofIntern;
+use crate::types::{Hash, Hasher, PlonkyProofIntern};
 
 /// A transaction proof along with its public values, for proper connection with
 /// contiguous proofs.
@@ -35,6 +40,17 @@ pub struct GeneratedAggProof {
 pub struct GeneratedBlockProof {
     /// Associated block height.
     pub b_height: BlockHeight,
+    /// Underlying plonky2 proof.
+    pub intern: PlonkyProofIntern,
+}
+
+/// An aggregation block proof along with its hashed public values, for proper
+/// connection with other proofs.
+///
+/// Aggregation block proofs can represent any aggregation of independent
+/// blocks.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneratedAggBlockProof {
     /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }
@@ -81,6 +97,55 @@ impl From<GeneratedTxnProof> for AggregatableProof {
 
 impl From<GeneratedAggProof> for AggregatableProof {
     fn from(v: GeneratedAggProof) -> Self {
+        Self::Agg(v)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum AggregatableBlockProof {
+    /// The underlying proof is a single block proof.
+    Block(GeneratedBlockProof),
+    /// The underlying proof is an aggregation proof.
+    Agg(GeneratedAggBlockProof),
+}
+
+impl AggregatableBlockProof {
+    pub fn pv_hash(&self) -> Hash {
+        match self {
+            AggregatableBlockProof::Block(info) => {
+                let pv = extract_block_public_values(&info.intern.public_inputs);
+                Hasher::hash_no_pad(pv)
+            }
+            AggregatableBlockProof::Agg(info) => {
+                let hash = extract_two_to_one_block_hash(&info.intern.public_inputs);
+                Hash::from_partial(hash)
+            }
+        }
+    }
+
+    pub(crate) const fn is_agg(&self) -> bool {
+        match self {
+            AggregatableBlockProof::Block(_) => false,
+            AggregatableBlockProof::Agg(_) => true,
+        }
+    }
+
+    pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
+        match self {
+            AggregatableBlockProof::Block(info) => &info.intern,
+            AggregatableBlockProof::Agg(info) => &info.intern,
+        }
+    }
+}
+
+impl From<GeneratedBlockProof> for AggregatableBlockProof {
+    fn from(v: GeneratedBlockProof) -> Self {
+        Self::Block(v)
+    }
+}
+
+impl From<GeneratedAggBlockProof> for AggregatableBlockProof {
+    fn from(v: GeneratedAggBlockProof) -> Self {
         Self::Agg(v)
     }
 }

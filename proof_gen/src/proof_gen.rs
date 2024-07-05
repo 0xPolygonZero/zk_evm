@@ -12,7 +12,10 @@ use plonky2::{
 };
 
 use crate::{
-    proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof, GeneratedTxnProof},
+    proof_types::{
+        AggregatableBlockProof, AggregatableProof, GeneratedAggBlockProof, GeneratedAggProof,
+        GeneratedBlockProof, GeneratedTxnProof,
+    },
     prover_state::ProverState,
     types::{Config, Field, PlonkyProofIntern, EXTENSION_DEGREE},
 };
@@ -112,6 +115,27 @@ pub fn generate_block_proof(
         b_height,
         intern: b_proof_intern,
     })
+}
+
+/// Generates an aggregation proof from two child proofs.
+///
+/// Note that the child proofs may be either transaction or aggregation proofs.
+pub fn generate_agg_block_proof(
+    p_state: &ProverState,
+    lhs_child: &AggregatableBlockProof,
+    rhs_child: &AggregatableBlockProof,
+) -> ProofGenResult<GeneratedAggBlockProof> {
+    let intern = p_state
+        .state
+        .prove_two_to_one_block(
+            lhs_child.intern(),
+            lhs_child.is_agg(),
+            rhs_child.intern(),
+            rhs_child.is_agg(),
+        )
+        .map_err(|err| err.to_string())?;
+
+    Ok(GeneratedAggBlockProof { intern })
 }
 
 /// Generates a dummy proof for a dummy circuit doing nothing.
