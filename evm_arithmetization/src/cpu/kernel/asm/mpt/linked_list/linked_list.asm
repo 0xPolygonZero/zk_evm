@@ -79,6 +79,7 @@ global store_initial_accounts:
 loop_store_initial_accounts:
     // stack: current_node_ptr
     %get_trie_data_size
+global debug_new_ptr:
     DUP2
     MLOAD_GENERAL
     // stack: current_addr, cpy_ptr, current_node_ptr, retdest
@@ -762,6 +763,7 @@ next_node_ok:
     %increment
     DUP1
     DUP6
+    %clone_slot
     MSTORE_GENERAL
     // stack: new_ptr + 3, next_ptr, addr, key, payload_ptr, retdest
     %increment

@@ -116,6 +116,7 @@ global perform_final_checks:
 
     SWAP1 %set_trie_data_size
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
+global debug_st_1:
     %assert_eq
 
     PUSH 1 // initial trie data length
@@ -123,6 +124,7 @@ global perform_final_checks:
 global check_state_trie:
     %set_final_tries
     %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
+global debug_st_2:
     %assert_eq
 global check_txn_trie:
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq

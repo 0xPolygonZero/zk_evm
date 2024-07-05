@@ -95,6 +95,7 @@ global delete_removed_accounts:
     // The inital accounts linked was store at addresses smaller than `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
     // If we also know that `@SEGMENT_ACCOUNT_LINKED_LIST <= account_ptr_ptr`, for deleting node at `addr_ptr_ptr` it
     // suffices to check that `account_ptr_ptr` != `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`
+global debug_eq:
     EQ
     %jumpi(delete_removed_accounts_end)
     // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest

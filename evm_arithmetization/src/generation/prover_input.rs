@@ -290,6 +290,8 @@ impl<F: Field> GenerationState<F> {
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
+        log::debug!("account ll = {:?}", self.get_accounts_linked_list());
+        log::debug!("storage ll = {:?}", self.get_storage_linked_list());
         match input_fn.0[1].as_str() {
             "insert_account" => self.run_next_insert_account(),
             "remove_account" => self.run_next_remove_account(),

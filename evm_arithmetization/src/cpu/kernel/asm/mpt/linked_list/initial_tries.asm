@@ -19,6 +19,7 @@ global mpt_set_payload:
     DUP1 %eq_const(@MPT_NODE_LEAF)      %jumpi(set_payload_leaf)
 
 skip:
+global debug_skip:
     // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     %stack (node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest) -> (retdest, account_ptr_ptr, storage_ptr_ptr)
     JUMP
@@ -130,6 +131,7 @@ set_payload_storage_extension:
     // stack: child_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
     %jump(mpt_set_storage_payload)
 
+global debug_set_payload_leaf:
 set_payload_leaf:
     // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     POP

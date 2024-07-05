@@ -49,7 +49,12 @@
 
 %macro clone_slot
     // stack: slot_ptr
+    DUP1
+    %jumpi(%%non_zero_ptr)
+    %jump(%%avoid_clonning_zero_ptr)
+%%non_zero_ptr:
     %get_trie_data_size
+%%avoid_clonning_zero_ptr:
     // stack: cloned_slot_ptr
     SWAP1
     %mload_trie_data

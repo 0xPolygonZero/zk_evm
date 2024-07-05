@@ -57,6 +57,7 @@ global encode_or_hash_node:
     DUP1
     PUSH @MPT_NODE_HASH
     SUB
+global debug_o:
     %jumpi(encode_or_hash_concrete_node)
 
     // If we got here, node_type == @MPT_NODE_HASH.
@@ -74,6 +75,8 @@ global encode_or_hash_node:
     SWAP2 %add_const(2)
     %stack (cur_len, encode_value, hash, retdest) -> (retdest, hash, 32, cur_len)
     JUMP
+
+global debug_encode_or_hash_concrete_node:
 encode_or_hash_concrete_node:
     %stack (node_type, node_ptr, encode_value, cur_len) -> (node_type, node_ptr, encode_value, cur_len, maybe_hash_node)
     %jump(encode_node)

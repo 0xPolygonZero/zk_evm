@@ -57,6 +57,8 @@ fn test_erc20() -> anyhow::Result<()> {
     let giver_state_key = keccak(giver);
     let token_state_key = keccak(token);
 
+    log::debug!("the keys {:?} - {:?} - {:?}", sender_state_key, giver_state_key, token_state_key);
+
     let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
     let giver_nibbles = Nibbles::from_bytes_be(giver_state_key.as_bytes()).unwrap();
     let token_nibbles = Nibbles::from_bytes_be(token_state_key.as_bytes()).unwrap();
@@ -118,6 +120,23 @@ fn test_erc20() -> anyhow::Result<()> {
         state_trie_after
     };
 
+    log::debug!("sender account = {:?}", sender_account());
+
+    log::debug!("expected state trie = {:?}", expected_state_trie_after);
+    let account: AccountRlp = rlp::decode(&[
+        248, 78, 1, 138, 2, 30, 25, 224, 201, 186, 178, 55, 97, 2, 160, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 197, 210, 70, 1,
+        134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59,
+        123, 250, 216, 4, 93, 133, 164, 112,
+    ])?;
+    log::debug!("account ok = {:?}", account);
+    let account: AccountRlp = rlp::decode(&[
+        248, 78, 1, 138, 2, 30, 25, 224, 201, 186, 178, 55, 97, 2, 160, 86, 232, 31, 23, 27, 204,
+        85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98,
+        47, 181, 227, 99, 180, 33, 160, 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220,
+        199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
+    ])?;
+    log::debug!("account not ok = {:?}", account);
     let receipt_0 = LegacyReceiptRlp {
         status: true,
         cum_gas_used: gas_used,

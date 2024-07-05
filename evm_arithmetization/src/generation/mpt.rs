@@ -360,6 +360,7 @@ fn get_state_and_storage_leaves(
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
+            log::debug!("Pura hoja");
             let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
             let AccountRlp {
                 nonce,
