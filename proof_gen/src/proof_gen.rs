@@ -117,9 +117,9 @@ pub fn generate_block_proof(
     })
 }
 
-/// Generates an aggregation proof from two child proofs.
+/// Generates an aggregation block proof from two child proofs.
 ///
-/// Note that the child proofs may be either transaction or aggregation proofs.
+/// Note that the child proofs may be either block or aggregation proofs.
 pub fn generate_agg_block_proof(
     p_state: &ProverState,
     lhs_child: &AggregatableBlockProof,
