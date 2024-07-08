@@ -31,6 +31,7 @@ impl Operation for SegmentProof {
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
         let input = all_data.0.clone();
+        let segment_index = all_data.1.segment_index();
         let _span = SegmentProofSpan::new(&input, all_data.1.segment_index());
         let proof = if self.save_inputs_on_error {
             zero_bin_common::prover_state::p_manager()
@@ -38,8 +39,11 @@ impl Operation for SegmentProof {
                 .map_err(|err| {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
-                            "b{}_txn_{}_input.log",
-                            input.block_metadata.block_number, input.txn_number_before
+                            "b{}_txns_{}-{}-({})_input.log",
+                            input.block_metadata.block_number,
+                            input.txn_number_before,
+                            input.txn_number_before + input.signed_txns.len(),
+                            segment_index
                         ),
                         input,
                     ) {
@@ -65,6 +69,7 @@ impl Operation for SegmentProof {
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         let gen_input = input.0;
+        let segment_index = input.1.segment_index();
         let _span = SegmentProofSpan::new(&gen_input, input.1.segment_index());
 
         if self.save_inputs_on_error {
@@ -74,8 +79,11 @@ impl Operation for SegmentProof {
             .map_err(|err| {
                 if let Err(write_err) = save_inputs_to_disk(
                     format!(
-                        "b{}_txn_{}_input.log",
-                        gen_input.block_metadata.block_number, gen_input.txn_number_before
+                        "b{}_txns_{}-{}-({})_input.log",
+                        gen_input.block_metadata.block_number,
+                        gen_input.txn_number_before,
+                        gen_input.txn_number_before + gen_input.signed_txns.len(),
+                        segment_index
                     ),
                     gen_input,
                 ) {
