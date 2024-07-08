@@ -1999,14 +1999,18 @@ fn shrinking_config() -> CircuitConfig {
 
 /// Extracts the two-to-one block aggregation hash from a predefined location.
 pub fn extract_two_to_one_block_hash<T>(public_inputs: &[T]) -> &[T; NUM_HASH_OUT_ELTS] {
-    public_inputs[0..NUM_HASH_OUT_ELTS]
+    const PV_HASH_INDEX_START: usize = 0;
+    const PV_HASH_INDEX_END: usize = PV_HASH_INDEX_START + NUM_HASH_OUT_ELTS;
+    public_inputs[PV_HASH_INDEX_START..PV_HASH_INDEX_END]
         .try_into()
         .expect("Public inputs vector was malformed.")
 }
 
 /// Extracts the two-to-one block aggregation hash from a predefined location.
 pub fn extract_block_public_values<T>(public_inputs: &[T]) -> &[T; PublicValuesTarget::SIZE] {
-    public_inputs[0..PublicValuesTarget::SIZE]
+    const PV_INDEX_START: usize = 0;
+    const PV_INDEX_END: usize = PV_INDEX_START + PublicValuesTarget::SIZE;
+    public_inputs[PV_INDEX_START..PV_INDEX_END]
         .try_into()
         .expect("Public inputs vector was malformed.")
 }
