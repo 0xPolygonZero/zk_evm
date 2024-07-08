@@ -10,8 +10,10 @@ fn main() -> anyhow::Result<()> {
         .context("couldn't find evm_arithmetization package")?
         .version;
     println!(
-        "cargo::rustc-env=EVM_ARITHMETIZATION_PACKAGE_VERSION={}",
-        version
+        "cargo::rustc-env=EVM_ARITHMETIZATION_PACKAGE_VERSION={}.{}.x",
+        // patch version change should not prompt circuits regeneration
+        version.major,
+        version.minor
     );
     Ok(())
 }
