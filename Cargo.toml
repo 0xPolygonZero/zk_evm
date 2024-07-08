@@ -1,18 +1,20 @@
 [workspace]
-members = ["mpt_trie",
-    "smt_trie",
-    "proof_gen",
-    "trace_decoder",
+members = [
+    "compat",
     "evm_arithmetization",
+    "mpt_trie",
     "proc_macro",
-    "zero_bin/leader",
-    "zero_bin/worker",
+    "proof_gen",
+    "smt_trie",
+    "trace_decoder",
     "zero_bin/common",
+    "zero_bin/leader",
     "zero_bin/ops",
-    "zero_bin/verifier",
+    "zero_bin/prover",
     "zero_bin/rpc",
-    "zero_bin/prover", 
-    "compat"]
+    "zero_bin/verifier",
+    "zero_bin/worker",
+]
 resolver = "2"
 
 [workspace.package]
@@ -24,7 +26,7 @@ keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
 categories = ["cryptography::cryptocurrencies"]
 
 [workspace.dependencies]
-alloy = { git = "https://github.com/alloy-rs/alloy", tag='v0.1.1', default-features = false, features = [
+alloy = { git = "https://github.com/alloy-rs/alloy", tag = 'v0.1.1', default-features = false, features = [
     "consensus",
     "reqwest",
     "json-rpc",
@@ -36,7 +38,7 @@ alloy = { git = "https://github.com/alloy-rs/alloy", tag='v0.1.1', default-featu
     "providers",
     "transports",
     "transport-http",
-    "rpc-types-debug"
+    "rpc-types-debug",
 ] }
 anyhow = "1.0.86"
 async-stream = "0.3.5"
@@ -102,6 +104,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uint = "0.9.5"
 url = "2.5.2"
+lru = "0.12.3"
 
 # zero-bin related dependencies
 ops = { path = "zero_bin/ops" }
