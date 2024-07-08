@@ -216,6 +216,14 @@ decode_and_store_blob_versioned_hashes_finish:
     // stack: rlp_addr
     %decode_rlp_scalar
     %stack (rlp_addr, s) -> (s, rlp_addr)
+
+    // EIP-2: Check that s is within valid range.
+    DUP1
+    %secp_scalar_half
+    // stack: ceil(N/2), s, s, rlp_addr
+    %assert_gt
+
+    // stack: s, rlp_addr
     %mstore_txn_field(@TXN_FIELD_S)
     // stack: rlp_addr
 %endmacro

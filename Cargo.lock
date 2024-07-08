@@ -4069,6 +4069,7 @@ dependencies = [
  "compat",
  "evm_arithmetization",
  "futures",
+ "lru",
  "mpt_trie",
  "primitive-types 0.12.2",
  "prover",
