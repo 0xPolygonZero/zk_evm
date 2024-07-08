@@ -75,7 +75,7 @@ fn process_type_0_txn_invalid_sig() -> Result<()> {
     let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
 
     let retaddr = 0xDEADBEEFu32.into();
-    let mut interpreter: Interpreter<F> = Interpreter::new(process_type_0_txn, vec![retaddr]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(process_type_0_txn, vec![retaddr], None);
 
     // Same transaction as `process_type_0_txn()`, with the exception that the `s`
     // component in the signature is flipped (i.e. `s' = N - s`, where `N` is the
