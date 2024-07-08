@@ -18,7 +18,7 @@ use crate::generation::prover_input::EvmField::{
     Bls381Base, Bls381Scalar, Bn254Base, Bn254Scalar, Secp256k1Base, Secp256k1Scalar,
 };
 use crate::generation::prover_input::FieldOp::{Inverse, Sqrt};
-use crate::generation::state::GenerationState;
+use crate::generation::state::{GenerationState, State};
 use crate::memory::segments::Segment;
 use crate::memory::segments::Segment::BnPairing;
 use crate::util::{biguint_to_mem_vec, mem_vec_to_biguint, u256_to_u8, u256_to_usize};
@@ -88,11 +88,20 @@ impl<F: Field> GenerationState<F> {
                 .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
-            "trie_data_size" => Ok(U256::from(
-                self.memory.contexts[0].segments[Segment::TrieData.unscale()]
-                    .content
-                    .len(),
-            )),
+            "trie_data_size" => Ok(self
+                .memory
+                .preinitialized_segments
+                .get(&Segment::TrieData)
+                .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
+                .content
+                .len()
+                .max(
+                    self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                        .content
+                        .len(),
+                )
+                .into()),
+
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -295,16 +304,38 @@ impl<F: Field> GenerationState<F> {
             "insert_slot" => self.run_next_insert_slot(),
             "remove_slot" => self.run_next_remove_slot(),
             "remove_address_slots" => self.run_next_remove_address_slots(),
-            "accounts_linked_list_len" => Ok((Segment::AccountsLinkedList as usize
-                + self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
+            "accounts_linked_list_len" => {
+                let len = self
+                    .memory
+                    .preinitialized_segments
+                    .get(&Segment::AccountsLinkedList)
+                    .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
                     .content
-                    .len())
-            .into()),
-            "storage_linked_list_len" => Ok((Segment::StorageLinkedList as usize
-                + self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
+                    .len()
+                    .max(
+                        self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
+                            .content
+                            .len(),
+                    );
+
+                Ok((Segment::AccountsLinkedList as usize + len).into())
+            }
+            "storage_linked_list_len" => {
+                let len = self
+                    .memory
+                    .preinitialized_segments
+                    .get(&Segment::StorageLinkedList)
+                    .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
                     .content
-                    .len())
-            .into()),
+                    .len()
+                    .max(
+                        self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
+                            .content
+                            .len(),
+                    );
+
+                Ok((Segment::StorageLinkedList as usize + len).into())
+            }
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -651,10 +682,8 @@ impl<F: Field> GenerationState<F> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
         // available virtual address in the segment. In order to get the length
         // we need to substract `Segment::AccountsLinkedList` as usize.
-        LinkedList::from_mem_and_segment(
-            &self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()].content,
-            Segment::AccountsLinkedList,
-        )
+        let accounts_mem = self.memory.get_ll_memory(Segment::AccountsLinkedList);
+        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
     }
 
     pub(crate) fn get_storage_linked_list(
@@ -663,10 +692,8 @@ impl<F: Field> GenerationState<F> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
         // available virtual address in the segment. In order to get the length
         // we need to substract `Segment::AccountsLinkedList` as usize.
-        LinkedList::from_mem_and_segment(
-            &self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()].content,
-            Segment::StorageLinkedList,
-        )
+        let storage_mem = self.memory.get_ll_memory(Segment::StorageLinkedList);
+        LinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
     }
 
     fn get_global_metadata(&self, data: GlobalMetadata) -> U256 {

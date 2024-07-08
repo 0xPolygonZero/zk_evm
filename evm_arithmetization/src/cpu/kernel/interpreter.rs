@@ -266,19 +266,29 @@ impl<F: Field> Interpreter<F> {
                 .expect("Invalid MPT data for preinitialization");
 
         self.generation_state.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
-            .content = state_leaves.iter().map(|&val| Some(val)).collect();
+            .content = vec![];
         self.generation_state.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
-            .content = storage_leaves.iter().map(|&val| Some(val)).collect();
-        self.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
-            trie_data.iter().map(|&val| Some(val)).collect();
+            .content = vec![];
+
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
 
         // Initialize the `TrieData` segment.
         let preinit_trie_data_segment = MemorySegmentState {
-            content: trie_data.iter().map(|&elt| Some(elt)).collect::<Vec<_>>(),
+            content: trie_data.iter().map(|&elt| Some(elt)).collect(),
+        };
+        let preinit_accounts_ll_segment = MemorySegmentState {
+            content: state_leaves.iter().map(|&val| Some(val)).collect(),
+        };
+        let preinit_storage_ll_segment = MemorySegmentState {
+            content: storage_leaves.iter().map(|&val| Some(val)).collect(),
         };
         self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
+        self.insert_preinitialized_segment(
+            Segment::AccountsLinkedList,
+            preinit_accounts_ll_segment,
+        );
+        self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);

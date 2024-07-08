@@ -215,6 +215,24 @@ impl MemoryState {
         Some(val)
     }
 
+    pub(crate) fn get_ll_memory(&self, segment: Segment) -> Vec<Option<U256>> {
+        assert!(segment == Segment::AccountsLinkedList || segment == Segment::StorageLinkedList);
+
+        let len = self
+            .preinitialized_segments
+            .get(&segment)
+            .unwrap_or(&MemorySegmentState { content: vec![] })
+            .content
+            .len()
+            .max(self.contexts[0].segments[segment.unscale()].content.len());
+
+        let vals = (0..len)
+            .map(|i| Some(self.get_with_init(MemoryAddress::new(0, segment, i))))
+            .collect::<Vec<_>>();
+
+        vals
+    }
+
     /// Returns a memory value, or 0 if the memory is unset. If we have some
     /// preinitialized segments (in interpreter mode), then the values might not
     /// be stored in memory yet. If the value in memory is not set and the
