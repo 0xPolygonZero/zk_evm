@@ -2013,12 +2013,12 @@ pub fn extract_block_public_values<T>(public_inputs: &[T]) -> &[T; PublicValuesT
 
 /// Computes the length added to the public inputs vector by
 /// [`CircuitBuilder::add_verifier_data_public_inputs`].
-pub fn verification_key_len<F, C, const D: usize>(circuit: &CircuitData<F, C, D>) -> usize
+pub const fn verification_key_len<F, C, const D: usize>(circuit: &CircuitData<F, C, D>) -> usize
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
     C::Hasher: AlgebraicHasher<F>,
 {
     circuit.verifier_only.circuit_digest.elements.len()
-        + (1 << circuit.common.config.fri_config.cap_height) * (NUM_HASH_OUT_ELTS)
+        + (1 << circuit.common.config.fri_config.cap_height) * NUM_HASH_OUT_ELTS
 }
