@@ -90,10 +90,10 @@ where
     let chain_id = cached_provider.as_provider().get_chain_id().await?;
 
     // For one block, we will fetch 128 previous blocks to get hashes instead of
-    // 256. But for two consecutive blocks (odd and even) we will fetch 256
-    // previous blocks in total. To overcome this, we add offset so that we
-    // always start fetching from the odd block and eventually skip additional
-    // block for even target_block_number.
+    // 256. But for two consecutive blocks (odd and even) we would fetch 256
+    // previous blocks in total. To overcome this, we add an offset so that we
+    // always start fetching from an odd index and eventually skip the additional
+    // block for an even `target_block_number`.
     let odd_offset: i128 = target_block_number as i128 % 2;
 
     let previous_block_numbers =
