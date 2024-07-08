@@ -127,19 +127,23 @@ impl SegmentProofSpan {
 
     /// Get a textual descriptor for the transaction proof.
     ///
-    /// Either the hex-encoded hash of the transaction or "Dummy" if the
-    /// transaction is not present.
+    /// Either the first 8 characters of the hex-encoded hash of the first and
+    /// last transactions, or "Dummy" if there is no transaction.
     fn get_descriptor(ir: &GenerationInputs) -> String {
         if ir.signed_txns.is_empty() {
             "Dummy".to_string()
         } else {
-            format!(
-                "{:x?}",
+            let first_encoding: [u8; 8] =
+                keccak(ir.signed_txns[0].clone())[..8].try_into().unwrap();
+            let last_encoding: [u8; 8] = keccak(
                 ir.signed_txns
-                    .iter()
-                    .map(|txn| keccak(txn.clone()))
-                    .collect::<Vec<_>>()
-            )
+                    .last()
+                    .expect("the vector of transactions is not empty")
+                    .clone(),
+            )[..8]
+                .try_into()
+                .unwrap();
+            format!("{:x?}..{:x?}", first_encoding, last_encoding)
         }
     }
 
