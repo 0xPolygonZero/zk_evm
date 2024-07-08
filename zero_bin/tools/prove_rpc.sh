@@ -59,7 +59,9 @@ RETRIES=${7:-0}
 OUTPUT_TO_TERMINAL="${OUTPUT_TO_TERMINAL:-false}"
 # Only generate proof by default
 RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
+
 mkdir -p $PROOF_OUTPUT_DIR
+
 if [ $IGNORE_PREVIOUS_PROOFS ]; then
     # Set checkpoint height to previous block number for the first block in range
     prev_proof_num=$(($1-1))
