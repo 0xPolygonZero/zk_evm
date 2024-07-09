@@ -125,7 +125,7 @@ impl BlockProverInput {
         self,
         _runtime: &Runtime,
         max_cpu_len_log: usize,
-        _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
+        previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         batch_size: usize,
         _save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
@@ -146,6 +146,12 @@ impl BlockProverInput {
         for txn in txs.into_iter() {
             simulate_all_segments_interpreter::<F>(txn, max_cpu_len_log)?;
         }
+
+        // Wait for previous block proof
+        let _prev = match previous {
+            Some(it) => Some(it.await?),
+            None => None,
+        };
 
         info!("Successfully generated witness for block {block_number}.");
 
