@@ -78,15 +78,13 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
     );
     yield_constr.constraint_transition(is_prover_input * (lv.is_kernel_mode - nv.is_kernel_mode));
 
-    // Check the helper value in the general columns.
+    // Check the helper value in the general columns. We do not need to enforce that
+    // it is set to 0 if the operation is a `PROVER_INPUT`, as the latter is a
+    // kernel-only instruction. This is enforced in the `decode` module.
     yield_constr.constraint(
         lv.op.push_prover_input
             * ((lv.is_kernel_mode + lv.general.push().push_prover_input_not_kernel) - P::ONES),
     );
-
-    // The general column should be not be set when the operation is a
-    // `PROVER_INPUT`.
-    yield_constr.constraint(is_prover_input * lv.general.push().push_prover_input_not_kernel);
 
     // If a non-CPU cycle row is followed by a CPU cycle row, then:
     //  - the `program_counter` of the CPU cycle row is `main` (the entry point of
@@ -115,12 +113,6 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
 
     let next_halt_state = builder.sub_extension(one, is_cpu_cycle_next);
 
-    let is_prover_input = builder.mul_sub_extension(
-        lv.op.push_prover_input,
-        lv.opcode_bits[5],
-        lv.op.push_prover_input,
-    );
-
     // Once we start executing instructions, then we continue until the end of the
     // table or we reach dummy padding rows. This, along with the constraints on
     // the first row, enforces that operation flags and the halt flag are
@@ -145,13 +137,20 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         yield_constr.constraint_transition(builder, kernel_constr);
 
         // Same constraints as before, for PROVER_INPUT.
+        let is_prover_input = builder.mul_sub_extension(
+            lv.op.push_prover_input,
+            lv.opcode_bits[5],
+            lv.op.push_prover_input,
+        );
         let pc_constr = builder.mul_add_extension(is_prover_input, pc_diff, is_prover_input);
         yield_constr.constraint_transition(builder, pc_constr);
         let kernel_constr = builder.mul_extension(is_prover_input, kernel_diff);
         yield_constr.constraint_transition(builder, kernel_constr);
     }
 
-    // Check the helper value in the general columns.
+    // Check the helper value in the general columns. We do not need to enforce that
+    // it is set to 0 if the operation is a `PROVER_INPUT`, as the latter is a
+    // kernel-only instruction. This is enforced in the `decode` module.
     {
         let temp = builder.add_extension(
             lv.is_kernel_mode,
@@ -159,16 +158,6 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         );
         let constr =
             builder.mul_sub_extension(lv.op.push_prover_input, temp, lv.op.push_prover_input);
-        yield_constr.constraint(builder, constr);
-    }
-
-    // The general column should be not be set when the operation is a
-    // `PROVER_INPUT`.
-    {
-        let constr = builder.mul_extension(
-            is_prover_input,
-            lv.general.push().push_prover_input_not_kernel,
-        );
         yield_constr.constraint(builder, constr);
     }
 
