@@ -20,7 +20,7 @@ use super::{
 const CIRCUITS_DIR: &str = "circuits/";
 const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
-const CARGO_WORKSPACE_DIR_ENV: &str = "CARGO_WORKSPACE_DIR";
+const ZK_EVM_WORKSPACE_DIR_ENV: &str = "ZK_EVM_WORKSPACE_DIR";
 
 fn get_serializers() -> (
     DefaultGateSerializer,
@@ -281,7 +281,7 @@ fn prover_to_disk(
 /// directory that lives in `tools/`. Otherwise, just use `circuits` in the
 /// current directory.
 fn relative_circuit_dir_path() -> String {
-    env::var(CARGO_WORKSPACE_DIR_ENV)
+    env::var(ZK_EVM_WORKSPACE_DIR_ENV)
         .map(|p| format!("{}tools/{}", p, CIRCUITS_DIR))
         .unwrap_or_else(|_| CIRCUITS_DIR.to_string())
 }
