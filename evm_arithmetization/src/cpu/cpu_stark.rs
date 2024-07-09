@@ -265,7 +265,10 @@ pub(crate) fn ctl_data_byte_packing_push<F: Field>() -> Vec<Column<F>> {
 pub(crate) fn ctl_filter_byte_packing_push<F: Field>() -> Filter<F> {
     let bit_col = Column::single(COL_MAP.opcode_bits[5]);
     Filter::new(
-        vec![(Column::single(COL_MAP.op.push_prover_input), bit_col)],
+        vec![(
+            Column::single(COL_MAP.general.push().push_prover_input_not_kernel),
+            bit_col,
+        )],
         vec![],
     )
 }

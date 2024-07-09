@@ -78,6 +78,12 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
     );
     yield_constr.constraint_transition(is_prover_input * (lv.is_kernel_mode - nv.is_kernel_mode));
 
+    // Check the helper value in the general columns.
+    yield_constr.constraint(
+        lv.op.push_prover_input
+            * (P::ONES - lv.is_kernel_mode - lv.general.push().push_prover_input_not_kernel),
+    );
+
     // If a non-CPU cycle row is followed by a CPU cycle row, then:
     //  - the `program_counter` of the CPU cycle row is `main` (the entry point of
     //    our kernel),
@@ -138,6 +144,17 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         yield_constr.constraint_transition(builder, pc_constr);
         let kernel_constr = builder.mul_extension(is_prover_input, kernel_diff);
         yield_constr.constraint_transition(builder, kernel_constr);
+    }
+
+    // Check the helper value in the general columns.
+    {
+        let not_kernel_mode = builder.sub_extension(one, lv.is_kernel_mode);
+        let diff = builder.sub_extension(
+            not_kernel_mode,
+            lv.general.push().push_prover_input_not_kernel,
+        );
+        let constr = builder.mul_extension(lv.op.push_prover_input, diff);
+        yield_constr.constraint(builder, constr);
     }
 
     // If a non-CPU cycle row is followed by a CPU cycle row, then:

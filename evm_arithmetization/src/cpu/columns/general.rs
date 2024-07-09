@@ -14,6 +14,7 @@ pub(crate) union CpuGeneralColumnsView<T: Copy> {
     jumps: CpuJumpsView<T>,
     shift: CpuShiftView<T>,
     stack: CpuStackView<T>,
+    push: CpuPushView<T>,
 }
 
 impl<T: Copy> CpuGeneralColumnsView<T> {
@@ -77,6 +78,18 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
     /// SAFETY: Each view is a valid interpretation of the underlying array.
     pub(crate) fn stack_mut(&mut self) -> &mut CpuStackView<T> {
         unsafe { &mut self.stack }
+    }
+
+    /// View of the columns required for the push operation.
+    /// SAFETY: Each view is a valid interpretation of the underlying array.
+    pub(crate) fn push(&self) -> &CpuPushView<T> {
+        unsafe { &self.push }
+    }
+
+    /// Mutable view of the columns required for the push operation.
+    /// SAFETY: Each view is a valid interpretation of the underlying array.
+    pub(crate) fn push_mut(&mut self) -> &mut CpuPushView<T> {
+        unsafe { &mut self.push }
     }
 }
 
@@ -180,6 +193,18 @@ pub(crate) struct CpuStackView<T: Copy> {
     pub(crate) stack_len_bounds_aux: T,
 }
 
+/// View of the first `CpuGeneralColumn` storing the product of the negated
+/// `is_kernel_mode` flag with the `push_prover_input` combined op flag, to
+/// filter out `PUSH` instructions from being range-checked when happening in
+/// the KERNEL context.
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub(crate) struct CpuPushView<T: Copy> {
+    /// Product of `push_prover_input` with the negated `is_kernel_mode` flag.
+    pub(crate) push_prover_input_not_kernel: T,
+    /// Reserve the unused columns.
+    _padding_columns: [T; NUM_SHARED_COLUMNS - 1],
+}
 /// The number of columns shared by all views of [`CpuGeneralColumnsView`].
 /// This is defined in terms of the largest view in order to determine the
 /// number of padding columns to add to each field without creating a cycle
@@ -195,3 +220,4 @@ const_assert!(size_of::<CpuLogicView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuJumpsView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuShiftView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuStackView<u8>>() == NUM_SHARED_COLUMNS);
+const_assert!(size_of::<CpuPushView<u8>>() == NUM_SHARED_COLUMNS);
