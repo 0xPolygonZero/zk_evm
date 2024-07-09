@@ -161,7 +161,21 @@ global account_found:
     %eq_const(1)
     %stack (cold_access, orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, cold_access, orig_payload_ptr)
     JUMP
-//DEBUG
+
+insert_new_account_with_values:
+    // stack: pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
+    %get_trie_data_size
+    // stack: payload_ptr, pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
+    %stack (payload_ptr, pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash) -> (payload_ptr, nonce, balance, storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr)
+    DUP1 SWAP2 MSTORE_GENERAL
+    // stack: payload_ptr, balance, storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    %increment DUP1 SWAP2 MSTORE_GENERAL
+    // stack: balance_ptr, storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    %increment DUP1 SWAP2 MSTORE_GENERAL
+    // stack: storage_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    %increment SWAP1 MSTORE_GENERAL
+    // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
+
 global insert_new_account:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     POP
@@ -215,29 +229,29 @@ global insert_new_account:
     JUMP
 
 global insert_account_with_overwrite:
-    // stack: addr, payload_ptr, retdest
+    // stack: addr, nonce, balance, storage_root_ptr, code_hash, retdest
     PROVER_INPUT(linked_list::insert_account)
-    // stack: pred_ptr/4, addr, payload_ptr, retdest
+    // stack: pred_ptr/4, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     %get_valid_account_ptr
-    // stack: pred_ptr, addr, payload_ptr, retdest
+    // stack: pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     DUP1
     MLOAD_GENERAL
     DUP1
-    // stack: pred_addr, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    // stack: pred_addr, pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     DUP4 GT
     DUP3 %eq_const(@SEGMENT_ACCOUNTS_LINKED_LIST)
     ADD // OR
     // If the predesessor is strictly smaller or the predecessor is the special
     // node with key @U256_MAX (and hence we're inserting a new minimum), then
     // we need to insert a new node.
-    %jumpi(insert_new_account)
-    // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
+    %jumpi(insert_new_account_with_values)
+    // stack: pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
     DUP3
     %assert_eq
-    // stack: pred_ptr, addr, payload_ptr, retdest
+    // stack: pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     
-    // stack: pred_ptr, addr, payload_ptr, retdest
+    // stack: pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     // Check that this is not a deleted node
     DUP1
     %add_const(3)
@@ -248,12 +262,22 @@ global insert_account_with_overwrite:
 
 account_found_with_overwrite:
     // The address was already in the list
-    // stack: pred_ptr, addr, payload_ptr, retdest
+    // stack: pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     // Load the the payload pointer and access counter
     %increment
     DUP1
-    // stack: payload_ptr_ptr, pred_ptr+1, addr, payload_ptr, retdest
-    DUP4 MSTORE_GENERAL
+    // stack: payload_ptr_ptr, pred_ptr+1, addr, nonce, balance, storage_root_ptr, code_hash, retdest
+    MLOAD_GENERAL
+    // stack: payload_ptr, pred_ptr+1, addr, nonce, balance, storage_root_ptr, code_hash, retdest
+    %stack (payload_ptr, pred_ptr_1, addr, nonce, balance, storage_root_ptr, code_hash) -> (payload_ptr, nonce, balance, storage_root_ptr, code_hash, pred_ptr_1, addr, payload_ptr)
+    DUP1 SWAP2 MSTORE_GENERAL
+    // stack: payload_ptr, balance, storage_root_ptr, code_hash, pred_ptr+1, addr, payload_ptr
+    %increment DUP1 SWAP2 MSTORE_GENERAL
+    // stack: balance_ptr, storage_root_ptr, code_hash, pred_ptr+1, addr, payload_ptr
+    %increment DUP1 SWAP2 MSTORE_GENERAL
+    // stack: storage_ptr, code_hash, pred_ptr+1, addr, payload_ptr
+    %increment SWAP1 MSTORE_GENERAL
+    // stack: pred_ptr+1, addr, payload_ptr
     %increment
     DUP1
     MLOAD_GENERAL

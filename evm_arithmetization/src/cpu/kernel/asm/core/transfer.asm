@@ -88,17 +88,8 @@ global add_eth_new_account:
     POP
     // stack: addr, amount, retdest
     DUP1 %journal_add_account_created
-    %get_trie_data_size // pointer to new account we're about to create
-    // stack: new_account_ptr, addr, amount, retdest
-    SWAP2
-    // stack: amount, addr, new_account_ptr, retdest
-    PUSH 0 %append_to_trie_data // nonce
-    %append_to_trie_data // balance
-    // stack: addr, new_account_ptr, retdest
-    PUSH 0 %append_to_trie_data // storage root pointer
-    PUSH @EMPTY_STRING_HASH %append_to_trie_data // code hash
-    // stack: addr, new_account_ptr, retdest
-    %addr_to_state_key
+    // stack: addr, amount, retdest
+    %stack (addr, amount) -> (addr, 0, amount, 0, @EMPTY_STRING_HASH) // nonce, balance, storage_ptr, code_hash
     // stack: key, new_account_ptr, retdest
     %jump(mpt_insert_state_trie)
 

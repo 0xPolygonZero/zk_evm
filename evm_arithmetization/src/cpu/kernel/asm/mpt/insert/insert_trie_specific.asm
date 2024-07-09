@@ -5,12 +5,12 @@
 // Post stack: (empty)
 // TODO: Have this take an address and do %mpt_insert_state_trie? To match mpt_read_state_trie.
 global mpt_insert_state_trie:
-    // stack: key, value_ptr, retdest
+    // stack: key, nonce, balance, storage_root_ptr, code_hash, retdest
     %insert_account_with_overwrite_no_return
     JUMP
 
 %macro mpt_insert_state_trie
-    %stack (key, value_ptr) -> (key, value_ptr, %%after)
+    %stack (key, once, balance, storage_root_ptr, code_hash) -> (key, once, balance, storage_root_ptr, code_hash, %%after)
     %jump(mpt_insert_state_trie)
 %%after:
 %endmacro
@@ -24,7 +24,7 @@ global mpt_insert_txn_trie:
     %stack (key, num_nibbles, txn_rlp_ptr)
         -> (num_nibbles, key, txn_rlp_ptr, mpt_insert_txn_trie_save)
     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_ROOT)
-    // stack: txn_trie_root_ptr, num_nibbles, key, txn_rlp_ptr, mpt_insert_state_trie_save, retdest
+    // stack: txn_trie_root_ptr, num_nibbles, key, txn_rlp_ptr, mpt_insert_txn_trie_save, retdest
     %jump(mpt_insert)
 
 mpt_insert_txn_trie_save:

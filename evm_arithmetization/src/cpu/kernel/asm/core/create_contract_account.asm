@@ -31,21 +31,11 @@
 %%do_insert:
     // stack: new_acct_value, address
     // Write the new account's data to MPT data, and get a pointer to it.
-    %get_trie_data_size
-    // stack: account_ptr, new_acct_value, address
-    PUSH 0 DUP4 %journal_add_nonce_change
-    PUSH 1 %append_to_trie_data // nonce = 1
-    // stack: account_ptr, new_acct_value, address
-    SWAP1 %append_to_trie_data // balance = new_acct_value
-    // stack: account_ptr, address
-    PUSH 0 %append_to_trie_data // storage_root = nil
-    // stack: account_ptr, address
-    PUSH @EMPTY_STRING_HASH %append_to_trie_data // code_hash = keccak('')
-    // stack: account_ptr, address
-    SWAP1
-    // stack: address, account_ptr
+    // stack: new_acct_value, address
+    PUSH 0 DUP3 %journal_add_nonce_change
+    %stack (new_acct_value, address) -> (address, 1, new_acct_value, 0, @EMPTY_STRING_HASH) // address, nonce=1, balance, storage_ptr, code_hash
     %addr_to_state_key
-    // stack: state_key, account_ptr
+    // stack: state_key, nonce=1, balance, storage_ptr, code_hash
     %mpt_insert_state_trie
     // stack: (empty)
     PUSH 0 // success
