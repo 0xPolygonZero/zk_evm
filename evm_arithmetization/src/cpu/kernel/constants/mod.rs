@@ -100,7 +100,7 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 5] = [
     // *Note*: Changing this will break some tests.
     (
         "ENCODED_EMPTY_NODE_ADDR",
-        hex!("0000000000000000000000000000000000000000000000000000000c00000000"),
+        hex!("0000000000000000000000000000000000000000000000000000000b00000000"),
     ),
     // 0x10000 = 2^16 bytes, much larger than any RLP blob the EVM could possibly create.
     (
@@ -112,14 +112,14 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 5] = [
     // *Note*: Changing this will break some tests.
     (
         "INITIAL_TXN_RLP_ADDR",
-        hex!("0000000000000000000000000000000000000000000000000000000c00000001"),
+        hex!("0000000000000000000000000000000000000000000000000000000b00000001"),
     ),
     // Address where the final registers start. It is the offset 6 within the
     // SEGMENT_REGISTERS_STATES.
     // *Note*: Changing this will break some tests.
     (
         "FINAL_REGISTERS_ADDR",
-        hex!("0000000000000000000000000000000000000000000000000000002200000006"),
+        hex!("0000000000000000000000000000000000000000000000000000002100000006"),
     ),
 ];
 
@@ -136,7 +136,7 @@ const HASH_CONSTANTS: [(&str, [u8; 32]); 2] = [
     ),
 ];
 
-const EC_CONSTANTS: [(&str, [u8; 32]); 20] = [
+const EC_CONSTANTS: [(&str, [u8; 32]); 25] = [
     (
         "U256_MAX",
         hex!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
@@ -152,6 +152,22 @@ const EC_CONSTANTS: [(&str, [u8; 32]); 20] = [
     (
         "BN_TWISTED_IM",
         hex!("009713b03af0fed4cd2cafadeed8fdf4a74fa084e52d1852e4a2bd0685c315d2"),
+    ),
+    (
+        "BN_ENDO_X_COORD_RE",
+        hex!("2fb347984f7911f74c0bec3cf559b143b78cc310c2c3330c99e39557176f553d"),
+    ),
+    (
+        "BN_ENDO_X_COORD_IM",
+        hex!("16c9e55061ebae204ba4cc8bd75a079432ae2a1d0b7c9dce1665d51c640fcba2"),
+    ),
+    (
+        "BN_ENDO_Y_COORD_RE",
+        hex!("063cf305489af5dcdc5ec698b6e2f9b9dbaae0eda9c95998dc54014671a0135a"),
+    ),
+    (
+        "BN_ENDO_Y_COORD_IM",
+        hex!("07c03cbcac41049a0704b5a7ec796f2b21807dc98fa25bd282d37f632623b0e3"),
     ),
     (
         "BN_SCALAR",
@@ -194,6 +210,11 @@ const EC_CONSTANTS: [(&str, [u8; 32]); 20] = [
     (
         "SECP_SCALAR",
         hex!("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"),
+    ),
+    (
+        "SECP_SCALAR_HALF",
+        // Corresponds to `ceil(SECP_SCALAR / 2)`.
+        hex!("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1"),
     ),
     (
         "SECP_GLV_BETA",

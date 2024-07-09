@@ -101,7 +101,7 @@ pub(crate) fn eval_packed_jump_jumpi<P: PackedField>(
     let empty_stack_filter = filter * (lv.general.stack().stack_inv_aux - P::ONES);
     yield_constr.constraint_transition(empty_stack_filter * channel.used);
 
-    // If `JUMP`, re-use the `JUMPI` logic, but setting the second input (the
+    // If `JUMP`, reuse the `JUMPI` logic, but setting the second input (the
     // predicate) to be 1. In other words, we implement `JUMP(dst)` as
     // `JUMPI(dst, cond=1)`.
     yield_constr.constraint(is_jump * (cond[0] - P::ONES));
@@ -236,7 +236,7 @@ pub(crate) fn eval_ext_circuit_jump_jumpi<F: RichField + Extendable<D>, const D:
         yield_constr.constraint_transition(builder, constr);
     }
 
-    // If `JUMP`, re-use the `JUMPI` logic, but setting the second input (the
+    // If `JUMP`, reuse the `JUMPI` logic, but setting the second input (the
     // predicate) to be 1. In other words, we implement `JUMP(dst)` as
     // `JUMPI(dst, cond=1)`.
     {

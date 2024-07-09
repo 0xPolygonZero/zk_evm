@@ -600,7 +600,7 @@ pub(crate) fn generate_next_segment<F: RichField>(
         segment_data.registers_after = updated_registers;
         Some((segment_data, partial_segment_data))
     } else {
-        None
+        panic!("Segment generation failed");
     }
 }
 

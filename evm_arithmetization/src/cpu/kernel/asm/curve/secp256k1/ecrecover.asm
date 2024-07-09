@@ -175,6 +175,10 @@ pubkey_to_addr:
     PUSH @SECP_SCALAR
 %endmacro
 
+%macro secp_scalar_half
+    PUSH @SECP_SCALAR_HALF
+%endmacro
+
 // Return u256::MAX which is used to indicate the input was invalid.
 %macro ecrecover_invalid_input
     // stack: retdest

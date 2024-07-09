@@ -1,0 +1,21 @@
+[package]
+name = "smt_trie"
+description = "Types and utility functions for building/working with Polygon Hermez Sparse Merkle Trees."
+version = "0.1.0"
+authors = ["William Borgeaud <williamborgeaud@gmail.com>"]
+readme = "README.md"
+categories = ["cryptography"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ethereum-types = { workspace = true }
+hex-literal = { workspace = true }
+plonky2 = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }
