@@ -100,7 +100,7 @@ where
         std::iter::successors(Some(target_block_number as i128 - 1 + odd_offset), |&it| {
             Some(it - 1)
         })
-        .take(PREVIOUS_HASHES_COUNT)
+        .take(PREVIOUS_HASHES_COUNT + 1)
         .filter(|i| *i >= 0)
         .collect::<Vec<_>>();
     let concurrency = previous_block_numbers.len();
