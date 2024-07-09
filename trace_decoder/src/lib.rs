@@ -103,9 +103,9 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
 
-/// Core payload needed to generate a proof for a block. Note that the scheduler
-/// may need to request some additional data from the client along with this in
-/// order to generate a proof.
+/// Core payload needed to generate proof for a block.
+/// Additional data retrievable from the blockchain node (using standard ETH RPC
+/// API) may be needed for proof generation.
 ///
 /// The trie preimages are the hashed partial tries at the
 /// start of the block. A [TxnInfo] contains all the transaction data
@@ -231,12 +231,12 @@ pub struct TxnTrace {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub storage_read: Option<Vec<H256>>,
 
-    /// Account storage addresses that were mutated by the txn along with their
+    /// Account storage locations that were mutated by the txn along with their
     /// new value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub storage_written: Option<HashMap<H256, U256>>,
 
-    /// Contract code that this address accessed.
+    /// Contract code that this account has accessed or created
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code_usage: Option<ContractCodeUsage>,
 
