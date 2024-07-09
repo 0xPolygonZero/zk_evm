@@ -563,8 +563,13 @@ impl ProcessedBlockTrace {
     fn add_withdrawals_to_txns(
         txn_ir: &mut [GenerationInputs],
         final_trie_state: &mut PartialTrieState,
-        withdrawals: Vec<(Address, U256)>,
+        mut withdrawals: Vec<(Address, U256)>,
     ) -> TraceParsingResult<()> {
+        // Scale withdrawals amounts.
+        for (_addr, amt) in withdrawals.iter_mut() {
+            *amt = eth_to_gwei(*amt)
+        }
+
         let withdrawals_with_hashed_addrs_iter = || {
             withdrawals
                 .iter()
@@ -617,7 +622,7 @@ impl ProcessedBlockTrace {
             })?;
             let mut acc_data = account_from_rlped_bytes(acc_bytes)?;
 
-            acc_data.balance += eth_to_gwei(amt);
+            acc_data.balance += amt;
 
             state
                 .insert(h_addr_nibs, rlp::encode(&acc_data).to_vec())
