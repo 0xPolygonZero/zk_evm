@@ -90,6 +90,7 @@ global add_eth_new_account:
     DUP1 %journal_add_account_created
     // stack: addr, amount, retdest
     %stack (addr, amount) -> (addr, 0, amount, 0, @EMPTY_STRING_HASH) // nonce, balance, storage_ptr, code_hash
+    %addr_to_state_key
     // stack: key, new_account_ptr, retdest
     %jump(mpt_insert_state_trie)
 
