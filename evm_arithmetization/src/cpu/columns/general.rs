@@ -193,15 +193,14 @@ pub(crate) struct CpuStackView<T: Copy> {
     pub(crate) stack_len_bounds_aux: T,
 }
 
-/// View of the first `CpuGeneralColumn` storing the product of the negated
-/// `is_kernel_mode` flag with the `push_prover_input` combined op flag, to
-/// filter out `PUSH` instructions from being range-checked when happening in
-/// the KERNEL context.
+/// View of the first `CpuGeneralColumn` storing the negation of
+/// `is_kernel_mode` flag, to filter out `PUSH` instructions from being
+/// range-checked when happening in the KERNEL context.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct CpuPushView<T: Copy> {
     /// Product of `push_prover_input` with the negated `is_kernel_mode` flag.
-    pub(crate) push_prover_input_not_kernel: T,
+    pub(crate) is_not_kernel: T,
     /// Reserve the unused columns.
     _padding_columns: [T; NUM_SHARED_COLUMNS - 1],
 }

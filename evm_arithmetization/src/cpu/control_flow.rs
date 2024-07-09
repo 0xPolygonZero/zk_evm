@@ -82,8 +82,7 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
     // it is set to 0 if the operation is a `PROVER_INPUT`, as the latter is a
     // kernel-only instruction. This is enforced in the `decode` module.
     yield_constr.constraint(
-        lv.op.push_prover_input
-            * ((lv.is_kernel_mode + lv.general.push().push_prover_input_not_kernel) - P::ONES),
+        lv.op.push_prover_input * ((lv.is_kernel_mode + lv.general.push().is_not_kernel) - P::ONES),
     );
 
     // If a non-CPU cycle row is followed by a CPU cycle row, then:
@@ -152,10 +151,7 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     // it is set to 0 if the operation is a `PROVER_INPUT`, as the latter is a
     // kernel-only instruction. This is enforced in the `decode` module.
     {
-        let temp = builder.add_extension(
-            lv.is_kernel_mode,
-            lv.general.push().push_prover_input_not_kernel,
-        );
+        let temp = builder.add_extension(lv.is_kernel_mode, lv.general.push().is_not_kernel);
         let constr =
             builder.mul_sub_extension(lv.op.push_prover_input, temp, lv.op.push_prover_input);
         yield_constr.constraint(builder, constr);

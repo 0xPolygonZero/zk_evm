@@ -265,7 +265,7 @@ pub(crate) fn ctl_data_byte_packing_push<F: Field>() -> Vec<Column<F>> {
 pub(crate) fn ctl_filter_byte_packing_push<F: Field>() -> Filter<F> {
     Filter::new(
         vec![(
-            Column::single(COL_MAP.general.push().push_prover_input_not_kernel),
+            Column::single(COL_MAP.general.push().is_not_kernel),
             Column::single(COL_MAP.op.push_prover_input),
         )],
         vec![],

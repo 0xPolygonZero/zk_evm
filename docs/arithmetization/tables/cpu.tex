@@ -71,5 +71,5 @@ overflow and be zero if some of the limbs are non-zero.
 before) the instruction. \texttt{stack\_len\_bounds\_ aux} is used to check that the stack doesn't overflow in user mode. We use the last four columns to prevent conflicts with the other general columns.
 See \ref{stackhandling} for more details.
     \label{push_general_view}
-    \item  \texttt{Push}: \texttt{push\_prover\_input\_not\_kernel} is used to skip range-checking the output of a PUSH operation when we are in privileged mode, as the kernel code is known and trusted.
+    \item  \texttt{Push}: \texttt{is\_not\_kernel} is used to skip range-checking the output of a PUSH operation when we are in privileged mode, as the kernel code is known and trusted.
 \end{itemize}

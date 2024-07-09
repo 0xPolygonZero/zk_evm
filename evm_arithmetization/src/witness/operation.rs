@@ -388,7 +388,7 @@ pub(crate) fn generate_push<F: Field, T: Transition<F>>(
 
     // This is necessary to filter out PUSH instructions from the BytePackingStark
     // CTl when happening in the KERNEL context.
-    row.general.push_mut().push_prover_input_not_kernel = F::ONE - row.is_kernel_mode;
+    row.general.push_mut().is_not_kernel = F::ONE - row.is_kernel_mode;
 
     if code_context != KERNEL_CONTEXT {
         byte_packing_log(state, base_address, bytes);
