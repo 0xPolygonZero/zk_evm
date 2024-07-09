@@ -138,6 +138,7 @@ where
         .into_iter()
         .flatten()
         .skip(odd_offset as usize)
+        .take(PREVIOUS_HASHES_COUNT)
         .for_each(|(hash, block_num)| {
             if let (Some(hash), Some(block_num)) = (hash, block_num) {
                 // Most recent previous block hash is expected at the end of the array
