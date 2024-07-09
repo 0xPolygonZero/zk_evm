@@ -55,7 +55,7 @@ else
         # These sizes are configured specifically for block 19240705. Don't use this in other scenarios.
         echo "Using specific circuit sizes for witness_b19240705.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..19"
-        export BYTE_PACKING_CIRCUIT_SIZE="12..15"
+        export BYTE_PACKING_CIRCUIT_SIZE="11..15"
         export CPU_CIRCUIT_SIZE="18..21"
         export KECCAK_CIRCUIT_SIZE="15..18"
         export KECCAK_SPONGE_CIRCUIT_SIZE="10..13"
