@@ -30,7 +30,7 @@ use crate::{
         OtherBlockData, TrieRootHash, TxnIdx, EMPTY_ACCOUNT_BYTES_RLPED,
         ZERO_STORAGE_SLOT_VAL_RLPED,
     },
-    utils::{hash, optional_field, optional_field_hex, update_val_if_some},
+    utils::{eth_to_gwei, hash, optional_field, optional_field_hex, update_val_if_some},
 };
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
@@ -617,7 +617,7 @@ impl ProcessedBlockTrace {
             })?;
             let mut acc_data = account_from_rlped_bytes(acc_bytes)?;
 
-            acc_data.balance += amt;
+            acc_data.balance += eth_to_gwei(amt);
 
             state
                 .insert(h_addr_nibs, rlp::encode(&acc_data).to_vec())
