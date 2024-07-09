@@ -70,4 +70,6 @@ overflow and be zero if some of the limbs are non-zero.
     \item  \texttt{Stack}: \texttt{stack\_inv}, \texttt{stack\_inv\_aux} and \texttt{stack\_inv\_aux\_2} are used by popping-only (resp. pushing-only) instructions to check if the stack is empty after (resp. was empty
 before) the instruction. \texttt{stack\_len\_bounds\_ aux} is used to check that the stack doesn't overflow in user mode. We use the last four columns to prevent conflicts with the other general columns.
 See \ref{stackhandling} for more details.
+    \label{push_general_view}
+    \item  \texttt{Push}: \texttt{push\_prover\_input\_not\_kernel} is used to skip range-checking the output of a PUSH operation when we are in privileged mode, as the kernel code is known and trusted.
 \end{itemize}
