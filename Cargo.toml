@@ -1,19 +1,19 @@
 [workspace]
 members = [
-    "mpt_trie",
-    "smt_trie",
-    "proof_gen",
-    "trace_decoder",
-    "evm_arithmetization",
-    "proc_macro",
-    "zero_bin/leader",
-    "zero_bin/worker",
-    "zero_bin/common",
-    "zero_bin/ops",
-    "zero_bin/verifier",
-    "zero_bin/rpc",
-    "zero_bin/prover",
     "compat",
+    "evm_arithmetization",
+    "mpt_trie",
+    "proc_macro",
+    "proof_gen",
+    "smt_trie",
+    "trace_decoder",
+    "zero_bin/common",
+    "zero_bin/leader",
+    "zero_bin/ops",
+    "zero_bin/prover",
+    "zero_bin/rpc",
+    "zero_bin/verifier",
+    "zero_bin/worker",
 ]
 resolver = "2"
 
@@ -71,6 +71,7 @@ impl-serde = "0.4.0"
 itertools = "0.13.0"
 keccak-hash = "0.10.0"
 log = "0.4.21"
+lru = "0.12.3"
 mpt_trie = { path = "mpt_trie", version = "0.3.0" }
 num = "0.4.3"
 num-bigint = "0.4.5"
@@ -109,7 +110,6 @@ u4 = "0.1.0"
 uint = "0.9.5"
 url = "2.5.2"
 winnow = "0.6.13"
-
 
 # zero-bin related dependencies
 ops = { path = "zero_bin/ops" }
