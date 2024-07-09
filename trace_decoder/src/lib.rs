@@ -72,11 +72,10 @@
 /// 1. Ethereum nodes emit a bunch of binary [`wire::Instruction`]s, which are
 ///    parsed in [`wire`].
 /// 2. They are passed to one of two "frontends", depending on the node
-///    - [`hermez_cdk_erigon`], which contains an [`smt_trie`].
-///    - [`zero_jerigon`], which contains an [`mpt_trie`].
-/// 3. The frontend ([`hermez_cdk_erigon::Frontend`] or
-///    [`zero_jerigon::Frontend`]) is passed to the "backend", which lowers to
-///    [`evm_arithmetization::GenerationInputs`].
+///    - [`type2`], which contains an [`smt_trie`].
+///    - [`type1`], which contains an [`mpt_trie`].
+/// 3. The frontend ([`type1::Frontend`] or [`type2::Frontend`]) is passed to
+///    the "backend", which lowers to [`evm_arithmetization::GenerationInputs`].
 ///
 /// Deviations from the specification are signalled with `BUG(spec)` in the
 /// code.
@@ -288,7 +287,7 @@ pub struct BlockLevelData {
     pub withdrawals: Vec<(Address, U256)>,
 }
 
-/// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+/// TODO(0xaatif): <https://github.com/0xPolygonZero/zk_evm/issues/275>
 ///                document this once we have the API finalized
 pub fn entrypoint(
     trace: BlockTrace,
