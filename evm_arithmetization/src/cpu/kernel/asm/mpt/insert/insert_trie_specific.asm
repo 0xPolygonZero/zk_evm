@@ -10,7 +10,7 @@ global mpt_insert_state_trie:
     JUMP
 
 %macro mpt_insert_state_trie
-    %stack (key, once, balance, storage_root_ptr, code_hash) -> (key, once, balance, storage_root_ptr, code_hash, %%after)
+    %stack (key, nonce, balance, storage_root_ptr, code_hash) -> (key, nonce, balance, storage_root_ptr, code_hash, %%after)
     %jump(mpt_insert_state_trie)
 %%after:
 %endmacro

@@ -71,7 +71,7 @@ global init_linked_lists:
 %endmacro
 
 %macro insert_account_with_overwrite
-    %stack (addr, ptr) -> (addr, ptr, %%after)
+    %stack (addr, nonce, balance, storage_ptr, code_hash) -> (addr, nonce, balance, storage_ptr, code_hash, %%after)
     %jump(insert_account_with_overwrite)
 %%after:
     // stack: cold_access
@@ -166,14 +166,14 @@ insert_new_account_with_values:
     // stack: pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     %get_trie_data_size
     // stack: payload_ptr, pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash, retdest
-    %stack (payload_ptr, pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash) -> (payload_ptr, nonce, balance, storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr)
-    DUP1 SWAP2 MSTORE_GENERAL
-    // stack: payload_ptr, balance, storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
-    %increment DUP1 SWAP2 MSTORE_GENERAL
-    // stack: balance_ptr, storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
-    %increment DUP1 SWAP2 MSTORE_GENERAL
-    // stack: storage_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
-    %increment SWAP1 MSTORE_GENERAL
+    %stack (payload_ptr, pred_addr, pred_ptr, addr, nonce, balance, storage_root_ptr, code_hash) -> (nonce, balance, storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr)
+    %append_to_trie_data
+    // stack: balance, storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    %append_to_trie_data
+    // stack: storage_root_ptr, code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    %append_to_trie_data
+    // stack: code_hash, pred_addr, pred_ptr, addr, payload_ptr, retdest
+    %append_to_trie_data
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
 
 global insert_new_account:
@@ -270,13 +270,13 @@ account_found_with_overwrite:
     MLOAD_GENERAL
     // stack: payload_ptr, pred_ptr+1, addr, nonce, balance, storage_root_ptr, code_hash, retdest
     %stack (payload_ptr, pred_ptr_1, addr, nonce, balance, storage_root_ptr, code_hash) -> (payload_ptr, nonce, balance, storage_root_ptr, code_hash, pred_ptr_1, addr, payload_ptr)
-    DUP1 SWAP2 MSTORE_GENERAL
+    SWAP1 DUP2 %mstore_trie_data
     // stack: payload_ptr, balance, storage_root_ptr, code_hash, pred_ptr+1, addr, payload_ptr
-    %increment DUP1 SWAP2 MSTORE_GENERAL
+    %increment SWAP1 DUP2 %mstore_trie_data
     // stack: balance_ptr, storage_root_ptr, code_hash, pred_ptr+1, addr, payload_ptr
-    %increment DUP1 SWAP2 MSTORE_GENERAL
+    %increment SWAP1 DUP2 %mstore_trie_data
     // stack: storage_ptr, code_hash, pred_ptr+1, addr, payload_ptr
-    %increment SWAP1 MSTORE_GENERAL
+    %increment %mstore_trie_data
     // stack: pred_ptr+1, addr, payload_ptr
     %increment
     DUP1
