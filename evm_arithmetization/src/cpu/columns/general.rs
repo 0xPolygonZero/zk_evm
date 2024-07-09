@@ -117,7 +117,7 @@ pub(crate) struct CpuExceptionView<T: Copy> {
     /// Exception code as little-endian bits.
     pub(crate) exc_code_bits: [T; 3],
     /// Reserve the unused columns.
-    _padding_columns: [T; NUM_UNION_COLUMNS - 3],
+    _padding_columns: [T; NUM_SHARED_COLUMNS - 3],
 }
 
 /// View of the `CpuGeneralColumns` storing pseudo-inverses used to prove logic
@@ -143,7 +143,7 @@ pub(crate) struct CpuJumpsView<T: Copy> {
     /// Pseudoinverse of `cond.iter().sum()`. Used to check `should_jump`.
     pub(crate) cond_sum_pinv: T,
     /// Reserve the unused columns.
-    _padding_columns: [T; NUM_UNION_COLUMNS - 2],
+    _padding_columns: [T; NUM_SHARED_COLUMNS - 2],
 }
 
 /// View of the first `CpuGeneralColumns` storing a pseudoinverse used to prove
@@ -155,7 +155,7 @@ pub(crate) struct CpuShiftView<T: Copy> {
     /// sum(displacement[1..]) or zero if the sum is zero.
     pub(crate) high_limb_sum_inv: T,
     /// Reserve the unused columns.
-    _padding_columns: [T; NUM_UNION_COLUMNS - 1],
+    _padding_columns: [T; NUM_SHARED_COLUMNS - 1],
 }
 
 /// View of the last four `CpuGeneralColumns` storing stack-related variables.
@@ -168,7 +168,7 @@ pub(crate) struct CpuStackView<T: Copy> {
     /// Reserve the unused columns at the beginning. This allows `Self` to
     /// coexist with any view that uses only the first four columns (i.e. all
     /// except `CpuLogicView`).
-    _unused: [T; NUM_UNION_COLUMNS - 4],
+    _unused: [T; NUM_SHARED_COLUMNS - 4],
     /// Pseudoinverse of `stack_len - num_pops`.
     pub(crate) stack_inv: T,
     /// stack_inv * stack_len.
@@ -180,16 +180,13 @@ pub(crate) struct CpuStackView<T: Copy> {
     pub(crate) stack_len_bounds_aux: T,
 }
 
-/// Number of columns shared by all the views of `CpuGeneralColumnsView`.
-/// `u8` is guaranteed to have a `size_of` of 1.
-pub(crate) const NUM_SHARED_COLUMNS: usize = size_of::<CpuGeneralColumnsView<u8>>();
-
-/// The number of columns in the largest field of [`CpuGeneralColumnsView`].
-/// We assert that this is the same as [`NUM_SHARED_COLUMNS`], but we define
-/// it in order to determine the number of padding columns to add to each field
-/// without creating a cycle for rustc.
-const NUM_UNION_COLUMNS: usize = size_of::<CpuLogicView<u8>>();
-const_assert!(NUM_UNION_COLUMNS == NUM_SHARED_COLUMNS);
+/// The number of columns shared by all views of [`CpuGeneralColumnsView`].
+/// This is defined in terms of the largest view in order to determine the
+/// number of padding columns to add to each field without creating a cycle
+/// for rustc.
+/// NB: `u8` is guaranteed to have a `size_of` of 1.
+pub(crate) const NUM_SHARED_COLUMNS: usize = size_of::<CpuLogicView<u8>>();
+const_assert!(NUM_SHARED_COLUMNS == size_of::<CpuGeneralColumnsView<u8>>());
 
 /// Assert that each field of the [`CpuGeneralColumnsView`] union contains the
 /// correct number of columns.
