@@ -12,18 +12,23 @@ global insert_all_accounts:
     DUP1
     %eq_const(@U256_MAX)
     %jumpi(no_more_accounts)
+    // stack: key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP4
     %increment
     MLOAD_GENERAL
+global debug_account_ptr:
     // stack: account_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %add_const(2)
     DUP1
     %mload_trie_data
+global debug_storage_root_ptr:
     // stack: storage_root_ptr, storage_root_ptr_ptr, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %stack
         (storage_root_ptr, storage_root_ptr_ptr, key, storage_ptr_ptr) ->
         (key, storage_ptr_ptr, storage_root_ptr, after_insert_all_slots, storage_root_ptr_ptr, key)
     %jump(insert_all_slots)
+
+global debug_after_insert_all_slots:
 after_insert_all_slots:
     // stack: storage_ptr_ptr', storage_root_ptr', storage_root_ptr_ptr, key, root_ptr, account_ptr_ptr, retdest
     SWAP2

@@ -139,13 +139,13 @@ where
     let type_of_trie = PartialTrieType::of(trie) as u32;
     if type_of_trie > 0 {
         trie_data.push(Some(type_of_trie.into()));
+        log::debug!("pushed hash node at {node_ptr} with val = {:?}", trie_data[node_ptr]);
     }
 
     match trie.deref() {
         Node::Empty => Ok(0),
         Node::Hash(h) => {
             trie_data.push(Some(h2u(*h)));
-
             Ok(node_ptr)
         }
         Node::Branch { children, value } => {
@@ -221,7 +221,6 @@ fn load_state_trie(
         Node::Empty => Ok(0),
         Node::Hash(h) => {
             trie_data.push(Some(h2u(*h)));
-
             Ok(node_ptr)
         }
         Node::Branch { children, value } => {

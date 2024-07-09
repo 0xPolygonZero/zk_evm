@@ -52,6 +52,7 @@ global debug_skip:
 global mpt_set_storage_payload:
     // stack: node_ptr, storage_ptr_ptr, retdest
     DUP1 %mload_trie_data
+global debug_storage_node_type:
     // stack: node_type, node_ptr, storage_ptr_ptr, retdest
     // Increment node_ptr, so it points to the node payload instead of its type.
     SWAP1 %increment SWAP1
@@ -142,6 +143,10 @@ set_payload_leaf:
     // stack account_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
     %add_const(2)
     %mload_trie_data // storage_root_ptr = account[2]
+
+    DUP1 %mload_trie_data
+global debug_node_type:
+    POP
     // stack storage_root_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
     %stack
         (storage_root_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr) ->
@@ -150,13 +155,22 @@ set_payload_leaf:
 after_set_storage_payload:
     // stack: storage_ptr_ptr', storage_root_ptr, payload_ptr_ptr, account_ptr_ptr, retdest
     DUP4
+global debueg_the_intial_ptr:
     MLOAD_GENERAL // load the next payload pointer in the linked list
     DUP1 %add_const(2) // new_storage_root_ptr_ptr = payload_ptr[2]
     // stack: new_storage_root_ptr_ptr, new_payload_ptr, storage_root_ptr, storage_ptr_ptr', payload_ptr_ptr, account_ptr_ptr, retdest
+    // Load also the old "dynamic" payload for storing the storage_root_ptr
+    DUP6 %decrement
+global debug_the_dyn_ptr:
+    MLOAD_GENERAL
+    %add_const(2) // dyn_storage_root_ptr_ptr = dyn_paylod_ptr[2]
     %stack
-        (new_storage_root_ptr_ptr, new_payload_ptr, storage_ptr_ptr_p, storage_root_ptr, payload_ptr_ptr, account_ptr_ptr) ->
-        (new_storage_root_ptr_ptr, storage_root_ptr, payload_ptr_ptr, new_payload_ptr, account_ptr_ptr, storage_ptr_ptr_p)
-    %mstore_trie_data // The account in the linked list has no storage root so we need to manually set it.
+        (dyn_storage_root_ptr_ptr, new_storage_root_ptr_ptr, new_payload_ptr, storage_ptr_ptr_p, storage_root_ptr, payload_ptr_ptr, account_ptr_ptr) ->
+        (new_storage_root_ptr_ptr, storage_root_ptr, dyn_storage_root_ptr_ptr, storage_root_ptr, payload_ptr_ptr, new_payload_ptr, account_ptr_ptr, storage_ptr_ptr_p)
+global debug_setting_intial_account_ptr:
+    %mstore_trie_data // The initial account pointer in the linked list has no storage root so we need to manually set it.
+global debug_setting_dyn_account_storage:
+    %mstore_trie_data // The dynamic account pointer in the linked list has no storage root so we need to manually set it.
     %mstore_trie_data // Set the leaf payload pointing to next account in the linked list.
     // stack: account_ptr_ptr, storage_ptr_ptr', retdest
     %add_const(4) // The next pointer is at distance 4

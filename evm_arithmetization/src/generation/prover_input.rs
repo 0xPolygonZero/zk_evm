@@ -80,17 +80,20 @@ impl<F: Field> GenerationState<F> {
             "state" => match self.trie_root_ptrs.state_root_ptr {
                 Some(state_root_ptr) => Ok(state_root_ptr),
                 None => {
-                    load_state_mpt(
+                    let n = load_state_mpt(
                         &self.inputs.tries,
                         &mut self.memory.contexts[0].segments[Segment::TrieData.unscale()].content,
-                    )
+                    )?;
+                    log::debug!("guessed state trie = {:?}", get_state_trie::<HashedPartialTrie>(&self.memory, n));
+                    Ok(n)
                 }
             }
             .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             "trie_data_size" => Ok(U256::from(
-                self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                self.memory
+                .contexts[0].segments[Segment::TrieData.unscale()]
                     .content
                     .len(),
             )),

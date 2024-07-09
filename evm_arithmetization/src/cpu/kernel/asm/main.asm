@@ -109,6 +109,8 @@ global perform_final_checks:
     %pop3
 
     PROVER_INPUT(trie_ptr::state)
+
+global debug_state_trie_ptr:
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     %set_initial_tries
     %get_trie_data_size
