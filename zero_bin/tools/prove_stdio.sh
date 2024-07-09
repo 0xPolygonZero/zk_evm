@@ -52,18 +52,28 @@ if [[ $TEST_ONLY == "test_only" ]]; then
     export MEMORY_CIRCUIT_SIZE="17..18"
 else
     if [[ $INPUT_FILE == *"witness_b19240705"* ]]; then
-      # These sizes are configured specifically for block 19240705. Don't use this in other scenarios
+        # These sizes are configured specifically for block 19240705. Don't use this in other scenarios.
         echo "Using specific circuit sizes for witness_b19240705.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..19"
-        export BYTE_PACKING_CIRCUIT_SIZE="16..19"
+        export BYTE_PACKING_CIRCUIT_SIZE="12..15"
         export CPU_CIRCUIT_SIZE="18..21"
         export KECCAK_CIRCUIT_SIZE="15..18"
         export KECCAK_SPONGE_CIRCUIT_SIZE="10..13"
         export LOGIC_CIRCUIT_SIZE="13..17"
         export MEMORY_CIRCUIT_SIZE="20..23"
+    elif [[ $INPUT_FILE == *"witness_b2_b7"* ]]; then
+        # These sizes are configured specifically for custom small blocks. Don't use this in other scenarios.
+        echo "Using specific circuit sizes for witness_b2_b7.json"
+        export ARITHMETIC_CIRCUIT_SIZE="16..17"
+        export BYTE_PACKING_CIRCUIT_SIZE="9..11"
+        export CPU_CIRCUIT_SIZE="16..17"
+        export KECCAK_CIRCUIT_SIZE="14..15"
+        export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
+        export LOGIC_CIRCUIT_SIZE="12..13"
+        export MEMORY_CIRCUIT_SIZE="18..19"
     else
         export ARITHMETIC_CIRCUIT_SIZE="16..23"
-        export BYTE_PACKING_CIRCUIT_SIZE="9..21"
+        export BYTE_PACKING_CIRCUIT_SIZE="8..21"
         export CPU_CIRCUIT_SIZE="12..25"
         export KECCAK_CIRCUIT_SIZE="14..20"
         export KECCAK_SPONGE_CIRCUIT_SIZE="9..15"
