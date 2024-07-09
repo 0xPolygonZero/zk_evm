@@ -54,59 +54,24 @@ async fn main() -> Result<()> {
     // debug!("Initializing the `tracing` logger");
     // init::tracing();
 
+    //------------------------------------------------------------------------
+    // Request queue
+    //------------------------------------------------------------------------
+
+    info!("Initializing the request queue");
     let (tx, mut rx) = tokio::sync::mpsc::channel::<ProveBlocksInput>(50);
 
-    // Start the receiving handling tasks
-    // tokio::task::spawn(process_posts(rx));
-
-    // Store it in an Arc
+    // Store it in a Data for server
     let post_queue = web::Data::new(tx);
-
-    //------------------------------------------------------------------------
-    // Server
-    //------------------------------------------------------------------------
-
-    debug!("Setting up server endpoint");
-
-    let server_addr = match env::var(SERVER_ADDR_ENVKEY) {
-        Ok(addr) => {
-            info!("Retrieved server address: {}", addr);
-            addr
-        }
-        Err(env::VarError::NotPresent) => {
-            warn!("Using default server address: {}", DFLT_SERVER_ADDR);
-            String::from(DFLT_SERVER_ADDR)
-        }
-        Err(env::VarError::NotUnicode(os_str)) => {
-            error!("Non-unicode server address: {:?}", os_str);
-            panic!("Non-unicode server address: {:?}", os_str);
-        }
-    };
-
-    info!("Starting HTTP Server: {}", server_addr);
-
-    // Set up the server
-    let server = match HttpServer::new(move || {
-        App::new()
-            .app_data(post_queue.clone())
-            .service(web::resource("/").route(web::post().to(handle_post)))
-            .route("/health", web::get().to(handle_health))
-    })
-    .workers(NUM_SERVER_WORKERS)
-    .bind(server_addr)
-    {
-        Ok(item) => item,
-        Err(err) => panic!("Failed to start the server: {}", err),
-    };
-
-    tokio::task::spawn(server.run());
 
     //------------------------------------------------------------------------
     // Runtime
     //------------------------------------------------------------------------
 
+    info!("Starting to build Paladin Runtime");
+
     let runtime = {
-        debug!("Attempting to build paladin config for Runtime");
+        info!("Attempting to build paladin config for Runtime");
         let config = build_paladin_config_from_env();
 
         debug!("Determining if should initialize a prover state config...");
@@ -143,6 +108,7 @@ async fn main() -> Result<()> {
                 );
             }
         }
+
         info!("Building Paladin Runtime");
         match Runtime::from_config(&config, register()).await {
             Ok(runtime) => {
@@ -157,20 +123,71 @@ async fn main() -> Result<()> {
         }
     };
 
+    debug!("Wrapping Paladin Runtime in Arc");
     let runtime_arc = Arc::new(runtime);
 
+    //------------------------------------------------------------------------
+    // Server
+    //------------------------------------------------------------------------
+
+    debug!("Setting up server endpoint");
+
+    let server_addr = match env::var(SERVER_ADDR_ENVKEY) {
+        Ok(addr) => {
+            info!("Retrieved server address: {}", addr);
+            addr
+        }
+        Err(env::VarError::NotPresent) => {
+            warn!("Using default server address: {}", DFLT_SERVER_ADDR);
+            String::from(DFLT_SERVER_ADDR)
+        }
+        Err(env::VarError::NotUnicode(os_str)) => {
+            error!("Non-unicode server address: {:?}", os_str);
+            panic!("Non-unicode server address: {:?}", os_str);
+        }
+    };
+
+    // Set up the server
+    let server = match HttpServer::new(move || {
+        App::new()
+            .app_data(post_queue.clone())
+            .service(web::resource("/").route(web::post().to(handle_post)))
+            .route("/health", web::get().to(handle_health))
+    })
+    .workers(NUM_SERVER_WORKERS)
+    .bind(server_addr.as_str())
+    {
+        Ok(item) => item,
+        Err(err) => panic!("Failed to start the server: {}", err),
+    };
+
+    // Move the http server to its own tokio thread
+    info!("Starting HTTP Server: {}", server_addr);
+    tokio::task::spawn(server.run());
+
     // Start the processing loop
+    info!("Starting the processing loop.");
+    let mut run_cnt: usize = 0;
     loop {
+        run_cnt += 1;
+        info!("Awaiting request for run {} in current session.", run_cnt);
         match rx.recv().await {
-            Some(input) => match ManyProver::new(input, runtime_arc.clone()).await {
-                Ok(mut manyprover) => match manyprover.prove_blocks().await {
-                    Ok(_) => info!("Starting to prove blocks."),
-                    Err(err) => error!("Critical error: {}", err),
-                },
-                Err(err) => error!("Critical configuration error: {}", err),
-            },
+            Some(input) => {
+                info!("Received request for run #{} in current session", run_cnt);
+                info!("From queue: {:?}", input);
+                match ManyProver::new(input, runtime_arc.clone()).await {
+                    Ok(mut manyprover) => {
+                        match manyprover.prove_blocks().await {
+                            Ok(_) => info!("Completed a request."),
+                            Err(err) => error!("Critical error: {}", err),
+                        };
+                    }
+                    Err(err) => error!("Critical configuration error: {}", err),
+                }
+            }
             None => {
                 info!("Channel to process posts is closed.");
+                // Attempt to close the runtime proper.
                 match runtime_arc.close().await {
                     Ok(_) => info!("Successfully terminated the runtime."),
                     Err(err) => error!("Error closing the runtime: {}", err),
@@ -180,6 +197,7 @@ async fn main() -> Result<()> {
         }
     }
 
+    info!("Closing Coordinator");
     Ok(())
 }
 
