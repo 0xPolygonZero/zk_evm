@@ -1997,7 +1997,19 @@ fn shrinking_config() -> CircuitConfig {
     }
 }
 
-/// Extracts the two-to-one block aggregation hash from a predefined location.
+/// Extracts the two-to-one block aggregation hash from a public inputs slice.
+///
+/// # Arguments
+///
+/// - `public_inputs`: A slice of public inputs originating from the aggregation
+/// case of a two-to-one block proof.  This slice must consist of a hash, either
+/// of public values, or of two concatenated hashes.  The hash must start at
+/// offset zero of the slice and is typically followed by padding and then a
+/// verifier key.  It is an error to call this on a slice for a base proof.
+///
+/// # Outputs
+///
+/// - A slice containing exactly the hash.
 pub fn extract_two_to_one_block_hash<T>(public_inputs: &[T]) -> &[T; NUM_HASH_OUT_ELTS] {
     const PV_HASH_INDEX_START: usize = 0;
     const PV_HASH_INDEX_END: usize = PV_HASH_INDEX_START + NUM_HASH_OUT_ELTS;
@@ -2006,7 +2018,19 @@ pub fn extract_two_to_one_block_hash<T>(public_inputs: &[T]) -> &[T; NUM_HASH_OU
         .expect("Public inputs vector was malformed.")
 }
 
-/// Extracts the two-to-one block aggregation hash from a predefined location.
+/// Extracts the two-to-one block aggregation public values of the block from
+/// a public inputs slice.
+///
+/// # Arguments
+///
+/// - `public_inputs`: A slice of public inputs originating from the base case
+/// of a two-to-one block proof.  This slice must consist exactly of public
+/// values starting at offset zero and is typically followed by a verifier key.
+/// It is an error to call this function on a slice for an aggregation proof.
+///
+/// # Outputs
+///
+/// - A slice containing exactly the public values.
 pub fn extract_block_public_values<T>(public_inputs: &[T]) -> &[T; PublicValuesTarget::SIZE] {
     const PV_INDEX_START: usize = 0;
     const PV_INDEX_END: usize = PV_INDEX_START + PublicValuesTarget::SIZE;
