@@ -21,7 +21,7 @@ use alloy::{
 };
 use anyhow::Context as _;
 use futures::stream::{FuturesOrdered, TryStreamExt};
-use trace_decoder::trace_protocol::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
+use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
 use super::CodeDb;
 use crate::Compat;
@@ -265,7 +265,7 @@ async fn process_code(
         (Some(post_code), _) => {
             let code_hash = keccak256(post_code).compat();
             code_db.insert(code_hash, post_code.to_vec());
-            Some(ContractCodeUsage::Write(post_code.to_vec().into()))
+            Some(ContractCodeUsage::Write(post_code.to_vec()))
         }
         (_, Some(read_code)) => {
             let code_hash = keccak256(read_code).compat();

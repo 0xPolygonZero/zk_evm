@@ -8,7 +8,7 @@ use alloy::{
 };
 use futures::try_join;
 use prover::BlockProverInput;
-use trace_decoder::trace_protocol::BlockTrace;
+use trace_decoder::BlockTrace;
 
 use crate::provider::CachedProvider;
 

@@ -9,24 +9,24 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-tokio = { workspace = true }
-tracing-subscriber = { workspace = true }
+__compat_primitive_types = { workspace = true }
+alloy.workspace = true
 anyhow = { workspace = true }
-serde = { workspace = true }
-trace_decoder = { workspace = true }
-serde_json = { workspace = true }
 clap = { workspace = true }
 evm_arithmetization = { workspace = true }
-mpt_trie = { workspace = true }
-alloy.workspace = true
 futures = { workspace = true }
-url = { workspace = true }
-__compat_primitive_types = { workspace = true }
-tower = { workspace = true, features = ["retry"] }
+hex = { workspace = true }
 lru = { workspace = true }
+mpt_trie = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true, features = ["retry"] }
+trace_decoder = { workspace = true }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }
 
 # Local dependencies
 compat = { workspace = true }
 zero_bin_common = { workspace = true }
 prover = { workspace = true }
-
