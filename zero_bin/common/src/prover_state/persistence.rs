@@ -77,10 +77,11 @@ pub(crate) trait DiskResource {
 
         // Create the base folder if non-existent.
         if std::fs::metadata(&circuits_dir).is_err() {
-            std::fs::create_dir(&circuits_dir).map_err(|_| {
-                DiskResourceError::IoError::<Self::Error>(std::io::Error::other(
-                    format!("Could not create circuits folder at {}", circuits_dir),
-                ))
+            std::fs::create_dir(&circuits_dir).map_err(|err| {
+                DiskResourceError::IoError::<Self::Error>(std::io::Error::other(format!(
+                    "Could not create circuits folder at {} (err: {})", err,
+                    circuits_dir
+                )))
             })?;
         }
 
@@ -282,6 +283,6 @@ fn prover_to_disk(
 /// current directory.
 fn relative_circuit_dir_path() -> String {
     env::var(ZK_EVM_WORKSPACE_DIR_ENV)
-        .map(|p| format!("{}tools/{}", p, CIRCUITS_DIR))
+        .map(|p| format!("{}zero_bin/tools/{}", p, CIRCUITS_DIR))
         .unwrap_or_else(|_| CIRCUITS_DIR.to_string())
 }
