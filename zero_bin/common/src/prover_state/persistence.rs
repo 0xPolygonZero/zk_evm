@@ -79,7 +79,7 @@ pub(crate) trait DiskResource {
         if std::fs::metadata(&circuits_dir).is_err() {
             std::fs::create_dir(&circuits_dir).map_err(|_| {
                 DiskResourceError::IoError::<Self::Error>(std::io::Error::other(
-                    "Could not create circuits folder",
+                    format!("Could not create circuits folder at {}", circuits_dir),
                 ))
             })?;
         }
