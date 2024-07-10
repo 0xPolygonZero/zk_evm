@@ -10,9 +10,9 @@ use anyhow::Context as _;
 use evm_arithmetization::testing_utils::{BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH};
 use futures::future::{try_join, try_join_all};
 use mpt_trie::{builder::PartialTrieBuilder, partial_trie::HashedPartialTrie};
-use trace_decoder::trace_protocol::{
+use trace_decoder::{
     BlockTraceTriePreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
-    SeparateTriePreImages, TrieDirect, TxnInfo,
+    SeparateTriePreImages, TxnInfo,
 };
 
 use crate::provider::CachedProvider;
@@ -45,16 +45,11 @@ where
             .await?;
 
     Ok(BlockTraceTriePreImages::Separate(SeparateTriePreImages {
-        state: SeparateTriePreImage::Direct(TrieDirect(state.build())),
+        state: SeparateTriePreImage::Direct(state.build()),
         storage: SeparateStorageTriesPreImage::MultipleTries(
             storage_proofs
                 .into_iter()
-                .map(|(a, m)| {
-                    (
-                        a.compat(),
-                        SeparateTriePreImage::Direct(TrieDirect(m.build())),
-                    )
-                })
+                .map(|(a, m)| (a.compat(), SeparateTriePreImage::Direct(m.build())))
                 .collect(),
         ),
     }))

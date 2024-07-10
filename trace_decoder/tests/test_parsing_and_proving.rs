@@ -13,15 +13,7 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::util::timing::TimingTree;
 use pretty_env_logger::env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use serde::{Deserialize, Serialize};
-use trace_decoder::{
-    processed_block_trace::ProcessingMeta,
-    trace_protocol::BlockTrace,
-    types::{CodeHash, OtherBlockData},
-};
-
-fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
-    todo!()
-}
+use trace_decoder::{BlockTrace, OtherBlockData};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProverInput {
@@ -37,13 +29,12 @@ fn test_block(path: &str) {
     let bytes = std::fs::read(path).unwrap();
     let prover_input: ProverInput = serde_json::from_slice(&bytes).unwrap();
 
-    let tx_inputs = prover_input
-        .block_trace
-        .into_txn_proof_gen_ir(
-            &ProcessingMeta::new(resolve_code_hash_fn),
-            prover_input.other_data.clone(),
-        )
-        .unwrap();
+    let tx_inputs = trace_decoder::entrypoint(
+        prover_input.block_trace,
+        prover_input.other_data.clone(),
+        |_| unimplemented!(),
+    )
+    .unwrap();
 
     for tx_input in tx_inputs {
         let timing = TimingTree::new(
