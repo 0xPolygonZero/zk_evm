@@ -117,10 +117,14 @@ global debug_eq:
     %add_const(2)
     MLOAD_GENERAL // get intitial payload_ptr
     %add_const(2) // storage_root_ptr_ptr = payload_ptr + 2
-    DUP1
     %mload_trie_data
+    // stack: storage_root_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
+    DUP3
+    %increment
+    MLOAD_GENERAL // get dynamic payload_ptr
+    %add_const(2) // storage_root_ptr_ptr = dyn_payload_ptr + 2
     %stack
-        (storage_root_ptr, storage_root_ptr_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr) ->
+        (storage_root_ptr_ptr, storage_root_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr) ->
         (key, storage_root_ptr, storage_ptr_ptr, after_delete_removed_slots, storage_root_ptr_ptr, account_ptr_ptr, root_ptr)
     %jump(delete_removed_slots)
 after_delete_removed_slots:
@@ -192,6 +196,7 @@ delete_this_slot:
     %stack (key, addr, root_ptr, storage_ptr_ptr) -> (root_ptr, 64, key, after_mpt_delete_slot, addr, storage_ptr_ptr)
     %jump(mpt_delete)
 after_mpt_delete_slot:
+global debug_after_mpt_delete_slot:
     // stack: root_ptr', addr, storage_ptr_ptr
     SWAP2
     %add_const(5)

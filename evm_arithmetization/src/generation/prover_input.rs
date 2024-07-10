@@ -5,6 +5,7 @@ use std::str::FromStr;
 use anyhow::{bail, Error};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
+use log::{Level, Log};
 use mpt_trie::partial_trie::HashedPartialTrie;
 use num_bigint::BigUint;
 use plonky2::field::types::Field;
@@ -293,8 +294,8 @@ impl<F: Field> GenerationState<F> {
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
-        log::debug!("account ll = {:?}", self.get_accounts_linked_list());
-        log::debug!("storage ll = {:?}", self.get_storage_linked_list());
+        self.log(log::Level::Debug, format!("account ll = {:?}", self.get_accounts_linked_list()));
+        self.log(log::Level::Debug, format!("storage ll = {:?}", self.get_storage_linked_list()));
         match input_fn.0[1].as_str() {
             "insert_account" => self.run_next_insert_account(),
             "remove_account" => self.run_next_remove_account(),
