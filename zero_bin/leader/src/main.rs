@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, io};
 use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
@@ -9,18 +9,18 @@ use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use tracing::info;
+use tracing::{info, warn};
 use zero_bin_common::block_interval::BlockInterval;
 
 use crate::client::{client_main, ProofParams};
-use crate::utils::get_package_version;
 
 mod cli;
 mod client;
 mod http;
 mod init;
 mod stdio;
-mod utils;
+
+const EVM_ARITH_VER_KEY: &str = "EVM_ARITHMETIZATION_PKG_VER";
 
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
     if path.is_none() {
@@ -36,27 +36,20 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProo
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenv().ok();
+    load_dotenvy_vars_if_present();
     init::tracing();
 
-    if env::var("EVM_ARITHMETIZATION_PKG_VER").is_err() {
-        let pkg_ver = get_package_version("evm_arithmetization")?;
-        // Extract the major and minor version parts and append 'x' as the patch version
-        if let Some((major_minor, _)) = pkg_ver.as_ref().and_then(|s| s.rsplit_once('.')) {
-            let circuits_version = format!("{}.x", major_minor);
-            // Set the environment variable for the evm_arithmetization package version
-            #[allow(unused_unsafe)]
-            unsafe {
-                env::set_var("EVM_ARITHMETIZATION_PKG_VER", circuits_version);
-            }
-        } else {
-            // Set to "NA" if version extraction fails
-            #[allow(unused_unsafe)]
-            unsafe {
-                env::set_var("EVM_ARITHMETIZATION_PKG_VER", "NA");
-            }
+    if env::var_os(EVM_ARITH_VER_KEY).is_none() {
+        // Safety:
+        // - we're early enough in main that nothing else should race
+        unsafe {
+            env::set_var(
+                EVM_ARITH_VER_KEY,
+                // see build.rs
+                env!("EVM_ARITHMETIZATION_PACKAGE_VERSION"),
+            );
         }
-    }
+    };
 
     let args = cli::Cli::parse();
     if let paladin::config::Runtime::InMemory = args.paladin.runtime {
@@ -69,7 +62,7 @@ async fn main() -> Result<()> {
 
     let runtime = Runtime::from_config(&args.paladin, register()).await?;
 
-    match args.command.clone() {
+    match args.command {
         Command::Stdio {
             previous_proof,
             save_inputs_on_error,
@@ -93,20 +86,9 @@ async fn main() -> Result<()> {
 
             http::http_main(runtime, port, output_dir, save_inputs_on_error).await?;
         }
-        Command::Jerigon {
+        Command::Rpc {
             rpc_url,
-            block_interval,
-            checkpoint_block_number,
-            previous_proof,
-            proof_output_dir,
-            save_inputs_on_error,
-            block_time,
-            keep_intermediate_proofs,
-            backoff,
-            max_retries,
-        }
-        | Command::Native {
-            rpc_url,
+            rpc_type,
             block_interval,
             checkpoint_block_number,
             previous_proof,
@@ -133,7 +115,7 @@ async fn main() -> Result<()> {
                 runtime,
                 RpcParams {
                     rpc_url,
-                    rpc_type: args.command.into(),
+                    rpc_type,
                     backoff,
                     max_retries,
                 },
@@ -151,4 +133,16 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Attempt to load in the local `.env` if present and set any environment
+/// variables specified inside of it.
+///
+/// To keep things simple, any IO error we will treat as the file not existing
+/// and continue moving on without the `env` variables set.
+fn load_dotenvy_vars_if_present() {
+    match dotenv() {
+        Ok(_) | Err(dotenvy::Error::Io(io::Error { .. })) => (),
+        Err(e) => warn!("Found local `.env` file but was unable to parse it! (err: {e})",),
+    }
 }

@@ -82,7 +82,7 @@ In most cases, tables deal with U256 words, split into 32-bit limbs (to avoid ov
 \subsubsection{What to range-check?}
 One can note that every element that ever appears on the stack has been pushed. Therefore, enforcing a range-check on pushed elements is enough to range-check all elements on the stack. Similarly, all elements in memory must have been written prior, and therefore it is enough to range-check memory writes. However, range-checking the PUSH and MSTORE opcodes is not sufficient.
 \begin{enumerate}
-  \item Pushes and memory writes for ``MSTORE\_32BYTES'' are range-checked in ``BytePackingStark''.
+  \item Pushes and memory writes for ``MSTORE\_32BYTES'' are range-checked in ``BytePackingStark'', except PUSH operations happening in privileged mode. See \ref{push_general_view}.
   \item Syscalls, exceptions and prover inputs are range-checked in ``ArithmeticStark''.
   \item The inputs and outputs of binary and ternary arithmetic operations are range-checked in ``ArithmeticStark''.
   \item The inputs' bits of logic operations are checked to be either 1 or 0 in ``LogicStark''. Since ``LogicStark'' only deals with bitwise operations, this is enough to have range-checked outputs as well.

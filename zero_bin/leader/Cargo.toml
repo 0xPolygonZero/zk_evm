@@ -35,3 +35,7 @@ proof_gen = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/ca
 [features]
 default = []
 test_only = ["ops/test_only", "prover/test_only"]
+
+[build-dependencies]
+cargo_metadata = "0.18.1"
+anyhow = { workspace = true }

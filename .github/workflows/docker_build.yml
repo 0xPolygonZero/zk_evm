@@ -1,0 +1,26 @@
+name: Docker Build & Run
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+    branches:
+      - "**"
+
+jobs:
+  docker:
+    name: Regression test docker images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - run: |
+          docker build --progress=plain --build-arg=PROFILE=dev --tag scratch .
+          docker run --rm --init --entrypoint leader scratch --help
+          docker run --rm --init --entrypoint worker scratch --help
+          docker run --rm --init --entrypoint rpc scratch --help
+          docker run --rm --init --entrypoint verifier scratch --help

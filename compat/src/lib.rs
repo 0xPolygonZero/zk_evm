@@ -1,4 +1,6 @@
+/// A trait to convert between alloy and ethereum types.
 pub trait Compat<Out> {
+    /// Convert the type to another type
     fn compat(self) -> Out;
 }
 

@@ -1,0 +1,8 @@
+error: zk_evm_proc_macro error: column struct must be `#[repr(C)]`
+ --> tests/compile_fail/not_repr_c.rs:4:1
+  |
+4 | / struct Columns<T> {
+5 | |     a: T,
+6 | |     b: [T; 3],
+7 | | }
+  | |_^

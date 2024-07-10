@@ -172,7 +172,7 @@ const HASH_CONSTANTS: [(&str, [u8; 32]); 3] = [
     ),
 ];
 
-const EC_CONSTANTS: [(&str, [u8; 32]); 24] = [
+const EC_CONSTANTS: [(&str, [u8; 32]); 25] = [
     (
         "U256_MAX",
         hex!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
@@ -246,6 +246,11 @@ const EC_CONSTANTS: [(&str, [u8; 32]); 24] = [
     (
         "SECP_SCALAR",
         hex!("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"),
+    ),
+    (
+        "SECP_SCALAR_HALF",
+        // Corresponds to `ceil(SECP_SCALAR / 2)`.
+        hex!("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1"),
     ),
     (
         "SECP_GLV_BETA",

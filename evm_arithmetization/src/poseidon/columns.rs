@@ -1,10 +1,10 @@
-use std::borrow::{Borrow, BorrowMut};
 use std::mem::{size_of, transmute};
 
 use plonky2::hash::poseidon;
+use zk_evm_proc_macro::Columns;
 
 use super::poseidon_stark::FELT_MAX_BYTES;
-use crate::util::{indices_arr, transmute_no_compile_time_size_checks};
+use crate::util::indices_arr;
 
 pub(crate) const POSEIDON_SPONGE_WIDTH: usize = poseidon::SPONGE_WIDTH;
 pub(crate) const POSEIDON_SPONGE_RATE: usize = poseidon::SPONGE_RATE;
@@ -13,7 +13,7 @@ pub(crate) const N_PARTIAL_ROUNDS: usize = poseidon::N_PARTIAL_ROUNDS;
 pub(crate) const POSEIDON_DIGEST: usize = 4;
 
 #[repr(C)]
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Columns, Eq, PartialEq, Debug)]
 pub(crate) struct PoseidonColumnsView<T: Copy> {
     // The base address at which we will read the input block.
     pub context: T,
@@ -129,48 +129,6 @@ pub(crate) fn reg_full_sbox_1(round: usize, i: usize) -> usize {
 
 // `u8` is guaranteed to have a `size_of` of 1.
 pub(crate) const NUM_COLUMNS: usize = size_of::<PoseidonColumnsView<u8>>();
-
-impl<T: Copy> From<[T; NUM_COLUMNS]> for PoseidonColumnsView<T> {
-    fn from(value: [T; NUM_COLUMNS]) -> Self {
-        unsafe { transmute_no_compile_time_size_checks(value) }
-    }
-}
-
-impl<T: Copy> From<PoseidonColumnsView<T>> for [T; NUM_COLUMNS] {
-    fn from(value: PoseidonColumnsView<T>) -> Self {
-        unsafe { transmute_no_compile_time_size_checks(value) }
-    }
-}
-
-impl<T: Copy> Borrow<PoseidonColumnsView<T>> for [T; NUM_COLUMNS] {
-    fn borrow(&self) -> &PoseidonColumnsView<T> {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> BorrowMut<PoseidonColumnsView<T>> for [T; NUM_COLUMNS] {
-    fn borrow_mut(&mut self) -> &mut PoseidonColumnsView<T> {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> Borrow<[T; NUM_COLUMNS]> for PoseidonColumnsView<T> {
-    fn borrow(&self) -> &[T; NUM_COLUMNS] {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> BorrowMut<[T; NUM_COLUMNS]> for PoseidonColumnsView<T> {
-    fn borrow_mut(&mut self) -> &mut [T; NUM_COLUMNS] {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy + Default> Default for PoseidonColumnsView<T> {
-    fn default() -> Self {
-        [T::default(); NUM_COLUMNS].into()
-    }
-}
 
 const fn make_col_map() -> PoseidonColumnsView<usize> {
     let indices_arr = indices_arr::<NUM_COLUMNS>();

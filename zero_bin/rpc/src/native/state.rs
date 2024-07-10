@@ -1,24 +1,26 @@
 use std::collections::{HashMap, HashSet};
 
 use alloy::{
-    primitives::{keccak256, Address, StorageKey, B256},
+    primitives::{keccak256, Address, StorageKey, B256, U256},
     providers::Provider,
     rpc::types::eth::{Block, BlockTransactionsKind, EIP1186AccountProofResponse},
     transports::Transport,
 };
 use anyhow::Context as _;
+use evm_arithmetization::testing_utils::{BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH};
 use futures::future::{try_join, try_join_all};
 use mpt_trie::{builder::PartialTrieBuilder, partial_trie::HashedPartialTrie};
-use trace_decoder::trace_protocol::{
+use trace_decoder::{
     BlockTraceTriePreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
-    SeparateTriePreImages, TrieDirect, TxnInfo,
+    SeparateTriePreImages, TxnInfo,
 };
 
-use crate::compat::Compat;
+use crate::provider::CachedProvider;
+use crate::Compat;
 
 /// Processes the state witness for the given block.
 pub async fn process_state_witness<ProviderT, TransportT>(
-    provider: &ProviderT,
+    cached_provider: &CachedProvider<ProviderT, TransportT>,
     block: Block,
     txn_infos: &[TxnInfo],
 ) -> anyhow::Result<BlockTraceTriePreImages>
@@ -32,34 +34,30 @@ where
         .header
         .number
         .context("Block number not returned with block")?;
-    let prev_state_root = provider
+    let prev_state_root = cached_provider
         .get_block((block_number - 1).into(), BlockTransactionsKind::Hashes)
         .await?
-        .context("Failed to get previous block")?
         .header
         .state_root;
 
     let (state, storage_proofs) =
-        generate_state_witness(prev_state_root, state_access, provider, block_number).await?;
+        generate_state_witness(prev_state_root, state_access, cached_provider, block_number)
+            .await?;
 
     Ok(BlockTraceTriePreImages::Separate(SeparateTriePreImages {
-        state: SeparateTriePreImage::Direct(TrieDirect(state.build())),
+        state: SeparateTriePreImage::Direct(state.build()),
         storage: SeparateStorageTriesPreImage::MultipleTries(
             storage_proofs
                 .into_iter()
-                .map(|(a, m)| {
-                    (
-                        a.compat(),
-                        SeparateTriePreImage::Direct(TrieDirect(m.build())),
-                    )
-                })
+                .map(|(a, m)| (a.compat(), SeparateTriePreImage::Direct(m.build())))
                 .collect(),
         ),
     }))
 }
 
 /// Iterate over the tx_infos and process the state access for each address.
-/// Also includes the state access for withdrawals and the block author.
+/// Also includes the state access for the beacon roots contract, withdrawals
+/// and the block author.
 ///
 /// Returns a map from address to the set of storage keys accessed by that
 /// address.
@@ -68,6 +66,8 @@ pub fn process_states_access(
     block: &Block,
 ) -> anyhow::Result<HashMap<Address, HashSet<StorageKey>>> {
     let mut state_access = HashMap::<Address, HashSet<StorageKey>>::new();
+
+    insert_beacon_roots_update(&mut state_access, block)?;
 
     if let Some(w) = block.withdrawals.as_ref() {
         w.iter().for_each(|w| {
@@ -93,11 +93,29 @@ pub fn process_states_access(
     Ok(state_access)
 }
 
+/// Cancun HF specific, see <https://eips.ethereum.org/EIPS/eip-4788>.
+fn insert_beacon_roots_update(
+    state_access: &mut HashMap<Address, HashSet<StorageKey>>,
+    block: &Block,
+) -> anyhow::Result<()> {
+    let timestamp = block.header.timestamp;
+
+    const MODULUS: u64 = HISTORY_BUFFER_LENGTH.1;
+
+    let keys = HashSet::from_iter([
+        U256::from(timestamp % MODULUS).into(), // timestamp_idx
+        U256::from((timestamp % MODULUS) + MODULUS).into(), // root_idx
+    ]);
+    state_access.insert(BEACON_ROOTS_CONTRACT_STATE_KEY.1.into(), keys);
+
+    Ok(())
+}
+
 /// Generates the state witness for the given block.
 async fn generate_state_witness<ProviderT, TransportT>(
     prev_state_root: B256,
     accounts_state: HashMap<Address, HashSet<StorageKey>>,
-    provider: &ProviderT,
+    cached_provider: &CachedProvider<ProviderT, TransportT>,
     block_number: u64,
 ) -> anyhow::Result<(
     PartialTrieBuilder<HashedPartialTrie>,
@@ -111,7 +129,7 @@ where
     let mut storage_proofs = HashMap::<B256, PartialTrieBuilder<HashedPartialTrie>>::new();
 
     let (account_proofs, next_account_proofs) =
-        fetch_proof_data(accounts_state, provider, block_number).await?;
+        fetch_proof_data(accounts_state, cached_provider, block_number).await?;
 
     // Insert account proofs
     for (address, proof) in account_proofs.into_iter() {
@@ -146,7 +164,7 @@ where
 /// Fetches the proof data for the given accounts and associated storage keys.
 async fn fetch_proof_data<ProviderT, TransportT>(
     accounts_state: HashMap<Address, HashSet<StorageKey>>,
-    provider: &ProviderT,
+    provider: &CachedProvider<ProviderT, TransportT>,
     block_number: u64,
 ) -> anyhow::Result<(
     Vec<(Address, EIP1186AccountProofResponse)>,
@@ -161,6 +179,7 @@ where
         .into_iter()
         .map(|(address, keys)| async move {
             let proof = provider
+                .as_provider()
                 .get_proof(address, keys.into_iter().collect())
                 .block_id((block_number - 1).into())
                 .await
@@ -173,6 +192,7 @@ where
         .into_iter()
         .map(|(address, keys)| async move {
             let proof = provider
+                .as_provider()
                 .get_proof(address, keys.into_iter().collect())
                 .block_id(block_number.into())
                 .await

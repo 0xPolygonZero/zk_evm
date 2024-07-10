@@ -2,7 +2,7 @@ use ethereum_types::U256;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 
-const KERNEL_CONTEXT: usize = 0;
+pub(crate) const KERNEL_CONTEXT: usize = 0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RegistersState {

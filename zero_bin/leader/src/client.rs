@@ -34,23 +34,19 @@ pub(crate) async fn client_main(
     block_interval: BlockInterval,
     mut params: ProofParams,
 ) -> Result<()> {
+    let cached_provider = rpc::provider::CachedProvider::new(build_http_retry_provider(
+        rpc_params.rpc_url.clone(),
+        rpc_params.backoff,
+        rpc_params.max_retries,
+    ));
+
     let prover_input = rpc::prover_input(
-        &build_http_retry_provider(
-            rpc_params.rpc_url,
-            rpc_params.backoff,
-            rpc_params.max_retries,
-        ),
+        &cached_provider,
         block_interval,
         params.checkpoint_block_number.into(),
         rpc_params.rpc_type,
     )
     .await?;
-
-    if cfg!(feature = "test_only") {
-        info!("All proof witnesses have been generated successfully.");
-    } else {
-        info!("All proofs have been generated successfully.");
-    }
 
     // If `keep_intermediate_proofs` is not set we only keep the last block
     // proof from the interval. It contains all the necessary information to
@@ -65,6 +61,12 @@ pub(crate) async fn client_main(
         .await;
     runtime.close().await?;
     let proved_blocks = proved_blocks?;
+
+    if cfg!(feature = "test_only") {
+        info!("All proof witnesses have been generated successfully.");
+    } else {
+        info!("All proofs have been generated successfully.");
+    }
 
     if params.keep_intermediate_proofs {
         if params.proof_output_dir.is_some() {
@@ -105,14 +107,4 @@ pub(crate) async fn client_main(
     }
 
     Ok(())
-}
-
-impl From<super::cli::Command> for RpcType {
-    fn from(command: super::cli::Command) -> Self {
-        match command {
-            super::cli::Command::Native { .. } => RpcType::Native,
-            super::cli::Command::Jerigon { .. } => RpcType::Jerigon,
-            _ => panic!("Unsupported command type"),
-        }
-    }
 }

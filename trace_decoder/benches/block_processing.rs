@@ -6,37 +6,27 @@
 //! for a total of 24,479,837 gas.
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use serde::{Deserialize, Serialize};
-use trace_decoder::{
-    processed_block_trace::ProcessingMeta,
-    trace_protocol::BlockTrace,
-    types::{CodeHash, OtherBlockData},
-};
+use trace_decoder::{BlockTrace, OtherBlockData};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, serde::Deserialize)]
 pub struct ProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
 }
 
-fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
-    todo!()
-}
-
 fn criterion_benchmark(c: &mut Criterion) {
-    let bytes = std::fs::read("benches/block_input.json").unwrap();
-    let prover_input: ProverInput = serde_json::from_slice(&bytes).unwrap();
+    let prover_input =
+        serde_json::from_slice::<ProverInput>(include_bytes!("block_input.json").as_slice())
+            .unwrap();
 
     c.bench_function("Block 19778575 processing", |b| {
         b.iter_batched(
             || prover_input.clone(),
-            |pi| {
-                pi.block_trace
-                    .into_txn_proof_gen_ir(
-                        &ProcessingMeta::new(resolve_code_hash_fn),
-                        prover_input.other_data.clone(),
-                    )
-                    .unwrap()
+            |ProverInput {
+                 block_trace,
+                 other_data,
+             }| {
+                trace_decoder::entrypoint(block_trace, other_data, |_| unimplemented!()).unwrap()
             },
             BatchSize::LargeInput,
         )

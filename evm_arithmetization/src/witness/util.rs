@@ -348,6 +348,11 @@ pub(crate) fn byte_packing_log<F: RichField, T: Transition<F>>(
     base_address: MemoryAddress,
     bytes: Vec<u8>,
 ) {
+    if bytes.is_empty() {
+        // No-op
+        return;
+    }
+
     let clock = state.get_clock();
 
     let mut address = base_address;

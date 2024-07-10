@@ -1,14 +1,14 @@
 use alloy::{
     primitives::B256, providers::Provider, rpc::types::eth::BlockId, transports::Transport,
 };
+use anyhow::Context as _;
 use prover::BlockProverInput;
 use serde::Deserialize;
 use serde_json::json;
-use trace_decoder::trace_protocol::{
-    BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TrieCompact, TxnInfo,
-};
+use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
 
 use super::fetch_other_block_data;
+use crate::provider::CachedProvider;
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]
@@ -18,12 +18,8 @@ pub struct ZeroTxResult {
     pub result: TxnInfo,
 }
 
-/// Block witness retrieved from Erigon zeroTracer.
-#[derive(Debug, Deserialize)]
-pub struct ZeroBlockWitness(TrieCompact);
-
 pub async fn block_prover_input<ProviderT, TransportT>(
-    provider: ProviderT,
+    cached_provider: &CachedProvider<ProviderT, TransportT>,
     target_block_id: BlockId,
     checkpoint_state_trie_root: B256,
 ) -> anyhow::Result<BlockProverInput>
@@ -32,7 +28,8 @@ where
     TransportT: Transport + Clone,
 {
     // Grab trace information
-    let tx_results = provider
+    let tx_results = cached_provider
+        .as_provider()
         .raw_request::<_, Vec<ZeroTxResult>>(
             "debug_traceBlockByNumber".into(),
             (target_block_id, json!({"tracer": "zeroTracer"})),
@@ -40,18 +37,22 @@ where
         .await?;
 
     // Grab block witness info (packed as combined trie pre-images)
-    let block_witness = provider
-        .raw_request::<_, ZeroBlockWitness>("eth_getWitness".into(), vec![target_block_id])
+
+    let block_witness = cached_provider
+        .as_provider()
+        .raw_request::<_, String>("eth_getWitness".into(), vec![target_block_id])
         .await?;
 
     let other_data =
-        fetch_other_block_data(provider, target_block_id, checkpoint_state_trie_root).await?;
+        fetch_other_block_data(cached_provider, target_block_id, checkpoint_state_trie_root)
+            .await?;
 
     // Assemble
     Ok(BlockProverInput {
         block_trace: BlockTrace {
             trie_pre_images: BlockTraceTriePreImages::Combined(CombinedPreImages {
-                compact: block_witness.0,
+                compact: hex::decode(block_witness.strip_prefix("0x").unwrap_or(&block_witness))
+                    .context("invalid hex returned from call to eth_getWitness")?,
             }),
             txn_info: tx_results.into_iter().map(|it| it.result).collect(),
             code_db: Default::default(),
