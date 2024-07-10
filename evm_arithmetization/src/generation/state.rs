@@ -9,7 +9,7 @@ use log::Level;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::types::Field;
 
-use super::mpt::{load_all_mpts, TrieRootPtrs};
+use super::mpt::TrieRootPtrs;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -374,16 +374,6 @@ pub struct GenerationState<F: Field> {
 }
 
 impl<F: Field> GenerationState<F> {
-    fn preinitialize_mpts(&mut self, trie_inputs: &TrieInputs) -> TrieRootPtrs {
-        let (trie_roots_ptrs, trie_data) =
-            load_all_mpts(trie_inputs).expect("Invalid MPT data for preinitialization");
-
-        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
-            trie_data.iter().map(|&val| Some(val)).collect();
-
-        trie_roots_ptrs
-    }
-
     fn preinitialize_linked_lists_and_txn_and_receipt_mpts(
         &mut self,
         trie_inputs: &TrieInputs,

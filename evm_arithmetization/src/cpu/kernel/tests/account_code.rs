@@ -16,9 +16,7 @@ use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, Gas
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
-use crate::generation::mpt::{
-    load_all_mpts, load_linked_lists_and_txn_and_receipt_mpts, AccountRlp,
-};
+use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, AccountRlp};
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;

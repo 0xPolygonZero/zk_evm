@@ -206,10 +206,90 @@ where
     }
 }
 
+fn load_storage_mpt<F>(
+    addr: U256,
+    trie: &HashedPartialTrie,
+    trie_data: &mut Vec<U256>,
+    parse_value: &F,
+    storage_leaves: &Vec<U256>,
+) -> Result<usize, ProgramError>
+where
+    F: Fn(&[u8]) -> Result<Vec<U256>, ProgramError>,
+{
+    let node_ptr = trie_data.len();
+    let type_of_trie = PartialTrieType::of(trie) as u32;
+    if type_of_trie > 0 {
+        trie_data.push(type_of_trie.into());
+    }
+
+    match trie.deref() {
+        Node::Empty => Ok(0),
+        Node::Hash(h) => {
+            trie_data.push(h2u(*h));
+
+            Ok(node_ptr)
+        }
+        Node::Branch { children, value } => {
+            // First, set children pointers to 0.
+            let first_child_ptr = trie_data.len();
+            trie_data.extend(vec![U256::zero(); 16]);
+            // Then, set value.
+            if value.is_empty() {
+                trie_data.push(U256::zero());
+            } else {
+                let parsed_value = parse_value(value)?;
+                trie_data.push((trie_data.len() + 1).into());
+                trie_data.extend(parsed_value);
+            }
+
+            // Now, load all children and update their pointers.
+            for (i, child) in children.iter().enumerate() {
+                let child_ptr = load_mpt(child, trie_data, parse_value)?;
+                trie_data[first_child_ptr + i] = child_ptr.into();
+            }
+
+            Ok(node_ptr)
+        }
+
+        Node::Extension { nibbles, child } => {
+            trie_data.push(nibbles.count.into());
+            trie_data.push(
+                nibbles
+                    .try_into()
+                    .map_err(|_| ProgramError::IntegerTooLarge)?,
+            );
+            trie_data.push((trie_data.len() + 1).into());
+
+            let child_ptr = load_mpt(child, trie_data, parse_value)?;
+            if child_ptr == 0 {
+                trie_data.push(0.into());
+            }
+
+            Ok(node_ptr)
+        }
+        Node::Leaf { nibbles, value } => {
+            trie_data.push(nibbles.count.into());
+            trie_data.push(
+                nibbles
+                    .try_into()
+                    .map_err(|_| ProgramError::IntegerTooLarge)?,
+            );
+
+            let value_ptr = search_storage_ll(storage_leaves, addr, nibbles.try_into().unwrap());
+            // Set `value_ptr_ptr`.
+            trie_data.push(value_ptr.into());
+
+            Ok(node_ptr)
+        }
+    }
+}
+
 fn load_state_trie(
     trie: &HashedPartialTrie,
     key: Nibbles,
     trie_data: &mut Vec<U256>,
+    state_leaves: &Vec<U256>,
+    storage_leaves: &Vec<U256>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<usize, ProgramError> {
     let node_ptr = trie_data.len();
@@ -242,8 +322,14 @@ fn load_state_trie(
                     count: 1,
                     packed: i.into(),
                 });
-                let child_ptr =
-                    load_state_trie(child, extended_key, trie_data, storage_tries_by_state_key)?;
+                let child_ptr = load_state_trie(
+                    child,
+                    extended_key,
+                    trie_data,
+                    state_leaves,
+                    storage_leaves,
+                    storage_tries_by_state_key,
+                )?;
 
                 trie_data[first_child_ptr + i] = child_ptr.into();
             }
@@ -260,8 +346,14 @@ fn load_state_trie(
             // Set `value_ptr_ptr`.
             trie_data.push((trie_data.len() + 1).into());
             let extended_key = key.merge_nibbles(nibbles);
-            let child_ptr =
-                load_state_trie(child, extended_key, trie_data, storage_tries_by_state_key)?;
+            let child_ptr = load_state_trie(
+                child,
+                extended_key,
+                trie_data,
+                state_leaves,
+                storage_leaves,
+                storage_tries_by_state_key,
+            )?;
             if child_ptr == 0 {
                 trie_data.push(0.into());
             }
@@ -293,16 +385,23 @@ fn load_state_trie(
                     .try_into()
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             );
+            let v = merged_key
+                .try_into()
+                .map_err(|_| ProgramError::IntegerTooLarge)?;
             // Set `value_ptr_ptr`.
-            trie_data.push((trie_data.len() + 1).into());
-
-            trie_data.push(nonce);
-            trie_data.push(balance);
+            let value_ptr = search_account_ll(state_leaves, v);
+            assert!(value_ptr != 0.into());
+            trie_data.push(value_ptr.into());
             // Storage trie ptr.
-            let storage_ptr_ptr = trie_data.len();
-            trie_data.push((trie_data.len() + 2).into());
-            trie_data.push(code_hash.into_uint());
-            let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value)?;
+            let storage_ptr_ptr = value_ptr.as_usize() + 2;
+            trie_data[storage_ptr_ptr] = trie_data.len().into();
+            let storage_ptr = load_storage_mpt(
+                v,
+                storage_trie,
+                trie_data,
+                &parse_storage_value,
+                storage_leaves,
+            )?;
             if storage_ptr == 0 {
                 trie_data[storage_ptr_ptr] = 0.into();
             }
@@ -494,42 +593,22 @@ where
     }
 }
 
-pub(crate) fn load_all_mpts(
-    trie_inputs: &TrieInputs,
-) -> Result<(TrieRootPtrs, Vec<U256>), ProgramError> {
-    let mut trie_data = vec![U256::zero()];
-    let storage_tries_by_state_key = trie_inputs
-        .storage_tries
-        .iter()
-        .map(|(hashed_address, storage_trie)| {
-            let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
-                .expect("An H256 is 32 bytes long");
-            (key, storage_trie)
-        })
-        .collect();
+fn search_account_ll(ll: &Vec<U256>, key: U256) -> U256 {
+    let mut ptr = 0;
+    while ptr < ll.len() && ll[ptr] != key {
+        ptr += ACCOUNTS_LINKED_LIST_NODE_SIZE;
+    }
 
-    let state_root_ptr = load_state_trie(
-        &trie_inputs.state_trie,
-        empty_nibbles(),
-        &mut trie_data,
-        &storage_tries_by_state_key,
-    )?;
+    ll[ptr + 1]
+}
 
-    let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
-        let mut parsed_txn = vec![U256::from(rlp.len())];
-        parsed_txn.extend(rlp.iter().copied().map(U256::from));
-        Ok(parsed_txn)
-    })?;
+fn search_storage_ll(ll: &Vec<U256>, addr: U256, key: U256) -> U256 {
+    let mut ptr = 0;
+    while ptr < ll.len() && (ll[ptr] != addr || ll[ptr + 1] != key) {
+        ptr += STORAGE_LINKED_LIST_NODE_SIZE;
+    }
 
-    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
-
-    let trie_root_ptrs = TrieRootPtrs {
-        state_root_ptr: Some(state_root_ptr),
-        txn_root_ptr,
-        receipt_root_ptr,
-    };
-
-    Ok((trie_root_ptrs, trie_data))
+    ll[ptr + 2]
 }
 
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
@@ -569,7 +648,8 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     );
 
     // TODO: Remove after checking correctness of linked lists
-    let state_root_ptr = load_state_mpt(trie_inputs, &mut trie_data)?;
+    let state_root_ptr =
+        load_state_mpt(trie_inputs, &mut trie_data, &state_leaves, &storage_leaves)?;
 
     Ok((
         TrieRootPtrs {
@@ -586,6 +666,8 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
 pub(crate) fn load_state_mpt(
     trie_inputs: &TrieInputs,
     trie_data: &mut Vec<U256>,
+    state_leaves: &Vec<U256>,
+    storage_leaves: &Vec<U256>,
 ) -> Result<usize, ProgramError> {
     let storage_tries_by_state_key = trie_inputs
         .storage_tries
@@ -601,6 +683,8 @@ pub(crate) fn load_state_mpt(
         &trie_inputs.state_trie,
         empty_nibbles(),
         trie_data,
+        state_leaves,
+        storage_leaves,
         &storage_tries_by_state_key,
     )
 }
