@@ -25,9 +25,13 @@ pub(crate) fn eval_round_flags<F: Field, P: PackedField<Scalar = F>>(
     }
 
     // Initially, the first step flag should be 1 while the others should be 0.
-    yield_constr.constraint_first_row(local_values[reg_step(0)] - F::ONE);
+    let local_any_flag = (0..NUM_ROUNDS)
+        .map(|i| local_values[reg_step(i)])
+        .sum::<P>();
+
+    yield_constr.constraint_first_row(local_any_flag * (local_values[reg_step(0)] - F::ONE));
     for i in 1..NUM_ROUNDS {
-        yield_constr.constraint_first_row(local_values[reg_step(i)]);
+        yield_constr.constraint_first_row(local_any_flag * local_values[reg_step(i)]);
     }
 
     // Flags should circularly increment, or be all zero for padding rows.
@@ -69,10 +73,15 @@ pub(crate) fn eval_round_flags_recursively<F: RichField + Extendable<D>, const D
     }
 
     // Initially, the first step flag should be 1 while the others should be 0.
+    let local_any_flag =
+        builder.add_many_extension((0..NUM_ROUNDS).map(|i| local_values[reg_step(i)]));
+    // Initially, the first step flag should be 1 while the others should be 0.
     let step_0_minus_1 = builder.sub_extension(local_values[reg_step(0)], one);
+    let step_0_minus_1 = builder.mul_extension(local_any_flag, step_0_minus_1);
     yield_constr.constraint_first_row(builder, step_0_minus_1);
     for i in 1..NUM_ROUNDS {
-        yield_constr.constraint_first_row(builder, local_values[reg_step(i)]);
+        let constr = builder.mul_extension(local_any_flag, local_values[reg_step(i)]);
+        yield_constr.constraint_first_row(builder, constr);
     }
 
     // Flags should circularly increment, or be all zero for padding rows.

@@ -20,8 +20,11 @@ global exception_jumptable:
     // exception 5: stack overflow
     JUMPTABLE exc_stack_overflow
 
-    // exceptions 6 and 7: unused
-    JUMPTABLE panic
+    // exception 6: end of segmented proof.
+    // This reuses the exceptions logic but is part of any valid segment execution.
+    JUMPTABLE exc_stop
+
+    // exceptions 7: unused
     JUMPTABLE panic
 
 
@@ -165,6 +168,92 @@ global exc_stack_overflow_check_stack_length:
     %jumpi(fault_exception)
     PANIC
 
+global exc_stop:
+    // Here, we need to check that the final registers have the correct value.
+    // stack: trap_info
+    PUSH @FINAL_REGISTERS_ADDR
+    // stack: addr_registers, trap_info
+    PUSH 3 
+    // If the current `stack_len` is 3, then the stack was empty before the exception and there's no stack top.
+    %stack_length
+    SUB
+    // First, check the stack length.
+    // stack: stack_len-3 = stack_len_before_exc, addr_registers, trap_info
+    DUP2 %add_const(2)
+    MLOAD_GENERAL
+    // stack: stored_stack_length, stack_len_before_exc, addr_registers, trap_info
+    DUP2 %assert_eq
+
+    // Now, check that we end up with the correct stack_top.
+    // stack: stack_len_before_exc, addr_registers, trap_info
+    DUP1 PUSH 0 LT
+    // stack: 0 < stack_len_before_exc, stack_len_before_exc, addr_registers, trap_info
+    PUSH 1 DUP3 SUB
+    // stack: stack_len_before_exc - 1, 0 < stack_len_before_exc, stack_len_before_exc, addr_registers, trap_info
+    MUL
+    // If the previous stack length is 0, we load the first value in the stack segment:
+    // we do not need to constrain the value in that case, so this is just to avoid a jumpi.
+    // Not having a `jumpi` provides a constant number of operations, which is better for segmentation.
+    // stack: (stack_len_before_exc - 1) * (stack_len_before_exc != 0), stack_len_before_exc, addr_registers, trap_info
+    PUSH @SEGMENT_STACK
+    GET_CONTEXT
+    %build_address
+    // stack: stack_top_before_exc_addr, stack_len_before_exc, addr_registers, trap_info
+    MLOAD_GENERAL
+    // stack: stack_top_before_exc, stack_len_before_exc, addr_registers, trap_info
+    DUP3 %add_const(3)
+    MLOAD_GENERAL
+    // stack: stored_stack_top, stack_top_before_exc, stack_len_before_exc, addr_registers, trap_info
+    SUB MUL
+    // stack: (stored_stack_top - stack_top_before_exc) * stack_len_before_exc, addr_registers, trap_info
+    %assert_zero
+
+    // Check the program counter.
+    // stack: addr_registers, trap_info
+    DUP2 %as_u32
+    // stack: program_counter, addr_registers, trap_info
+    DUP2
+    MLOAD_GENERAL
+    // stack: public_pc, program_counter, addr_registers, trap_info
+    %assert_eq
+
+    // Check is_kernel_mode.
+    // stack: addr_registers, trap_info
+    DUP2 %shr_const(32)
+    %as_u32
+    // stack: is_kernel_mode, addr_registers, trap_info
+    DUP2 %increment
+    MLOAD_GENERAL
+    %assert_eq
+
+    // Check the gas used.
+    // stack: addr_registers, trap_info
+    SWAP1 %shr_const(192)
+    %as_u32
+    // stack: gas_used, addr_registers
+    DUP2 %add_const(5)
+    MLOAD_GENERAL
+    %assert_eq
+
+    // Check the context.
+    // stack: addr_registers
+    %add_const(4)
+    MLOAD_GENERAL
+    %shl_const(64)
+    // stack: stored_context
+    GET_CONTEXT
+    %assert_eq
+    // stack: (empty)
+    // The following two instructions are needed to not have failing constraints. 
+    // `ISZERO` pops and pushes, which means that there is no need to read the next top of the stack after it. 
+    // If we don't have it, there is a read of the top of the stack in padding rows, which have all channels disabled, 
+    // thus making the constraints fail. 
+    PUSH 1
+    ISZERO
+
+global halt_final:
+    // Just for halting. Nothing is executed when this is reached.
+    PANIC
 
 // Given the exception trap info, load the opcode that caused the exception
 %macro opcode_from_exp_trap_info

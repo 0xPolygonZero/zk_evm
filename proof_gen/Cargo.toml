@@ -14,6 +14,7 @@ log = { workspace = true }
 paste = { workspace = true }
 plonky2 = { workspace = true }
 serde = { workspace = true }
+hashbrown = { workspace = true }
 
 # Local dependencies
 evm_arithmetization = { workspace = true }

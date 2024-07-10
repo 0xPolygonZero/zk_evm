@@ -320,7 +320,7 @@ fn test_ecpairing_precompile_invalid_input() -> Result<()> {
     stack.reverse();
 
     for bytes in ECPAIRING_PRECOMPILE_INVALID_INPUTS.iter() {
-        let mut interpreter: Interpreter<F> = Interpreter::new(pairing_label, stack.clone());
+        let mut interpreter: Interpreter<F> = Interpreter::new(pairing_label, stack.clone(), None);
         let preloaded_memory = vec![
             U256::from_big_endian(&bytes[0..32]),    // Px
             U256::from_big_endian(&bytes[32..64]),   // Py

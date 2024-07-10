@@ -19,21 +19,25 @@ export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 if [[ $8 == "test_only" ]]; then
   # Circuit sizes don't matter in test_only mode, so we keep them minimal.
-  export ARITHMETIC_CIRCUIT_SIZE="16..17"
-  export BYTE_PACKING_CIRCUIT_SIZE="9..10"
-  export CPU_CIRCUIT_SIZE="12..13"
-  export KECCAK_CIRCUIT_SIZE="14..15"
-  export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
-  export LOGIC_CIRCUIT_SIZE="12..13"
-  export MEMORY_CIRCUIT_SIZE="17..18"
+    export ARITHMETIC_CIRCUIT_SIZE="16..17"
+    export BYTE_PACKING_CIRCUIT_SIZE="9..10"
+    export CPU_CIRCUIT_SIZE="12..13"
+    export KECCAK_CIRCUIT_SIZE="4..5"
+    export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
+    export LOGIC_CIRCUIT_SIZE="12..13"
+    export MEMORY_CIRCUIT_SIZE="17..18"
+    export MEMORY_BEFORE_CIRCUIT_SIZE="7..8"
+    export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
 else
-  export ARITHMETIC_CIRCUIT_SIZE="16..23"
-  export BYTE_PACKING_CIRCUIT_SIZE="9..21"
-  export CPU_CIRCUIT_SIZE="12..25"
-  export KECCAK_CIRCUIT_SIZE="14..20"
-  export KECCAK_SPONGE_CIRCUIT_SIZE="9..15"
-  export LOGIC_CIRCUIT_SIZE="12..18"
-  export MEMORY_CIRCUIT_SIZE="17..28"
+    export ARITHMETIC_CIRCUIT_SIZE="16..23"
+    export BYTE_PACKING_CIRCUIT_SIZE="8..23"
+    export CPU_CIRCUIT_SIZE="8..25"
+    export KECCAK_CIRCUIT_SIZE="4..20"
+    export KECCAK_SPONGE_CIRCUIT_SIZE="8..15"
+    export LOGIC_CIRCUIT_SIZE="8..18"
+    export MEMORY_CIRCUIT_SIZE="17..28"
+    export MEMORY_BEFORE_CIRCUIT_SIZE="7..27"
+    export MEMORY_AFTER_CIRCUIT_SIZE="7..27"
 fi
 
 # Force the working directory to always be the `tools/` directory. 

@@ -89,7 +89,7 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c
 }
 
-const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
+const MISC_CONSTANTS: [(&str, [u8; 32]); 5] = [
     // Base for limbs used in bignum arithmetic.
     (
         "BIGNUM_LIMB_BASE",
@@ -113,6 +113,13 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     (
         "INITIAL_TXN_RLP_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000b00000001"),
+    ),
+    // Address where the final registers start. It is the offset 6 within the
+    // SEGMENT_REGISTERS_STATES.
+    // *Note*: Changing this will break some tests.
+    (
+        "FINAL_REGISTERS_ADDR",
+        hex!("0000000000000000000000000000000000000000000000000000002100000006"),
     ),
 ];
 

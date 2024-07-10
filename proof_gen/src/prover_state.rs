@@ -29,6 +29,8 @@ pub struct ProverStateBuilder {
     pub(crate) keccak_sponge_circuit_size: Range<usize>,
     pub(crate) logic_circuit_size: Range<usize>,
     pub(crate) memory_circuit_size: Range<usize>,
+    pub(crate) memory_before_circuit_size: Range<usize>,
+    pub(crate) memory_after_circuit_size: Range<usize>,
 }
 
 impl Default for ProverStateBuilder {
@@ -48,6 +50,8 @@ impl Default for ProverStateBuilder {
             keccak_sponge_circuit_size: DEFAULT_KECCAK_SPONGE_RANGE,
             logic_circuit_size: DEFAULT_LOGIC_RANGE,
             memory_circuit_size: DEFAULT_MEMORY_RANGE,
+            memory_before_circuit_size: DEFAULT_MEMORY_BEFORE_RANGE,
+            memory_after_circuit_size: DEFAULT_MEMORY_AFTER_RANGE,
         }
     }
 }
@@ -73,6 +77,8 @@ impl ProverStateBuilder {
     define_set_circuit_size_method!(keccak_sponge);
     define_set_circuit_size_method!(logic);
     define_set_circuit_size_method!(memory);
+    define_set_circuit_size_method!(memory_before);
+    define_set_circuit_size_method!(memory_after);
 
     // TODO: Consider adding async version?
     /// Instantiate the prover state from the builder. Note that this is a very
@@ -90,6 +96,8 @@ impl ProverStateBuilder {
                 self.keccak_sponge_circuit_size,
                 self.logic_circuit_size,
                 self.memory_circuit_size,
+                self.memory_before_circuit_size,
+                self.memory_after_circuit_size,
             ],
             &StarkConfig::standard_fast_config(),
         );

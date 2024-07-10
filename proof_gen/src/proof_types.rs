@@ -9,21 +9,34 @@ use crate::types::PlonkyProofIntern;
 /// A transaction proof along with its public values, for proper connection with
 /// contiguous proofs.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneratedTxnProof {
+pub struct GeneratedSegmentProof {
     /// Public values of this transaction proof.
     pub p_vals: PublicValues,
     /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }
 
-/// An aggregation proof along with its public values, for proper connection
-/// with contiguous proofs.
+/// A segment aggregation proof along with its public values, for proper
+/// connection with contiguous proofs.
 ///
 /// Aggregation proofs can represent any contiguous range of two or more
-/// transactions, up to an entire block.
+/// segments, up to an entire transaction.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct GeneratedAggProof {
+pub struct GeneratedSegmentAggProof {
     /// Public values of this aggregation proof.
+    pub p_vals: PublicValues,
+    /// Underlying plonky2 proof.
+    pub intern: PlonkyProofIntern,
+}
+
+/// A transaction aggregation proof along with its public values, for proper
+/// connection with contiguous proofs.
+///
+/// Transaction agregation proofs can represent any contiguous range of two or
+/// more transactions, up to an entire block.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneratedTxnAggProof {
+    /// Public values of this transaction aggregation proof.
     pub p_vals: PublicValues,
     /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
@@ -43,44 +56,105 @@ pub struct GeneratedBlockProof {
 /// we can combine it into an agg proof. For these cases, we want to abstract
 /// away whether or not the proof was a txn or agg proof.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum AggregatableProof {
-    /// The underlying proof is a transaction proof.
-    Txn(GeneratedTxnProof),
+pub enum SegmentAggregatableProof {
+    /// The underlying proof is a segment proof.
+    Seg(GeneratedSegmentProof),
     /// The underlying proof is an aggregation proof.
-    Agg(GeneratedAggProof),
+    Agg(GeneratedSegmentAggProof),
 }
 
-impl AggregatableProof {
+/// Sometimes we don't care about the underlying proof type and instead only if
+/// we can combine it into an agg proof. For these cases, we want to abstract
+/// away whether or not the proof was a txn or agg proof.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum TxnAggregatableProof {
+    /// The underlying proof is a segment proof. It first needs to be aggregated
+    /// with another segment proof, or a dummy one.
+    Segment(GeneratedSegmentProof),
+    /// The underlying proof is a transaction proof.
+    Txn(GeneratedSegmentAggProof),
+    /// The underlying proof is an aggregation proof.
+    Agg(GeneratedTxnAggProof),
+}
+
+impl SegmentAggregatableProof {
     pub(crate) fn public_values(&self) -> PublicValues {
         match self {
-            AggregatableProof::Txn(info) => info.p_vals.clone(),
-            AggregatableProof::Agg(info) => info.p_vals.clone(),
+            SegmentAggregatableProof::Seg(info) => info.p_vals.clone(),
+            SegmentAggregatableProof::Agg(info) => info.p_vals.clone(),
         }
     }
 
     pub(crate) const fn is_agg(&self) -> bool {
         match self {
-            AggregatableProof::Txn(_) => false,
-            AggregatableProof::Agg(_) => true,
+            SegmentAggregatableProof::Seg(_) => false,
+            SegmentAggregatableProof::Agg(_) => true,
         }
     }
 
     pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
         match self {
-            AggregatableProof::Txn(info) => &info.intern,
-            AggregatableProof::Agg(info) => &info.intern,
+            SegmentAggregatableProof::Seg(info) => &info.intern,
+            SegmentAggregatableProof::Agg(info) => &info.intern,
         }
     }
 }
 
-impl From<GeneratedTxnProof> for AggregatableProof {
-    fn from(v: GeneratedTxnProof) -> Self {
+impl TxnAggregatableProof {
+    pub(crate) fn public_values(&self) -> PublicValues {
+        match self {
+            TxnAggregatableProof::Segment(info) => info.p_vals.clone(),
+            TxnAggregatableProof::Txn(info) => info.p_vals.clone(),
+            TxnAggregatableProof::Agg(info) => info.p_vals.clone(),
+        }
+    }
+
+    pub(crate) fn is_agg(&self) -> bool {
+        match self {
+            TxnAggregatableProof::Segment(_) => false,
+            TxnAggregatableProof::Txn(_) => false,
+            TxnAggregatableProof::Agg(_) => true,
+        }
+    }
+
+    pub(crate) fn intern(&self) -> &PlonkyProofIntern {
+        match self {
+            TxnAggregatableProof::Segment(info) => &info.intern,
+            TxnAggregatableProof::Txn(info) => &info.intern,
+            TxnAggregatableProof::Agg(info) => &info.intern,
+        }
+    }
+}
+
+impl From<GeneratedSegmentProof> for SegmentAggregatableProof {
+    fn from(v: GeneratedSegmentProof) -> Self {
+        Self::Seg(v)
+    }
+}
+
+impl From<GeneratedSegmentAggProof> for SegmentAggregatableProof {
+    fn from(v: GeneratedSegmentAggProof) -> Self {
+        Self::Agg(v)
+    }
+}
+
+impl From<GeneratedSegmentAggProof> for TxnAggregatableProof {
+    fn from(v: GeneratedSegmentAggProof) -> Self {
         Self::Txn(v)
     }
 }
 
-impl From<GeneratedAggProof> for AggregatableProof {
-    fn from(v: GeneratedAggProof) -> Self {
+impl From<GeneratedTxnAggProof> for TxnAggregatableProof {
+    fn from(v: GeneratedTxnAggProof) -> Self {
         Self::Agg(v)
+    }
+}
+
+impl From<SegmentAggregatableProof> for TxnAggregatableProof {
+    fn from(v: SegmentAggregatableProof) -> Self {
+        match v {
+            SegmentAggregatableProof::Agg(agg) => TxnAggregatableProof::Txn(agg),
+            SegmentAggregatableProof::Seg(seg) => TxnAggregatableProof::Segment(seg),
+        }
     }
 }

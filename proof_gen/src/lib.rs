@@ -44,10 +44,10 @@
 //! This library handles the 3 kinds of proof generations necessary for the
 //! zkEVM:
 //!
-//! ### Transaction proofs
+//! ### Segment proofs
 //!
 //! From a `ProverState` and a transaction processed with some metadata in
-//! Intermediate Representation, one can obtain a transaction proof by calling
+//! Intermediate Representation, one can obtain a segment proof by calling
 //! the method below:
 //!
 //! ```compile_fail
@@ -61,10 +61,10 @@
 //! The obtained `GeneratedTxnProof` contains the actual proof and some
 //! additional data to be used when aggregating this transaction with others.
 //!
-//! ### Aggregation proofs
+//! ### Segment Aggregation proofs
 //!
 //! Two proofs can be aggregated together with a `ProverState`. These `child`
-//! proofs can either be transaction proofs, or aggregated proofs themselves.
+//! proofs can either be segment proofs, or aggregated proofs themselves.
 //! This library abstracts their type behind an `AggregatableProof` enum.
 //!
 //! ```compile_fail
@@ -75,9 +75,25 @@
 //! ) -> ProofGenResult<GeneratedAggProof> { ... }
 //! ```
 //!
+//! ### Transaction Aggregation proofs
+//!
+//! Given a `GeneratedAggProof` corresponding to the entire set of segment
+//! proofs within one transaction proof, the prover can wrap it into a
+//! `GeneratedBlockProof`. The prover can pass an optional previous transaction
+//! proof as argument to the `generate_transaction_agg_proof` method, to combine
+//! both statements into one.
+//!
+//! ```compile_fail
+//!  pub fn generate_transaction_agg_proof(
+//!      p_state: &ProverState,
+//!      prev_opt_parent_b_proof: Option<&GeneratedBlockProof>,
+//!      curr_block_agg_proof: &GeneratedAggProof,
+//!  ) -> ProofGenResult<GeneratedBlockProof> { ... }
+//! ```
+//!
 //! ### Block proofs
 //!
-//! Once the prover has obtained a `GeneratedAggProof` corresponding to the
+//! Once the prover has obtained a `GeneratedBlockProof` corresponding to the
 //! entire set of transactions within a block, they can then wrap it into a
 //! final `GeneratedBlockProof`. The prover can pass an optional previous
 //! block proof as argument to the `generate_block_proof` method, to combine

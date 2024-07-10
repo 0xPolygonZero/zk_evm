@@ -40,7 +40,7 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use plonky2::util::transpose;
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
-use starky::evaluation_frame::StarkEvaluationFrame;
+use starky::evaluation_frame::{StarkEvaluationFrame, StarkFrame};
 use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 

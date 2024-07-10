@@ -207,9 +207,18 @@ process_receipt_after_write:
     %mpt_insert_receipt_trie
     // stack: new_cum_gas, txn_nb, num_nibbles, retdest
 
-    // We don't need to reset the bloom filter segment as we only process a single transaction.
-    // TODO: Revert in case we add back support for multi-txn proofs.
-
+    // Now, we set the Bloom filter back to 0. We proceed by chunks of 32 bytes.
+    PUSH @SEGMENT_TXN_BLOOM // ctx == offset == 0
+    %rep 8
+        // stack: addr, new_cum_gas, txn_nb, num_nibbles, retdest
+        PUSH 0 // we will fill the memory segment with zeroes
+        SWAP1
+        // stack: addr, 0, new_cum_gas, txn_nb, num_nibbles, retdest
+        MSTORE_32BYTES_32
+        // stack: new_addr, new_cum_gas, txn_nb, num_nibbles, retdest
+    %endrep
+    POP
+    // stack: new_cum_gas, txn_nb, num_nibbles, retdest
     %stack (new_cum_gas, txn_nb, num_nibbles, retdest) -> (retdest, new_cum_gas)
     JUMP
     

@@ -81,7 +81,9 @@ gen_prover_state_config!(
     keccak: Circuit::Keccak,
     keccak_sponge: Circuit::KeccakSponge,
     logic: Circuit::Logic,
-    memory: Circuit::Memory
+    memory: Circuit::Memory,
+    mem_before: Circuit::MemoryBefore,
+    mem_after: Circuit::MemoryAfter
 );
 
 impl CliProverStateConfig {
@@ -96,6 +98,8 @@ impl CliProverStateConfig {
             (Circuit::KeccakSponge, self.keccak_sponge),
             (Circuit::Logic, self.logic),
             (Circuit::Memory, self.memory),
+            (Circuit::MemoryBefore, self.mem_before),
+            (Circuit::MemoryAfter, self.mem_after),
         ]
         .into_iter()
         .filter_map(|(circuit, range)| range.map(|range| (circuit, range)))

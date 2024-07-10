@@ -5,13 +5,17 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
+use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::polynomial::PolynomialValues;
+use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
+use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::challenger::Challenger;
-use plonky2::plonk::config::GenericConfig;
+use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use starky::cross_table_lookup::{get_ctl_data, CtlData};
 use starky::lookup::GrandProductChallengeSet;
@@ -21,15 +25,53 @@ use starky::stark::Stark;
 
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
+use crate::generation::state::{GenerationState, State};
 use crate::generation::{generate_traces, GenerationInputs};
 use crate::get_challenges::observe_public_values;
-use crate::proof::{AllProof, PublicValues};
+use crate::memory::segments::Segment;
+use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
+use crate::witness::memory::{MemoryAddress, MemoryState};
+use crate::witness::state::RegistersState;
+
+/// Structure holding the data needed to initialize a segment.
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct GenerationSegmentData {
+    /// Indicates whether this corresponds to a dummy segment.
+    pub(crate) is_dummy: bool,
+    /// Indicates the position of this segment in a sequence of
+    /// executions for a larger payload.
+    pub(crate) segment_index: usize,
+    /// Registers at the start of the segment execution.
+    pub(crate) registers_before: RegistersState,
+    /// Registers at the end of the segment execution.
+    pub(crate) registers_after: RegistersState,
+    /// Memory at the start of the segment execution.
+    pub(crate) memory: MemoryState,
+    /// Extra data required to initialize a segment.
+    pub(crate) extra_data: ExtraSegmentData,
+    /// Log of the maximal cpu length.
+    pub(crate) max_cpu_len_log: Option<usize>,
+}
+
+impl GenerationSegmentData {
+    /// Indicates if this segment is a dummy one.
+    pub fn is_dummy(&self) -> bool {
+        self.is_dummy
+    }
+
+    /// Retrieves the index of this segment.
+    pub fn segment_index(&self) -> usize {
+        self.segment_index
+    }
+}
 
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     inputs: GenerationInputs,
+    segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> Result<AllProof<F, C, D>>
@@ -38,21 +80,24 @@ where
     C: GenericConfig<D, F = F>,
 {
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
-    let (traces, public_values) = timed!(
+
+    let (traces, mut public_values) = timed!(
         timing,
         "generate all traces",
-        generate_traces(all_stark, inputs, config, timing)?
+        generate_traces(all_stark, &inputs, config, segment_data, timing)?
     );
+
     check_abort_signal(abort_signal.clone())?;
 
     let proof = prove_with_traces(
         all_stark,
         config,
         traces,
-        public_values,
+        &mut public_values,
         timing,
         abort_signal,
     )?;
+
     Ok(proof)
 }
 
@@ -61,7 +106,7 @@ pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
-    public_values: PublicValues,
+    public_values: &mut PublicValues,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> Result<AllProof<F, C, D>>
@@ -107,7 +152,7 @@ where
         challenger.observe_cap(cap);
     }
 
-    observe_public_values::<F, C, D>(&mut challenger, &public_values)
+    observe_public_values::<F, C, D>(&mut challenger, public_values)
         .map_err(|_| anyhow::Error::msg("Invalid conversion of public values."))?;
 
     // For each STARK, compute its cross-table lookup Z polynomials and get the
@@ -124,7 +169,7 @@ where
         )
     );
 
-    let stark_proofs = timed!(
+    let (stark_proofs, mem_before_cap, mem_after_cap) = timed!(
         timing,
         "compute all proofs given commitments",
         prove_with_commitments(
@@ -139,6 +184,34 @@ where
             abort_signal,
         )?
     );
+    public_values.mem_before = MemCap {
+        mem_cap: mem_before_cap
+            .0
+            .iter()
+            .map(|h| {
+                h.to_vec()
+                    .iter()
+                    .map(|hi| hi.to_canonical_u64().into())
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>(),
+    };
+    public_values.mem_after = MemCap {
+        mem_cap: mem_after_cap
+            .0
+            .iter()
+            .map(|h| {
+                h.to_vec()
+                    .iter()
+                    .map(|hi| hi.to_canonical_u64().into())
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>(),
+    };
 
     // This is an expensive check, hence is only run when `debug_assertions` are
     // enabled.
@@ -152,7 +225,7 @@ where
         let mut extra_values = HashMap::new();
         extra_values.insert(
             *Table::Memory,
-            get_memory_extra_looking_values(&public_values),
+            get_memory_extra_looking_values(public_values),
         );
         check_ctls(
             &trace_poly_values,
@@ -166,9 +239,15 @@ where
             stark_proofs,
             ctl_challenges,
         },
-        public_values,
+        public_values: public_values.clone(),
     })
 }
+
+type ProofWithMemCaps<F, C, H, const D: usize> = (
+    [StarkProofWithMetadata<F, C, D>; NUM_TABLES],
+    MerkleCap<F, H>,
+    MerkleCap<F, H>,
+);
 
 /// Generates a proof for each STARK.
 /// At this stage, we have computed the trace polynomials commitments for the
@@ -189,12 +268,12 @@ fn prove_with_commitments<F, C, const D: usize>(
     ctl_challenges: &GrandProductChallengeSet<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<[StarkProofWithMetadata<F, C, D>; NUM_TABLES]>
+) -> Result<ProofWithMemCaps<F, C, C::Hasher, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    let arithmetic_proof = timed!(
+    let (arithmetic_proof, _) = timed!(
         timing,
         "prove Arithmetic STARK",
         prove_single_table(
@@ -209,7 +288,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let byte_packing_proof = timed!(
+    let (byte_packing_proof, _) = timed!(
         timing,
         "prove byte packing STARK",
         prove_single_table(
@@ -224,7 +303,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let cpu_proof = timed!(
+    let (cpu_proof, _) = timed!(
         timing,
         "prove CPU STARK",
         prove_single_table(
@@ -239,7 +318,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let keccak_proof = timed!(
+    let (keccak_proof, _) = timed!(
         timing,
         "prove Keccak STARK",
         prove_single_table(
@@ -254,7 +333,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let keccak_sponge_proof = timed!(
+    let (keccak_sponge_proof, _) = timed!(
         timing,
         "prove Keccak sponge STARK",
         prove_single_table(
@@ -269,7 +348,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let logic_proof = timed!(
+    let (logic_proof, _) = timed!(
         timing,
         "prove logic STARK",
         prove_single_table(
@@ -284,7 +363,7 @@ where
             abort_signal.clone(),
         )?
     );
-    let memory_proof = timed!(
+    let (memory_proof, _) = timed!(
         timing,
         "prove memory STARK",
         prove_single_table(
@@ -296,25 +375,66 @@ where
             ctl_challenges,
             challenger,
             timing,
+            abort_signal.clone(),
+        )?
+    );
+    let (mem_before_proof, mem_before_cap) = timed!(
+        timing,
+        "prove mem_before STARK",
+        prove_single_table(
+            &all_stark.mem_before_stark,
+            config,
+            &trace_poly_values[Table::MemBefore as usize],
+            &trace_commitments[Table::MemBefore as usize],
+            &ctl_data_per_table[Table::MemBefore as usize],
+            ctl_challenges,
+            challenger,
+            timing,
+            abort_signal.clone(),
+        )?
+    );
+    let (mem_after_proof, mem_after_cap) = timed!(
+        timing,
+        "prove mem_after STARK",
+        prove_single_table(
+            &all_stark.mem_after_stark,
+            config,
+            &trace_poly_values[Table::MemAfter as usize],
+            &trace_commitments[Table::MemAfter as usize],
+            &ctl_data_per_table[Table::MemAfter as usize],
+            ctl_challenges,
+            challenger,
+            timing,
             abort_signal,
         )?
     );
 
-    Ok([
-        arithmetic_proof,
-        byte_packing_proof,
-        cpu_proof,
-        keccak_proof,
-        keccak_sponge_proof,
-        logic_proof,
-        memory_proof,
-    ])
+    Ok((
+        [
+            arithmetic_proof,
+            byte_packing_proof,
+            cpu_proof,
+            keccak_proof,
+            keccak_sponge_proof,
+            logic_proof,
+            memory_proof,
+            mem_before_proof,
+            mem_after_proof,
+        ],
+        mem_before_cap,
+        mem_after_cap,
+    ))
 }
+
+type ProofSingleWithCap<F, C, H, const D: usize> =
+    (StarkProofWithMetadata<F, C, D>, MerkleCap<F, H>);
 
 /// Computes a proof for a single STARK table, including:
 /// - the initial state of the challenger,
 /// - all the requires Merkle caps,
 /// - all the required polynomial and FRI argument openings.
+///
+/// Returns the proof, along with the associated `MerkleCap`.
 pub(crate) fn prove_single_table<F, C, S, const D: usize>(
     stark: &S,
     config: &StarkConfig,
@@ -325,7 +445,7 @@ pub(crate) fn prove_single_table<F, C, S, const D: usize>(
     challenger: &mut Challenger<F, C::Hasher>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<StarkProofWithMetadata<F, C, D>>
+) -> Result<ProofSingleWithCap<F, C, C::Hasher, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -336,7 +456,7 @@ where
     // Clear buffered outputs.
     let init_challenger_state = challenger.compact();
 
-    prove_with_commitment(
+    let proof = prove_with_commitment(
         stark,
         config,
         trace_poly_values,
@@ -350,7 +470,9 @@ where
     .map(|proof_with_pis| StarkProofWithMetadata {
         proof: proof_with_pis.proof,
         init_challenger_state,
-    })
+    })?;
+
+    Ok((proof, trace_commitment.merkle_tree.cap.clone()))
 }
 
 /// Utility method that checks whether a kill signal has been emitted by one of
@@ -366,6 +488,163 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
     Ok(())
 }
 
+/// Builds a new `GenerationSegmentData`.
+/// This new segment's `is_dummy` field must be updated manually
+/// in case it corresponds to a dummy segment.
+#[allow(clippy::unwrap_or_default)]
+fn build_segment_data<F: RichField>(
+    segment_index: usize,
+    registers_before: Option<RegistersState>,
+    registers_after: Option<RegistersState>,
+    memory: Option<MemoryState>,
+    interpreter: &Interpreter<F>,
+) -> GenerationSegmentData {
+    GenerationSegmentData {
+        is_dummy: false,
+        segment_index,
+        registers_before: registers_before.unwrap_or(RegistersState::new()),
+        registers_after: registers_after.unwrap_or(RegistersState::new()),
+        memory: memory.unwrap_or_default(),
+        max_cpu_len_log: interpreter.get_max_cpu_len_log(),
+        extra_data: ExtraSegmentData {
+            bignum_modmul_result_limbs: interpreter
+                .generation_state
+                .bignum_modmul_result_limbs
+                .clone(),
+            rlp_prover_inputs: interpreter.generation_state.rlp_prover_inputs.clone(),
+            withdrawal_prover_inputs: interpreter
+                .generation_state
+                .withdrawal_prover_inputs
+                .clone(),
+            trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
+            jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
+            next_txn_index: interpreter.generation_state.next_txn_index,
+        },
+    }
+}
+
+pub struct SegmentDataIterator<'a> {
+    pub partial_next_data: Option<GenerationSegmentData>,
+    pub inputs: &'a GenerationInputs,
+    pub max_cpu_len_log: Option<usize>,
+}
+
+type F = GoldilocksField;
+impl<'a> Iterator for SegmentDataIterator<'a> {
+    type Item = (GenerationInputs, GenerationSegmentData);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let cur_and_next_data = generate_next_segment::<F>(
+            self.max_cpu_len_log,
+            self.inputs,
+            self.partial_next_data.clone(),
+        );
+
+        if cur_and_next_data.is_some() {
+            let (data, next_data) = cur_and_next_data.expect("Data cannot be `None`");
+            self.partial_next_data = next_data;
+            Some((self.inputs.clone(), data))
+        } else {
+            None
+        }
+    }
+}
+
+/// Returns the data for the current segment, as well as the data -- except
+/// registers_after -- for the next segment.
+pub(crate) fn generate_next_segment<F: RichField>(
+    max_cpu_len_log: Option<usize>,
+    inputs: &GenerationInputs,
+    partial_segment_data: Option<GenerationSegmentData>,
+) -> Option<(GenerationSegmentData, Option<GenerationSegmentData>)> {
+    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+        KERNEL.global_labels["init"],
+        vec![],
+        inputs,
+        max_cpu_len_log,
+    );
+
+    // Get the (partial) current segment data, if it is provided. Otherwise,
+    // initialize it.
+    let mut segment_data = if let Some(partial) = partial_segment_data {
+        if partial.registers_after.program_counter == KERNEL.global_labels["halt"] {
+            return None;
+        }
+        interpreter
+            .get_mut_generation_state()
+            .set_segment_data(&partial);
+        interpreter.generation_state.memory = partial.memory.clone();
+        partial
+    } else {
+        build_segment_data(0, None, None, None, &interpreter)
+    };
+
+    let segment_index = segment_data.segment_index;
+
+    // Run the interpreter to get `registers_after` and the partial data for the
+    // next segment.
+    if let Ok((updated_registers, mem_after)) =
+        set_registers_and_run(segment_data.registers_after, &mut interpreter)
+    {
+        // Set `registers_after` correctly and push the data.
+        let before_registers = segment_data.registers_after;
+
+        let partial_segment_data = Some(build_segment_data(
+            segment_index + 1,
+            Some(updated_registers),
+            Some(updated_registers),
+            mem_after,
+            &interpreter,
+        ));
+
+        segment_data.registers_after = updated_registers;
+        Some((segment_data, partial_segment_data))
+    } else {
+        panic!("Segment generation failed");
+    }
+}
+
+/// Returns a vector containing the data required to generate all the segments
+/// of a transaction.
+pub fn generate_all_data_segments<F: RichField>(
+    max_cpu_len_log: Option<usize>,
+    inputs: &GenerationInputs,
+) -> anyhow::Result<Vec<GenerationSegmentData>> {
+    let mut all_seg_data = vec![];
+
+    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+        KERNEL.global_labels["init"],
+        vec![],
+        inputs,
+        max_cpu_len_log,
+    );
+
+    let mut segment_index = 0;
+
+    let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
+
+    while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
+        let (updated_registers, mem_after) =
+            set_registers_and_run(segment_data.registers_before, &mut interpreter)?;
+
+        // Set `registers_after` correctly and push the data.
+        segment_data.registers_after = updated_registers;
+        all_seg_data.push(segment_data);
+
+        segment_index += 1;
+
+        segment_data = build_segment_data(
+            segment_index,
+            Some(updated_registers),
+            Some(updated_registers),
+            mem_after,
+            &interpreter,
+        );
+    }
+
+    Ok(all_seg_data)
+}
+
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use super::*;
@@ -378,14 +657,83 @@ pub mod testing {
     /// It does not generate any trace or proof of correct state transition.
     pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
         let initial_stack = vec![];
-        let initial_offset = KERNEL.global_labels["main"];
+        let initial_offset = KERNEL.global_labels["init"];
         let mut interpreter: Interpreter<F> =
-            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, inputs);
+            Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
         let result = interpreter.run();
         if result.is_err() {
             output_debug_tries(interpreter.get_generation_state())?;
         }
 
-        result
+        result?;
+        Ok(())
+    }
+
+    pub fn prove_all_segments<F, C, const D: usize>(
+        all_stark: &AllStark<F, D>,
+        config: &StarkConfig,
+        inputs: GenerationInputs,
+        max_cpu_len_log: usize,
+        timing: &mut TimingTree,
+        abort_signal: Option<Arc<AtomicBool>>,
+    ) -> Result<Vec<AllProof<F, C, D>>>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+    {
+        let mut segment_idx = 0;
+        let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
+
+        let mut proofs = Vec::with_capacity(data.len());
+        for mut d in data {
+            let proof = prove(
+                all_stark,
+                config,
+                inputs.clone(),
+                &mut d,
+                timing,
+                abort_signal.clone(),
+            )?;
+            proofs.push(proof);
+        }
+
+        Ok(proofs)
+    }
+
+    pub fn simulate_all_segments_interpreter<F>(
+        inputs: GenerationInputs,
+        max_cpu_len_log: usize,
+    ) -> anyhow::Result<()>
+    where
+        F: RichField,
+    {
+        let max_cpu_len_log = Some(max_cpu_len_log);
+        let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
+            KERNEL.global_labels["init"],
+            vec![],
+            &inputs,
+            max_cpu_len_log,
+        );
+
+        let mut segment_index = 0;
+
+        let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
+
+        while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
+            segment_index += 1;
+
+            let (updated_registers, mem_after) =
+                set_registers_and_run(segment_data.registers_before, &mut interpreter)?;
+
+            segment_data = build_segment_data(
+                segment_index,
+                Some(updated_registers),
+                Some(updated_registers),
+                mem_after,
+                &interpreter,
+            );
+        }
+
+        Ok(())
     }
 }

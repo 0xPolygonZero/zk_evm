@@ -4,8 +4,11 @@ use std::time::Duration;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{BigEndianHash, H256};
+use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::proof::{
+    BlockHashes, BlockMetadata, FinalPublicValues, PublicValues, TrieRoots,
+};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
 use log::info;
@@ -47,10 +50,11 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
+
     let mut initial_block_hashes = vec![H256::default(); 256];
     initial_block_hashes[255] = H256::from_uint(&0x200.into());
     let inputs = GenerationInputs {
-        signed_txn: None,
+        signed_txns: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
             state_trie,
@@ -74,8 +78,8 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
     // Initialize the preprocessed circuits for the zkEVM.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 9..11, 12..13, 14..15, 9..11, 12..13, 17..18], /* Minimal ranges to prove an
-                                                                  * empty list */
+        // Minimal ranges to prove an empty list
+        &[16..17, 8..9, 8..10, 5..8, 8..9, 4..6, 16..17, 16..17, 7..17],
         &config,
     );
 
@@ -108,37 +112,125 @@ fn test_empty_txn_list() -> anyhow::Result<()> {
         assert_eq!(all_circuits, all_circuits_from_bytes);
     }
 
+    let max_cpu_len_log = 9;
     let mut timing = TimingTree::new("prove", log::Level::Info);
-    let (root_proof, public_values) =
-        all_circuits.prove_root(&all_stark, &config, inputs, &mut timing, None)?;
-    timing.filter(Duration::from_millis(100)).print();
-    all_circuits.verify_root(root_proof.clone())?;
+
+    let segment_proofs_data = &all_circuits.prove_all_segments(
+        &all_stark,
+        &config,
+        inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
+
+    assert_eq!(segment_proofs_data.len(), 3);
+    for proof_data in segment_proofs_data {
+        let ProverOutputData {
+            proof_with_pis: proof,
+            ..
+        } = proof_data;
+        all_circuits.verify_root(proof.clone())?;
+    }
+
+    let first_mem_before = segment_proofs_data[0]
+        .public_values
+        .mem_before
+        .mem_cap
+        .clone();
+    let second_mem_before = segment_proofs_data[1]
+        .public_values
+        .mem_before
+        .mem_cap
+        .clone();
+    let third_mem_before = segment_proofs_data[2]
+        .public_values
+        .mem_before
+        .mem_cap
+        .clone();
 
     // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&root_proof.public_inputs);
-    assert_eq!(retrieved_public_values, public_values);
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &segment_proofs_data[0].proof_with_pis.public_inputs,
+        first_mem_before.len(),
+    );
+    assert_eq!(
+        retrieved_public_values,
+        segment_proofs_data[0].public_values
+    );
+
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &segment_proofs_data[1].proof_with_pis.public_inputs,
+        second_mem_before.len(),
+    );
+    assert_eq!(
+        retrieved_public_values,
+        segment_proofs_data[1].public_values
+    );
+
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &segment_proofs_data[2].proof_with_pis.public_inputs,
+        third_mem_before.len(),
+    );
+    assert_eq!(
+        retrieved_public_values,
+        segment_proofs_data[2].public_values
+    );
 
     // We can duplicate the proofs here because the state hasn't mutated.
-    let (agg_proof, agg_public_values) = all_circuits.prove_aggregation(
+    let aggregation_output_data = all_circuits.prove_segment_aggregation(
         false,
-        &root_proof,
-        public_values.clone(),
+        &segment_proofs_data[0],
         false,
-        &root_proof,
-        public_values,
+        &segment_proofs_data[1],
     )?;
-    all_circuits.verify_aggregation(&agg_proof)?;
+    all_circuits.verify_segment_aggregation(&aggregation_output_data.proof_with_pis)?;
+
+    let aggregation_output_data = all_circuits.prove_segment_aggregation(
+        true,
+        &aggregation_output_data,
+        false,
+        &segment_proofs_data[2],
+    )?;
+    all_circuits.verify_segment_aggregation(&aggregation_output_data.proof_with_pis)?;
 
     // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&agg_proof.public_inputs);
-    assert_eq!(retrieved_public_values, agg_public_values);
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &aggregation_output_data.proof_with_pis.public_inputs,
+        aggregation_output_data
+            .public_values
+            .mem_before
+            .mem_cap
+            .len(),
+    );
+    assert_eq!(
+        retrieved_public_values,
+        aggregation_output_data.public_values
+    );
+
+    let (txn_proof, txn_public_values) = all_circuits.prove_transaction_aggregation(
+        false,
+        &aggregation_output_data.proof_with_pis,
+        aggregation_output_data.public_values.clone(),
+        false,
+        &aggregation_output_data.proof_with_pis,
+        aggregation_output_data.public_values,
+    )?;
+    all_circuits.verify_txn_aggregation(&txn_proof)?;
+
+    // Test retrieved public values from the proof public inputs.
+    let retrieved_public_values = PublicValues::from_public_inputs(
+        &txn_proof.public_inputs,
+        txn_public_values.mem_before.mem_cap.len(),
+    );
+    assert_eq!(retrieved_public_values, txn_public_values);
 
     let (block_proof, block_public_values) =
-        all_circuits.prove_block(None, &agg_proof, agg_public_values)?;
+        all_circuits.prove_block(None, &txn_proof, txn_public_values)?;
     all_circuits.verify_block(&block_proof)?;
 
-    // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&block_proof.public_inputs);
+    // Test retrieved final public values from the proof public inputs.
+    let retrieved_public_values = FinalPublicValues::from_public_inputs(&block_proof.public_inputs);
     assert_eq!(retrieved_public_values, block_public_values);
 
     // Get the verifier associated to these preprocessed circuits, and have it

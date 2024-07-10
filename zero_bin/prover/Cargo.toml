@@ -11,10 +11,12 @@ categories.workspace = true
 [dependencies]
 serde = { workspace = true }
 proof_gen = { workspace = true }
+plonky2 = { workspace = true }
 trace_decoder = { workspace = true }
 tracing = { workspace = true }
 paladin-core = { workspace = true }
 anyhow = { workspace = true }
+evm_arithmetization = { workspace = true }
 futures = { workspace = true }
 alloy.workspace = true
 tokio = {workspace = true}

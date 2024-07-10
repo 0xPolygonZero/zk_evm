@@ -27,6 +27,10 @@ pub(crate) enum Command {
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,
+        #[arg(short, long, default_value_t = 20)]
+        max_cpu_len_log: usize,
+        #[arg(short, long, default_value_t = 1)]
+        batch_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
         save_inputs_on_error: bool,
@@ -52,6 +56,11 @@ pub(crate) enum Command {
         /// stdout.
         #[arg(long, short = 'o', value_hint = ValueHint::FilePath)]
         proof_output_dir: Option<PathBuf>,
+        /// The log of the max number of CPU cycles per proof.
+        #[arg(short, long, default_value_t = 20)]
+        max_cpu_len_log: usize,
+        #[arg(short, long, default_value_t = 1)]
+        batch_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
         save_inputs_on_error: bool,
@@ -83,6 +92,10 @@ pub(crate) enum Command {
         /// The directory to which output should be written.
         #[arg(short, long, value_hint = ValueHint::DirPath)]
         output_dir: PathBuf,
+        #[arg(short, long, default_value_t = 20)]
+        max_cpu_len_log: usize,
+        #[arg(short, long, default_value_t = 1)]
+        batch_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
         save_inputs_on_error: bool,

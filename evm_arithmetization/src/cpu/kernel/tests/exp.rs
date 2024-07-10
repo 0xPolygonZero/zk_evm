@@ -17,7 +17,7 @@ fn test_exp() -> Result<()> {
 
     // Random input
     let initial_stack = vec![0xDEADBEEFu32.into(), b, a];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack.clone());
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack.clone(), None);
 
     let stack_with_kernel = run_interpreter::<F>(exp, initial_stack)?.stack();
 

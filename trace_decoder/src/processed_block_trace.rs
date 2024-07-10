@@ -42,20 +42,25 @@ impl BlockTrace {
         self,
         p_meta: &ProcessingMeta<F>,
         other_data: OtherBlockData,
+        batch_size: usize,
     ) -> TraceParsingResult<Vec<GenerationInputs>>
     where
         F: CodeHashResolveFunc,
     {
-        let processed_block_trace =
-            self.into_processed_block_trace(p_meta, other_data.b_data.withdrawals.clone())?;
+        let processed_block_trace = self.into_processed_block_trace(
+            p_meta,
+            other_data.b_data.withdrawals.clone(),
+            batch_size,
+        )?;
 
-        processed_block_trace.into_txn_proof_gen_ir(other_data)
+        processed_block_trace.into_txn_proof_gen_ir(other_data, batch_size)
     }
 
     fn into_processed_block_trace<F>(
         self,
         p_meta: &ProcessingMeta<F>,
         withdrawals: Vec<(Address, U256)>,
+        batch_size: usize,
     ) -> TraceParsingResult<ProcessedBlockTrace>
     where
         F: CodeHashResolveFunc,
@@ -93,11 +98,11 @@ impl BlockTrace {
             extra_code_hash_mappings: code_db,
         };
 
-        let last_tx_idx = self.txn_info.len().saturating_sub(1);
+        let last_tx_idx = self.txn_info.len().saturating_sub(1) / batch_size;
 
         let txn_info = self
             .txn_info
-            .into_iter()
+            .chunks(batch_size)
             .enumerate()
             .map(|(i, t)| {
                 let extra_state_accesses = if last_tx_idx == i {
@@ -111,7 +116,8 @@ impl BlockTrace {
                     Vec::new()
                 };
 
-                t.into_processed_txn_info(
+                TxnInfo::into_processed_txn_info(
+                    t,
                     &all_accounts_in_pre_image,
                     &extra_state_accesses,
                     &mut code_hash_resolver,
@@ -253,7 +259,7 @@ where
 pub(crate) struct ProcessedTxnInfo {
     pub(crate) nodes_used_by_txn: NodesUsedByTxn,
     pub(crate) contract_code_accessed: HashMap<CodeHash, Vec<u8>>,
-    pub(crate) meta: TxnMetaState,
+    pub(crate) meta: Vec<TxnMetaState>,
 }
 
 struct CodeHashResolving<F> {
@@ -283,131 +289,169 @@ impl<F: CodeHashResolveFunc> CodeHashResolving<F> {
 
 impl TxnInfo {
     fn into_processed_txn_info<F: CodeHashResolveFunc>(
-        self,
+        tx_infos: &[Self],
         all_accounts_in_pre_image: &[(HashedAccountAddr, AccountRlp)],
         extra_state_accesses: &[HashedAccountAddr],
         code_hash_resolver: &mut CodeHashResolving<F>,
     ) -> ProcessedTxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
+        let mut meta = Vec::with_capacity(tx_infos.len());
 
-        for (addr, trace) in self.traces {
-            let hashed_addr = hash(addr.as_bytes());
+        for txn in tx_infos.iter() {
+            for (addr, trace) in txn.traces.iter() {
+                let hashed_addr = hash(addr.as_bytes());
 
-            let storage_writes = trace.storage_written.unwrap_or_default();
+                let storage_writes = trace.storage_written.clone().unwrap_or_default();
 
-            let storage_read_keys = trace
-                .storage_read
-                .into_iter()
-                .flat_map(|reads| reads.into_iter());
+                let storage_read_keys = trace
+                    .storage_read
+                    .clone()
+                    .into_iter()
+                    .flat_map(|reads| reads.into_iter());
 
-            let storage_write_keys = storage_writes.keys();
-            let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
+                let storage_write_keys = storage_writes.keys();
+                let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
 
-            nodes_used_by_txn.storage_accesses.push((
-                hashed_addr,
-                storage_access_keys
-                    .map(|k| Nibbles::from_h256_be(hash(&k.0)))
-                    .collect(),
-            ));
-
-            let storage_trie_change = !storage_writes.is_empty();
-            let code_change = trace.code_usage.is_some();
-            let state_write_occurred = trace.balance.is_some()
-                || trace.nonce.is_some()
-                || storage_trie_change
-                || code_change;
-
-            if state_write_occurred {
-                let state_trie_writes = StateTrieWrites {
-                    balance: trace.balance,
-                    nonce: trace.nonce,
-                    storage_trie_change,
-                    code_hash: trace.code_usage.as_ref().map(|usage| usage.get_code_hash()),
+                if let Some(storage) = nodes_used_by_txn.storage_accesses.get_mut(&hashed_addr) {
+                    storage.extend(
+                        &storage_access_keys
+                            .map(|k| Nibbles::from_h256_be(hash(&k.0)))
+                            .collect::<Vec<Nibbles>>(),
+                    )
+                } else {
+                    nodes_used_by_txn.storage_accesses.insert(
+                        hashed_addr,
+                        storage_access_keys
+                            .map(|k| Nibbles::from_h256_be(hash(&k.0)))
+                            .collect::<Vec<Nibbles>>(),
+                    );
                 };
 
-                nodes_used_by_txn
-                    .state_writes
-                    .push((hashed_addr, state_trie_writes))
-            }
+                let storage_trie_change = !storage_writes.is_empty();
+                let code_change = trace.code_usage.is_some();
+                let state_write_occurred = trace.balance.is_some()
+                    || trace.nonce.is_some()
+                    || storage_trie_change
+                    || code_change;
 
-            let storage_writes_vec = storage_writes
-                .into_iter()
-                .map(|(k, v)| (Nibbles::from_h256_be(k), rlp::encode(&v).to_vec()))
-                .collect();
+                if state_write_occurred {
+                    if let Some(state_trie_writes) =
+                        nodes_used_by_txn.state_writes.get_mut(&hashed_addr)
+                    {
+                        // The entry already exists, so we update only the relevant fields.
+                        if trace.balance.is_some() {
+                            state_trie_writes.balance = trace.balance;
+                        }
+                        if trace.nonce.is_some() {
+                            state_trie_writes.nonce = trace.nonce;
+                        }
+                        if storage_trie_change {
+                            state_trie_writes.storage_trie_change = storage_trie_change;
+                        }
+                        if code_change {
+                            state_trie_writes.code_hash =
+                                trace.code_usage.as_ref().map(|usage| usage.get_code_hash());
+                        }
+                    } else {
+                        let state_trie_writes = StateTrieWrites {
+                            balance: trace.balance,
+                            nonce: trace.nonce,
+                            storage_trie_change,
+                            code_hash: trace.code_usage.as_ref().map(|usage| usage.get_code_hash()),
+                        };
 
-            nodes_used_by_txn
-                .storage_writes
-                .push((hashed_addr, storage_writes_vec));
-
-            nodes_used_by_txn.state_accesses.push(hashed_addr);
-
-            if let Some(c_usage) = trace.code_usage {
-                match c_usage {
-                    ContractCodeUsage::Read(c_hash) => {
-                        contract_code_accessed
-                            .entry(c_hash)
-                            .or_insert_with(|| code_hash_resolver.resolve(&c_hash));
+                        nodes_used_by_txn
+                            .state_writes
+                            .insert(hashed_addr, state_trie_writes);
                     }
-                    ContractCodeUsage::Write(c_bytes) => {
-                        let c_hash = hash(&c_bytes);
+                }
 
-                        contract_code_accessed.insert(c_hash, c_bytes.0.clone());
-                        code_hash_resolver.insert_code(c_hash, c_bytes.0);
+                for (k, v) in storage_writes.into_iter() {
+                    if let Some(storage) = nodes_used_by_txn.storage_writes.get_mut(&hashed_addr) {
+                        storage.insert(Nibbles::from_h256_be(k), rlp::encode(&v).to_vec());
+                    } else {
+                        nodes_used_by_txn.storage_writes.insert(
+                            hashed_addr,
+                            HashMap::from_iter([(
+                                Nibbles::from_h256_be(k),
+                                rlp::encode(&v).to_vec(),
+                            )]),
+                        );
                     }
+                }
+
+                nodes_used_by_txn.state_accesses.insert(hashed_addr);
+
+                if let Some(c_usage) = &trace.code_usage {
+                    match c_usage {
+                        ContractCodeUsage::Read(c_hash) => {
+                            contract_code_accessed
+                                .entry(*c_hash)
+                                .or_insert_with(|| code_hash_resolver.resolve(c_hash));
+                        }
+                        ContractCodeUsage::Write(c_bytes) => {
+                            let c_hash = hash(c_bytes);
+
+                            contract_code_accessed.insert(c_hash, c_bytes.0.clone());
+                            code_hash_resolver.insert_code(c_hash, c_bytes.0.clone());
+                        }
+                    }
+                }
+
+                if trace
+                    .self_destructed
+                    .map_or(false, |self_destructed| self_destructed)
+                {
+                    nodes_used_by_txn
+                        .self_destructed_accounts
+                        .insert(hashed_addr);
                 }
             }
 
-            if trace
-                .self_destructed
-                .map_or(false, |self_destructed| self_destructed)
-            {
-                nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
+            for &hashed_addr in extra_state_accesses {
+                nodes_used_by_txn.state_accesses.insert(hashed_addr);
             }
-        }
 
-        for &hashed_addr in extra_state_accesses {
-            nodes_used_by_txn.state_accesses.push(hashed_addr);
-        }
+            let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
+                nodes_used_by_txn
+                    .storage_accesses
+                    .iter()
+                    .filter(|(_, slots)| !slots.is_empty())
+                    .map(|(addr, _)| *addr),
+            );
 
-        let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
-            nodes_used_by_txn
-                .storage_accesses
+            let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
                 .iter()
-                .filter(|(_, slots)| !slots.is_empty())
-                .map(|(addr, _)| *addr),
-        );
+                .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
 
-        let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
-            .iter()
-            .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
+            let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
+                .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(addr))
+                .map(|(addr, data)| (*addr, data.storage_root));
 
-        let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
-            .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(addr))
-            .map(|(addr, data)| (*addr, data.storage_root));
+            nodes_used_by_txn
+                .state_accounts_with_no_accesses_but_storage_tries
+                .extend(accounts_with_storage_but_no_storage_accesses);
 
-        nodes_used_by_txn
-            .state_accounts_with_no_accesses_but_storage_tries
-            .extend(accounts_with_storage_but_no_storage_accesses);
+            let txn_bytes = match txn.meta.byte_code.is_empty() {
+                false => Some(txn.meta.byte_code.clone()),
+                true => None,
+            };
 
-        let txn_bytes = match self.meta.byte_code.is_empty() {
-            false => Some(self.meta.byte_code),
-            true => None,
-        };
+            let receipt_node_bytes =
+                process_rlped_receipt_node_bytes(txn.meta.new_receipt_trie_node_byte.clone());
 
-        let receipt_node_bytes =
-            process_rlped_receipt_node_bytes(self.meta.new_receipt_trie_node_byte);
-
-        let new_meta_state = TxnMetaState {
-            txn_bytes,
-            receipt_node_bytes,
-            gas_used: self.meta.gas_used,
-        };
+            meta.push(TxnMetaState {
+                txn_bytes,
+                receipt_node_bytes,
+                gas_used: txn.meta.gas_used,
+            });
+        }
 
         ProcessedTxnInfo {
             nodes_used_by_txn,
             contract_code_accessed,
-            meta: new_meta_state,
+            meta,
         }
     }
 }
@@ -427,20 +471,20 @@ fn create_empty_code_access_map() -> HashMap<CodeHash, Vec<u8>> {
 }
 
 pub(crate) type StorageAccess = Vec<HashedStorageAddrNibbles>;
-pub(crate) type StorageWrite = Vec<(HashedStorageAddrNibbles, Vec<u8>)>;
+pub(crate) type StorageWrite = HashMap<HashedStorageAddrNibbles, Vec<u8>>;
 
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    pub(crate) state_accesses: Vec<HashedNodeAddr>,
-    pub(crate) state_writes: Vec<(HashedAccountAddr, StateTrieWrites)>,
+    pub(crate) state_accesses: HashSet<HashedNodeAddr>,
+    pub(crate) state_writes: HashMap<HashedAccountAddr, StateTrieWrites>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(HashedAccountAddr, StorageAccess)>,
-    pub(crate) storage_writes: Vec<(HashedAccountAddr, StorageWrite)>,
+    pub(crate) storage_accesses: HashMap<HashedAccountAddr, StorageAccess>,
+    pub(crate) storage_writes: HashMap<HashedAccountAddr, StorageWrite>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries:
         HashMap<HashedAccountAddr, TrieRootHash>,
-    pub(crate) self_destructed_accounts: Vec<HashedAccountAddr>,
+    pub(crate) self_destructed_accounts: HashSet<HashedAccountAddr>,
 }
 
 #[derive(Debug)]
