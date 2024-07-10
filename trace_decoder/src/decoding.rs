@@ -549,8 +549,13 @@ impl ProcessedBlockTrace {
     fn add_withdrawals_to_txns(
         txn_ir: &mut [GenerationInputs],
         final_trie_state: &mut PartialTrieState,
-        withdrawals: Vec<(Address, U256)>,
+        mut withdrawals: Vec<(Address, U256)>,
     ) -> TraceParsingResult<()> {
+        // Scale withdrawals amounts.
+        for (_addr, amt) in withdrawals.iter_mut() {
+            *amt = eth_to_gwei(*amt)
+        }
+
         let withdrawals_with_hashed_addrs_iter = || {
             withdrawals
                 .iter()
@@ -908,4 +913,9 @@ fn optional_field<T: std::fmt::Debug>(label: &str, value: Option<T>) -> String {
 
 fn optional_field_hex<T: std::fmt::UpperHex>(label: &str, value: Option<T>) -> String {
     value.map_or(String::new(), |v| format!("{}: 0x{:064X}\n", label, v))
+}
+
+fn eth_to_gwei(eth: U256) -> U256 {
+    // 1 ether = 10^9 gwei.
+    eth * U256::from(10).pow(9.into())
 }

@@ -100,7 +100,7 @@ where
         std::iter::successors(Some(target_block_number as i128 - 1 + odd_offset), |&it| {
             Some(it - 1)
         })
-        .take(PREVIOUS_HASHES_COUNT)
+        .take(PREVIOUS_HASHES_COUNT + 1)
         .filter(|i| *i >= 0)
         .collect::<Vec<_>>();
     let concurrency = previous_block_numbers.len();
@@ -138,6 +138,7 @@ where
         .into_iter()
         .flatten()
         .skip(odd_offset as usize)
+        .take(PREVIOUS_HASHES_COUNT)
         .for_each(|(hash, block_num)| {
             if let (Some(hash), Some(block_num)) = (hash, block_num) {
                 // Most recent previous block hash is expected at the end of the array
