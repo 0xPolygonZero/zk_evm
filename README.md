@@ -10,7 +10,9 @@ This repository contains the following Rust crates:
 
 * [mpt_trie](./mpt_trie/README.md): A collection of types and functions to work with Ethereum Merkle Patricie Tries.
 
-* [trace_decoder](./trace_decoder/README.md): Flexible protocol designed to process Ethereum clients trace payloads into an IR format that can be
+* [smt_trie](./smt_trie/README.md): A collection of types and functions to work with Polygon Hermez Sparse Merkle Trees (SMT).
+
+* [trace_decoder](./trace_decoder/Cargo.toml): Flexible protocol designed to process Ethereum clients trace payloads into an IR format that can be
 understood by the zkEVM prover.
 
 * [evm_arithmetization](./evm_arithmetization/README.md): Defines all the STARK constraints and recursive circuits to generate succinct proofs of EVM execution.
@@ -18,37 +20,42 @@ It uses starky and plonky2 as proving backend: https://github.com/0xPolygonZero/
 
 * [proof_gen](./proof_gen/README.md): A convenience library for generating proofs from inputs already in Intermediate Representation (IR) format.
 
+* [zero_bin](./zero_bin/README.md): A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`proof_gen`](./proof_gen/README.md) to generate
+EVM block proofs.
+
 ## Dependency graph
 
-Below is a simplified view of the dependency graph, including the proving systems backend and the application layer defined within [zero-bin](https://github.com/0xPolygonZero/zero-bin).
+Below is a simplified view of the dependency graph, including the proving system backends and the application layer defined within [zero-bin](https://github.com/0xPolygonZero/zero-bin).
 
+<!---
+TODO: Update mermaid chard with `smt_trie` once type-2 is plugged in.
+-->
 ```mermaid
-flowchart TD
+flowchart LR
     subgraph ps [proving systems]
     A1{{plonky2}}
     A2{{starky}}
     end
+
+    ps --> zk_evm
 
     subgraph zk_evm [zk_evm]
     B[mpt_trie]
     C[evm_arithmetization]
     D[trace_decoder]
     E[proof_gen]
-    A1 --> C
-    A1 --> E
-    A2 --> C
+
     B --> C
     B ---> D
     C ---> D
     C --> E
     D --> E
-    end
 
     F{zero-bin}
-    A1 --> F
     C --> F
     D --> F
     E --> F
+    end
 ```
 
 ## Documentation
