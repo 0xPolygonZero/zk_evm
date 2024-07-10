@@ -133,16 +133,19 @@ impl SegmentProofSpan {
         if ir.signed_txns.is_empty() {
             "Dummy".to_string()
         } else {
-            let first_encoding: [u8; 8] =
-                keccak(ir.signed_txns[0].clone())[..8].try_into().unwrap();
-            let last_encoding: [u8; 8] = keccak(
-                ir.signed_txns
-                    .last()
-                    .expect("the vector of transactions is not empty")
-                    .clone(),
-            )[..8]
-                .try_into()
-                .unwrap();
+            let first_encoding =
+                u64::from_be_bytes(keccak(ir.signed_txns[0].clone())[0..8].try_into().unwrap());
+            let last_encoding = u64::from_be_bytes(
+                keccak(
+                    ir.signed_txns
+                        .last()
+                        .expect("the vector of transactions is not empty")
+                        .clone(),
+                )[0..8]
+                    .try_into()
+                    .unwrap(),
+            );
+
             format!("{:x?}..{:x?}", first_encoding, last_encoding)
         }
     }
