@@ -78,10 +78,10 @@ pub(crate) trait DiskResource {
 
         // Create the base folder if non-existent.
         if std::fs::metadata(&circuits_dir).is_err() {
-            std::fs::create_dir_all(&circuits_dir).map_err(|err| {
+            std::fs::create_dir(&circuits_dir).map_err(|err| {
                 DiskResourceError::IoError::<Self::Error>(std::io::Error::other(format!(
-                    "Could not create circuits folder with error \"{:?}\"",
-                    err
+                    "Could not create circuits folder at {} with error: {:?}",
+                    circuits_dir, err
                 )))
             })?;
         }
