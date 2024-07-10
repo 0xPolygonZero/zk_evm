@@ -29,9 +29,8 @@ export TOKIO_WORKER_THREADS=$num_procs
 export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=full
 export RUST_LOG=info
-# Disable the lld linker for now, as it's causing issues with the linkme package.
-# https://github.com/rust-lang/rust/pull/124129
-# https://github.com/dtolnay/linkme/pull/88
+# Script users are running locally, and might benefit from extra perf.
+# See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 INPUT_FILE=$1
@@ -56,17 +55,17 @@ else
       # These sizes are configured specifically for block 19807080. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b19807080.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..18"
-        export BYTE_PACKING_CIRCUIT_SIZE="15..19"
+        export BYTE_PACKING_CIRCUIT_SIZE="11..15"
         export CPU_CIRCUIT_SIZE="17..21"
         export KECCAK_CIRCUIT_SIZE="14..17"
         export KECCAK_SPONGE_CIRCUIT_SIZE="10..13"
         export LOGIC_CIRCUIT_SIZE="13..16"
-        export MEMORY_CIRCUIT_SIZE="20..23"
+        export MEMORY_CIRCUIT_SIZE="19..23"
     elif [[ $INPUT_FILE == *"witness_b3_b6"* ]]; then
       # These sizes are configured specifically for custom blocks 3 to 6. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b3_b6.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..17"
-        export BYTE_PACKING_CIRCUIT_SIZE="12..17"
+        export BYTE_PACKING_CIRCUIT_SIZE="8..14"
         export CPU_CIRCUIT_SIZE="14..19"
         export KECCAK_CIRCUIT_SIZE="14..15"
         export KECCAK_SPONGE_CIRCUIT_SIZE="10..11"
@@ -74,7 +73,7 @@ else
         export MEMORY_CIRCUIT_SIZE="17..21"
     else
         export ARITHMETIC_CIRCUIT_SIZE="16..23"
-        export BYTE_PACKING_CIRCUIT_SIZE="9..21"
+        export BYTE_PACKING_CIRCUIT_SIZE="8..21"
         export CPU_CIRCUIT_SIZE="12..25"
         export KECCAK_CIRCUIT_SIZE="14..20"
         export KECCAK_SPONGE_CIRCUIT_SIZE="9..15"

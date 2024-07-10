@@ -260,13 +260,11 @@ pub(crate) fn ctl_data_byte_packing_push<F: Field>() -> Vec<Column<F>> {
 
 /// CTL filter for the `PUSH` operation.
 pub(crate) fn ctl_filter_byte_packing_push<F: Field>() -> Filter<F> {
-    let col_bit = Column::linear_combination_with_constant(
-        vec![(COL_MAP.opcode_bits[7], F::NEG_ONE)],
-        F::ONE,
-    );
-
     Filter::new(
-        vec![(Column::single(COL_MAP.op.push_prover_input), col_bit)],
+        vec![(
+            Column::single(COL_MAP.general.push().is_not_kernel),
+            Column::single(COL_MAP.op.push_prover_input),
+        )],
         vec![],
     )
 }

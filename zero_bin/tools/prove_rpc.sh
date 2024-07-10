@@ -13,9 +13,8 @@
 export RUST_MIN_STACK=33554432
 export RUST_BACKTRACE=1
 export RUST_LOG=info
-# Disable the lld linker for now, as it's causing issues with the linkme package.
-# https://github.com/rust-lang/rust/pull/124129
-# https://github.com/dtolnay/linkme/pull/88
+# Script users are running locally, and might benefit from extra perf.
+# See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 if [[ $8 == "test_only" ]]; then
@@ -29,7 +28,7 @@ if [[ $8 == "test_only" ]]; then
   export MEMORY_CIRCUIT_SIZE="17..18"
 else
   export ARITHMETIC_CIRCUIT_SIZE="16..23"
-  export BYTE_PACKING_CIRCUIT_SIZE="9..21"
+  export BYTE_PACKING_CIRCUIT_SIZE="8..21"
   export CPU_CIRCUIT_SIZE="12..25"
   export KECCAK_CIRCUIT_SIZE="14..20"
   export KECCAK_SPONGE_CIRCUIT_SIZE="9..15"
