@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -8,6 +10,7 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
+use evm_arithmetization::prover::testing::simulate_execution;
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -148,7 +151,7 @@ fn add11_yml() -> anyhow::Result<()> {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
-    let inputs = GenerationInputs {
+    let _inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
         withdrawals: vec![],
         tries: tries_before,
@@ -165,11 +168,64 @@ fn add11_yml() -> anyhow::Result<()> {
         },
     };
 
-    let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;
-    timing.filter(Duration::from_millis(100)).print();
+    let contract_rlp = vec![
+        248, 76, 128, 136, 13, 224, 182, 179, 167, 100, 0, 0, 160, 130, 30, 37, 86, 162, 144, 200,
+        100, 5, 248, 22, 10, 45, 102, 32, 66, 164, 49, 186, 69, 107, 157, 178, 101, 199, 155, 184,
+        55, 192, 75, 229, 240, 160, 57, 160, 134, 121, 22, 167, 121, 85, 39, 97, 89, 233, 92, 162,
+        37, 154, 128, 251, 69, 156, 253, 188, 138, 94, 26, 190, 85, 63, 251, 76, 243, 98,
+    ];
+    let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
+    log::debug!("good = {:#?}", contracto);
+    let contract_rlp = vec![
+        248, 76, 128, 136, 13, 224, 182, 179, 167, 100, 0, 0, 160, 86, 232, 31, 23, 27, 204, 85,
+        166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47,
+        181, 227, 99, 180, 33, 160, 57, 160, 134, 121, 22, 167, 121, 85, 39, 97, 89, 233, 92, 162,
+        37, 154, 128, 251, 69, 156, 253, 188, 138, 94, 26, 190, 85, 63, 251, 76, 243, 98,
+    ];
+    let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
+    log::debug!("bad = {:#?}", contracto);
 
-    verify_proof(&all_stark, proof, &config)
+    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stShift/shr01_d0g0v0_Shanghai.json");
+    visit_dirs(dir)?;
+    // let bytes =
+    // std::fs::read("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/
+    // stTimeConsuming/static_Call50000_sha256_d0g0v0_Shanghai.json").unwrap();
+    //             let inputs = serde_json::from_slice(&bytes).unwrap();
+
+    //             let mut timing = TimingTree::new("prove", log::Level::Debug);
+    //             // let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut
+    // timing,             // None)?;
+    //             simulate_execution::<F>(inputs)?;
+    //             timing.filter(Duration::from_millis(100)).print();
+
+    Ok(())
+    // verify_proof(&all_stark, proof, &config)
+}
+
+fn visit_dirs(dir: &Path) -> anyhow::Result<()> {
+    if dir == Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stTimeConsuming")
+    {
+        return Ok(());
+    }
+    if dir.is_dir() {
+        log::info!("Found directory: {:?}", dir);
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            visit_dirs(&path)?; // Recurse into the subdirectory
+        }
+    } else if dir.is_file() {
+        log::info!("Found file: {:?}", dir);
+        let bytes = std::fs::read(dir).unwrap();
+        let inputs = serde_json::from_slice(&bytes).unwrap();
+
+        let mut timing = TimingTree::new("prove", log::Level::Debug);
+        // let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing,
+        // None)?;
+        simulate_execution::<F>(inputs)?;
+        timing.filter(Duration::from_millis(100)).print();
+    }
+    Ok(())
 }
 
 fn init_logger() {
