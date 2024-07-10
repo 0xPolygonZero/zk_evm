@@ -2002,10 +2002,10 @@ fn shrinking_config() -> CircuitConfig {
 /// # Arguments
 ///
 /// - `public_inputs`: A slice of public inputs originating from the aggregation
-/// case of a two-to-one block proof.  This slice must consist of a hash, either
-/// of public values, or of two concatenated hashes.  The hash must start at
-/// offset zero of the slice and is typically followed by padding and then a
-/// verifier key.  It is an error to call this on a slice for a base proof.
+///   case of a two-to-one block proof.  This slice must consist of a hash, either
+///   of public values, or of two concatenated hashes.  The hash must start at
+///   offset zero of the slice and is typically followed by padding and then a
+///   verifier key.  It is an error to call this on a slice for a base proof.
 ///
 /// # Outputs
 ///
@@ -2024,9 +2024,9 @@ pub fn extract_two_to_one_block_hash<T>(public_inputs: &[T]) -> &[T; NUM_HASH_OU
 /// # Arguments
 ///
 /// - `public_inputs`: A slice of public inputs originating from the base case
-/// of a two-to-one block proof.  This slice must consist exactly of public
-/// values starting at offset zero and is typically followed by a verifier key.
-/// It is an error to call this function on a slice for an aggregation proof.
+///   of a two-to-one block proof.  This slice must consist exactly of public
+///   values starting at offset zero and is typically followed by a verifier key.
+///   It is an error to call this function on a slice for an aggregation proof.
 ///
 /// # Outputs
 ///
