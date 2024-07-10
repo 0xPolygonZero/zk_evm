@@ -3,6 +3,7 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
 
+use super::state::KERNEL_CONTEXT;
 use super::transition::Transition;
 use super::util::{
     byte_packing_log, byte_unpacking_log, mem_read_with_log, mem_write_log,
@@ -389,7 +390,13 @@ pub(crate) fn generate_push<F: Field, T: Transition<F>>(
     let val = U256::from_big_endian(&bytes);
     push_with_write(state, &mut row, val)?;
 
-    byte_packing_log(state, base_address, bytes);
+    // This is necessary to filter out PUSH instructions from the BytePackingStark
+    // CTl when happening in the KERNEL context.
+    row.general.push_mut().is_not_kernel = F::ONE - row.is_kernel_mode;
+
+    if code_context != KERNEL_CONTEXT {
+        byte_packing_log(state, base_address, bytes);
+    }
 
     state.push_cpu(row);
 
