@@ -12,9 +12,9 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, init_logger,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
@@ -428,6 +428,10 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         beacon_roots_account_nibbles(),
         rlp::encode(&beacon_roots_account).to_vec(),
     )?;
+    expected_state_trie_after.insert(
+        ger_account_nibbles(),
+        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+    )?;
 
     // Compute new receipt trie.
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
@@ -479,7 +483,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     // Preprocess all circuits.
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 12..15, 14..18, 14..15, 9..10, 12..13, 17..20],
+        &[16..17, 8..10, 15..17, 14..15, 10..11, 12..13, 17..19],
         &config,
     );
 
@@ -577,6 +581,11 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
     expected_state_trie_after.insert(
         to_second_nibbles,
         rlp::encode(&to_account_second_after).to_vec(),
+    )?;
+
+    expected_state_trie_after.insert(
+        ger_account_nibbles(),
+        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
     )?;
 
     // Copy without the beacon roots account for the next block.
