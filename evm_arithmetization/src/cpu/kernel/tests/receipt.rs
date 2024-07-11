@@ -59,6 +59,8 @@ fn test_process_receipt() -> Result<()> {
             0.into(),                                         // data_len
         ],
     );
+    interpreter.set_memory_segment(Segment::TrieData, vec![0.into()]);
+    interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, 1.into());
     interpreter.set_txn_field(NormalizedTxnField::GasLimit, U256::from(5000));
     interpreter.set_memory_segment(Segment::TxnBloom, vec![0.into(); 256]);
     interpreter.set_memory_segment(Segment::Logs, vec![0.into()]);
@@ -71,7 +73,7 @@ fn test_process_receipt() -> Result<()> {
 
     // The expected TrieData has the form [payload_len, status, cum_gas_used,
     // bloom_filter, logs_payload_len, num_logs, [logs]]
-    let mut expected_trie_data: Vec<U256> = vec![323.into(), success, 2000.into()];
+    let mut expected_trie_data: Vec<U256> = vec![0.into(), 323.into(), success, 2000.into()];
     expected_trie_data.extend(
         expected_bloom
             .into_iter()
