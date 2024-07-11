@@ -203,9 +203,8 @@ global process_contract_creation_txn_after_constructor:
     PUSH @SEGMENT_RETURNDATA
     GET_CONTEXT
     %build_address_no_offset
-    // stack: addr, len
-    PROVER_INPUT(poseidon_code) // TODO: FIX THIS!
-    %stack (codehash, addr, len) -> (codehash)
+    // stack: addr, len, leftover_gas, new_ctx, address, retdest, success
+    %poseidon_hash_code_unpadded
     // stack: codehash, leftover_gas, new_ctx, address, retdest, success
     %observe_new_contract
     DUP4

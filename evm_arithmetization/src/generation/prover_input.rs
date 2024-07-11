@@ -9,7 +9,6 @@ use itertools::Itertools;
 use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
-use smt_trie::code::hash_bytecode_u256;
 
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
@@ -64,7 +63,6 @@ impl<F: RichField> GenerationState<F> {
             "num_bits" => self.run_num_bits(),
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
-            "poseidon_code" => self.run_poseidon_code(),
             "ger" => self.run_global_exit_roots(),
             "kzg_point_eval" => self.run_kzg_point_eval(),
             "kzg_point_eval_2" => self.run_kzg_point_eval_2(),
@@ -413,21 +411,6 @@ impl<F: RichField> GenerationState<F> {
             }
         }
         Ok((Segment::AccessedStorageKeys as usize).into())
-    }
-
-    fn run_poseidon_code(&mut self) -> Result<U256, ProgramError> {
-        let addr = stack_peek(self, 0)?;
-        let len = stack_peek(self, 1)?.as_usize();
-        let addr = MemoryAddress::new_bundle(addr)?;
-        let code = (0..len)
-            .map(|i| {
-                let mut a = addr;
-                a.virt += i;
-                self.memory.get_with_init(a).as_usize() as u8
-            })
-            .collect_vec();
-
-        Ok(hash_bytecode_u256(code))
     }
 
     /// Returns the first part of the KZG precompile output.

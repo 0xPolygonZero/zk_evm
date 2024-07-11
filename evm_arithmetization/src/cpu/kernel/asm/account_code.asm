@@ -139,3 +139,52 @@ remove_padding_loop:
 remove_padding_after:
     %stack (offset, ctx, retdest) -> (retdest, offset)
     JUMP
+
+/// Applies the padding rule to the code located at the provided address before hashing it.
+/// Memory cells after the last code byte will be overwritten.
+%macro poseidon_hash_code_unpadded
+    // stack: addr, len
+    DUP2 DUP2 ADD
+    // stack: padding_addr, addr, len
+
+    // write 1 after the last code byte
+    DUP1 PUSH 1 MSTORE_GENERAL
+    // stack: padding_addr, addr, len
+    %increment
+    // stack: padding_addr, addr, len
+
+    // Pad with 0s until the length is a multiple of 56
+    PUSH 56
+    DUP4 %increment
+    // stack: curr_len, 56, padding_addr, addr, len
+    MOD
+    // stack: remainder, padding_addr, addr, len
+    PUSH 56 SUB
+    // stack: padding_len, padding_addr, addr, len
+    SWAP3 DUP4
+    // stack: padding_len, len, padding_addr, addr, padding_len
+    ADD
+    // stack: last_byte_offset, padding_addr, addr, padding_len
+    %stack (last_byte_offset, padding_addr, addr, padding_len)
+        -> (padding_addr, padding_len, %%after, addr, last_byte_offset)
+    %jump(memset)
+%%after:
+    // stack: addr, last_byte_offset
+
+    // Xor the last element with 0x80
+    PUSH 1 DUP3 ADD
+    // stack: total_code_len, addr, last_byte_offset
+    SWAP2
+    // stack: last_byte_offset, addr, total_code_len
+    DUP2 ADD
+    // stack: last_byte_addr, addr, total_code_len
+    DUP1 MLOAD_GENERAL
+    // stack: last_byte, last_byte_addr, addr, total_code_len
+    PUSH 0x80 XOR
+    // stack: last_byte_updated, last_byte_addr, addr, total_code_len
+    MSTORE_GENERAL
+    // stack: addr, total_code_len
+
+    POSEIDON_GENERAL
+    // stack: codehash
+%endmacro
