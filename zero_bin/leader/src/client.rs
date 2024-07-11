@@ -23,6 +23,8 @@ pub struct ProofParams {
     pub checkpoint_block_number: u64,
     pub previous_proof: Option<GeneratedBlockProof>,
     pub proof_output_dir: Option<PathBuf>,
+    pub max_cpu_len_log: usize,
+    pub batch_size: usize,
     pub save_inputs_on_error: bool,
     pub keep_intermediate_proofs: bool,
 }
@@ -46,25 +48,27 @@ pub(crate) async fn client_main(
     )
     .await?;
 
-    if cfg!(feature = "test_only") {
-        info!("All proof witnesses have been generated successfully.");
-    } else {
-        info!("All proofs have been generated successfully.");
-    }
-
     // If `keep_intermediate_proofs` is not set we only keep the last block
     // proof from the interval. It contains all the necessary information to
     // verify the whole sequence.
     let proved_blocks = prover_input
         .prove(
             &runtime,
+            params.max_cpu_len_log,
             params.previous_proof.take(),
+            params.batch_size,
             params.save_inputs_on_error,
             params.proof_output_dir.clone(),
         )
         .await;
     runtime.close().await?;
     let proved_blocks = proved_blocks?;
+
+    if cfg!(feature = "test_only") {
+        info!("All proof witnesses have been generated successfully.");
+    } else {
+        info!("All proofs have been generated successfully.");
+    }
 
     if params.keep_intermediate_proofs {
         if params.proof_output_dir.is_some() {

@@ -10,7 +10,9 @@ use crate::all_stark::{AllStark, NUM_TABLES};
 use crate::arithmetic::{BinaryOperator, Operation};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
+use crate::generation::MemBeforeValues;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
+use crate::memory_continuation::memory_continuation_stark::mem_before_values_to_rows;
 use crate::witness::memory::MemoryOp;
 use crate::{arithmetic, keccak, keccak_sponge, logic};
 
@@ -119,6 +121,9 @@ impl<T: Copy> Traces<T> {
     pub(crate) fn into_tables<const D: usize>(
         self,
         all_stark: &AllStark<T, D>,
+        mem_before_values: &MemBeforeValues,
+        stale_contexts: Vec<usize>,
+        mut trace_lengths: TraceCheckpoint,
         config: &StarkConfig,
         timing: &mut TimingTree,
     ) -> [Vec<PolynomialValues<T>>; NUM_TABLES]
@@ -171,10 +176,38 @@ impl<T: Copy> Traces<T> {
                 .logic_stark
                 .generate_trace(logic_ops, cap_elements, timing)
         );
-        let memory_trace = timed!(
+        let (memory_trace, final_values, unpadded_memory_length) = timed!(
             timing,
             "generate memory trace",
-            all_stark.memory_stark.generate_trace(memory_ops, timing)
+            all_stark.memory_stark.generate_trace(
+                memory_ops,
+                mem_before_values,
+                stale_contexts,
+                timing
+            )
+        );
+        trace_lengths.memory_len = unpadded_memory_length;
+
+        let mem_before_trace = timed!(
+            timing,
+            "generate mem_before trace",
+            all_stark
+                .mem_before_stark
+                .generate_trace(mem_before_values_to_rows(mem_before_values))
+        );
+        let mem_after_trace = timed!(
+            timing,
+            "generate mem_after trace",
+            all_stark
+                .mem_after_stark
+                .generate_trace(final_values.clone())
+        );
+
+        log::info!(
+            "Trace lengths (before padding): {:?}, mem_before_len: {}, mem_after_len: {}",
+            trace_lengths,
+            mem_before_values.len(),
+            final_values.len()
         );
 
         [
@@ -185,6 +218,8 @@ impl<T: Copy> Traces<T> {
             keccak_sponge_trace,
             logic_trace,
             memory_trace,
+            mem_before_trace,
+            mem_after_trace,
         ]
     }
 }

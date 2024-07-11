@@ -41,9 +41,13 @@ pub(crate) fn ctl_data_keccak_sponge<F: Field>() -> Vec<Column<F>> {
     let virt = Column::single(virt);
     let len = Column::single(COL_MAP.mem_channels[1].value[0]);
 
+    // Since we start the clock at 1, we have that:
+    // timestamp = (clock - 1) * num_channels + 1.
     let num_channels = F::from_canonical_usize(NUM_CHANNELS);
-    let timestamp = Column::linear_combination([(COL_MAP.clock, num_channels)]);
-
+    let timestamp = Column::linear_combination_with_constant(
+        [(COL_MAP.clock, num_channels)],
+        F::ONE - num_channels,
+    );
     let mut cols = vec![context, segment, virt, len, timestamp];
     cols.extend(Column::singles_next_row(COL_MAP.mem_channels[0].value));
     cols
@@ -130,6 +134,21 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
     )
 }
 
+/// Returns a column containing stale contexts.
+pub(crate) fn ctl_context_pruning_looked<F: Field>() -> TableWithColumns<F> {
+    TableWithColumns::new(
+        *Table::Cpu,
+        vec![Column::single(COL_MAP.context)],
+        Filter::new(
+            vec![(
+                Column::single(COL_MAP.op.context_op),
+                Column::single(COL_MAP.general.context_pruning().pruning_flag),
+            )],
+            vec![],
+        ),
+    )
+}
+
 /// Creates the vector of `Columns` corresponding to the contents of General
 /// Purpose channels when calling byte packing. We use `ctl_data_keccak_sponge`
 /// because the `Columns` are the same as the ones computed for
@@ -178,8 +197,13 @@ pub(crate) fn ctl_data_byte_unpacking<F: Field>() -> Vec<Column<F>> {
     );
     res.push(len);
 
+    // Since we start the clock at 1, we have that:
+    // timestamp = (clock - 1) * num_channels + 1.
     let num_channels = F::from_canonical_usize(NUM_CHANNELS);
-    let timestamp = Column::linear_combination([(COL_MAP.clock, num_channels)]);
+    let timestamp = Column::linear_combination_with_constant(
+        [(COL_MAP.clock, num_channels)],
+        F::ONE - num_channels,
+    );
     res.push(timestamp);
 
     let val = Column::singles(COL_MAP.mem_channels[1].value);
@@ -222,8 +246,13 @@ pub(crate) fn ctl_data_jumptable_read<F: Field>() -> Vec<Column<F>> {
     let len = Column::constant(F::from_canonical_usize(3));
     res.push(len);
 
+    // Since we start the clock at 1, we have that:
+    // timestamp = (clock - 1) * num_channels + 1.
     let num_channels = F::from_canonical_usize(NUM_CHANNELS);
-    let timestamp = Column::linear_combination([(COL_MAP.clock, num_channels)]);
+    let timestamp = Column::linear_combination_with_constant(
+        [(COL_MAP.clock, num_channels)],
+        F::ONE - num_channels,
+    );
     res.push(timestamp);
 
     res.extend(val);
@@ -252,8 +281,13 @@ pub(crate) fn ctl_data_byte_packing_push<F: Field>() -> Vec<Column<F>> {
     // 1`.
     let len = Column::le_bits_with_constant(&COL_MAP.opcode_bits[0..5], F::ONE);
 
+    // Since we start the clock at 1, we have that:
+    // timestamp = (clock - 1) * num_channels + 1.
     let num_channels = F::from_canonical_usize(NUM_CHANNELS);
-    let timestamp = Column::linear_combination([(COL_MAP.clock, num_channels)]);
+    let timestamp = Column::linear_combination_with_constant(
+        [(COL_MAP.clock, num_channels)],
+        F::ONE - num_channels,
+    );
 
     let mut res = vec![is_read, context, segment, virt, len, timestamp];
     res.extend(val);
@@ -292,7 +326,7 @@ pub(crate) const fn get_addr<T: Copy>(lv: &CpuColumnsView<T>, mem_channel: usize
 /// Make the time/channel column for memory lookups.
 fn mem_time_and_channel<F: Field>(channel: usize) -> Column<F> {
     let scalar = F::from_canonical_usize(NUM_CHANNELS);
-    let addend = F::from_canonical_usize(channel);
+    let addend = F::from_canonical_usize(channel) - scalar + F::ONE;
     Column::linear_combination_with_constant([(COL_MAP.clock, scalar)], addend)
 }
 

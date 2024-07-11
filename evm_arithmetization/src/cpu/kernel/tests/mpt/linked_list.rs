@@ -31,7 +31,7 @@ fn test_init_linked_lists() -> Result<()> {
 
     // Check the initial state of the linked list in the kernel.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     assert!(interpreter.stack().is_empty());
@@ -84,7 +84,7 @@ fn test_list_iterator() -> Result<()> {
     let init_label = KERNEL.global_labels["init_linked_lists"];
 
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     // test the list iterator
@@ -138,7 +138,7 @@ fn test_insert_account() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     let insert_account_label = KERNEL.global_labels["insert_account_to_linked_list"];
@@ -193,7 +193,7 @@ fn test_insert_storage() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     let insert_account_label = KERNEL.global_labels["insert_slot"];
@@ -253,7 +253,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     let insert_account_label = KERNEL.global_labels["insert_account_to_linked_list"];
@@ -400,7 +400,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     let insert_slot_label = KERNEL.global_labels["insert_slot"];

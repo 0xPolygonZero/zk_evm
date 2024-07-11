@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use ethereum_types::U256;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 use crate::cpu::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 
@@ -126,7 +128,9 @@ impl MemoryOp {
         kind: MemoryOpKind,
         value: U256,
     ) -> Self {
-        let timestamp = clock * NUM_CHANNELS + channel.index();
+        // Since the CPU clock starts at 1, and the `clock` value is the CPU length, the
+        // timestamps is: `timestamp = clock * NUM_CHANNELS + 1 + channel`
+        let timestamp = clock * NUM_CHANNELS + 1 + channel.index();
         MemoryOp {
             filter: true,
             timestamp,
@@ -160,7 +164,7 @@ impl MemoryOp {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct MemoryState {
     pub(crate) contexts: Vec<MemoryContextState>,
     pub(crate) preinitialized_segments: HashMap<Segment, MemorySegmentState>,
@@ -209,6 +213,24 @@ impl MemoryState {
             segment.bit_range()
         );
         Some(val)
+    }
+
+    pub(crate) fn get_ll_memory(&self, segment: Segment) -> Vec<Option<U256>> {
+        assert!(segment == Segment::AccountsLinkedList || segment == Segment::StorageLinkedList);
+
+        let len = self
+            .preinitialized_segments
+            .get(&segment)
+            .unwrap_or(&MemorySegmentState { content: vec![] })
+            .content
+            .len()
+            .max(self.contexts[0].segments[segment.unscale()].content.len());
+
+        let vals = (0..len)
+            .map(|i| Some(self.get_with_init(MemoryAddress::new(0, segment, i))))
+            .collect::<Vec<_>>();
+
+        vals
     }
 
     /// Returns a memory value, or 0 if the memory is unset. If we have some
@@ -293,8 +315,9 @@ impl Default for MemoryState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct MemoryContextState {
+    #[serde(with = "BigArray")]
     /// The content of each memory segment.
     pub(crate) segments: [MemorySegmentState; Segment::COUNT],
 }
@@ -307,7 +330,7 @@ impl Default for MemoryContextState {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub(crate) struct MemorySegmentState {
     pub(crate) content: Vec<Option<U256>>,
 }

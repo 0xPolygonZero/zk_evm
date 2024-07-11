@@ -53,7 +53,7 @@ impl From<Vec<String>> for ProverInputFn {
 impl<F: Field> GenerationState<F> {
     pub(crate) fn prover_input(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[0].as_str() {
-            "no_txn" => self.no_txn(),
+            "end_of_txns" => self.run_end_of_txns(),
             "trie_ptr" => self.run_trie_ptr(input_fn),
             "ff" => self.run_ff(input_fn),
             "sf" => self.run_sf(input_fn),
@@ -71,8 +71,16 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    fn no_txn(&mut self) -> Result<U256, ProgramError> {
-        Ok(U256::from(self.inputs.signed_txn.is_none() as u8))
+    fn run_end_of_txns(&mut self) -> Result<U256, ProgramError> {
+        // Reset the jumpdest table before the next transaction.
+        self.jumpdest_table = None;
+        let end = self.next_txn_index == self.inputs.txns_len;
+        if end {
+            Ok(U256::one())
+        } else {
+            self.next_txn_index += 1;
+            Ok(U256::zero())
+        }
     }
 
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
@@ -85,19 +93,30 @@ impl<F: Field> GenerationState<F> {
                         &self.inputs.tries,
                         &mut self.memory.contexts[0].segments[Segment::TrieData.unscale()].content,
                     )?;
-                    log::debug!("guessed state trie = {:?}", get_state_trie::<HashedPartialTrie>(&self.memory, n));
+                    log::debug!(
+                        "guessed state trie = {:?}",
+                        get_state_trie::<HashedPartialTrie>(&self.memory, n)
+                    );
                     Ok(n)
                 }
             }
             .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
-            "trie_data_size" => Ok(U256::from(
-                self.memory
-                .contexts[0].segments[Segment::TrieData.unscale()]
-                    .content
-                    .len(),
-            )),
+            "trie_data_size" => Ok(self
+                .memory
+                .preinitialized_segments
+                .get(&Segment::TrieData)
+                .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
+                .content
+                .len()
+                .max(
+                    self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                        .content
+                        .len(),
+                )
+                .into()),
+
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -294,24 +313,52 @@ impl<F: Field> GenerationState<F> {
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
-        self.log(log::Level::Debug, format!("account ll = {:?}", self.get_accounts_linked_list()));
-        self.log(log::Level::Debug, format!("storage ll = {:?}", self.get_storage_linked_list()));
+        self.log(
+            log::Level::Debug,
+            format!("account ll = {:?}", self.get_accounts_linked_list()),
+        );
+        self.log(
+            log::Level::Debug,
+            format!("storage ll = {:?}", self.get_storage_linked_list()),
+        );
         match input_fn.0[1].as_str() {
             "insert_account" => self.run_next_insert_account(),
             "remove_account" => self.run_next_remove_account(),
             "insert_slot" => self.run_next_insert_slot(),
             "remove_slot" => self.run_next_remove_slot(),
             "remove_address_slots" => self.run_next_remove_address_slots(),
-            "accounts_linked_list_len" => Ok((Segment::AccountsLinkedList as usize
-                + self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
+            "accounts_linked_list_len" => {
+                let len = self
+                    .memory
+                    .preinitialized_segments
+                    .get(&Segment::AccountsLinkedList)
+                    .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
                     .content
-                    .len())
-            .into()),
-            "storage_linked_list_len" => Ok((Segment::StorageLinkedList as usize
-                + self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
+                    .len()
+                    .max(
+                        self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
+                            .content
+                            .len(),
+                    );
+
+                Ok((Segment::AccountsLinkedList as usize + len).into())
+            }
+            "storage_linked_list_len" => {
+                let len = self
+                    .memory
+                    .preinitialized_segments
+                    .get(&Segment::StorageLinkedList)
+                    .unwrap_or(&crate::witness::memory::MemorySegmentState { content: vec![] })
                     .content
-                    .len())
-            .into()),
+                    .len()
+                    .max(
+                        self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
+                            .content
+                            .len(),
+                    );
+
+                Ok((Segment::StorageLinkedList as usize + len).into())
+            }
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
     }
@@ -604,6 +651,17 @@ impl<F: Field> GenerationState<F> {
         Ok(code)
     }
 
+    fn set_code_len(&mut self, len: usize) {
+        self.memory.set(
+            MemoryAddress::new(
+                self.registers.context,
+                Segment::ContextMetadata,
+                ContextMetadata::CodeSize.unscale(),
+            ),
+            len.into(),
+        )
+    }
+
     fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
         let code_len = u256_to_usize(self.memory.get_with_init(MemoryAddress::new(
             context,
@@ -646,10 +704,8 @@ impl<F: Field> GenerationState<F> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
         // available virtual address in the segment. In order to get the length
         // we need to substract `Segment::AccountsLinkedList` as usize.
-        LinkedList::from_mem_and_segment(
-            &self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()].content,
-            Segment::AccountsLinkedList,
-        )
+        let accounts_mem = self.memory.get_ll_memory(Segment::AccountsLinkedList);
+        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
     }
 
     pub(crate) fn get_storage_linked_list(
@@ -658,10 +714,8 @@ impl<F: Field> GenerationState<F> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
         // available virtual address in the segment. In order to get the length
         // we need to substract `Segment::AccountsLinkedList` as usize.
-        LinkedList::from_mem_and_segment(
-            &self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()].content,
-            Segment::StorageLinkedList,
-        )
+        let storage_mem = self.memory.get_ll_memory(Segment::StorageLinkedList);
+        LinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
     }
 
     fn get_global_metadata(&self, data: GlobalMetadata) -> U256 {

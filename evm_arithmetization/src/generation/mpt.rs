@@ -8,9 +8,11 @@ use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde::{Deserialize, Serialize};
 
 use super::linked_list::empty_list_mem;
 use super::prover_input::{ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE};
+use super::TrimmedTrieInputs;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
@@ -26,7 +28,7 @@ pub struct AccountRlp {
     pub code_hash: H256,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TrieRootPtrs {
     pub state_root_ptr: Option<usize>,
     pub txn_root_ptr: usize,
@@ -139,7 +141,6 @@ where
     let type_of_trie = PartialTrieType::of(trie) as u32;
     if type_of_trie > 0 {
         trie_data.push(Some(type_of_trie.into()));
-        log::debug!("pushed hash node at {node_ptr} with val = {:?}", trie_data[node_ptr]);
     }
 
     match trie.deref() {
@@ -359,7 +360,6 @@ fn get_state_and_storage_leaves(
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
-            log::debug!("Pura hoja");
             let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
             let AccountRlp {
                 nonce,
@@ -494,44 +494,6 @@ where
     }
 }
 
-pub(crate) fn load_all_mpts(
-    trie_inputs: &TrieInputs,
-) -> Result<(TrieRootPtrs, Vec<Option<U256>>), ProgramError> {
-    let mut trie_data = vec![Some(U256::zero())];
-    let storage_tries_by_state_key = trie_inputs
-        .storage_tries
-        .iter()
-        .map(|(hashed_address, storage_trie)| {
-            let key = Nibbles::from_bytes_be(hashed_address.as_bytes())
-                .expect("An H256 is 32 bytes long");
-            (key, storage_trie)
-        })
-        .collect();
-
-    let state_root_ptr = load_state_trie(
-        &trie_inputs.state_trie,
-        empty_nibbles(),
-        &mut trie_data,
-        &storage_tries_by_state_key,
-    )?;
-
-    let txn_root_ptr = load_mpt(&trie_inputs.transactions_trie, &mut trie_data, &|rlp| {
-        let mut parsed_txn = vec![U256::from(rlp.len())];
-        parsed_txn.extend(rlp.iter().copied().map(U256::from));
-        Ok(parsed_txn)
-    })?;
-
-    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
-
-    let trie_root_ptrs = TrieRootPtrs {
-        state_root_ptr: Some(state_root_ptr),
-        txn_root_ptr,
-        receipt_root_ptr,
-    };
-
-    Ok((trie_root_ptrs, trie_data))
-}
-
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     trie_inputs: &TrieInputs,
 ) -> Result<(TrieRootPtrs, Vec<U256>, Vec<U256>, Vec<Option<U256>>), ProgramError> {
@@ -584,7 +546,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
 }
 
 pub(crate) fn load_state_mpt(
-    trie_inputs: &TrieInputs,
+    trie_inputs: &TrimmedTrieInputs,
     trie_data: &mut Vec<Option<U256>>,
 ) -> Result<usize, ProgramError> {
     let storage_tries_by_state_key = trie_inputs

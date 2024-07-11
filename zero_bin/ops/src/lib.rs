@@ -7,30 +7,34 @@ use paladin::{
     registry, RemoteExecute,
 };
 use proof_gen::{
-    proof_gen::{generate_agg_proof, generate_block_proof},
-    proof_types::{AggregatableProof, GeneratedAggProof, GeneratedBlockProof},
+    proof_gen::{generate_block_proof, generate_segment_agg_proof, generate_transaction_agg_proof},
+    proof_types::{
+        GeneratedBlockProof, GeneratedTxnAggProof, SegmentAggregatableProof, TxnAggregatableProof,
+    },
 };
 use serde::{Deserialize, Serialize};
+use trace_decoder::types::AllData;
 use tracing::{error, event, info_span, Level};
 use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct TxProof {
+pub struct SegmentProof {
     pub save_inputs_on_error: bool,
 }
 
 #[cfg(not(feature = "test_only"))]
-impl Operation for TxProof {
-    type Input = GenerationInputs;
-    type Output = proof_gen::proof_types::AggregatableProof;
+impl Operation for SegmentProof {
+    type Input = AllData;
+    type Output = proof_gen::proof_types::SegmentAggregatableProof;
 
-    fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let _span = TxProofSpan::new(&input);
+    fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
+        let input = all_data.0.clone();
+        let _span = SegmentProofSpan::new(&input, all_data.1.segment_index());
         let proof = if self.save_inputs_on_error {
             zero_bin_common::prover_state::p_manager()
-                .generate_txn_proof(input.clone())
+                .generate_segment_proof(all_data)
                 .map_err(|err| {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
@@ -46,7 +50,7 @@ impl Operation for TxProof {
                 })?
         } else {
             zero_bin_common::prover_state::p_manager()
-                .generate_txn_proof(input)
+                .generate_segment_proof(all_data)
                 .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?
         };
 
@@ -55,24 +59,25 @@ impl Operation for TxProof {
 }
 
 #[cfg(feature = "test_only")]
-impl Operation for TxProof {
-    type Input = GenerationInputs;
+impl Operation for SegmentProof {
+    type Input = AllData;
     type Output = ();
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let _span = TxProofSpan::new(&input);
+        let gen_input = input.0;
+        let _span = SegmentProofSpan::new(&gen_input, input.1.segment_index());
 
         if self.save_inputs_on_error {
             evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                input.clone(),
+                gen_input.clone(),
             )
             .map_err(|err| {
                 if let Err(write_err) = save_inputs_to_disk(
                     format!(
                         "b{}_txn_{}_input.log",
-                        input.block_metadata.block_number, input.txn_number_before
+                        gen_input.block_metadata.block_number, gen_input.txn_number_before
                     ),
-                    input,
+                    gen_input,
                 ) {
                     error!("Failed to save txn proof input to disk: {:?}", write_err);
                 }
@@ -81,7 +86,7 @@ impl Operation for TxProof {
             })?;
         } else {
             evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                input,
+                gen_input.clone(),
             )
             .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
         }
@@ -94,18 +99,21 @@ impl Operation for TxProof {
 ///
 /// - When created, it starts a span with the transaction proof id.
 /// - When dropped, it logs the time taken by the transaction proof.
-struct TxProofSpan {
+struct SegmentProofSpan {
     _span: tracing::span::EnteredSpan,
     start: Instant,
     descriptor: String,
 }
 
-impl TxProofSpan {
+impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
-    fn get_id(ir: &GenerationInputs) -> String {
+    fn get_id(ir: &GenerationInputs, segment_index: usize) -> String {
         format!(
-            "b{} - {}",
-            ir.block_metadata.block_number, ir.txn_number_before
+            "b{} - {}_{} ({})",
+            ir.block_metadata.block_number,
+            ir.txn_number_before,
+            ir.txn_number_before + ir.signed_txns.len(),
+            segment_index
         )
     }
 
@@ -114,17 +122,24 @@ impl TxProofSpan {
     /// Either the hex-encoded hash of the transaction or "Dummy" if the
     /// transaction is not present.
     fn get_descriptor(ir: &GenerationInputs) -> String {
-        ir.signed_txn
-            .as_ref()
-            .map(|txn| format!("{:x}", keccak(txn)))
-            .unwrap_or_else(|| "Dummy".to_string())
+        if ir.signed_txns.is_empty() {
+            "Dummy".to_string()
+        } else {
+            format!(
+                "{:x?}",
+                ir.signed_txns
+                    .iter()
+                    .map(|txn| keccak(txn.clone()))
+                    .collect::<Vec<_>>()
+            )
+        }
     }
 
     /// Create a new transaction proof span.
     ///
     /// When dropped, it logs the time taken by the transaction proof.
-    fn new(ir: &GenerationInputs) -> Self {
-        let id = Self::get_id(ir);
+    fn new(ir: &GenerationInputs, segment_index: usize) -> Self {
+        let id = Self::get_id(ir, segment_index);
         let span = info_span!("p_gen", id).entered();
         let start = Instant::now();
         let descriptor = Self::get_descriptor(ir);
@@ -136,11 +151,11 @@ impl TxProofSpan {
     }
 }
 
-impl Drop for TxProofSpan {
+impl Drop for SegmentProofSpan {
     fn drop(&mut self) {
         event!(
             Level::INFO,
-            "txn proof ({}) took {:?}",
+            "segment proof ({}) took {:?}",
             self.descriptor,
             self.start.elapsed()
         );
@@ -148,26 +163,97 @@ impl Drop for TxProofSpan {
 }
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct AggProof {
+pub struct SegmentAggProof {
     pub save_inputs_on_error: bool,
 }
 
-fn get_agg_proof_public_values(elem: AggregatableProof) -> PublicValues {
+fn get_seg_agg_proof_public_values(elem: SegmentAggregatableProof) -> PublicValues {
     match elem {
-        AggregatableProof::Txn(info) => info.p_vals,
-        AggregatableProof::Agg(info) => info.p_vals,
+        SegmentAggregatableProof::Seg(info) => info.p_vals,
+        SegmentAggregatableProof::Agg(info) => info.p_vals,
     }
 }
 
-impl Monoid for AggProof {
-    type Elem = AggregatableProof;
+impl Monoid for SegmentAggProof {
+    type Elem = SegmentAggregatableProof;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
-        let result = generate_agg_proof(p_state(), &a, &b).map_err(|e| {
+        let result = generate_segment_agg_proof(p_state(), &a, &b, false).map_err(|e| {
             if self.save_inputs_on_error {
                 let pv = vec![
-                    get_agg_proof_public_values(a),
-                    get_agg_proof_public_values(b),
+                    get_seg_agg_proof_public_values(a),
+                    get_seg_agg_proof_public_values(b),
+                ];
+                if let Err(write_err) = save_inputs_to_disk(
+                    format!(
+                        "b{}_agg_lhs_rhs_inputs.log",
+                        pv[0].block_metadata.block_number
+                    ),
+                    pv,
+                ) {
+                    error!("Failed to save agg proof inputs to disk: {:?}", write_err);
+                }
+            }
+
+            FatalError::from(e)
+        })?;
+
+        Ok(result.into())
+    }
+
+    fn empty(&self) -> Self::Elem {
+        // Expect that empty blocks are padded.
+        unimplemented!("empty agg proof")
+    }
+}
+
+#[derive(Deserialize, Serialize, RemoteExecute)]
+pub struct TxnAggProof {
+    pub save_inputs_on_error: bool,
+}
+fn get_agg_proof_public_values(elem: TxnAggregatableProof) -> PublicValues {
+    match elem {
+        TxnAggregatableProof::Segment(info) => info.p_vals,
+        TxnAggregatableProof::Txn(info) => info.p_vals,
+        TxnAggregatableProof::Agg(info) => info.p_vals,
+    }
+}
+
+impl Monoid for TxnAggProof {
+    type Elem = TxnAggregatableProof;
+
+    fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
+        let lhs = match a {
+            TxnAggregatableProof::Segment(segment) => TxnAggregatableProof::from(
+                generate_segment_agg_proof(
+                    p_state(),
+                    &SegmentAggregatableProof::from(segment.clone()),
+                    &SegmentAggregatableProof::from(segment),
+                    true,
+                )
+                .map_err(FatalError::from)?,
+            ),
+            _ => a,
+        };
+
+        let rhs = match b {
+            TxnAggregatableProof::Segment(segment) => TxnAggregatableProof::from(
+                generate_segment_agg_proof(
+                    p_state(),
+                    &SegmentAggregatableProof::from(segment.clone()),
+                    &SegmentAggregatableProof::from(segment),
+                    true,
+                )
+                .map_err(FatalError::from)?,
+            ),
+            _ => b,
+        };
+
+        let result = generate_transaction_agg_proof(p_state(), &lhs, &rhs).map_err(|e| {
+            if self.save_inputs_on_error {
+                let pv = vec![
+                    get_agg_proof_public_values(lhs),
+                    get_agg_proof_public_values(rhs),
                 ];
                 if let Err(write_err) = save_inputs_to_disk(
                     format!(
@@ -199,7 +285,7 @@ pub struct BlockProof {
 }
 
 impl Operation for BlockProof {
-    type Input = GeneratedAggProof;
+    type Input = GeneratedTxnAggProof;
     type Output = GeneratedBlockProof;
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {

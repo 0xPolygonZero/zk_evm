@@ -10,7 +10,6 @@ categories.workspace = true
 
 [dependencies]
 tokio = { workspace = true }
-tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
@@ -19,17 +18,14 @@ serde_json = { workspace = true }
 clap = { workspace = true }
 evm_arithmetization = { workspace = true }
 mpt_trie = { workspace = true }
-thiserror = { workspace = true }
 alloy.workspace = true
 futures = { workspace = true }
-hex = { workspace = true }
-hex-literal = { workspace = true }
-itertools = { workspace = true }
 url = { workspace = true }
-__compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
+__compat_primitive_types = { workspace = true }
 tower = { workspace = true, features = ["retry"] }
 
 # Local dependencies
-zero_bin_common ={ workspace = true }
+compat = { workspace = true }
+zero_bin_common = { workspace = true }
 prover = { workspace = true }
 

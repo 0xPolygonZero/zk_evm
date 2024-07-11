@@ -11,6 +11,7 @@ pub(crate) union CpuGeneralColumnsView<T: Copy> {
     jumps: CpuJumpsView<T>,
     shift: CpuShiftView<T>,
     stack: CpuStackView<T>,
+    context_pruning: CpuContextPruningView<T>,
 }
 
 impl<T: Copy> CpuGeneralColumnsView<T> {
@@ -74,6 +75,18 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
     /// SAFETY: Each view is a valid interpretation of the underlying array.
     pub(crate) fn stack_mut(&mut self) -> &mut CpuStackView<T> {
         unsafe { &mut self.stack }
+    }
+
+    /// View of the column for context pruning.
+    /// SAFETY: Each view is a valid interpretation of the underlying array.
+    pub(crate) fn context_pruning(&self) -> &CpuContextPruningView<T> {
+        unsafe { &self.context_pruning }
+    }
+
+    /// Mutable view of the column for context pruning.
+    /// SAFETY: Each view is a valid interpretation of the underlying array.
+    pub(crate) fn context_pruning_mut(&mut self) -> &mut CpuContextPruningView<T> {
+        unsafe { &mut self.context_pruning }
     }
 }
 
@@ -140,6 +153,14 @@ pub(crate) struct CpuShiftView<T: Copy> {
     /// For a shift amount of displacement: [T], this is the inverse of
     /// sum(displacement[1..]) or zero if the sum is zero.
     pub(crate) high_limb_sum_inv: T,
+}
+
+/// View of the first `CpuGeneralColumns` storing a flag for context pruning.
+#[derive(Copy, Clone)]
+pub(crate) struct CpuContextPruningView<T: Copy> {
+    /// The flag is 1 if the OP flag `context_op` is set, the operation is
+    /// `SET_CONTEXT` and `new_ctx < old_ctx`, and 0 otherwise.
+    pub(crate) pruning_flag: T,
 }
 
 /// View of the last four `CpuGeneralColumns` storing stack-related variables.

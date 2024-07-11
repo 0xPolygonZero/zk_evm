@@ -5,11 +5,7 @@ use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
-use ops::TxProof;
-use paladin::{
-    directive::{Directive, IndexedStream},
-    runtime::Runtime,
-};
+use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -40,30 +36,66 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
+        max_cpu_len_log: usize,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
+        batch_size: usize,
         save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
+        use evm_arithmetization::prover::SegmentDataIterator;
+        use futures::{stream::FuturesUnordered, FutureExt};
+        use paladin::directive::{Directive, IndexedStream};
 
         let block_number = self.get_block_number();
+        info!("Proving block {block_number}");
 
         let other_data = self.other_data;
         let txs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
+            batch_size,
         )?;
 
-        let agg_proof = IndexedStream::from(txs)
-            .map(&TxProof {
-                save_inputs_on_error,
-            })
-            .fold(&ops::AggProof {
-                save_inputs_on_error,
-            })
-            .run(runtime)
-            .await?;
+        // Generate segment data.
+        let agg_ops = ops::SegmentAggProof {
+            save_inputs_on_error,
+        };
 
-        if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
+        let seg_ops = ops::SegmentProof {
+            save_inputs_on_error,
+        };
+
+        // Map the transactions to a stream of transaction proofs.
+        let tx_proof_futs: FuturesUnordered<_> = txs
+            .iter()
+            .enumerate()
+            .map(|(idx, txn)| {
+                let data_iterator = SegmentDataIterator {
+                    partial_next_data: None,
+                    inputs: txn,
+                    max_cpu_len_log: Some(max_cpu_len_log),
+                };
+
+                Directive::map(IndexedStream::from(data_iterator), &seg_ops)
+                    .fold(&agg_ops)
+                    .run(runtime)
+                    .map(move |e| {
+                        e.map(|p| (idx, proof_gen::proof_types::TxnAggregatableProof::from(p)))
+                    })
+            })
+            .collect();
+
+        // Fold the transaction proof stream into a single transaction proof.
+        let final_txn_proof = Directive::fold(
+            IndexedStream::new(tx_proof_futs),
+            &ops::TxnAggProof {
+                save_inputs_on_error,
+            },
+        )
+        .run(runtime)
+        .await?;
+
+        if let proof_gen::proof_types::TxnAggregatableProof::Agg(proof) = final_txn_proof {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;
@@ -81,6 +113,7 @@ impl BlockProverInput {
                 .await?;
 
             info!("Successfully proved block {block_number}");
+
             Ok(block_proof.0)
         } else {
             anyhow::bail!("AggProof is is not GeneratedAggProof")
@@ -90,10 +123,15 @@ impl BlockProverInput {
     #[cfg(feature = "test_only")]
     pub async fn prove(
         self,
-        runtime: &Runtime,
+        _runtime: &Runtime,
+        max_cpu_len_log: usize,
         _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        save_inputs_on_error: bool,
+        batch_size: usize,
+        _save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
+        use evm_arithmetization::prover::testing::simulate_all_segments_interpreter;
+        use plonky2::field::goldilocks_field::GoldilocksField;
+
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
@@ -101,16 +139,15 @@ impl BlockProverInput {
         let txs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
+            batch_size,
         )?;
 
-        IndexedStream::from(txs)
-            .map(&TxProof {
-                save_inputs_on_error,
-            })
-            .run(runtime)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+        type F = GoldilocksField;
+        for txn in txs.into_iter() {
+            simulate_all_segments_interpreter::<F>(txn, max_cpu_len_log)?;
+        }
+
+        info!("Successfully generated witness for block {block_number}.");
 
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
@@ -134,7 +171,9 @@ impl ProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
+        max_cpu_len_log: usize,
         previous_proof: Option<GeneratedBlockProof>,
+        batch_size: usize,
         save_inputs_on_error: bool,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
@@ -153,7 +192,13 @@ impl ProverInput {
                 // Prove the block
                 let proof_output_dir = proof_output_dir.clone();
                 let fut = block
-                    .prove(runtime, prev.take(), save_inputs_on_error)
+                    .prove(
+                        runtime,
+                        max_cpu_len_log,
+                        prev.take(),
+                        batch_size,
+                        save_inputs_on_error,
+                    )
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;

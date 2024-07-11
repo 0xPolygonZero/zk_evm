@@ -7,12 +7,11 @@ use std::time::Duration;
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
-use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
+use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use evm_arithmetization::prover::prove;
-use evm_arithmetization::prover::testing::simulate_execution;
-use evm_arithmetization::verifier::verify_proof;
-use evm_arithmetization::{AllStark, Node, StarkConfig};
+use evm_arithmetization::prover::testing::prove_all_segments;
+use evm_arithmetization::verifier::testing::verify_all_proofs;
+use evm_arithmetization::{AllStark, GenerationInputs, Node};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
@@ -20,19 +19,13 @@ use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
+use starky::config::StarkConfig;
 
 type F = GoldilocksField;
 const D: usize = 2;
 type C = KeccakGoldilocksConfig;
 
-/// The `add11_yml` test case from https://github.com/ethereum/tests
-#[test]
-fn add11_yml() -> anyhow::Result<()> {
-    init_logger();
-
-    let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
-
+fn get_generation_inputs() -> GenerationInputs {
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
     let sender = hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
@@ -63,15 +56,21 @@ fn add11_yml() -> anyhow::Result<()> {
     };
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    )?;
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
+    state_trie_before
+        .insert(
+            beneficiary_nibbles,
+            rlp::encode(&beneficiary_account_before).to_vec(),
+        )
+        .unwrap();
+    state_trie_before
+        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+        .unwrap();
+    state_trie_before
+        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+        .unwrap();
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_trie: state_trie_before.clone(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
         storage_tries: vec![(to_hashed, Node::Empty.into())],
@@ -119,13 +118,18 @@ fn add11_yml() -> anyhow::Result<()> {
         };
 
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after.insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_after).to_vec(),
-        )?;
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
+            .insert(
+                beneficiary_nibbles,
+                rlp::encode(&beneficiary_account_after).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .unwrap();
         expected_state_trie_after
     };
 
@@ -136,10 +140,12 @@ fn add11_yml() -> anyhow::Result<()> {
         logs: vec![],
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    )?;
+    receipts_trie
+        .insert(
+            Nibbles::from_str("0x80").unwrap(),
+            rlp::encode(&receipt_0).to_vec(),
+        )
+        .unwrap();
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
@@ -151,14 +157,15 @@ fn add11_yml() -> anyhow::Result<()> {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
-    let _inputs = GenerationInputs {
-        signed_txn: Some(txn.to_vec()),
+
+    GenerationInputs {
+        signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
         block_metadata,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: state_trie_before.hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0xa868u64.into(),
@@ -166,66 +173,33 @@ fn add11_yml() -> anyhow::Result<()> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
-    };
-
-    let contract_rlp = vec![
-        248, 76, 128, 136, 13, 224, 182, 179, 167, 100, 0, 0, 160, 130, 30, 37, 86, 162, 144, 200,
-        100, 5, 248, 22, 10, 45, 102, 32, 66, 164, 49, 186, 69, 107, 157, 178, 101, 199, 155, 184,
-        55, 192, 75, 229, 240, 160, 57, 160, 134, 121, 22, 167, 121, 85, 39, 97, 89, 233, 92, 162,
-        37, 154, 128, 251, 69, 156, 253, 188, 138, 94, 26, 190, 85, 63, 251, 76, 243, 98,
-    ];
-    let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
-    log::debug!("good = {:#?}", contracto);
-    let contract_rlp = vec![
-        248, 76, 128, 136, 13, 224, 182, 179, 167, 100, 0, 0, 160, 86, 232, 31, 23, 27, 204, 85,
-        166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47,
-        181, 227, 99, 180, 33, 160, 57, 160, 134, 121, 22, 167, 121, 85, 39, 97, 89, 233, 92, 162,
-        37, 154, 128, 251, 69, 156, 253, 188, 138, 94, 26, 190, 85, 63, 251, 76, 243, 98,
-    ];
-    let contracto: AccountRlp = rlp::decode(&contract_rlp).unwrap();
-    log::debug!("bad = {:#?}", contracto);
-
-    let dir = Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stShift/shiftSignedCombinations_d0g0v0_Shanghai.json");
-    visit_dirs(dir)?;
-    // let bytes =
-    // std::fs::read("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/
-    // stTimeConsuming/static_Call50000_sha256_d0g0v0_Shanghai.json").unwrap();
-    //             let inputs = serde_json::from_slice(&bytes).unwrap();
-
-    //             let mut timing = TimingTree::new("prove", log::Level::Debug);
-    //             // let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut
-    // timing,             // None)?;
-    //             simulate_execution::<F>(inputs)?;
-    //             timing.filter(Duration::from_millis(100)).print();
-
-    Ok(())
-    // verify_proof(&all_stark, proof, &config)
+    }
 }
+/// The `add11_yml` test case from https://github.com/ethereum/tests
+#[test]
+fn add11_yml() -> anyhow::Result<()> {
+    init_logger();
 
-fn visit_dirs(dir: &Path) -> anyhow::Result<()> {
-    if dir == Path::new("/Users/agonzalez/evm-tests-suite-parsed/serialized_tests/stTimeConsuming")
-    {
-        return Ok(());
-    }
-    if dir.is_dir() {
-        log::info!("Found directory: {:?}", dir);
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-            visit_dirs(&path)?; // Recurse into the subdirectory
-        }
-    } else if dir.is_file() {
-        log::info!("Found file: {:?}", dir);
-        let bytes = std::fs::read(dir).unwrap();
-        let inputs = serde_json::from_slice(&bytes).unwrap();
+    let all_stark = AllStark::<F, D>::default();
+    let config = StarkConfig::standard_fast_config();
+    let inputs = get_generation_inputs();
 
-        let mut timing = TimingTree::new("prove", log::Level::Debug);
-        // let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing,
-        // None)?;
-        simulate_execution::<F>(inputs)?;
-        timing.filter(Duration::from_millis(100)).print();
-    }
-    Ok(())
+    let max_cpu_len_log = 20;
+
+    let mut timing = TimingTree::new("prove", log::Level::Debug);
+
+    let proofs = prove_all_segments::<F, C, D>(
+        &all_stark,
+        &config,
+        inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
+
+    timing.filter(Duration::from_millis(100)).print();
+
+    verify_all_proofs(&all_stark, &proofs, &config)
 }
 
 fn init_logger() {
