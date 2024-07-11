@@ -31,6 +31,7 @@ impl Operation for SegmentProof {
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
         let input = all_data.0.clone();
+        let segment_index = all_data.1.segment_index();
         let _span = SegmentProofSpan::new(&input, all_data.1.segment_index());
         let proof = if self.save_inputs_on_error {
             zero_bin_common::prover_state::p_manager()
@@ -38,8 +39,11 @@ impl Operation for SegmentProof {
                 .map_err(|err| {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
-                            "b{}_txn_{}_input.log",
-                            input.block_metadata.block_number, input.txn_number_before
+                            "b{}_txns_{}-{}-({})_input.log",
+                            input.block_metadata.block_number,
+                            input.txn_number_before,
+                            input.txn_number_before + input.signed_txns.len(),
+                            segment_index
                         ),
                         input,
                     ) {
@@ -65,6 +69,7 @@ impl Operation for SegmentProof {
 
     fn execute(&self, input: Self::Input) -> Result<Self::Output> {
         let gen_input = input.0;
+        let segment_index = input.1.segment_index();
         let _span = SegmentProofSpan::new(&gen_input, input.1.segment_index());
 
         if self.save_inputs_on_error {
@@ -74,8 +79,11 @@ impl Operation for SegmentProof {
             .map_err(|err| {
                 if let Err(write_err) = save_inputs_to_disk(
                     format!(
-                        "b{}_txn_{}_input.log",
-                        gen_input.block_metadata.block_number, gen_input.txn_number_before
+                        "b{}_txns_{}-{}-({})_input.log",
+                        gen_input.block_metadata.block_number,
+                        gen_input.txn_number_before,
+                        gen_input.txn_number_before + gen_input.signed_txns.len(),
+                        segment_index
                     ),
                     gen_input,
                 ) {
@@ -108,30 +116,48 @@ struct SegmentProofSpan {
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
     fn get_id(ir: &GenerationInputs, segment_index: usize) -> String {
-        format!(
-            "b{} - {}_{} ({})",
-            ir.block_metadata.block_number,
-            ir.txn_number_before,
-            ir.txn_number_before + ir.signed_txns.len(),
-            segment_index
-        )
+        if ir.signed_txns.len() == 1 {
+            format!(
+                "b{} - {} ({})",
+                ir.block_metadata.block_number, ir.txn_number_before, segment_index
+            )
+        } else {
+            format!(
+                "b{} - {}_{} ({})",
+                ir.block_metadata.block_number,
+                ir.txn_number_before,
+                ir.txn_number_before + ir.signed_txns.len(),
+                segment_index
+            )
+        }
     }
 
     /// Get a textual descriptor for the transaction proof.
     ///
-    /// Either the hex-encoded hash of the transaction or "Dummy" if the
-    /// transaction is not present.
+    /// Either the first 8 characters of the hex-encoded hash of the first and
+    /// last transactions, or "Dummy" if there is no transaction.
     fn get_descriptor(ir: &GenerationInputs) -> String {
         if ir.signed_txns.is_empty() {
             "Dummy".to_string()
-        } else {
+        } else if ir.signed_txns.len() == 1 {
             format!(
                 "{:x?}",
-                ir.signed_txns
-                    .iter()
-                    .map(|txn| keccak(txn.clone()))
-                    .collect::<Vec<_>>()
+                u64::from_be_bytes(keccak(&ir.signed_txns[0][..])[0..8].try_into().unwrap())
             )
+        } else {
+            let first_encoding =
+                u64::from_be_bytes(keccak(&ir.signed_txns[0][..])[0..8].try_into().unwrap());
+            let last_encoding = u64::from_be_bytes(
+                keccak(
+                    ir.signed_txns
+                        .last()
+                        .expect("the vector of transactions is not empty"),
+                )[0..8]
+                    .try_into()
+                    .unwrap(),
+            );
+
+            format!("[0x{:x?}..0x{:x?}]", first_encoding, last_encoding)
         }
     }
 

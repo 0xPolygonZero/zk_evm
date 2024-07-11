@@ -232,11 +232,9 @@ impl MemoryState {
             .len()
             .max(self.contexts[0].segments[segment.unscale()].content.len());
 
-        let vals = (0..len)
+        (0..len)
             .map(|i| Some(self.get_with_init(MemoryAddress::new(0, segment, i))))
-            .collect::<Vec<_>>();
-
-        vals
+            .collect::<Vec<_>>()
     }
 
     /// Returns a memory value, or 0 if the memory is unset. If we have some

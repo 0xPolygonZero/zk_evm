@@ -46,12 +46,12 @@ pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [U256; N] {
     })
 }
 
-impl<'a, const N: usize> LinkedList<N> {
+impl<const N: usize> LinkedList<N> {
     pub fn from_mem_and_segment(
         mem: &[Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {
-        Self::from_mem_len_and_segment(&mem, mem.len(), segment)
+        Self::from_mem_len_and_segment(mem, mem.len(), segment)
     }
 
     pub fn from_mem_len_and_segment(
@@ -72,7 +72,7 @@ impl<'a, const N: usize> LinkedList<N> {
     }
 }
 
-impl<'a, const N: usize> fmt::Debug for LinkedList<N> {
+impl<const N: usize> fmt::Debug for LinkedList<N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Linked List {{");
         let cloned_list = self.clone();
@@ -87,7 +87,7 @@ impl<'a, const N: usize> fmt::Debug for LinkedList<N> {
     }
 }
 
-impl<'a, const N: usize> Iterator for LinkedList<N> {
+impl<const N: usize> Iterator for LinkedList<N> {
     type Item = [U256; N];
 
     fn next(&mut self) -> Option<Self::Item> {

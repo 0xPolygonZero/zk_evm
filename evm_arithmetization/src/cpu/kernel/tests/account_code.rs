@@ -31,7 +31,7 @@ pub(crate) fn initialize_mpts<F: Field>(
 ) {
     // Load all MPTs.
     let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
-        load_linked_lists_and_txn_and_receipt_mpts(&trie_inputs)
+        load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
             .expect("Invalid MPT data for preinitialization");
 
     interpreter.generation_state.memory.contexts[0].segments
@@ -128,7 +128,7 @@ pub(crate) fn initialize_mpts<F: Field>(
         interpreter
             .generation_state
             .memory
-            .set(trie_addr, data.unwrap_or_default().into());
+            .set(trie_addr, data.unwrap_or_default());
     }
 }
 

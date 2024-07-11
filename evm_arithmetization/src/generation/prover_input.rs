@@ -558,7 +558,7 @@ impl<F: Field> GenerationState<F> {
             .zip(self.get_accounts_linked_list()?.skip(2))
             .find(|&(_, [next_node_addr, ..])| next_node_addr == addr)
         {
-            Ok((ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE).into())
+            Ok(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE)
         } else {
             Ok((Segment::AccountsLinkedList as usize).into())
         }

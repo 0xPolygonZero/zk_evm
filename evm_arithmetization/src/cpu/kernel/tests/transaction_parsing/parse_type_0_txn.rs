@@ -68,3 +68,22 @@ fn process_type_0_txn() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn process_type_0_txn_invalid_sig() -> Result<()> {
+    let process_type_0_txn = KERNEL.global_labels["process_type_0_txn"];
+    let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
+
+    let retaddr = 0xDEADBEEFu32.into();
+    let mut interpreter: Interpreter<F> = Interpreter::new(process_type_0_txn, vec![retaddr], None);
+
+    // Same transaction as `process_type_0_txn()`, with the exception that the `s`
+    // component in the signature is flipped (i.e. `s' = N - s`, where `N` is the
+    // order of the SECP256k1 prime subgroup).
+    interpreter.extend_memory_segment_bytes(Segment::RlpRaw, hex!("f861050a8255f0940000000000000000000000000000000000000000648242421ca07c5c61ed975ebd286f6b027b8c504842e50a47d318e1e801719dd744fe93e6c6a0e184aee64a822ab1e8a00d0faa36e0c408f99e2ca41c87ec8b557e9be8f0949f").to_vec());
+
+    let result = interpreter.run();
+    assert!(result.is_err());
+
+    Ok(())
+}

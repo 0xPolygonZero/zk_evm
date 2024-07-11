@@ -278,7 +278,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     let offset = Segment::AccountsLinkedList as usize;
     // Insert all addresses
     for i in 0..n {
-        let addr = U256::from(addresses[i as usize].0.as_slice());
+        let addr = U256::from(addresses[i].0.as_slice());
         interpreter.push(0xdeadbeefu32.into());
         interpreter.push(addr + delta_ptr); // ptr = addr + delta_ptr for the sake of the test
         interpreter.push(addr);
@@ -310,7 +310,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
 
     // Test for address already in list.
     for i in 0..n {
-        let addr_in_list = U256::from(addresses[i as usize].0.as_slice());
+        let addr_in_list = U256::from(addresses[i].0.as_slice());
         interpreter.push(retaddr);
         interpreter.push(U256::zero());
         interpreter.push(addr_in_list);
@@ -356,7 +356,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
 
     for (i, j) in (0..n).tuples() {
         // Remove addressese already in list.
-        let addr_in_list = U256::from(addresses[i as usize].0.as_slice());
+        let addr_in_list = U256::from(addresses[i].0.as_slice());
         interpreter.push(retaddr);
         interpreter.push(addr_in_list);
         interpreter.generation_state.registers.program_counter = delete_account_label;
@@ -431,7 +431,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
     let offset = Segment::StorageLinkedList as usize;
     // Insert all addresses, key pairs
     for i in 0..n {
-        let [addr, key] = addresses_and_keys[i as usize].map(|x| U256::from(x.0.as_slice()));
+        let [addr, key] = addresses_and_keys[i].map(|x| U256::from(x.0.as_slice()));
         interpreter.push(0xdeadbeefu32.into());
         interpreter.push(addr + delta_ptr); // ptr = addr + delta_ptr for the sake of the test
         interpreter.push(key);
@@ -463,8 +463,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
 
     // Test for address already in list.
     for i in 0..n {
-        let [addr_in_list, key_in_list] =
-            addresses_and_keys[i as usize].map(|x| U256::from(x.0.as_slice()));
+        let [addr_in_list, key_in_list] = addresses_and_keys[i].map(|x| U256::from(x.0.as_slice()));
         interpreter.push(retaddr);
         interpreter.push(addr_in_list + delta_ptr);
         interpreter.push(key_in_list);
@@ -518,8 +517,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
 
     for (i, j) in (0..n).tuples() {
         // Test for [address, ke] already in list.
-        let [addr_in_list, key_in_list] =
-            addresses_and_keys[i as usize].map(|x| U256::from(x.0.as_slice()));
+        let [addr_in_list, key_in_list] = addresses_and_keys[i].map(|x| U256::from(x.0.as_slice()));
         interpreter.push(retaddr);
         interpreter.push(key_in_list);
         interpreter.push(addr_in_list);

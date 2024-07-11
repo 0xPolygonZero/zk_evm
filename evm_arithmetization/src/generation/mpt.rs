@@ -348,7 +348,7 @@ fn get_state_and_storage_leaves(
         }
         Node::Extension { nibbles, child } => {
             let extended_key = key.merge_nibbles(nibbles);
-            let child_ptr = get_state_and_storage_leaves(
+            get_state_and_storage_leaves(
                 child,
                 extended_key,
                 state_leaves,
@@ -438,7 +438,7 @@ where
                     count: 1,
                     packed: i.into(),
                 });
-                let child_ptr = get_storage_leaves(
+                get_storage_leaves(
                     address,
                     extended_key,
                     child,
@@ -494,9 +494,16 @@ where
     }
 }
 
+/// A type alias used to gather:
+///     - the trie root pointers for all tries
+///     - the vector of state trie leaves
+///     - the vector of storage trie leaves
+///     - the `TrieData` segment's memory content
+type TriePtrsLinkedLists = (TrieRootPtrs, Vec<U256>, Vec<U256>, Vec<Option<U256>>);
+
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     trie_inputs: &TrieInputs,
-) -> Result<(TrieRootPtrs, Vec<U256>, Vec<U256>, Vec<Option<U256>>), ProgramError> {
+) -> Result<TriePtrsLinkedLists, ProgramError> {
     let mut state_leaves =
         empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList).to_vec();
     let mut storage_leaves =

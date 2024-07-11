@@ -1,4 +1,4 @@
-use ethereum_types::H256;
+use ethereum_types::{H256, U256};
 use keccak_hash::keccak;
 use log::trace;
 use mpt_trie::{
@@ -7,6 +7,11 @@ use mpt_trie::{
 };
 
 use crate::types::HashedStorageAddr;
+
+pub(crate) fn eth_to_gwei(eth: U256) -> U256 {
+    // 1 ether = 10^9 gwei.
+    eth * U256::from(10).pow(9.into())
+}
 
 pub(crate) fn hash(bytes: &[u8]) -> H256 {
     H256::from(keccak(bytes).0)
