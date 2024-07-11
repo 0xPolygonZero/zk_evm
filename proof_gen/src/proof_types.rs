@@ -105,7 +105,7 @@ impl From<GeneratedAggProof> for AggregatableProof {
 pub enum AggregatableBlockProof {
     /// The underlying proof is a single block proof.
     Block(GeneratedBlockProof),
-    /// The underlying proof is an aggregation proof.
+    /// The underlying proof is an aggregated proof.
     Agg(GeneratedAggBlockProof),
 }
 
