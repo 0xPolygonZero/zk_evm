@@ -93,39 +93,35 @@ fn test_list_iterator() -> Result<()> {
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be an accounts list");
 
-    let Some([addr, ptr, ctr, scaled_pos_1]) = accounts_list.next() else {
+    let Some([addr, ptr, _ctr, scaled_pos_1]) = accounts_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
-    assert_eq!(ctr, U256::zero());
     assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
-    let Some([addr, ptr, ctr, scaled_pos_1]) = accounts_list.next() else {
+    let Some([addr, ptr, _ctr, scaled_pos_1]) = accounts_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
-    assert_eq!(ctr, U256::zero());
     assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
 
     let mut storage_list = interpreter
         .generation_state
         .get_storage_linked_list()
         .expect("Since we called init_access_lists there must be a storage list");
-    let Some([addr, key, ptr, ctr, scaled_pos_1]) = storage_list.next() else {
+    let Some([addr, key, ptr, _ctr, scaled_pos_1]) = storage_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
     assert_eq!(key, U256::zero());
     assert_eq!(ptr, U256::zero());
-    assert_eq!(ctr, U256::zero());
     assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
-    let Some([addr, key, ptr, ctr, scaled_pos_1]) = storage_list.next() else {
+    let Some([addr, key, ptr, _ctr, scaled_pos_1]) = storage_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
-    assert_eq!(ctr, U256::zero());
     assert_eq!(scaled_pos_1, (Segment::StorageLinkedList as usize).into());
 
     Ok(())
@@ -156,29 +152,27 @@ fn test_insert_account() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[payload_ptr, U256::zero()]);
+    assert_eq!(interpreter.stack(), &[payload_ptr]);
 
     let mut list = interpreter
         .generation_state
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    let Some([addr, ptr, ctr, scaled_next_pos]) = list.next() else {
+    let Some([addr, ptr, _ctr, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::from(address.0.as_slice()));
     assert_eq!(ptr, payload_ptr);
-    assert_eq!(ctr, U256::zero());
     assert_eq!(
         scaled_next_pos,
         (Segment::AccountsLinkedList as usize).into()
     );
-    let Some([addr, ptr, ctr, scaled_new_pos]) = list.next() else {
+    let Some([addr, ptr, _ctr, scaled_new_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(addr, U256::MAX);
     assert_eq!(ptr, U256::zero());
-    assert_eq!(ctr, U256::zero());
     assert_eq!(
         scaled_new_pos,
         (Segment::AccountsLinkedList as usize + 4).into()
@@ -213,31 +207,29 @@ fn test_insert_storage() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[payload_ptr, U256::zero()]);
+    assert_eq!(interpreter.stack(), &[payload_ptr]);
 
     let mut list = interpreter
         .generation_state
         .get_storage_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    let Some([inserted_addr, inserted_key, ptr, ctr, scaled_next_pos]) = list.next() else {
+    let Some([inserted_addr, inserted_key, ptr, _ctr, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(inserted_addr, U256::from(address.0.as_slice()));
     assert_eq!(inserted_key, U256::from(key.0.as_slice()));
     assert_eq!(ptr, payload_ptr);
-    assert_eq!(ctr, U256::zero());
     assert_eq!(
         scaled_next_pos,
         (Segment::StorageLinkedList as usize).into()
     );
-    let Some([inserted_addr, inserted_key, ptr, ctr, scaled_new_pos]) = list.next() else {
+    let Some([inserted_addr, inserted_key, ptr, _ctr, scaled_new_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
     assert_eq!(inserted_addr, U256::MAX);
     assert_eq!(inserted_key, U256::zero());
     assert_eq!(ptr, U256::zero());
-    assert_eq!(ctr, U256::zero());
     assert_eq!(
         scaled_new_pos,
         (Segment::StorageLinkedList as usize + 5).into()
@@ -286,18 +278,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         interpreter.run()?;
         assert_eq!(
             interpreter.pop().expect("The stack can't be empty"),
-            U256::zero()
-        );
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
             addr + delta_ptr
-        );
-        // The counter must be 0
-        assert_eq!(
-            interpreter.generation_state.memory.get_with_init(
-                MemoryAddress::new_bundle(U256::from(offset + 4 * (i + 1) + 2)).unwrap(),
-            ),
-            U256::zero()
         );
     }
 
@@ -319,20 +300,10 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         interpreter.push(addr_in_list);
         interpreter.generation_state.registers.program_counter = insert_account_label;
         interpreter.run()?;
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
-            U256::one()
-        );
+
         assert_eq!(
             interpreter.pop().expect("The stack can't be empty"),
             addr_in_list + delta_ptr
-        );
-        // The counter must be one now
-        assert_eq!(
-            interpreter.generation_state.memory.get_with_init(
-                MemoryAddress::new_bundle(U256::from(offset + 4 * (i + 1) + 2)).unwrap(),
-            ),
-            U256::one()
         );
     }
 
@@ -343,10 +314,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-    assert_eq!(
-        interpreter.pop().expect("The stack can't be empty"),
-        U256::zero()
-    );
+
     assert_eq!(
         interpreter.pop().expect("The stack can't be empty"),
         U256::from(addr_not_in_list.0.as_slice()) + delta_ptr
@@ -393,18 +361,15 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         .get_accounts_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    for (i, [addr, ptr, ctr, _]) in list.enumerate() {
+    for (i, [addr, ptr, _ctr, _]) in list.enumerate() {
         if addr == U256::MAX {
             assert_eq!(addr, U256::MAX);
             assert_eq!(ptr, U256::zero());
-            assert_eq!(ctr, U256::zero());
             break;
         }
         let addr_in_list = U256::from(new_addresses[i].0.as_slice());
         assert_eq!(addr, addr_in_list);
         assert_eq!(ptr, addr + delta_ptr);
-        // ctr is 0 for the lowest address because is never accessed
-        assert_eq!(ctr, if i == 0 { U256::zero() } else { U256::one() });
     }
 
     Ok(())
@@ -458,18 +423,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
         interpreter.run()?;
         assert_eq!(
             interpreter.pop().expect("The stack can't be empty"),
-            U256::zero()
-        );
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
             addr + delta_ptr
-        );
-        // The counter must be 0
-        assert_eq!(
-            interpreter.generation_state.memory.get_with_init(
-                MemoryAddress::new_bundle(U256::from(offset + 5 * (i + 1) + 3)).unwrap(),
-            ),
-            U256::zero()
         );
     }
 
@@ -493,20 +447,10 @@ fn test_insert_and_delete_storage() -> Result<()> {
         interpreter.push(addr_in_list);
         interpreter.generation_state.registers.program_counter = insert_slot_label;
         interpreter.run()?;
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
-            U256::one()
-        );
+
         assert_eq!(
             interpreter.pop().expect("The stack can't be empty"),
             addr_in_list + delta_ptr
-        );
-        // The counter must be one now
-        assert_eq!(
-            interpreter.generation_state.memory.get_with_init(
-                MemoryAddress::new_bundle(U256::from(offset + 5 * (i + 1) + 3)).unwrap(),
-            ),
-            U256::one()
         );
     }
 
@@ -518,10 +462,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_slot_label;
 
     interpreter.run()?;
-    assert_eq!(
-        interpreter.pop().expect("The stack can't be empty"),
-        U256::zero()
-    );
+
     assert_eq!(
         interpreter.pop().expect("The stack can't be empty"),
         U256::from(addr_not_in_list.0.as_slice()) + delta_ptr
@@ -570,21 +511,19 @@ fn test_insert_and_delete_storage() -> Result<()> {
         .get_storage_linked_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    for (i, [addr, key, ptr, ctr, _]) in list.enumerate() {
+    for (i, [addr, key, ptr, _ctr, _]) in list.enumerate() {
         if addr == U256::MAX {
             //
             assert_eq!(addr, U256::MAX);
             assert_eq!(key, U256::zero());
             assert_eq!(ptr, U256::zero());
-            assert_eq!(ctr, U256::zero());
+
             break;
         }
         let [addr_in_list, key_in_list] = new_addresses[i].map(|x| U256::from(x.0.as_slice()));
         assert_eq!(addr, addr_in_list);
         assert_eq!(key, key_in_list);
         assert_eq!(ptr, addr + delta_ptr);
-        // ctr is 0 for the lowest address because is never accessed
-        assert_eq!(ctr, if i == 0 { U256::zero() } else { U256::one() });
     }
 
     Ok(())
