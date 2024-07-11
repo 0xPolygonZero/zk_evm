@@ -382,11 +382,22 @@ impl<F: Field> GenerationState<F> {
             load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
                 .expect("Invalid MPT data for preinitialization");
 
-        self.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()].content =
-            state_leaves.iter().map(|&val| Some(val)).collect();
-        self.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()].content =
-            storage_leaves.iter().map(|&val| Some(val)).collect();
-        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content = trie_data;
+        self.memory.insert_preinitialized_segment(
+            Segment::AccountsLinkedList,
+            crate::witness::memory::MemorySegmentState {
+                content: state_leaves.iter().map(|&val| Some(val)).collect(),
+            },
+        );
+        self.memory.insert_preinitialized_segment(
+            Segment::StorageLinkedList,
+            crate::witness::memory::MemorySegmentState {
+                content: storage_leaves.iter().map(|&val| Some(val)).collect(),
+            },
+        );
+        self.memory.insert_preinitialized_segment(
+            Segment::TrieData,
+            crate::witness::memory::MemorySegmentState { content: trie_data },
+        );
 
         trie_roots_ptrs
     }
@@ -416,14 +427,7 @@ impl<F: Field> GenerationState<F> {
         };
         let trie_root_ptrs =
             state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
-        log::debug!(
-            "Initial accounts linked list = {:?}",
-            state.get_accounts_linked_list()
-        );
-        log::debug!(
-            "Initial storage linked list = {:?}",
-            state.get_storage_linked_list()
-        );
+
         state.trie_root_ptrs = trie_root_ptrs;
         Ok(state)
     }

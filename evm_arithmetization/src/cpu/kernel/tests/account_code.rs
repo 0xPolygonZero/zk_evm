@@ -30,13 +30,6 @@ pub(crate) fn initialize_mpts<F: Field>(
     trie_inputs: &TrieInputs,
 ) {
     // Load all MPTs.
-    log::debug!("trie input = {:?}", trie_inputs);
-    log::debug!(
-        "trie_data len = {:?}",
-        interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()]
-            .content
-            .len()
-    );
     let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
         load_linked_lists_and_txn_and_receipt_mpts(&trie_inputs)
             .expect("Invalid MPT data for preinitialization");
@@ -51,14 +44,6 @@ pub(crate) fn initialize_mpts<F: Field>(
         trie_data.clone();
     interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();
 
-    log::debug!(
-        "real init acc ll = {:?}",
-        interpreter.generation_state.get_accounts_linked_list()
-    );
-    log::debug!(
-        "real init sto ll = {:?}",
-        interpreter.generation_state.get_storage_linked_list()
-    );
     if trie_root_ptrs.state_root_ptr.is_none() {
         trie_root_ptrs.state_root_ptr = Some(
             load_state_mpt(
@@ -69,7 +54,6 @@ pub(crate) fn initialize_mpts<F: Field>(
             )
             .expect("Invalid MPT data for preinitialization"),
         );
-        log::debug!("state root ptr = {:?}", trie_root_ptrs.state_root_ptr);
     }
 
     let accounts_len = Segment::AccountsLinkedList as usize
@@ -77,7 +61,6 @@ pub(crate) fn initialize_mpts<F: Field>(
             [Segment::AccountsLinkedList.unscale()]
         .content
         .len();
-    log::debug!("accounts len = {accounts_len}");
     let storage_len = Segment::StorageLinkedList as usize
         + interpreter.generation_state.memory.contexts[0].segments
             [Segment::StorageLinkedList.unscale()]
@@ -120,10 +103,6 @@ pub(crate) fn initialize_mpts<F: Field>(
         (initial_storage_len_addr, storage_len.into()),
     ]);
 
-    log::debug!("the constant = {:?}", interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize));
-
-    log::debug!("trie data len = {trie_data_len}");
-
     let state_addr =
         MemoryAddress::new_bundle((GlobalMetadata::StateTrieRoot as usize).into()).unwrap();
     let txn_addr =
@@ -135,7 +114,6 @@ pub(crate) fn initialize_mpts<F: Field>(
 
     let mut to_set = vec![];
     if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
-        log::debug!("setiando el trai a {:?}", state_root_ptr);
         to_set.push((state_addr, state_root_ptr.into()));
     }
     to_set.extend([
@@ -426,15 +404,6 @@ fn prepare_interpreter_all_accounts<F: Field>(
         KERNEL.global_labels["store_initial_slots"];
     interpreter.run()?;
 
-    log::debug!(
-        "real init acc ll = {:?}",
-        interpreter.generation_state.get_accounts_linked_list()
-    );
-    log::debug!(
-        "real init sto ll = {:?}",
-        interpreter.generation_state.get_storage_linked_list()
-    );
-
     // Set the pointers to the intial payloads.
     interpreter
         .push(0xDEADBEEFu32.into())
@@ -461,7 +430,6 @@ fn prepare_interpreter_all_accounts<F: Field>(
     );
 
     let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
-    log::debug!(": = {acc_ptr}");
     let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
     interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
     interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);

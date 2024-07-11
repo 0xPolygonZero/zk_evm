@@ -215,9 +215,15 @@ impl MemoryState {
         Some(val)
     }
 
-    pub(crate) fn get_ll_memory(&self, segment: Segment) -> Vec<Option<U256>> {
-        assert!(segment == Segment::AccountsLinkedList || segment == Segment::StorageLinkedList);
-
+    /// Returns the memory values associated with a preinitialized segment. We
+    /// need a specific behaviour here, since the values can be stored either in
+    /// `preinitialized_segments` or in the memory itself.
+    pub(crate) fn get_preinit_memory(&self, segment: Segment) -> Vec<Option<U256>> {
+        assert!(
+            segment == Segment::AccountsLinkedList
+                || segment == Segment::StorageLinkedList
+                || segment == Segment::TrieData
+        );
         let len = self
             .preinitialized_segments
             .get(&segment)
@@ -254,7 +260,7 @@ impl MemoryState {
                             .len()
                 {
                     self.preinitialized_segments.get(&segment).unwrap().content[offset]
-                        .expect("We checked that the offset is not out of bounds.")
+                        .unwrap_or_default()
                 } else {
                     0.into()
                 }

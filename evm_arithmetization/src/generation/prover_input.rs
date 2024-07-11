@@ -89,13 +89,15 @@ impl<F: Field> GenerationState<F> {
             "state" => match self.trie_root_ptrs.state_root_ptr {
                 Some(state_root_ptr) => Ok(state_root_ptr),
                 None => {
-                    let n = load_state_mpt(
-                        &self.inputs.tries,
-                        &mut self.memory.contexts[0].segments[Segment::TrieData.unscale()].content,
-                    )?;
-                    log::debug!(
-                        "guessed state trie = {:?}",
-                        get_state_trie::<HashedPartialTrie>(&self.memory, n)
+                    let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
+
+                    let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
+
+                    self.memory.insert_preinitialized_segment(
+                        Segment::TrieData,
+                        crate::witness::memory::MemorySegmentState {
+                            content: new_content,
+                        },
                     );
                     Ok(n)
                 }
@@ -704,7 +706,7 @@ impl<F: Field> GenerationState<F> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
         // available virtual address in the segment. In order to get the length
         // we need to substract `Segment::AccountsLinkedList` as usize.
-        let accounts_mem = self.memory.get_ll_memory(Segment::AccountsLinkedList);
+        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
         LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
     }
 
@@ -714,7 +716,7 @@ impl<F: Field> GenerationState<F> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
         // available virtual address in the segment. In order to get the length
         // we need to substract `Segment::AccountsLinkedList` as usize.
-        let storage_mem = self.memory.get_ll_memory(Segment::StorageLinkedList);
+        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
         LinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
     }
 

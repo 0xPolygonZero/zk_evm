@@ -530,9 +530,6 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         &storage_tries_by_state_key,
     );
 
-    // TODO: Remove after checking correctness of linked lists
-    // let state_root_ptr = load_state_mpt(trie_inputs, &mut trie_data)?;
-
     Ok((
         TrieRootPtrs {
             state_root_ptr: None,
