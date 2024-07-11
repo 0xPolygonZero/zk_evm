@@ -146,7 +146,7 @@ impl SegmentProofSpan {
                     .unwrap(),
             );
 
-            format!("{:x?}..{:x?}", first_encoding, last_encoding)
+            format!("[0x{:x?}..0x{:x?}]", first_encoding, last_encoding)
         }
     }
 
