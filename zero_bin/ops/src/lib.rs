@@ -116,13 +116,20 @@ struct SegmentProofSpan {
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
     fn get_id(ir: &GenerationInputs, segment_index: usize) -> String {
-        format!(
-            "b{} - {}_{} ({})",
-            ir.block_metadata.block_number,
-            ir.txn_number_before,
-            ir.txn_number_before + ir.signed_txns.len(),
-            segment_index
-        )
+        if ir.signed_txns.len() == 1 {
+            format!(
+                "b{} - {} ({})",
+                ir.block_metadata.block_number, ir.txn_number_before, segment_index
+            )
+        } else {
+            format!(
+                "b{} - {}_{} ({})",
+                ir.block_metadata.block_number,
+                ir.txn_number_before,
+                ir.txn_number_before + ir.signed_txns.len(),
+                segment_index
+            )
+        }
     }
 
     /// Get a textual descriptor for the transaction proof.
@@ -132,6 +139,11 @@ impl SegmentProofSpan {
     fn get_descriptor(ir: &GenerationInputs) -> String {
         if ir.signed_txns.is_empty() {
             "Dummy".to_string()
+        } else if ir.signed_txns.len() == 1 {
+            format!(
+                "{:x?}",
+                u64::from_be_bytes(keccak(ir.signed_txns[0].clone())[0..8].try_into().unwrap())
+            )
         } else {
             let first_encoding =
                 u64::from_be_bytes(keccak(ir.signed_txns[0].clone())[0..8].try_into().unwrap());
