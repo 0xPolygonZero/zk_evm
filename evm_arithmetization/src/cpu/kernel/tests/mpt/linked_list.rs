@@ -156,7 +156,7 @@ fn test_insert_account() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[payload_ptr, U256::zero()]);
+    assert_eq!(interpreter.stack(), &[payload_ptr]);
 
     let mut list = interpreter
         .generation_state
@@ -213,7 +213,7 @@ fn test_insert_storage() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[payload_ptr, U256::zero()]);
+    assert_eq!(interpreter.stack(), &[payload_ptr]);
 
     let mut list = interpreter
         .generation_state
@@ -286,21 +286,15 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         interpreter.run()?;
         assert_eq!(
             interpreter.pop().expect("The stack can't be empty"),
-            U256::zero()
-        );
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
             addr + delta_ptr
         );
-        // The copied ptr is at distance 4, the size of an account, from the previous copied ptr.
-        log::debug!("ptr_cpy = {:?}", interpreter.generation_state.memory.get_with_init(
-            MemoryAddress::new_bundle(U256::from(offset + 4 * (i + 1) + 2)).unwrap(),
-        ));
+        // The copied ptr is at distance 4, the size of an account, from the previous
+        // copied ptr.
         assert_eq!(
             interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new_bundle(U256::from(offset + 4 * (i + 1) + 2)).unwrap(),
             ),
-            (4*i).into()
+            (4 * i).into()
         );
     }
 
@@ -322,10 +316,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         interpreter.push(addr_in_list);
         interpreter.generation_state.registers.program_counter = insert_account_label;
         interpreter.run()?;
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
-            U256::zero()
-        );
+
         assert_eq!(
             interpreter.pop().expect("The stack can't be empty"),
             addr_in_list + delta_ptr
@@ -339,10 +330,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-    assert_eq!(
-        interpreter.pop().expect("The stack can't be empty"),
-        U256::zero()
-    );
+
     assert_eq!(
         interpreter.pop().expect("The stack can't be empty"),
         U256::from(addr_not_in_list.0.as_slice()) + delta_ptr
@@ -452,13 +440,9 @@ fn test_insert_and_delete_storage() -> Result<()> {
         interpreter.run()?;
         assert_eq!(
             interpreter.pop().expect("The stack can't be empty"),
-            U256::zero()
-        );
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
             addr + delta_ptr
         );
-        // The counter must be 0
+        // The ptr_cpy must be 0
         assert_eq!(
             interpreter.generation_state.memory.get_with_init(
                 MemoryAddress::new_bundle(U256::from(offset + 5 * (i + 1) + 3)).unwrap(),
@@ -487,10 +471,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
         interpreter.push(addr_in_list);
         interpreter.generation_state.registers.program_counter = insert_slot_label;
         interpreter.run()?;
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
-            U256::zero()
-        );
+
         assert_eq!(
             interpreter.pop().expect("The stack can't be empty"),
             addr_in_list + delta_ptr
@@ -511,10 +492,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_slot_label;
 
     interpreter.run()?;
-    assert_eq!(
-        interpreter.pop().expect("The stack can't be empty"),
-        U256::zero()
-    );
+
     assert_eq!(
         interpreter.pop().expect("The stack can't be empty"),
         U256::from(addr_not_in_list.0.as_slice()) + delta_ptr

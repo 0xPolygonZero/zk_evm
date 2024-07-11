@@ -123,24 +123,24 @@ store_initial_accounts_end:
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(insert_account_to_linked_list)
 %%after:
-    // stack: cold_access
+    // stack: payload_ptr
 %endmacro
 
 %macro insert_account_with_overwrite
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(insert_account_with_overwrite)
 %%after:
-    // stack: cold_access
+    // stack: payload_ptr
 %endmacro
 
 %macro insert_account_to_linked_list_no_return
     %insert_account_to_linked_list
-    %pop2
+    POP
 %endmacro
 
 %macro insert_account_with_overwrite_no_return
     %insert_account_with_overwrite
-    %pop2
+    POP
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/4, by 4
@@ -161,8 +161,7 @@ store_initial_accounts_end:
 %endmacro
 
 /// Inserts the account addr and payload pointer into the linked list if it is not already present.
-/// Return `1, payload_ptr` if the account was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `payload_ptr` if the account was inserted, `original_ptr` if it was already present.
 global insert_account_to_linked_list:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -197,12 +196,11 @@ global insert_account_to_linked_list:
 global account_found:
     // The address was already in the list
     // stack: pred_ptr, addr, payload_ptr, retdest
-    // Load the the payload pointer and access counter
+    // Load the payload pointer
     %increment
     MLOAD_GENERAL
     // stack: orig_payload_ptr, addr, payload_ptr, retdest
-    // TODO: Remove the now unused cold_access
-    %stack (orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, 0, orig_payload_ptr)
+    %stack (orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
     JUMP
 //DEBUG
 global insert_new_account:
@@ -255,7 +253,7 @@ global insert_new_account:
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr, payload_ptr, retdest
-    %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    %stack (addr, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 global insert_account_with_overwrite:
@@ -293,29 +291,28 @@ global insert_account_with_overwrite:
 account_found_with_overwrite:
     // The address was already in the list
     // stack: pred_ptr, addr, payload_ptr, retdest
-    // Load the the payload pointer and access counter
+    // Load the payload pointer
     %increment
     // stack: payload_ptr_ptr, addr, payload_ptr, retdest
     DUP3 MSTORE_GENERAL
-    %stack (addr, payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    %stack (addr, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 %macro search_account
     %stack (addr, ptr) -> (addr, ptr, %%after)
     %jump(search_account)
 %%after:
-    // stack: cold_access
+    // stack:
 %endmacro
 
 %macro search_account_no_return
     %search_account
-    %pop2
+    POP
 %endmacro
 
 
 /// Search the account addr andin the linked list.
-/// Return `1, payload_ptr` if the account was not found, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `payload_ptr` if the account was not found, `original_ptr` if it was already present.
 global search_account:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -350,10 +347,7 @@ global search_account:
 
 account_not_found:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
-    %pop3
-    SWAP1
-    PUSH 1
-    SWAP1
+    %stack (pred_addr, pred_ptr, addr, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 %macro remove_account_from_linked_list
@@ -449,12 +443,12 @@ store_initial_slots_end:
     %stack (addr, key, ptr) -> (addr, key, ptr, %%after)
     %jump(insert_slot)
 %%after:
-    // stack: cold_access, value_ptr
+    // stack: value_ptr
 %endmacro
 
 %macro insert_slot_no_return
     %insert_slot
-    %pop2
+    POP
 %endmacro
 
 // Multiply the value at the top of the stack, denoted by ptr/5, by 5
@@ -462,13 +456,16 @@ store_initial_slots_end:
 // In this way @SEGMENT_STORAGE_LINKED_LIST + 5*ptr/5 must be pointing to the beginning of a node.
 // TODO: Maybe we should check here if the node have been deleted.
 %macro get_valid_slot_ptr
-     // stack: ptr/5
+    // stack: ptr/5
     DUP1
+    PUSH 5
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
+    // stack: segment, 5, ptr/5, ptr/5
     %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
-    %sub_const(@SEGMENT_STORAGE_LINKED_LIST)
-    // By construction, the unscaled list len
-    // must be multiple of 5
-    %div_const(5)
+    SUB
+    // stack: accessed_strg_keys_len, 5, ptr/5, ptr/5
+    // By construction, the unscaled list len must be multiple of 5
+    DIV
     // stack: accessed_strg_keys_len/5, ptr/5, ptr/5
     %assert_gt
     %mul_const(5)
@@ -477,8 +474,7 @@ store_initial_slots_end:
 
 /// Inserts the pair (addres, storage_key) and a new payload pointer into the linked list if it is not already present,
 /// or modify its payload if it was already present.
-/// Return `1, new_payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `new_payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global insert_slot_with_value:
     // stack: addr, key, value, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -585,7 +581,8 @@ next_node_ok_with_value:
     DUP1
     %get_trie_data_size
     // stack: new_payload_ptr, new_ptr+2, new_ptr+2, next_ptr, addr, key, value, retdest
-    %stack (new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr, key, value) -> (value, new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr, key, new_payload_ptr)
+    %stack (new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr, key, value, retdest)
+        -> (value, new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, retdest, new_payload_ptr)
     %append_to_trie_data
     MSTORE_GENERAL
 
@@ -599,17 +596,13 @@ next_node_ok_with_value:
     // stack: new_ptr + 3, next_ptr, addr, key, new_payload_ptr, retdest
     %increment
     DUP1
-    // stack: new_next_ptr, new_next_ptr, next_ptr, addr, key, new_payload_ptr, retdest
+    // stack: new_next_ptr, new_next_ptr, next_ptr, retdest, new_payload_ptr
     SWAP2
     MSTORE_GENERAL
-    // stack: new_next_ptr, addr, key, new_payload_ptr, retdest
+    // stack: new_next_ptr, retdest, new_payload_ptr
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
-    // stack: addr, key, new_payload_ptr, retdest
-    %pop2
-    PUSH 0
-    SWAP1
-    SWAP2
+    // stack: retdest, new_payload_ptr
     JUMP
 
 slot_found_write_value:
@@ -618,8 +611,7 @@ slot_found_write_value:
     %stack (payload_ptr, addr, key, value) -> (payload_ptr, value, payload_ptr)
     %mstore_trie_data
     // stack: payload_ptr, retdest
-    // the cold_access is no longer used here, so we can set any value.
-    %stack (payload_ptr, retdest) -> (retdest, 0, payload_ptr)
+    %stack (payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 %macro insert_slot_with_value
@@ -628,13 +620,12 @@ slot_found_write_value:
     SWAP1 %addr_to_state_key
     %jump(insert_slot_with_value)
 %%after:
-    // stack: cold_access, value_ptr
+    // stack: value_ptr
 %endmacro
 
 /// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present,
 /// or modify its payload if it was already present.
-/// Return `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
+/// Return `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global insert_slot:
     // stack: addr, key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -693,8 +684,7 @@ slot_found_write:
     SWAP1
     DUP5
     MSTORE_GENERAL // Store the new payload
-    // TODO: remove the unused cold access
-    %stack (orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, 0, orig_payload_ptr)
+    %stack (orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
     JUMP
 insert_new_slot:
     // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
@@ -775,17 +765,11 @@ next_node_ok:
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     // stack: addr, key, payload_ptr, retdest
-    %pop2
-    PUSH 0
-    SWAP1
-    SWAP2
+    %stack (addr, key, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
 /// Search the pair (address, storage_key) in the storage the linked list.
-/// Returns `1, payload_ptr` if the storage key was inserted, `1, original_ptr` if it was already present
-/// and this is the first access, or `0, original_ptr` if it was already present and accessed.
-// TODO: Not sure if this is correct, bc if a value is not found we need to return 0 but keep track of it for
-// having the right cold_access
+/// Returns `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global search_slot:
     // stack: addr, key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -834,7 +818,7 @@ global search_slot:
 slot_not_found:    
     // stack: pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest
     %stack (pred_addr_or_pred_key, pred_ptr, addr, key, payload_ptr, retdest)
-        -> (retdest, 1, payload_ptr)
+        -> (retdest, payload_ptr)
     JUMP
 
 slot_found_no_write:
@@ -844,8 +828,7 @@ slot_found_no_write:
     %add_const(2)
     MLOAD_GENERAL
     // stack: orig_payload_ptr, addr, key, payload_ptr, retdest
-    // TODO: remove the now unused cold access (the 0)
-    %stack (orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, 0, orig_payload_ptr)
+    %stack (orig_payload_ptr, addr, key, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
     JUMP
 
 
@@ -907,30 +890,38 @@ global remove_all_account_slots:
     // stack: pred_addr, pred_ptr, addr, retdest
     DUP3 EQ %jumpi(panic)
     // stack: pred_ptr, addr, retdest
-    // Now, while the next address is `addr`, remove the slot.
-    %add_const(4) MLOAD_GENERAL
-
-remove_all_slots_loop:
-    // stack: cur_ptr, addr, retdest
     DUP1
-    // stack: cur_ptr, cur_ptr, addr, retdest
+
+// Now, while the next address is `addr`, remove the next slot.
+remove_all_slots_loop:
+    // stack: pred_ptr, pred_ptr, addr, retdest
+    %add_const(4) DUP1 MLOAD_GENERAL
+    // stack: cur_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
     DUP1 %eq_const(@U256_MAX) %jumpi(remove_all_slots_end)
-    %add_const(4) MLOAD_GENERAL SWAP1 DUP1
-    // stack: cur_ptr, cur_ptr, next_ptr, addr, retdest
+    DUP1 %add_const(4) MLOAD_GENERAL 
+    // stack: next_ptr, cur_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
+    SWAP1 DUP1
+    // stack: cur_ptr, cur_ptr, next_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
     MLOAD_GENERAL
-    // stack: cur_addr, cur_ptr, next_ptr, addr, retdest
-    DUP1 DUP5 EQ ISZERO %jumpi(remove_all_slots_pop_and_end)
-    // stack: cur_addr, cur_ptr, next_ptr, addr, retdest
-    SWAP1 %increment MLOAD_GENERAL SWAP1
-    // stack: cur_addr, cur_key, next_ptr, addr, retdest
-    %remove_slot
-    // stack: next_ptr, addr, retdest
+    DUP6 EQ ISZERO %jumpi(remove_all_slots_pop_and_end)
+    
+    // Remove slot: update the value in cur_ptr_ptr, and set cur_ptr+4 to @U256_MAX.
+    // stack: cur_ptr, next_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
+    SWAP2 SWAP1
+    // stack: next_ptr, cur_ptr_ptr, cur_ptr, pred_ptr, addr, retdest
+    MSTORE_GENERAL
+    // stack: cur_ptr, pred_ptr, addr, retdest
+    %add_const(4) PUSH @U256_MAX
+    MSTORE_GENERAL
+    // stack: pred_ptr, addr, retdest
+    DUP1
     %jump(remove_all_slots_loop)
+
 remove_all_slots_pop_and_end:
     POP
 remove_all_slots_end:
-    // stack: cur_addr, cur_ptr, addr, retdest
-    %pop3 JUMP
+    // stack: next_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
+    %pop4 JUMP
 
 %macro remove_all_account_slots
     %stack (addr) -> (addr, %%after)
@@ -943,8 +934,7 @@ remove_all_slots_end:
     %addr_to_state_key
     %jump(search_account)
 %%after:
-    // stack: cold_access, account_ptr
-    POP
+    // stack: account_ptr
 %endmacro
 
 %macro read_storage_linked_list
@@ -955,8 +945,7 @@ remove_all_slots_end:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: cold_access, slot_ptr
-    POP
+    // stack: slot_ptr
 %endmacro
 
 %macro read_storage_linked_list_w_addr
@@ -967,8 +956,7 @@ remove_all_slots_end:
     %stack (addr, key) -> (addr, key, 0, %%after)
     %jump(search_slot)
 %%after:
-    // stack: cold_access, slot_ptr
-    POP
+    // stack: slot_ptr
 %endmacro
 
 %macro first_account
