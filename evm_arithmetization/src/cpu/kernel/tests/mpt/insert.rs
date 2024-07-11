@@ -14,6 +14,7 @@ use crate::cpu::kernel::tests::mpt::{
 use crate::generation::mpt::AccountRlp;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
+use crate::util::h2u;
 use crate::Node;
 
 #[test]
@@ -249,12 +250,22 @@ fn test_state_trie(
     interpreter.run()?;
 
     // Now, execute mpt_hash_state_trie.
+    state_trie.insert(k, rlp::encode(&account).to_vec());
+    let expected_state_trie_hash = state_trie.hash();
+    interpreter.set_global_metadata_field(
+        GlobalMetadata::StateTrieRootDigestAfter,
+        h2u(expected_state_trie_hash),
+    );
+
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
+    interpreter
+        .halt_offsets
+        .push(KERNEL.global_labels["check_txn_trie"]);
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(1.into()) // Initial length of the trie data segment, unused.
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");
     interpreter.run()?;
 
@@ -264,11 +275,6 @@ fn test_state_trie(
         "Expected 2 items on stack after hashing, found {:?}",
         interpreter.stack()
     );
-    let hash = H256::from_uint(&interpreter.stack()[1]);
-
-    state_trie.insert(k, rlp::encode(&account).to_vec());
-    let expected_state_trie_hash = state_trie.hash();
-    assert_eq!(hash, expected_state_trie_hash);
 
     Ok(())
 }
