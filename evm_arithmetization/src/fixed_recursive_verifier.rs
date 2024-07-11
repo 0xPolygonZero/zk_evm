@@ -1677,8 +1677,8 @@ where
         check_cyclic_proof_verifier_data(proof, &verifier_data.verifier_only, &verifier_data.common)
     }
 
-    /// Creates dummy public inputs with correct verifier key at the end.  Used
-    /// by [`set_dummy_if_necessary`].  It cyclic vk to the aggregation circuit
+    /// Creates dummy public inputs with correct verifier key at the end. Used
+    /// by [`set_dummy_if_necessary`]. It cyclic vk to the aggregation circuit
     /// values, so that both aggregation and non-aggregation parts of the child
     /// share the same vk. This is possible because only the aggregation inner
     /// circuit is checked against its vk.
@@ -1716,7 +1716,7 @@ where
     /// If the [`AggregationChild`] is a base proof and not an aggregation
     /// proof, we need to manually set the public inputs vector of the otherwise
     /// inert `agg_proof`, so that they correspond to the `cyclic_vk` of the
-    /// aggregation circuit.  The cyclic prover expects to find the `cyclic_vk`
+    /// aggregation circuit. The cyclic prover expects to find the `cyclic_vk`
     /// targets in the very end of the public inputs vector, and so it does not
     /// matter what the preceding values are.
     fn set_dummy_if_necessary(
@@ -2002,10 +2002,10 @@ fn shrinking_config() -> CircuitConfig {
 /// # Arguments
 ///
 /// - `public_inputs`: A slice of public inputs originating from the aggregation
-///   case of a two-to-one block proof.  This slice must consist of a hash,
-///   either of public values, or of two concatenated hashes.  The hash must
+///   case of a two-to-one block proof. This slice must consist of a hash,
+///   either of public values, or of two concatenated hashes. The hash must
 ///   start at offset zero of the slice and is typically followed by padding and
-///   then a verifier key.  It is an error to call this on a slice for a base
+///   then a verifier key. It is an error to call this on a slice for a base
 ///   proof.
 ///
 /// # Outputs
@@ -2025,9 +2025,9 @@ pub fn extract_two_to_one_block_hash<T>(public_inputs: &[T]) -> &[T; NUM_HASH_OU
 /// # Arguments
 ///
 /// - `public_inputs`: A slice of public inputs originating from the base case
-///   of a two-to-one block proof.  This slice must consist exactly of public
+///   of a two-to-one block proof. This slice must consist exactly of public
 ///   values starting at offset zero and is typically followed by a verifier
-///   key.  It is an error to call this function on a slice for an aggregation
+///   key. It is an error to call this function on a slice for an aggregation
 ///   proof.
 ///
 /// # Outputs
