@@ -15,7 +15,8 @@ use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::plonk::config::{GenericConfig, Hasher, PoseidonGoldilocksConfig};
+use plonky2::hash::poseidon::PoseidonHash;
+use plonky2::plonk::config::{Hasher, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
 
@@ -285,17 +286,12 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
 
         {
             // Compute Merkle root from public inputs of block proofs.
-            let hash_no_pad =
-                <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::hash_no_pad;
-            let two_to_one =
-                <PoseidonGoldilocksConfig as GenericConfig<D>>::InnerHasher::two_to_one;
-
             // Leaves
             let mut hashes: Vec<_> = bp
                 .iter()
                 .map(|block_proof| {
                     let public_values = extract_block_public_values(&block_proof.public_inputs);
-                    hash_no_pad(public_values)
+                    PoseidonHash::hash_no_pad(public_values)
                 })
                 .collect();
 
@@ -303,7 +299,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
             hashes.extend_from_within(0..hashes.len());
             let half = hashes.len() / 2;
             for i in 0..half - 1 {
-                hashes[half + i] = two_to_one(hashes[2 * i], hashes[2 * i + 1]);
+                hashes[half + i] = PoseidonHash::two_to_one(hashes[2 * i], hashes[2 * i + 1]);
             }
             let merkle_root = hashes[hashes.len() - 2].elements;
 

@@ -65,6 +65,9 @@ global deduct_eth_insufficient_balance:
 global add_eth:
     // stack: addr, amount, retdest
     DUP1 %insert_touched_addresses
+    // stack: addr, amount, retdest
+    DUP2 ISZERO %jumpi(add_eth_zero_amount)
+    // stack: addr, amount, retdest
     DUP1 %mpt_read_state_trie
     // stack: account_ptr, addr, amount, retdest
     DUP1 ISZERO %jumpi(add_eth_new_account) // If the account pointer is null, we need to create the account.
@@ -84,7 +87,6 @@ global add_eth_new_account:
     // stack: null_account_ptr, addr, amount, retdest
     POP
     // stack: addr, amount, retdest
-    DUP2 ISZERO %jumpi(add_eth_new_account_zero)
     DUP1 %journal_add_account_created
     %get_trie_data_size // pointer to new account we're about to create
     // stack: new_account_ptr, addr, amount, retdest
@@ -100,7 +102,7 @@ global add_eth_new_account:
     // stack: key, new_account_ptr, retdest
     %jump(mpt_insert_state_trie)
 
-add_eth_new_account_zero:
+add_eth_zero_amount:
     // stack: addr, amount, retdest
     %pop2 JUMP
 

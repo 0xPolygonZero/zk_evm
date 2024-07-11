@@ -2,7 +2,9 @@ use core::borrow::{Borrow, BorrowMut};
 use core::mem::{size_of, transmute};
 use core::ops::Range;
 
-use crate::util::{indices_arr, transmute_no_compile_time_size_checks};
+use zk_evm_proc_macro::Columns;
+
+use crate::util::indices_arr;
 
 /// Total number of sponge bytes: number of rate bytes + number of capacity
 /// bytes.
@@ -27,7 +29,7 @@ pub(crate) const KECCAK_DIGEST_U32S: usize = KECCAK_DIGEST_BYTES / 4;
 
 /// A view of `KeccakSpongeStark`'s columns.
 #[repr(C)]
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Columns, Eq, PartialEq, Debug)]
 pub(crate) struct KeccakSpongeColumnsView<T: Copy> {
     /// 1 if this row represents a full input block, i.e. one in which each byte
     /// is an input byte, not a padding byte; 0 otherwise.
@@ -111,48 +113,6 @@ pub(crate) const fn get_block_bytes_range() -> Range<usize> {
 pub(crate) const fn get_single_block_bytes_value(i: usize) -> usize {
     debug_assert!(i < KECCAK_RATE_BYTES);
     get_block_bytes_range().start + i
-}
-
-impl<T: Copy> From<[T; NUM_KECCAK_SPONGE_COLUMNS]> for KeccakSpongeColumnsView<T> {
-    fn from(value: [T; NUM_KECCAK_SPONGE_COLUMNS]) -> Self {
-        unsafe { transmute_no_compile_time_size_checks(value) }
-    }
-}
-
-impl<T: Copy> From<KeccakSpongeColumnsView<T>> for [T; NUM_KECCAK_SPONGE_COLUMNS] {
-    fn from(value: KeccakSpongeColumnsView<T>) -> Self {
-        unsafe { transmute_no_compile_time_size_checks(value) }
-    }
-}
-
-impl<T: Copy> Borrow<KeccakSpongeColumnsView<T>> for [T; NUM_KECCAK_SPONGE_COLUMNS] {
-    fn borrow(&self) -> &KeccakSpongeColumnsView<T> {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> BorrowMut<KeccakSpongeColumnsView<T>> for [T; NUM_KECCAK_SPONGE_COLUMNS] {
-    fn borrow_mut(&mut self) -> &mut KeccakSpongeColumnsView<T> {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> Borrow<[T; NUM_KECCAK_SPONGE_COLUMNS]> for KeccakSpongeColumnsView<T> {
-    fn borrow(&self) -> &[T; NUM_KECCAK_SPONGE_COLUMNS] {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy> BorrowMut<[T; NUM_KECCAK_SPONGE_COLUMNS]> for KeccakSpongeColumnsView<T> {
-    fn borrow_mut(&mut self) -> &mut [T; NUM_KECCAK_SPONGE_COLUMNS] {
-        unsafe { transmute(self) }
-    }
-}
-
-impl<T: Copy + Default> Default for KeccakSpongeColumnsView<T> {
-    fn default() -> Self {
-        [T::default(); NUM_KECCAK_SPONGE_COLUMNS].into()
-    }
 }
 
 const fn make_col_map() -> KeccakSpongeColumnsView<usize> {

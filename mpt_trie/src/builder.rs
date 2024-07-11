@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use ethereum_types::H256;
 use keccak_hash::keccak;
+use rlp::{Prototype, Rlp};
 
 use super::{
     nibbles::Nibbles,
@@ -48,9 +49,22 @@ impl<T: PartialTrie> PartialTrieBuilder<T> {
     /// Inserts variants of extension and leaf nodes into the builder.
     pub fn insert_short_node_variants_from_proof(&mut self, proof: Vec<Vec<u8>>) {
         for node in proof {
-            let bytes = rlp::decode_list::<Vec<u8>>(&node);
-            match bytes.len() {
-                2 => self.insert_short_node_variants(bytes),
+            let rlp = Rlp::new(&node);
+            match rlp.prototype().expect("rlp data is valid") {
+                Prototype::List(2) => {
+                    self.insert_short_node_variants(rlp.as_list().expect("valid list"))
+                }
+                Prototype::List(17) => {
+                    for i in 0..16 {
+                        if let Ok(entry) = rlp.at(i) {
+                            if let Prototype::List(2) = entry.prototype().expect("valid list") {
+                                self.insert_short_node_variants(
+                                    entry.as_list().expect("valid list"),
+                                )
+                            }
+                        }
+                    }
+                }
                 _ => continue,
             }
         }
