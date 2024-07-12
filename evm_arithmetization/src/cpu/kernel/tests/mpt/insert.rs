@@ -183,15 +183,22 @@ fn test_state_trie(
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
+    // Store initial accounts and storage.
+    interpreter
+        .halt_offsets
+        .push(KERNEL.global_labels["after_store_initial"]);
+    interpreter.generation_state.registers.program_counter = KERNEL.global_labels["store_initial"];
+    interpreter.run();
+
     // Set initial tries.
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push((Segment::StorageLinkedList as usize + 7).into())
+        .push((Segment::StorageLinkedList as usize + 8).into())
         .expect("The stack should not overflow");
     interpreter
-        .push((Segment::AccountsLinkedList as usize + 5).into())
+        .push((Segment::AccountsLinkedList as usize + 6).into())
         .expect("The stack should not overflow");
     interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
 
@@ -201,8 +208,8 @@ fn test_state_trie(
 
     interpreter.run()?;
 
-    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 1;
-    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
+    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
+    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
     interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
     interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
 
@@ -255,9 +262,9 @@ fn test_state_trie(
     interpreter
         .halt_offsets
         .push(KERNEL.global_labels["check_txn_trie"]);
-    interpreter
-        .push(0xDEADBEEFu32.into())
-        .expect("The stack should not overflow");
+    // interpreter
+    //     .push(0xDEADBEEFu32.into())
+    //     .expect("The stack should not overflow");
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");
@@ -265,7 +272,7 @@ fn test_state_trie(
 
     assert_eq!(
         interpreter.stack().len(),
-        2,
+        1,
         "Expected 2 items on stack after hashing, found {:?}",
         interpreter.stack()
     );
