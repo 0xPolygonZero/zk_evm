@@ -14,7 +14,7 @@ use plonky2::field::polynomial::{PolynomialCoeffs, PolynomialValues};
 use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::reduction_strategies::FriReductionStrategy;
-use plonky2::fri::structure::FriInstanceInfo;
+use plonky2::fri::structure::{FriInstanceInfo, FriOpeningBatch};
 use plonky2::fri::FriConfig;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
@@ -24,6 +24,7 @@ use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use serde::{Deserialize, Serialize};
+use starky::batch_proof::{BatchStarkProof, BatchStarkProofWithPublicInputs};
 use starky::config::StarkConfig;
 use starky::cross_table_lookup::{get_ctl_auxiliary_polys, get_ctl_data, CtlData};
 use starky::lookup::{lookup_helper_columns, GrandProductChallengeSet};
@@ -290,7 +291,7 @@ pub(crate) fn prove_with_traces_batch<F, P, C, const D: usize>(
     public_values: PublicValues,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<StarkProofWithPublicInputs<F, C, D>>
+) -> Result<BatchStarkProofWithPublicInputs<F, C, D, NUM_TABLES>>
 where
     F: RichField + Extendable<D>,
     P: PackedField<Scalar = F>,
@@ -447,17 +448,22 @@ where
     // Get the FRI openings and observe them.
     // Compute all openings: evaluate all committed polynomials at `zeta` and, when
     // necessary, at `g * zeta`.
-    // TODO: Need batched openings.
-    let openings = StarkOpeningSet {
-        local_values: Vec::new(),
-        next_values: Vec::new(),
-        auxiliary_polys: None,
-        auxiliary_polys_next: None,
-        ctl_zs_first: None,
-        quotient_polys: None,
-    };
+    let openings = all_openings(
+        all_stark,
+        &trace_poly_values_sorted,
+        &trace_commitment,
+        &auxiliary_columns_sorted,
+        &auxiliary_commitment,
+        &quotient_polys_sorted,
+        &quotient_commitment,
+        &ctl_data_per_table,
+        zeta,
+        config,
+    );
 
-    challenger.observe_openings(&openings.to_fri_openings());
+    for opening in openings.iter() {
+        challenger.observe_openings(&opening.to_fri_openings());
+    }
 
     let initial_merkle_trees = [
         &trace_commitment,
@@ -495,15 +501,15 @@ where
         );
     }
 
-    let stark_proof = StarkProof {
+    let stark_proof = BatchStarkProof {
         trace_cap: trace_commitment.batch_merkle_tree.cap.clone(),
         auxiliary_polys_cap: Some(auxiliary_commitment.batch_merkle_tree.cap),
         quotient_polys_cap: Some(quotient_commitment.batch_merkle_tree.cap),
-        openings,
+        openings: openings.try_into().unwrap(),
         opening_proof,
     };
 
-    Ok(StarkProofWithPublicInputs {
+    Ok(BatchStarkProofWithPublicInputs {
         proof: stark_proof,
         public_inputs: vec![],
     })
@@ -677,23 +683,16 @@ where
 {
     let mut res = Vec::new();
 
-    // This method assumes that all STARKs have distinct degrees.
-    // TODO: Relax this.
-    assert!(Table::all_degree_logs()
-        .windows(2)
-        .all(|pair| { pair[0] > pair[1] }));
-
     // Arithmetic.
     {
-        let trace_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Arithmetic]][0]
-            .len();
+        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Arithmetic];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
             trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
         };
-        let aux_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Arithmetic]][0]
-            .len();
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
@@ -717,15 +716,14 @@ where
 
     // Bytepacking.
     {
-        let trace_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::BytePacking]][0]
-            .len();
+        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::BytePacking];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
             trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
         };
-        let aux_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::BytePacking]][0]
-            .len();
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
@@ -749,15 +747,14 @@ where
 
     // Cpu.
     {
-        let trace_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Cpu]][0]
-            .len();
+        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Cpu];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
             trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
         };
-        let aux_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Cpu]][0]
-            .len();
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
@@ -781,15 +778,14 @@ where
 
     // Keccak.
     {
-        let trace_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Keccak]][0]
-            .len();
+        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Keccak];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
             trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
         };
-        let aux_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Keccak]][0]
-            .len();
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
@@ -813,15 +809,14 @@ where
 
     // KeccakSponge.
     {
-        let trace_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::KeccakSponge]][0]
-            .len();
+        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::KeccakSponge];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
             trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
         };
-        let aux_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::KeccakSponge]][0]
-            .len();
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
@@ -845,15 +840,14 @@ where
 
     // Logic.
     {
-        let trace_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Logic]][0]
-            .len();
+        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Logic];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
             trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
         };
-        let aux_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Logic]][0]
-            .len();
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
@@ -877,15 +871,14 @@ where
 
     // Memory.
     {
-        let trace_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Memory]][0]
-            .len();
+        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Memory];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
             trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
         };
-        let aux_leave_len = trace_commitment.batch_merkle_tree.leaves
-            [Table::table_to_sorted_index()[*Table::Memory]][0]
-            .len();
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
@@ -1027,6 +1020,308 @@ where
             num_ctl_helper_polys.iter().sum(),
             num_ctl_helper_polys,
             config,
+        ));
+    }
+
+    res
+}
+
+/// Generates all opening sets.
+fn all_openings<F, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    trace_commitment: &BatchFriOracle<F, C, D>,
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    auxiliary_commitment: &BatchFriOracle<F, C, D>,
+    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
+    quotient_commitment: &BatchFriOracle<F, C, D>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    zeta: F::Extension,
+    config: &StarkConfig,
+) -> Vec<StarkOpeningSet<F, D>>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    let degree_bits = Table::all_degree_logs();
+    let mut res = Vec::new();
+
+    // Arithmetic.
+    {
+        let stark = all_stark.arithmetic_stark;
+        let table = Table::Arithmetic;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
+        ));
+    }
+
+    // Bytepacking.
+    {
+        let stark = all_stark.byte_packing_stark;
+        let table = Table::BytePacking;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
+        ));
+    }
+
+    // Cpu.
+    {
+        let stark = all_stark.cpu_stark;
+        let table = Table::Cpu;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
+        ));
+    }
+
+    // Keccak.
+    {
+        let stark = all_stark.keccak_stark;
+        let table = Table::Keccak;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
+        ));
+    }
+
+    // KeccakSponge.
+    {
+        let stark = all_stark.keccak_sponge_stark;
+        let table = Table::KeccakSponge;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
+        ));
+    }
+
+    // Logic.
+    {
+        let stark = all_stark.logic_stark;
+        let table = Table::Logic;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
+        ));
+    }
+
+    // Memory.
+    {
+        let stark = all_stark.memory_stark;
+        let table = Table::Memory;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
+        ));
+    }
+
+    // MemBefore.
+    {
+        let stark = all_stark.mem_before_stark;
+        let table = Table::MemBefore;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
+        ));
+    }
+
+    // MemAfter.
+    {
+        let stark = all_stark.mem_after_stark;
+        let table = Table::MemAfter;
+        let g = F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*table]]);
+        let table_sorted_index = Table::table_to_sorted_index()[*table];
+        let mut num_trace_polys_before = 0;
+        let mut num_aux_polys_before = 0;
+        let mut num_quotient_polys_before = 0;
+        for i in 0..table_sorted_index {
+            num_trace_polys_before += trace_poly_values_sorted[i].len();
+            num_aux_polys_before += auxiliary_columns_sorted[i].len();
+            num_quotient_polys_before += quotient_polys_sorted[i].len();
+        }
+
+        let num_trace_polys = res.push(StarkOpeningSet::new_from_batch(
+            stark,
+            zeta,
+            g,
+            trace_commitment,
+            num_trace_polys_before
+                ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+            auxiliary_commitment,
+            num_aux_polys_before..auxiliary_columns_sorted[table_sorted_index].len(),
+            quotient_commitment,
+            num_quotient_polys_before..quotient_polys_sorted[table_sorted_index].len(),
+            stark.num_lookup_helper_columns(config),
+            &ctl_data_per_table[*table].num_ctl_helper_polys(),
         ));
     }
 

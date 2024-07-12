@@ -143,6 +143,22 @@ impl Table {
         [4, 5, 3, 6, 8, 7, 0, 1, 2]
     }
 
+    /// Returns the ordered position of the tables in a batch Merkle tree. Each
+    /// entry is a couple to account for duplicate sizes.
+    pub(crate) const fn table_to_sorted_index_pair() -> [(usize, usize); NUM_TABLES] {
+        [
+            (3, 0),
+            (3, 1),
+            (2, 0),
+            (3, 2),
+            (5, 0),
+            (4, 0),
+            (0, 0),
+            (1, 0),
+            (1, 1),
+        ]
+    }
+
     /// Returns all STARK padded trace degrees in descending order.
     pub(crate) const fn all_degree_logs() -> [usize; NUM_TABLES] {
         [23, 22, 22, 20, 19, 19, 19, 17, 14]
