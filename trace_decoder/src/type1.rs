@@ -428,12 +428,13 @@ fn iter_leaves(node: Node) -> Box<dyn Iterator<Item = (Vec<U4>, IterLeaf)>> {
 }
 
 #[test]
-fn test() {
-    for (ix, case) in
-        serde_json::from_str::<Vec<super::Case>>(include_str!("test_cases/zero_jerigon.json"))
-            .unwrap()
-            .into_iter()
-            .enumerate()
+fn test_tries() {
+    for (ix, case) in serde_json::from_str::<Vec<super::Case>>(include_str!(
+        "../tests/data/tries/zero_jerigon.json"
+    ))
+    .unwrap()
+    .into_iter()
+    .enumerate()
     {
         println!("case {}", ix);
         let instructions = crate::wire::parse(&case.bytes).unwrap();
@@ -454,3 +455,6 @@ fn test() {
         }
     }
 }
+
+#[test]
+fn test_witness_processing() {}
