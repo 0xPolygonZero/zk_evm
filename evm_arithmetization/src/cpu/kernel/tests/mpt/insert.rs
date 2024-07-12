@@ -1,4 +1,5 @@
 use anyhow::Result;
+use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{BigEndianHash, H256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -174,7 +175,7 @@ fn test_state_trie(
         storage_tries: vec![],
     };
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
-    let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
+    let check_state_trie = KERNEL.global_labels["check_state_trie"];
 
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
@@ -241,15 +242,8 @@ fn test_state_trie(
         interpreter.stack()
     );
 
-    // Now, run `set_final_tries` so that the trie roots are correct.
-    interpreter
-        .push(0xDEADBEEFu32.into())
-        .expect("The stack should not overflow");
-    interpreter.generation_state.registers.program_counter =
-        KERNEL.global_labels["set_final_tries"];
-    interpreter.run()?;
-
-    // Now, execute mpt_hash_state_trie.
+    // Now, execute mpt_hash_state_trie and check the hash value (both are done
+    // under `check_state_trie`).
     state_trie.insert(k, rlp::encode(&account).to_vec());
     let expected_state_trie_hash = state_trie.hash();
     interpreter.set_global_metadata_field(
@@ -257,7 +251,7 @@ fn test_state_trie(
         h2u(expected_state_trie_hash),
     );
 
-    interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
+    interpreter.generation_state.registers.program_counter = check_state_trie;
     interpreter
         .halt_offsets
         .push(KERNEL.global_labels["check_txn_trie"]);
