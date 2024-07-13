@@ -388,13 +388,13 @@ impl<F: Field> GenerationState<F> {
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
             crate::witness::memory::MemorySegmentState {
-                content: state_leaves.iter().map(|&val| Some(val)).collect(),
+                content: state_leaves,
             },
         );
         self.memory.insert_preinitialized_segment(
             Segment::StorageLinkedList,
             crate::witness::memory::MemorySegmentState {
-                content: storage_leaves.iter().map(|&val| Some(val)).collect(),
+                content: storage_leaves,
             },
         );
         self.memory.insert_preinitialized_segment(

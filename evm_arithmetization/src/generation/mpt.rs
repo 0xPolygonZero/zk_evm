@@ -315,8 +315,8 @@ fn load_state_trie(
 fn get_state_and_storage_leaves(
     trie: &HashedPartialTrie,
     key: Nibbles,
-    state_leaves: &mut Vec<U256>,
-    storage_leaves: &mut Vec<U256>,
+    state_leaves: &mut Vec<Option<U256>>,
+    storage_leaves: &mut Vec<Option<U256>>,
     trie_data: &mut Vec<Option<U256>>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<(), ProgramError> {
@@ -384,19 +384,20 @@ associated storage trie hash"
 
             // The last leaf must point to the new one.
             let len = state_leaves.len();
-            state_leaves[len - 1] =
-                U256::from(Segment::AccountsLinkedList as usize + state_leaves.len());
+            state_leaves[len - 1] = Some(U256::from(
+                Segment::AccountsLinkedList as usize + state_leaves.len(),
+            ));
             // The nibbles are the address.
             let address = merged_key
                 .try_into()
                 .map_err(|_| ProgramError::IntegerTooLarge)?;
-            state_leaves.push(address);
+            state_leaves.push(Some(address));
             // Set `value_ptr_ptr`.
-            state_leaves.push(trie_data.len().into());
+            state_leaves.push(Some(trie_data.len().into()));
             // Set counter.
-            state_leaves.push(0.into());
+            state_leaves.push(Some(0.into()));
             // Set the next node as the inital node.
-            state_leaves.push((Segment::AccountsLinkedList as usize).into());
+            state_leaves.push(Some((Segment::AccountsLinkedList as usize).into()));
 
             // Push the payload in the trie data.
             trie_data.push(Some(nonce));
@@ -423,7 +424,7 @@ pub(crate) fn get_storage_leaves<F>(
     address: U256,
     key: Nibbles,
     trie: &HashedPartialTrie,
-    storage_leaves: &mut Vec<U256>,
+    storage_leaves: &mut Vec<Option<U256>>,
     trie_data: &mut Vec<Option<U256>>,
     parse_value: &F,
 ) -> Result<(), ProgramError>
@@ -468,22 +469,23 @@ where
             // The last leaf must point to the new one.
             let len = storage_leaves.len();
             let merged_key = key.merge_nibbles(nibbles);
-            storage_leaves[len - 1] =
-                U256::from(Segment::StorageLinkedList as usize + storage_leaves.len());
+            storage_leaves[len - 1] = Some(U256::from(
+                Segment::StorageLinkedList as usize + storage_leaves.len(),
+            ));
             // Write the address.
-            storage_leaves.push(address);
+            storage_leaves.push(Some(address));
             // Write the key.
-            storage_leaves.push(
+            storage_leaves.push(Some(
                 merged_key
                     .try_into()
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
-            );
+            ));
             // Write `value_ptr_ptr`.
-            storage_leaves.push((trie_data.len()).into());
+            storage_leaves.push(Some((trie_data.len()).into()));
             // Write the counter.
-            storage_leaves.push(0.into());
+            storage_leaves.push(Some(0.into()));
             // Set the next node as the inital node.
-            storage_leaves.push((Segment::StorageLinkedList as usize).into());
+            storage_leaves.push(Some((Segment::StorageLinkedList as usize).into()));
 
             let leaf = parse_value(value)?.into_iter().map(Some);
             trie_data.extend(leaf);
@@ -499,7 +501,12 @@ where
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
 ///     - the `TrieData` segment's memory content
-type TriePtrsLinkedLists = (TrieRootPtrs, Vec<U256>, Vec<U256>, Vec<Option<U256>>);
+type TriePtrsLinkedLists = (
+    TrieRootPtrs,
+    Vec<Option<U256>>,
+    Vec<Option<U256>>,
+    Vec<Option<U256>>,
+);
 
 pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
     trie_inputs: &TrieInputs,

@@ -274,10 +274,10 @@ impl<F: Field> Interpreter<F> {
         // Initialize the `TrieData` segment.
         let preinit_trie_data_segment = MemorySegmentState { content: trie_data };
         let preinit_accounts_ll_segment = MemorySegmentState {
-            content: state_leaves.iter().map(|&val| Some(val)).collect(),
+            content: state_leaves,
         };
         let preinit_storage_ll_segment = MemorySegmentState {
-            content: storage_leaves.iter().map(|&val| Some(val)).collect(),
+            content: storage_leaves,
         };
         self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
         self.insert_preinitialized_segment(

@@ -34,14 +34,14 @@ pub(crate) struct LinkedList<'a, const N: usize> {
     pos: usize,
 }
 
-pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [U256; N] {
+pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [Option<U256>; N] {
     std::array::from_fn(|i| {
         if i == 0 {
-            U256::MAX
+            Some(U256::MAX)
         } else if i == N - 1 {
-            (segment as usize).into()
+            Some((segment as usize).into())
         } else {
-            U256::zero()
+            Some(U256::zero())
         }
     })
 }
