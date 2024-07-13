@@ -14,6 +14,7 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
+use crate::generation::linked_list::LinkedList;
 use crate::memory::segments::Segment::{self, AccessedAddresses, AccessedStorageKeys};
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
@@ -88,10 +89,12 @@ fn test_list_iterator() -> Result<()> {
     interpreter.run()?;
 
     // test the list iterator
-    let mut accounts_list = interpreter
+    let accounts_mem = interpreter
         .generation_state
-        .get_accounts_linked_list()
-        .expect("Since we called init_access_lists there must be an accounts list");
+        .memory
+        .get_preinit_memory(Segment::AccountsLinkedList);
+    let mut accounts_list =
+        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList).unwrap();
 
     let Some([addr, ptr, ptr_cpy, scaled_pos_1]) = accounts_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
@@ -108,10 +111,12 @@ fn test_list_iterator() -> Result<()> {
     assert_eq!(ptr_cpy, U256::zero());
     assert_eq!(scaled_pos_1, (Segment::AccountsLinkedList as usize).into());
 
-    let mut storage_list = interpreter
+    let accounts_mem = interpreter
         .generation_state
-        .get_storage_linked_list()
-        .expect("Since we called init_access_lists there must be a storage list");
+        .memory
+        .get_preinit_memory(Segment::StorageLinkedList);
+    let mut storage_list =
+        LinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
     let Some([addr, key, ptr, ptr_cpy, scaled_pos_1]) = storage_list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
@@ -158,10 +163,12 @@ fn test_insert_account() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[payload_ptr]);
 
-    let mut list = interpreter
+    let accounts_mem = interpreter
         .generation_state
-        .get_accounts_linked_list()
-        .expect("Since we called init_access_lists there must be a list");
+        .memory
+        .get_preinit_memory(Segment::AccountsLinkedList);
+    let mut list =
+        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList).unwrap();
 
     let Some([addr, ptr, ptr_cpy, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
@@ -215,10 +222,12 @@ fn test_insert_storage() -> Result<()> {
     interpreter.run()?;
     assert_eq!(interpreter.stack(), &[payload_ptr]);
 
-    let mut list = interpreter
+    let accounts_mem = interpreter
         .generation_state
-        .get_storage_linked_list()
-        .expect("Since we called init_access_lists there must be a list");
+        .memory
+        .get_preinit_memory(Segment::StorageLinkedList);
+    let mut list =
+        LinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
 
     let Some([inserted_addr, inserted_key, ptr, ptr_cpy, scaled_next_pos]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
@@ -370,10 +379,12 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     // the linked list with the interpreter's memory.
     new_addresses.sort();
 
-    let mut list = interpreter
+    let accounts_mem = interpreter
         .generation_state
-        .get_accounts_linked_list()
-        .expect("Since we called init_access_lists there must be a list");
+        .memory
+        .get_preinit_memory(Segment::AccountsLinkedList);
+    let mut list =
+        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList).unwrap();
 
     for (i, [addr, ptr, ptr_cpy, _]) in list.enumerate() {
         if addr == U256::MAX {
@@ -530,14 +541,15 @@ fn test_insert_and_delete_storage() -> Result<()> {
     // the linked list with the interpreter's memory.
     new_addresses.sort();
 
-    let mut list = interpreter
+    let accounts_mem = interpreter
         .generation_state
-        .get_storage_linked_list()
-        .expect("Since we called init_access_lists there must be a list");
+        .memory
+        .get_preinit_memory(Segment::StorageLinkedList);
+    let mut list =
+        LinkedList::from_mem_and_segment(&accounts_mem, Segment::StorageLinkedList).unwrap();
 
     for (i, [addr, key, ptr, ptr_cpy, _]) in list.enumerate() {
         if addr == U256::MAX {
-            //
             assert_eq!(addr, U256::MAX);
             assert_eq!(key, U256::zero());
             assert_eq!(ptr, U256::zero());

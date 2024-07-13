@@ -27,8 +27,8 @@ use crate::witness::memory::MemoryAddress;
 // `access_list_mem[i..i + node_size - 1]`, and `access_list_mem[i + node_size -
 // 1]` holds the address of the next node, where i = node_size * j.
 #[derive(Clone)]
-pub(crate) struct LinkedList<const N: usize> {
-    mem: Vec<Option<U256>>,
+pub(crate) struct LinkedList<'a, const N: usize> {
+    mem: &'a [Option<U256>],
     mem_len: usize,
     offset: usize,
     pos: usize,
@@ -46,16 +46,16 @@ pub(crate) fn empty_list_mem<const N: usize>(segment: Segment) -> [U256; N] {
     })
 }
 
-impl<const N: usize> LinkedList<N> {
+impl<'a, const N: usize> LinkedList<'a, N> {
     pub fn from_mem_and_segment(
-        mem: &[Option<U256>],
+        mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {
         Self::from_mem_len_and_segment(mem, mem.len(), segment)
     }
 
     pub fn from_mem_len_and_segment(
-        mem: &[Option<U256>],
+        mem: &'a [Option<U256>],
         mem_len: usize,
         segment: Segment,
     ) -> Result<Self, ProgramError> {
@@ -64,7 +64,7 @@ impl<const N: usize> LinkedList<N> {
         }
         let mem_len = mem.len();
         Ok(Self {
-            mem: mem.to_vec(),
+            mem,
             mem_len,
             offset: segment as usize,
             pos: 0,
@@ -72,7 +72,7 @@ impl<const N: usize> LinkedList<N> {
     }
 }
 
-impl<const N: usize> fmt::Debug for LinkedList<N> {
+impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Linked List {{");
         let cloned_list = self.clone();
@@ -87,7 +87,7 @@ impl<const N: usize> fmt::Debug for LinkedList<N> {
     }
 }
 
-impl<const N: usize> Iterator for LinkedList<N> {
+impl<'a, const N: usize> Iterator for LinkedList<'a, N> {
     type Item = [U256; N];
 
     fn next(&mut self) -> Option<Self::Item> {

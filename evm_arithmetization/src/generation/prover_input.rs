@@ -316,14 +316,6 @@ impl<F: Field> GenerationState<F> {
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
-        self.log(
-            log::Level::Debug,
-            format!("account ll = {:?}", self.get_accounts_linked_list()),
-        );
-        self.log(
-            log::Level::Debug,
-            format!("storage ll = {:?}", self.get_storage_linked_list()),
-        );
         match input_fn.0[1].as_str() {
             "insert_account" => self.run_next_insert_account(),
             "remove_account" => self.run_next_remove_account(),
@@ -507,10 +499,17 @@ impl<F: Field> GenerationState<F> {
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
     fn run_next_insert_account(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some((([.., pred_ptr], [node_addr, ..]), _)) = self
-            .get_accounts_linked_list()?
-            .zip(self.get_accounts_linked_list()?.skip(1))
-            .zip(self.get_accounts_linked_list()?.skip(2))
+        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
+        let accounts_linked_list =
+            LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &accounts_mem,
+                Segment::AccountsLinkedList,
+            )?;
+
+        if let Some((([.., pred_ptr], [node_addr, ..]), _)) = accounts_linked_list
+            .clone()
+            .zip(accounts_linked_list.clone().skip(1))
+            .zip(accounts_linked_list.skip(2))
             .find(|&((_, [prev_addr, ..]), [next_addr, ..])| {
                 (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
             })
@@ -528,10 +527,17 @@ impl<F: Field> GenerationState<F> {
     fn run_next_insert_slot(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        if let Some((([.., pred_ptr], _), _)) = self
-            .get_storage_linked_list()?
-            .zip(self.get_storage_linked_list()?.skip(1))
-            .zip(self.get_storage_linked_list()?.skip(2))
+        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
+        let storage_linked_list =
+            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &storage_mem,
+                Segment::StorageLinkedList,
+            )?;
+
+        if let Some((([.., pred_ptr], _), _)) = storage_linked_list
+            .clone()
+            .zip(storage_linked_list.clone().skip(1))
+            .zip(storage_linked_list.skip(2))
             .find(
                 |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
                     let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
@@ -554,9 +560,16 @@ impl<F: Field> GenerationState<F> {
     /// If the element is not in the list, loops forever.
     fn run_next_remove_account(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some(([.., ptr], _)) = self
-            .get_accounts_linked_list()?
-            .zip(self.get_accounts_linked_list()?.skip(2))
+        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
+        let accounts_linked_list =
+            LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &accounts_mem,
+                Segment::AccountsLinkedList,
+            )?;
+
+        if let Some(([.., ptr], _)) = accounts_linked_list
+            .clone()
+            .zip(accounts_linked_list.skip(2))
             .find(|&(_, [next_node_addr, ..])| next_node_addr == addr)
         {
             Ok(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE)
@@ -572,9 +585,16 @@ impl<F: Field> GenerationState<F> {
     fn run_next_remove_slot(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
-        if let Some(([.., ptr], _)) = self
-            .get_storage_linked_list()?
-            .zip(self.get_storage_linked_list()?.skip(2))
+        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
+        let storage_linked_list =
+            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &storage_mem,
+                Segment::StorageLinkedList,
+            )?;
+
+        if let Some(([.., ptr], _)) = storage_linked_list
+            .clone()
+            .zip(storage_linked_list.skip(2))
             .find(|&(_, [next_addr, next_key, ..])| next_addr == addr && next_key == key)
         {
             Ok((ptr - U256::from(Segment::StorageLinkedList as usize))
@@ -592,10 +612,17 @@ impl<F: Field> GenerationState<F> {
     /// stack.
     fn run_next_remove_address_slots(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
-        if let Some((([.., pred_ptr], _), _)) = self
-            .get_storage_linked_list()?
-            .zip(self.get_storage_linked_list()?.skip(1))
-            .zip(self.get_storage_linked_list()?.skip(2))
+        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
+        let storage_linked_list =
+            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &storage_mem,
+                Segment::StorageLinkedList,
+            )?;
+
+        if let Some((([.., pred_ptr], _), _)) = storage_linked_list
+            .clone()
+            .zip(storage_linked_list.clone().skip(1))
+            .zip(storage_linked_list.skip(2))
             .find(
                 |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
                     let prev_is_less = (prev_addr < addr || prev_addr == U256::MAX);
@@ -705,26 +732,6 @@ impl<F: Field> GenerationState<F> {
             &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content,
             Segment::AccessedAddresses,
         )
-    }
-
-    pub(crate) fn get_accounts_linked_list(
-        &self,
-    ) -> Result<LinkedList<ACCOUNTS_LINKED_LIST_NODE_SIZE>, ProgramError> {
-        // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
-        // available virtual address in the segment. In order to get the length,
-        // we need to substract `Segment::AccountsLinkedList` as usize.
-        let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-        LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
-    }
-
-    pub(crate) fn get_storage_linked_list(
-        &self,
-    ) -> Result<LinkedList<STORAGE_LINKED_LIST_NODE_SIZE>, ProgramError> {
-        // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
-        // available virtual address in the segment. In order to get the length,
-        // we need to substract `Segment::StorageLinkedList` as usize.
-        let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-        LinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
     }
 
     fn get_global_metadata(&self, data: GlobalMetadata) -> U256 {
