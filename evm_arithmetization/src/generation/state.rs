@@ -184,7 +184,6 @@ pub(crate) trait State<F: Field> {
             max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
 
         let mut final_registers = RegistersState::default();
-        let final_mem = self.get_active_memory();
         let mut running = true;
         let mut final_clock = 0;
         loop {
