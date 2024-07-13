@@ -143,16 +143,10 @@ pub(crate) fn set_registers_and_run<F: Field>(
     .iter()
     .enumerate()
     .for_each(|(i, reg_content)| {
-        let (addr, val) = (
-            MemoryAddress::new_u256s(
-                0.into(),
-                (Segment::RegistersStates.unscale()).into(),
-                i.into(),
-            )
-            .expect("All input values are known to be valid for MemoryAddress"),
+        interpreter.generation_state.memory.set(
+            MemoryAddress::new(0, Segment::RegistersStates, i),
             *reg_content,
-        );
-        interpreter.generation_state.memory.set(addr, val);
+        )
     });
 
     interpreter.run()
@@ -355,12 +349,7 @@ impl<F: Field> Interpreter<F> {
         let final_block_bloom_fields = (0..8)
             .map(|i| {
                 (
-                    MemoryAddress::new_u256s(
-                        U256::zero(),
-                        (Segment::GlobalBlockBloom.unscale()).into(),
-                        i.into(),
-                    )
-                    .expect("This cannot panic as `virt` fits in a `u32`"),
+                    MemoryAddress::new(0, Segment::GlobalBlockBloom, i),
                     metadata.block_bloom[i],
                 )
             })
@@ -372,12 +361,7 @@ impl<F: Field> Interpreter<F> {
         let block_hashes_fields = (0..256)
             .map(|i| {
                 (
-                    MemoryAddress::new_u256s(
-                        U256::zero(),
-                        (Segment::BlockHashes.unscale()).into(),
-                        i.into(),
-                    )
-                    .expect("This cannot panic as `virt` fits in a `u32`"),
+                    MemoryAddress::new(0, Segment::BlockHashes, i),
                     h2u(inputs.block_hashes.prev_hashes[i]),
                 )
             })
@@ -397,12 +381,7 @@ impl<F: Field> Interpreter<F> {
         let registers_before_fields = (0..registers_before.len())
             .map(|i| {
                 (
-                    MemoryAddress::new_u256s(
-                        0.into(),
-                        (Segment::RegistersStates.unscale()).into(),
-                        i.into(),
-                    )
-                    .unwrap(),
+                    MemoryAddress::new(0, Segment::RegistersStates, i),
                     registers_before[i],
                 )
             })

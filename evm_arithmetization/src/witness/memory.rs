@@ -79,11 +79,17 @@ impl MemoryAddress {
     /// It will recover the virtual offset as the lowest 32-bit limb, the
     /// segment as the next limb, and the context as the next one.
     pub(crate) fn new_bundle(addr: U256) -> Result<Self, ProgramError> {
-        let virt = addr.low_u32().into();
-        let segment = (addr >> SEGMENT_SCALING_FACTOR).low_u32().into();
-        let context = (addr >> CONTEXT_SCALING_FACTOR).low_u32().into();
+        let virt = addr.low_u32() as usize;
+        let segment = (addr >> SEGMENT_SCALING_FACTOR).low_u32() as usize;
+        let context = (addr >> CONTEXT_SCALING_FACTOR).low_u32() as usize;
 
-        Self::new_u256s(context, segment, virt)
+        if segment >= Segment::COUNT {
+            return Err(MemoryError(SegmentTooLarge {
+                segment: segment.into(),
+            }));
+        }
+
+        Ok(Self::new(context, Segment::all()[segment], virt))
     }
 
     pub(crate) fn increment(&mut self) {
