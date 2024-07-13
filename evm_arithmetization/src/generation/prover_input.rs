@@ -506,11 +506,9 @@ impl<F: Field> GenerationState<F> {
                 Segment::AccountsLinkedList,
             )?;
 
-        if let Some((([.., pred_ptr], [node_addr, ..]), _)) = accounts_linked_list
-            .clone()
-            .zip(accounts_linked_list.clone().skip(1))
-            .zip(accounts_linked_list.skip(2))
-            .find(|&((_, [prev_addr, ..]), [next_addr, ..])| {
+        if let Some(([.., pred_ptr], [node_addr, ..], _)) = accounts_linked_list
+            .tuple_windows()
+            .find(|&(_, [prev_addr, ..], [next_addr, ..])| {
                 (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
             })
         {
@@ -534,20 +532,15 @@ impl<F: Field> GenerationState<F> {
                 Segment::StorageLinkedList,
             )?;
 
-        if let Some((([.., pred_ptr], _), _)) = storage_linked_list
-            .clone()
-            .zip(storage_linked_list.clone().skip(1))
-            .zip(storage_linked_list.skip(2))
-            .find(
-                |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
-                    let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
-                        || (prev_addr == addr && prev_key <= key);
-                    let next_is_strictly_larger =
-                        next_addr > addr || (next_addr == addr && next_key > key);
-                    prev_is_less_or_equal && next_is_strictly_larger
-                },
-            )
-        {
+        if let Some(([.., pred_ptr], _, _)) = storage_linked_list.tuple_windows().find(
+            |&(_, [prev_addr, prev_key, ..], [next_addr, next_key, ..])| {
+                let prev_is_less_or_equal = (prev_addr < addr || prev_addr == U256::MAX)
+                    || (prev_addr == addr && prev_key <= key);
+                let next_is_strictly_larger =
+                    next_addr > addr || (next_addr == addr && next_key > key);
+                prev_is_less_or_equal && next_is_strictly_larger
+            },
+        ) {
             Ok((pred_ptr - U256::from(Segment::StorageLinkedList as usize))
                 / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {
@@ -567,10 +560,9 @@ impl<F: Field> GenerationState<F> {
                 Segment::AccountsLinkedList,
             )?;
 
-        if let Some(([.., ptr], _)) = accounts_linked_list
-            .clone()
-            .zip(accounts_linked_list.skip(2))
-            .find(|&(_, [next_node_addr, ..])| next_node_addr == addr)
+        if let Some(([.., ptr], _, _)) = accounts_linked_list
+            .tuple_windows()
+            .find(|&(_, _, [next_node_addr, ..])| next_node_addr == addr)
         {
             Ok(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE)
         } else {
@@ -592,10 +584,9 @@ impl<F: Field> GenerationState<F> {
                 Segment::StorageLinkedList,
             )?;
 
-        if let Some(([.., ptr], _)) = storage_linked_list
-            .clone()
-            .zip(storage_linked_list.skip(2))
-            .find(|&(_, [next_addr, next_key, ..])| next_addr == addr && next_key == key)
+        if let Some(([.., ptr], _, _)) = storage_linked_list
+            .tuple_windows()
+            .find(|&(_, _, [next_addr, next_key, ..])| next_addr == addr && next_key == key)
         {
             Ok((ptr - U256::from(Segment::StorageLinkedList as usize))
                 / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
@@ -619,18 +610,13 @@ impl<F: Field> GenerationState<F> {
                 Segment::StorageLinkedList,
             )?;
 
-        if let Some((([.., pred_ptr], _), _)) = storage_linked_list
-            .clone()
-            .zip(storage_linked_list.clone().skip(1))
-            .zip(storage_linked_list.skip(2))
-            .find(
-                |&((_, [prev_addr, prev_key, ..]), [next_addr, next_key, ..])| {
-                    let prev_is_less = (prev_addr < addr || prev_addr == U256::MAX);
-                    let next_is_larger_or_equal = next_addr >= addr;
-                    prev_is_less && next_is_larger_or_equal
-                },
-            )
-        {
+        if let Some(([.., pred_ptr], _, _)) = storage_linked_list.tuple_windows().find(
+            |&(_, [prev_addr, prev_key, ..], [next_addr, next_key, ..])| {
+                let prev_is_less = (prev_addr < addr || prev_addr == U256::MAX);
+                let next_is_larger_or_equal = next_addr >= addr;
+                prev_is_less && next_is_larger_or_equal
+            },
+        ) {
             Ok((pred_ptr - U256::from(Segment::StorageLinkedList as usize))
                 / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {

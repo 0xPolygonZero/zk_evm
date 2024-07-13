@@ -51,21 +51,19 @@ impl<'a, const N: usize> LinkedList<'a, N> {
         mem: &'a [Option<U256>],
         segment: Segment,
     ) -> Result<Self, ProgramError> {
-        Self::from_mem_len_and_segment(mem, mem.len(), segment)
+        Self::from_mem_len_and_segment(mem, segment)
     }
 
     pub fn from_mem_len_and_segment(
         mem: &'a [Option<U256>],
-        mem_len: usize,
         segment: Segment,
     ) -> Result<Self, ProgramError> {
         if mem.is_empty() {
             return Err(ProgramError::ProverInputError(InvalidInput));
         }
-        let mem_len = mem.len();
         Ok(Self {
             mem,
-            mem_len,
+            mem_len: mem.len(),
             offset: segment as usize,
             pos: 0,
         })
