@@ -39,7 +39,7 @@ where
         &mut self.provider
     }
 
-    pub fn as_provider(&self) -> &ProviderT {
+    pub const fn as_provider(&self) -> &ProviderT {
         &self.provider
     }
 

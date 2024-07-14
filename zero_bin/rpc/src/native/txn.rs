@@ -278,7 +278,7 @@ async fn process_code(
 }
 
 /// Processes the self destruct for the given account state.
-fn process_self_destruct(
+const fn process_self_destruct(
     post_state: Option<&AccountState>,
     pre_state: Option<&AccountState>,
 ) -> Option<bool> {

@@ -89,7 +89,7 @@ impl std::error::Error for TraceParsingError {}
 
 impl TraceParsingError {
     /// Function to create a new TraceParsingError with mandatory fields
-    fn new(reason: TraceParsingErrorReason) -> Self {
+    const fn new(reason: TraceParsingErrorReason) -> Self {
         Self {
             block_num: None,
             block_chain_id: None,
