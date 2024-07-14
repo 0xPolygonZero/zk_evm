@@ -1,19 +1,19 @@
 [workspace]
 members = [
-    "compat",
-    "evm_arithmetization",
-    "mpt_trie",
-    "proc_macro",
-    "proof_gen",
-    "smt_trie",
-    "trace_decoder",
-    "zero_bin/common",
-    "zero_bin/leader",
-    "zero_bin/ops",
-    "zero_bin/prover",
-    "zero_bin/rpc",
-    "zero_bin/verifier",
-    "zero_bin/worker",
+  "compat",
+  "evm_arithmetization",
+  "mpt_trie",
+  "proc_macro",
+  "proof_gen",
+  "smt_trie",
+  "trace_decoder",
+  "zero_bin/common",
+  "zero_bin/leader",
+  "zero_bin/ops",
+  "zero_bin/prover",
+  "zero_bin/rpc",
+  "zero_bin/verifier",
+  "zero_bin/worker",
 ]
 resolver = "2"
 
@@ -28,18 +28,18 @@ categories = ["cryptography::cryptocurrencies"]
 [workspace.dependencies]
 __compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 alloy = { git = "https://github.com/alloy-rs/alloy", tag = 'v0.1.1', default-features = false, features = [
-    "consensus",
-    "reqwest",
-    "json-rpc",
-    "rlp",
-    "rpc",
-    "rpc-client",
-    "rpc-types-eth",
-    "rpc-types-trace",
-    "providers",
-    "transports",
-    "transport-http",
-    "rpc-types-debug",
+  "consensus",
+  "reqwest",
+  "json-rpc",
+  "rlp",
+  "rpc",
+  "rpc-client",
+  "rpc-types-eth",
+  "rpc-types-trace",
+  "providers",
+  "transports",
+  "transport-http",
+  "rpc-types-debug",
 ] }
 anyhow = "1.0.86"
 async-stream = "0.3.5"
