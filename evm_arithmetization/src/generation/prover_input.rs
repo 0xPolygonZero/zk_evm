@@ -39,7 +39,7 @@ use crate::witness::util::{current_context_peek, stack_peek};
 #[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
 pub struct ProverInputFn(Vec<String>);
 
-pub const ADRESSSES_ACCESS_LIST_LEN: usize = 2;
+pub const ADDRESSES_ACCESS_LIST_LEN: usize = 2;
 pub const STORAGE_KEYS_ACCESS_LIST_LEN: usize = 4;
 pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
 pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
@@ -707,7 +707,7 @@ impl<F: Field> GenerationState<F> {
 
     pub(crate) fn get_addresses_access_list(
         &self,
-    ) -> Result<LinkedList<ADRESSSES_ACCESS_LIST_LEN>, ProgramError> {
+    ) -> Result<LinkedList<ADDRESSES_ACCESS_LIST_LEN>, ProgramError> {
         // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
         // virtual address in the segment. In order to get the length we need
         // to substract `Segment::AccessedAddresses` as usize.

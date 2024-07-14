@@ -15,7 +15,7 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::memory::segments::Segment::{self, AccessedAddresses, AccessedStorageKeys};
+use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::errors::ProverInputError;
