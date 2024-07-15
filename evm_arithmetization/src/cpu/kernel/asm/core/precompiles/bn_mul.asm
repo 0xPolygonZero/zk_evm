@@ -9,7 +9,7 @@ global precompile_bn_mul:
     %checkpoint // Checkpoint
     %increment_call_depth
     // stack: (empty)
-    PUSH 0x100000000 // = 2^32 (is_kernel = true)
+    PUSH @IS_KERNEL // true
     // stack: kexit_info
 
     %charge_gas_const(@BN_MUL_GAS)

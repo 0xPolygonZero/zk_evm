@@ -21,7 +21,7 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
     /// View of the columns used for exceptions: they are the exception code
     /// bits. SAFETY: Each view is a valid interpretation of the underlying
     /// array.
-    pub(crate) fn exception(&self) -> &CpuExceptionView<T> {
+    pub(crate) const fn exception(&self) -> &CpuExceptionView<T> {
         unsafe { &self.exception }
     }
 
@@ -34,7 +34,7 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
 
     /// View of the columns required for logic operations.
     /// SAFETY: Each view is a valid interpretation of the underlying array.
-    pub(crate) fn logic(&self) -> &CpuLogicView<T> {
+    pub(crate) const fn logic(&self) -> &CpuLogicView<T> {
         unsafe { &self.logic }
     }
 
@@ -46,7 +46,7 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
 
     /// View of the columns required for jump operations.
     /// SAFETY: Each view is a valid interpretation of the underlying array.
-    pub(crate) fn jumps(&self) -> &CpuJumpsView<T> {
+    pub(crate) const fn jumps(&self) -> &CpuJumpsView<T> {
         unsafe { &self.jumps }
     }
 
@@ -58,7 +58,7 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
 
     /// View of the columns required for shift operations.
     /// SAFETY: Each view is a valid interpretation of the underlying array.
-    pub(crate) fn shift(&self) -> &CpuShiftView<T> {
+    pub(crate) const fn shift(&self) -> &CpuShiftView<T> {
         unsafe { &self.shift }
     }
 
@@ -70,7 +70,7 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
 
     /// View of the columns required for the stack top.
     /// SAFETY: Each view is a valid interpretation of the underlying array.
-    pub(crate) fn stack(&self) -> &CpuStackView<T> {
+    pub(crate) const fn stack(&self) -> &CpuStackView<T> {
         unsafe { &self.stack }
     }
 
@@ -82,7 +82,7 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
 
     /// View of the columns required for the push operation.
     /// SAFETY: Each view is a valid interpretation of the underlying array.
-    pub(crate) fn push(&self) -> &CpuPushView<T> {
+    pub(crate) const fn push(&self) -> &CpuPushView<T> {
         unsafe { &self.push }
     }
 
@@ -94,7 +94,6 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
 }
 
 impl<T: Copy + PartialEq> PartialEq<Self> for CpuGeneralColumnsView<T> {
-    #[allow(clippy::unconditional_recursion)] // false positive
     fn eq(&self, other: &Self) -> bool {
         let self_arr: &[T; NUM_SHARED_COLUMNS] = self.borrow();
         let other_arr: &[T; NUM_SHARED_COLUMNS] = other.borrow();
@@ -212,8 +211,8 @@ pub(crate) struct CpuPushView<T: Copy> {
 pub(crate) const NUM_SHARED_COLUMNS: usize = size_of::<CpuLogicView<u8>>();
 const_assert!(NUM_SHARED_COLUMNS == size_of::<CpuGeneralColumnsView<u8>>());
 
-/// Assert that each field of the [`CpuGeneralColumnsView`] union contains the
-/// correct number of columns.
+// Assert that each field of the [`CpuGeneralColumnsView`] union contains the
+// correct number of columns.
 const_assert!(size_of::<CpuExceptionView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuLogicView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuJumpsView<u8>>() == NUM_SHARED_COLUMNS);

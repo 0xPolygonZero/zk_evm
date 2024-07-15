@@ -100,6 +100,7 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
+use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
 
 /// Core payload needed to generate proof for a block.
@@ -377,7 +378,7 @@ pub fn entrypoint(
 
     let last_tx_idx = txn_info.len().saturating_sub(1);
 
-    let txn_info = txn_info
+    let mut txn_info = txn_info
         .into_iter()
         .enumerate()
         .map(|(i, t)| {
@@ -401,6 +402,10 @@ pub fn entrypoint(
             )
         })
         .collect::<Vec<_>>();
+
+    while txn_info.len() < 2 {
+        txn_info.insert(0, ProcessedTxnInfo::default());
+    }
 
     Ok(ProcessedBlockTrace {
         tries: pre_images.tries,

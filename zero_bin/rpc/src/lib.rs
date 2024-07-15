@@ -169,6 +169,21 @@ where
                     .into(),
                 block_gas_used: target_block.header.gas_used.into(),
                 block_bloom: target_block.header.logs_bloom.compat(),
+                parent_beacon_block_root: target_block
+                    .header
+                    .parent_beacon_block_root
+                    .context("target block is missing field `parent_beacon_block_root`")?
+                    .compat(),
+                block_blob_gas_used: target_block
+                    .header
+                    .blob_gas_used
+                    .context("target block is missing field `blob_gas_used`")?
+                    .into(),
+                block_excess_blob_gas: target_block
+                    .header
+                    .excess_blob_gas
+                    .context("target block is missing field `excess_blob_gas`")?
+                    .into(),
             },
             b_hashes: BlockHashes {
                 prev_hashes: prev_hashes.map(|it| it.compat()).into(),

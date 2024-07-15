@@ -4,6 +4,7 @@
 global mpt_read_state_trie:
     // stack: addr, retdest
     %addr_to_state_key
+global mpt_read_state_trie_from_key:
     // stack: key, retdest
     PUSH 64 // num_nibbles
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT) // node_ptr
@@ -14,6 +15,13 @@ global mpt_read_state_trie:
 %macro mpt_read_state_trie
     %stack (addr) -> (addr, %%after)
     %jump(mpt_read_state_trie)
+%%after:
+%endmacro
+
+// Convenience macro to call mpt_read_state_trie_from_key and return where we left off.
+%macro mpt_read_state_trie_from_key
+    %stack (key) -> (key, %%after)
+    %jump(mpt_read_state_trie_from_key)
 %%after:
 %endmacro
 
@@ -121,7 +129,7 @@ global mpt_read_extension_found:
     // stack: child_ptr, future_nibbles, key, retdest
     %jump(mpt_read) // recurse
 
-mpt_read_leaf:
+global mpt_read_leaf:
     // stack: node_type, node_payload_ptr, num_nibbles, key, retdest
     POP
     // stack: node_payload_ptr, num_nibbles, key, retdest

@@ -87,8 +87,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         block_gaslimit: 0xff112233u32.into(),
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
-        block_gas_used: 0.into(),
-        block_bloom: [0.into(); 8],
+        ..Default::default()
     };
 
     let contract_code = HashMap::new();
@@ -178,6 +177,7 @@ fn get_test_block_proof(
         gas_used_before: inputs.gas_used_after,
         gas_used_after: inputs.gas_used_after,
         signed_txn: None,
+        global_exit_roots: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
             state_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.state_root)),

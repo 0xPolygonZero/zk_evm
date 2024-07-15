@@ -28,7 +28,7 @@ if [[ $8 == "test_only" ]]; then
   export MEMORY_CIRCUIT_SIZE="17..18"
 else
   export ARITHMETIC_CIRCUIT_SIZE="16..23"
-  export BYTE_PACKING_CIRCUIT_SIZE="9..21"
+  export BYTE_PACKING_CIRCUIT_SIZE="8..21"
   export CPU_CIRCUIT_SIZE="12..25"
   export KECCAK_CIRCUIT_SIZE="14..20"
   export KECCAK_SPONGE_CIRCUIT_SIZE="9..15"

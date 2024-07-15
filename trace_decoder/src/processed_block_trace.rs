@@ -35,7 +35,7 @@ pub(crate) struct ProcessedBlockTracePreImages {
     pub extra_code_hash_mappings: Option<HashMap<H256, Vec<u8>>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct ProcessedTxnInfo {
     pub nodes_used_by_txn: NodesUsedByTxn,
     pub contract_code_accessed: HashMap<H256, Vec<u8>>,

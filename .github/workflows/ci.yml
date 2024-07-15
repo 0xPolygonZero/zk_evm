@@ -187,7 +187,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b19240705.json
+          ./prove_stdio.sh artifacts/witness_b19807080.json
 
   simple_proof_witness_only:
     name: Execute bash script to generate the proof witness for a small block.
@@ -200,7 +200,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b19240705.json test_only
+          ./prove_stdio.sh artifacts/witness_b19807080.json test_only
 
   multi_blocks_proof_regular:
     name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
@@ -213,7 +213,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b2_b7.json
+          ./prove_stdio.sh artifacts/witness_b3_b6.json
 
   lints:
     name: Rustdoc, Formatting and Clippy

@@ -9,9 +9,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
-exclude = [
-    "test_data/*"
-]
+exclude = ["test_data/*"]
 
 [dependencies]
 bytes = { workspace = true }

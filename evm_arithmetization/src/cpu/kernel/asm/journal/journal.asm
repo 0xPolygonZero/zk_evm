@@ -182,7 +182,6 @@
     %mload_global_metadata(@GLOBAL_METADATA_CURRENT_CHECKPOINT)
 %endmacro
 
-
 %macro checkpoint
     // stack: (empty)
     %current_checkpoint

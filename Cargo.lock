@@ -4964,6 +4964,7 @@ dependencies = [
  "mpt_trie",
  "nunny",
  "plonky2",
+ "pretty_env_logger",
  "rlp",
  "serde",
  "serde_json",

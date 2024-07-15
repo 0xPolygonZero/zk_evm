@@ -81,7 +81,7 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
+        previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
         let block_number = self.get_block_number();
@@ -98,6 +98,12 @@ impl BlockProverInput {
             .await?
             .try_collect::<Vec<_>>()
             .await?;
+
+        // Wait for previous block proof
+        let _prev = match previous {
+            Some(it) => Some(it.await?),
+            None => None,
+        };
 
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {

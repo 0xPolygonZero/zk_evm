@@ -16,7 +16,7 @@ proof_gen = { workspace = true }
 tracing = { workspace = true }
 keccak-hash = { workspace = true }
 
-zero_bin_common ={ path = "../common" }
+zero_bin_common = { path = "../common" }
 
 [features]
 default = []

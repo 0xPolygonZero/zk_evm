@@ -125,7 +125,7 @@ pub struct ProverStateManager {
 }
 
 impl ProverStateManager {
-    pub fn with_load_strategy(self, load_strategy: TableLoadStrategy) -> Self {
+    pub const fn with_load_strategy(self, load_strategy: TableLoadStrategy) -> Self {
         match self.persistence {
             CircuitPersistence::None => self,
             CircuitPersistence::Disk(_) => Self {
