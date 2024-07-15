@@ -353,7 +353,8 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         let num_ops = memory_ops.len();
         // We want at least one padding row, so that the last real operation can have
         // its flags set correctly.
-        let num_ops_padded = (num_ops + 1).next_power_of_two();
+        let num_ops_padded =
+            1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Memory]];
         for _ in num_ops..num_ops_padded {
             memory_ops.push(padding_op);
         }

@@ -20,7 +20,7 @@ use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
 use super::columns::{value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, FILTER, NUM_COLUMNS};
-use crate::all_stark::EvmStarkFrame;
+use crate::all_stark::{EvmStarkFrame, Table};
 use crate::generation::MemBeforeValues;
 use crate::memory::VALUE_LIMBS;
 
@@ -85,7 +85,8 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D>
         let mut rows = propagated_values;
 
         let num_rows = rows.len();
-        let num_rows_padded = max(128, num_rows.next_power_of_two());
+        let num_rows_padded =
+            1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::MemBefore]];
         for _ in num_rows..num_rows_padded {
             rows.push(vec![F::ZERO; NUM_COLUMNS]);
         }

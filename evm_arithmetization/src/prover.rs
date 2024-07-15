@@ -94,7 +94,7 @@ pub(crate) fn zkevm_fast_config() -> StarkConfig {
             proof_of_work_bits: 16,
             // This strategy allows us to hit all intermediary STARK leaves while going through the
             // batched Field Merkle Trees.
-            reduction_strategy: FriReductionStrategy::Fixed(vec![3, 2, 2, 1, 2, 3, 4, 4, 2]),
+            reduction_strategy: FriReductionStrategy::Fixed(vec![1, 2, 4, 4, 4, 4]),
             num_query_rounds: 84,
         },
     }
@@ -128,6 +128,42 @@ where
         config,
         traces,
         &mut public_values,
+        timing,
+        abort_signal,
+    )?;
+
+    Ok(proof)
+}
+
+/// Generate traces, then create all STARK proofs.
+pub fn prove_batch<F, P, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    config: &StarkConfig,
+    inputs: GenerationInputs,
+    segment_data: &mut GenerationSegmentData,
+    timing: &mut TimingTree,
+    abort_signal: Option<Arc<AtomicBool>>,
+) -> Result<BatchStarkProofWithPublicInputs<F, C, D, 9>>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    P: PackedField<Scalar = F>,
+{
+    timed!(timing, "build kernel", Lazy::force(&KERNEL));
+
+    let (traces, mut public_values) = timed!(
+        timing,
+        "generate all traces",
+        generate_traces(all_stark, &inputs, config, segment_data, timing)?
+    );
+
+    check_abort_signal(abort_signal.clone())?;
+
+    let proof = prove_with_traces_batch::<F, P, C, D>(
+        all_stark,
+        config,
+        traces,
+        public_values,
         timing,
         abort_signal,
     )?;
@@ -1766,6 +1802,38 @@ pub mod testing {
         let mut proofs = Vec::with_capacity(data.len());
         for mut d in data {
             let proof = prove(
+                all_stark,
+                config,
+                inputs.clone(),
+                &mut d,
+                timing,
+                abort_signal.clone(),
+            )?;
+            proofs.push(proof);
+        }
+
+        Ok(proofs)
+    }
+
+    pub fn prove_all_segments_batch<F, P, C, const D: usize>(
+        all_stark: &AllStark<F, D>,
+        config: &StarkConfig,
+        inputs: GenerationInputs,
+        max_cpu_len_log: usize,
+        timing: &mut TimingTree,
+        abort_signal: Option<Arc<AtomicBool>>,
+    ) -> Result<Vec<BatchStarkProofWithPublicInputs<F, C, D, NUM_TABLES>>>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        P: PackedField<Scalar = F>,
+    {
+        let mut segment_idx = 0;
+        let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
+
+        let mut proofs = Vec::with_capacity(data.len());
+        for mut d in data {
+            let proof = prove_batch::<F, P, C, D>(
                 all_stark,
                 config,
                 inputs.clone(),
