@@ -912,7 +912,7 @@ impl Nibbles {
 
     /// Returns a slice of the internal bytes of packed nibbles.
     /// Only the relevant bytes (up to `count` nibbles) are considered valid.
-    pub fn as_byte_slice(&self) -> &[u8] {
+    pub const fn as_byte_slice(&self) -> &[u8] {
         // Calculate the number of full bytes needed to cover 'count' nibbles
         let bytes_needed = (self.count + 1) / 2; // each nibble is half a byte
 

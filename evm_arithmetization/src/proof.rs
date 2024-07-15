@@ -59,14 +59,7 @@ impl PublicValues {
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
-        assert!(
-            pis.len()
-                > TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    - 1
-        );
+        assert!(PublicValuesTarget::SIZE <= pis.len());
 
         let trie_roots_before = TrieRoots::from_public_inputs(&pis[0..TrieRootsTarget::SIZE]);
         let trie_roots_after =
@@ -294,6 +287,10 @@ pub struct PublicValuesTarget {
 }
 
 impl PublicValuesTarget {
+    pub(crate) const SIZE: usize = TrieRootsTarget::SIZE * 2
+        + BlockMetadataTarget::SIZE
+        + BlockHashesTarget::SIZE
+        + ExtraBlockDataTarget::SIZE;
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         let TrieRootsTarget {
@@ -827,7 +824,7 @@ pub struct ExtraBlockDataTarget {
 
 impl ExtraBlockDataTarget {
     /// Number of `Target`s required for the extra block data.
-    const SIZE: usize = 12;
+    pub(crate) const SIZE: usize = 12;
 
     /// Extracts the extra block data `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.

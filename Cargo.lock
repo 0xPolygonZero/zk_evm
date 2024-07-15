@@ -1903,7 +1903,7 @@ dependencies = [
 
 [[package]]
 name = "evm_arithmetization"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1916,7 +1916,7 @@ dependencies = [
  "itertools 0.13.0",
  "keccak-hash 0.10.0",
  "log",
- "mpt_trie 0.3.0",
+ "mpt_trie 0.4.1",
  "num",
  "num-bigint",
  "once_cell",
@@ -1933,7 +1933,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "smt_trie 0.1.0",
+ "smt_trie 0.1.1",
  "starky",
  "static_assertions",
  "tiny-keccak",
@@ -1942,8 +1942,8 @@ dependencies = [
 
 [[package]]
 name = "evm_arithmetization"
-version = "0.2.0"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#ddca6be9a40a7d0492312ecaf9d966e2124dbc91"
+version = "0.4.0"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#33360556b0945272883c3f742c3fb404cd4c7fb0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1954,7 +1954,7 @@ dependencies = [
  "itertools 0.13.0",
  "keccak-hash 0.10.0",
  "log",
- "mpt_trie 0.3.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "mpt_trie 0.4.1 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "num",
  "num-bigint",
  "once_cell",
@@ -1973,7 +1973,7 @@ dependencies = [
  "starky",
  "static_assertions",
  "tiny-keccak",
- "zk_evm_proc_macro 0.1.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "zk_evm_proc_macro 0.1.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
 ]
 
 [[package]]
@@ -2782,7 +2782,7 @@ dependencies = [
  "futures",
  "ops",
  "paladin-core",
- "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "proof_gen 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "prover",
  "rpc",
  "serde",
@@ -2936,7 +2936,7 @@ checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
 
 [[package]]
 name = "mpt_trie"
-version = "0.3.0"
+version = "0.4.1"
 dependencies = [
  "bytes",
  "enum-as-inner",
@@ -2963,8 +2963,8 @@ dependencies = [
 
 [[package]]
 name = "mpt_trie"
-version = "0.3.0"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#ddca6be9a40a7d0492312ecaf9d966e2124dbc91"
+version = "0.4.1"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#33360556b0945272883c3f742c3fb404cd4c7fb0"
 dependencies = [
  "bytes",
  "enum-as-inner",
@@ -3220,10 +3220,10 @@ dependencies = [
 name = "ops"
 version = "0.1.0"
 dependencies = [
- "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "evm_arithmetization 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "keccak-hash 0.10.0",
  "paladin-core",
- "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "proof_gen 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "serde",
  "tracing",
  "zero_bin_common",
@@ -3758,9 +3758,9 @@ dependencies = [
 
 [[package]]
 name = "proof_gen"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
- "evm_arithmetization 0.2.0",
+ "evm_arithmetization 0.4.0",
  "log",
  "paste",
  "plonky2",
@@ -3769,10 +3769,10 @@ dependencies = [
 
 [[package]]
 name = "proof_gen"
-version = "0.2.0"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#ddca6be9a40a7d0492312ecaf9d966e2124dbc91"
+version = "0.4.0"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#33360556b0945272883c3f742c3fb404cd4c7fb0"
 dependencies = [
- "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "evm_arithmetization 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "log",
  "paste",
  "plonky2",
@@ -3809,12 +3809,12 @@ dependencies = [
  "num-traits",
  "ops",
  "paladin-core",
- "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "proof_gen 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "ruint",
  "serde",
  "serde_json",
  "tokio",
- "trace_decoder 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "trace_decoder 0.6.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "tracing",
  "zero_bin_common",
 ]
@@ -4074,18 +4074,18 @@ dependencies = [
  "anyhow",
  "clap",
  "compat",
- "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "evm_arithmetization 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "futures",
  "hex",
  "lru",
- "mpt_trie 0.3.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "mpt_trie 0.4.1 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "primitive-types 0.12.2",
  "prover",
  "serde",
  "serde_json",
  "tokio",
  "tower",
- "trace_decoder 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "trace_decoder 0.6.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "tracing-subscriber",
  "url",
  "zero_bin_common",
@@ -4539,7 +4539,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "smt_trie"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ethereum-types",
  "hex-literal",
@@ -4550,8 +4550,8 @@ dependencies = [
 
 [[package]]
 name = "smt_trie"
-version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#ddca6be9a40a7d0492312ecaf9d966e2124dbc91"
+version = "0.1.1"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#33360556b0945272883c3f742c3fb404cd4c7fb0"
 dependencies = [
  "ethereum-types",
  "hex-literal",
@@ -5027,7 +5027,7 @@ checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 
 [[package]]
 name = "trace_decoder"
-version = "0.4.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bitflags 2.5.0",
@@ -5039,20 +5039,20 @@ dependencies = [
  "either",
  "enum-as-inner",
  "ethereum-types",
- "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "evm_arithmetization 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "hex",
  "hex-literal",
  "itertools 0.13.0",
  "keccak-hash 0.10.0",
  "log",
- "mpt_trie 0.3.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "mpt_trie 0.4.1 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "nunny",
  "plonky2",
  "pretty_env_logger",
  "rlp",
  "serde",
  "serde_json",
- "smt_trie 0.1.0",
+ "smt_trie 0.1.1",
  "thiserror",
  "u4",
  "winnow 0.6.13",
@@ -5060,8 +5060,8 @@ dependencies = [
 
 [[package]]
 name = "trace_decoder"
-version = "0.4.0"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#ddca6be9a40a7d0492312ecaf9d966e2124dbc91"
+version = "0.6.0"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#33360556b0945272883c3f742c3fb404cd4c7fb0"
 dependencies = [
  "anyhow",
  "bitflags 2.5.0",
@@ -5072,18 +5072,18 @@ dependencies = [
  "either",
  "enum-as-inner",
  "ethereum-types",
- "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "evm_arithmetization 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "hex",
  "hex-literal",
  "itertools 0.13.0",
  "keccak-hash 0.10.0",
  "log",
- "mpt_trie 0.3.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "mpt_trie 0.4.1 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "nunny",
  "plonky2",
  "rlp",
  "serde",
- "smt_trie 0.1.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "smt_trie 0.1.1 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "thiserror",
  "u4",
  "winnow 0.6.13",
@@ -5295,7 +5295,7 @@ dependencies = [
  "anyhow",
  "clap",
  "dotenvy",
- "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "proof_gen 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "serde_json",
  "serde_path_to_error",
  "tracing",
@@ -5705,10 +5705,10 @@ dependencies = [
  "anyhow",
  "async-stream",
  "clap",
- "evm_arithmetization 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "evm_arithmetization 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "futures",
  "plonky2",
- "proof_gen 0.2.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun)",
+ "proof_gen 0.4.0 (git+https://github.com/0xPolygonZero/zk_evm?branch=develop)",
  "serde",
  "serde_json",
  "thiserror",
@@ -5769,7 +5769,7 @@ dependencies = [
 [[package]]
 name = "zk_evm_proc_macro"
 version = "0.1.0"
-source = "git+https://github.com/0xPolygonZero/zk_evm?branch=feat/cancun#ddca6be9a40a7d0492312ecaf9d966e2124dbc91"
+source = "git+https://github.com/0xPolygonZero/zk_evm?branch=develop#33360556b0945272883c3f742c3fb404cd4c7fb0"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -1,10 +1,10 @@
 [package]
 name = "evm_arithmetization"
 description = "Implementation of STARKs for the Ethereum Virtual Machine"
-version = "0.2.0"
+version = "0.4.0"
 authors = [
-    "Daniel Lubarov <daniel@lubarov.com>",
-    "William Borgeaud <williamborgeaud@gmail.com>",
+  "Daniel Lubarov <daniel@lubarov.com>",
+  "William Borgeaud <williamborgeaud@gmail.com>",
 ]
 readme = "README.md"
 categories = ["cryptography"]
@@ -59,9 +59,9 @@ default = ["parallel"]
 asmtools = ["hex"]
 disable_jemalloc = []
 parallel = [
-    "plonky2/parallel",
-    "plonky2_maybe_rayon/parallel",
-    "starky/parallel",
+  "plonky2/parallel",
+  "plonky2_maybe_rayon/parallel",
+  "starky/parallel",
 ]
 
 [[bin]]

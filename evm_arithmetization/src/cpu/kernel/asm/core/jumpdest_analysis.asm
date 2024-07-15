@@ -134,7 +134,7 @@ global write_table_if_jumpdest:
 
     %jump_neq_const(0x5b, return)
 
-    //stack: jumpdest, ctx, proof_prefix_addr, retdest
+    // stack: jumpdest, ctx, proof_prefix_addr, retdest
     SWAP2 DUP1
     // stack: proof_prefix_addr, proof_prefix_addr, ctx, jumpdest
     ISZERO

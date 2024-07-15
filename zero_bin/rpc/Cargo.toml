@@ -28,6 +28,6 @@ compat = { workspace = true }
 zero_bin_common = { workspace = true }
 prover = { workspace = true }
 # TODO: update deps to take local versions again
-mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
-evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
-trace_decoder = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
+mpt_trie = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
+trace_decoder = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }

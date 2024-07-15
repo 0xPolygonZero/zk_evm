@@ -16,8 +16,8 @@ keccak-hash = { workspace = true }
 
 # Local dependencies
 # TODO: update deps to take local versions again
-proof_gen = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
-evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "feat/cancun" }
+proof_gen = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
+evm_arithmetization = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
 zero_bin_common = { workspace = true }
 
 [features]

@@ -129,7 +129,7 @@ process_receipt_logs_loop:
     MLOAD_GENERAL
     %append_to_trie_data
     // stack: addr_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
-    //Write num_topics.
+    // Write num_topics.
     %increment
     // stack: num_topics_ptr, i, num_logs, receipt_ptr, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     DUP1

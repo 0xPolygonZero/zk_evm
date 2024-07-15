@@ -10,7 +10,7 @@ global bn_msm_loop:
     DUP1 %jumpi(bn_msm_loop_add_a_nonzero)
     POP
 msm_loop_add_b:
-    //stack: accx, accy, i, retdest
+    // stack: accx, accy, i, retdest
     DUP3 %bn_mload_wnaf_b
     // stack: w, accx, accy, i, retdest
     DUP1 %jumpi(bn_msm_loop_add_b_nonzero)
@@ -20,7 +20,7 @@ msm_loop_contd:
     // TODO: the GLV scalars for the BN curve are 127-bit, so could use 127 here. But this would require modifying `wnaf.asm`. Not sure it's worth it...
     %eq_const(129) %jumpi(msm_end)
     %increment
-    //stack: i+1, accx, accy, retdest
+    // stack: i+1, accx, accy, retdest
     %stack (i, accx, accy, retdest) -> (accx, accy, bn_msm_loop, i, retdest)
     %jump(bn_double)
 
@@ -54,9 +54,9 @@ bn_msm_loop_add_b_nonzero:
     // stack: w
     DUP1
     %mload_current(@SEGMENT_BN_TABLE_Q)
-    //stack: Gy, w
+    // stack: Gy, w
     SWAP1 %decrement %mload_current(@SEGMENT_BN_TABLE_Q)
-    //stack: Gx, Gy
+    // stack: Gx, Gy
 %endmacro
 
 %macro bn_mload_point_b
@@ -67,7 +67,7 @@ bn_msm_loop_add_b_nonzero:
     %stack (bneg, Gy, w) -> (@BN_BASE, Gy, bneg, bneg, Gy, w)
     SUB SWAP1 ISZERO MUL SWAP2 MUL ADD
     SWAP1 %decrement %mload_current(@SEGMENT_BN_TABLE_Q)
-    //stack: Gx, Gy
+    // stack: Gx, Gy
     PUSH @BN_GLV_BETA
     MULFP254
 %endmacro

@@ -28,7 +28,7 @@ pub struct PartialTrieBuilder<T> {
 
 impl<T: PartialTrie> PartialTrieBuilder<T> {
     /// Creates a new `PartialTrieBuilder` with the given root and nodes.
-    pub fn new(root: H256, nodes: HashMap<H256, Vec<u8>>) -> Self {
+    pub const fn new(root: H256, nodes: HashMap<H256, Vec<u8>>) -> Self {
         PartialTrieBuilder {
             root,
             nodes,
