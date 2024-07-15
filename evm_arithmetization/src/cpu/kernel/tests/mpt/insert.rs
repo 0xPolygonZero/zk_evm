@@ -5,6 +5,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
+use super::{test_account_1, test_account_1_empty_storage_rlp};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
@@ -28,7 +29,7 @@ fn mpt_insert_leaf_identical_keys() -> Result<()> {
     let key = nibbles_64(0xABC);
     let state_trie = Node::Leaf {
         nibbles: key,
-        value: test_account_1_rlp(),
+        value: test_account_1_empty_storage_rlp(),
     }
     .into();
     test_state_trie(state_trie, key, test_account_2())

@@ -450,7 +450,7 @@ fn test_log_with_aggreg() -> anyhow::Result<()> {
         &all_stark,
         &[
             16..17,
-            11..15,
+            8..10,
             12..17,
             8..11,
             8..9,
