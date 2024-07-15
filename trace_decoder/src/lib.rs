@@ -103,6 +103,7 @@ use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
+use typed_mpt::{StateTrie, StorageTrie, TriePath};
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -297,7 +298,6 @@ pub fn entrypoint(
     resolve: impl Fn(H256) -> Vec<u8>,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     use anyhow::Context as _;
-    use evm_arithmetization::generation::mpt::AccountRlp;
     use mpt_trie::partial_trie::PartialTrie as _;
 
     use crate::processed_block_trace::{
@@ -321,11 +321,42 @@ pub fn entrypoint(
             storage: SeparateStorageTriesPreImage::MultipleTries(storage),
         }) => ProcessedBlockTracePreImages {
             tries: PartialTriePreImages {
-                state,
+                state: state.items().try_fold(
+                    StateTrie::default(),
+                    |mut acc, (nibbles, hash_or_val)| {
+                        let path = TriePath::from_nibbles(nibbles);
+                        match hash_or_val {
+                            mpt_trie::trie_ops::ValOrHash::Val(bytes) => acc.insert_by_path(
+                                path,
+                                rlp::decode(&bytes)
+                                    .context("invalid AccountRlp in direct state trie")?,
+                            ),
+                            mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                acc.insert_branch_by_path(path, h)
+                            }
+                        };
+                        anyhow::Ok(acc)
+                    },
+                )?,
                 storage: storage
                     .into_iter()
-                    .map(|(k, SeparateTriePreImage::Direct(v))| (k, v))
-                    .collect(),
+                    .map(|(k, SeparateTriePreImage::Direct(v))| {
+                        v.items()
+                            .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
+                                let path = TriePath::from_nibbles(nibbles);
+                                match hash_or_val {
+                                    mpt_trie::trie_ops::ValOrHash::Val(value) => {
+                                        acc.insert(path, value)
+                                    }
+                                    mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                        acc.insert_branch(path, h)
+                                    }
+                                };
+                                anyhow::Ok(acc)
+                            })
+                            .map(|v| (k, v))
+                    })
+                    .collect::<Result<_, _>>()?,
             },
             extra_code_hash_mappings: None,
         },
@@ -339,12 +370,10 @@ pub fn entrypoint(
             } = type1::frontend(instructions)?;
             ProcessedBlockTracePreImages {
                 tries: PartialTriePreImages {
-                    state: state.as_hashed_partial_trie(),
+                    state,
                     storage: storage
                         .into_iter()
-                        .map(|(path, trie)| {
-                            (path.into_hash_left_padded(), trie.as_hashed_partial_trie())
-                        })
+                        .map(|(path, trie)| (path.into_hash_left_padded(), trie))
                         .collect(),
                 },
                 extra_code_hash_mappings: match code.is_empty() {
@@ -362,11 +391,8 @@ pub fn entrypoint(
     let all_accounts_in_pre_images = pre_images
         .tries
         .state
-        .items()
-        .filter_map(|(addr, data)| {
-            data.as_val()
-                .map(|data| (addr.into(), rlp::decode::<AccountRlp>(data).unwrap()))
-        })
+        .iter()
+        .filter_map(|(addr, data)| Some((addr.into_hash_left_padded(), data.right()?)))
         .collect::<Vec<_>>();
 
     let code_db = {
@@ -419,8 +445,8 @@ pub fn entrypoint(
 
 #[derive(Debug, Default)]
 struct PartialTriePreImages {
-    pub state: HashedPartialTrie,
-    pub storage: HashMap<H256, HashedPartialTrie>,
+    pub state: StateTrie,
+    pub storage: HashMap<H256, StorageTrie>,
 }
 
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes

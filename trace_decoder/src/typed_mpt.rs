@@ -50,6 +50,17 @@ impl TriePath {
         }
         theirs
     }
+    pub fn from_nibbles(mut theirs: mpt_trie::nibbles::Nibbles) -> Self {
+        let mut ours = CopyVec::new();
+        while !theirs.is_empty() {
+            ours.try_push(
+                U4::new(theirs.pop_next_nibble_front())
+                    .expect("mpt_trie returned an invalid nibble"),
+            )
+            .expect("mpt_trie should not have more than 64 nibbles")
+        }
+        Self(ours)
+    }
 }
 
 /// Map where keys are [up to 64 nibbles](TriePath), and values are either an
@@ -201,7 +212,7 @@ impl StateTrie {
     ) -> Option<Either<H256, AccountRlp>> {
         self.typed.insert(path, account)
     }
-    pub fn insert_branch(
+    pub fn insert_branch_by_path(
         &mut self,
         path: TriePath,
         hash: H256,
@@ -240,22 +251,34 @@ impl IntoIterator for StateTrie {
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
 #[derive(Debug, Clone, Default)]
 pub struct StorageTrie {
-    typed: TypedMpt<Vec<u8>>,
+    /// This does NOT use [`TypedMpt`] - T could be anything!
+    map: BTreeMap<TriePath, Either<H256, Vec<u8>>>,
 }
 impl StorageTrie {
     pub fn insert(&mut self, path: TriePath, value: Vec<u8>) -> Option<Either<H256, Vec<u8>>> {
-        self.typed.insert(path, value)
+        self.map.insert(path, Either::Right(value))
     }
     pub fn insert_branch(&mut self, path: TriePath, hash: H256) -> Option<Either<H256, Vec<u8>>> {
-        self.typed.insert_branch(path, hash)
+        self.map.insert(path, Either::Left(hash))
     }
     pub fn root(&self) -> H256 {
-        self.typed.root()
+        self.as_hashed_partial_trie().hash()
     }
     pub fn remove(&mut self, path: TriePath) -> Option<Either<H256, Vec<u8>>> {
-        self.typed.map.remove(&path)
+        self.map.remove(&path)
     }
     pub fn as_hashed_partial_trie(&self) -> mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
+        let mut theirs = mpt_trie::partial_trie::HashedPartialTrie::default();
+        for (k, v) in &self.map {
+            let nibbles = k.into_nibbles();
+            match v {
+                Either::Left(h) => theirs.insert(nibbles, *h),
+                // TODO(0xaatif): why is RLP-encoding here the right thing to do?
+                //                (Our tests fail without it).
+                Either::Right(v) => theirs.insert(nibbles, &*rlp::encode(v)),
+            }
+            .expect("error in mpt_trie")
+        }
+        theirs
     }
 }

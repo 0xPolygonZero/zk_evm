@@ -54,7 +54,7 @@ fn visit(
         Node::Hash(Hash { raw_hash }) => {
             let clobbered = frontend
                 .state
-                .insert_branch(TriePath::new(path.iter().copied())?, raw_hash.into());
+                .insert_branch_by_path(TriePath::new(path.iter().copied())?, raw_hash.into());
             ensure!(clobbered.is_none(), "duplicate hash")
         }
         Node::Leaf(Leaf { key, value }) => {
