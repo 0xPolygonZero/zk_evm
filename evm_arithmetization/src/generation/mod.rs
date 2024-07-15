@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use jumpdest::JumpDestTableWitness;
 use keccak_hash::keccak;
 use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -32,6 +33,7 @@ use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
 
+pub mod jumpdest;
 pub(crate) mod linked_list;
 pub mod mpt;
 pub(crate) mod prover_input;
@@ -106,6 +108,10 @@ pub struct GenerationInputs<F: RichField> {
     ///
     /// This is specific to `cdk-erigon`.
     pub ger_data: Option<(H256, H256)>,
+
+    /// A table listing each JUMPDESTs reached in each call context under
+    /// associated code hash.
+    pub jumpdest_tables: Vec<Option<JumpDestTableWitness>>,
 }
 
 /// A lighter version of [`GenerationInputs`], which have been trimmed
@@ -156,6 +162,10 @@ pub struct TrimmedGenerationInputs<F: RichField> {
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
     pub block_hashes: BlockHashes,
+
+    /// A list of tables listing each JUMPDESTs reached in each call context
+    /// under associated code hash.
+    pub jumpdest_tables: Vec<Option<JumpDestTableWitness>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -230,6 +240,7 @@ impl<F: RichField> GenerationInputs<F> {
             burn_addr: self.burn_addr,
             block_metadata: self.block_metadata.clone(),
             block_hashes: self.block_hashes.clone(),
+            jumpdest_tables: self.jumpdest_tables.clone(),
         }
     }
 }

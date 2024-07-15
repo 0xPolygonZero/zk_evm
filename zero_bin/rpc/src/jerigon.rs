@@ -1,12 +1,29 @@
-use alloy::{providers::Provider, rpc::types::eth::BlockId, transports::Transport};
+use std::collections::BTreeMap;
+use std::ops::Deref as _;
+
+use alloy::providers::ext::DebugApi;
+use alloy::rpc::types::trace::geth::StructLog;
+use alloy::{
+    providers::Provider,
+    rpc::types::{eth::BlockId, trace::geth::GethTrace, Block, BlockTransactionsKind, Transaction},
+    transports::Transport,
+};
+use alloy_primitives::Address;
 use anyhow::Context as _;
+use evm_arithmetization::jumpdest::JumpDestTableWitness;
+use futures::stream::FuturesOrdered;
+use futures::StreamExt as _;
 use prover::BlockProverInput;
 use serde::Deserialize;
 use serde_json::json;
-use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
+use trace_decoder::{
+    BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo, TxnMeta, TxnTrace,
+};
 use zero_bin_common::provider::CachedProvider;
 
 use super::fetch_other_block_data;
+use crate::jumpdest;
+use crate::jumpdest::structlogprime::try_reserialize;
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]
@@ -33,15 +50,62 @@ where
             "debug_traceBlockByNumber".into(),
             (target_block_id, json!({"tracer": "zeroTracer"})),
         )
-        .await?;
+        .await?
+        .into_iter()
+        .map(|ztr| ztr.result)
+        .collect::<Vec<_>>();
 
     // Grab block witness info (packed as combined trie pre-images)
-
     let block_witness = cached_provider
         .get_provider()
         .await?
         .raw_request::<_, String>("eth_getWitness".into(), vec![target_block_id])
         .await?;
+
+    let block = cached_provider
+        .get_block(target_block_id, BlockTransactionsKind::Full)
+        .await?;
+
+    let tx_traces: Vec<&BTreeMap<__compat_primitive_types::H160, TxnTrace>> = tx_results
+        .iter()
+        .map(|TxnInfo { traces, meta: _ }| traces)
+        .collect::<Vec<_>>();
+
+    let jdts: Vec<Option<JumpDestTableWitness>> = process_transactions(
+        &block,
+        cached_provider.get_provider().await?.deref(),
+        &tx_traces,
+    )
+    .await?;
+
+    // weave in the JDTs
+    let txn_info = tx_results
+        .into_iter()
+        .zip(jdts)
+        .map(
+            |(
+                TxnInfo {
+                    traces,
+                    meta:
+                        TxnMeta {
+                            byte_code,
+                            new_receipt_trie_node_byte,
+                            gas_used,
+                            jumpdest_table: _,
+                        },
+                },
+                jdt,
+            )| TxnInfo {
+                traces,
+                meta: TxnMeta {
+                    byte_code,
+                    new_receipt_trie_node_byte,
+                    gas_used,
+                    jumpdest_table: jdt,
+                },
+            },
+        )
+        .collect();
 
     let other_data =
         fetch_other_block_data(cached_provider, target_block_id, checkpoint_block_number).await?;
@@ -53,9 +117,69 @@ where
                 compact: hex::decode(block_witness.strip_prefix("0x").unwrap_or(&block_witness))
                     .context("invalid hex returned from call to eth_getWitness")?,
             }),
-            txn_info: tx_results.into_iter().map(|it| it.result).collect(),
+            txn_info,
             code_db: Default::default(),
         },
         other_data,
     })
+}
+
+/// Processes the transactions in the given block and updates the code db.
+pub async fn process_transactions<ProviderT, TransportT>(
+    block: &Block,
+    provider: &ProviderT,
+    tx_traces: &[&BTreeMap<__compat_primitive_types::H160, TxnTrace>],
+) -> anyhow::Result<Vec<Option<JumpDestTableWitness>>>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    let futures = block
+        .transactions
+        .as_transactions()
+        .context("No transactions in block")?
+        .iter()
+        .zip(tx_traces)
+        .map(|(tx, &tx_trace)| process_transaction(provider, tx, tx_trace))
+        .collect::<FuturesOrdered<_>>();
+
+    let vec_of_res = futures.collect::<Vec<_>>().await;
+    vec_of_res.into_iter().collect::<Result<Vec<_>, _>>()
+}
+
+/// Processes the transaction with the given transaction hash and updates the
+/// accounts state.
+pub async fn process_transaction<ProviderT, TransportT>(
+    provider: &ProviderT,
+    tx: &Transaction,
+    tx_trace: &BTreeMap<__compat_primitive_types::H160, TxnTrace>,
+) -> anyhow::Result<Option<JumpDestTableWitness>>
+where
+    ProviderT: Provider<TransportT>,
+    TransportT: Transport + Clone,
+{
+    let structlog_trace = provider
+        .debug_trace_transaction(tx.hash, jumpdest::structlog_tracing_options())
+        .await?;
+
+    let struct_logs_opt: Option<Vec<StructLog>> = match structlog_trace {
+        GethTrace::Default(structlog_frame) => Some(structlog_frame.struct_logs),
+        GethTrace::JS(structlog_js_object) => try_reserialize(structlog_js_object)
+            .ok()
+            .map(|s| s.struct_logs),
+        _ => None,
+    };
+
+    let tx_traces = tx_trace
+        .iter()
+        .map(|(h, t)| (Address::from(h.to_fixed_bytes()), t.clone()))
+        .collect();
+
+    let jumpdest_table: Option<JumpDestTableWitness> = struct_logs_opt.and_then(|struct_log| {
+        jumpdest::generate_jumpdest_table(tx, &struct_log, &tx_traces)
+            .map(Some)
+            .unwrap_or_default()
+    });
+
+    Ok(jumpdest_table)
 }

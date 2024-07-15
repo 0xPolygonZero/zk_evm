@@ -9,25 +9,27 @@ use alloy::{
         Provider,
     },
     rpc::types::{
-        eth::Transaction,
-        eth::{AccessList, Block},
+        eth::{AccessList, Block, Transaction},
         trace::geth::{
-            AccountState, DiffMode, GethDebugBuiltInTracerType, GethTrace, PreStateConfig,
-            PreStateFrame, PreStateMode,
+            AccountState, DiffMode, GethDebugBuiltInTracerType, GethDebugTracerType,
+            GethDebugTracingOptions, GethTrace, PreStateConfig, PreStateFrame, PreStateMode,
+            StructLog,
         },
-        trace::geth::{GethDebugTracerType, GethDebugTracingOptions},
     },
     transports::Transport,
 };
 use anyhow::Context as _;
+use evm_arithmetization::{jumpdest::JumpDestTableWitness, CodeDb};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
-use super::CodeDb;
-use crate::Compat;
+use crate::{
+    jumpdest::{self, structlogprime::try_reserialize},
+    Compat,
+};
 
 /// Processes the transactions in the given block and updates the code db.
-pub(super) async fn process_transactions<ProviderT, TransportT>(
+pub async fn process_transactions<ProviderT, TransportT>(
     block: &Block,
     provider: &ProviderT,
 ) -> anyhow::Result<(CodeDb, Vec<TxnInfo>)>
@@ -55,7 +57,7 @@ where
 
 /// Processes the transaction with the given transaction hash and updates the
 /// accounts state.
-async fn process_transaction<ProviderT, TransportT>(
+pub async fn process_transaction<ProviderT, TransportT>(
     provider: &ProviderT,
     tx: &Transaction,
 ) -> anyhow::Result<(CodeDb, TxnInfo)>
@@ -63,16 +65,11 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let (tx_receipt, pre_trace, diff_trace) = fetch_tx_data(provider, &tx.hash).await?;
+    let (tx_receipt, pre_trace, diff_trace, structlog_trace) =
+        fetch_tx_data(provider, &tx.hash).await?;
     let tx_status = tx_receipt.status();
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
-
-    let tx_meta = TxnMeta {
-        byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
-        new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
-        gas_used: tx_receipt.gas_used as u64,
-    };
 
     let (code_db, mut tx_traces) = match (pre_trace, diff_trace) {
         (
@@ -85,7 +82,30 @@ where
     // Handle case when transaction failed and a contract creation was reverted
     if !tx_status && tx_receipt.contract_address.is_some() {
         tx_traces.insert(tx_receipt.contract_address.unwrap(), TxnTrace::default());
-    }
+    };
+
+    let struct_logs_opt: Option<Vec<StructLog>> = match structlog_trace {
+        GethTrace::Default(structlog_frame) => Some(structlog_frame.struct_logs),
+        GethTrace::JS(structlog_js_object) => try_reserialize(structlog_js_object)
+            .ok()
+            .map(|s| s.struct_logs),
+        _ => None,
+    };
+
+    let jumpdest_table: Option<JumpDestTableWitness> = struct_logs_opt.and_then(|struct_logs| {
+        jumpdest::generate_jumpdest_table(tx, &struct_logs, &tx_traces)
+            .map(Some)
+            .unwrap_or_default()
+    });
+
+    // if jumpdest_table.is_some() { eprintln!("======================> 1")};
+
+    let tx_meta = TxnMeta {
+        byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
+        new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
+        gas_used: tx_receipt.gas_used as u64,
+        jumpdest_table,
+    };
 
     Ok((
         code_db,
@@ -103,7 +123,12 @@ where
 async fn fetch_tx_data<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
-) -> anyhow::Result<(<Ethereum as Network>::ReceiptResponse, GethTrace, GethTrace), anyhow::Error>
+) -> anyhow::Result<(
+    <Ethereum as Network>::ReceiptResponse,
+    GethTrace,
+    GethTrace,
+    GethTrace,
+)>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -111,14 +136,21 @@ where
     let tx_receipt_fut = provider.get_transaction_receipt(*tx_hash);
     let pre_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(false));
     let diff_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(true));
+    let structlog_trace_fut =
+        provider.debug_trace_transaction(*tx_hash, jumpdest::structlog_tracing_options());
 
-    let (tx_receipt, pre_trace, diff_trace) =
-        futures::try_join!(tx_receipt_fut, pre_trace_fut, diff_trace_fut,)?;
+    let (tx_receipt, pre_trace, diff_trace, structlog_trace) = futures::try_join!(
+        tx_receipt_fut,
+        pre_trace_fut,
+        diff_trace_fut,
+        structlog_trace_fut
+    )?;
 
     Ok((
         tx_receipt.context("Transaction receipt not found.")?,
         pre_trace,
         diff_trace,
+        structlog_trace,
     ))
 }
 

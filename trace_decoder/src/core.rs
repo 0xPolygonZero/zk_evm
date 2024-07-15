@@ -1,3 +1,4 @@
+use core::option::Option::None;
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -10,6 +11,7 @@ use anyhow::{anyhow, bail, ensure, Context as _};
 use ethereum_types::{Address, U256};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, TrieInputs},
+    jumpdest::JumpDestTableWitness,
     proof::TrieRoots,
     testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH},
     GenerationInputs,
@@ -87,6 +89,7 @@ pub fn entrypoint(
                      },
                  after,
                  withdrawals,
+                 jumpdest_tables,
              }| GenerationInputs::<Field> {
                 txn_number_before: first_txn_ix.into(),
                 gas_used_before: running_gas_used.into(),
@@ -113,6 +116,7 @@ pub fn entrypoint(
                 block_metadata: b_meta.clone(),
                 block_hashes: b_hashes.clone(),
                 burn_addr,
+                jumpdest_tables,
             },
         )
         .collect())
@@ -256,6 +260,8 @@ struct Batch<StateTrieT> {
 
     /// Empty for all but the final batch
     pub withdrawals: Vec<(Address, U256)>,
+
+    pub jumpdest_tables: Vec<Option<JumpDestTableWitness>>,
 }
 
 /// [`evm_arithmetization::generation::TrieInputs`],
@@ -336,6 +342,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
             )?;
         }
 
+        let mut jumpdest_tables = vec![];
+
         for txn in batch {
             let do_increment_txn_ix = txn.is_some();
             let TxnInfo {
@@ -345,6 +353,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         byte_code,
                         new_receipt_trie_node_byte,
                         gas_used: txn_gas_used,
+                        jumpdest_table,
                     },
             } = txn.unwrap_or_default();
 
@@ -475,6 +484,8 @@ fn middle<StateTrieT: StateTrie + Clone>(
                   // the transaction calling them reverted.
             }
 
+            jumpdest_tables.push(jumpdest_table);
+
             if do_increment_txn_ix {
                 txn_ix += 1;
             }
@@ -527,6 +538,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 transactions_root: transaction_trie.root(),
                 receipts_root: receipt_trie.root(),
             },
+            jumpdest_tables,
         });
     } // batch in batches
 

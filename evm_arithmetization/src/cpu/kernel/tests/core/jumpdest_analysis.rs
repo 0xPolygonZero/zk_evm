@@ -7,6 +7,7 @@ use plonky2::field::goldilocks_field::GoldilocksField as F;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::opcodes::{get_opcode, get_push_opcode};
+use crate::generation::jumpdest::JumpDestTableProcessed;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 
 #[test]
@@ -67,7 +68,10 @@ fn test_jumpdest_analysis() -> Result<()> {
         interpreter.generation_state.jumpdest_table,
         // Context 3 has jumpdest 1, 5, 7. All have proof 0 and hence
         // the list [proof_0, jumpdest_0, ... ] is [0, 1, 0, 5, 0, 7, 8, 40]
-        Some(HashMap::from([(3, vec![0, 1, 0, 5, 0, 7, 8, 40])]))
+        Some(JumpDestTableProcessed::new(HashMap::from([(
+            3,
+            vec![0, 1, 0, 5, 0, 7, 8, 40]
+        )])))
     );
 
     // Run jumpdest analysis with context = 3
@@ -84,14 +88,14 @@ fn test_jumpdest_analysis() -> Result<()> {
 
     // We need to manually pop the jumpdest_table and push its value on the top of
     // the stack
-    interpreter
+    (*interpreter
         .generation_state
         .jumpdest_table
         .as_mut()
-        .unwrap()
-        .get_mut(&CONTEXT)
-        .unwrap()
-        .pop();
+        .unwrap())
+    .get_mut(&CONTEXT)
+    .unwrap()
+    .pop();
     interpreter
         .push(41.into())
         .expect("The stack should not overflow");
@@ -136,7 +140,9 @@ fn test_packed_verification() -> Result<()> {
     let mut interpreter: Interpreter<F> =
         Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
     interpreter.set_code(CONTEXT, code.clone());
-    interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
+    interpreter.generation_state.jumpdest_table = Some(JumpDestTableProcessed::new(HashMap::from(
+        [(3, vec![1, 33])],
+    )));
 
     interpreter.run()?;
 
@@ -149,7 +155,9 @@ fn test_packed_verification() -> Result<()> {
         let mut interpreter: Interpreter<F> =
             Interpreter::new(write_table_if_jumpdest, initial_stack.clone(), None);
         interpreter.set_code(CONTEXT, code.clone());
-        interpreter.generation_state.jumpdest_table = Some(HashMap::from([(3, vec![1, 33])]));
+        interpreter.generation_state.jumpdest_table = Some(JumpDestTableProcessed::new(
+            HashMap::from([(3, vec![1, 33])]),
+        ));
 
         assert!(interpreter.run().is_err());
 

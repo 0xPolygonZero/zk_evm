@@ -35,6 +35,9 @@ prover = { workspace = true }
 trace_decoder = { workspace = true }
 zero_bin_common = { workspace = true }
 zk_evm_common = { workspace = true }
+alloy-serde = { workspace = true }
+alloy-primitives = { workspace = true }
+keccak-hash = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }

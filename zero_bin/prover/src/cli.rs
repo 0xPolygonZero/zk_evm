@@ -18,7 +18,7 @@ pub struct CliProverConfig {
     #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 19)]
     max_cpu_len_log: usize,
     /// Number of transactions in a batch to process at once.
-    #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 10)]
+    #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 1)]
     batch_size: usize,
     /// If true, save the public inputs to disk on error.
     #[arg(short='i', long, help_heading = HELP_HEADING, default_value_t = false)]

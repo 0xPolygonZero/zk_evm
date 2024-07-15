@@ -5,10 +5,12 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
+use core::option::Option::None;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
+use keccak_hash::H256;
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::hash::hash_types::RichField;
@@ -19,7 +21,9 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
+use crate::generation::jumpdest::{ContextJumpDests, JumpDestTableProcessed, JumpDestTableWitness};
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
+use crate::generation::prover_input::get_proofs_and_jumpdests;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_ger_prover_inputs, all_withdrawals_prover_inputs_reversed, GenerationState,
@@ -56,6 +60,7 @@ pub(crate) struct Interpreter<F: RichField> {
     /// Counts the number of appearances of each opcode. For debugging purposes.
     #[allow(unused)]
     pub(crate) opcode_count: [usize; 0x100],
+    /// A table of contexts and their reached JUMPDESTs.
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
     pub(crate) is_jumpdest_analysis: bool,
@@ -71,9 +76,9 @@ pub(crate) struct Interpreter<F: RichField> {
 pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
     final_label: &str,
     state: &GenerationState<F>,
-) -> Option<HashMap<usize, Vec<usize>>> {
+) -> Option<(JumpDestTableProcessed, JumpDestTableWitness)> {
     match state.jumpdest_table {
-        Some(_) => None,
+        Some(_) => Default::default(),
         None => {
             let halt_pc = KERNEL.global_labels[final_label];
             let initial_context = state.registers.context;
@@ -92,16 +97,15 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: RichField>(
 
             let clock = interpreter.get_clock();
 
-            interpreter
+            let jdtw = interpreter
                 .generation_state
-                .set_jumpdest_analysis_inputs(interpreter.jumpdest_table);
+                .set_jumpdest_analysis_inputs(interpreter.jumpdest_table.clone());
 
             log::debug!(
                 "Simulated CPU for jumpdest analysis halted after {:?} cycles.",
                 clock
             );
-
-            interpreter.generation_state.jumpdest_table
+            (interpreter.generation_state.jumpdest_table).map(|x| (x, jdtw))
         }
     }
 }
@@ -114,9 +118,9 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
     pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
-    pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
     pub(crate) accounts: BTreeMap<U256, usize>,
     pub(crate) storage: BTreeMap<(U256, U256), usize>,
+    pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
     pub(crate) next_txn_index: usize,
 }
 
@@ -148,6 +152,48 @@ pub(crate) fn set_registers_and_run<F: RichField>(
     });
 
     interpreter.run()
+}
+
+/// Computes the JUMPDEST proofs for each context.
+///
+/// # Arguments
+///
+/// - `jumpdest_table_rpc`:  The raw table received from RPC.
+/// - `code_db`: The corresponding database of contract code used in the trace.
+pub(crate) fn set_jumpdest_analysis_inputs_rpc(
+    jumpdest_table_rpc: &JumpDestTableWitness,
+    code_map: &HashMap<H256, Vec<u8>>,
+) -> JumpDestTableProcessed {
+    let ctx_proofs = (*jumpdest_table_rpc)
+        .iter()
+        .flat_map(|(code_addr, ctx_jumpdests)| {
+            prove_context_jumpdests(&code_map[code_addr], ctx_jumpdests)
+        })
+        .collect();
+    JumpDestTableProcessed::new(ctx_proofs)
+}
+
+/// Orchestrates the proving of all contexts in a specific bytecode.
+///
+/// # Arguments
+///
+/// - `ctx_jumpdests`: Map from `ctx` to its list of offsets to reached
+///   `JUMPDEST`s.
+/// - `code`: The bytecode for the contexts.  This is the same for all contexts.
+fn prove_context_jumpdests(
+    code: &[u8],
+    ctx_jumpdests: &ContextJumpDests,
+) -> HashMap<usize, Vec<usize>> {
+    ctx_jumpdests
+        .0
+        .iter()
+        .map(|(&ctx, jumpdests)| {
+            let proofs = jumpdests.last().map_or(Vec::default(), |&largest_address| {
+                get_proofs_and_jumpdests(code, largest_address, jumpdests.clone())
+            });
+            (ctx, proofs)
+        })
+        .collect()
 }
 
 impl<F: RichField> Interpreter<F> {

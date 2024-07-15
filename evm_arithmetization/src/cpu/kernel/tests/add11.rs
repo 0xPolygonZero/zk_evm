@@ -194,6 +194,7 @@ fn test_add11_yml() {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
+        jumpdest_tables: vec![],
     };
 
     let initial_stack = vec![];
@@ -371,6 +372,7 @@ fn test_add11_yml_with_exception() {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
+        jumpdest_tables: vec![],
     };
 
     let initial_stack = vec![];

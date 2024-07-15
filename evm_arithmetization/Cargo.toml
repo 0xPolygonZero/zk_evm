@@ -15,6 +15,7 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
+__compat_primitive_types = { workspace = true }
 anyhow = { workspace = true }
 bytes = { workspace = true }
 env_logger = { workspace = true }

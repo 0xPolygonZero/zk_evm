@@ -21,6 +21,7 @@ use trace_decoder::{BlockLevelData, OtherBlockData};
 use tracing::warn;
 
 pub mod jerigon;
+pub mod jumpdest;
 pub mod native;
 pub mod retry;
 

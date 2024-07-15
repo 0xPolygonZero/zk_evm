@@ -6,10 +6,12 @@ use std::str::FromStr;
 use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
+use keccak_hash::keccak;
 use num_bigint::BigUint;
 use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
+use super::jumpdest::{JumpDestTableProcessed, JumpDestTableWitness};
 use super::linked_list::{
     LinkedList, ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
@@ -20,7 +22,9 @@ use crate::cpu::kernel::constants::cancun_constants::{
     POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
+use crate::cpu::kernel::interpreter::{
+    set_jumpdest_analysis_inputs_rpc, simulate_cpu_and_get_user_jumps,
+};
 use crate::curve_pairings::{bls381, CurveAff, CyclicGroup};
 use crate::extension_tower::{FieldExt, Fp12, Fp2, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
 use crate::generation::prover_input::EvmField::{
@@ -37,6 +41,10 @@ use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 use crate::witness::util::{current_context_peek, stack_peek};
+
+/// A set of contract code as a byte arrays.  From this a mapping: hash ->
+/// contract can be built.
+pub type CodeDb = BTreeSet<Vec<u8>>;
 
 /// Prover input function represented as a scoped function name.
 /// Example: `PROVER_INPUT(ff::bn254_base::inverse)` is represented as
@@ -364,12 +372,12 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
+        if let Some(ctx_jumpdest_table) = (*jumpdest_table).get_mut(&context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
         {
             Ok((next_jumpdest_address + 1).into())
         } else {
-            jumpdest_table.remove(&context);
+            (*jumpdest_table).remove(&context);
             Ok(U256::zero())
         }
     }
@@ -383,7 +391,7 @@ impl<F: RichField> GenerationState<F> {
             ));
         };
 
-        if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
+        if let Some(ctx_jumpdest_table) = (*jumpdest_table).get_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
         {
             Ok(next_jumpdest_proof.into())
@@ -757,7 +765,22 @@ impl<F: RichField> GenerationState<F> {
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
-        self.jumpdest_table = simulate_cpu_and_get_user_jumps("terminate_common", self);
+
+        dbg!(&self.inputs.jumpdest_tables);
+        eprintln!("Generating JUMPDEST tables");
+        // w for witness
+        let txn_idx = self.next_txn_index - 1;
+        let rpcw = self.inputs.jumpdest_tables[txn_idx].as_ref();
+        let rpc = rpcw.map(|jdt| set_jumpdest_analysis_inputs_rpc(jdt, &self.inputs.contract_code));
+
+        if let Some((_sim, simw)) = simulate_cpu_and_get_user_jumps("terminate_common", self) {
+            if rpcw.is_some() && rpcw.unwrap() != &simw.clone() {
+                println!("SIMW {}", simw.clone());
+                println!("RPCW {}", rpcw.unwrap());
+                assert_eq!(simw.clone(), *rpcw.unwrap());
+            }
+        }
+        self.jumpdest_table = rpc;
 
         Ok(())
     }
@@ -768,18 +791,23 @@ impl<F: RichField> GenerationState<F> {
     pub(crate) fn set_jumpdest_analysis_inputs(
         &mut self,
         jumpdest_table: HashMap<usize, BTreeSet<usize>>,
-    ) {
-        self.jumpdest_table = Some(HashMap::from_iter(jumpdest_table.into_iter().map(
-            |(ctx, jumpdest_table)| {
+    ) -> JumpDestTableWitness {
+        let mut jdtw = JumpDestTableWitness::default();
+        self.jumpdest_table = Some(JumpDestTableProcessed::new(HashMap::from_iter(
+            jumpdest_table.into_iter().map(|(ctx, jumpdest_table)| {
                 let code = self.get_code(ctx).unwrap();
+                for offset in jumpdest_table.clone() {
+                    jdtw.insert(keccak(code.clone()), ctx, offset);
+                }
                 if let Some(&largest_address) = jumpdest_table.last() {
                     let proofs = get_proofs_and_jumpdests(&code, largest_address, jumpdest_table);
                     (ctx, proofs)
                 } else {
                     (ctx, vec![])
                 }
-            },
+            }),
         )));
+        jdtw
     }
 
     pub(crate) fn get_current_code(&self) -> Result<Vec<u8>, ProgramError> {
@@ -850,7 +878,7 @@ impl<F: RichField> GenerationState<F> {
 /// for which none of the previous 32 bytes in the code (including opcodes
 /// and pushed bytes) is a PUSHXX and the address is in its range. It returns
 /// a vector of even size containing proofs followed by their addresses.
-fn get_proofs_and_jumpdests(
+pub(crate) fn get_proofs_and_jumpdests(
     code: &[u8],
     largest_address: usize,
     jumpdest_table: std::collections::BTreeSet<usize>,

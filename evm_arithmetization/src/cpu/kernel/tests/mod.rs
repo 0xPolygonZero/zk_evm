@@ -249,7 +249,7 @@ impl<F: RichField> Interpreter<F> {
     }
 
     pub(crate) fn set_jumpdest_analysis_inputs(&mut self, jumps: HashMap<usize, BTreeSet<usize>>) {
-        self.generation_state.set_jumpdest_analysis_inputs(jumps);
+        let _ = self.generation_state.set_jumpdest_analysis_inputs(jumps);
     }
 
     pub(crate) fn extract_kernel_memory(self, segment: Segment, range: Range<usize>) -> Vec<U256> {

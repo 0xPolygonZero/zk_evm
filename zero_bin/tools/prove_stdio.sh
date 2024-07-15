@@ -17,24 +17,25 @@ else
     num_procs=$(nproc)
 fi
 
-# Force the working directory to always be the `tools/` directory. 
+# Force the working directory to always be the `tools/` directory.
 TOOLS_DIR=$(dirname $(realpath "$0"))
 PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
 
-BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
-echo "Block batch size: $BLOCK_BATCH_SIZE"
+BATCH_SIZE=${BATCH_SIZE:=1}
+echo "Batch size: $BATCH_SIZE"
 
 OUTPUT_LOG="${TOOLS_DIR}/output.log"
 PROOFS_FILE_LIST="${PROOF_OUTPUT_DIR}/proof_files.json"
 TEST_OUT_PATH="${TOOLS_DIR}/test.out"
 
+
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
-export TOKIO_WORKER_THREADS=$num_procs
+#export TOKIO_WORKER_THREADS=$num_procs
 
-export RUST_MIN_STACK=33554432
-export RUST_BACKTRACE=full
-export RUST_LOG=info
+#export RUST_MIN_STACK=33554432
+#export RUST_BACKTRACE=full
+#export RUST_LOG=info
 # Script users are running locally, and might benefit from extra perf.
 # See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
@@ -95,7 +96,7 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --quiet --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $TEST_OUT_PATH
+  cargo run --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --batch-size $BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE |& tee $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         rm $TEST_OUT_PATH
@@ -108,10 +109,9 @@ fi
 
 cargo build --release --jobs "$num_procs"
 
-
 start_time=$(date +%s%N)
-"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
- --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $OUTPUT_LOG
+"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --batch-size $BATCH_SIZE \
+ --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE |& tee $OUTPUT_LOG
 end_time=$(date +%s%N)
 
 set +o pipefail

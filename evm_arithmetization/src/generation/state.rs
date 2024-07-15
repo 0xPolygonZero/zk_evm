@@ -8,6 +8,7 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::hash::hash_types::RichField;
 
+use super::jumpdest::JumpDestTableProcessed;
 use super::linked_list::{AccountsLinkedList, StorageLinkedList};
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
@@ -374,7 +375,7 @@ pub struct GenerationState<F: RichField> {
     /// "proof" for a jump destination is either 0 or an address i > 32 in
     /// the code (not necessarily pointing to an opcode) such that for every
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
-    pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+    pub(crate) jumpdest_table: Option<JumpDestTableProcessed>,
 
     /// Each entry contains the pair (key, ptr) where key is the (hashed) key
     /// of an account in the accounts linked list, and ptr is the respective

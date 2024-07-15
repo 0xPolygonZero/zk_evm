@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -15,7 +14,8 @@ use zero_bin_common::provider::CachedProvider;
 mod state;
 mod txn;
 
-type CodeDb = BTreeSet<Vec<u8>>;
+pub use txn::process_transaction;
+pub use txn::process_transactions;
 
 /// Fetches the prover input for the given BlockId.
 pub async fn block_prover_input<ProviderT, TransportT>(
@@ -39,7 +39,7 @@ where
 }
 
 /// Processes the block with the given block number and returns the block trace.
-async fn process_block_trace<ProviderT, TransportT>(
+pub(crate) async fn process_block_trace<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: BlockId,
 ) -> anyhow::Result<BlockTrace>
