@@ -1,6 +1,8 @@
 # Zero Bin
 
-A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`plonky-block-proof-gen`](https://github.com/0xPolygonZero/plonky-block-proof-gen). Given the [proof generation protocol](/prover/src/lib.rs) as input, generate a proof. The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/paladin), and as such can distribute proof generation across multiple worker machines.
+A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`proof_gen`](../proof_gen/README.md).
+Given the [proof generation protocol](./prover/src/lib.rs) as input, generate a proof.
+The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/paladin), and as such can distribute proof generation across multiple worker machines.
 
 - [Zero Bin](#zero-bin)
   - [Project layout](#project-layout)
@@ -433,6 +435,7 @@ A few other notes:
 
 - Proving blocks is very resource intensive in terms of both CPU and memory. You can also only generate the witness for a block instead (see [Generating Witnesses Only](#generating-witnesses-only)) to significantly reduce the CPU and memory requirements.
 - Because incorporating the previous block proof requires a chain of proofs back to the last checkpoint height, you can also disable this requirement by passing `true` for `<IGNORE_PREVIOUS_PROOFS>` (which internally just sets the current checkpoint height to the previous block height).
+- When proving multiple blocks concurrently, one may need to increase the system resource usage limit because of the number of RPC connections opened simultaneously, in particular when running a native tracer. For Linux systems, it is recommended to set `ulimit` to 8192.
 
 ### Generating Witnesses Only
 
