@@ -42,7 +42,7 @@ global mpt_insert_branch:
     // stack: node_type, node_payload_ptr, num_nibbles, key, value_ptr, retdest
     POP
 
-    //stack: node_payload_ptr, num_nibbles, key, value_ptr, retdest
+    // stack: node_payload_ptr, num_nibbles, key, value_ptr, retdest
 
     // At this point, we branch based on whether the key terminates with this branch node.
     // stack: node_payload_ptr, num_nibbles, key, value_ptr, retdest

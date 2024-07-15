@@ -15,4 +15,4 @@ serde_path_to_error = { workspace = true }
 proof_gen = { workspace = true }
 
 # Local dependencies
-zero_bin_common ={ path = "../common" }
+zero_bin_common = { path = "../common" }
