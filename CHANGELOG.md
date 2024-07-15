@@ -8,6 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2024-07-15
+
+### Changed
+- Implement EIP-4788 for Cancun (#40)
+- Implement Blob transactions (type-3) and BLOBHASH opcode (#50)
+- Fix beacons root contract bytecode (#70)
+- LxLy exit roots (#90)
+- Eip 1153 (TLOAD/TSTORE) (#59)
+- Remove blobbasefee from block header (#100)
+- Fix MCOPY from rebasing (#103)
+- Fix storage write for beacons root contract (#102)
+- EIP-4844 part 2: Point evaluation precompile (#133)
+- Some fixes to Cancun (#187)
+- Insert blob versioned hashes in signature payload for hashing (#209)
+- Fix KZG precompile context setup (#210)
+- Fix txn type encoding for receipts (#214)
+- Add blob gas fee burn for type-3 txns (#219)
+- Update decoder processing for cancun (#207)
+- cancun: Add a full block test (#223)
+- Fix KZG precompile I/O (#213)
+- Fix selfdestruct address listing (#225)
+- Fix withdrawals without txns and add test for empty block (#228)
+- doc: update README (#242)
+- Cleanup and bring back deadcode lint (#232)
+- fix(cancun): dummy payloads and public input retrieval (#249)
+- fix: encode calldata for EIP-4780 as U256 (#253)
+- fix: handle KZG precompile errors properly (#251)
+- fix(cancun): `mcopy` check offsets and overwrites (#252)
+- fix(cancun): correct search loop in transient storage (#257)
+- perf: Charge gas before tload search (#272)
+- fix: add check on decoded versioned hashes (#278)
+- fix: Add beacon roots touched slots into `state_access` with native tracer (#353)
+- feat(cancun): update test blocks (#365)
+- fix: failed to send proof (#366)
+- feat: cancun jerigon test network (#367)
+- fix(cancun): properly update accumulator in fake_exponential() (#376)
+- fix(cancun): tweak ranges in integration tests (#377)
+- `cancun`: cleanup pre-release (#392)
+
 ## [0.5.0] - 2024-07-15
 
 ### Changed
