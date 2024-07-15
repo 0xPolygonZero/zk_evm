@@ -1903,7 +1903,7 @@ dependencies = [
 
 [[package]]
 name = "evm_arithmetization"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2899,7 +2899,7 @@ checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
 
 [[package]]
 name = "mpt_trie"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "enum-as-inner",
@@ -3698,7 +3698,7 @@ dependencies = [
 
 [[package]]
 name = "proof_gen"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "evm_arithmetization",
  "log",
@@ -4943,7 +4943,7 @@ checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 
 [[package]]
 name = "trace_decoder"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "bitflags 2.6.0",

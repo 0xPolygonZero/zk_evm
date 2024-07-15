@@ -8,6 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2024-07-15
+
+### Changed
+- fix: docker images (#108)
+- feat: add transaction hash to zero trace (#103)
+- perf: add benchmarks for different components (#273)
+- fix: add check on decoded versioned hashes (#278)
+- fix: discard intermediate proofs (#106)
+- feat: stdio parallel proving (#109)
+- Fixes related to nightly and alloy (#101)
+- Introduce native tracer support (#81)
+- chore: bump alloy to v0.1.1 (#111)
+- Migrate `zero-bin` into `zk-evm`
+- fix: Bring back Cargo.lock (#280)
+- ci: add labeler flag for new `zero-bin` crate + update `CODEOWNERS` (#281)
+- fix: only executables should choose a global allocator (#301)
+- doc: fix typos (#298)
+- misc: fix logging filename (#305)
+- refactor zero_bin leader cli (#317)
+- Removed non-existing dep public `__compat_primitive_types` (#321)
+- perf: Check for zero amount early in 'add_eth' (#322)
+- fix: interval (#324)
+- fix: optimize previous hashes retrieval (#316)
+- feat: add jerigon test workflow (#303)
+- fix: do not add selfdestruct journal entry for empty accounts (#328)
+- ci: add PR check job (#332)
+- Constrain FP254 operations and SUBMOD to be kernel-only (#333)
+- fix: add recipient to touched_addresses even when skipping empty transfer (#336)
+- Fixed leader crashing when `.env` not present (#335)
+- perf: reduce overhead in final iteration of memset (#339)
+- Make leader work no matter what the CWD is (#307)
+- Cleanup/clippy and update pass (#341)
+- Add `Columns` and `DerefColumns` derive macros (#315)
+- migrate compat to micro crate (#308)
+- fix: docker build for worker and leader (#329)
+- parse embedded short nodes (#345)
+- Add `LogicColumnsView` struct for `LogicStark` (#347)
+- fix: properly log final result when due (#352)
+- fix: Check valid range for s and add test (#363)
+- feat: add caching for `get_block` (#346)
+- refactor!: docker builds (#357)
+- fix: tweak fetching of previous block hashes (#370)
+- fix(evm_arithmetization): Adjust layout of `CpuGeneralColumnsView` (#355)
+- feat: skip range-checking `PUSH` operations in `KERNEL` mode (#373)
+- Fix iterator length when fetching block hashes (#374)
+- fix: scale withdrawals amount to gwei (#371)
+- refactor: frontend of `trace_decoder` (#309)
+
+
 ## [0.4.0] - 2024-06-12
 
 ### Changed
