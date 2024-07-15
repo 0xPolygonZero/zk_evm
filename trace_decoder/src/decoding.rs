@@ -66,7 +66,7 @@ impl std::fmt::Display for TraceParsingError {
         let h_slot = self.slot.map(|slot| {
             let mut buf = [0u8; 64];
             slot.to_big_endian(&mut buf);
-            hash(&buf)
+            hash(buf)
         });
         write!(
             f,
@@ -379,7 +379,7 @@ impl ProcessedBlockTrace {
 
             for (slot, val) in storage_writes
                 .iter()
-                .map(|(k, v)| (Nibbles::from_h256_be(hash(&k.bytes_be())), v))
+                .map(|(k, v)| (Nibbles::from_h256_be(hash(k.bytes_be())), v))
             {
                 // If we are writing a zero, then we actually need to perform a delete.
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {

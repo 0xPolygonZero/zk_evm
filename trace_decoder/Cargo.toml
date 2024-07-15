@@ -32,6 +32,7 @@ plonky2 = { workspace = true }
 rlp = { workspace = true }
 serde = { workspace = true }
 smt_trie = { workspace = true }
+stackstack = "0.3.0"
 thiserror = { workspace = true }
 u4 = { workspace = true }
 winnow = { workspace = true }

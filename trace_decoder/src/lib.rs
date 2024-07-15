@@ -99,6 +99,7 @@ use std::collections::HashMap;
 use ethereum_types::{Address, U256};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
+use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use serde::{Deserialize, Serialize};
@@ -338,8 +339,13 @@ pub fn entrypoint(
             } = type1::frontend(instructions)?;
             ProcessedBlockTracePreImages {
                 tries: PartialTriePreImages {
-                    state,
-                    storage: storage.into_iter().collect(),
+                    state: state.as_hashed_partial_trie(),
+                    storage: storage
+                        .into_iter()
+                        .map(|(path, trie)| {
+                            (path.into_hash_left_padded(), trie.as_hashed_partial_trie())
+                        })
+                        .collect(),
                 },
                 extra_code_hash_mappings: match code.is_empty() {
                     true => None,
@@ -409,10 +415,6 @@ pub fn entrypoint(
         withdrawals: other.b_data.withdrawals.clone(),
     }
     .into_txn_proof_gen_ir(other)?)
-}
-
-fn hash(bytes: &[u8]) -> ethereum_types::H256 {
-    keccak_hash::keccak(bytes).0.into()
 }
 
 #[derive(Debug, Default)]

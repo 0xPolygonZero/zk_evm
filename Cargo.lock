@@ -4528,6 +4528,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "stackstack"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8acdd7dbfcfb5dd6e46c63512508bf71c2043f70b8f143813ad75cb5e8a589f2"
+
+[[package]]
 name = "starky"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4975,6 +4981,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smt_trie",
+ "stackstack",
  "thiserror",
  "u4",
  "winnow 0.6.13",

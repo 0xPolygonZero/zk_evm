@@ -1,27 +1,25 @@
 //! Frontend for the witness format emitted by e.g the [`0xPolygonZero/erigon`](https://github.com/0xPolygonZero/erigon)
 //! Ethereum node (a.k.a "jerigon").
 
-use std::{
-    array,
-    collections::{HashMap, HashSet},
-    iter,
-};
+use std::array;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
-use mpt_trie::{
-    partial_trie::{HashedPartialTrie, PartialTrie as _},
-    trie_ops::ValOrHash,
-};
+use evm_arithmetization::generation::mpt::AccountRlp;
 use nunny::NonEmpty;
 use u4::U4;
 
+use crate::typed_mpt::{StateTrie, StorageTrie, TriePath};
 use crate::wire::{Instruction, SmtLeaf};
 
+#[derive(Debug, Default, Clone)]
 pub struct Frontend {
-    pub state: HashedPartialTrie,
-    pub code: HashSet<NonEmpty<Vec<u8>>>,
-    pub storage: HashMap<ethereum_types::H256, HashedPartialTrie>,
+    pub state: StateTrie,
+    pub code: BTreeSet<NonEmpty<Vec<u8>>>,
+    /// The key here matches the [`TriePath`] inside [`Self::state`] for
+    /// accounts which had inline storage
+    pub storage: BTreeMap<TriePath, StorageTrie>,
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -32,25 +30,139 @@ pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::
     );
     let execution = executions.into_vec().remove(0);
 
-    let mut visitor = Visitor {
-        path: Vec::new(),
-        frontend: Frontend {
-            state: HashedPartialTrie::default(),
-            code: HashSet::new(),
-            storage: HashMap::new(),
+    let mut frontend = Frontend::default();
+    visit(
+        &mut frontend,
+        &stackstack::Stack::new(),
+        match execution {
+            Execution::Leaf(it) => Node::Leaf(it),
+            Execution::Extension(it) => Node::Extension(it),
+            Execution::Branch(it) => Node::Branch(it),
+            Execution::Empty => Node::Empty,
         },
-    };
-    visitor.visit_node(match execution {
-        Execution::Leaf(it) => Node::Leaf(it),
-        Execution::Extension(it) => Node::Extension(it),
-        Execution::Branch(it) => Node::Branch(it),
-        Execution::Empty => Node::Empty,
-    })?;
-    let Visitor { path, frontend } = visitor;
-
-    assert_eq!(Vec::<U4>::new(), path);
+    )?;
 
     Ok(frontend)
+}
+
+fn visit(
+    frontend: &mut Frontend,
+    path: &stackstack::Stack<'_, U4>,
+    node: Node,
+) -> anyhow::Result<()> {
+    match node {
+        Node::Hash(Hash { raw_hash }) => {
+            let clobbered = frontend
+                .state
+                .insert_branch(TriePath::new(path.iter().copied())?, raw_hash.into());
+            ensure!(clobbered.is_none(), "duplicate hash")
+        }
+        Node::Leaf(Leaf { key, value }) => {
+            let path = TriePath::new(path.iter().copied().chain(key))?;
+            match value {
+                // TODO(0xaatif): what should this be interpreted as?
+                //                (this branch isn't hit in our tests)
+                Either::Left(Value { .. }) => bail!("unsupported value node"),
+                Either::Right(Account {
+                    nonce,
+                    balance,
+                    storage,
+                    code,
+                }) => {
+                    let account = AccountRlp {
+                        nonce: nonce.into(),
+                        balance,
+                        storage_root: {
+                            let storage = node2storagetrie(match storage {
+                                Some(it) => *it,
+                                None => Node::Empty,
+                            })?;
+                            let storage_root = storage.root();
+                            let clobbered = frontend.storage.insert(path, storage);
+                            ensure!(clobbered.is_none(), "duplicate storage");
+                            storage_root
+                        },
+                        code_hash: {
+                            match code {
+                                Some(Either::Left(Hash { raw_hash })) => raw_hash.into(),
+                                Some(Either::Right(Code { code })) => {
+                                    let hash = crate::hash(&code);
+                                    frontend.code.insert(code);
+                                    hash
+                                }
+                                None => crate::hash([]),
+                            }
+                        },
+                    };
+                    let clobbered = frontend.state.insert_by_path(path, account);
+                    ensure!(clobbered.is_none(), "duplicate account");
+                }
+            }
+        }
+        Node::Extension(Extension { key, child }) => {
+            path.with_all(key, |path| visit(frontend, path, *child))?
+        }
+        Node::Branch(Branch { children }) => {
+            for (ix, node) in children.into_iter().enumerate() {
+                if let Some(node) = node {
+                    path.with(
+                        U4::new(ix.try_into().expect("ix is in range 0..16"))
+                            .expect("ix is in range 0..16"),
+                        |path| visit(frontend, path, *node),
+                    )?;
+                }
+            }
+        }
+        Node::Code(Code { code }) => {
+            frontend.code.insert(code);
+        }
+        Node::Empty => {}
+    }
+    Ok(())
+}
+
+fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
+    fn visit(
+        mpt: &mut StorageTrie,
+        path: &stackstack::Stack<U4>,
+        node: Node,
+    ) -> anyhow::Result<()> {
+        match node {
+            Node::Hash(Hash { raw_hash }) => {
+                mpt.insert_branch(TriePath::new(path.iter().copied())?, raw_hash.into());
+            }
+            Node::Leaf(Leaf { key, value }) => {
+                match value {
+                    Either::Left(Value { raw_value }) => mpt.insert(
+                        TriePath::new(path.iter().copied().chain(key))?,
+                        raw_value.into_vec(),
+                    ),
+                    Either::Right(_) => bail!("unexpected account node in storage trie"),
+                };
+            }
+            Node::Extension(Extension { key, child }) => {
+                path.with_all(key, |path| visit(mpt, path, *child))?
+            }
+            Node::Branch(Branch { children }) => {
+                for (ix, node) in children.into_iter().enumerate() {
+                    if let Some(node) = node {
+                        path.with(
+                            U4::new(ix.try_into().expect("ix is in range 0..16"))
+                                .expect("ix is in range 0..16"),
+                            |path| visit(mpt, path, *node),
+                        )?;
+                    }
+                }
+            }
+            Node::Code(_) => bail!("unexpected Code node in storage trie"),
+            Node::Empty => {}
+        }
+        Ok(())
+    }
+
+    let mut mpt = StorageTrie::default();
+    visit(&mut mpt, &stackstack::Stack::new(), node)?;
+    Ok(mpt)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -253,182 +365,9 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
     }
 }
 
-/// Visit a [`Node`], keeping track of the path and decorating the [`Frontend`]
-/// as appropriate.
-struct Visitor {
-    path: Vec<U4>,
-    frontend: Frontend,
-}
-
-impl Visitor {
-    fn with_path<T>(
-        &mut self,
-        path: impl IntoIterator<Item = U4>,
-        f: impl FnOnce(&mut Self) -> T,
-    ) -> T {
-        let len = self.path.len();
-        self.path.extend(path);
-        let ret = f(self);
-        self.path.truncate(len);
-        ret
-    }
-    fn visit_node(&mut self, it: Node) -> anyhow::Result<()> {
-        match it {
-            Node::Hash(Hash { raw_hash }) => {
-                self.frontend.state.insert(
-                    nibbles2nibbles(self.path.clone()),
-                    ValOrHash::Hash(raw_hash.into()),
-                )?;
-                Ok(())
-            }
-            Node::Leaf(it) => self.visit_leaf(it),
-            Node::Extension(it) => self.visit_extension(it),
-            Node::Branch(it) => self.visit_branch(it),
-            Node::Code(Code { code }) => {
-                self.frontend.code.insert(code);
-                Ok(())
-            }
-            Node::Empty => Ok(()),
-        }
-    }
-    fn visit_extension(&mut self, Extension { key, child }: Extension) -> anyhow::Result<()> {
-        self.with_path(key, |this| this.visit_node(*child))
-    }
-    fn visit_branch(&mut self, Branch { children }: Branch) -> anyhow::Result<()> {
-        for (ix, node) in children.into_iter().enumerate() {
-            if let Some(node) = node {
-                self.with_path(
-                    iter::once(U4::new(ix.try_into().unwrap()).unwrap()),
-                    |this| this.visit_node(*node),
-                )?
-            }
-        }
-        Ok(())
-    }
-    fn visit_leaf(&mut self, Leaf { key, value }: Leaf) -> anyhow::Result<()> {
-        let key = self.path.iter().copied().chain(key).collect::<Vec<_>>();
-        let value = match value {
-            Either::Left(Value { raw_value }) => rlp::encode(raw_value.as_vec()),
-            Either::Right(Account {
-                nonce,
-                balance,
-                storage,
-                code,
-            }) => rlp::encode(&evm_arithmetization::generation::mpt::AccountRlp {
-                nonce: nonce.into(),
-                balance,
-                code_hash: match code {
-                    Some(Either::Left(Hash { raw_hash })) => raw_hash.into(),
-                    Some(Either::Right(Code { code })) => {
-                        let hash = crate::hash(&code);
-                        self.frontend.code.insert(code);
-                        hash
-                    }
-                    None => crate::hash(&[]),
-                },
-                storage_root: {
-                    let storage = node2trie(match storage {
-                        Some(it) => *it,
-                        None => Node::Empty,
-                    })
-                    .context(format!(
-                        "couldn't convert account storage to trie at path {:?}",
-                        self.path
-                    ))?;
-                    let storage_root = storage.hash();
-                    self.frontend.storage.insert(
-                        ethereum_types::H256::from_slice(&nibbles2nibbles(key.clone()).bytes_be()),
-                        storage,
-                    );
-                    storage_root
-                },
-            }),
-        };
-        // TODO(0xaatif): do consistency checks here.
-        self.frontend
-            .state
-            .insert(nibbles2nibbles(key), ValOrHash::Val(value.to_vec()))?;
-        Ok(())
-    }
-}
-
-/// # Panics
-/// - internally in [`mpt_trie`].
-fn node2trie(node: Node) -> anyhow::Result<HashedPartialTrie> {
-    let mut trie = HashedPartialTrie::default();
-    for (k, v) in iter_leaves(node) {
-        trie.insert(
-            nibbles2nibbles(k),
-            match v {
-                IterLeaf::Hash(Hash { raw_hash }) => ValOrHash::Hash(raw_hash.into()),
-                IterLeaf::Value(Value { raw_value }) => {
-                    ValOrHash::Val(rlp::encode(raw_value.as_vec()).to_vec())
-                }
-                IterLeaf::Empty => continue,
-                IterLeaf::Account => bail!("unexpected Account node in storage trie"),
-                IterLeaf::Code => bail!("unexpected Code node in storage trie"),
-            },
-        )?;
-    }
-    Ok(trie)
-}
-
-/// # Panics
-/// - If `ours` is too deep.
-fn nibbles2nibbles(ours: Vec<U4>) -> mpt_trie::nibbles::Nibbles {
-    let mut theirs = mpt_trie::nibbles::Nibbles::default();
-    for it in ours {
-        theirs.push_nibble_back(it as u8)
-    }
-    theirs
-}
-
-/// Leaf in a [`Node`] tree, see [`iter_leaves`].
-enum IterLeaf {
-    Hash(Hash),
-    Value(Value),
-    Empty,
-    // we don't attach information to these variants because they're error cases
-    Account,
-    Code,
-}
-
-/// Simple, inefficient visitor of all leaves of the [`Node`] tree.
-#[allow(clippy::type_complexity)]
-fn iter_leaves(node: Node) -> Box<dyn Iterator<Item = (Vec<U4>, IterLeaf)>> {
-    match node {
-        Node::Hash(it) => Box::new(iter::once((vec![], IterLeaf::Hash(it)))),
-        Node::Leaf(Leaf { key, value }) => match value {
-            Either::Left(it) => Box::new(iter::once((key.into(), IterLeaf::Value(it)))),
-            Either::Right(_) => Box::new(iter::once((key.into(), IterLeaf::Account))),
-        },
-        Node::Extension(Extension {
-            key: parent_key,
-            child,
-        }) => Box::new(iter_leaves(*child).map(move |(child_key, v)| {
-            (parent_key.clone().into_iter().chain(child_key).collect(), v)
-        })),
-        Node::Branch(Branch { children }) => Box::new(
-            children
-                .into_iter()
-                .enumerate()
-                .flat_map(|(ix, child)| {
-                    child.map(|it| (U4::new(ix.try_into().unwrap()).unwrap(), *it))
-                })
-                .flat_map(|(parent_key, child)| {
-                    iter_leaves(child).map(move |(mut child_key, v)| {
-                        child_key.insert(0, parent_key);
-                        (child_key, v)
-                    })
-                }),
-        ),
-        Node::Code(_) => Box::new(iter::once((vec![], IterLeaf::Code))),
-        Node::Empty => Box::new(iter::once((vec![], IterLeaf::Empty))),
-    }
-}
-
 #[test]
 fn test() {
+    use mpt_trie::partial_trie::PartialTrie as _;
     for (ix, case) in
         serde_json::from_str::<Vec<super::Case>>(include_str!("test_cases/zero_jerigon.json"))
             .unwrap()
@@ -438,17 +377,13 @@ fn test() {
         println!("case {}", ix);
         let instructions = crate::wire::parse(&case.bytes).unwrap();
         let frontend = frontend(instructions).unwrap();
-        assert_eq!(case.expected_state_root, frontend.state.hash());
+        assert_eq!(case.expected_state_root, frontend.state.root());
 
-        for (address, data) in frontend.state.items() {
-            if let ValOrHash::Val(bytes) = data {
-                let address = ethereum_types::H256::from_slice(&address.bytes_be());
-                let account =
-                    rlp::decode::<evm_arithmetization::generation::mpt::AccountRlp>(&bytes)
-                        .unwrap();
-                let storage_root = account.storage_root;
-                if storage_root != crate::processed_block_trace::EMPTY_TRIE_HASH {
-                    assert!(frontend.storage.contains_key(&address))
+        for (path, hash_or_acct) in frontend.state {
+            if let Either::Right(acct) = hash_or_acct {
+                if acct.storage_root != mpt_trie::partial_trie::HashedPartialTrie::default().hash()
+                {
+                    assert!(frontend.storage.contains_key(&path))
                 }
             }
         }

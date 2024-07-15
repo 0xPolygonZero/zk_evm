@@ -20,7 +20,7 @@ impl TriePath {
     pub fn new(components: impl IntoIterator<Item = U4>) -> anyhow::Result<Self> {
         Ok(TriePath(CopyVec::try_from_iter(components)?))
     }
-    fn into_hash_left_padded(mut self) -> H256 {
+    pub fn into_hash_left_padded(mut self) -> H256 {
         for _ in 0..self.0.spare_capacity_mut().len() {
             self.0.insert(0, U4::Dec00)
         }
@@ -80,33 +80,26 @@ impl<T> TypedMpt<T> {
             map: BTreeMap::new(),
         }
     }
-    pub fn remove(&mut self, path: TriePath) -> Option<Either<H256, T>> {
-        self.map.remove(&path)
-    }
+    // pub fn remove(&mut self, path: TriePath) -> Option<Either<H256, T>> {
+    //     self.map.remove(&path)
+    // }
     pub fn insert(&mut self, path: TriePath, value: T) -> Option<Either<H256, T>> {
         self.map.insert(path, Either::Right(value))
     }
     pub fn insert_branch(&mut self, path: TriePath, hash: H256) -> Option<Either<H256, T>> {
         self.map.insert(path, Either::Left(hash))
     }
-    pub fn get(&self, path: TriePath) -> Option<Either<H256, &T>> {
-        self.map.get(&path).map(|it| it.as_ref().map_left(|it| *it))
-    }
+    // pub fn get(&self, path: TriePath) -> Option<Either<H256, &T>> {
+    //     self.map.get(&path).map(|it| it.as_ref().map_left(|it| *it))
+    // }
     pub fn root(&self) -> H256
     where
         T: rlp::Encodable,
     {
         self.as_hashed_partial_trie().hash()
     }
-    pub fn values(&self) -> impl Iterator<Item = (TriePath, &T)> {
-        self.map
-            .iter()
-            .filter_map(|(k, v)| Some((*k, v.as_ref().right()?)))
-    }
-    pub fn iter(&self) -> impl Iterator<Item = (TriePath, Either<H256, &T>)> {
-        self.map
-            .iter()
-            .map(|(k, v)| (*k, v.as_ref().map_left(|h| *h)))
+    pub fn iter(&self) -> impl Iterator<Item = (&TriePath, &Either<H256, T>)> {
+        self.map.iter()
     }
     pub fn as_hashed_partial_trie(&self) -> mpt_trie::partial_trie::HashedPartialTrie
     where
@@ -126,12 +119,25 @@ impl<T> TypedMpt<T> {
 }
 
 impl<'a, T> IntoIterator for &'a TypedMpt<T> {
-    type Item = (TriePath, Either<H256, &'a T>);
+    type Item = (&'a TriePath, &'a Either<H256, T>);
 
-    type IntoIter = Box<dyn Iterator<Item = (TriePath, Either<H256, &'a T>)> + 'a>;
+    type IntoIter = Box<dyn Iterator<Item = (&'a TriePath, &'a Either<H256, T>)> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         Box::new(self.iter())
+    }
+}
+
+impl<T> IntoIterator for TypedMpt<T>
+where
+    T: 'static,
+{
+    type Item = (TriePath, Either<H256, T>);
+
+    type IntoIter = Box<dyn Iterator<Item = (TriePath, Either<H256, T>)>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(self.map.into_iter())
     }
 }
 
@@ -188,7 +194,7 @@ impl StateTrie {
     ) -> Option<Either<H256, AccountRlp>> {
         self.insert_by_path(TriePath::from_address(address), account)
     }
-    fn insert_by_path(
+    pub fn insert_by_path(
         &mut self,
         path: TriePath,
         account: AccountRlp,
@@ -211,13 +217,21 @@ impl StateTrie {
     pub fn root(&self) -> H256 {
         self.typed.root()
     }
-    pub fn iter(&self) -> impl Iterator<Item = (TriePath, Either<H256, AccountRlp>)> + '_ {
-        self.typed
-            .iter()
-            .map(|(path, eith)| (path, eith.map_right(|acct| *acct)))
+    pub fn iter(&self) -> impl Iterator<Item = (&TriePath, &Either<H256, AccountRlp>)> {
+        self.typed.iter()
     }
     pub fn as_hashed_partial_trie(&self) -> mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
+    }
+}
+
+impl IntoIterator for StateTrie {
+    type Item = (TriePath, Either<H256, AccountRlp>);
+
+    type IntoIter = Box<dyn Iterator<Item = (TriePath, Either<H256, AccountRlp>)>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.typed.into_iter()
     }
 }
 
