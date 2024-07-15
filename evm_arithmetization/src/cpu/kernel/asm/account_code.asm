@@ -165,9 +165,9 @@ global poseidon_hash_code_unpadded:
     PUSH 56
     DUP4 %increment
     // stack: curr_len, 56, padding_addr, addr, len, retdest
-    MOD
-    // stack: remainder, padding_addr, addr, len, retdest
     PUSH 56 SUB
+    // stack: 56 - curr_len, 56, padding_addr, addr, len, retdest
+    MOD
     // stack: padding_len, padding_addr, addr, len, retdest
     SWAP3 DUP4
     // stack: padding_len, len, padding_addr, addr, padding_len, retdest
@@ -188,7 +188,7 @@ after_padding:
     // stack: last_byte_addr, addr, total_code_len, retdest
     DUP1 MLOAD_GENERAL
     // stack: last_byte, last_byte_addr, addr, total_code_len, retdest
-    PUSH 0x80 XOR
+    PUSH 0x80 ADD
     // stack: last_byte_updated, last_byte_addr, addr, total_code_len, retdest
     MSTORE_GENERAL
     // stack: addr, total_code_len, retdest
