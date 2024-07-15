@@ -1,10 +1,13 @@
 [package]
 name = "zk_evm_proc_macro"
+description = "Procedural Macros for Polygon Zero zkEVM"
+authors = ["Polygon Zero"]
 version = "0.1.0"
-publish = false
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
 
 [lib]
 proc-macro = true
