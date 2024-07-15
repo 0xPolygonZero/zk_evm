@@ -1,7 +1,9 @@
 use ethereum_types::{BigEndianHash, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
+use smt_trie::code::poseidon_hash_padded_byte_vec;
+use smt_trie::utils::hashout2u;
 
 use super::state::KERNEL_CONTEXT;
 use super::transition::Transition;
@@ -14,10 +16,12 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::assembler::BYTES_PER_OFFSET;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::membus::NUM_CHANNELS;
 use crate::cpu::simple_logic::eq_iszero::generate_pinv_diff;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::extension_tower::BN_BASE;
 use crate::memory::segments::Segment;
+use crate::poseidon::poseidon_stark::{PoseidonGeneralOp, PoseidonOp, PoseidonSimpleOp};
 use crate::util::u256_to_usize;
 use crate::witness::errors::MemoryError::VirtTooLarge;
 use crate::witness::errors::ProgramError;
@@ -40,6 +44,8 @@ pub(crate) enum Operation {
     BinaryArithmetic(arithmetic::BinaryOperator),
     TernaryArithmetic(arithmetic::TernaryOperator),
     KeccakGeneral,
+    Poseidon,
+    PoseidonGeneral,
     ProverInput,
     Pop,
     Jump,
@@ -66,7 +72,7 @@ pub(crate) const CONTEXT_SCALING_FACTOR: usize = 64;
 /// operation. Generates a new logic operation and adds it to the vector of
 /// operation in `LogicStark`. Adds three memory read operations to
 /// `MemoryStark`: for the two inputs and the output.
-pub(crate) fn generate_binary_logic_op<F: Field, T: Transition<F>>(
+pub(crate) fn generate_binary_logic_op<F: RichField, T: Transition<F>>(
     op: logic::Op,
     state: &mut T,
     mut row: CpuColumnsView<F>,
@@ -84,7 +90,7 @@ pub(crate) fn generate_binary_logic_op<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_binary_arithmetic_op<F: Field, T: Transition<F>>(
+pub(crate) fn generate_binary_arithmetic_op<F: RichField, T: Transition<F>>(
     operator: arithmetic::BinaryOperator,
     state: &mut T,
     mut row: CpuColumnsView<F>,
@@ -115,7 +121,7 @@ pub(crate) fn generate_binary_arithmetic_op<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_ternary_arithmetic_op<F: Field, T: Transition<F>>(
+pub(crate) fn generate_ternary_arithmetic_op<F: RichField, T: Transition<F>>(
     operator: arithmetic::TernaryOperator,
     state: &mut T,
     mut row: CpuColumnsView<F>,
@@ -134,7 +140,7 @@ pub(crate) fn generate_ternary_arithmetic_op<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_keccak_general<F: Field, T: Transition<F>>(
+pub(crate) fn generate_keccak_general<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -167,7 +173,84 @@ pub(crate) fn generate_keccak_general<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_prover_input<F: Field, T: Transition<F>>(
+/// Pops 3 elements `x,y,z` from the stack, and returns `Poseidon(x || y ||
+/// z)[0..4]`, where values are split into 64-bit limbs, and `z` is used as the
+/// capacity. Limbs are range-checked to be in canonical form in the
+/// PoseidonStark.
+pub(crate) fn generate_poseidon<F: RichField, T: Transition<F>>(
+    state: &mut T,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    let generation_state = state.get_mut_generation_state();
+    let [(x, _), (y, log_in1), (z, log_in2)] =
+        stack_pop_with_log_and_fill::<3, _>(generation_state, &mut row)?;
+    let arr = [
+        x.0[0], x.0[1], x.0[2], x.0[3], y.0[0], y.0[1], y.0[2], y.0[3], z.0[0], z.0[1], z.0[2],
+        z.0[3],
+    ]
+    .map(F::from_canonical_u64);
+    let hash = F::poseidon(arr);
+    let hash = U256(std::array::from_fn(|i| hash[i].to_canonical_u64()));
+    log::debug!("Poseidon hashing {:?} -> {}", arr, hash);
+    push_no_write(generation_state, hash);
+
+    state.push_poseidon(PoseidonOp::PoseidonSimpleOp(PoseidonSimpleOp(arr)));
+
+    state.push_memory(log_in1);
+    state.push_memory(log_in2);
+    state.push_cpu(row);
+    Ok(())
+}
+
+pub(crate) fn generate_poseidon_general<F: RichField, T: Transition<F>>(
+    state: &mut T,
+    mut row: CpuColumnsView<F>,
+) -> Result<(), ProgramError> {
+    let clock = state.get_clock();
+    let generation_state = state.get_mut_generation_state();
+    let [(addr, _), (len, log_in1)] =
+        stack_pop_with_log_and_fill::<2, _>(generation_state, &mut row)?;
+    let len = u256_to_usize(len)?;
+
+    let base_address = MemoryAddress::new_bundle(addr)?;
+    let input = (0..len)
+        .map(|i| {
+            let address = MemoryAddress {
+                virt: base_address.virt.saturating_add(i),
+                ..base_address
+            };
+            let val = generation_state.memory.get_with_init(address);
+            generation_state.traces.memory_ops.push(MemoryOp::new(
+                MemoryChannel::Code,
+                clock,
+                address,
+                MemoryOpKind::Read,
+                val.0[0].into(),
+            ));
+
+            val.0[0] as u8
+        })
+        .collect_vec();
+
+    let poseidon_op = PoseidonOp::PoseidonGeneralOp(PoseidonGeneralOp {
+        base_address,
+        timestamp: clock * NUM_CHANNELS,
+        input: input.clone(),
+        len: input.len(),
+    });
+
+    let hash = hashout2u(poseidon_hash_padded_byte_vec(input.clone()));
+
+    push_no_write(generation_state, hash);
+
+    state.push_poseidon(poseidon_op);
+
+    state.push_memory(log_in1);
+    state.push_cpu(row);
+    Ok(())
+}
+
+pub(crate) fn generate_prover_input<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -195,7 +278,7 @@ pub(crate) fn generate_prover_input<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_pop<F: Field, T: Transition<F>>(
+pub(crate) fn generate_pop<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -218,7 +301,7 @@ pub(crate) fn generate_pop<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_pc<F: Field, T: Transition<F>>(
+pub(crate) fn generate_pc<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -231,7 +314,7 @@ pub(crate) fn generate_pc<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_jumpdest<F: Field, T: Transition<F>>(
+pub(crate) fn generate_jumpdest<F: RichField, T: Transition<F>>(
     state: &mut T,
     row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -239,7 +322,7 @@ pub(crate) fn generate_jumpdest<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_get_context<F: Field, T: Transition<F>>(
+pub(crate) fn generate_get_context<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -275,7 +358,7 @@ pub(crate) fn generate_get_context<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
+pub(crate) fn generate_set_context<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -355,7 +438,7 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_push<F: Field, T: Transition<F>>(
+pub(crate) fn generate_push<F: RichField, T: Transition<F>>(
     n: u8,
     state: &mut T,
     mut row: CpuColumnsView<F>,
@@ -406,7 +489,7 @@ pub(crate) fn generate_push<F: Field, T: Transition<F>>(
 // - Update `stack_top` with `val` and add 1 to `stack_len`
 // Since the write must happen before the read, the normal way of assigning
 // GP channels doesn't work and we must handle them manually.
-pub(crate) fn generate_dup<F: Field, T: Transition<F>>(
+pub(crate) fn generate_dup<F: RichField, T: Transition<F>>(
     n: u8,
     state: &mut T,
     mut row: CpuColumnsView<F>,
@@ -474,7 +557,7 @@ pub(crate) fn generate_dup<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_swap<F: Field, T: Transition<F>>(
+pub(crate) fn generate_swap<F: RichField, T: Transition<F>>(
     n: u8,
     state: &mut T,
     mut row: CpuColumnsView<F>,
@@ -505,7 +588,7 @@ pub(crate) fn generate_swap<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_not<F: Field, T: Transition<F>>(
+pub(crate) fn generate_not<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -529,7 +612,7 @@ pub(crate) fn generate_not<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_iszero<F: Field, T: Transition<F>>(
+pub(crate) fn generate_iszero<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -548,7 +631,7 @@ pub(crate) fn generate_iszero<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-fn append_shift<F: Field, T: Transition<F>>(
+fn append_shift<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
     is_shl: bool,
@@ -599,7 +682,7 @@ fn append_shift<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_shl<F: Field, T: Transition<F>>(
+pub(crate) fn generate_shl<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -615,7 +698,7 @@ pub(crate) fn generate_shl<F: Field, T: Transition<F>>(
     append_shift(state, row, true, input0, input1, log_in1, result)
 }
 
-pub(crate) fn generate_shr<F: Field, T: Transition<F>>(
+pub(crate) fn generate_shr<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -630,7 +713,7 @@ pub(crate) fn generate_shr<F: Field, T: Transition<F>>(
     append_shift(state, row, false, input0, input1, log_in1, result)
 }
 
-pub(crate) fn generate_syscall<F: Field, T: Transition<F>>(
+pub(crate) fn generate_syscall<F: RichField, T: Transition<F>>(
     opcode: u8,
     stack_values_read: usize,
     stack_len_increased: bool,
@@ -723,7 +806,7 @@ pub(crate) fn generate_syscall<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_eq<F: Field, T: Transition<F>>(
+pub(crate) fn generate_eq<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -741,7 +824,7 @@ pub(crate) fn generate_eq<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_exit_kernel<F: Field, T: Transition<F>>(
+pub(crate) fn generate_exit_kernel<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -770,7 +853,7 @@ pub(crate) fn generate_exit_kernel<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_mload_general<F: Field, T: Transition<F>>(
+pub(crate) fn generate_mload_general<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -803,7 +886,7 @@ pub(crate) fn generate_mload_general<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_mload_32bytes<F: Field, T: Transition<F>>(
+pub(crate) fn generate_mload_32bytes<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -843,7 +926,7 @@ pub(crate) fn generate_mload_32bytes<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_mstore_general<F: Field, T: Transition<F>>(
+pub(crate) fn generate_mstore_general<F: RichField, T: Transition<F>>(
     state: &mut T,
     mut row: CpuColumnsView<F>,
 ) -> Result<(), ProgramError> {
@@ -873,7 +956,7 @@ pub(crate) fn generate_mstore_general<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_mstore_32bytes<F: Field, T: Transition<F>>(
+pub(crate) fn generate_mstore_32bytes<F: RichField, T: Transition<F>>(
     n: u8,
     state: &mut T,
     mut row: CpuColumnsView<F>,
@@ -893,7 +976,7 @@ pub(crate) fn generate_mstore_32bytes<F: Field, T: Transition<F>>(
     Ok(())
 }
 
-pub(crate) fn generate_exception<F: Field, T: Transition<F>>(
+pub(crate) fn generate_exception<F: RichField, T: Transition<F>>(
     exc_code: u8,
     state: &mut T,
     mut row: CpuColumnsView<F>,

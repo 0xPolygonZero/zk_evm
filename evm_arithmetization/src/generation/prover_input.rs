@@ -4,10 +4,10 @@ use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
 use anyhow::{bail, Error, Result};
-use ethereum_types::{BigEndianHash, H256, U256, U512};
+use ethereum_types::{U256, U512};
 use itertools::Itertools;
 use num_bigint::BigUint;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
@@ -46,7 +46,7 @@ impl From<Vec<String>> for ProverInputFn {
     }
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     pub(crate) fn prover_input(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[0].as_str() {
             "no_txn" => self.no_txn(),
@@ -172,13 +172,25 @@ impl<F: Field> GenerationState<F> {
         let code = self
             .inputs
             .contract_code
-            .get(&H256::from_uint(&codehash))
+            .get(&codehash)
             .ok_or(ProgramError::ProverInputError(CodeHashNotFound))?;
+        let code_len = code.len();
+
         for &byte in code {
             self.memory.set(address, byte.into());
             address.increment();
         }
-        Ok(code.len().into())
+
+        // Padding
+        self.memory.set(address, 1.into());
+        let mut len = code_len + 1;
+        len = 56 * ((len + 55) / 56);
+        let last_byte_addr = MemoryAddress::new(context, Segment::Code, len - 1);
+        let mut last_byte = u256_to_usize(self.memory.get_with_init(last_byte_addr))?;
+        last_byte |= 0x80;
+        self.memory.set(last_byte_addr, last_byte.into());
+
+        Ok(len.into())
     }
 
     // Bignum modular multiplication.
@@ -551,7 +563,7 @@ impl<F: Field> GenerationState<F> {
     }
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {

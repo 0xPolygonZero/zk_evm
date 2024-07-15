@@ -2,7 +2,7 @@ use anyhow::Result;
 use ethereum_types::U256;
 use once_cell::sync::Lazy;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use crate::cpu::kernel::aggregator::{
     combined_kernel_from_files, KERNEL_FILES, NUMBER_KERNEL_FILES,
@@ -16,7 +16,7 @@ use crate::memory::segments::Segment;
 use crate::witness::memory::MemoryAddress;
 use crate::GenerationInputs;
 
-fn initialize_interpreter<F: Field>(interpreter: &mut Interpreter<F>, gas_limit: U256) {
+fn initialize_interpreter<F: RichField>(interpreter: &mut Interpreter<F>, gas_limit: U256) {
     let gas_limit_address = MemoryAddress {
         context: 0,
         segment: Segment::ContextMetadata.unscale(),

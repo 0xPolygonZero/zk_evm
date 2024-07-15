@@ -174,7 +174,7 @@
 //! ```
 //!
 //! Note that an entire prover state built with wide ranges may be particularly
-//! large (up to ~25 GB), hence serialization methods, while faster than doing
+//! large (up to ~40 GB), hence serialization methods, while faster than doing
 //! another preprocessing, may take some non-negligible time.
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -191,6 +191,7 @@ pub mod keccak;
 pub mod keccak_sponge;
 pub mod logic;
 pub mod memory;
+pub mod poseidon;
 
 // Proving system components
 pub mod all_stark;

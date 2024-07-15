@@ -2,25 +2,25 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
-use ethereum_types::{Address, BigEndianHash, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, eth_to_wei,
-    ger_account_nibbles, init_logger, preinitialized_state_and_storage_tries,
-    update_beacon_roots_account_storage, GLOBAL_EXIT_ROOT_ACCOUNT,
+    eth_to_wei, init_logger, preinitialized_state, preinitialized_state_with_updated_storage,
+    set_account,
 };
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
-use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -38,29 +38,32 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     let sender = hex!("2c7536e3605d9c16a7a3d7b1898e529396a65c23");
     let to = hex!("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0");
 
-    let sender_state_key = keccak(sender);
-    let to_state_key = keccak(to);
-
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
-
     let sender_account_before = AccountRlp {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: keccak([]),
+        ..Default::default()
     };
+
     let to_account_before = AccountRlp::default();
 
-    let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
+    let mut state_smt_before = preinitialized_state();
+    set_account(
+        &mut state_smt_before,
+        H160(sender),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_before,
+        &HashMap::new(),
+    );
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries,
     };
 
     // Generated using a little py-evm script.
@@ -81,21 +84,12 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
 
-    let expected_state_trie_after: HashedPartialTrie = {
-        let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
-
+    let expected_state_smt_after = {
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
         let txdata_gas = 2 * 16;
         let gas_used = 21_000 + txdata_gas;
-
-        update_beacon_roots_account_storage(
-            &mut beacon_roots_account_storage,
-            block_metadata.block_timestamp,
-            block_metadata.parent_beacon_block_root,
-        )?;
-        let beacon_roots_account =
-            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
         let sender_account_after = AccountRlp {
             balance: sender_account_before.balance - value - gas_used * 10,
@@ -107,19 +101,15 @@ fn test_simple_transfer() -> anyhow::Result<()> {
             ..to_account_before
         };
 
-        state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-        state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
+        set_account(
+            &mut smt,
+            H160(sender),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(&mut smt, H160(to), &to_account_after, &HashMap::new());
 
-        state_trie_after.insert(
-            beacon_roots_account_nibbles(),
-            rlp::encode(&beacon_roots_account).to_vec(),
-        )?;
-        state_trie_after.insert(
-            ger_account_nibbles(),
-            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-        )?;
-
-        state_trie_after
+        smt
     };
 
     let receipt_0 = LegacyReceiptRlp {
@@ -140,7 +130,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     .into();
 
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };

@@ -1,82 +1,44 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, BigEndianHash, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_public_values, extract_two_to_one_block_hash,
 };
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::testing_utils::{
+    init_logger, preinitialized_state, preinitialized_state_with_updated_storage,
+};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
-use keccak_hash::keccak;
-use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::poseidon::PoseidonHash;
 use plonky2::plonk::config::{Hasher, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::util::timing::TimingTree;
+use smt_trie::db::MemoryDb;
+use smt_trie::smt::Smt;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
 
-fn eth_to_wei(eth: U256) -> U256 {
-    // 1 ether = 10^18 wei.
-    eth * U256::from(10).pow(18.into())
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
-}
-
-/// Get `GenerationInputs` for a simple token transfer txn, where the block has
-/// the given timestamp.
-fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
+/// Get `GenerationInputs` for an empty block with the given timestamp.
+fn empty_transfer(timestamp: u64) -> anyhow::Result<(GenerationInputs, Smt<MemoryDb>)> {
     init_logger();
 
     let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
-    let sender = hex!("2c7536e3605d9c16a7a3d7b1898e529396a65c23");
-    let to = hex!("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0");
 
-    let sender_state_key = keccak(sender);
-    let to_state_key = keccak(to);
-
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
-
-    let sender_account_before = AccountRlp {
-        nonce: 5.into(),
-        balance: eth_to_wei(100_000.into()),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: keccak([]),
-    };
-    let to_account_before = AccountRlp::default();
-
-    let state_trie_before: HashedPartialTrie = Node::Leaf {
-        nibbles: sender_nibbles,
-        value: rlp::encode(&sender_account_before).to_vec(),
-    }
-    .into();
-    let checkpoint_state_trie_root = state_trie_before.hash();
-    assert_eq!(
-        checkpoint_state_trie_root,
-        hex!("ef46022eafbc33d70e6ea9c6aef1074c1ff7ad36417ffbc64307ad3a8c274b75").into()
-    );
+    let state_smt_before = preinitialized_state();
+    let checkpoint_state_trie_root = H256::from_uint(&hashout2u(state_smt_before.root));
 
     let tries_before = TrieInputs {
-        state_trie: HashedPartialTrie::from(Node::Empty),
+        state_smt: state_smt_before.serialize(),
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries: vec![],
     };
-
-    // Generated using a little py-evm script.
-    let txn = hex!("f861050a8255f094a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0648242421ba02c89eb757d9deeb1f5b3859a9d4d679951ef610ac47ad4608dc142beb1b7e313a05af7e9fbab825455d36c36c7f4cfcafbeafa9a77bdff936b52afb36d4fe4bcdd");
-    let value = U256::from(100u32);
 
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::from(beneficiary),
@@ -92,76 +54,24 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
 
     let contract_code = HashMap::new();
 
-    let expected_state_trie_after: HashedPartialTrie = {
-        let txdata_gas = 2 * 16;
-        let gas_used = 21_000 + txdata_gas;
-
-        let sender_account_after = AccountRlp {
-            balance: sender_account_before.balance - value - gas_used * 10,
-            nonce: sender_account_before.nonce + 1,
-            ..sender_account_before
-        };
-        let to_account_after = AccountRlp {
-            balance: value,
-            ..to_account_before
-        };
-
-        let mut children = core::array::from_fn(|_| Node::Empty.into());
-        children[sender_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: sender_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&sender_account_after).to_vec(),
-        }
-        .into();
-        children[to_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: to_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&to_account_after).to_vec(),
-        }
-        .into();
-        Node::Branch {
-            children,
-            value: vec![],
-        }
-        .into()
-    };
-
-    let receipt_0 = LegacyReceiptRlp {
-        status: true,
-        cum_gas_used: 21032.into(),
-        bloom: vec![0; 256].into(),
-        logs: vec![],
-    };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    )?;
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
-        nibbles: Nibbles::from_str("0x80").unwrap(),
-        value: txn.to_vec(),
-    }
-    .into();
-
-    let _trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
-        transactions_root: transactions_trie.hash(),
-        receipts_root: receipts_trie.hash(),
-    };
+    let expected_smt_after = preinitialized_state_with_updated_storage(&block_metadata, &[]);
 
     let trie_roots_after = TrieRoots {
-        state_root: tries_before.state_trie.hash(),
-        transactions_root: tries_before.transactions_trie.hash(),
-        receipts_root: tries_before.receipts_trie.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_smt_after.root)),
+        transactions_root: HashedPartialTrie::from(Node::Empty).hash(),
+        receipts_root: HashedPartialTrie::from(Node::Empty).hash(),
     };
+
     let inputs = GenerationInputs {
-        tries: tries_before.clone(),
+        tries: tries_before,
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: tries_before.state_trie.hash(),
+        checkpoint_state_trie_root,
         block_metadata,
         ..Default::default()
     };
 
-    Ok(inputs)
+    Ok((inputs, expected_smt_after))
 }
 
 fn get_test_block_proof(
@@ -170,7 +80,7 @@ fn get_test_block_proof(
     all_stark: &AllStark<GoldilocksField, 2>,
     config: &StarkConfig,
 ) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
-    let inputs0 = empty_transfer(timestamp)?;
+    let (inputs0, state_smt) = empty_transfer(timestamp)?;
     let inputs = inputs0.clone();
     let dummy0 = GenerationInputs {
         txn_number_before: inputs.txn_number_before,
@@ -180,14 +90,13 @@ fn get_test_block_proof(
         global_exit_roots: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
-            state_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.state_root)),
+            state_smt: state_smt.serialize(),
             transactions_trie: HashedPartialTrie::from(Node::Hash(
                 inputs.trie_roots_after.transactions_root,
             )),
             receipts_trie: HashedPartialTrie::from(Node::Hash(
                 inputs.trie_roots_after.receipts_root,
             )),
-            storage_tries: vec![],
         },
         trie_roots_after: inputs.trie_roots_after,
         checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
@@ -244,7 +153,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     let config = StarkConfig::standard_fast_config();
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
+        &[16..17, 8..9, 13..14, 14..15, 10..11, 12..13, 17..18, 6..7],
         &config,
     );
 

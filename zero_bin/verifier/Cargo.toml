@@ -12,7 +12,8 @@ dotenvy = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
-proof_gen = { workspace = true }
 
 # Local dependencies
-zero_bin_common = { path = "../common" }
+# TODO: update deps to take local versions again
+proof_gen = { git = "https://github.com/0xPolygonZero/zk_evm", branch = "develop" }
+zero_bin_common ={ path = "../common" }

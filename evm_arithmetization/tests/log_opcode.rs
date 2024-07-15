@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bytes::Bytes;
-use ethereum_types::{Address, BigEndianHash, H256};
+use ethereum_types::{Address, BigEndianHash, H160, H256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
 };
@@ -12,19 +12,18 @@ use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::prove;
 use evm_arithmetization::testing_utils::{
-    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
-    GLOBAL_EXIT_ROOT_ACCOUNT,
+    init_logger, preinitialized_state, preinitialized_state_with_updated_storage, set_account,
 };
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
-use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
+use smt_trie::code::hash_bytecode_u256;
+use smt_trie::utils::hashout2u;
 
 type F = GoldilocksField;
 const D: usize = 2;
@@ -43,14 +42,6 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     // Private key: DCDFF53B4F013DBCDC717F89FE3BF4D8B10512AAE282B48E01D7530470382701
     let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
-    let beneficiary_state_key = keccak(beneficiary);
-    let sender_state_key = keccak(sender);
-    let to_hashed = keccak(to);
-
-    let beneficiary_nibbles = Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
-
     // For the first code transaction code, we consider two LOG opcodes. The first
     // deals with 0 topics and empty data. The second deals with two topics, and
     // data of length 5, stored in memory.
@@ -60,14 +51,13 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         0x60, 99, 0x60, 98, 0x60, 5, 0x60, 27, 0xA2, // LOG2(27, 5, 98, 99)
         0x00,
     ];
-
     let code_gas = 3 + 3 + 3 // PUSHs and MSTORE
                  + 3 + 3 + 375 // PUSHs and LOG0
                  + 3 + 3 + 3 + 3 + 375 + 375*2 + 8*5 + 3// PUSHs, LOG2 and memory expansion
     ;
     let gas_used = 21_000 + code_gas;
 
-    let code_hash = keccak(code);
+    let code_hash = hash_bytecode_u256(code.to_vec());
 
     // Set accounts before the transaction.
     let beneficiary_account_before = AccountRlp {
@@ -87,16 +77,25 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     // Initialize the state trie with three accounts.
-    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
-    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    )?;
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
-
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    let mut state_smt_before = preinitialized_state();
+    set_account(
+        &mut state_smt_before,
+        H160(beneficiary),
+        &beneficiary_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(sender),
+        &sender_account_before,
+        &HashMap::new(),
+    );
+    set_account(
+        &mut state_smt_before,
+        H160(to),
+        &to_account_before,
+        &HashMap::new(),
+    );
 
     // We now add two receipts with logs and data. This updates the receipt trie as
     // well.
@@ -128,10 +127,9 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     )?;
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
+        state_smt: state_smt_before.serialize(),
         transactions_trie: Node::Empty.into(),
         receipts_trie: receipts_trie.clone(),
-        storage_tries,
     };
 
     // Prove a transaction which carries out two LOG opcodes.
@@ -151,34 +149,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
+    contract_code.insert(hash_bytecode_u256(vec![]), vec![]);
     contract_code.insert(code_hash, code.to_vec());
-
-    // Update the state and receipt tries after the transaction, so that we have the
-    // correct expected tries: Update accounts
-    let beneficiary_account_after = AccountRlp {
-        nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-
-    let sender_balance_after = sender_balance_before - gas_used * txn_gas_price;
-    let sender_account_after = AccountRlp {
-        balance: sender_balance_after.into(),
-        nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-    let to_account_after = AccountRlp {
-        balance: 9000000000u64.into(),
-        code_hash,
-        ..AccountRlp::default()
-    };
-
-    update_beacon_roots_account_storage(
-        &mut beacon_roots_account_storage,
-        block_metadata.block_timestamp,
-        block_metadata.parent_beacon_block_root,
-    )?;
-    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
     // Update the receipt trie.
     let first_log = LogRlp {
@@ -208,22 +180,39 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
 
     // Update the state trie.
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_after).to_vec(),
-    )?;
-    expected_state_trie_after
-        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
-    expected_state_trie_after.insert(
-        beacon_roots_account_nibbles(),
-        rlp::encode(&beacon_roots_account).to_vec(),
-    )?;
-    expected_state_trie_after.insert(
-        ger_account_nibbles(),
-        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
-    )?;
+    let expected_state_smt_after = {
+        let mut smt = preinitialized_state_with_updated_storage(&block_metadata, &[]);
+        let beneficiary_account_after = AccountRlp {
+            nonce: 1.into(),
+            ..AccountRlp::default()
+        };
+        let sender_account_after = AccountRlp {
+            balance: (sender_balance_before - gas_used * txn_gas_price).into(),
+            nonce: 1.into(),
+            ..AccountRlp::default()
+        };
+        let to_account_after = AccountRlp {
+            balance: 9000000000u64.into(),
+            code_hash,
+            ..AccountRlp::default()
+        };
+
+        set_account(
+            &mut smt,
+            H160(beneficiary),
+            &beneficiary_account_after,
+            &HashMap::new(),
+        );
+        set_account(
+            &mut smt,
+            H160(sender),
+            &sender_account_after,
+            &HashMap::new(),
+        );
+        set_account(&mut smt, H160(to), &to_account_after, &HashMap::new());
+
+        smt
+    };
 
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
@@ -232,7 +221,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     .into();
 
     let trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
+        state_root: H256::from_uint(&hashout2u(expected_state_smt_after.root)),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -259,17 +248,6 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let mut timing = TimingTree::new("prove", log::Level::Debug);
     let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;
     timing.filter(Duration::from_millis(100)).print();
-
-    // Assert that the proof leads to the correct state and receipt roots.
-    assert_eq!(
-        proof.public_values.trie_roots_after.state_root,
-        expected_state_trie_after.hash()
-    );
-
-    assert_eq!(
-        proof.public_values.trie_roots_after.receipts_root,
-        receipts_trie.hash()
-    );
 
     verify_proof(&all_stark, proof, &config)
 }

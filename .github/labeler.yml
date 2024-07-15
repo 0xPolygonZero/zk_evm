@@ -3,6 +3,11 @@
 - changed-files:
   - any-glob-to-any-file: mpt_trie/**
 
+# Add 'crate: smt_trie' label to any changes within 'smt_trie' folder.
+'crate: smt_trie':
+- changed-files:
+  - any-glob-to-any-file: smt_trie/**
+
 # Add 'crate: evm_arithmetization' label to any changes within 'evm_arithmetization' folder.
 'crate: evm_arithmetization':
 - changed-files:
