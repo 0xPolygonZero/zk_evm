@@ -168,9 +168,8 @@ after_constructor:
     // Store the code hash of the new contract.
     %returndatasize
     PUSH @SEGMENT_RETURNDATA GET_CONTEXT %build_address_no_offset
-    // stack: addr, len
-    PROVER_INPUT(poseidon_code) // TODO: FIX THIS!
-    %stack (codehash, addr, len) -> (codehash)
+    // stack: addr, len, leftover_gas, success, address, kexit_info
+    %poseidon_hash_code_unpadded
     // stack: codehash, leftover_gas, success, address, kexit_info
     %observe_new_contract
     DUP4
