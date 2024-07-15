@@ -39,6 +39,8 @@ use crate::witness::state::RegistersState;
 pub struct GenerationSegmentData {
     /// Indicates whether this corresponds to a dummy segment.
     pub(crate) is_dummy: bool,
+    /// Indicates whether we should set the preinitialized trie data segment.
+    pub(crate) set_preinit: bool,
     /// Indicates the position of this segment in a sequence of
     /// executions for a larger payload.
     pub(crate) segment_index: usize,
@@ -494,6 +496,7 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 #[allow(clippy::unwrap_or_default)]
 fn build_segment_data<F: RichField>(
     segment_index: usize,
+    set_preinit: bool,
     registers_before: Option<RegistersState>,
     registers_after: Option<RegistersState>,
     memory: Option<MemoryState>,
@@ -501,6 +504,7 @@ fn build_segment_data<F: RichField>(
 ) -> GenerationSegmentData {
     GenerationSegmentData {
         is_dummy: false,
+        set_preinit,
         segment_index,
         registers_before: registers_before.unwrap_or(RegistersState::new()),
         registers_after: registers_after.unwrap_or(RegistersState::new()),
@@ -576,7 +580,7 @@ pub(crate) fn generate_next_segment<F: RichField>(
         interpreter.generation_state.memory = partial.memory.clone();
         partial
     } else {
-        build_segment_data(0, None, None, None, &interpreter)
+        build_segment_data(0, false, None, None, None, &interpreter)
     };
 
     let segment_index = segment_data.segment_index;
@@ -591,6 +595,7 @@ pub(crate) fn generate_next_segment<F: RichField>(
 
         let partial_segment_data = Some(build_segment_data(
             segment_index + 1,
+            interpreter.generation_state.set_preinit || segment_data.set_preinit,
             Some(updated_registers),
             Some(updated_registers),
             mem_after,
@@ -621,7 +626,7 @@ pub fn generate_all_data_segments<F: RichField>(
 
     let mut segment_index = 0;
 
-    let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
+    let mut segment_data = build_segment_data(segment_index, false, None, None, None, &interpreter);
 
     while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
         let (updated_registers, mem_after) =
@@ -635,6 +640,7 @@ pub fn generate_all_data_segments<F: RichField>(
 
         segment_data = build_segment_data(
             segment_index,
+            interpreter.generation_state.set_preinit,
             Some(updated_registers),
             Some(updated_registers),
             mem_after,
@@ -737,7 +743,8 @@ pub mod testing {
 
         let mut segment_index = 0;
 
-        let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
+        let mut segment_data =
+            build_segment_data(segment_index, false, None, None, None, &interpreter);
 
         while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
             segment_index += 1;
@@ -747,6 +754,7 @@ pub mod testing {
 
             segment_data = build_segment_data(
                 segment_index,
+                interpreter.generation_state.set_preinit,
                 Some(updated_registers),
                 Some(updated_registers),
                 mem_after,

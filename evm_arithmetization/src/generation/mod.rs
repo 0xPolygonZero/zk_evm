@@ -411,6 +411,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     // previous segment execution, if any.
     let GenerationSegmentData {
         is_dummy,
+        set_preinit,
         segment_index,
         max_cpu_len_log,
         memory,
@@ -418,6 +419,10 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         registers_after,
         extra_data,
     } = segment_data;
+
+    if segment_data.set_preinit {
+        state.memory.preinitialized_segments = segment_data.memory.preinitialized_segments.clone();
+    }
 
     for &(address, val) in &actual_mem_before {
         state.memory.set(address, val);
