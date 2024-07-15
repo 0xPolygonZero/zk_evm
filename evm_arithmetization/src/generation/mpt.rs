@@ -15,7 +15,7 @@ use crate::util::h2u;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
-#[derive(RlpEncodable, RlpDecodable, Debug)]
+#[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AccountRlp {
     pub nonce: U256,
     pub balance: U256,

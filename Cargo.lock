@@ -1415,6 +1415,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9885fa71e26b8ab7855e2ec7cae6e9b380edff76cd052e07c683a0319d51b3a2"
 
 [[package]]
+name = "copyvec"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d540a4ee3e6ea3547a6b492c5e76a4b9086e6b41178061e03ca82fc385912b1f"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4951,6 +4957,7 @@ dependencies = [
  "bytes",
  "ciborium",
  "ciborium-io",
+ "copyvec",
  "criterion",
  "either",
  "enum-as-inner",

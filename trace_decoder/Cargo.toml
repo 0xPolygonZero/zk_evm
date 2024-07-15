@@ -16,6 +16,7 @@ bitvec = { workspace = true }
 bytes = { workspace = true }
 ciborium = { workspace = true }
 ciborium-io = { workspace = true }
+copyvec = "0.2.0"
 either = { workspace = true }
 enum-as-inner = { workspace = true }
 ethereum-types = { workspace = true }

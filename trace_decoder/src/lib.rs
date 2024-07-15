@@ -91,6 +91,7 @@ mod type1;
 #[cfg(test)]
 #[allow(dead_code)]
 mod type2;
+mod typed_mpt;
 mod wire;
 
 use std::collections::HashMap;
