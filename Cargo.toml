@@ -130,4 +130,4 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
 trybuild = "1.0"
-zk_evm_proc_macro = { path = "proc_macro" }
+zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
