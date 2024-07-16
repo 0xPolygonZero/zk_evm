@@ -78,7 +78,7 @@ fn test_state_trie(state_trie: Node, k: Nibbles, mut account: AccountRlp) -> Res
     assert_eq!(k.count, 64);
 
     // Ignore any storage_root; see documentation note.
-    account.storage_root = Node::from(Node::Empty).hash();
+    account.storage_root = Node::Empty.hash();
 
     let trie_inputs = TrieInputs {
         state_trie: state_trie.clone().freeze(),

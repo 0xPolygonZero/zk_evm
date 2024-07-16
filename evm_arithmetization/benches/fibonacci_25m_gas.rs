@@ -72,7 +72,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     ];
     let code_hash = keccak(code);
 
-    let empty_trie_root = Node::from(Node::Empty).hash();
+    let empty_trie_root = Node::Empty.hash();
 
     let sender_account_before = AccountRlp {
         nonce: 169.into(),
@@ -135,7 +135,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     };
     let to_account_after = to_account_before;
 
-    let mut expected_state_trie_after = Node::from(Node::Empty);
+    let mut expected_state_trie_after = Node::Empty;
     expected_state_trie_after
         .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
@@ -161,7 +161,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),

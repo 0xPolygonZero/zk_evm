@@ -18,7 +18,7 @@ fn test_account(balance: U256) -> AccountRlp {
     AccountRlp {
         nonce: U256::from(1111),
         balance,
-        storage_root: Node::from(Node::Empty).hash(),
+        storage_root: Node::Empty.hash(),
         code_hash: H256::from_uint(&U256::from(8888)),
     }
 }

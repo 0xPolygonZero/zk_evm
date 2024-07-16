@@ -50,7 +50,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     let sender_account_before = AccountRlp {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
-        storage_root: Node::from(Node::Empty).hash(),
+        storage_root: Node::Empty.hash(),
         code_hash: keccak([]),
     };
     let to_account_before = AccountRlp::default();
@@ -122,7 +122,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),

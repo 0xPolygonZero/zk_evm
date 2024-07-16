@@ -46,7 +46,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     let sender_account_before = AccountRlp {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
-        storage_root: Node::from(Node::Empty).hash(),
+        storage_root: Node::Empty.hash(),
         code_hash: keccak([]),
     };
     let to_account_before = AccountRlp::default();
@@ -86,7 +86,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     contract_code.insert(keccak(vec![]), vec![]);
 
     let expected_state_trie_after: Node = {
-        let mut state_trie_after = Node::from(Node::Empty);
+        let mut state_trie_after = Node::Empty;
 
         let txdata_gas = 2 * 16;
         let gas_used = 21_000 + txdata_gas;
@@ -130,7 +130,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
@@ -152,7 +152,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
         tries: tries_before,
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

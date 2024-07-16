@@ -116,7 +116,7 @@ fn test_erc20() -> anyhow::Result<()> {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let mut state_trie_after = Node::from(Node::Empty);
+        let mut state_trie_after = Node::Empty;
         let sender_account = sender_account();
         let sender_account_after = AccountRlp {
             nonce: sender_account.nonce + 1,
@@ -167,7 +167,7 @@ fn test_erc20() -> anyhow::Result<()> {
                 .into(),
         }],
     };
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(Nibbles::from_str("0x80").unwrap(), receipt_0.encode(2))?;
     let transactions_trie: Node = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
@@ -186,7 +186,7 @@ fn test_erc20() -> anyhow::Result<()> {
         tries: tries_before,
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

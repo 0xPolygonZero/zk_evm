@@ -38,8 +38,8 @@ fn test_global_exit_root() -> anyhow::Result<()> {
     let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     let mut ger_account_storage = storage_tries[1].1.clone();
-    let transactions_trie = Node::from(Node::Empty);
-    let receipts_trie = Node::from(Node::Empty);
+    let transactions_trie = Node::Empty;
+    let receipts_trie = Node::Empty;
 
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
@@ -47,7 +47,7 @@ fn test_global_exit_root() -> anyhow::Result<()> {
     let global_exit_roots = vec![(U256(random()), H256(random()))];
 
     let state_trie_after = {
-        let mut trie = Node::from(Node::Empty);
+        let mut trie = Node::Empty;
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
@@ -90,7 +90,7 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         },
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

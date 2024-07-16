@@ -61,7 +61,7 @@ fn test_account(code: &[u8]) -> AccountRlp {
     AccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
-        storage_root: Node::from(Node::Empty).hash(),
+        storage_root: Node::Empty.hash(),
         code_hash: keccak(code),
     }
 }
@@ -320,7 +320,7 @@ fn sstore() -> Result<()> {
         ..AccountRlp::default()
     };
 
-    let mut state_trie_before = Node::from(Node::Empty);
+    let mut state_trie_before = Node::Empty;
 
     state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
 
@@ -386,7 +386,7 @@ fn sstore() -> Result<()> {
 
     let hash = H256::from_uint(&interpreter.stack()[1]);
 
-    let mut expected_state_trie_after = Node::from(Node::Empty);
+    let mut expected_state_trie_after = Node::Empty;
     expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec())?;
 
     let expected_state_trie_hash = expected_state_trie_after.hash();
@@ -418,7 +418,7 @@ fn sload() -> Result<()> {
         ..AccountRlp::default()
     };
 
-    let mut state_trie_before = Node::from(Node::Empty);
+    let mut state_trie_before = Node::Empty;
 
     state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
 

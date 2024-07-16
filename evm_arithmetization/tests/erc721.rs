@@ -127,7 +127,7 @@ fn test_erc721() -> anyhow::Result<()> {
     };
 
     let expected_state_trie_after: Node = {
-        let mut state_trie_after = Node::from(Node::Empty);
+        let mut state_trie_after = Node::Empty;
 
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
@@ -170,7 +170,7 @@ fn test_erc721() -> anyhow::Result<()> {
         bloom: bloom_bytes.to_vec().into(),
         logs,
     };
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(Nibbles::from_str("0x80").unwrap(), receipt_0.encode(0))?;
     let transactions_trie: Node = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
@@ -190,7 +190,7 @@ fn test_erc721() -> anyhow::Result<()> {
         tries: tries_before,
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
@@ -266,7 +266,7 @@ fn owner_account() -> AccountRlp {
     AccountRlp {
         nonce: 2.into(),
         balance: 0x1000000.into(),
-        storage_root: Node::from(Node::Empty).hash(),
+        storage_root: Node::Empty.hash(),
         code_hash: keccak([]),
     }
 }

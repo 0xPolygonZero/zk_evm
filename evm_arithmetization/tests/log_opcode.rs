@@ -120,7 +120,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 
     // Insert the first receipt into the initial receipt trie. The initial receipts
     // trie has an initial node with a random nibble.
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x1337").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
@@ -210,7 +210,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
 
     // Update the state trie.
-    let mut expected_state_trie_after = Node::from(Node::Empty);
+    let mut expected_state_trie_after = Node::Empty;
     expected_state_trie_after.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_after).to_vec(),
@@ -245,7 +245,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         tries: tries_before,
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
@@ -280,7 +280,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     // This test checks that inserting into the transaction and receipt
     // `Node`s works as expected.
-    let mut example_txn_trie = Node::from(Node::Empty);
+    let mut example_txn_trie = Node::Empty;
 
     // We consider two transactions, with one log each.
     let transaction_0 = LegacyTransactionRlp {
@@ -324,7 +324,7 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     )?;
 
     // Receipts:
-    let mut example_receipt_trie = Node::from(Node::Empty);
+    let mut example_receipt_trie = Node::Empty;
 
     let log_0 = LogRlp {
         address: hex!("7ef66b77759e12Caf3dDB3E4AFF524E577C59D8D").into(),

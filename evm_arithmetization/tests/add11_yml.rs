@@ -132,7 +132,7 @@ fn add11_yml() -> anyhow::Result<()> {
             ..AccountRlp::default()
         };
 
-        let mut expected_state_trie_after = Node::from(Node::Empty);
+        let mut expected_state_trie_after = Node::Empty;
         expected_state_trie_after.insert(
             beneficiary_nibbles,
             rlp::encode(&beneficiary_account_after).to_vec(),
@@ -158,7 +158,7 @@ fn add11_yml() -> anyhow::Result<()> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
@@ -181,7 +181,7 @@ fn add11_yml() -> anyhow::Result<()> {
         trie_roots_after,
         contract_code,
         block_metadata,
-        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0xa868u64.into(),

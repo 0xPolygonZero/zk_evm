@@ -34,7 +34,7 @@ impl Default for AccountRlp {
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
-            storage_root: Node::from(Node::Empty).hash(),
+            storage_root: Node::Empty.hash(),
             code_hash: keccak([]),
         }
     }
