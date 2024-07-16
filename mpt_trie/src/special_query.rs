@@ -106,7 +106,7 @@ where
     K: Into<Nibbles>,
 {
     TriePathIter {
-        curr_node: trie.clone().into(),
+        curr_node: trie.clone(),
         curr_key: k.into(),
         terminated: false,
         always_include_final_node_if_possible,

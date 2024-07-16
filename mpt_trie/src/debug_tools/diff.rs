@@ -26,7 +26,7 @@
 //!   to use.
 
 use std::fmt::{self, Debug};
-use std::{fmt::Display, ops::Deref};
+use std::fmt::Display;
 
 use ethereum_types::H256;
 

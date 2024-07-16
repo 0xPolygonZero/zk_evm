@@ -24,8 +24,7 @@ fn mpt_delete_leaf_nonoverlapping_keys() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: nibbles_64(0xABC),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0x123), test_account_2())
 }
 
@@ -34,8 +33,7 @@ fn mpt_delete_leaf_overlapping_keys() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: nibbles_64(0xABC),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0xADE), test_account_2())
 }
 
@@ -45,8 +43,7 @@ fn mpt_delete_branch_into_hash() -> Result<()> {
     let state_trie = Node::Extension {
         nibbles: nibbles_64(0xADF),
         child: hash.into(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0xADE), test_account_2())
 }
 
@@ -67,8 +64,7 @@ fn test_after_mpt_delete_extension_branch() -> Result<()> {
     let state_trie = Node::Extension {
         nibbles,
         child: branch.into(),
-    }
-    .into();
+    };
     let key = nibbles.merge_nibbles(&Nibbles {
         packed: NibblesIntern::zero(),
         count: 64 - nibbles.count,

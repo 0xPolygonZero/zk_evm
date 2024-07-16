@@ -29,8 +29,7 @@ fn mpt_hash_empty_branch() -> Result<()> {
     let state_trie = Node::Branch {
         children,
         value: vec![],
-    }
-    .into();
+    };
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
@@ -44,7 +43,7 @@ fn mpt_hash_empty_branch() -> Result<()> {
 fn mpt_hash_hash() -> Result<()> {
     let hash = H256::random();
     let trie_inputs = TrieInputs {
-        state_trie: Node::Hash(hash).into(),
+        state_trie: Node::Hash(hash),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
@@ -58,8 +57,7 @@ fn mpt_hash_leaf() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: 0xABC_u64.into(),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
@@ -94,8 +92,7 @@ fn mpt_hash_branch_to_leaf() -> Result<()> {
     let state_trie = Node::Branch {
         children,
         value: vec![],
-    }
-    .into();
+    };
 
     let trie_inputs = TrieInputs {
         state_trie,

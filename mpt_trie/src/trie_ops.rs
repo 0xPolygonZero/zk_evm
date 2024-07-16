@@ -380,7 +380,7 @@ impl Node {
     pub(crate) fn trie_items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         PartialTrieIter {
             curr_key_after_last_branch: Nibbles::default(),
-            trie_stack: vec![IterStackEntry::Root(self.clone().into())],
+            trie_stack: vec![IterStackEntry::Root(self.clone())],
         }
     }
 
@@ -564,7 +564,7 @@ fn delete_intern(node: &Node, mut curr_k: Nibbles) -> TrieOpResult<Option<(Node,
             trace!("Delete traversed Leaf (nibbles: {:?})", nibbles);
             Ok((*nibbles == curr_k).then(|| {
                 trace!("Deleting leaf ({:x})", nibbles);
-                (Node::Empty.into(), value.clone())
+                (Node::Empty, value.clone())
             }))
         }
     }
@@ -723,11 +723,11 @@ fn node_is_empty(node: &Node) -> bool {
 }
 
 pub(crate) fn branch(children: [Box<Node>; 16], value: Vec<u8>) -> Node {
-    Node::Branch { children, value }.into()
+    Node::Branch { children, value }
 }
 
 fn branch_from_insert_val(children: [Box<Node>; 16], value: ValOrHash) -> TrieOpResult<Node> {
-    create_node_if_ins_val_not_hash(value, |value| Node::Branch { children, value }.into())
+    create_node_if_ins_val_not_hash(value, |value| Node::Branch { children, value })
 }
 
 fn extension(nibbles: Nibbles, child: impl Into<Box<Node>>) -> Node {
@@ -735,15 +735,14 @@ fn extension(nibbles: Nibbles, child: impl Into<Box<Node>>) -> Node {
         nibbles,
         child: child.into(),
     }
-    .into()
 }
 
 fn leaf(nibbles: Nibbles, value: Vec<u8>) -> Node {
-    Node::Leaf { nibbles, value }.into()
+    Node::Leaf { nibbles, value }
 }
 
 fn leaf_from_insert_val(nibbles: Nibbles, value: ValOrHash) -> TrieOpResult<Node> {
-    create_node_if_ins_val_not_hash(value, |value| Node::Leaf { nibbles, value }.into())
+    create_node_if_ins_val_not_hash(value, |value| Node::Leaf { nibbles, value })
 }
 
 fn create_node_from_insert_val(nibbles: Nibbles, value: ValOrHash) -> Node {
@@ -763,7 +762,6 @@ fn create_node_from_insert_val(nibbles: Nibbles, value: ValOrHash) -> Node {
             }
         }
     }
-    .into()
 }
 
 fn create_node_if_ins_val_not_hash<F: FnOnce(Vec<u8>) -> Node>(

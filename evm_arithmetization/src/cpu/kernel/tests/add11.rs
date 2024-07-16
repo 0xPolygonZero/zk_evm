@@ -71,12 +71,12 @@ fn test_add11_yml() {
         .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
         .unwrap();
 
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    storage_tries.push((to_hashed, Node::Empty));
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
+        transactions_trie: Node::Empty,
+        receipts_trie: Node::Empty,
         storage_tries,
     };
 
@@ -170,8 +170,7 @@ fn test_add11_yml() {
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
@@ -259,12 +258,12 @@ fn test_add11_yml_with_exception() {
         .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
         .unwrap();
 
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    storage_tries.push((to_hashed, Node::Empty));
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
+        transactions_trie: Node::Empty,
+        receipts_trie: Node::Empty,
         storage_tries,
     };
 
@@ -351,8 +350,7 @@ fn test_add11_yml_with_exception() {
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),

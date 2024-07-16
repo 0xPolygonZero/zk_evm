@@ -1,4 +1,3 @@
-use core::ops::Deref;
 
 use mpt_trie::partial_trie::HashedPartialTrie;
 
@@ -17,7 +16,7 @@ impl PartialTrieType {
     pub(crate) const COUNT: usize = 5;
 
     pub(crate) fn of(trie: &HashedPartialTrie) -> Self {
-        match trie.deref() {
+        match trie {
             Node::Empty => Self::Empty,
             Node::Hash(_) => Self::Hash,
             Node::Branch { .. } => Self::Branch,

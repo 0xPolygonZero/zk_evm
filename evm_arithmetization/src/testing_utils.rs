@@ -98,9 +98,9 @@ pub fn preinitialized_state_and_storage_tries(
     let storage_tries = vec![
         (
             H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
-            Node::Empty.into(),
+            Node::Empty,
         ),
-        (H256(GLOBAL_EXIT_ROOT_ADDRESS_HASHED), Node::Empty.into()),
+        (H256(GLOBAL_EXIT_ROOT_ADDRESS_HASHED), Node::Empty),
     ];
 
     Ok((state_trie, storage_tries))

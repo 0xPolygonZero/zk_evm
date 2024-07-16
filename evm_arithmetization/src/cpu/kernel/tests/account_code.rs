@@ -327,9 +327,9 @@ fn sstore() -> Result<()> {
 
     let trie_inputs = TrieInputs {
         state_trie: state_trie_before.clone(),
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
+        transactions_trie: Node::Empty,
+        receipts_trie: Node::Empty,
+        storage_tries: vec![(addr_hashed, Node::Empty)],
     };
 
     let initial_stack = vec![];
@@ -425,9 +425,9 @@ fn sload() -> Result<()> {
 
     let trie_inputs = TrieInputs {
         state_trie: state_trie_before.clone(),
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
+        transactions_trie: Node::Empty,
+        receipts_trie: Node::Empty,
+        storage_tries: vec![(addr_hashed, Node::Empty)],
     };
 
     let initial_stack = vec![];

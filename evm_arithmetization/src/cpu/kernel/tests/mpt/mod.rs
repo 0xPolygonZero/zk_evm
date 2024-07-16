@@ -68,5 +68,4 @@ pub(crate) fn extension_to_leaf(value: Vec<u8>) -> HashedPartialTrie {
         }
         .into(),
     }
-    .into()
 }

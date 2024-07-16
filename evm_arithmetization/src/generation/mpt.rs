@@ -1,4 +1,3 @@
-use core::ops::Deref;
 use std::collections::HashMap;
 
 use bytes::Bytes;
@@ -139,7 +138,7 @@ where
         trie_data.push(type_of_trie.into());
     }
 
-    match trie.deref() {
+    match trie {
         Node::Empty => Ok(0),
         Node::Hash(h) => {
             trie_data.push(h2u(*h));
@@ -214,7 +213,7 @@ fn load_state_trie(
     if type_of_trie > 0 {
         trie_data.push(type_of_trie.into());
     }
-    match trie.deref() {
+    match trie {
         Node::Empty => Ok(0),
         Node::Hash(h) => {
             trie_data.push(h2u(*h));

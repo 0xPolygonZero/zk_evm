@@ -103,8 +103,8 @@ impl HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        let res = self.trie_delete(k);
-        res
+        
+        self.trie_delete(k)
     }
     /// Get the hash for the node.
     pub fn hash(&self) -> H256 {
@@ -136,8 +136,8 @@ impl HashedPartialTrie {
 
 impl Node {
     pub(crate) fn hash_intern(&self) -> EncodedNode {
-        let res = rlp_encode_and_hash_node(&self);
-        res
+        
+        rlp_encode_and_hash_node(self)
     }
     pub(crate) fn get_hash(&self) -> H256 {
         hash_trie(self)

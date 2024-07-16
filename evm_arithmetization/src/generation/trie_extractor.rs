@@ -152,7 +152,7 @@ pub(crate) fn get_trie(
         count: 0,
         packed: NibblesIntern::zero(),
     };
-    Ok(get_trie_helper(memory, ptr, read_rlp_value, empty_nibbles)?)
+    get_trie_helper(memory, ptr, read_rlp_value, empty_nibbles)
 }
 
 pub(crate) fn get_trie_helper(

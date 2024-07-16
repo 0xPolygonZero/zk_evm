@@ -26,8 +26,7 @@ fn mpt_insert_leaf_identical_keys() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: key,
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, key, test_account_2())
 }
 
@@ -36,8 +35,7 @@ fn mpt_insert_leaf_nonoverlapping_keys() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: nibbles_64(0xABC),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0x123), test_account_2())
 }
 
@@ -46,8 +44,7 @@ fn mpt_insert_leaf_overlapping_keys() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: nibbles_64(0xABC),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0xADE), test_account_2())
 }
 
@@ -57,8 +54,7 @@ fn mpt_insert_leaf_insert_key_extends_leaf_key() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: 0xABC_u64.into(),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0xABCDE), test_account_2())
 }
 
@@ -68,8 +64,7 @@ fn mpt_insert_leaf_leaf_key_extends_insert_key() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: 0xABCDE_u64.into(),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0xABC), test_account_2())
 }
 
@@ -79,8 +74,7 @@ fn mpt_insert_branch_replacing_empty_child() -> Result<()> {
     let state_trie = Node::Branch {
         children,
         value: vec![],
-    }
-    .into();
+    };
 
     test_state_trie(state_trie, nibbles_64(0xABC), test_account_2())
 }
@@ -104,8 +98,7 @@ fn mpt_insert_extension_nonoverlapping_keys() -> Result<()> {
             value: test_account_1_rlp(),
         }
         .into(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0x12345), test_account_2())
 }
 
@@ -128,8 +121,7 @@ fn mpt_insert_extension_insert_key_extends_node_key() -> Result<()> {
             value: test_account_1_rlp(),
         }
         .into(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0xABCDEF), test_account_2())
 }
 
@@ -146,8 +138,7 @@ fn mpt_insert_branch_to_leaf_same_key() -> Result<()> {
     let state_trie = Node::Branch {
         children,
         value: vec![],
-    }
-    .into();
+    };
 
     test_state_trie(state_trie, nibbles_64(0xABCD), test_account_2())
 }

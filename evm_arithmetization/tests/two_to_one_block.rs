@@ -59,8 +59,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     let state_trie_before: HashedPartialTrie = Node::Leaf {
         nibbles: sender_nibbles,
         value: rlp::encode(&sender_account_before).to_vec(),
-    }
-    .into();
+    };
     let checkpoint_state_trie_root = state_trie_before.hash();
     assert_eq!(
         checkpoint_state_trie_root,
@@ -121,7 +120,6 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
             children,
             value: vec![],
         }
-        .into()
     };
 
     let receipt_0 = LegacyReceiptRlp {
@@ -138,8 +136,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let _trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
