@@ -1,17 +1,13 @@
 //! Specialized queries that users of the library may need that require
 //! knowledge of the private internal trie state.
 
-use crate::{
-    nibbles::Nibbles,
-    partial_trie::{Node, PartialTrie, WrappedNode},
-    utils::TrieSegment,
-};
+use crate::{nibbles::Nibbles, partial_trie::Node, utils::TrieSegment};
 
 /// An iterator for a trie query. Note that this iterator is lazy.
 #[derive(Debug)]
-pub struct TriePathIter<N: PartialTrie> {
+pub struct TriePathIter {
     /// The next node in the trie to query with the remaining key.
-    curr_node: WrappedNode<N>,
+    curr_node: Node,
 
     /// The remaining part of the key as we traverse down the trie.
     curr_key: Nibbles,
@@ -25,7 +21,7 @@ pub struct TriePathIter<N: PartialTrie> {
     always_include_final_node_if_possible: bool,
 }
 
-impl<T: PartialTrie> Iterator for TriePathIter<T> {
+impl Iterator for TriePathIter {
     type Item = TrieSegment;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -33,7 +29,7 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
             return None;
         }
 
-        match self.curr_node.as_ref() {
+        match &self.curr_node {
             Node::Empty => {
                 self.terminated = true;
                 Some(TrieSegment::Empty)
@@ -53,7 +49,7 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
                 }
 
                 let nib = self.curr_key.pop_next_nibble_front();
-                self.curr_node = children[nib as usize].clone();
+                self.curr_node = *children[nib as usize].clone();
 
                 Some(TrieSegment::Branch(nib))
             }
@@ -71,7 +67,7 @@ impl<T: PartialTrie> Iterator for TriePathIter<T> {
                     true => {
                         pop_nibbles_clamped(&mut self.curr_key, nibbles.count);
                         let res = Some(TrieSegment::Extension(*nibbles));
-                        self.curr_node = child.clone();
+                        self.curr_node = *child.clone();
 
                         res
                     }
@@ -101,11 +97,11 @@ fn pop_nibbles_clamped(nibbles: &mut Nibbles, n: usize) -> Nibbles {
 /// Note that if the key does not match the entire key of a node (eg. the
 /// remaining key is `0x34` but the next key is a leaf with the key `0x3456`),
 /// then the leaf will not appear in the query output.
-pub fn path_for_query<K, T: PartialTrie>(
-    trie: &Node<T>,
+pub fn path_for_query<K>(
+    trie: &Node,
     k: K,
     always_include_final_node_if_possible: bool,
-) -> TriePathIter<T>
+) -> TriePathIter
 where
     K: Into<Nibbles>,
 {
@@ -168,7 +164,7 @@ mod test {
         ];
 
         for (q, expected) in ks.into_iter().zip(res.into_iter()) {
-            let res: Vec<_> = path_for_query(&trie.node, q, false).collect();
+            let res: Vec<_> = path_for_query(&trie.root, q, false).collect();
             assert_eq!(res, expected)
         }
 

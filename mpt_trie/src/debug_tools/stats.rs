@@ -7,7 +7,7 @@ use std::fmt::{self, Display};
 
 use num_traits::ToPrimitive;
 
-use crate::partial_trie::{Node, PartialTrie};
+use crate::partial_trie::Node;
 
 #[derive(Debug, Default)]
 /// Statistics for a given trie, consisting of node count aggregated
@@ -245,16 +245,16 @@ impl DepthStats {
 
 /// Returns trie statistics consisting of node type counts as well as depth
 /// statistics.
-pub fn get_trie_stats<T: PartialTrie>(trie: &T) -> TrieStats {
+pub fn get_trie_stats(trie: &Node) -> TrieStats {
     get_trie_stats_common(trie, None)
 }
 
 /// Returns trie statistics with a given name.
-pub fn get_trie_stats_with_name<T: PartialTrie>(trie: &T, name: String) -> TrieStats {
+pub fn get_trie_stats_with_name(trie: &Node, name: String) -> TrieStats {
     get_trie_stats_common(trie, Some(name))
 }
 
-fn get_trie_stats_common<T: PartialTrie>(trie: &T, name: Option<String>) -> TrieStats {
+fn get_trie_stats_common(trie: &Node, name: Option<String>) -> TrieStats {
     let mut state = CurrTrackingState::default();
 
     get_trie_stats_rec(trie, &mut state, 0);
@@ -272,11 +272,7 @@ fn get_trie_stats_common<T: PartialTrie>(trie: &T, name: Option<String>) -> Trie
     }
 }
 
-fn get_trie_stats_rec<T: PartialTrie>(
-    node: &Node<T>,
-    state: &mut CurrTrackingState,
-    curr_depth: usize,
-) {
+fn get_trie_stats_rec(node: &Node, state: &mut CurrTrackingState, curr_depth: usize) {
     match node {
         Node::Empty => {
             state.counts.empty += 1;
@@ -312,7 +308,7 @@ fn get_trie_stats_rec<T: PartialTrie>(
 mod tests {
     use super::get_trie_stats;
     use crate::{
-        partial_trie::{HashedPartialTrie, PartialTrie},
+        partial_trie::HashedPartialTrie,
         testing_utils::{
             generate_n_random_fixed_trie_hash_entries, generate_n_random_fixed_trie_value_entries,
             handmade_trie_1,

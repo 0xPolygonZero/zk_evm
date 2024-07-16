@@ -4,7 +4,6 @@ use std::{
     borrow::Borrow,
     fmt::{self, Display},
     ops::BitAnd,
-    sync::Arc,
 };
 
 use ethereum_types::H256;
@@ -12,37 +11,22 @@ use num_traits::PrimInt;
 
 use crate::{
     nibbles::{Nibble, Nibbles, NibblesIntern},
-    partial_trie::{Node, PartialTrie},
+    partial_trie::Node,
     trie_ops::TrieOpResult,
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 /// Simplified trie node type to make logging cleaner.
-pub enum TrieNodeType {
-    /// Empty node.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum NodeKind {
     Empty,
-
-    /// Hash node.
     Hash,
-
-    /// Branch node.
     Branch,
-
-    /// Extension node.
     Extension,
-
-    /// Leaf node.
     Leaf,
 }
 
-impl<N: PartialTrie> From<&Arc<Box<N>>> for TrieNodeType {
-    fn from(value: &Arc<Box<N>>) -> Self {
-        (&****value).into()
-    }
-}
-
-impl<N: PartialTrie> From<&Node<N>> for TrieNodeType {
-    fn from(node: &Node<N>) -> Self {
+impl NodeKind {
+    pub fn of(node: &Node) -> Self {
         match node {
             Node::Empty => Self::Empty,
             Node::Hash(_) => Self::Hash,
@@ -53,17 +37,9 @@ impl<N: PartialTrie> From<&Node<N>> for TrieNodeType {
     }
 }
 
-impl Display for TrieNodeType {
+impl Display for NodeKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            TrieNodeType::Empty => "Empty",
-            TrieNodeType::Hash => "Hash",
-            TrieNodeType::Branch => "Branch",
-            TrieNodeType::Extension => "Extension",
-            TrieNodeType::Leaf => "Leaf",
-        };
-
-        write!(f, "{}", s)
+        write!(f, "{:?}", self)
     }
 }
 
@@ -206,13 +182,13 @@ impl Display for TrieSegment {
 
 impl TrieSegment {
     /// Get the node type of the [`TrieSegment`].
-    pub const fn node_type(&self) -> TrieNodeType {
+    pub const fn node_type(&self) -> NodeKind {
         match self {
-            TrieSegment::Empty => TrieNodeType::Empty,
-            TrieSegment::Hash => TrieNodeType::Hash,
-            TrieSegment::Branch(_) => TrieNodeType::Branch,
-            TrieSegment::Extension(_) => TrieNodeType::Extension,
-            TrieSegment::Leaf(_) => TrieNodeType::Leaf,
+            TrieSegment::Empty => NodeKind::Empty,
+            TrieSegment::Hash => NodeKind::Hash,
+            TrieSegment::Branch(_) => NodeKind::Branch,
+            TrieSegment::Extension(_) => NodeKind::Extension,
+            TrieSegment::Leaf(_) => NodeKind::Leaf,
         }
     }
 
@@ -231,16 +207,13 @@ impl TrieSegment {
 /// This function is intended to be used during a trie query as we are
 /// traversing down a trie. Depending on the current node, we pop off nibbles
 /// and use these to create `TrieSegment`s.
-pub(crate) fn get_segment_from_node_and_key_piece<T: PartialTrie>(
-    n: &Node<T>,
-    k_piece: &Nibbles,
-) -> TrieSegment {
-    match TrieNodeType::from(n) {
-        TrieNodeType::Empty => TrieSegment::Empty,
-        TrieNodeType::Hash => TrieSegment::Hash,
-        TrieNodeType::Branch => TrieSegment::Branch(k_piece.get_nibble(0)),
-        TrieNodeType::Extension => TrieSegment::Extension(*k_piece),
-        TrieNodeType::Leaf => TrieSegment::Leaf(*k_piece),
+pub(crate) fn get_segment_from_node_and_key_piece(n: &Node, k_piece: &Nibbles) -> TrieSegment {
+    match NodeKind::of(n) {
+        NodeKind::Empty => TrieSegment::Empty,
+        NodeKind::Hash => TrieSegment::Hash,
+        NodeKind::Branch => TrieSegment::Branch(k_piece.get_nibble(0)),
+        NodeKind::Extension => TrieSegment::Extension(*k_piece),
+        NodeKind::Leaf => TrieSegment::Leaf(*k_piece),
     }
 }
 

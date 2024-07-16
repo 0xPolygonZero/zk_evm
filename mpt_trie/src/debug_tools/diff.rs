@@ -33,13 +33,13 @@ use ethereum_types::H256;
 use crate::utils::{get_segment_from_node_and_key_piece, TriePath};
 use crate::{
     nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node, PartialTrie},
-    utils::TrieNodeType,
+    partial_trie::{HashedPartialTrie, Node},
+    utils::NodeKind,
 };
 
 /// Get the key piece from the given node if applicable. Note that
 /// [branch][`Node::Branch`]s have no [`Nibble`] directly associated with them.
-fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>) -> Nibbles {
+fn get_key_piece_from_node(n: &Node) -> Nibbles {
     match n {
         Node::Empty | Node::Hash(_) | Node::Branch { .. } => Nibbles::default(),
         Node::Extension { nibbles, child: _ } | Node::Leaf { nibbles, value: _ } => *nibbles,
@@ -141,7 +141,7 @@ pub struct NodeInfo {
     /// The direct value associated with the node (only applicable to `Leaf` &
     /// `Branch` nodes).
     value: Option<Vec<u8>>,
-    node_type: TrieNodeType,
+    node_type: NodeKind,
     hash: H256,
 }
 
@@ -167,7 +167,7 @@ impl NodeInfo {
         Self {
             key,
             value,
-            node_type: n.deref().into(),
+            node_type: NodeKind::of(n),
             hash: n.hash(),
         }
     }
@@ -309,8 +309,8 @@ fn find_latest_diff_point_between_tries_rec(
         return DiffDetectionState::NoDiffDetected;
     }
 
-    let a_type: TrieNodeType = state.a.deref().into();
-    let b_type: TrieNodeType = state.b.deref().into();
+    let a_type: NodeKind = NodeKind::of(state.a);
+    let b_type: NodeKind = NodeKind::of(state.b);
 
     let a_key_piece = get_key_piece_from_node(state.a);
     let b_key_piece = get_key_piece_from_node(state.b);
@@ -321,7 +321,7 @@ fn find_latest_diff_point_between_tries_rec(
         depth_state.try_update_longest_divergence_key_node(state);
         DiffDetectionState::NodeTypesDiffer
     } else {
-        match (&state.a.node, &state.b.node) {
+        match (&state.a.root, &state.b.root) {
             (Node::Empty, Node::Empty) => DiffDetectionState::NoDiffDetected,
             (Node::Hash(a_hash), Node::Hash(b_hash)) => {
                 create_diff_detection_state_based_from_hashes(
@@ -414,7 +414,7 @@ fn create_diff_detection_state_based_from_hashes(
 
 /// If the node type contains a value (without looking at the children), then
 /// return it.
-const fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
+const fn get_value_from_node(n: &Node) -> Option<&Vec<u8>> {
     match n {
         Node::Empty | Node::Hash(_) | Node::Extension { .. } => None,
         Node::Branch { value, .. } | Node::Leaf { nibbles: _, value } => Some(value),
@@ -425,10 +425,7 @@ const fn get_value_from_node<T: PartialTrie>(n: &Node<T>) -> Option<&Vec<u8>> {
 mod tests {
     use super::{create_diff_between_tries, DiffPoint, NodeInfo, TriePath};
     use crate::{
-        nibbles::Nibbles,
-        partial_trie::{HashedPartialTrie, PartialTrie},
-        trie_ops::TrieOpResult,
-        utils::TrieNodeType,
+        nibbles::Nibbles, partial_trie::HashedPartialTrie, trie_ops::TrieOpResult, utils::NodeKind,
     };
 
     #[test]
@@ -447,14 +444,14 @@ mod tests {
         let expected_a = NodeInfo {
             key: 0x1234.into(),
             value: Some(vec![0]),
-            node_type: TrieNodeType::Leaf,
+            node_type: NodeKind::Leaf,
             hash: a_hash,
         };
 
         let expected_b = NodeInfo {
             key: 0x1234.into(),
             value: Some(vec![1]),
-            node_type: TrieNodeType::Leaf,
+            node_type: NodeKind::Leaf,
             hash: b_hash,
         };
 

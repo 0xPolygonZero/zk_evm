@@ -7,7 +7,7 @@ use ethereum_types::H256;
 
 use crate::{
     nibbles::Nibbles,
-    partial_trie::{Node, PartialTrie, WrappedNode},
+    partial_trie::Node,
     utils::{get_segment_from_node_and_key_piece, TriePath, TrieSegment},
 };
 
@@ -18,10 +18,7 @@ use crate::{
 /// and [Leaf][`Node::Leaf`] nodes, and the only way to get the `Nibble`
 /// "associated" with a branch is to look at the next `Nibble` in the current
 /// key as we traverse down it.
-fn get_key_piece_from_node_pulling_from_key_for_branches<T: PartialTrie>(
-    n: &Node<T>,
-    curr_key: &Nibbles,
-) -> Nibbles {
+fn get_key_piece_from_node_pulling_from_key_for_branches(n: &Node, curr_key: &Nibbles) -> Nibbles {
     match n {
         Node::Empty | Node::Hash(_) => Nibbles::default(),
         Node::Branch { .. } => curr_key.get_next_nibbles(1),
@@ -133,7 +130,7 @@ impl Display for ExtraNodeSegmentInfo {
 }
 
 impl ExtraNodeSegmentInfo {
-    pub(super) fn from_node<T: PartialTrie>(n: &Node<T>) -> Option<Self> {
+    pub(super) fn from_node(n: &Node) -> Option<Self> {
         match n {
             Node::Empty | Node::Extension { .. } => None,
             Node::Hash(h) => Some(ExtraNodeSegmentInfo::Hash(*h)),
@@ -147,7 +144,7 @@ impl ExtraNodeSegmentInfo {
     }
 }
 
-fn create_child_mask_from_children<T: PartialTrie>(children: &[WrappedNode<T>; 16]) -> u16 {
+fn create_child_mask_from_children(children: &[Box<Node>; 16]) -> u16 {
     let mut mask: u16 = 0;
 
     for (i, child) in children.iter().enumerate().take(16) {
@@ -262,10 +259,7 @@ impl DebugQueryOutput {
 }
 
 /// Get debug information on the path taken when querying a key in a given trie.
-pub fn get_path_from_query<T: PartialTrie, Q: Into<DebugQuery>>(
-    trie: &Node<T>,
-    q: Q,
-) -> DebugQueryOutput {
+pub fn get_path_from_query<Q: Into<DebugQuery>>(trie: &Node, q: Q) -> DebugQueryOutput {
     let q = q.into();
 
     let mut out = DebugQueryOutput::new(q.k, q.params);
@@ -274,11 +268,7 @@ pub fn get_path_from_query<T: PartialTrie, Q: Into<DebugQuery>>(
     out
 }
 
-fn get_path_from_query_rec<T: PartialTrie>(
-    node: &Node<T>,
-    curr_key: &mut Nibbles,
-    query_out: &mut DebugQueryOutput,
-) {
+fn get_path_from_query_rec(node: &Node, curr_key: &mut Nibbles, query_out: &mut DebugQueryOutput) {
     let key_piece = get_key_piece_from_node_pulling_from_key_for_branches(node, curr_key);
     let seg = get_segment_from_node_and_key_piece(node, &key_piece);
 

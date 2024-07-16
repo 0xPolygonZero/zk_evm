@@ -3,10 +3,7 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
-use crate::{
-    partial_trie::{Node, PartialTrie, TrieNodeIntern},
-    utils::bytes_to_h256,
-};
+use crate::{partial_trie::Node, utils::bytes_to_h256};
 
 /// The node type used for calculating the hash of a trie.
 #[derive(Debug)]
@@ -28,14 +25,12 @@ impl From<&EncodedNode> for H256 {
 
 /// Calculates the hash of a node.
 /// Assumes that all leaf values are already rlp encoded.
-pub(crate) fn hash_trie<N: PartialTrie + TrieNodeIntern>(node: &Node<N>) -> H256 {
+pub(crate) fn hash_trie(node: &Node) -> H256 {
     let trie_hash_bytes = rlp_encode_and_hash_node(node);
     (&trie_hash_bytes).into()
 }
 
-pub(crate) fn rlp_encode_and_hash_node<N: PartialTrie + TrieNodeIntern>(
-    node: &Node<N>,
-) -> EncodedNode {
+pub(crate) fn rlp_encode_and_hash_node(node: &Node) -> EncodedNode {
     let res = match node {
         Node::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
         Node::Hash(h) => EncodedNode::Hashed(h.0),
@@ -106,7 +101,7 @@ mod tests {
 
     use crate::{
         nibbles::{Nibble, Nibbles},
-        partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode},
+        partial_trie::{HashedPartialTrie, Node},
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_value_entries,
             generate_n_random_fixed_trie_value_entries,
@@ -412,9 +407,7 @@ mod tests {
         Ok(())
     }
 
-    fn get_branch_children_expected(
-        node: &mut Node<HashedPartialTrie>,
-    ) -> &mut [WrappedNode<HashedPartialTrie>; 16] {
+    fn get_branch_children_expected(node: &mut Node) -> &mut [Box<Node>; 16] {
         match node {
             Node::Branch { children, .. } => children,
             _ => unreachable!(),

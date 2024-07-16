@@ -1,16 +1,12 @@
 //! A builder for constructing a partial trie from a collection of proofs.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::{Prototype, Rlp};
 
-use super::{
-    nibbles::Nibbles,
-    partial_trie::{Node, PartialTrie, WrappedNode},
-};
+use super::{nibbles::Nibbles, partial_trie::Node};
 
 /// The hash of an empty trie.
 const EMPTY_TRIE_HASH: H256 = H256([
@@ -20,20 +16,15 @@ const EMPTY_TRIE_HASH: H256 = H256([
 
 #[derive(Debug)]
 /// A builder for constructing a partial trie from a collection of nodes.
-pub struct PartialTrieBuilder<T> {
+pub struct PartialTrieBuilder {
     root: H256,
     nodes: HashMap<H256, Vec<u8>>,
-    _marker: std::marker::PhantomData<T>,
 }
 
-impl<T: PartialTrie> PartialTrieBuilder<T> {
+impl PartialTrieBuilder {
     /// Creates a new `PartialTrieBuilder` with the given root and nodes.
     pub const fn new(root: H256, nodes: HashMap<H256, Vec<u8>>) -> Self {
-        PartialTrieBuilder {
-            root,
-            nodes,
-            _marker: std::marker::PhantomData,
-        }
+        PartialTrieBuilder { root, nodes }
     }
 
     /// Inserts a proof into the builder.
@@ -71,7 +62,7 @@ impl<T: PartialTrie> PartialTrieBuilder<T> {
     }
 
     /// Builds the partial trie from the nodes and root.
-    pub fn build(self) -> T {
+    pub fn build(self) -> Node {
         construct_partial_trie(self.root, &self.nodes)
     }
 
@@ -90,25 +81,23 @@ impl<T: PartialTrie> PartialTrieBuilder<T> {
 }
 
 /// Constructs a partial trie from a root hash and a collection of nodes.
-fn construct_partial_trie<T: PartialTrie>(hash: H256, nodes: &HashMap<H256, Vec<u8>>) -> T {
+fn construct_partial_trie(hash: H256, nodes: &HashMap<H256, Vec<u8>>) -> Node {
     let bytes = match nodes.get(&hash) {
         Some(value) => rlp::decode_list::<Vec<u8>>(value),
-        None if [H256::zero(), EMPTY_TRIE_HASH].contains(&hash) => return T::default(),
-        None => return T::new(Node::Hash(hash)),
+        None if [H256::zero(), EMPTY_TRIE_HASH].contains(&hash) => return Node::Empty,
+        None => return Node::Hash(hash),
     };
 
     decode_node(bytes, nodes)
 }
 
-fn decode_node<T: PartialTrie>(bytes: Vec<Vec<u8>>, nodes: &HashMap<H256, Vec<u8>>) -> T {
-    let node = match bytes.len() {
+fn decode_node(bytes: Vec<Vec<u8>>, nodes: &HashMap<H256, Vec<u8>>) -> Node {
+    match bytes.len() {
         17 => parse_branch_node(bytes, nodes),
         2 if is_extension_node(&bytes) => parse_extension_node(bytes, nodes),
         2 if is_leaf_node(&bytes) => parse_leaf_node(bytes),
         _ => unreachable!(),
-    };
-
-    T::new(node)
+    }
 }
 
 /// Returns true if the node is an extension node.
@@ -122,31 +111,24 @@ fn is_leaf_node(bytes: &[Vec<u8>]) -> bool {
 }
 
 /// Parses a branch node from the given bytes.
-fn parse_branch_node<T: PartialTrie>(
-    bytes: Vec<Vec<u8>>,
-    nodes: &HashMap<H256, Vec<u8>>,
-) -> Node<T> {
+fn parse_branch_node(bytes: Vec<Vec<u8>>, nodes: &HashMap<H256, Vec<u8>>) -> Node {
     let children = (0..16)
         .map(|i| {
-            let child = match bytes[i].is_empty() {
-                true => T::default(),
+            Box::new(match bytes[i].is_empty() {
+                true => Node::Empty,
                 false => parse_child_node(&bytes[i], nodes),
-            };
-            Arc::new(Box::new(child))
+            })
         })
-        .collect::<Vec<WrappedNode<T>>>();
+        .collect::<Vec<_>>();
 
-    Node::<T>::Branch {
+    Node::Branch {
         children: children.try_into().unwrap(),
         value: bytes[16].clone(),
     }
 }
 
 /// Parses an extension node from the given bytes.
-fn parse_extension_node<T: PartialTrie>(
-    bytes: Vec<Vec<u8>>,
-    nodes: &HashMap<H256, Vec<u8>>,
-) -> Node<T> {
+fn parse_extension_node(bytes: Vec<Vec<u8>>, nodes: &HashMap<H256, Vec<u8>>) -> Node {
     let mut encoded_path = Nibbles::from_bytes_be(&bytes[0][..]).unwrap();
 
     if encoded_path.pop_next_nibble_front() == 0 {
@@ -155,12 +137,12 @@ fn parse_extension_node<T: PartialTrie>(
 
     Node::Extension {
         nibbles: encoded_path,
-        child: Arc::new(Box::new(parse_child_node(&bytes[1], nodes))),
+        child: (Box::new(parse_child_node(&bytes[1], nodes))),
     }
 }
 
 /// Parses a leaf node from the given bytes.
-fn parse_leaf_node<T: PartialTrie>(bytes: Vec<Vec<u8>>) -> Node<T> {
+fn parse_leaf_node(bytes: Vec<Vec<u8>>) -> Node {
     let mut encoded_path = Nibbles::from_bytes_be(&bytes[0][..]).unwrap();
 
     if encoded_path.pop_next_nibble_front() == 2 {
@@ -174,7 +156,7 @@ fn parse_leaf_node<T: PartialTrie>(bytes: Vec<Vec<u8>>) -> Node<T> {
 }
 
 /// Parses a child node from the given bytes.
-fn parse_child_node<T: PartialTrie>(bytes: &[u8], nodes: &HashMap<H256, Vec<u8>>) -> T {
+fn parse_child_node(bytes: &[u8], nodes: &HashMap<H256, Vec<u8>>) -> Node {
     match bytes.len() {
         x if x < 32 => decode_node(rlp::decode_list::<Vec<u8>>(bytes), nodes),
         _ => construct_partial_trie(H256::from_slice(bytes), nodes),
