@@ -48,6 +48,7 @@ use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeStark;
 use crate::logic::LogicStark;
 use crate::memory::memory_stark::MemoryStark;
 use crate::memory::segments::Segment;
+use crate::memory_continuation::memory_continuation_stark::MemoryContinuationStark;
 use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
 use crate::witness::memory::{MemoryAddress, MemoryState};
 use crate::witness::state::RegistersState;
@@ -648,6 +649,34 @@ where
             ctl_challenges,
         ),
     );
+
+    // MemBefore.
+    res.push(auxiliary_columns_single_stark::<
+        F,
+        C,
+        MemoryContinuationStark<F, D>,
+        D,
+    >(
+        all_stark.mem_before_stark,
+        config,
+        &trace_poly_values[*Table::MemBefore],
+        &ctl_data_per_table[*Table::MemBefore],
+        ctl_challenges,
+    ));
+
+    // MemAfter.
+    res.push(auxiliary_columns_single_stark::<
+        F,
+        C,
+        MemoryContinuationStark<F, D>,
+        D,
+    >(
+        all_stark.mem_before_stark,
+        config,
+        &trace_poly_values[*Table::MemAfter],
+        &ctl_data_per_table[*Table::MemAfter],
+        ctl_challenges,
+    ));
 
     res
 }
