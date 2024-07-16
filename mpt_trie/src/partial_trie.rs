@@ -1,6 +1,6 @@
 //! Definitions for the core types [`PartialTrie`] and [`Nibbles`].
 
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 
 use ethereum_types::H256;
 use serde::{Deserialize, Serialize};
@@ -12,10 +12,25 @@ use crate::{
     utils::TryFromIterator,
 };
 
+/// A node (and equivalently, a tree) in a [Merkle Patricia Trie](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/).
+///
+/// Nodes may be [hashed](Self::hash) recursively.
+///
+/// Any node in the trie may be replaced by its [hash](Self::hash) in a
+/// [Node::Hash], and the root hash of the trie will remain unchanged.
+///
+/// ```text
+///     R            R'
+///    / \          / \
+///   A   B        H   B
+///  / \   \            \
+/// C   D   E            E
+/// ```
+///
+/// That is, if `H` is `A`'s hash, then the roots of `R` and `R'` are the same.
+///
+/// This is particularly useful for pruning unrequired data from tries.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-/// A partial trie, or a sub-trie thereof. This mimics the structure of an
-/// Ethereum trie, except with an additional `Hash` node type, representing a
-/// node whose data is not needed to process our transaction.
 pub enum Node {
     /// An empty trie.
     #[default]
@@ -51,9 +66,32 @@ pub enum Node {
     },
 }
 
-pub type HashedPartialTrie = Node;
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FrozenNode {
+    node: Node,
+    hash: H256,
+}
 
-impl HashedPartialTrie {
+impl FrozenNode {
+    pub fn thaw(self) -> Node {
+        self.node
+    }
+}
+impl Deref for FrozenNode {
+    type Target = Node;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node
+    }
+}
+
+impl Node {
+    pub fn freeze(self) -> FrozenNode {
+        FrozenNode {
+            hash: self.hash(),
+            node: self,
+        }
+    }
     /// Creates a new partial trie from a node.
     pub fn new(node: Node) -> Self {
         node
@@ -103,7 +141,6 @@ impl HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        
         self.trie_delete(k)
     }
     /// Get the hash for the node.
@@ -136,7 +173,6 @@ impl HashedPartialTrie {
 
 impl Node {
     pub(crate) fn hash_intern(&self) -> EncodedNode {
-        
         rlp_encode_and_hash_node(self)
     }
     pub(crate) fn get_hash(&self) -> H256 {
@@ -144,7 +180,7 @@ impl Node {
     }
 }
 
-impl<K, V> TryFromIterator<(K, V)> for HashedPartialTrie
+impl<K, V> TryFromIterator<(K, V)> for Node
 where
     K: Into<Nibbles>,
     V: Into<ValOrHash>,

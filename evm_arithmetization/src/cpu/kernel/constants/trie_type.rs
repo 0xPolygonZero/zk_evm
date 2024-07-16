@@ -1,4 +1,3 @@
-
 use mpt_trie::partial_trie::HashedPartialTrie;
 
 use crate::Node;

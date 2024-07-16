@@ -17,7 +17,7 @@
 
 pub mod builder;
 pub mod nibbles;
-pub mod partial_trie;
+mod partial_trie;
 pub mod special_query;
 mod trie_hashing;
 pub mod trie_ops;
@@ -29,3 +29,5 @@ pub mod debug_tools;
 
 #[cfg(test)]
 pub(crate) mod testing_utils;
+
+pub use partial_trie::{FrozenNode, Node};

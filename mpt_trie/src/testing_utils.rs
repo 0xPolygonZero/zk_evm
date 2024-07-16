@@ -9,7 +9,7 @@ use rand::{rngs::StdRng, seq::IteratorRandom, Rng, RngCore, SeedableRng};
 
 use crate::{
     nibbles::{Nibbles, NibblesIntern},
-    partial_trie::{HashedPartialTrie, Node},
+    partial_trie::Node,
     trie_ops::{TrieOpResult, ValOrHash},
     utils::is_even,
 };
@@ -20,7 +20,7 @@ use crate::{
 /// chances of these collisions occurring.
 const MIN_BYTES_FOR_VAR_KEY: usize = 5;
 
-pub(crate) type TrieType = HashedPartialTrie;
+pub(crate) type TrieType = Node;
 
 pub(crate) type TestInsertValEntry = (Nibbles, Vec<u8>);
 pub(crate) type TestInsertHashEntry = (Nibbles, H256);

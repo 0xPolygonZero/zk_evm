@@ -308,7 +308,7 @@ fn get_trie_stats_rec(node: &Node, state: &mut CurrTrackingState, curr_depth: us
 mod tests {
     use super::get_trie_stats;
     use crate::{
-        partial_trie::HashedPartialTrie,
+        partial_trie::Node,
         testing_utils::{
             generate_n_random_fixed_trie_hash_entries, generate_n_random_fixed_trie_value_entries,
             handmade_trie_1,
@@ -368,7 +368,7 @@ mod tests {
         let val_entries = generate_n_random_fixed_trie_value_entries(n_leaf_nodes, seed);
         let hash_entries = generate_n_random_fixed_trie_hash_entries(n_hash_nodes, seed + 1);
 
-        let mut trie = HashedPartialTrie::default();
+        let mut trie = Node::default();
         trie.extend(val_entries)?;
         trie.extend(hash_entries)?;
 

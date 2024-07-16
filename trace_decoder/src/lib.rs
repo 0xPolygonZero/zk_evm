@@ -99,7 +99,7 @@ use ethereum_types::{Address, U256};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::H256;
-use mpt_trie::partial_trie::HashedPartialTrie;
+use mpt_trie::Node;
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
 
@@ -150,7 +150,7 @@ pub struct SeparateTriePreImages {
 pub enum SeparateTriePreImage {
     /// Storage or state trie format that can be processed as is, as it
     /// corresponds to the internal format.
-    Direct(HashedPartialTrie),
+    Direct(Node),
 }
 
 /// A trie pre-image where both state & storage are combined into one payload.
@@ -420,8 +420,8 @@ fn hash(bytes: &[u8]) -> ethereum_types::H256 {
 
 #[derive(Debug, Default)]
 struct PartialTriePreImages {
-    pub state: HashedPartialTrie,
-    pub storage: HashMap<H256, HashedPartialTrie>,
+    pub state: Node,
+    pub storage: HashMap<H256, Node>,
 }
 
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes

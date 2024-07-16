@@ -25,17 +25,13 @@
 //!   If there are multiple differences, then this will likely be what you want
 //!   to use.
 
-use std::fmt::{self, Debug};
 use std::fmt::Display;
+use std::fmt::{self, Debug};
 
 use ethereum_types::H256;
 
 use crate::utils::{get_segment_from_node_and_key_piece, TriePath};
-use crate::{
-    nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node},
-    utils::NodeKind,
-};
+use crate::{nibbles::Nibbles, partial_trie::Node, utils::NodeKind};
 
 /// Get the key piece from the given node if applicable. Note that
 /// [branch][`Node::Branch`]s have no [`Nibble`] directly associated with them.
@@ -102,12 +98,7 @@ pub struct DiffPoint {
 }
 
 impl DiffPoint {
-    fn new(
-        child_a: &HashedPartialTrie,
-        child_b: &HashedPartialTrie,
-        parent_k: Nibbles,
-        path: TriePath,
-    ) -> Self {
+    fn new(child_a: &Node, child_b: &Node, parent_k: Nibbles, path: TriePath) -> Self {
         let a_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_a));
         let b_key = parent_k.merge_nibbles(&get_key_piece_from_node(child_b));
 
@@ -163,7 +154,7 @@ impl Display for NodeInfo {
 }
 
 impl NodeInfo {
-    fn new(n: &HashedPartialTrie, key: Nibbles, value: Option<Vec<u8>>) -> Self {
+    fn new(n: &Node, key: Nibbles, value: Option<Vec<u8>>) -> Self {
         Self {
             key,
             value,
@@ -175,7 +166,7 @@ impl NodeInfo {
 
 /// Create a diff between two tries. Will perform both types of diff searches
 /// (top-down & bottom-up).
-pub fn create_diff_between_tries(a: &HashedPartialTrie, b: &HashedPartialTrie) -> TrieDiff {
+pub fn create_diff_between_tries(a: &Node, b: &Node) -> TrieDiff {
     TrieDiff {
         latest_diff_res: find_latest_diff_point_between_tries(a, b),
     }
@@ -183,10 +174,7 @@ pub fn create_diff_between_tries(a: &HashedPartialTrie, b: &HashedPartialTrie) -
 
 // Only support `HashedPartialTrie` due to it being significantly faster to
 // detect differences because of caching hashes.
-fn find_latest_diff_point_between_tries(
-    a: &HashedPartialTrie,
-    b: &HashedPartialTrie,
-) -> Option<DiffPoint> {
+fn find_latest_diff_point_between_tries(a: &Node, b: &Node) -> Option<DiffPoint> {
     let state = DepthDiffPerCallState::new(a, b, Nibbles::default(), 0);
     let mut longest_state = DepthNodeDiffState::default();
 
@@ -232,8 +220,8 @@ impl DepthNodeDiffState {
     fn replace_longest_field_if_our_key_is_larger(
         field: &mut Option<DiffPoint>,
         parent_k: &Nibbles,
-        child_a: &HashedPartialTrie,
-        child_b: &HashedPartialTrie,
+        child_a: &Node,
+        child_b: &Node,
         path: TriePath,
     ) {
         if field
@@ -248,8 +236,8 @@ impl DepthNodeDiffState {
 /// State that is copied per recursive call.
 #[derive(Clone, Debug)]
 struct DepthDiffPerCallState<'a> {
-    a: &'a HashedPartialTrie,
-    b: &'a HashedPartialTrie,
+    a: &'a Node,
+    b: &'a Node,
     curr_key: Nibbles,
     curr_depth: usize,
 
@@ -260,12 +248,7 @@ struct DepthDiffPerCallState<'a> {
 impl<'a> DepthDiffPerCallState<'a> {
     /// Exists solely to prevent construction of this type from going over
     /// multiple lines.
-    fn new(
-        a: &'a HashedPartialTrie,
-        b: &'a HashedPartialTrie,
-        curr_key: Nibbles,
-        curr_depth: usize,
-    ) -> Self {
+    fn new(a: &'a Node, b: &'a Node, curr_key: Nibbles, curr_depth: usize) -> Self {
         Self {
             a,
             b,
@@ -277,12 +260,7 @@ impl<'a> DepthDiffPerCallState<'a> {
 
     /// Note: The assumption here is that `a` and `b` are of the same node type
     /// and have the key.
-    fn new_from_parent(
-        &self,
-        a: &'a HashedPartialTrie,
-        b: &'a HashedPartialTrie,
-        key_piece: &Nibbles,
-    ) -> Self {
+    fn new_from_parent(&self, a: &'a Node, b: &'a Node, key_piece: &Nibbles) -> Self {
         let new_segment = get_segment_from_node_and_key_piece(self.a, key_piece);
         let new_path = self.curr_path.dup_and_append(new_segment);
 
@@ -424,14 +402,12 @@ const fn get_value_from_node(n: &Node) -> Option<&Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::{create_diff_between_tries, DiffPoint, NodeInfo, TriePath};
-    use crate::{
-        nibbles::Nibbles, partial_trie::HashedPartialTrie, trie_ops::TrieOpResult, utils::NodeKind,
-    };
+    use crate::{nibbles::Nibbles, partial_trie::Node, trie_ops::TrieOpResult, utils::NodeKind};
 
     #[test]
     fn depth_single_node_hash_diffs_work() -> TrieOpResult<()> {
         // TODO: Reduce duplication once we identify common structures across tests...
-        let mut a = HashedPartialTrie::default();
+        let mut a = Node::default();
         a.insert(0x1234, vec![0])?;
         let a_hash = a.hash();
 
