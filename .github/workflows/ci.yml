@@ -45,7 +45,7 @@ jobs:
 
   test_trace_decoder:
     name: Test trace_decoder
-    runs-on: ubuntu-latest
+    runs-on: zero-ci
     timeout-minutes: 30
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
