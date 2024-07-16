@@ -39,7 +39,8 @@ use crate::witness::state::RegistersState;
 pub struct GenerationSegmentData {
     /// Indicates whether this corresponds to a dummy segment.
     pub(crate) is_dummy: bool,
-    /// Indicates whether we should set the preinitialized trie data segment.
+    /// Indicates whether we should set the preinitialized segments before
+    /// proving.
     pub(crate) set_preinit: bool,
     /// Indicates the position of this segment in a sequence of
     /// executions for a larger payload.
@@ -654,7 +655,6 @@ pub fn generate_all_data_segments<F: RichField>(
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use mpt_trie::partial_trie::HashedPartialTrie;
-    use mpt_trie::partial_trie::PartialTrie;
 
     use super::*;
     use crate::{

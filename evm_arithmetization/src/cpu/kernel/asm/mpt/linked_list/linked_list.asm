@@ -79,7 +79,6 @@ global store_initial_accounts:
 loop_store_initial_accounts:
     // stack: current_node_ptr
     %get_trie_data_size
-global debug_new_ptr:
     DUP2
     MLOAD_GENERAL
     // stack: current_addr, cpy_ptr, current_node_ptr, retdest
@@ -193,7 +192,7 @@ global insert_account_to_linked_list:
     %jump_neq_const(@U256_MAX, account_found)
     // The storage key is not in the list.
     PANIC
-global account_found:
+account_found:
     // The address was already in the list
     // stack: pred_ptr, addr, payload_ptr, retdest
     // Load the payload pointer
@@ -202,8 +201,8 @@ global account_found:
     // stack: orig_payload_ptr, addr, payload_ptr, retdest
     %stack (orig_payload_ptr, addr, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
     JUMP
-//DEBUG
-global insert_new_account:
+
+insert_new_account:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     POP
     // get the value of the next address
@@ -556,6 +555,7 @@ insert_new_slot_with_value:
     DUP7
     // The next key must be strictly larger
     %assert_lt
+
 next_node_ok_with_value:
     // stack: next_addr or next_key, next_ptr, new_ptr, next_ptr_ptr, addr, key, value, retdest
     POP
@@ -656,7 +656,6 @@ global insert_slot:
     // stack: pred_key, pred_ptr, addr, key, payload_ptr, retdest
     DUP1 DUP5
     GT
-global before_jumpi:
     %jumpi(insert_new_slot)
     // stack: pred_key, pred_ptr, addr, key, payload_ptr, retdest
     DUP4

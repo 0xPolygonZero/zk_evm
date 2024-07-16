@@ -1,5 +1,4 @@
 use anyhow::Result;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{BigEndianHash, H256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -250,7 +249,7 @@ fn test_state_trie(
         interpreter.stack()
     );
 
-    // Now, execute mpt_hash_state_trie and check the hash value (both are done
+    // Now, execute `mpt_hash_state_trie` and check the hash value (both are done
     // under `check_state_trie`).
     state_trie.insert(k, rlp::encode(&account).to_vec());
     let expected_state_trie_hash = state_trie.hash();
@@ -263,9 +262,7 @@ fn test_state_trie(
     interpreter
         .halt_offsets
         .push(KERNEL.global_labels["check_txn_trie"]);
-    // interpreter
-    //     .push(0xDEADBEEFu32.into())
-    //     .expect("The stack should not overflow");
+
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");

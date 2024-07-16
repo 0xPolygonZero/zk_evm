@@ -341,6 +341,8 @@ pub struct GenerationState<F: Field> {
 
     pub(crate) next_txn_index: usize,
 
+    /// Indicates whether we should set the preinitialized segments before
+    /// proving.
     pub(crate) set_preinit: bool,
     /// Memory used by stale contexts can be pruned so proving segments can be
     /// smaller.

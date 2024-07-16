@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -139,9 +138,8 @@ pub(crate) fn prepare_interpreter<F: Field>(
     address: Address,
     account: &AccountRlp,
 ) -> Result<()> {
-    init_logger();
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
-    let mpt_hash_state_trie = KERNEL.global_labels["check_state_trie"];
+    let check_state_trie = KERNEL.global_labels["check_state_trie"];
     let mut state_trie: HashedPartialTrie = HashedPartialTrie::from(Node::Empty);
     let trie_inputs = TrieInputs {
         state_trie: HashedPartialTrie::from(Node::Empty),
@@ -198,10 +196,10 @@ pub(crate) fn prepare_interpreter<F: Field>(
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push((Segment::StorageLinkedList as usize + 7).into())
+        .push((Segment::StorageLinkedList as usize + 8).into())
         .expect("The stack should not overflow");
     interpreter
-        .push((Segment::AccountsLinkedList as usize + 5).into())
+        .push((Segment::AccountsLinkedList as usize + 6).into())
         .expect("The stack should not overflow");
     interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
 
@@ -211,12 +209,12 @@ pub(crate) fn prepare_interpreter<F: Field>(
 
     interpreter.run()?;
 
-    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 1;
-    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
+    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
+    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
     interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
     interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
 
-    // Now, execute mpt_hash_state_trie.
+    // Now, execute `mpt_hash_state_trie`.
     state_trie.insert(k, rlp::encode(account).to_vec());
     let expected_state_trie_hash = state_trie.hash();
     interpreter.set_global_metadata_field(
@@ -224,7 +222,7 @@ pub(crate) fn prepare_interpreter<F: Field>(
         h2u(expected_state_trie_hash),
     );
 
-    interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
+    interpreter.generation_state.registers.program_counter = check_state_trie;
     interpreter
         .halt_offsets
         .push(KERNEL.global_labels["check_txn_trie"]);
@@ -299,7 +297,6 @@ fn test_extcodesize() -> Result<()> {
 
 #[test]
 fn test_extcodecopy() -> Result<()> {
-    init_logger();
     let code = random_code();
     let account = test_account(&code);
 
@@ -462,7 +459,6 @@ fn prepare_interpreter_all_accounts<F: Field>(
 /// Tests an SSTORE within a code similar to the contract code in add11_yml.
 #[test]
 fn sstore() -> Result<()> {
-    init_logger();
     // We take the same `to` account as in add11_yml.
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
@@ -534,7 +530,7 @@ fn sstore() -> Result<()> {
     interpreter
         .halt_offsets
         .push(KERNEL.global_labels["check_txn_trie"]);
-    // Now, execute mpt_hash_state_trie and check that the hash is correct.
+    // Now, execute `mpt_hash_state_trie` and check that the hash is correct.
     let mpt_hash_state_trie = KERNEL.global_labels["check_state_trie"];
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
     interpreter.set_is_kernel(true);
@@ -553,8 +549,6 @@ fn sstore() -> Result<()> {
 /// Tests an SLOAD within a code similar to the contract code in add11_yml.
 #[test]
 fn sload() -> Result<()> {
-    init_logger(); // We take the same `to` account as in add11_yml.
-
     let addr = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
 
     let addr_hashed = keccak(addr);
@@ -618,7 +612,7 @@ fn sload() -> Result<()> {
     interpreter
         .pop()
         .expect("The stack length should not be empty.");
-    // Now, execute mpt_hash_state_trie. We check that the state trie has not
+    // Now, execute `mpt_hash_state_trie`. We check that the state trie has not
     // changed.
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
@@ -646,8 +640,4 @@ fn sload() -> Result<()> {
     let expected_state_trie_hash = state_trie_before.hash();
     assert_eq!(hash, expected_state_trie_hash);
     Ok(())
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }

@@ -18,7 +18,7 @@ global mpt_delete:
          
     PANIC
 
-global mpt_delete_leaf:
+mpt_delete_leaf:
     // stack: node_type, node_payload_ptr, num_nibbles, key, retdest
     %pop4
     PUSH 0 // empty node ptr

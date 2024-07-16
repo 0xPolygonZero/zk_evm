@@ -98,10 +98,14 @@ pub(crate) enum GlobalMetadata {
     /// The address of the next available address in
     /// Segment::AccountsLinkedList
     AccountsLinkedListLen,
-    // The address of the next available address in
+    /// The address of the next available address in
     /// Segment::StorageLinkedList
     StorageLinkedListLen,
+    /// Length of the `AccountsLinkedList` segment after insertion of the
+    /// initial accounts.
     InitialAccountsLinkedListLen,
+    /// Length of the `StorageLinkedList` segment after insertion of the
+    /// initial storage slots.
     InitialStorageLinkedListLen,
 }
 

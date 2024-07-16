@@ -262,13 +262,11 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     let mut rng = thread_rng();
     let n = 10;
     let mut addresses = (0..n)
-        // .map(|_| rng.gen::<Address>())
         .map(|i| Address::from_low_u64_be(i as u64 + 5))
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<Address>>();
     let delta_ptr = 100;
-    // let addr_not_in_list = rng.gen::<Address>();
     let addr_not_in_list = Address::from_low_u64_be(4);
     assert!(
         !addresses.contains(&addr_not_in_list),
@@ -349,7 +347,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         U256::from(offset + (n + 2) * 4)
     );
 
-    // Remove all even nodes
+    // Remove all even nodes.
     let delete_account_label = KERNEL.global_labels["remove_account"];
 
     let mut new_addresses = vec![];
@@ -365,11 +363,11 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         // we add the non deleted addres to new_addresses
         new_addresses.push(addresses[j]);
     }
-    // the last address is not removed
+    // The last address is not removed.
     new_addresses.push(*addresses.last().unwrap());
 
-    // We need to sort the list in order to properly compare with
-    // the linked list the interpreter's memory
+    // We need to sort the list in order to properly compare
+    // the linked list with the interpreter's memory.
     new_addresses.sort();
 
     let mut list = interpreter
@@ -409,7 +407,6 @@ fn test_insert_and_delete_storage() -> Result<()> {
     let mut rng = thread_rng();
     let n = 10;
     let mut addresses_and_keys = (0..n)
-        // .map(|_| rng.gen::<Address>())
         .map(|i| {
             [
                 Address::from_low_u64_be(i as u64 + 5),
@@ -420,7 +417,6 @@ fn test_insert_and_delete_storage() -> Result<()> {
         .into_iter()
         .collect::<Vec<[H160; 2]>>();
     let delta_ptr = 100;
-    // let addr_not_in_list = rng.gen::<Address>();
     let addr_not_in_list = Address::from_low_u64_be(4);
     let key_not_in_list = H160::from_low_u64_be(5);
     assert!(
@@ -510,13 +506,13 @@ fn test_insert_and_delete_storage() -> Result<()> {
         U256::from(offset + (n + 2) * 5)
     );
 
-    // Remove all even nodes
+    // Remove all even nodes.
     let remove_slot_label = KERNEL.global_labels["remove_slot"];
 
     let mut new_addresses = vec![];
 
     for (i, j) in (0..n).tuples() {
-        // Test for [address, ke] already in list.
+        // Test for [address, key] already in list.
         let [addr_in_list, key_in_list] = addresses_and_keys[i].map(|x| U256::from(x.0.as_slice()));
         interpreter.push(retaddr);
         interpreter.push(key_in_list);
@@ -527,11 +523,11 @@ fn test_insert_and_delete_storage() -> Result<()> {
         // we add the non deleted addres to new_addresses
         new_addresses.push(addresses_and_keys[j]);
     }
-    // the last address is not removed
+    // The last address is not removed.
     new_addresses.push(*addresses_and_keys.last().unwrap());
 
-    // We need to sort the list in order to properly compare with
-    // the linked list the interpreter's memory
+    // We need to sort the list in order to properly compare
+    // the linked list with the interpreter's memory.
     new_addresses.sort();
 
     let mut list = interpreter

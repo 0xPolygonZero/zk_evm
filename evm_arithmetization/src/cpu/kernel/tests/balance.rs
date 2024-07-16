@@ -1,5 +1,4 @@
 use anyhow::Result;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -23,10 +22,6 @@ fn test_account(balance: U256) -> AccountRlp {
         storage_root: HashedPartialTrie::from(Node::Empty).hash(),
         code_hash: H256::from_uint(&U256::from(8888)),
     }
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }
 
 #[test]

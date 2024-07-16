@@ -416,7 +416,7 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns a non-jumpdest proof for the address on the top of the stack. A
     /// non-jumpdest proof is the closest address to the address on the top of
-    /// the stack, if the closses address is >= 32, or zero otherwise.
+    /// the stack, if the closest address is >= 32, or zero otherwise.
     fn run_next_non_jumpdest_proof(&self) -> Result<U256, ProgramError> {
         let code = self.get_current_code()?;
         let address = u256_to_usize(stack_peek(self, 0)?)?;
@@ -448,7 +448,7 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns a pointer to an element in the list whose value is such that
     /// `value < addr == next_value` and addr is the top of the stack.
-    /// If the element is not in the list returns loops forever
+    /// If the element is not in the list, it loops forever
     fn run_next_addresses_remove(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         if let Some(([_, ptr], _)) = self
@@ -503,7 +503,7 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    /// Returns a pointer to an node in the list such that
+    /// Returns a pointer to a node in the list such that
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
     fn run_next_insert_account(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
@@ -523,7 +523,7 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns an unscaled pointer to an element in the list such that
     /// `node[0] <= addr < next_node[0]`, or  node[0] == addr and `node[1] <=
-    /// key < next_node[1]`, where `addr` and `key` are the elements at top
+    /// key < next_node[1]`, where `addr` and `key` are the elements at the top
     /// of the stack.
     fn run_next_insert_slot(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
@@ -549,9 +549,9 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    /// Returns a pointer `ptr`` to a node of the form [next_addr, ..]  in the
-    /// list such that `next_addr = addr` and addr is the top of the stack.
-    /// If the element is not in the list loops forever
+    /// Returns a pointer `ptr` to a node of the form [next_addr, ..]  in the
+    /// list such that `next_addr = addr` and `addr` is the top of the stack.
+    /// If the element is not in the list, loops forever.
     fn run_next_remove_account(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         if let Some(([.., ptr], _)) = self
@@ -565,10 +565,10 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    /// Returns a pointer `ptr`to an a node = [next_addr, next_key] in the list
-    /// such that `next_addr == addr` and `next_key == key `,
+    /// Returns a pointer `ptr` to a node = `[next_addr, next_key]` in the list
+    /// such that `next_addr == addr` and `next_key == key`,
     /// and `addr, key` are the elements at the top of the stack.
-    /// If the element is not in the list loops forever
+    /// If the element is not in the list, loops forever.
     fn run_next_remove_slot(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
@@ -584,6 +584,12 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
+    /// Returns a pointer `ptr` to a storage node in the storage linked list.
+    /// The node's next element = `[next_addr, next_key]` is such that
+    /// `next_addr = addr`, if such an element exists, or such that
+    /// `next_addr = @U256_MAX`. This is used to determine the first storage
+    /// node for the account at `addr`. `addr` is the element at the top of the
+    /// stack.
     fn run_next_remove_address_slots(&self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         if let Some((([.., pred_ptr], _), _)) = self
@@ -705,7 +711,7 @@ impl<F: Field> GenerationState<F> {
         &self,
     ) -> Result<LinkedList<ACCOUNTS_LINKED_LIST_NODE_SIZE>, ProgramError> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
-        // available virtual address in the segment. In order to get the length
+        // available virtual address in the segment. In order to get the length,
         // we need to substract `Segment::AccountsLinkedList` as usize.
         let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
         LinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)
@@ -715,8 +721,8 @@ impl<F: Field> GenerationState<F> {
         &self,
     ) -> Result<LinkedList<STORAGE_LINKED_LIST_NODE_SIZE>, ProgramError> {
         // `GlobalMetadata::AccountsLinkedListLen` stores the value of the next
-        // available virtual address in the segment. In order to get the length
-        // we need to substract `Segment::AccountsLinkedList` as usize.
+        // available virtual address in the segment. In order to get the length,
+        // we need to substract `Segment::StorageLinkedList` as usize.
         let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
         LinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)
     }
@@ -734,7 +740,7 @@ impl<F: Field> GenerationState<F> {
     ) -> Result<LinkedList<STORAGE_KEYS_ACCESS_LIST_LEN>, ProgramError> {
         // GlobalMetadata::AccessedStorageKeysLen stores the value of the next available
         // virtual address in the segment. In order to get the length we need
-        // to substract Segment::AccessedStorageKeys as usize
+        // to substract `Segment::AccessedStorageKeys` as usize.
         LinkedList::from_mem_and_segment(
             &self.memory.contexts[0].segments[Segment::AccessedStorageKeys.unscale()].content,
             Segment::AccessedStorageKeys,

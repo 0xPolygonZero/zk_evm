@@ -119,11 +119,6 @@ sstore_after_refund:
     %append_to_trie_data
     // stack: slot, value_ptr, kexit_info
 
-    // DEBUG
-    DUP2 %mload_trie_data
-    POP
-    // ENDDEBUG
-
     %slot_to_storage_key
     %address
     %addr_to_state_key

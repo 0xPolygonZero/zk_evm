@@ -382,26 +382,26 @@ fn get_state_and_storage_leaves(
 associated storage trie hash"
             );
 
-            // The last leaf must point to the new one
+            // The last leaf must point to the new one.
             let len = state_leaves.len();
             state_leaves[len - 1] =
                 U256::from(Segment::AccountsLinkedList as usize + state_leaves.len());
-            // The nibbles are the address?
+            // The nibbles are the address.
             let address = merged_key
                 .try_into()
                 .map_err(|_| ProgramError::IntegerTooLarge)?;
             state_leaves.push(address);
             // Set `value_ptr_ptr`.
             state_leaves.push(trie_data.len().into());
-            // Set counter
+            // Set counter.
             state_leaves.push(0.into());
-            // Set the next node as the inital node
+            // Set the next node as the inital node.
             state_leaves.push((Segment::AccountsLinkedList as usize).into());
 
-            // Push the payload in the trie data
+            // Push the payload in the trie data.
             trie_data.push(Some(nonce));
             trie_data.push(Some(balance));
-            // The Storage pointer is only written in the trie
+            // The Storage pointer is only written in the trie.
             trie_data.push(Some(0.into()));
             trie_data.push(Some(code_hash.into_uint()));
             get_storage_leaves(
@@ -465,14 +465,14 @@ where
             Ok(())
         }
         Node::Leaf { nibbles, value } => {
-            // The last leaf must point to the new one
+            // The last leaf must point to the new one.
             let len = storage_leaves.len();
             let merged_key = key.merge_nibbles(nibbles);
             storage_leaves[len - 1] =
                 U256::from(Segment::StorageLinkedList as usize + storage_leaves.len());
-            // Write the address
+            // Write the address.
             storage_leaves.push(address);
-            // Write the key
+            // Write the key.
             storage_leaves.push(
                 merged_key
                     .try_into()
@@ -480,9 +480,9 @@ where
             );
             // Write `value_ptr_ptr`.
             storage_leaves.push((trie_data.len()).into());
-            // Write the counter
+            // Write the counter.
             storage_leaves.push(0.into());
-            // Set the next node as the inital node
+            // Set the next node as the inital node.
             storage_leaves.push((Segment::StorageLinkedList as usize).into());
 
             let leaf = parse_value(value)?.into_iter().map(Some);

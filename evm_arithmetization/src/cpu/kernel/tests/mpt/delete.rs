@@ -1,5 +1,4 @@
 use anyhow::Result;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{BigEndianHash, H256};
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -18,13 +17,8 @@ use crate::memory::segments::Segment;
 use crate::util::h2u;
 use crate::Node;
 
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
-}
-
 #[test]
 fn mpt_delete_empty() -> Result<()> {
-    init_logger();
     test_state_trie(Default::default(), nibbles_64(0xABC), test_account_2())
 }
 
@@ -208,7 +202,7 @@ fn test_state_trie(
     let state_trie_ptr = interpreter.pop().expect("The stack should not be empty");
     interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_trie_ptr);
 
-    // Now, execute mpt_hash_state_trie.
+    // Now, execute `mpt_hash_state_trie`.
     let expected_state_trie_hash = state_trie.hash();
     interpreter.set_global_metadata_field(
         GlobalMetadata::StateTrieRootDigestAfter,
