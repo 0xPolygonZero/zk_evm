@@ -583,14 +583,14 @@ next_node_ok_with_value:
     %append_to_trie_data
     MSTORE_GENERAL
 
-    // stack: new_ptr + 2, next_ptr, addr, key, new_payload_ptr, retdest
+    // stack: new_ptr + 2, next_ptr, new_payload_ptr, retdest
     // Store the payload ptr copy
     %increment
     DUP1
-    DUP6
+    DUP4
     %clone_slot
     MSTORE_GENERAL
-    // stack: new_ptr + 3, next_ptr, addr, key, new_payload_ptr, retdest
+    // stack: new_ptr + 3, next_ptr, new_payload_ptr, retdest
     %increment
     DUP1
     // stack: new_next_ptr, new_next_ptr, next_ptr, retdest, new_payload_ptr
