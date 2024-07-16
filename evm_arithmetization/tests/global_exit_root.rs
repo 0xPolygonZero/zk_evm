@@ -80,10 +80,13 @@ fn test_global_exit_root() -> anyhow::Result<()> {
         withdrawals: vec![],
         global_exit_roots,
         tries: TrieInputs {
-            state_trie: state_trie_before,
-            transactions_trie,
-            receipts_trie,
-            storage_tries,
+            state_trie: state_trie_before.freeze(),
+            transactions_trie: transactions_trie.freeze(),
+            receipts_trie: receipts_trie.freeze(),
+            storage_tries: storage_tries
+                .into_iter()
+                .map(|(k, v)| (k, v.freeze()))
+                .collect(),
         },
         trie_roots_after,
         contract_code,

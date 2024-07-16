@@ -17,7 +17,7 @@ use mpt_trie::{
     trie_ops::{TrieOpError, TrieOpResult},
     trie_subsets::{create_trie_subset, SubsetTrieError},
     utils::{IntoTrieKey, TriePath},
-    Node,
+    FrozenNode, Node,
 };
 use thiserror::Error;
 
@@ -438,15 +438,17 @@ impl ProcessedBlockTrace {
             delta_application_out
                 .additional_state_trie_paths_to_not_hash
                 .into_iter(),
-        )?;
+        )?
+        .freeze();
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
 
         let transactions_trie =
-            create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
+            create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?.freeze();
 
         let receipts_trie =
-            create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
+            create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?
+                .freeze();
 
         let storage_tries = create_minimal_storage_partial_tries(
             &curr_block_tries.storage,
@@ -650,7 +652,8 @@ impl ProcessedBlockTrace {
                 &final_trie_state.state,
                 withdrawal_addrs,
                 additional_paths.into_iter(),
-            )?;
+            )?
+            .freeze();
         }
 
         Self::update_trie_state_from_withdrawals(
@@ -841,7 +844,7 @@ fn create_minimal_storage_partial_tries<'a>(
     storage_tries: &HashMap<H256, Node>,
     accesses_per_account: impl Iterator<Item = &'a (H256, Vec<Nibbles>)>,
     additional_storage_trie_paths_to_not_hash: &HashMap<H256, Vec<Nibbles>>,
-) -> TraceParsingResult<Vec<(H256, Node)>> {
+) -> TraceParsingResult<Vec<(H256, FrozenNode)>> {
     accesses_per_account
         .map(|(h_addr, mem_accesses)| {
             // Guaranteed to exist due to calling `init_any_needed_empty_storage_tries`
@@ -859,7 +862,8 @@ fn create_minimal_storage_partial_tries<'a>(
                 base_storage_trie,
                 storage_slots_to_not_hash,
                 TrieType::Storage,
-            )?;
+            )?
+            .freeze();
 
             Ok((*h_addr, partial_storage_trie))
         })

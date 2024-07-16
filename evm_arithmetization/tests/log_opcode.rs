@@ -127,10 +127,13 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     )?;
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::Empty,
-        receipts_trie: receipts_trie.clone(),
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: receipts_trie.clone().freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     // Prove a transaction which carries out two LOG opcodes.

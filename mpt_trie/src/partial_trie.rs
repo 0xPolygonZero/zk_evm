@@ -66,10 +66,35 @@ pub enum Node {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(from = "Node", into = "Node")]
 pub struct FrozenNode {
     node: Node,
     hash: H256,
+}
+
+impl From<Node> for FrozenNode {
+    fn from(value: Node) -> Self {
+        value.freeze()
+    }
+}
+
+impl From<FrozenNode> for Node {
+    fn from(value: FrozenNode) -> Self {
+        value.thaw()
+    }
+}
+
+impl Default for FrozenNode {
+    fn default() -> Self {
+        Node::default().freeze()
+    }
+}
+
+impl FrozenNode {
+    pub fn hash(&self) -> H256 {
+        self.hash
+    }
 }
 
 impl FrozenNode {

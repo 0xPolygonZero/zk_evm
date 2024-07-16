@@ -72,10 +72,13 @@ fn test_erc721() -> anyhow::Result<()> {
     storage_tries.push((contract_state_key, contract_storage()?));
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::from(Node::Empty),
-        receipts_trie: Node::from(Node::Empty),
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     let txn = signed_tx();

@@ -4,6 +4,7 @@ use bytes::Bytes;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
+use mpt_trie::FrozenNode;
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
@@ -205,7 +206,7 @@ fn load_state_trie(
     trie: &Node,
     key: Nibbles,
     trie_data: &mut Vec<U256>,
-    storage_tries_by_state_key: &HashMap<Nibbles, &Node>,
+    storage_tries_by_state_key: &HashMap<Nibbles, &FrozenNode>,
 ) -> Result<usize, ProgramError> {
     let node_ptr = trie_data.len();
     let type_of_trie = PartialTrieType::of(trie) as u32;
@@ -272,7 +273,7 @@ fn load_state_trie(
                 code_hash,
             } = account;
 
-            let storage_hash_only = Node::new(Node::Hash(storage_root));
+            let storage_hash_only = Node::new(Node::Hash(storage_root)).freeze();
             let merged_key = key.merge_nibbles(nibbles);
             let storage_trie: &Node = storage_tries_by_state_key
                 .get(&merged_key)

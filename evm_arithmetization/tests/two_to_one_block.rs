@@ -65,12 +65,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         hex!("ef46022eafbc33d70e6ea9c6aef1074c1ff7ad36417ffbc64307ad3a8c274b75").into()
     );
 
-    let tries_before = TrieInputs {
-        state_trie: Node::from(Node::Empty),
-        transactions_trie: Node::from(Node::Empty),
-        receipts_trie: Node::from(Node::Empty),
-        storage_tries: vec![],
-    };
+    let tries_before = TrieInputs::default();
 
     // Generated using a little py-evm script.
     let txn = hex!("f861050a8255f094a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0648242421ba02c89eb757d9deeb1f5b3859a9d4d679951ef610ac47ad4608dc142beb1b7e313a05af7e9fbab825455d36c36c7f4cfcafbeafa9a77bdff936b52afb36d4fe4bcdd");
@@ -176,9 +171,9 @@ fn get_test_block_proof(
         global_exit_roots: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
-            state_trie: Node::from(Node::Hash(inputs.trie_roots_after.state_root)),
-            transactions_trie: Node::from(Node::Hash(inputs.trie_roots_after.transactions_root)),
-            receipts_trie: Node::from(Node::Hash(inputs.trie_roots_after.receipts_root)),
+            state_trie: Node::Hash(inputs.trie_roots_after.state_root).freeze(),
+            transactions_trie: Node::Hash(inputs.trie_roots_after.transactions_root).freeze(),
+            receipts_trie: Node::Hash(inputs.trie_roots_after.receipts_root).freeze(),
             storage_tries: vec![],
         },
         trie_roots_after: inputs.trie_roots_after,

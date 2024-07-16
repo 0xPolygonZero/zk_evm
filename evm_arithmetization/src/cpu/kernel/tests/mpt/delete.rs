@@ -81,7 +81,7 @@ fn test_state_trie(state_trie: Node, k: Nibbles, mut account: AccountRlp) -> Res
     account.storage_root = Node::from(Node::Empty).hash();
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie.clone(),
+        state_trie: state_trie.clone().freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],

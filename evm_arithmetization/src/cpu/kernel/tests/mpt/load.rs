@@ -53,7 +53,8 @@ fn load_all_mpts_leaf() -> Result<()> {
         state_trie: Node::Leaf {
             nibbles: 0xABC_u64.into(),
             value: test_account_1_rlp(),
-        },
+        }
+        .freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
@@ -99,7 +100,7 @@ fn load_all_mpts_leaf() -> Result<()> {
 fn load_all_mpts_hash() -> Result<()> {
     let hash = H256::random();
     let trie_inputs = TrieInputs {
-        state_trie: Node::Hash(hash),
+        state_trie: Node::Hash(hash).freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
@@ -134,7 +135,8 @@ fn load_all_mpts_empty_branch() -> Result<()> {
     let state_trie = Node::Branch {
         children,
         value: vec![],
-    };
+    }
+    .freeze();
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
@@ -188,7 +190,7 @@ fn load_all_mpts_empty_branch() -> Result<()> {
 #[test]
 fn load_all_mpts_ext_to_leaf() -> Result<()> {
     let trie_inputs = TrieInputs {
-        state_trie: extension_to_leaf(test_account_1_rlp()),
+        state_trie: extension_to_leaf(test_account_1_rlp()).freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
@@ -235,7 +237,8 @@ fn load_mpt_txn_trie() -> Result<()> {
         transactions_trie: Node::from(Node::Leaf {
             nibbles: Nibbles::from_str("0x80").unwrap(),
             value: txn.clone(),
-        }),
+        })
+        .freeze(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
     };

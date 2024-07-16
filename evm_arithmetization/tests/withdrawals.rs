@@ -39,8 +39,8 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
     let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    let transactions_trie = Node::from(Node::Empty);
-    let receipts_trie = Node::from(Node::Empty);
+    let transactions_trie = Node::Empty.freeze();
+    let receipts_trie = Node::Empty.freeze();
 
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
@@ -88,10 +88,13 @@ fn test_withdrawals() -> anyhow::Result<()> {
         withdrawals,
         global_exit_roots: vec![],
         tries: TrieInputs {
-            state_trie: state_trie_before,
+            state_trie: state_trie_before.freeze(),
             transactions_trie,
             receipts_trie,
-            storage_tries,
+            storage_tries: storage_tries
+                .into_iter()
+                .map(|(k, v)| (k, v.freeze()))
+                .collect(),
         },
         trie_roots_after,
         contract_code,

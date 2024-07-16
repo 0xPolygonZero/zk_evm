@@ -96,10 +96,13 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     storage_tries.push((to_state_key, Node::Empty));
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::Empty,
-        receipts_trie: Node::Empty,
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     let gas_used = U256::from(0x17d7840_u32);

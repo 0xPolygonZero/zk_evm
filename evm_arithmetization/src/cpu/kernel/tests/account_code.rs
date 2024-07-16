@@ -325,10 +325,10 @@ fn sstore() -> Result<()> {
     state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
-        transactions_trie: Node::Empty,
-        receipts_trie: Node::Empty,
-        storage_tries: vec![(addr_hashed, Node::Empty)],
+        state_trie: state_trie_before.clone().freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: vec![(addr_hashed, Node::Empty.freeze())],
     };
 
     let initial_stack = vec![];
@@ -423,10 +423,10 @@ fn sload() -> Result<()> {
     state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
-        transactions_trie: Node::Empty,
-        receipts_trie: Node::Empty,
-        storage_tries: vec![(addr_hashed, Node::Empty)],
+        state_trie: state_trie_before.clone().freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: vec![(addr_hashed, Node::Empty.freeze())],
     };
 
     let initial_stack = vec![];
