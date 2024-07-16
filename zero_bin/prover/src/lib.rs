@@ -47,7 +47,6 @@ impl BlockProverInput {
         use paladin::directive::{Directive, IndexedStream};
 
         let block_number = self.get_block_number();
-        info!("Proving block {block_number}");
 
         let other_data = self.other_data;
         let txs = self.block_trace.into_txn_proof_gen_ir(
