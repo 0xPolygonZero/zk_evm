@@ -47,15 +47,15 @@
     // stack: cloned_account_ptr
 %endmacro
 
+// The slot_ptr cannot be 0, because `insert_slot` 
+// is only called in `revert_storage_change` (where the case `slot_ptr = 0` 
+// is dealt with differently), and in `storage_write`, 
+// where writing 0 actually corresponds to a `delete`.
 %macro clone_slot
     // stack: slot_ptr
-    DUP1
-    %jumpi(%%non_zero_ptr)
-    %jump(%%avoid_clonning_zero_ptr)
-%%non_zero_ptr:
+    DUP1 %assert_nonzero
     %get_trie_data_size
-%%avoid_clonning_zero_ptr:
-    // stack: cloned_slot_ptr
+    // stack: cloned_slot_ptr, slot_ptr
     SWAP1
     %mload_trie_data
     %append_to_trie_data
