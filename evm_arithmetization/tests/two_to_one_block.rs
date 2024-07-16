@@ -55,7 +55,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     };
     let to_account_before = AccountRlp::default();
 
-    let state_trie_before: Node = Node::Leaf {
+    let state_trie_before = Node::Leaf {
         nibbles: sender_nibbles,
         value: rlp::encode(&sender_account_before).to_vec(),
     };
@@ -127,7 +127,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
     )?;
-    let transactions_trie: Node = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     };

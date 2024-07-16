@@ -170,7 +170,7 @@ fn test_add11_yml() {
             rlp::encode(&receipt_0).to_vec(),
         )
         .unwrap();
-    let transactions_trie: Node = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     };
@@ -353,7 +353,7 @@ fn test_add11_yml_with_exception() {
             rlp::encode(&receipt_0).to_vec(),
         )
         .unwrap();
-    let transactions_trie: Node = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     };

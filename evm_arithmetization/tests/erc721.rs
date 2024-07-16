@@ -172,7 +172,7 @@ fn test_erc721() -> anyhow::Result<()> {
     };
     let mut receipts_trie = Node::Empty;
     receipts_trie.insert(Nibbles::from_str("0x80").unwrap(), receipt_0.encode(0))?;
-    let transactions_trie: Node = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     };
