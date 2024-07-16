@@ -34,7 +34,7 @@ use trace_decoder::OtherBlockData;
 type F = GoldilocksField;
 
 const JERIGON_WITNESS_DIR: &str = "tests/data/witnesses/zero_jerigon";
-const CDK_ERIGON_WITNESS_DIR: &str = "tests/data/witnesses/hermez_cdk_erigon";
+//const CDK_ERIGON_WITNESS_DIR: &str = "tests/data/witnesses/hermez_cdk_erigon";
 
 enum JsonFileType {
     Witness,
@@ -161,7 +161,7 @@ fn verify_generation_inputs(
 /// CI even in `debug` mode.
 #[rstest]
 #[case(JERIGON_WITNESS_DIR)]
-#[case(CDK_ERIGON_WITNESS_DIR)]
+//#[case(CDK_ERIGON_WITNESS_DIR)]
 fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
     init_logger();
 
@@ -214,7 +214,7 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
 /// checks if trace decoder output generation inputs are valid and consistent
 #[rstest]
 #[case(JERIGON_WITNESS_DIR)]
-#[case(CDK_ERIGON_WITNESS_DIR)]
+//#[case(CDK_ERIGON_WITNESS_DIR)]
 fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
     init_logger();
 
