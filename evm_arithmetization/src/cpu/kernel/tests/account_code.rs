@@ -357,10 +357,10 @@ fn sstore() -> Result<()> {
     let account_after = AccountRlp {
         balance: 0x0de0b6b3a7640000u64.into(),
         code_hash,
-        storage_root: Node::from(Node::Leaf {
+        storage_root: Node::Leaf {
             nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
             value: vec![2],
-        })
+        }
         .hash(),
         ..AccountRlp::default()
     };

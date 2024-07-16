@@ -124,10 +124,10 @@ fn add11_yml() -> anyhow::Result<()> {
             balance: 0xde0b6b3a76586a0u64.into(),
             code_hash,
             // Storage map: { 0 => 2 }
-            storage_root: Node::from(Node::Leaf {
+            storage_root: Node::Leaf {
                 nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
                 value: vec![2],
-            })
+            }
             .hash(),
             ..AccountRlp::default()
         };

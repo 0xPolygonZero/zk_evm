@@ -234,10 +234,10 @@ fn load_mpt_txn_trie() -> Result<()> {
 
     let trie_inputs = TrieInputs {
         state_trie: Default::default(),
-        transactions_trie: Node::from(Node::Leaf {
+        transactions_trie: Node::Leaf {
             nibbles: Nibbles::from_str("0x80").unwrap(),
             value: txn.clone(),
-        })
+        }
         .freeze(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
