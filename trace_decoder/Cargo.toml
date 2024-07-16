@@ -41,8 +41,10 @@ pretty_env_logger = { workspace = true }
 serde_json = { workspace = true }
 prover = { workspace = true }
 serde_path_to_error = { workspace = true }
+plonky2_maybe_rayon = { workspace = true }
 alloy-rpc-types-eth = "0.1.4"
 rstest = "0.21.0"
+
 
 [[bench]]
 name = "block_processing"

@@ -5065,6 +5065,7 @@ dependencies = [
  "mpt_trie",
  "nunny",
  "plonky2",
+ "plonky2_maybe_rayon",
  "pretty_env_logger",
  "prover",
  "rlp",

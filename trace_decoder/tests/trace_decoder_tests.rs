@@ -25,6 +25,7 @@ use log::{info, warn};
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::util::timing::TimingTree;
+use plonky2_maybe_rayon::*;
 use pretty_env_logger::env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use prover::BlockProverInput;
 use rstest::rstest;
@@ -84,25 +85,6 @@ fn decode_generation_inputs(
     .into_iter()
     .collect::<Vec<GenerationInputs>>();
     Ok(trace_decoder_output)
-}
-
-fn all_test_generation_inputs(
-    test_data_dir: &str,
-) -> impl Iterator<Item = anyhow::Result<GenerationInputs>> {
-    find_json_data_files(test_data_dir, JsonFileType::Witness)
-        .into_iter()
-        .flatten()
-        .map(|file_path| {
-            // Read one json witness file and get list of BlockProverInputs
-            read_witness_file(&file_path)
-        })
-        .flatten_ok()
-        .map_ok(|block_prover_input| {
-            // Run trace decoder, create generation inputs
-            decode_generation_inputs(block_prover_input)
-        })
-        .map(|it| Ok(it??.into_iter()))
-        .flatten_ok()
 }
 
 fn verify_generation_inputs(
@@ -183,23 +165,44 @@ fn verify_generation_inputs(
 fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
     init_logger();
 
-    let result: Vec<Result<(), anyhow::Error>> = all_test_generation_inputs(test_witness_directory)
-        .map_ok(|generation_inputs| {
-            let timing = TimingTree::new(
-                &format!(
-                    "Simulating zkEVM CPU for block {} txn {:?}",
-                    generation_inputs.block_metadata.block_number,
-                    generation_inputs.txn_number_before
-                ),
-                log::Level::Info,
-            );
-            simulate_execution::<F>(generation_inputs)?;
-            timing.filter(Duration::from_millis(100)).print();
-            Ok::<(), anyhow::Error>(())
+    let results = find_json_data_files(test_witness_directory, JsonFileType::Witness)
+        .into_iter()
+        .flatten()
+        .map(|file_path| {
+            {
+                // Read one json witness file for this block and get list of BlockProverInputs
+                read_witness_file(&file_path)
+            }
         })
+        .map_ok(|block_prover_inputs| {
+            block_prover_inputs.into_iter().map(|block_prover_input| {
+                // Run trace decoder, create list of generation inputs
+                let block_generation_inputs = decode_generation_inputs(block_prover_input)?;
+                block_generation_inputs
+                    .into_par_iter()
+                    .map(|generation_inputs| {
+                        // For every generation input, simulate execution.
+                        // Execution will be simulated in parallel
+                        let timing = TimingTree::new(
+                            &format!(
+                                "Simulating zkEVM CPU for block {} txn {:?}",
+                                generation_inputs.block_metadata.block_number,
+                                generation_inputs.txn_number_before
+                            ),
+                            log::Level::Info,
+                        );
+                        simulate_execution::<F>(generation_inputs)?;
+                        timing.filter(Duration::from_millis(100)).print();
+                        Ok::<(), anyhow::Error>(())
+                    })
+                    .collect::<Result<Vec<_>, anyhow::Error>>()
+            })
+        })
+        .flatten_ok()
         .map(|it| it?)
-        .collect();
-    result.iter().for_each(|it| {
+        .collect::<Vec<Result<_, anyhow::Error>>>();
+
+    results.iter().for_each(|it| {
         if let Err(e) = it {
             panic!("Failed to run parsing decoding proving test: {e:?}");
         }
