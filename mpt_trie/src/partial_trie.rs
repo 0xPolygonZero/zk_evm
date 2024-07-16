@@ -66,6 +66,9 @@ pub enum Node {
     },
 }
 
+/// An immutable [`Node`] which caches the [`Node::hash`].
+///
+/// Freely convertible with [`Node`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(from = "Node", into = "Node")]
 pub struct FrozenNode {
@@ -92,12 +95,14 @@ impl Default for FrozenNode {
 }
 
 impl FrozenNode {
+    /// A cached version of [`Node::hash`].
     pub fn hash(&self) -> H256 {
         self.hash
     }
 }
 
 impl FrozenNode {
+    /// Unfreeze this object, making it mutable again.
     pub fn thaw(self) -> Node {
         self.node
     }
@@ -111,6 +116,7 @@ impl Deref for FrozenNode {
 }
 
 impl Node {
+    /// Make this node immutable, caching it's [`Node::hash`].
     pub fn freeze(self) -> FrozenNode {
         FrozenNode {
             hash: self.hash(),

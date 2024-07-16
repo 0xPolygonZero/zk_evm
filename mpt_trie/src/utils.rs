@@ -15,7 +15,7 @@ use crate::{
     trie_ops::TrieOpResult,
 };
 
-/// Simplified trie node type to make logging cleaner.
+/// Represents the different [`Node`] discriminants.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum NodeKind {
     Empty,
