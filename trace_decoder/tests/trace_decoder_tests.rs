@@ -7,7 +7,7 @@
 //! 2. Download the header file for the block or range of blocks:
 //!```
 //!     file_name = b<number>_<network>_header.json
-//!     echo "[" > $file_name && cast rpc eth_getBlockByNumber "0x<block_number>" 'true' --rpc-url <node_rpc_endpoint>  >> $file_name && echo "]" >> $file_name
+//!     echo "[" > $file_name && cast rpc eth_getBlockByNumber "0x<block_number>" 'false' --rpc-url <node_rpc_endpoint>  >> $file_name && echo "]" >> $file_name
 //! ```
 
 use std::time::Duration;
@@ -166,8 +166,8 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
     init_logger();
 
     let results = find_json_data_files(test_witness_directory, JsonFileType::Witness)
+        .expect("valid json data files found")
         .into_iter()
-        .flatten()
         .map(|file_path| {
             {
                 // Read one json witness file for this block and get list of BlockProverInputs
@@ -220,8 +220,8 @@ fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
 
     let result: Vec<Result<(), anyhow::Error>> =
         find_json_data_files(test_witness_directory, JsonFileType::Witness)
+            .expect("valid json data files found")
             .into_iter()
-            .flatten()
             .map(|file_path| {
                 {
                     // Read json header file of the block. We need it to check tracer output
