@@ -344,24 +344,6 @@ mod tests {
     }
 
     #[test]
-    fn small() -> TrieOpResult<()> {
-        for pow in 0..16 {
-            let n = 2usize.pow(pow);
-            let start = SystemTime::now();
-            create_trie_and_stats_from_entries_and_assert(n, 0, 9522)?;
-            println!(
-                "{}\t{}",
-                n,
-                SystemTime::now()
-                    .duration_since(start)
-                    .unwrap()
-                    .as_secs_f32()
-            )
-        }
-        Ok(())
-    }
-
-    #[test]
     fn massive_leaf_trie_has_correct_leaf_node_stats() -> TrieOpResult<()> {
         create_trie_and_stats_from_entries_and_assert(MASSIVE_TRIE_SIZE, 0, 9522)
     }
