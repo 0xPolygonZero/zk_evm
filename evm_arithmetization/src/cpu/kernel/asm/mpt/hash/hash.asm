@@ -74,7 +74,6 @@ global encode_or_hash_node:
     SWAP2 %add_const(2)
     %stack (cur_len, encode_value, hash, retdest) -> (retdest, hash, 32, cur_len)
     JUMP
-
 encode_or_hash_concrete_node:
     %stack (node_type, node_ptr, encode_value, cur_len) -> (node_type, node_ptr, encode_value, cur_len, maybe_hash_node)
     %jump(encode_node)

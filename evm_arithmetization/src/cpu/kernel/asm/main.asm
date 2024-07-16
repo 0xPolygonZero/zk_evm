@@ -157,12 +157,9 @@ global execute_withdrawals:
 global perform_final_checks:
     // stack: cum_gas, txn_counter, num_nibbles, txn_nb
     // Check that we end up with the correct `cum_gas`, `txn_nb` and bloom filter.
-    %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER) 
-    %assert_eq
-
-    
-    DUP3 %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER)
-    %assert_eq
+    %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_AFTER) %assert_eq
+    DUP3
+    %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER) %assert_eq
     %pop3
 
     PROVER_INPUT(trie_ptr::state)
@@ -180,8 +177,7 @@ global perform_final_checks:
     
 global check_state_trie:
     %set_final_tries
-    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
-    %assert_eq
+    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
 global check_txn_trie:
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq
 global check_receipt_trie:

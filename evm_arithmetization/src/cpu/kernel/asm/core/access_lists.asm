@@ -274,7 +274,6 @@ global insert_accessed_storage_keys:
     %jump_neq_const(@U256_MAX, storage_key_found)
     // The storage key is not in the list.
     PANIC
-
 storage_key_found:
     // The address was already in the list
     // stack: pred_ptr, addr, key, retdest

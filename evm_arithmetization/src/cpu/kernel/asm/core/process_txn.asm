@@ -36,8 +36,7 @@ global process_normalized_txn:
     // stack: sender, retdest
 
     // Assert sender has no code.
-    DUP1 %ext_code_empty
-    %assert_nonzero(invalid_txn_1)
+    DUP1 %ext_code_empty %assert_nonzero(invalid_txn_1)
     // stack: sender, retdest
 
     // Assert sender balance >= gas_limit * gas_price + value.

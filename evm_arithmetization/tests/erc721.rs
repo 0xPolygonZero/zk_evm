@@ -177,7 +177,6 @@ fn test_erc721() -> anyhow::Result<()> {
     };
 
     let max_cpu_len_log = 20;
-
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
     let proofs = prove_all_segments::<F, C, D>(

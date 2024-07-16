@@ -22,7 +22,8 @@ revert_account_destroyed_contd:
     %assert_nonzero
     %add_const(1)
     // stack: target_balance_ptr, address, prev_balance, retdest
-    DUP3 DUP2 %mload_trie_data
+    DUP3
+    DUP2 %mload_trie_data
     // stack: target_balance, prev_balance, target_balance_ptr, address, prev_balance, retdest
     SUB SWAP1 %mstore_trie_data
     // stack: address, prev_balance, retdest
@@ -33,4 +34,4 @@ revert_account_destroyed_contd:
     // stack: account_balance_payload_ptr, prev_balance, retdest
     %mstore_trie_data
     JUMP
-    
+
