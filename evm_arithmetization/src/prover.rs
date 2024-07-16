@@ -344,11 +344,12 @@ where
         .unwrap();
 
     // We compute the Field Merkle Tree of all STARK traces.
-    let trace_polys_values_sorted_flat = trace_poly_values_sorted
+    let trace_polys_values_sorted_flat: Vec<_> = trace_poly_values_sorted
         .clone()
         .into_iter()
         .flatten()
         .collect();
+    let num_trace_polys = trace_polys_values_sorted_flat.len();
     let trace_commitment = timed!(
         timing,
         "compute trace commitments",
@@ -358,7 +359,7 @@ where
             false,
             cap_height,
             timing,
-            &[None; NUM_TABLES],
+            &vec![None; num_trace_polys],
         )
     );
 
@@ -402,11 +403,12 @@ where
         .iter()
         .map(|&table| auxiliary_columns[*table].clone())
         .collect();
-    let auxiliary_columns_sorted_flat = auxiliary_columns_sorted
+    let auxiliary_columns_sorted_flat: Vec<_> = auxiliary_columns_sorted
         .clone()
         .into_iter()
         .flatten()
         .collect();
+    let num_aux_polys = auxiliary_columns_sorted_flat.len();
     let auxiliary_commitment = timed!(
         timing,
         "compute auxiliary commitments",
@@ -416,7 +418,7 @@ where
             false,
             cap_height,
             timing,
-            &[None; NUM_TABLES],
+            &vec![None; num_aux_polys],
         )
     );
     challenger.observe_cap(&auxiliary_commitment.batch_merkle_tree.cap);
