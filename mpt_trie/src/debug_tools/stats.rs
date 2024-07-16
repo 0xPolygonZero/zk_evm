@@ -306,6 +306,8 @@ fn get_trie_stats_rec(node: &Node, state: &mut CurrTrackingState, curr_depth: us
 
 #[cfg(test)]
 mod tests {
+    use std::time::SystemTime;
+
     use super::get_trie_stats;
     use crate::{
         partial_trie::Node,
@@ -339,6 +341,24 @@ mod tests {
     #[ignore]
     fn perfectly_balanced_trie_has_correct_node_stats() {
         todo!()
+    }
+
+    #[test]
+    fn small() -> TrieOpResult<()> {
+        for pow in 0..16 {
+            let n = 2usize.pow(pow);
+            let start = SystemTime::now();
+            create_trie_and_stats_from_entries_and_assert(n, 0, 9522)?;
+            println!(
+                "{}\t{}",
+                n,
+                SystemTime::now()
+                    .duration_since(start)
+                    .unwrap()
+                    .as_secs_f32()
+            )
+        }
+        Ok(())
     }
 
     #[test]

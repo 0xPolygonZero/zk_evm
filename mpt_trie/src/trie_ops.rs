@@ -1,7 +1,7 @@
 //! Defines various operations for
 //! [`PartialTrie`].
 
-use std::{array, fmt::Display, mem::size_of};
+use std::{array, fmt::Display, mem::size_of, sync::Arc};
 
 use enum_as_inner::EnumAsInner;
 use ethereum_types::{H256, U128, U256, U512};
@@ -161,8 +161,8 @@ struct ExistingAndNewNodePreAndPost {
 /// enum just indicates whether or not a value needs to go into the branch node.
 #[derive(Debug)]
 enum ExistingOrNewBranchValuePlacement {
-    BranchValue(Vec<u8>, (Nibble, Node)),
-    BothBranchChildren((Nibble, Node), (Nibble, Node)),
+    BranchValue(Vec<u8>, (Nibble, Arc<Node>)),
+    BothBranchChildren((Nibble, Arc<Node>), (Nibble, Arc<Node>)),
 }
 
 #[derive(Debug)]
@@ -174,7 +174,7 @@ enum IterStackEntry {
 
 #[derive(Debug)]
 struct BranchStackEntry {
-    children: [Box<Node>; 16],
+    children: [Arc<Node>; 16],
     value: Vec<u8>,
     curr_nib: Nibble,
 }
@@ -426,7 +426,7 @@ fn insert_into_trie_rec(node: &Node, mut new_node: InsertEntry) -> TrieOpResult<
             Ok(
                 insert_into_trie_rec(&children[nibble as usize], new_node)?.map(|updated_child| {
                     let mut updated_children = children.clone();
-                    updated_children[nibble as usize] = Box::new(updated_child);
+                    updated_children[nibble as usize] = Arc::new(updated_child);
                     branch(updated_children, value.clone())
                 }),
             )
@@ -454,8 +454,11 @@ fn insert_into_trie_rec(node: &Node, mut new_node: InsertEntry) -> TrieOpResult<
             // If we split an extension node, we may need to place an extension node after
             // the branch.
             let updated_existing_node = match existing_postfix_adjusted_for_branch.count {
-                0 => *child.clone(),
-                _ => extension(existing_postfix_adjusted_for_branch, child.clone()),
+                0 => child.clone(),
+                _ => Arc::new(extension(
+                    existing_postfix_adjusted_for_branch,
+                    child.clone(),
+                )),
             };
 
             Ok(Some(place_branch_and_potentially_ext_prefix(
@@ -483,7 +486,7 @@ fn insert_into_trie_rec(node: &Node, mut new_node: InsertEntry) -> TrieOpResult<
 
             Ok(Some(place_branch_and_potentially_ext_prefix(
                 &info,
-                existing_node_truncated,
+                Arc::new(existing_node_truncated),
                 new_node,
             )))
         }
@@ -517,7 +520,7 @@ fn delete_intern(node: &Node, mut curr_k: Nibbles) -> TrieOpResult<Option<(Node,
                             // Branch stays.
                             let mut updated_children = children.clone();
                             updated_children[nibble as usize] =
-                                Box::new(try_collapse_if_extension(updated_child)?);
+                                Arc::new(try_collapse_if_extension(updated_child)?);
                             branch(updated_children, value.clone())
                         }
                         true => {
@@ -625,7 +628,7 @@ fn get_pre_and_postfixes_for_existing_and_new_nodes(
 
 fn place_branch_and_potentially_ext_prefix(
     info: &ExistingAndNewNodePreAndPost,
-    existing_node: Node,
+    existing_node: Arc<Node>,
     new_node: InsertEntry,
 ) -> Node {
     let mut children = new_branch_child_arr();
@@ -637,12 +640,12 @@ fn place_branch_and_potentially_ext_prefix(
         new_node,
     ) {
         ExistingOrNewBranchValuePlacement::BranchValue(branch_v, (nib, node)) => {
-            children[nib as usize] = Box::new(node);
+            children[nib as usize] = (node);
             value = branch_v;
         }
         ExistingOrNewBranchValuePlacement::BothBranchChildren((nib_1, node_1), (nib_2, node_2)) => {
-            children[nib_1 as usize] = Box::new(node_1);
-            children[nib_2 as usize] = Box::new(node_2);
+            children[nib_1 as usize] = (node_1);
+            children[nib_2 as usize] = (node_2);
         }
     }
 
@@ -658,18 +661,18 @@ fn place_branch_and_potentially_ext_prefix(
 /// into the value field of the new branch.
 fn check_if_existing_or_new_node_should_go_in_branch_value_field(
     info: &ExistingAndNewNodePreAndPost,
-    existing_node: Node,
+    existing_node: Arc<Node>,
     new_node_entry: InsertEntry,
 ) -> ExistingOrNewBranchValuePlacement {
     // Guaranteed that both postfixes are not equal at this point.
     match (
         info.existing_postfix.count,
         info.new_postfix.count,
-        &existing_node,
+        &*existing_node,
     ) {
         (0, _, Node::Leaf { value, .. }) => ExistingOrNewBranchValuePlacement::BranchValue(
             value.clone(),
-            ins_entry_into_leaf_and_nibble(info, new_node_entry),
+            (ins_entry_into_leaf_and_nibble(info, new_node_entry)),
         ),
 
         (_, 0, _) => ExistingOrNewBranchValuePlacement::BranchValue(
@@ -678,7 +681,7 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field(
         ),
         (_, _, _) => ExistingOrNewBranchValuePlacement::BothBranchChildren(
             (info.existing_postfix.get_nibble(0), existing_node.clone()),
-            ins_entry_into_leaf_and_nibble(info, new_node_entry),
+            (ins_entry_into_leaf_and_nibble(info, new_node_entry)),
         ),
     }
 }
@@ -686,7 +689,7 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field(
 fn ins_entry_into_leaf_and_nibble(
     info: &ExistingAndNewNodePreAndPost,
     entry: InsertEntry,
-) -> (Nibble, Node) {
+) -> (Nibble, Arc<Node>) {
     let new_first_nibble = info.new_postfix.get_nibble(0);
     let new_node = create_node_from_insert_val(
         entry
@@ -695,19 +698,19 @@ fn ins_entry_into_leaf_and_nibble(
         entry.v,
     );
 
-    (new_first_nibble, new_node)
+    (new_first_nibble, Arc::new(new_node))
 }
 
-fn new_branch_child_arr() -> [Box<Node>; 16] {
-    array::from_fn(|_ix| Box::new(Node::Empty))
+fn new_branch_child_arr() -> [Arc<Node>; 16] {
+    array::from_fn(|_ix| Arc::new(Node::Empty))
 }
 
-fn get_num_non_empty_children(children: &[Box<Node>; 16]) -> usize {
+fn get_num_non_empty_children(children: &[Arc<Node>; 16]) -> usize {
     children.iter().filter(|c| !node_is_empty(c)).count()
 }
 
 fn get_other_non_empty_child_and_nibble_in_two_elem_branch(
-    children: &[Box<Node>; 16],
+    children: &[Arc<Node>; 16],
     our_nib: Nibble,
 ) -> (Nibble, &Node) {
     children
@@ -722,15 +725,15 @@ fn node_is_empty(node: &Node) -> bool {
     matches!(node, Node::Empty)
 }
 
-pub(crate) fn branch(children: [Box<Node>; 16], value: Vec<u8>) -> Node {
+pub(crate) fn branch(children: [Arc<Node>; 16], value: Vec<u8>) -> Node {
     Node::Branch { children, value }
 }
 
-fn branch_from_insert_val(children: [Box<Node>; 16], value: ValOrHash) -> TrieOpResult<Node> {
+fn branch_from_insert_val(children: [Arc<Node>; 16], value: ValOrHash) -> TrieOpResult<Node> {
     create_node_if_ins_val_not_hash(value, |value| Node::Branch { children, value })
 }
 
-fn extension(nibbles: Nibbles, child: impl Into<Box<Node>>) -> Node {
+fn extension(nibbles: Nibbles, child: impl Into<Arc<Node>>) -> Node {
     Node::Extension {
         nibbles,
         child: child.into(),

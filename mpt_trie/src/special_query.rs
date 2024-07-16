@@ -1,13 +1,15 @@
 //! Specialized queries that users of the library may need that require
 //! knowledge of the private internal trie state.
 
+use std::sync::Arc;
+
 use crate::{nibbles::Nibbles, partial_trie::Node, utils::TrieSegment};
 
 /// An iterator for a trie query. Note that this iterator is lazy.
 #[derive(Debug)]
 pub struct TriePathIter {
     /// The next node in the trie to query with the remaining key.
-    curr_node: Node,
+    curr_node: Arc<Node>,
 
     /// The remaining part of the key as we traverse down the trie.
     curr_key: Nibbles,
@@ -29,7 +31,7 @@ impl Iterator for TriePathIter {
             return None;
         }
 
-        match &self.curr_node {
+        match &*self.curr_node {
             Node::Empty => {
                 self.terminated = true;
                 Some(TrieSegment::Empty)
@@ -49,7 +51,7 @@ impl Iterator for TriePathIter {
                 }
 
                 let nib = self.curr_key.pop_next_nibble_front();
-                self.curr_node = *children[nib as usize].clone();
+                self.curr_node = children[nib as usize].clone();
 
                 Some(TrieSegment::Branch(nib))
             }
@@ -67,7 +69,7 @@ impl Iterator for TriePathIter {
                     true => {
                         pop_nibbles_clamped(&mut self.curr_key, nibbles.count);
                         let res = Some(TrieSegment::Extension(*nibbles));
-                        self.curr_node = *child.clone();
+                        self.curr_node = child.clone();
 
                         res
                     }
@@ -106,7 +108,7 @@ where
     K: Into<Nibbles>,
 {
     TriePathIter {
-        curr_node: trie.clone(),
+        curr_node: Arc::new(trie.clone()),
         curr_key: k.into(),
         terminated: false,
         always_include_final_node_if_possible,

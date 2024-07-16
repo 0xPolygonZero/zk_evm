@@ -1,6 +1,6 @@
 //! Definitions for the core types [`PartialTrie`] and [`Nibbles`].
 
-use std::{fmt::Debug, ops::Deref};
+use std::{fmt::Debug, ops::Deref, sync::Arc};
 
 use ethereum_types::H256;
 use serde::{Deserialize, Serialize};
@@ -45,7 +45,7 @@ pub enum Node {
     /// A branch node, which consists of 16 children and an optional value.
     Branch {
         /// A slice containing the 16 children of this branch node.
-        children: [Box<Self>; 16],
+        children: [Arc<Self>; 16],
         /// The payload of this node.
         value: Vec<u8>,
     },
@@ -55,7 +55,7 @@ pub enum Node {
         /// The path of this extension.
         nibbles: Nibbles,
         /// The child of this extension node.
-        child: Box<Self>,
+        child: Arc<Self>,
     },
     /// A leaf node, which consists of a list of nibbles and a value.
     Leaf {

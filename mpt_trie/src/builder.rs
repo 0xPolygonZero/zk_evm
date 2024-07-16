@@ -1,6 +1,6 @@
 //! A builder for constructing a partial trie from a collection of proofs.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use ethereum_types::H256;
 use keccak_hash::keccak;
@@ -114,7 +114,7 @@ fn is_leaf_node(bytes: &[Vec<u8>]) -> bool {
 fn parse_branch_node(bytes: Vec<Vec<u8>>, nodes: &HashMap<H256, Vec<u8>>) -> Node {
     let children = (0..16)
         .map(|i| {
-            Box::new(match bytes[i].is_empty() {
+            Arc::new(match bytes[i].is_empty() {
                 true => Node::Empty,
                 false => parse_child_node(&bytes[i], nodes),
             })
@@ -137,7 +137,7 @@ fn parse_extension_node(bytes: Vec<Vec<u8>>, nodes: &HashMap<H256, Vec<u8>>) -> 
 
     Node::Extension {
         nibbles: encoded_path,
-        child: (Box::new(parse_child_node(&bytes[1], nodes))),
+        child: (Arc::new(parse_child_node(&bytes[1], nodes))),
     }
 }
 

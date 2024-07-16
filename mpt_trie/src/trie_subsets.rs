@@ -5,7 +5,7 @@
 //! included in the produced subset. Any nodes that are not needed in the subset
 //! are replaced with [`Hash`] nodes are far up the trie as possible.
 
-use std::array;
+use std::{array, sync::Arc};
 
 use ethereum_types::H256;
 use log::trace;
@@ -63,21 +63,21 @@ impl TrackedNode {
     }
 }
 
-fn tracked_branch(underlying_children: &[Box<Node>; 16]) -> [TrackedNode; 16] {
+fn tracked_branch(underlying_children: &[Arc<Node>; 16]) -> [TrackedNode; 16] {
     array::from_fn(|ix| TrackedNode::new(&underlying_children[ix]))
 }
 
 fn partial_trie_extension(nibbles: Nibbles, child: &TrackedNode) -> Node {
     Node::Extension {
         nibbles,
-        child: (Box::new(create_partial_trie_subset_from_tracked_trie(child))),
+        child: (Arc::new(create_partial_trie_subset_from_tracked_trie(child))),
     }
 }
 
 fn partial_trie_branch(underlying_children: &[TrackedNode; 16], value: &[u8]) -> Node {
     Node::Branch {
         children: array::from_fn(|ix| {
-            Box::new(create_partial_trie_subset_from_tracked_trie(
+            Arc::new(create_partial_trie_subset_from_tracked_trie(
                 &underlying_children[ix],
             ))
         }),

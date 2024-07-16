@@ -1,7 +1,10 @@
 //! Query tooling to report info on the path taken when searching down a trie
 //! with a given key.
 
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display},
+    sync::Arc,
+};
 
 use ethereum_types::H256;
 
@@ -144,7 +147,7 @@ impl ExtraNodeSegmentInfo {
     }
 }
 
-fn create_child_mask_from_children(children: &[Box<Node>; 16]) -> u16 {
+fn create_child_mask_from_children(children: &[Arc<Node>; 16]) -> u16 {
     let mut mask: u16 = 0;
 
     for (i, child) in children.iter().enumerate().take(16) {

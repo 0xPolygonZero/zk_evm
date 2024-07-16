@@ -1,6 +1,8 @@
 //! Code for extracting trie data after witness generation. This is intended
 //! only for debugging.
 
+use std::sync::Arc;
+
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::Node;
@@ -188,7 +190,7 @@ pub(crate) fn get_trie_helper(
                     get_trie_helper(memory, child_ptr, read_value, prefix.merge_nibble(i as u8))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let children = core::array::from_fn(|i| Box::new(children[i].clone()));
+            let children = core::array::from_fn(|i| Arc::new(children[i].clone()));
             let value_ptr = u256_to_usize(load(ptr_payload + 16).unwrap_or_default())?;
             let mut value: Vec<u8> = vec![];
             if value_ptr != 0 {
@@ -204,7 +206,7 @@ pub(crate) fn get_trie_helper(
                 packed: packed.into(),
             };
             let child_ptr = u256_to_usize(load(ptr + 3).unwrap_or_default())?;
-            let child = Box::new(get_trie_helper(
+            let child = Arc::new(get_trie_helper(
                 memory,
                 child_ptr,
                 read_value,

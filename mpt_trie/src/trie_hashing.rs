@@ -407,7 +407,7 @@ mod tests {
         Ok(())
     }
 
-    fn get_branch_children_expected(node: &mut Node) -> &mut [Box<Node>; 16] {
+    fn get_branch_children_expected(node: &mut Node) -> &mut [Arc<Node>; 16] {
         match node {
             Node::Branch { children, .. } => children,
             _ => unreachable!(),
