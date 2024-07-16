@@ -1,6 +1,5 @@
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256};
-use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;

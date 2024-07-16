@@ -13,7 +13,7 @@ use evm_arithmetization::{
 use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node, PartialTrie},
+    partial_trie::{HashedPartialTrie, Node},
     special_query::path_for_query,
     trie_ops::{TrieOpError, TrieOpResult},
     trie_subsets::{create_trie_subset, SubsetTrieError},

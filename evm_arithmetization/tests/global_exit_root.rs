@@ -13,7 +13,7 @@ use evm_arithmetization::testing_utils::{
 use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
+use mpt_trie::partial_trie::{HashedPartialTrie,};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;

@@ -297,7 +297,6 @@ pub fn entrypoint(
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     use anyhow::Context as _;
     use evm_arithmetization::generation::mpt::AccountRlp;
-    use mpt_trie::partial_trie::PartialTrie as _;
 
     use crate::processed_block_trace::{
         CodeHashResolving, ProcessedBlockTrace, ProcessedBlockTracePreImages,

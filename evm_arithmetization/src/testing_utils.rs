@@ -7,7 +7,7 @@ use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::{
     nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node, PartialTrie},
+    partial_trie::{HashedPartialTrie, Node},
 };
 
 pub use crate::cpu::kernel::cancun_constants::*;

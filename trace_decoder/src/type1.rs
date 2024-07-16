@@ -9,10 +9,7 @@ use std::{
 
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
-use mpt_trie::{
-    partial_trie::{HashedPartialTrie, PartialTrie as _},
-    trie_ops::ValOrHash,
-};
+use mpt_trie::{partial_trie::HashedPartialTrie, trie_ops::ValOrHash};
 use nunny::NonEmpty;
 use u4::U4;
 

@@ -211,11 +211,9 @@ pub mod extension_tower;
 pub mod testing_utils;
 pub mod util;
 
-use mpt_trie::partial_trie::HashedPartialTrie;
-
 // Public definitions and re-exports
 
-pub type Node = mpt_trie::partial_trie::Node<HashedPartialTrie>;
+pub type Node = mpt_trie::partial_trie::Node;
 /// A type alias for `u64` of a block height.
 pub type BlockHeight = u64;
 

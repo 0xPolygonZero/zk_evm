@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
-use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
+use mpt_trie::partial_trie::{HashedPartialTrie, Node};
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;

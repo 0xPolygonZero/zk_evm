@@ -9,7 +9,7 @@ use alloy::{
 use anyhow::Context as _;
 use evm_arithmetization::testing_utils::{BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH};
 use futures::future::{try_join, try_join_all};
-use mpt_trie::{builder::PartialTrieBuilder, partial_trie::HashedPartialTrie};
+use mpt_trie::builder::PartialTrieBuilder;
 use trace_decoder::{
     BlockTraceTriePreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
     SeparateTriePreImages, TxnInfo,
@@ -117,16 +117,13 @@ async fn generate_state_witness<ProviderT, TransportT>(
     accounts_state: HashMap<Address, HashSet<StorageKey>>,
     cached_provider: &CachedProvider<ProviderT, TransportT>,
     block_number: u64,
-) -> anyhow::Result<(
-    PartialTrieBuilder<HashedPartialTrie>,
-    HashMap<B256, PartialTrieBuilder<HashedPartialTrie>>,
-)>
+) -> anyhow::Result<(PartialTrieBuilder, HashMap<B256, PartialTrieBuilder>)>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
     let mut state = PartialTrieBuilder::new(prev_state_root.compat(), Default::default());
-    let mut storage_proofs = HashMap::<B256, PartialTrieBuilder<HashedPartialTrie>>::new();
+    let mut storage_proofs = HashMap::<B256, PartialTrieBuilder>::new();
 
     let (account_proofs, next_account_proofs) =
         fetch_proof_data(accounts_state, cached_provider, block_number).await?;
