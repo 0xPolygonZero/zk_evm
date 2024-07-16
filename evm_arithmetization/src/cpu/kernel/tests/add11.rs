@@ -111,10 +111,10 @@ fn test_add11_yml() {
             balance: 0xde0b6b3a76586a0u64.into(),
             code_hash,
             // Storage map: { 0 => 2 }
-            storage_root: Node::from(Node::Leaf {
+            storage_root: Node::Leaf {
                 nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
                 value: vec![2],
-            })
+            }
             .hash(),
             ..AccountRlp::default()
         };
@@ -127,7 +127,7 @@ fn test_add11_yml() {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let mut expected_state_trie_after = Node::from(Node::Empty);
+        let mut expected_state_trie_after = Node::Empty;
         expected_state_trie_after
             .insert(
                 beneficiary_nibbles,
@@ -160,7 +160,7 @@ fn test_add11_yml() {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie
         .insert(
             Nibbles::from_str("0x80").unwrap(),
@@ -186,7 +186,7 @@ fn test_add11_yml() {
         trie_roots_after,
         contract_code: contract_code.clone(),
         block_metadata,
-        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: gas_used,
@@ -306,7 +306,7 @@ fn test_add11_yml_with_exception() {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let mut expected_state_trie_after = Node::from(Node::Empty);
+        let mut expected_state_trie_after = Node::Empty;
         expected_state_trie_after
             .insert(
                 beneficiary_nibbles,
@@ -340,7 +340,7 @@ fn test_add11_yml_with_exception() {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = Node::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie
         .insert(
             Nibbles::from_str("0x80").unwrap(),
@@ -366,7 +366,7 @@ fn test_add11_yml_with_exception() {
         trie_roots_after,
         contract_code: contract_code.clone(),
         block_metadata,
-        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: txn_gas_limit.into(),

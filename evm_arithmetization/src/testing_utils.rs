@@ -49,7 +49,7 @@ fn insert_storage(trie: &mut Node, slot: U256, value: U256) -> anyhow::Result<()
 /// Creates a storage trie for an account, given a list of `(slot, value)`
 /// pairs.
 pub fn create_account_storage(storage_pairs: &[(U256, U256)]) -> anyhow::Result<Node> {
-    let mut trie = Node::from(Node::Empty);
+    let mut trie = Node::Empty;
     for (slot, value) in storage_pairs {
         insert_storage(&mut trie, *slot, *value)?;
     }
@@ -81,7 +81,7 @@ pub fn beacon_roots_contract_from_storage(storage_trie: &Node) -> AccountRlp {
 /// Returns an initial state trie containing the beacon roots and global exit
 /// roots contracts, along with their storage tries.
 pub fn preinitialized_state_and_storage_tries() -> anyhow::Result<(Node, Vec<(H256, Node)>)> {
-    let mut state_trie = Node::from(Node::Empty);
+    let mut state_trie = Node::Empty;
     state_trie.insert(
         beacon_roots_account_nibbles(),
         rlp::encode(&BEACON_ROOTS_ACCOUNT).to_vec(),
