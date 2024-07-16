@@ -436,7 +436,7 @@ mod tests {
     fn encountering_a_hash_node_returns_err() {
         common_setup();
 
-        let trie = TrieType::new(Node::Hash(H256::zero()));
+        let trie = Node::Hash(H256::zero());
         let res = create_trie_subset(&trie, once(0x1234));
 
         assert!(res.is_err())

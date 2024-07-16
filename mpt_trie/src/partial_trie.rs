@@ -123,10 +123,6 @@ impl Node {
             node: self,
         }
     }
-    /// Creates a new partial trie from a node.
-    pub fn new(node: Node) -> Self {
-        node
-    }
     /// Inserts a node into the trie.
     pub fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where

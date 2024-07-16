@@ -417,7 +417,7 @@ impl ProcessedBlockTrace {
             if !storage_tries.contains_key(h_addr) {
                 let trie = state_accounts_with_no_accesses_but_storage_tries
                     .get(h_addr)
-                    .map(|s_root| Node::new(Node::Hash(*s_root)))
+                    .map(|s_root| Node::Hash(*s_root))
                     .unwrap_or_default();
 
                 storage_tries.insert(*h_addr, trie);

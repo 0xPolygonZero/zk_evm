@@ -273,7 +273,7 @@ fn load_state_trie(
                 code_hash,
             } = account;
 
-            let storage_hash_only = Node::new(Node::Hash(storage_root)).freeze();
+            let storage_hash_only = Node::Hash(storage_root).freeze();
             let merged_key = key.merge_nibbles(nibbles);
             let storage_trie: &Node = storage_tries_by_state_key
                 .get(&merged_key)

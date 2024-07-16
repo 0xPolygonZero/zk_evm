@@ -227,7 +227,7 @@ mod tests {
     fn get_root_hashes_for_our_trie_after_each_insert(
         entries: impl Iterator<Item = TestInsertValEntry>,
     ) -> impl Iterator<Item = H256> {
-        let mut trie = Node::new(Node::Empty);
+        let mut trie = Node::Empty;
 
         entries.map(move |(k, v)| {
             trie.insert(k, v).unwrap();
@@ -250,7 +250,7 @@ mod tests {
     fn empty_hash_is_correct() {
         common_setup();
 
-        let trie = Node::new(Node::Empty);
+        let trie = Node::Empty;
         assert_eq!(keccak_hash::KECCAK_NULL_RLP, trie.get_hash());
     }
 
