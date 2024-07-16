@@ -53,7 +53,6 @@
 // where writing 0 actually corresponds to a `delete`.
 %macro clone_slot
     // stack: slot_ptr
-    DUP1 %assert_nonzero
     %get_trie_data_size
     // stack: cloned_slot_ptr, slot_ptr
     SWAP1
