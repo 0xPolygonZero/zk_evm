@@ -34,7 +34,8 @@ use trace_decoder::OtherBlockData;
 type F = GoldilocksField;
 
 const JERIGON_WITNESS_DIR: &str = "tests/data/witnesses/zero_jerigon";
-//const CDK_ERIGON_WITNESS_DIR: &str = "tests/data/witnesses/hermez_cdk_erigon";
+//const CDK_ERIGON_WITNESS_DIR: &str =
+// "tests/data/witnesses/hermez_cdk_erigon";
 
 enum JsonFileType {
     Witness,
