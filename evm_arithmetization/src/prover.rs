@@ -721,7 +721,10 @@ where
 
     // Arithmetic.
     {
-        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Arithmetic];
+        let table = Table::Arithmetic;
+        let stark = &all_stark.arithmetic_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
         let trace_leave_len =
             trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
@@ -732,17 +735,17 @@ where
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
-        let num_lookup_columns = all_auxiliary_columns[*Table::Arithmetic].len();
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
         res.push(
-            compute_quotient_polys::<F, P, C, ArithmeticStark<F, D>, D>(
-                &all_stark.arithmetic_stark,
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
                 &get_trace_packed,
                 &get_aux_packed,
                 lookup_challenges,
-                Some(&ctl_data_per_table[*Table::Arithmetic]),
+                Some(&ctl_data_per_table[*table]),
                 &vec![],
                 alphas.clone(),
-                Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Arithmetic]],
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
                 num_lookup_columns,
                 config,
             )
@@ -752,7 +755,10 @@ where
 
     // Bytepacking.
     {
-        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::BytePacking];
+        let table = Table::BytePacking;
+        let stark = &all_stark.byte_packing_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
         let trace_leave_len =
             trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
@@ -763,17 +769,17 @@ where
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
-        let num_lookup_columns = all_auxiliary_columns[*Table::BytePacking].len();
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
         res.push(
-            compute_quotient_polys::<F, P, C, BytePackingStark<F, D>, D>(
-                &all_stark.byte_packing_stark,
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
                 &get_trace_packed,
                 &get_aux_packed,
                 lookup_challenges,
-                Some(&ctl_data_per_table[*Table::BytePacking]),
+                Some(&ctl_data_per_table[*table]),
                 &vec![],
                 alphas.clone(),
-                Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::BytePacking]],
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
                 num_lookup_columns,
                 config,
             )
@@ -783,7 +789,10 @@ where
 
     // Cpu.
     {
-        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Cpu];
+        let table = Table::Cpu;
+        let stark = &all_stark.cpu_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
         let trace_leave_len =
             trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
@@ -794,17 +803,17 @@ where
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
-        let num_lookup_columns = all_auxiliary_columns[*Table::Cpu].len();
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
         res.push(
-            compute_quotient_polys::<F, P, C, CpuStark<F, D>, D>(
-                &all_stark.cpu_stark,
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
                 &get_trace_packed,
                 &get_aux_packed,
                 lookup_challenges,
-                Some(&ctl_data_per_table[*Table::Cpu]),
+                Some(&ctl_data_per_table[*table]),
                 &vec![],
                 alphas.clone(),
-                Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Cpu]],
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
                 num_lookup_columns,
                 config,
             )
@@ -814,7 +823,10 @@ where
 
     // Keccak.
     {
-        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Keccak];
+        let table = Table::Keccak;
+        let stark = &all_stark.keccak_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
         let trace_leave_len =
             trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
@@ -825,17 +837,17 @@ where
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
-        let num_lookup_columns = all_auxiliary_columns[*Table::Keccak].len();
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
         res.push(
-            compute_quotient_polys::<F, P, C, KeccakStark<F, D>, D>(
-                &all_stark.keccak_stark,
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
                 &get_trace_packed,
                 &get_aux_packed,
                 lookup_challenges,
-                Some(&ctl_data_per_table[*Table::Keccak]),
+                Some(&ctl_data_per_table[*table]),
                 &vec![],
                 alphas.clone(),
-                Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Keccak]],
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
                 num_lookup_columns,
                 config,
             )
@@ -845,7 +857,10 @@ where
 
     // KeccakSponge.
     {
-        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::KeccakSponge];
+        let table = Table::KeccakSponge;
+        let stark = &all_stark.keccak_sponge_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
         let trace_leave_len =
             trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
@@ -856,17 +871,17 @@ where
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
-        let num_lookup_columns = all_auxiliary_columns[*Table::KeccakSponge].len();
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
         res.push(
-            compute_quotient_polys::<F, P, C, KeccakSpongeStark<F, D>, D>(
-                &all_stark.keccak_sponge_stark,
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
                 &get_trace_packed,
                 &get_aux_packed,
                 lookup_challenges,
-                Some(&ctl_data_per_table[*Table::KeccakSponge]),
+                Some(&ctl_data_per_table[*table]),
                 &vec![],
                 alphas.clone(),
-                Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::KeccakSponge]],
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
                 num_lookup_columns,
                 config,
             )
@@ -876,7 +891,10 @@ where
 
     // Logic.
     {
-        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Logic];
+        let table = Table::Logic;
+        let stark = &all_stark.logic_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
         let trace_leave_len =
             trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
@@ -887,17 +905,17 @@ where
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
-        let num_lookup_columns = all_auxiliary_columns[*Table::Logic].len();
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
         res.push(
-            compute_quotient_polys::<F, P, C, LogicStark<F, D>, D>(
-                &all_stark.logic_stark,
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
                 &get_trace_packed,
                 &get_aux_packed,
                 lookup_challenges,
-                Some(&ctl_data_per_table[*Table::Logic]),
+                Some(&ctl_data_per_table[*table]),
                 &vec![],
                 alphas.clone(),
-                Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Logic]],
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
                 num_lookup_columns,
                 config,
             )
@@ -907,7 +925,10 @@ where
 
     // Memory.
     {
-        let (index_outer, index_inner) = Table::table_to_sorted_index_pair()[*Table::Memory];
+        let table = Table::Memory;
+        let stark = &all_stark.memory_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
         let trace_leave_len =
             trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
         let get_trace_packed = |index, step| {
@@ -918,17 +939,85 @@ where
         let get_aux_packed = |index, step| {
             auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
         };
-        let num_lookup_columns = all_auxiliary_columns[*Table::Memory].len();
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
         res.push(
-            compute_quotient_polys::<F, P, C, MemoryStark<F, D>, D>(
-                &all_stark.memory_stark,
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
                 &get_trace_packed,
                 &get_aux_packed,
                 lookup_challenges,
-                Some(&ctl_data_per_table[*Table::Memory]),
+                Some(&ctl_data_per_table[*table]),
                 &vec![],
                 alphas.clone(),
-                Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Memory]],
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
+                num_lookup_columns,
+                config,
+            )
+            .expect("Couldn't compute quotient polys."),
+        );
+    }
+
+    // MemBefore.
+    {
+        let table = Table::MemBefore;
+        let stark = &all_stark.mem_before_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
+        let get_trace_packed = |index, step| {
+            trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
+        };
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
+        let get_aux_packed = |index, step| {
+            auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
+        };
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
+        res.push(
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
+                &get_trace_packed,
+                &get_aux_packed,
+                lookup_challenges,
+                Some(&ctl_data_per_table[*table]),
+                &vec![],
+                alphas.clone(),
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
+                num_lookup_columns,
+                config,
+            )
+            .expect("Couldn't compute quotient polys."),
+        );
+    }
+
+    // MemAfter.
+    {
+        let table = Table::MemAfter;
+        let stark = &all_stark.mem_after_stark;
+        let (index_outer, index_inner) =
+            Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
+        let trace_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
+        let get_trace_packed = |index, step| {
+            trace_commitment.get_lde_values_packed::<P>(0, index, step, 0, trace_leave_len)
+        };
+        let aux_leave_len =
+            trace_commitment.batch_merkle_tree.leaves[index_outer][index_inner].len();
+        let get_aux_packed = |index, step| {
+            auxiliary_commitment.get_lde_values_packed(0, index, step, 0, aux_leave_len)
+        };
+        let num_lookup_columns = all_auxiliary_columns[*table].len();
+        res.push(
+            compute_quotient_polys::<F, P, C, _, D>(
+                stark,
+                &get_trace_packed,
+                &get_aux_packed,
+                lookup_challenges,
+                Some(&ctl_data_per_table[*table]),
+                &vec![],
+                alphas.clone(),
+                Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
                 num_lookup_columns,
                 config,
             )

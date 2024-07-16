@@ -131,8 +131,8 @@ impl Table {
             Self::Cpu,
             Self::Arithmetic,
             Self::BytePacking,
-            Self::Keccak,
             Self::Logic,
+            Self::Keccak,
             Self::KeccakSponge,
         ]
     }
@@ -140,28 +140,28 @@ impl Table {
     /// Returns the ordered position of the tables. This is the inverse of
     /// `all_sorted()`.
     pub(crate) const fn table_to_sorted_index() -> [usize; NUM_TABLES] {
-        [4, 5, 3, 6, 8, 7, 0, 1, 2]
+        [4, 5, 3, 7, 8, 6, 0, 1, 2]
     }
 
     /// Returns the ordered position of the tables in a batch Merkle tree. Each
     /// entry is a couple to account for duplicate sizes.
-    pub(crate) const fn table_to_sorted_index_pair() -> [(usize, usize); NUM_TABLES] {
+    pub(crate) const fn sorted_index_pair() -> [(usize, usize); NUM_TABLES] {
         [
-            (2, 1),
-            (2, 2),
-            (2, 0),
-            (2, 3),
-            (3, 0),
-            (2, 4),
             (0, 0),
             (1, 0),
             (1, 1),
+            (2, 0),
+            (2, 1),
+            (2, 2),
+            (2, 3),
+            (3, 0),
+            (4, 0),
         ]
     }
 
     /// Returns all STARK padded trace degrees in descending order.
     pub(crate) const fn all_degree_logs() -> [usize; NUM_TABLES] {
-        [23, 22, 22, 20, 20, 20, 20, 20, 16]
+        [23, 22, 22, 20, 20, 20, 20, 18, 16]
     }
 }
 

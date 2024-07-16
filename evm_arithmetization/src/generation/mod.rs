@@ -17,7 +17,7 @@ use GlobalMetadata::{
     StateTrieRootDigestBefore, TransactionTrieRootDigestAfter, TransactionTrieRootDigestBefore,
 };
 
-use crate::all_stark::{AllStark, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -487,10 +487,12 @@ fn simulate_cpu<F: Field>(
     row.stack_len = F::from_canonical_usize(state.registers.stack_len);
 
     loop {
-        // Padding to a power of 2.
+        // Padding.
         state.push_cpu(row);
         row.clock += F::ONE;
-        if state.traces.clock().is_power_of_two() {
+        if state.traces.clock()
+            == 1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Cpu]]
+        {
             break;
         }
     }
