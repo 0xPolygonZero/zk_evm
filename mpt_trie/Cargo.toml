@@ -39,13 +39,3 @@ serde_json = { workspace = true }
 [features]
 default = ["trie_debug"]
 trie_debug = []
-
-[lib]
-doc-scrape-examples = true
-
-[[example]]
-name = "simple"
-doc-scrape-examples = true
-
-[package.metadata.docs.rs]
-cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
