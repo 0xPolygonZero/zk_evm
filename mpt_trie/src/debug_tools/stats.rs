@@ -306,8 +306,6 @@ fn get_trie_stats_rec(node: &Node, state: &mut CurrTrackingState, curr_depth: us
 
 #[cfg(test)]
 mod tests {
-    use std::time::SystemTime;
-
     use super::get_trie_stats;
     use crate::{
         partial_trie::Node,

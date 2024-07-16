@@ -56,7 +56,7 @@ pub(crate) fn bytes_to_h256(b: &[u8; 32]) -> H256 {
 }
 
 /// Minimal key information of "segments" (nodes) used to construct trie
-/// "traces" of a trie query. Unlike [`TrieNodeType`], this type also contains
+/// "traces" of a trie query. Unlike [`NodeKind`], this type also contains
 /// the key piece of the node if applicable (eg. [`Node::Empty`] &
 /// [`Node::Hash`] do not have associated key pieces).
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]

@@ -1,5 +1,4 @@
-//! Defines various operations for
-//! [`PartialTrie`].
+//! Defines various operations for [`Node`].
 
 use std::{array, fmt::Display, mem::size_of, sync::Arc};
 
@@ -66,7 +65,7 @@ impl InsertEntry {
     }
 }
 
-/// An "entry" in a [`PartialTrie`].
+/// An "entry" in a [`Node`].
 ///
 /// Entries in the trie may either be actual values or
 /// [`Hash`](crate::partial_trie::Node::Hash) nodes.

@@ -255,8 +255,7 @@ impl From<U256> for NibblesIntern {
 }
 
 #[derive(Copy, Clone, Deserialize, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-/// A sequence of nibbles which is used as the key type into
-/// [`PartialTrie`][`crate::partial_trie::PartialTrie`].
+/// A sequence of nibbles which is used as the key type into a [`crate::Node`].
 ///
 /// Generally, if you're constructing keys from actual trie data, you probably
 /// will be working with `U256`s and `H256`s both of which `Nibbles` has a

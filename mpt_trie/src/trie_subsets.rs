@@ -1,7 +1,7 @@
-//! Logic for calculating a subset of a [`PartialTrie`] from an existing
-//! [`PartialTrie`].
+//! Logic for calculating a subset of a [`Node`] from an existing
+//! [`Node`].
 //!
-//! Given a `PartialTrie`, you can pass in keys of leaf nodes that should be
+//! Given an MPT, you can pass in keys of leaf nodes that should be
 //! included in the produced subset. Any nodes that are not needed in the subset
 //! are replaced with [`Hash`] nodes are far up the trie as possible.
 
@@ -21,7 +21,7 @@ use crate::{
 /// The output type of trie_subset operations.
 pub type SubsetTrieResult<T> = Result<T, SubsetTrieError>;
 
-/// Errors that may occur when creating a subset [`PartialTrie`].
+/// Errors that may occur when creating a subset [`Node`].
 #[derive(Debug, Error)]
 pub enum SubsetTrieError {
     #[error("Tried to mark nodes in a tracked trie for a key that does not exist! (Key: {0}, trie: {1})")]
@@ -136,7 +136,7 @@ impl TrackedNodeInfo {
     }
 }
 
-/// Create a [`PartialTrie`] subset from a base trie given an iterator of keys
+/// Create a [`Node`] subset from a base trie given an iterator of keys
 /// of nodes that may or may not exist in the trie. All nodes traversed by the
 /// keys will not be hashed out in the trie subset. If the key does not exist in
 /// the trie at all, this is not considered an error and will still record which
@@ -152,7 +152,7 @@ where
     create_trie_subset_intern(&mut tracked_trie, keys_involved.into_iter())
 }
 
-/// Create [`PartialTrie`] subsets from a given base `PartialTrie` given a
+/// Create [`Node`] subsets from a given base Node given a
 /// iterator of keys per subset needed. See [`create_trie_subset`] for more
 /// info.
 pub fn create_trie_subsets<K>(
