@@ -50,7 +50,6 @@ use std::{
     str::FromStr,
 };
 
-use mpt_trie::partial_trie::PartialTrie;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node},
@@ -77,7 +76,7 @@ fn main() -> TrieOpResult<()> {
     // Slight hack. Normally this has would come from your own logic that is making
     // calls into this crate to construct the `PartialTrie`. May add API to
     // do this in the future if needed.
-    let left_side_hash = match &*full_trie {
+    let left_side_hash = match full_trie {
         Node::Branch { children, .. } => children[0].hash(),
         _ => unreachable!(),
     };

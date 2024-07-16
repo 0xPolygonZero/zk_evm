@@ -1,20 +1,15 @@
 //! Definitions for the core types [`PartialTrie`] and [`Nibbles`].
 
-use std::{
-    fmt::Debug,
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
+use std::fmt::Debug;
 
 use ethereum_types::H256;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     nibbles::Nibbles,
     trie_hashing::{hash_trie, rlp_encode_and_hash_node, EncodedNode},
     trie_ops::{TrieOpResult, ValOrHash},
-    utils::{bytes_to_h256, TryFromIterator},
+    utils::TryFromIterator,
 };
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -56,38 +51,12 @@ pub enum Node {
     },
 }
 
-/// A partial trie that lazily caches hashes for each node as needed.
-/// If you are doing frequent hashing of node, you probably want to use this
-/// `Trie` variant.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct HashedPartialTrie {
-    pub(crate) root: Node,
-    pub(crate) hash: Arc<RwLock<Option<H256>>>,
-}
-
-impl HashedPartialTrie {
-    /// Lazily get calculates the hash for the node,
-    pub(crate) fn get_hash(&self) -> H256 {
-        let hash = *self.hash.read();
-
-        match hash {
-            Some(h) => h,
-            None => hash_trie(self),
-        }
-    }
-
-    pub(crate) fn set_hash(&self, v: Option<H256>) {
-        *self.hash.write() = v;
-    }
-}
+pub type HashedPartialTrie = Node;
 
 impl HashedPartialTrie {
     /// Creates a new partial trie from a node.
     pub fn new(node: Node) -> Self {
-        Self {
-            root: node,
-            hash: Arc::new(RwLock::new(None)),
-        }
+        node
     }
     /// Inserts a node into the trie.
     pub fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
@@ -95,8 +64,7 @@ impl HashedPartialTrie {
         K: Into<crate::nibbles::Nibbles>,
         V: Into<crate::trie_ops::ValOrHash>,
     {
-        self.root.trie_insert(k, v)?;
-        self.set_hash(None);
+        self.trie_insert(k, v)?;
         Ok(())
     }
     /// Add more nodes to the trie through an iterator
@@ -106,8 +74,7 @@ impl HashedPartialTrie {
         V: Into<crate::trie_ops::ValOrHash>,
         I: IntoIterator<Item = (K, V)>,
     {
-        self.root.trie_extend(nodes)?;
-        self.set_hash(None);
+        self.trie_extend(nodes)?;
         Ok(())
     }
     /// Get a node if it exists in the trie.
@@ -115,7 +82,7 @@ impl HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        self.root.trie_get(k)
+        self.trie_get(k)
     }
 
     /// Deletes a `Leaf` node or `Branch` value field if it exists.
@@ -136,9 +103,7 @@ impl HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        let res = self.root.trie_delete(k);
-        self.set_hash(None);
-
+        let res = self.trie_delete(k);
         res
     }
     /// Get the hash for the node.
@@ -148,24 +113,24 @@ impl HashedPartialTrie {
     /// Returns an iterator over the trie that returns all key/value pairs for
     /// every `Leaf` and `Hash` node.
     pub fn items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
-        self.root.trie_items()
+        self.trie_items()
     }
     /// Returns an iterator over the trie that returns all keys for every `Leaf`
     /// and `Hash` node.
     pub fn keys(&self) -> impl Iterator<Item = Nibbles> {
-        self.root.trie_keys()
+        self.trie_keys()
     }
     /// Returns an iterator over the trie that returns all values for every
     /// `Leaf` and `Hash` node.
     pub fn values(&self) -> impl Iterator<Item = ValOrHash> {
-        self.root.trie_values()
+        self.trie_values()
     }
     /// Returns `true` if the trie contains an element with the given key.
     pub fn contains<K>(&self, k: K) -> bool
     where
         K: Into<Nibbles>,
     {
-        self.root.trie_has_item_by_key(k)
+        self.trie_has_item_by_key(k)
     }
 }
 
@@ -176,27 +141,6 @@ impl Node {
     }
     pub(crate) fn get_hash(&self) -> H256 {
         hash_trie(self)
-    }
-}
-
-impl Deref for HashedPartialTrie {
-    type Target = Node;
-
-    fn deref(&self) -> &Self::Target {
-        &self.root
-    }
-}
-
-impl DerefMut for HashedPartialTrie {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.root
-    }
-}
-
-impl Eq for HashedPartialTrie {}
-impl PartialEq for HashedPartialTrie {
-    fn eq(&self, other: &Self) -> bool {
-        self.root == other.root
     }
 }
 

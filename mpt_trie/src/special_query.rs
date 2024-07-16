@@ -164,7 +164,7 @@ mod test {
         ];
 
         for (q, expected) in ks.into_iter().zip(res.into_iter()) {
-            let res: Vec<_> = path_for_query(&trie.root, q, false).collect();
+            let res: Vec<_> = path_for_query(&trie, q, false).collect();
             assert_eq!(res, expected)
         }
 

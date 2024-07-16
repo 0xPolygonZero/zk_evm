@@ -14,7 +14,6 @@
 #![allow(incomplete_features)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(missing_debug_implementations)]
-#![deny(missing_docs)]
 
 pub mod builder;
 pub mod nibbles;

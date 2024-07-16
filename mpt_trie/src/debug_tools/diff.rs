@@ -321,7 +321,7 @@ fn find_latest_diff_point_between_tries_rec(
         depth_state.try_update_longest_divergence_key_node(state);
         DiffDetectionState::NodeTypesDiffer
     } else {
-        match (&state.a.root, &state.b.root) {
+        match (&state.a, &state.b) {
             (Node::Empty, Node::Empty) => DiffDetectionState::NoDiffDetected,
             (Node::Hash(a_hash), Node::Hash(b_hash)) => {
                 create_diff_detection_state_based_from_hashes(

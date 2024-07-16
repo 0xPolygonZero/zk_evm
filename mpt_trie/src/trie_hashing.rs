@@ -433,7 +433,7 @@ mod tests {
         let mut trie = HashedPartialTrie::try_from_iter(entries)?;
         let orig_hash = trie.get_hash();
 
-        let root_branch_children = match &mut *trie {
+        let root_branch_children = match &mut trie {
             Node::Branch { children, .. } => children,
             _ => unreachable!(),
         };
