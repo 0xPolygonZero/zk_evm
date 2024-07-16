@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use hashbrown::HashMap;
 use itertools::{zip_eq, Itertools};
-use mpt_trie::partial_trie::{HashedPartialTrie, Node};
+use mpt_trie::Node;
 use plonky2::field::extension::Extendable;
 use plonky2::fri::FriParams;
 use plonky2::gates::constant::ConstantGate;
@@ -1150,7 +1150,7 @@ where
         builder.assert_zero(x.extra_block_data.gas_used_before);
 
         // The transactions and receipts tries are empty at the beginning of the block.
-        let initial_trie = HashedPartialTrie::from(Node::Empty).hash();
+        let initial_trie = Node::from(Node::Empty).hash();
 
         for (i, limb) in h256_limbs::<F>(initial_trie).into_iter().enumerate() {
             let limb_target = builder.constant(limb);

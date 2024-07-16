@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use log::log_enabled;
-use mpt_trie::partial_trie::HashedPartialTrie;
+use mpt_trie::Node;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::field::types::Field;
@@ -85,22 +85,22 @@ pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
-    pub state_trie: HashedPartialTrie,
+    pub state_trie: Node,
 
     /// A partial version of the transaction trie prior to these transactions.
     /// It should include all nodes that will be accessed by these
     /// transactions.
-    pub transactions_trie: HashedPartialTrie,
+    pub transactions_trie: Node,
 
     /// A partial version of the receipt trie prior to these transactions. It
     /// should include all nodes that will be accessed by these
     /// transactions.
-    pub receipts_trie: HashedPartialTrie,
+    pub receipts_trie: Node,
 
     /// A partial version of each storage trie prior to these transactions. It
     /// should include all storage tries, and nodes therein, that will be
     /// accessed by these transactions.
-    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+    pub storage_tries: Vec<(H256, Node)>,
 }
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(

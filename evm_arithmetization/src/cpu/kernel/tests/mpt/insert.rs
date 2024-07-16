@@ -1,7 +1,6 @@
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256};
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -146,15 +145,11 @@ fn mpt_insert_branch_to_leaf_same_key() -> Result<()> {
 /// Note: The account's storage_root is ignored, as we can't insert a new
 /// storage_root without the accompanying trie data. An empty trie's
 /// storage_root is used instead.
-fn test_state_trie(
-    mut state_trie: HashedPartialTrie,
-    k: Nibbles,
-    mut account: AccountRlp,
-) -> Result<()> {
+fn test_state_trie(mut state_trie: Node, k: Nibbles, mut account: AccountRlp) -> Result<()> {
     assert_eq!(k.count, 64);
 
     // Ignore any storage_root; see documentation note.
-    account.storage_root = HashedPartialTrie::from(Node::Empty).hash();
+    account.storage_root = Node::from(Node::Empty).hash();
 
     let trie_inputs = TrieInputs {
         state_trie: state_trie.clone(),

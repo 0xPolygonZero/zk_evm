@@ -4,7 +4,6 @@ use bytes::Bytes;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
-use mpt_trie::partial_trie::HashedPartialTrie;
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
@@ -34,7 +33,7 @@ impl Default for AccountRlp {
         Self {
             nonce: U256::zero(),
             balance: U256::zero(),
-            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            storage_root: Node::from(Node::Empty).hash(),
             code_hash: keccak([]),
         }
     }
@@ -125,7 +124,7 @@ const fn empty_nibbles() -> Nibbles {
 }
 
 fn load_mpt<F>(
-    trie: &HashedPartialTrie,
+    trie: &Node,
     trie_data: &mut Vec<U256>,
     parse_value: &F,
 ) -> Result<usize, ProgramError>
@@ -203,10 +202,10 @@ where
 }
 
 fn load_state_trie(
-    trie: &HashedPartialTrie,
+    trie: &Node,
     key: Nibbles,
     trie_data: &mut Vec<U256>,
-    storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
+    storage_tries_by_state_key: &HashMap<Nibbles, &Node>,
 ) -> Result<usize, ProgramError> {
     let node_ptr = trie_data.len();
     let type_of_trie = PartialTrieType::of(trie) as u32;
@@ -273,9 +272,9 @@ fn load_state_trie(
                 code_hash,
             } = account;
 
-            let storage_hash_only = HashedPartialTrie::new(Node::Hash(storage_root));
+            let storage_hash_only = Node::new(Node::Hash(storage_root));
             let merged_key = key.merge_nibbles(nibbles);
-            let storage_trie: &HashedPartialTrie = storage_tries_by_state_key
+            let storage_trie: &Node = storage_tries_by_state_key
                 .get(&merged_key)
                 .copied()
                 .unwrap_or(&storage_hash_only);

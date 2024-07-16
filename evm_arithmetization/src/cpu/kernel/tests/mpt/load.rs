@@ -4,7 +4,6 @@ use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256, U256};
 use hex_literal::hex;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -233,7 +232,7 @@ fn load_mpt_txn_trie() -> Result<()> {
 
     let trie_inputs = TrieInputs {
         state_trie: Default::default(),
-        transactions_trie: HashedPartialTrie::from(Node::Leaf {
+        transactions_trie: Node::from(Node::Leaf {
             nibbles: Nibbles::from_str("0x80").unwrap(),
             value: txn.clone(),
         }),

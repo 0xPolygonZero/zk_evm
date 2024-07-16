@@ -3,7 +3,7 @@
 
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
-use mpt_trie::partial_trie::{HashedPartialTrie, Node};
+use mpt_trie::Node;
 
 use super::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
@@ -93,10 +93,9 @@ pub(crate) fn read_state_rlp_value(
     memory: &MemoryState,
     slice: &MemoryValues,
 ) -> Result<Vec<u8>, ProgramError> {
-    let storage_trie: HashedPartialTrie =
-        get_trie(memory, slice[2].unwrap_or_default().as_usize(), |_, x| {
-            Ok(rlp::encode(&read_storage_trie_value(x)).to_vec())
-        })?;
+    let storage_trie: Node = get_trie(memory, slice[2].unwrap_or_default().as_usize(), |_, x| {
+        Ok(rlp::encode(&read_storage_trie_value(x)).to_vec())
+    })?;
     let account = AccountRlp {
         nonce: slice[0].unwrap_or_default(),
         balance: slice[1].unwrap_or_default(),

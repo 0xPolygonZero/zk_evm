@@ -9,16 +9,16 @@ use std::{
 
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
-use mpt_trie::{partial_trie::Node, trie_ops::ValOrHash};
+use mpt_trie::{trie_ops::ValOrHash, Node as TrieNode};
 use nunny::NonEmpty;
 use u4::U4;
 
 use crate::wire::{Instruction, SmtLeaf};
 
 pub struct Frontend {
-    pub state: Node,
+    pub state: TrieNode,
     pub code: HashSet<NonEmpty<Vec<u8>>>,
-    pub storage: HashMap<ethereum_types::H256, Node>,
+    pub storage: HashMap<ethereum_types::H256, TrieNode>,
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -32,7 +32,7 @@ pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::
     let mut visitor = Visitor {
         path: Vec::new(),
         frontend: Frontend {
-            state: Node::default(),
+            state: Default::default(),
             code: HashSet::new(),
             storage: HashMap::new(),
         },
@@ -351,8 +351,8 @@ impl Visitor {
 
 /// # Panics
 /// - internally in [`mpt_trie`].
-fn node2trie(node: Node) -> anyhow::Result<Node> {
-    let mut trie = Node::default();
+fn node2trie(node: Node) -> anyhow::Result<TrieNode> {
+    let mut trie = TrieNode::default();
     for (k, v) in iter_leaves(node) {
         trie.insert(
             nibbles2nibbles(k),

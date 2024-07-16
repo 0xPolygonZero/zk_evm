@@ -13,7 +13,6 @@ use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie,};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::poseidon::PoseidonHash;
 use plonky2::plonk::config::{Hasher, PoseidonGoldilocksConfig};
@@ -51,12 +50,12 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     let sender_account_before = AccountRlp {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+        storage_root: Node::from(Node::Empty).hash(),
         code_hash: keccak([]),
     };
     let to_account_before = AccountRlp::default();
 
-    let state_trie_before: HashedPartialTrie = Node::Leaf {
+    let state_trie_before: Node = Node::Leaf {
         nibbles: sender_nibbles,
         value: rlp::encode(&sender_account_before).to_vec(),
     };
@@ -67,9 +66,9 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
     );
 
     let tries_before = TrieInputs {
-        state_trie: HashedPartialTrie::from(Node::Empty),
-        transactions_trie: HashedPartialTrie::from(Node::Empty),
-        receipts_trie: HashedPartialTrie::from(Node::Empty),
+        state_trie: Node::from(Node::Empty),
+        transactions_trie: Node::from(Node::Empty),
+        receipts_trie: Node::from(Node::Empty),
         storage_tries: vec![],
     };
 
@@ -91,7 +90,7 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
 
     let contract_code = HashMap::new();
 
-    let expected_state_trie_after: HashedPartialTrie = {
+    let expected_state_trie_after: Node = {
         let txdata_gas = 2 * 16;
         let gas_used = 21_000 + txdata_gas;
 
@@ -128,12 +127,12 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let mut receipts_trie = Node::from(Node::Empty);
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
     )?;
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
+    let transactions_trie: Node = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     };
@@ -177,13 +176,9 @@ fn get_test_block_proof(
         global_exit_roots: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
-            state_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.state_root)),
-            transactions_trie: HashedPartialTrie::from(Node::Hash(
-                inputs.trie_roots_after.transactions_root,
-            )),
-            receipts_trie: HashedPartialTrie::from(Node::Hash(
-                inputs.trie_roots_after.receipts_root,
-            )),
+            state_trie: Node::from(Node::Hash(inputs.trie_roots_after.state_root)),
+            transactions_trie: Node::from(Node::Hash(inputs.trie_roots_after.transactions_root)),
+            receipts_trie: Node::from(Node::Hash(inputs.trie_roots_after.receipts_root)),
             storage_tries: vec![],
         },
         trie_roots_after: inputs.trie_roots_after,

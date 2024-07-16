@@ -1,6 +1,5 @@
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::HashedPartialTrie;
 
 use crate::generation::mpt::AccountRlp;
 use crate::Node;
@@ -56,7 +55,7 @@ pub(crate) fn test_account_2_rlp() -> Vec<u8> {
 
 /// A `PartialTrie` where an extension node leads to a leaf node containing an
 /// account.
-pub(crate) fn extension_to_leaf(value: Vec<u8>) -> HashedPartialTrie {
+pub(crate) fn extension_to_leaf(value: Vec<u8>) -> Node {
     Node::Extension {
         nibbles: 0xABC_u64.into(),
         child: Node::Leaf {

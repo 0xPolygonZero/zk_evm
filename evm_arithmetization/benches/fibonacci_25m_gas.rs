@@ -25,7 +25,6 @@ use evm_arithmetization::Node;
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
 
 type F = GoldilocksField;
@@ -73,7 +72,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     ];
     let code_hash = keccak(code);
 
-    let empty_trie_root = HashedPartialTrie::from(Node::Empty).hash();
+    let empty_trie_root = Node::from(Node::Empty).hash();
 
     let sender_account_before = AccountRlp {
         nonce: 169.into(),
@@ -133,7 +132,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     };
     let to_account_after = to_account_before;
 
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+    let mut expected_state_trie_after = Node::from(Node::Empty);
     expected_state_trie_after
         .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
@@ -159,12 +158,12 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let mut receipts_trie = Node::from(Node::Empty);
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
     )?;
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
+    let transactions_trie: Node = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
     };

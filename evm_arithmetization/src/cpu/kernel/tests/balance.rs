@@ -1,7 +1,6 @@
 use anyhow::Result;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
 use rand::{thread_rng, Rng};
@@ -19,7 +18,7 @@ fn test_account(balance: U256) -> AccountRlp {
     AccountRlp {
         nonce: U256::from(1111),
         balance,
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+        storage_root: Node::from(Node::Empty).hash(),
         code_hash: H256::from_uint(&U256::from(8888)),
     }
 }
@@ -33,7 +32,7 @@ fn prepare_interpreter<F: Field>(
 ) -> Result<()> {
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
-    let mut state_trie: HashedPartialTrie = Default::default();
+    let mut state_trie: Node = Default::default();
     let trie_inputs = Default::default();
 
     initialize_mpts(interpreter, &trie_inputs);

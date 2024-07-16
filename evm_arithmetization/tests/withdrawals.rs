@@ -15,7 +15,6 @@ use evm_arithmetization::verifier::verify_proof;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie,};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
@@ -40,8 +39,8 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
     let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
-    let transactions_trie = HashedPartialTrie::from(Node::Empty);
-    let receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let transactions_trie = Node::from(Node::Empty);
+    let receipts_trie = Node::from(Node::Empty);
 
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
@@ -50,7 +49,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let withdrawals = vec![(H160(random()), U256(random()))];
 
     let state_trie_after = {
-        let mut trie = HashedPartialTrie::from(Node::Empty);
+        let mut trie = Node::from(Node::Empty);
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
             block_metadata.block_timestamp,
@@ -96,7 +95,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
         },
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::from(Node::Empty).hash(),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
