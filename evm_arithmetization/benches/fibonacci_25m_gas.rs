@@ -93,13 +93,13 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
-    storage_tries.push((sender_state_key, Node::Empty.into()));
-    storage_tries.push((to_state_key, Node::Empty.into()));
+    storage_tries.push((sender_state_key, Node::Empty));
+    storage_tries.push((to_state_key, Node::Empty));
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
+        transactions_trie: Node::Empty,
+        receipts_trie: Node::Empty,
         storage_tries,
     };
 
@@ -167,8 +167,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
