@@ -145,7 +145,7 @@ fn verify_generation_inputs(
         &header.parent_hash.to_vec()
     );
     info!(
-        "Block {} generation inputs valid",
+        "Block {} GenerationInputs valid",
         other.b_data.b_meta.block_number
     );
     Ok(())
@@ -265,7 +265,7 @@ fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
 
     result.iter().for_each(|it| {
         if let Err(e) = it {
-            panic!("Failed to verify generation inputs consistency {e:?}");
+            panic!("Failed to verify generation inputs consistency: {e:?}");
         }
     });
 }
