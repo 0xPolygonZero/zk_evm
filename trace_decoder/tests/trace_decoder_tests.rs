@@ -61,7 +61,8 @@ fn find_json_data_files(dir: &str, file_type: JsonFileType) -> anyhow::Result<Ve
 fn read_witness_file(file_path: &Path) -> anyhow::Result<Vec<BlockProverInput>> {
     let witness = fs::File::open(file_path).context("Unable to read file")?;
     let mut reader = std::io::BufReader::new(witness);
-    serde_json::from_reader::<_, Vec<BlockProverInput>>(&mut reader).context(format!(
+    let jd = &mut serde_json::Deserializer::from_reader(&mut reader);
+    serde_path_to_error::deserialize(jd).context(format!(
         "Failed to deserialize json file {}",
         file_path.display()
     ))
