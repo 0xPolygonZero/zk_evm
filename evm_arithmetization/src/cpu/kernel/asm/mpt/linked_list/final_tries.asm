@@ -85,16 +85,17 @@ after_insert_slot:
     %jump(insert_all_slots)
 
 // Delete all the accounts, referenced by the respective nodes in the linked list starting at 
-// `account_ptr_ptr, which where deleted from the intial state. Delete also all slots deleted
-// from the storage trie of non-deleted accounts.
+// `account_ptr_ptr`, which where deleted from the intial state. Delete also all slots of non-deleted accounts 
+// deleted from the storage trie.
 // Pre stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr.
 global delete_removed_accounts:
+    // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP1
     // We assume that the size of the initial accounts linked list, containing the accounts
-    // of the initial state, was store at `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
+    // of the initial state, was stored at `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
-    // The inital accounts linked was store at addresses smaller than `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
+    // The inital accounts linked list was stored at addresses smaller than `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
     // If we also know that `@SEGMENT_ACCOUNT_LINKED_LIST <= account_ptr_ptr`, for deleting node at `addr_ptr_ptr` it
     // suffices to check that `account_ptr_ptr` != `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`
     EQ
@@ -102,9 +103,9 @@ global delete_removed_accounts:
     // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP1
     %next_account
-    %eq_const(@U256_MAX) // Check if the next node pointer is @U256_MAX, the node was deleted
+    %eq_const(@U256_MAX) // If the next node pointer is @U256_MAX, the node was deleted
     %jumpi(delete_account)
-    // The account is still there so we need to delete any removed slot
+    // The account is still there so we need to delete any removed slot.
     // stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP1
     MLOAD_GENERAL
@@ -154,10 +155,11 @@ after_mpt_delete:
     %jump(delete_removed_accounts)
 
 // Delete all slots in `storage_ptr_ptr` with address == `addr` and
-// `storage_ptr_ptr` < @GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN.
+// `storage_ptr_ptr` < `@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN`.
 // Pre stack: addr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr, storage_ptr_ptr'.
 delete_removed_slots:
+    // stack: addr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     MLOAD_GENERAL
     // stack: address, addr, root_ptr, storage_ptr_ptr, retdest

@@ -1,8 +1,8 @@
-// Set the trie with root at `node_ptr` leaves 
-// payloads pointers to mem[payload_ptr_ptr] + step*i, for
+// Set the payload pointers of the leaves in the trie with root at `node_ptr` 
+// to mem[payload_ptr_ptr] + step*i,
 // for i =0..n_leaves. This is used to constraint the
 // initial state and account tries payload pointers such that they are exactly
-// those of the inital accounts and linked lists
+// those of the inital accounts and linked lists.
 // Pre stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
 // Post stack: account_ptr_ptr, storage_ptr_ptr
 global mpt_set_payload:
@@ -151,7 +151,6 @@ set_payload_leaf:
 after_set_storage_payload:
     // stack: storage_ptr_ptr', storage_root_ptr, payload_ptr_ptr, account_ptr_ptr, retdest
     DUP4
-global debueg_the_intial_ptr:
     MLOAD_GENERAL // load the next payload pointer in the linked list
     DUP1 %add_const(2) // new_storage_root_ptr_ptr = payload_ptr[2]
     // stack: new_storage_root_ptr_ptr, new_payload_ptr, storage_root_ptr, storage_ptr_ptr', payload_ptr_ptr, account_ptr_ptr, retdest

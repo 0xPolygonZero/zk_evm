@@ -12,7 +12,7 @@ global revert_account_destroyed:
     PUSH revert_account_destroyed_contd DUP2
     %jump(remove_selfdestruct_list)
 revert_account_destroyed_contd:
-    // stack: address: target, prev_balance, retdest
+    // stack: address, target, prev_balance, retdest
     SWAP1
     // Remove `prev_balance` from `target`'s balance.
     // stack: target, address, prev_balance, retdest

@@ -6,14 +6,14 @@
 /// Searching and inserting is done by guessing the predecessor in the list.
 /// If the address/storage key isn't found in the array, it is inserted at the end.
 
-// Initialize an empty account linked list (@U256_MAX)⮌
+// Initialize an empty account linked list (@U256_MAX)
 // which is written as [@U256_MAX, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST
 // The values at the respective positions are:
 // - 0: The account key
 // - 1: A ptr to the payload (the account values)
 // - 2: A ptr to the intial payload.
 // - 3: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
-// Initialize also an empty storage linked list (@U256_MAX)⮌
+// Initialize also an empty storage linked list (@U256_MAX)
 // which is written as [@U256_MAX, _, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST
 // The values at the respective positions are:
 // - 0: The account key
@@ -24,8 +24,8 @@
 global init_linked_lists:
     // stack: (empty)
 
-    // Initialize SEGMENT_ACCOUNTS_LINKED_LIST
-    // Store @U256_MAX at the beggining of the segment
+    // Initialize SEGMENT_ACCOUNTS_LINKED_LIST.
+    // Store @U256_MAX at the beginning of the segment.
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST // ctx == virt == 0
     DUP1
     PUSH @U256_MAX
@@ -36,12 +36,12 @@ global init_linked_lists:
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
     MSTORE_GENERAL
     
-    // Store the segment scaled length
+    // Store the segment scaled length.
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
 
-    // Initialize SEGMENT_STORAGE_LINKED_LIST
-    // Store @U256_MAX at the beggining of the segment
+    // Initialize SEGMENT_STORAGE_LINKED_LIST.
+    // Store @U256_MAX at the beginning of the segment.
     PUSH @SEGMENT_STORAGE_LINKED_LIST // ctx == virt == 0
     DUP1
     PUSH @U256_MAX
@@ -52,7 +52,7 @@ global init_linked_lists:
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     MSTORE_GENERAL
     
-    // Store the segment scaled length
+    // Store the segment scaled length.
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     JUMP
@@ -73,7 +73,6 @@ global init_linked_lists:
 /// the accounts, storing a pointer to the copied account in the node.
 global store_initial_accounts:
     // stack: retdest
-
     PUSH  @SEGMENT_ACCOUNTS_LINKED_LIST
     %next_account
 loop_store_initial_accounts:
@@ -142,12 +141,12 @@ store_initial_accounts_end:
     POP
 %endmacro
 
-// Multiply the value at the top of the stack, denoted by ptr/4, by 4
-// and abort if ptr/4 >= mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN]/4
-// In this way 4*ptr/4 must be pointing to the beginning of a node.
-// TODO: Maybe we should check here if the node have been deleted.
+// Multiplies the value at the top of the stack, denoted by ptr/4, by 4
+// and aborts if ptr/4 >= mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN]/4
+// This way, 4*ptr/4 must be pointing to the beginning of a node.
+// TODO: Maybe we should check here if the node has been deleted.
 %macro get_valid_account_ptr
-     // stack: ptr/4
+    // stack: ptr/4
     DUP1
     PUSH 4
     %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
@@ -160,7 +159,7 @@ store_initial_accounts_end:
 %endmacro
 
 /// Inserts the account addr and payload pointer into the linked list if it is not already present.
-/// Return `payload_ptr` if the account was inserted, `original_ptr` if it was already present.
+/// Returns `payload_ptr` if the account was inserted, `original_ptr` if it was already present.
 global insert_account_to_linked_list:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -310,8 +309,8 @@ account_found_with_overwrite:
 %endmacro
 
 
-/// Search the account addr andin the linked list.
-/// Return `payload_ptr` if the account was not found, `original_ptr` if it was already present.
+/// Searches the account addr andin the linked list.
+/// Returns `payload_ptr` if the account was not found, `original_ptr` if it was already present.
 global search_account:
     // stack: addr, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -356,7 +355,7 @@ account_not_found:
 %%after:
 %endmacro
 
-/// Remove the address and its value from the access list.
+/// Removes the address and its value from the access list.
 /// Panics if the key is not in the list.
 global remove_account:
     // stack: addr, retdest
@@ -406,7 +405,6 @@ global remove_account:
 /// the accounts, storing a pointer to the copied account in the node.
 global store_initial_slots:
     // stack: retdest
-
     PUSH  @SEGMENT_STORAGE_LINKED_LIST
     %next_slot
 
@@ -428,7 +426,6 @@ loop_store_initial_slots:
     DUP2
     %add_const(3)
     SWAP1
-global store_cpy_ptr:
     MSTORE_GENERAL // Store cpy_ptr
     %next_slot
     %jump(loop_store_initial_slots)
@@ -450,10 +447,10 @@ store_initial_slots_end:
     POP
 %endmacro
 
-// Multiply the value at the top of the stack, denoted by ptr/5, by 5
-// and abort if ptr/5 >= (mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN] - @SEGMENT_STORAGE_LINKED_LIST)/5
-// In this way @SEGMENT_STORAGE_LINKED_LIST + 5*ptr/5 must be pointing to the beginning of a node.
-// TODO: Maybe we should check here if the node have been deleted.
+// Multiplies the value at the top of the stack, denoted by ptr/5, by 5
+// and aborts if ptr/5 >= (mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN] - @SEGMENT_STORAGE_LINKED_LIST)/5.
+// This way, @SEGMENT_STORAGE_LINKED_LIST + 5*ptr/5 must be pointing to the beginning of a node.
+// TODO: Maybe we should check here if the node has been deleted.
 %macro get_valid_slot_ptr
     // stack: ptr/5
     DUP1
@@ -472,8 +469,8 @@ store_initial_slots_end:
 %endmacro
 
 /// Inserts the pair (addres, storage_key) and a new payload pointer into the linked list if it is not already present,
-/// or modify its payload if it was already present.
-/// Return `new_payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
+/// or modifies its payload if it was already present.
+/// Returns `new_payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global insert_slot_with_value:
     // stack: addr, key, value, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -624,8 +621,8 @@ slot_found_write_value:
 %endmacro
 
 /// Inserts the pair (addres, storage_key) and payload pointer into the linked list if it is not already present,
-/// or modify its payload if it was already present.
-/// Return `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
+/// or modifies its payload if it was already present.
+/// Returns `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global insert_slot:
     // stack: addr, key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -767,7 +764,7 @@ next_node_ok:
     %stack (addr, key, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP
 
-/// Search the pair (address, storage_key) in the storage the linked list.
+/// Searches the pair (address, storage_key) in the storage the linked list.
 /// Returns `payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global search_slot:
     // stack: addr, key, payload_ptr, retdest
@@ -837,7 +834,7 @@ slot_found_no_write:
 %%after:
 %endmacro
 
-/// Remove the storage key and its value from the list.
+/// Removes the storage key and its value from the list.
 /// Panics if the key is not in the list.
 global remove_slot:
     // stack: addr, key, retdest
@@ -982,13 +979,4 @@ remove_all_slots_end:
     %add_const(4)
     MLOAD_GENERAL
     // stack: next_node_ptr
-%endmacro
-
-%macro read_slot_linked_list
-    // stack: address, slot
-    %addr_to_state_key
-    SWAP1 %slot_to_storage_key
-    %stack (slot_key, addr_key) -> (addr_key, slot_key, 0, %%after)
-    %jump(search_slot)
-%%after:
 %endmacro

@@ -1,6 +1,6 @@
 // Given an address, return a pointer to the associated account data, which
 // consists of four words (nonce, balance, storage_root, code_hash), in the
-// trie_data segment. Returns null if the address is not found.
+// trie_data segment. Return null if the address is not found.
 global mpt_read_state_trie:
     // stack: addr, retdest
     %read_accounts_linked_list
