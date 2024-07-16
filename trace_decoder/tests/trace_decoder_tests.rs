@@ -1,14 +1,5 @@
-//! These tests rely on the jerigon and cdk erigon witness files as input
-//! To add a new block or range of blocks as test input, do the following:
-//! 1. Run rpc tool to fetch block witness:
-//!```
-//!     cargo run --bin rpc fetch --rpc-url <node_rpc_endpoint> --start-block <start> --end-block <end> ./b<number>_<network>.json
-//! ```
-//! 2. Download the header file for the block or range of blocks:
-//!```
-//!     file_name = b<number>_<network>_header.json
-//!     echo "[" > $file_name && cast rpc eth_getBlockByNumber "0x<block_number>" 'false' --rpc-url <node_rpc_endpoint>  >> $file_name && echo "]" >> $file_name
-//! ```
+//! Tests to check the parsing/decoding and `GenerationInputs` validity.
+//! They rely on the jerigon and cdk erigon witness files as input.
 
 use std::time::Duration;
 use std::{
@@ -21,7 +12,7 @@ use anyhow::Context as _;
 use evm_arithmetization::prover::testing::simulate_execution;
 use evm_arithmetization::GenerationInputs;
 use itertools::Itertools;
-use log::{info, warn};
+use log::info;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::util::timing::TimingTree;
@@ -34,6 +25,12 @@ use trace_decoder::OtherBlockData;
 type F = GoldilocksField;
 
 const JERIGON_WITNESS_DIR: &str = "tests/data/witnesses/zero_jerigon";
+///TODO Add CDK Erigon witness test data.
+/// Local [cdk erigon](https://github.com/0xPolygonHermez/cdk-erigon?tab=readme-ov-file#running-cdk-erigon) dev network
+/// could be used for basic witness generation.
+/// Related work for type2 prover is on the [type2_cancun](https://github.com/0xPolygonZero/zk_evm/pull/319) branch at the moment.
+/// When the cdk erigon witness data is added, enable test execution for
+/// `CDK_ERIGON_WITNESS_DIR`
 //const CDK_ERIGON_WITNESS_DIR: &str =
 // "tests/data/witnesses/hermez_cdk_erigon";
 
@@ -93,10 +90,7 @@ fn verify_generation_inputs(
     other: &OtherBlockData,
     generation_inputs: Vec<GenerationInputs>,
 ) -> anyhow::Result<()> {
-    if generation_inputs.is_empty() {
-        warn!("Empty generation inputs list");
-        return Ok(());
-    }
+    assert!(generation_inputs.len() >= 2);
     assert_eq!(
         other.checkpoint_state_trie_root,
         generation_inputs
