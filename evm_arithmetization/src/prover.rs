@@ -95,7 +95,7 @@ pub(crate) fn zkevm_fast_config() -> StarkConfig {
             proof_of_work_bits: 16,
             // This strategy allows us to hit all intermediary STARK leaves while going through the
             // batched Field Merkle Trees.
-            reduction_strategy: FriReductionStrategy::Fixed(vec![1, 2, 2, 2, 4, 4, 4]),
+            reduction_strategy: FriReductionStrategy::Fixed(vec![3, 2, 2, 2, 4, 4, 2]),
             num_query_rounds: 84,
         },
     }
