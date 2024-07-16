@@ -640,12 +640,12 @@ fn place_branch_and_potentially_ext_prefix(
         new_node,
     ) {
         ExistingOrNewBranchValuePlacement::BranchValue(branch_v, (nib, node)) => {
-            children[nib as usize] = (node);
+            children[nib as usize] = node;
             value = branch_v;
         }
         ExistingOrNewBranchValuePlacement::BothBranchChildren((nib_1, node_1), (nib_2, node_2)) => {
-            children[nib_1 as usize] = (node_1);
-            children[nib_2 as usize] = (node_2);
+            children[nib_1 as usize] = node_1;
+            children[nib_2 as usize] = node_2;
         }
     }
 
@@ -672,7 +672,7 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field(
     ) {
         (0, _, Node::Leaf { value, .. }) => ExistingOrNewBranchValuePlacement::BranchValue(
             value.clone(),
-            (ins_entry_into_leaf_and_nibble(info, new_node_entry)),
+            ins_entry_into_leaf_and_nibble(info, new_node_entry),
         ),
 
         (_, 0, _) => ExistingOrNewBranchValuePlacement::BranchValue(
@@ -681,7 +681,7 @@ fn check_if_existing_or_new_node_should_go_in_branch_value_field(
         ),
         (_, _, _) => ExistingOrNewBranchValuePlacement::BothBranchChildren(
             (info.existing_postfix.get_nibble(0), existing_node.clone()),
-            (ins_entry_into_leaf_and_nibble(info, new_node_entry)),
+            ins_entry_into_leaf_and_nibble(info, new_node_entry),
         ),
     }
 }
