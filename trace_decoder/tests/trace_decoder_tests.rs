@@ -63,7 +63,7 @@ fn read_witness_file(file_path: &Path) -> anyhow::Result<Vec<BlockProverInput>> 
     ))
 }
 
-fn derive_header_file_name(witness_file_path: &Path) -> Result<PathBuf, anyhow::Error> {
+fn derive_header_file_path(witness_file_path: &Path) -> Result<PathBuf, anyhow::Error> {
     let mut header_file_path = witness_file_path.to_path_buf();
     header_file_path.set_extension("");
     let mut block_header_file_name = header_file_path
@@ -230,7 +230,7 @@ fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
             {
                 // Read json header file of the block. We need it to check tracer output
                 // consistency
-                let header_file_path = derive_header_file_name(&file_path)?;
+                let header_file_path = derive_header_file_path(&file_path)?;
                 let header_file = fs::File::open(header_file_path.as_path()).context(format!(
                     "Unable to open header file {}",
                     header_file_path.display()
