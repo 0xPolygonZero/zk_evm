@@ -31,6 +31,7 @@ pub enum ProverInputError {
     OutOfMptData,
     OutOfRlpData,
     OutOfWithdrawalData,
+    OutOfGerData,
     CodeHashNotFound,
     InvalidMptInput,
     InvalidInput,
@@ -38,4 +39,6 @@ pub enum ProverInputError {
     NumBitsError,
     InvalidJumpDestination,
     InvalidJumpdestSimulation,
+    KzgEvalFailure(String),
+    Unimplemented,
 }

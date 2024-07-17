@@ -44,14 +44,14 @@ impl Add for Bits {
 }
 
 impl Bits {
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Bits {
             count: 0,
             packed: U256::zero(),
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.count == 0
     }
 

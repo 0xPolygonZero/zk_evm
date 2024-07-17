@@ -14,25 +14,33 @@ read_txn_from_memory:
     // stack: retdest
 
     // We will peak at the first byte to determine what type of transaction this is.
-    // Note that type 1 and 2 transactions have a first byte of 1 and 2, respectively.
+    // Note that type 1, 2 and 3 transactions have a first byte of 1, 2 and 3, respectively.
     // Type 0 (legacy) transactions have no such prefix, but their RLP will have a
     // first byte >= 0xc0, so there is no overlap.
 
     PUSH @INITIAL_TXN_RLP_ADDR
+    DUP1
     MLOAD_GENERAL
     %eq_const(1)
-    // stack: first_byte == 1, retdest
+    // stack: first_byte == 1, rlp_segment, retdest
     %jumpi(process_type_1_txn)
-    // stack: retdest
+    // stack: rlp_segment, retdest
 
-    PUSH @INITIAL_TXN_RLP_ADDR
+    DUP1
     MLOAD_GENERAL
     %eq_const(2)
-    // stack: first_byte == 2, retdest
+    // stack: first_byte == 2, rlp_segment, retdest
     %jumpi(process_type_2_txn)
-    // stack: retdest
+    // stack: rlp_segment, retdest
 
-    // At this point, since it's not a type 1 or 2 transaction,
+    DUP1
+    MLOAD_GENERAL
+    %eq_const(3)
+    // stack: first_byte == 3, rlp_segment, retdest
+    %jumpi(process_type_3_txn)
+    // stack: rlp_segment, retdest
+
+    // At this point, since it's not a type 1, 2 or 3 transaction,
     // it must be a legacy (aka type 0) transaction.
     %jump(process_type_0_txn)
 

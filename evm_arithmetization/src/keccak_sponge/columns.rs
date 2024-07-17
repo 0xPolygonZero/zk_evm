@@ -1,4 +1,3 @@
-use core::borrow::{Borrow, BorrowMut};
 use core::mem::{size_of, transmute};
 use core::ops::Range;
 

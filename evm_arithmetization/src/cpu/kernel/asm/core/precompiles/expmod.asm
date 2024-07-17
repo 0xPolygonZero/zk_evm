@@ -163,7 +163,7 @@ global precompile_expmod:
     %checkpoint // Checkpoint
     %increment_call_depth
     // stack: (empty)
-    PUSH 0x100000000 // = 2^32 (is_kernel = true)
+    PUSH @IS_KERNEL // true
     // stack: kexit_info
 
     // Load l_B from i[0..32].

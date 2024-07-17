@@ -87,7 +87,9 @@ global add_eth_new_account:
     // stack: null_account_ptr, addr, amount, retdest
     POP
     // stack: addr, amount, retdest
-    DUP1 %journal_add_account_created
+    DUP1 PUSH 0
+    // stack: is_eoa, addr, addr, amount, retdest
+    %journal_add_account_created
     %get_trie_data_size // pointer to new account we're about to create
     // stack: new_account_ptr, addr, amount, retdest
     SWAP2

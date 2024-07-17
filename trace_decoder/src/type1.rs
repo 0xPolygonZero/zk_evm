@@ -365,13 +365,13 @@ fn finish_stack(v: &mut Vec<Node>) -> anyhow::Result<Execution> {
 }
 
 #[test]
-fn test() {
-    use mpt_trie::partial_trie::PartialTrie as _;
-    for (ix, case) in
-        serde_json::from_str::<Vec<super::Case>>(include_str!("test_cases/zero_jerigon.json"))
-            .unwrap()
-            .into_iter()
-            .enumerate()
+fn test_tries() {
+    for (ix, case) in serde_json::from_str::<Vec<super::Case>>(include_str!(
+        "../tests/data/tries/zero_jerigon.json"
+    ))
+    .unwrap()
+    .into_iter()
+    .enumerate()
     {
         println!("case {}", ix);
         let instructions = crate::wire::parse(&case.bytes).unwrap();
@@ -379,7 +379,7 @@ fn test() {
         assert_eq!(case.expected_state_root, frontend.state.root());
 
         for (path, acct) in &frontend.state {
-            if acct.storage_root != mpt_trie::partial_trie::HashedPartialTrie::default().hash() {
+            if acct.storage_root != StateTrie::default().root() {
                 assert!(frontend.storage.contains_key(&path))
             }
         }

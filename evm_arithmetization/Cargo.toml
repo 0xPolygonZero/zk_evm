@@ -1,10 +1,10 @@
 [package]
 name = "evm_arithmetization"
 description = "Implementation of STARKs for the Ethereum Virtual Machine"
-version = "0.2.0"
+version = "0.4.0"
 authors = [
-    "Daniel Lubarov <daniel@lubarov.com>",
-    "William Borgeaud <williamborgeaud@gmail.com>",
+  "Daniel Lubarov <daniel@lubarov.com>",
+  "William Borgeaud <williamborgeaud@gmail.com>",
 ]
 readme = "README.md"
 categories = ["cryptography"]
@@ -38,6 +38,7 @@ rand_chacha = { workspace = true }
 rlp = { workspace = true }
 rlp-derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+sha2 = { workspace = true }
 static_assertions = { workspace = true }
 hashbrown = { workspace = true }
 tiny-keccak = { workspace = true }
@@ -51,15 +52,14 @@ zk_evm_proc_macro = { workspace = true }
 criterion = { workspace = true }
 hex = { workspace = true }
 ripemd = { workspace = true }
-sha2 = { workspace = true }
 
 [features]
 default = ["parallel"]
 asmtools = ["hex"]
 parallel = [
-    "plonky2/parallel",
-    "plonky2_maybe_rayon/parallel",
-    "starky/parallel",
+  "plonky2/parallel",
+  "plonky2_maybe_rayon/parallel",
+  "starky/parallel",
 ]
 
 [[bin]]

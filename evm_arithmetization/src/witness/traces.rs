@@ -37,7 +37,7 @@ pub(crate) struct Traces<T: Copy> {
 }
 
 impl<T: Copy> Traces<T> {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Traces {
             arithmetic_ops: vec![],
             byte_packing_ops: vec![],

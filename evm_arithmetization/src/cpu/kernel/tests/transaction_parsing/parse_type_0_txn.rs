@@ -15,7 +15,11 @@ fn process_type_0_txn() -> Result<()> {
     let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
 
     let retaddr = 0xDEADBEEFu32.into();
-    let mut interpreter: Interpreter<F> = Interpreter::new(process_type_0_txn, vec![retaddr]);
+    const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
+    let mut interpreter: Interpreter<F> = Interpreter::new(
+        process_type_0_txn,
+        vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
+    );
 
     // When we reach process_normalized_txn, we're done with parsing and
     // normalizing. Processing normalized transactions is outside the scope of
@@ -72,10 +76,13 @@ fn process_type_0_txn() -> Result<()> {
 #[test]
 fn process_type_0_txn_invalid_sig() -> Result<()> {
     let process_type_0_txn = KERNEL.global_labels["process_type_0_txn"];
-    let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
 
     let retaddr = 0xDEADBEEFu32.into();
-    let mut interpreter: Interpreter<F> = Interpreter::new(process_type_0_txn, vec![retaddr]);
+    const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
+    let mut interpreter: Interpreter<F> = Interpreter::new(
+        process_type_0_txn,
+        vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
+    );
 
     // Same transaction as `process_type_0_txn()`, with the exception that the `s`
     // component in the signature is flipped (i.e. `s' = N - s`, where `N` is the

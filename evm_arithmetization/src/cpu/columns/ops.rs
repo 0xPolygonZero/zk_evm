@@ -1,7 +1,3 @@
-use core::borrow::{Borrow, BorrowMut};
-use core::mem::{size_of, transmute};
-use core::ops::{Deref, DerefMut};
-
 use zk_evm_proc_macro::{Columns, DerefColumns};
 
 /// Structure representing the flags for the various opcodes.
@@ -46,7 +42,3 @@ pub(crate) struct OpsColumnsView<T: Copy> {
     /// Flag for exceptions.
     pub exception: T,
 }
-
-/// Number of columns in Cpu Stark.
-/// `u8` is guaranteed to have a `size_of` of 1.
-pub(crate) const NUM_OPS_COLUMNS: usize = size_of::<OpsColumnsView<u8>>();

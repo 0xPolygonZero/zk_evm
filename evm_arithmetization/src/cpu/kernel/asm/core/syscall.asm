@@ -69,8 +69,10 @@ global syscall_jumptable:
     JUMPTABLE sys_chainid
     JUMPTABLE sys_selfbalance
     JUMPTABLE sys_basefee
-    %rep 7
-        JUMPTABLE panic // 0x49-0x4f are invalid opcodes
+    JUMPTABLE sys_blobhash
+    JUMPTABLE sys_blobbasefee
+    %rep 5
+        JUMPTABLE panic // 0x4b-0x4f are invalid opcodes
     %endrep
 
     // 0x50-0x5f
@@ -86,9 +88,9 @@ global syscall_jumptable:
     JUMPTABLE sys_msize
     JUMPTABLE sys_gas
     JUMPTABLE panic // jumpdest is implemented natively
-    JUMPTABLE panic // 0x5c is an invalid opcode
-    JUMPTABLE panic // 0x5d is an invalid opcode
-    JUMPTABLE panic // 0x5e is an invalid opcode
+    JUMPTABLE sys_tload
+    JUMPTABLE sys_tstore
+    JUMPTABLE sys_mcopy
     JUMPTABLE panic // 0x5f is an invalid opcode
 
     // 0x60-0x6f

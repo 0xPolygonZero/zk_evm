@@ -95,6 +95,7 @@ global warm_precompiles:
     PUSH @BN_MUL %insert_accessed_addresses_no_return
     PUSH @SNARKV %insert_accessed_addresses_no_return
     PUSH @BLAKE2_F %insert_accessed_addresses_no_return
+    PUSH @KZG_PEVAL %insert_accessed_addresses_no_return
 
 // EIP-3651
 global warm_coinbase:
@@ -169,7 +170,7 @@ global process_contract_creation_txn_after_code_loaded:
     %mload_txn_field(@TXN_FIELD_VALUE) %set_new_ctx_value
     %set_new_ctx_parent_ctx
     %set_new_ctx_parent_pc(process_contract_creation_txn_after_constructor)
-    %non_intrinisic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit
     // stack: new_ctx, address, retdest
 
     %enter_new_ctx
@@ -257,7 +258,7 @@ global process_message_txn_insufficient_balance:
 global process_message_txn_return:
     // stack: retdest
     // Since no code was executed, the leftover gas is the non-intrinsic gas.
-    %non_intrinisic_gas
+    %non_intrinsic_gas
     DUP1
     // stack: leftover_gas, leftover_gas, retdest
     %pay_coinbase_and_refund_sender
@@ -282,7 +283,7 @@ global process_message_txn_code_loaded:
     %mload_txn_field(@TXN_FIELD_VALUE) %set_new_ctx_value
     %set_new_ctx_parent_ctx
     %set_new_ctx_parent_pc(process_message_txn_after_call)
-    %non_intrinisic_gas %set_new_ctx_gas_limit
+    %non_intrinsic_gas %set_new_ctx_gas_limit
     // stack: new_ctx, retdest
 
     // Set calldatasize and copy txn data to calldata.
@@ -386,7 +387,7 @@ process_message_txn_fail:
     // stack: (empty)
 %endmacro
 
-%macro non_intrinisic_gas
+%macro non_intrinsic_gas
     // stack: (empty)
     %mload_txn_field(@TXN_FIELD_INTRINSIC_GAS)
     %mload_txn_field(@TXN_FIELD_GAS_LIMIT)

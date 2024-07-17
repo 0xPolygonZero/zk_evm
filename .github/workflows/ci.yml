@@ -45,7 +45,7 @@ jobs:
 
   test_trace_decoder:
     name: Test trace_decoder
-    runs-on: ubuntu-latest
+    runs-on: zero-ci
     timeout-minutes: 30
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
@@ -61,10 +61,9 @@ jobs:
           cache-on-failure: true
 
       - name: Test in trace_decoder subdirectory
-        run: cargo test --manifest-path trace_decoder/Cargo.toml
+        run: cargo test --release --manifest-path trace_decoder/Cargo.toml -- --nocapture
         env:
-          RUSTFLAGS: -Copt-level=3 -Cdebug-assertions -Coverflow-checks=y -Cdebuginfo=0
-          RUST_LOG: 1
+          RUST_LOG: info
           CARGO_INCREMENTAL: 1
           RUST_BACKTRACE: 1
 
@@ -187,7 +186,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b19240705.json
+          ./prove_stdio.sh artifacts/witness_b19807080.json
 
   simple_proof_witness_only:
     name: Execute bash script to generate the proof witness for a small block.
@@ -200,7 +199,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b19240705.json test_only
+          ./prove_stdio.sh artifacts/witness_b19807080.json test_only
 
   multi_blocks_proof_regular:
     name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
@@ -213,7 +212,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
-          ./prove_stdio.sh artifacts/witness_b2_b7.json
+          ./prove_stdio.sh artifacts/witness_b3_b6.json
 
   lints:
     name: Rustdoc, Formatting and Clippy

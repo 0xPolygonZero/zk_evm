@@ -2,7 +2,7 @@
 name = "trace_decoder"
 description = "Ethereum node witness -> Prover input"
 authors = ["Polygon Zero"]
-version = "0.4.0"
+version = "0.6.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -39,7 +39,14 @@ winnow = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+pretty_env_logger = { workspace = true }
 serde_json = { workspace = true }
+prover = { workspace = true }
+serde_path_to_error = { workspace = true }
+plonky2_maybe_rayon = { workspace = true }
+alloy-rpc-types-eth = "0.1.4"
+rstest = "0.21.0"
+
 
 [[bench]]
 name = "block_processing"

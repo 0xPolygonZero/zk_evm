@@ -53,26 +53,26 @@ if [[ $TEST_ONLY == "test_only" ]]; then
     export LOGIC_CIRCUIT_SIZE="12..13"
     export MEMORY_CIRCUIT_SIZE="17..18"
 else
-    if [[ $INPUT_FILE == *"witness_b19240705"* ]]; then
-        # These sizes are configured specifically for block 19240705. Don't use this in other scenarios.
-        echo "Using specific circuit sizes for witness_b19240705.json"
-        export ARITHMETIC_CIRCUIT_SIZE="16..19"
+    if [[ $INPUT_FILE == *"witness_b19807080"* ]]; then
+      # These sizes are configured specifically for block 19807080. Don't use this in other scenarios
+        echo "Using specific circuit sizes for witness_b19807080.json"
+        export ARITHMETIC_CIRCUIT_SIZE="16..18"
         export BYTE_PACKING_CIRCUIT_SIZE="11..15"
-        export CPU_CIRCUIT_SIZE="18..21"
-        export KECCAK_CIRCUIT_SIZE="15..18"
+        export CPU_CIRCUIT_SIZE="17..21"
+        export KECCAK_CIRCUIT_SIZE="14..17"
         export KECCAK_SPONGE_CIRCUIT_SIZE="10..13"
-        export LOGIC_CIRCUIT_SIZE="13..17"
-        export MEMORY_CIRCUIT_SIZE="20..23"
-    elif [[ $INPUT_FILE == *"witness_b2_b7"* ]]; then
-        # These sizes are configured specifically for custom small blocks. Don't use this in other scenarios.
-        echo "Using specific circuit sizes for witness_b2_b7.json"
+        export LOGIC_CIRCUIT_SIZE="13..16"
+        export MEMORY_CIRCUIT_SIZE="19..23"
+    elif [[ $INPUT_FILE == *"witness_b3_b6"* ]]; then
+      # These sizes are configured specifically for custom blocks 3 to 6. Don't use this in other scenarios
+        echo "Using specific circuit sizes for witness_b3_b6.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..17"
-        export BYTE_PACKING_CIRCUIT_SIZE="9..11"
-        export CPU_CIRCUIT_SIZE="16..17"
+        export BYTE_PACKING_CIRCUIT_SIZE="8..14"
+        export CPU_CIRCUIT_SIZE="14..19"
         export KECCAK_CIRCUIT_SIZE="14..15"
-        export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
+        export KECCAK_SPONGE_CIRCUIT_SIZE="10..11"
         export LOGIC_CIRCUIT_SIZE="12..13"
-        export MEMORY_CIRCUIT_SIZE="18..19"
+        export MEMORY_CIRCUIT_SIZE="17..21"
     else
         export ARITHMETIC_CIRCUIT_SIZE="16..23"
         export BYTE_PACKING_CIRCUIT_SIZE="8..21"
