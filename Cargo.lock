@@ -5592,6 +5592,7 @@ dependencies = [
  "clap",
  "evm_arithmetization",
  "futures",
+ "once_cell",
  "plonky2",
  "proof_gen",
  "serde",

@@ -6,6 +6,9 @@ use std::{
     path::Path,
 };
 
+use alloy::hex;
+use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
+use once_cell::sync::Lazy;
 use plonky2::util::serialization::{
     Buffer, DefaultGateSerializer, DefaultGeneratorSerializer, IoError,
 };
@@ -21,6 +24,19 @@ const CIRCUITS_DIR: &str = "circuits/";
 const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
 const ZK_EVM_WORKSPACE_DIR_ENV: &str = "ZK_EVM_WORKSPACE_DIR";
+
+/// We version serialized circuits by the kernel hash they were serialized with,
+/// but we really only need a few of the starting hex nibbles to reliably
+/// differentiate.
+const NUM_HASH_NIBS_TO_USE_IN_CIRCUIT_VERSION: usize = 8;
+
+/// When we serialize/deserialize circuits, we rely on the hash of the plonky
+/// kernel to determine if the circuit is compatible with our current binary. If
+/// the kernel hash of the circuit that we are loading in from disk differs,
+/// then using these circuits could potentially lead to incorrect results (but
+/// most likely just a crash).
+static CIRCUIT_VERSION: Lazy<String> =
+    Lazy::new(|| hex::encode(KERNEL.hash())[..NUM_HASH_NIBS_TO_USE_IN_CIRCUIT_VERSION].to_string());
 
 fn get_serializers() -> (
     DefaultGateSerializer,
@@ -110,7 +126,7 @@ impl DiskResource for BaseProverResource {
             "{}/{}_base_{}_{}",
             &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
-            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
+            *CIRCUIT_VERSION,
             p.get_configuration_digest()
         )
     }
@@ -146,7 +162,7 @@ impl DiskResource for MonolithicProverResource {
             "{}/{}_monolithic_{}_{}",
             &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
-            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
+            *CIRCUIT_VERSION,
             p.get_configuration_digest()
         )
     }
@@ -181,7 +197,7 @@ impl DiskResource for RecursiveCircuitResource {
             "{}/{}_{}_{}_{}",
             &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
-            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
+            *CIRCUIT_VERSION,
             circuit_type.as_short_str(),
             size
         )
@@ -225,7 +241,7 @@ impl DiskResource for VerifierResource {
             "{}/{}_{}_{}",
             &relative_circuit_dir_path(),
             VERIFIER_STATE_FILE_PREFIX,
-            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
+            *CIRCUIT_VERSION,
             p.get_configuration_digest()
         )
     }
