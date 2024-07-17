@@ -17,7 +17,6 @@ use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
@@ -72,13 +71,16 @@ fn add11_yml() -> anyhow::Result<()> {
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    storage_tries.push((to_hashed, Node::Empty));
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
@@ -122,15 +124,15 @@ fn add11_yml() -> anyhow::Result<()> {
             balance: 0xde0b6b3a76586a0u64.into(),
             code_hash,
             // Storage map: { 0 => 2 }
-            storage_root: HashedPartialTrie::from(Node::Leaf {
+            storage_root: Node::Leaf {
                 nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
                 value: vec![2],
-            })
+            }
             .hash(),
             ..AccountRlp::default()
         };
 
-        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+        let mut expected_state_trie_after = Node::Empty;
         expected_state_trie_after.insert(
             beneficiary_nibbles,
             rlp::encode(&beneficiary_account_after).to_vec(),
@@ -156,16 +158,15 @@ fn add11_yml() -> anyhow::Result<()> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
     )?;
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
@@ -180,7 +181,7 @@ fn add11_yml() -> anyhow::Result<()> {
         trie_roots_after,
         contract_code,
         block_metadata,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0xa868u64.into(),

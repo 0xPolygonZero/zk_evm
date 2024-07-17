@@ -25,7 +25,6 @@ use evm_arithmetization::Node;
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 
 type F = GoldilocksField;
@@ -73,7 +72,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     ];
     let code_hash = keccak(code);
 
-    let empty_trie_root = HashedPartialTrie::from(Node::Empty).hash();
+    let empty_trie_root = Node::Empty.hash();
 
     let sender_account_before = AccountRlp {
         nonce: 169.into(),
@@ -93,14 +92,17 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
-    storage_tries.push((sender_state_key, Node::Empty.into()));
-    storage_tries.push((to_state_key, Node::Empty.into()));
+    storage_tries.push((sender_state_key, Node::Empty));
+    storage_tries.push((to_state_key, Node::Empty));
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     let gas_used = U256::from(0x17d7840_u32);
@@ -133,7 +135,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
     };
     let to_account_after = to_account_before;
 
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+    let mut expected_state_trie_after = Node::Empty;
     expected_state_trie_after
         .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
@@ -159,16 +161,15 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
     )?;
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),

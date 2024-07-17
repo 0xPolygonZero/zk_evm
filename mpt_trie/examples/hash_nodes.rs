@@ -50,12 +50,7 @@ use std::{
     str::FromStr,
 };
 
-use mpt_trie::partial_trie::PartialTrie;
-use mpt_trie::{
-    nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node},
-    trie_ops::TrieOpResult,
-};
+use mpt_trie::{nibbles::Nibbles, trie_ops::TrieOpResult, Node};
 
 fn main() -> TrieOpResult<()> {
     pretty_env_logger::try_init().unwrap();
@@ -63,7 +58,7 @@ fn main() -> TrieOpResult<()> {
     // Lets build the (binary) tries in the module-level docs. Since the example
     // uses binary nodes while branch nodes are really `16-ary`, we'll only use
     // branch slots `0` and `1`.
-    let mut full_trie = HashedPartialTrie::default();
+    let mut full_trie = Node::default();
 
     // Note the nibbles read the most significant nibble first (eg. `0x12` reads `1`
     // first).
@@ -77,13 +72,13 @@ fn main() -> TrieOpResult<()> {
     // Slight hack. Normally this has would come from your own logic that is making
     // calls into this crate to construct the `PartialTrie`. May add API to
     // do this in the future if needed.
-    let left_side_hash = match &*full_trie {
+    let left_side_hash = match full_trie {
         Node::Branch { children, .. } => children[0].hash(),
         _ => unreachable!(),
     };
 
     // Hash version. `0` branch is replaced with a `Hash` node.
-    let mut hash_trie = HashedPartialTrie::default();
+    let mut hash_trie = Node::default();
     hash_trie.insert(Nibbles::from_str("0x0").unwrap(), left_side_hash)?; // Hash node
     hash_trie.insert(0x10_u64, large_val(3))?; // 3rd from left.
     hash_trie.insert(0x11_u64, large_val(4))?; // 4th from left.

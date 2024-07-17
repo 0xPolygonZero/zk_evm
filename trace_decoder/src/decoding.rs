@@ -13,11 +13,11 @@ use evm_arithmetization::{
 use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
     trie_ops::{TrieOpError, TrieOpResult},
     trie_subsets::{create_trie_subset, SubsetTrieError},
     utils::{IntoTrieKey, TriePath},
+    FrozenNode, Node,
 };
 use thiserror::Error;
 
@@ -204,10 +204,10 @@ impl Display for TrieType {
 /// after every txn we process in the trace.
 #[derive(Clone, Debug, Default)]
 struct PartialTrieState {
-    state: HashedPartialTrie,
-    storage: HashMap<H256, HashedPartialTrie>,
-    txn: HashedPartialTrie,
-    receipt: HashedPartialTrie,
+    state: Node,
+    storage: HashMap<H256, Node>,
+    txn: Node,
+    receipt: Node,
 }
 
 /// Additional information discovered during delta application.
@@ -409,7 +409,7 @@ impl ProcessedBlockTrace {
     /// accessed by any txns, then we still need to manually create an entry for
     /// them.
     fn init_any_needed_empty_storage_tries<'a>(
-        storage_tries: &mut HashMap<H256, HashedPartialTrie>,
+        storage_tries: &mut HashMap<H256, Node>,
         accounts_with_storage: impl Iterator<Item = &'a H256>,
         state_accounts_with_no_accesses_but_storage_tries: &'a HashMap<H256, H256>,
     ) {
@@ -417,7 +417,7 @@ impl ProcessedBlockTrace {
             if !storage_tries.contains_key(h_addr) {
                 let trie = state_accounts_with_no_accesses_but_storage_tries
                     .get(h_addr)
-                    .map(|s_root| HashedPartialTrie::new(Node::Hash(*s_root)))
+                    .map(|s_root| Node::Hash(*s_root))
                     .unwrap_or_default();
 
                 storage_tries.insert(*h_addr, trie);
@@ -438,15 +438,17 @@ impl ProcessedBlockTrace {
             delta_application_out
                 .additional_state_trie_paths_to_not_hash
                 .into_iter(),
-        )?;
+        )?
+        .freeze();
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
 
         let transactions_trie =
-            create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
+            create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?.freeze();
 
         let receipts_trie =
-            create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
+            create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?
+                .freeze();
 
         let storage_tries = create_minimal_storage_partial_tries(
             &curr_block_tries.storage,
@@ -564,7 +566,7 @@ impl ProcessedBlockTrace {
         Ok(out)
     }
 
-    fn get_trie_trace(trie: &HashedPartialTrie, k: &Nibbles) -> TriePath {
+    fn get_trie_trace(trie: &Node, k: &Nibbles) -> TriePath {
         path_for_query(trie, *k, true).collect()
     }
 
@@ -572,7 +574,7 @@ impl ProcessedBlockTrace {
     /// the other single child that remains also is not hashed when passed into
     /// plonky2. Returns the key to the remaining child if a collapse occurred.
     fn delete_node_and_report_remaining_key_if_branch_collapsed(
-        trie: &mut HashedPartialTrie,
+        trie: &mut Node,
         delete_k: &Nibbles,
     ) -> TrieOpResult<Option<Nibbles>> {
         let old_trace = Self::get_trie_trace(trie, delete_k);
@@ -650,7 +652,8 @@ impl ProcessedBlockTrace {
                 &final_trie_state.state,
                 withdrawal_addrs,
                 additional_paths.into_iter(),
-            )?;
+            )?
+            .freeze();
         }
 
         Self::update_trie_state_from_withdrawals(
@@ -668,7 +671,7 @@ impl ProcessedBlockTrace {
     /// our local trie state.
     fn update_trie_state_from_withdrawals<'a>(
         withdrawals: impl IntoIterator<Item = (Address, H256, U256)> + 'a,
-        state: &mut HashedPartialTrie,
+        state: &mut Node,
     ) -> TraceParsingResult<()> {
         for (addr, h_addr, amt) in withdrawals {
             let h_addr_nibs = Nibbles::from_h256_be(h_addr);
@@ -785,7 +788,7 @@ impl StateTrieWrites {
         &self,
         state_node: &mut AccountRlp,
         h_addr: &H256,
-        acc_storage_tries: &HashMap<H256, HashedPartialTrie>,
+        acc_storage_tries: &HashMap<H256, Node>,
     ) -> TraceParsingResult<()> {
         let storage_root_hash_change = match self.storage_trie_change {
             false => None,
@@ -821,10 +824,10 @@ fn calculate_trie_input_hashes(t_inputs: &PartialTrieState) -> TrieRoots {
 }
 
 fn create_minimal_state_partial_trie(
-    state_trie: &HashedPartialTrie,
+    state_trie: &Node,
     state_accesses: impl Iterator<Item = H256>,
     additional_state_trie_paths_to_not_hash: impl Iterator<Item = Nibbles>,
-) -> TraceParsingResult<HashedPartialTrie> {
+) -> TraceParsingResult<Node> {
     create_trie_subset_wrapped(
         state_trie,
         state_accesses
@@ -838,10 +841,10 @@ fn create_minimal_state_partial_trie(
 // TODO!!!: We really need to be appending the empty storage tries to the base
 // trie somewhere else! This is a big hack!
 fn create_minimal_storage_partial_tries<'a>(
-    storage_tries: &HashMap<H256, HashedPartialTrie>,
+    storage_tries: &HashMap<H256, Node>,
     accesses_per_account: impl Iterator<Item = &'a (H256, Vec<Nibbles>)>,
     additional_storage_trie_paths_to_not_hash: &HashMap<H256, Vec<Nibbles>>,
-) -> TraceParsingResult<Vec<(H256, HashedPartialTrie)>> {
+) -> TraceParsingResult<Vec<(H256, FrozenNode)>> {
     accesses_per_account
         .map(|(h_addr, mem_accesses)| {
             // Guaranteed to exist due to calling `init_any_needed_empty_storage_tries`
@@ -859,7 +862,8 @@ fn create_minimal_storage_partial_tries<'a>(
                 base_storage_trie,
                 storage_slots_to_not_hash,
                 TrieType::Storage,
-            )?;
+            )?
+            .freeze();
 
             Ok((*h_addr, partial_storage_trie))
         })
@@ -867,10 +871,10 @@ fn create_minimal_storage_partial_tries<'a>(
 }
 
 fn create_trie_subset_wrapped(
-    trie: &HashedPartialTrie,
+    trie: &Node,
     accesses: impl Iterator<Item = Nibbles>,
     trie_type: TrieType,
-) -> TraceParsingResult<HashedPartialTrie> {
+) -> TraceParsingResult<Node> {
     create_trie_subset(trie, accesses).map_err(|trie_err| {
         let key = match trie_err {
             SubsetTrieError::UnexpectedKey(key, _) => key,

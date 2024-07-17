@@ -12,7 +12,7 @@ use crate::generation::TrieInputs;
 #[test]
 fn mpt_read() -> Result<()> {
     let trie_inputs = TrieInputs {
-        state_trie: extension_to_leaf(test_account_1_rlp()),
+        state_trie: extension_to_leaf(test_account_1_rlp()).freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],

@@ -5,7 +5,6 @@ use ethereum_types::{Address, BigEndianHash, H256, U256};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use plonky2::field::types::Field;
 use rand::{thread_rng, Rng};
@@ -62,7 +61,7 @@ fn test_account(code: &[u8]) -> AccountRlp {
     AccountRlp {
         nonce: U256::from(1111),
         balance: U256::from(2222),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+        storage_root: Node::Empty.hash(),
         code_hash: keccak(code),
     }
 }
@@ -82,7 +81,7 @@ fn prepare_interpreter<F: Field>(
 ) -> Result<()> {
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
-    let mut state_trie: HashedPartialTrie = Default::default();
+    let mut state_trie: Node = Default::default();
     let trie_inputs = Default::default();
 
     initialize_mpts(interpreter, &trie_inputs);
@@ -321,15 +320,15 @@ fn sstore() -> Result<()> {
         ..AccountRlp::default()
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let mut state_trie_before = Node::Empty;
 
     state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
+        state_trie: state_trie_before.clone().freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: vec![(addr_hashed, Node::Empty.freeze())],
     };
 
     let initial_stack = vec![];
@@ -358,10 +357,10 @@ fn sstore() -> Result<()> {
     let account_after = AccountRlp {
         balance: 0x0de0b6b3a7640000u64.into(),
         code_hash,
-        storage_root: HashedPartialTrie::from(Node::Leaf {
+        storage_root: Node::Leaf {
             nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
             value: vec![2],
-        })
+        }
         .hash(),
         ..AccountRlp::default()
     };
@@ -387,7 +386,7 @@ fn sstore() -> Result<()> {
 
     let hash = H256::from_uint(&interpreter.stack()[1]);
 
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+    let mut expected_state_trie_after = Node::Empty;
     expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec())?;
 
     let expected_state_trie_hash = expected_state_trie_after.hash();
@@ -419,15 +418,15 @@ fn sload() -> Result<()> {
         ..AccountRlp::default()
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let mut state_trie_before = Node::Empty;
 
     state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie_before.clone(),
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(addr_hashed, Node::Empty.into())],
+        state_trie: state_trie_before.clone().freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: vec![(addr_hashed, Node::Empty.freeze())],
     };
 
     let initial_stack = vec![];

@@ -16,7 +16,6 @@ use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::KeccakGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
@@ -46,7 +45,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     let sender_account_before = AccountRlp {
         nonce: 5.into(),
         balance: eth_to_wei(100_000.into()),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+        storage_root: Node::Empty.hash(),
         code_hash: keccak([]),
     };
     let code = vec![
@@ -56,7 +55,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     let to_account_before = AccountRlp {
         nonce: 12.into(),
         balance: eth_to_wei(10_000.into()),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+        storage_root: Node::Empty.hash(),
         code_hash: keccak(&code),
     };
 
@@ -66,10 +65,13 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: HashedPartialTrie::from(Node::Empty),
-        receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     // Generated using a little py-evm script.
@@ -90,8 +92,8 @@ fn test_selfdestruct() -> anyhow::Result<()> {
 
     let contract_code = [(keccak(&code), code.clone()), (keccak([]), vec![])].into();
 
-    let expected_state_trie_after: HashedPartialTrie = {
-        let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
+    let expected_state_trie_after: Node = {
+        let mut state_trie_after = Node::Empty;
 
         update_beacon_roots_account_storage(
             &mut beacon_roots_account_storage,
@@ -104,7 +106,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         let sender_account_after = AccountRlp {
             nonce: 6.into(),
             balance: eth_to_wei(110_000.into()) - 26_002 * 0xa,
-            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            storage_root: Node::Empty.hash(),
             code_hash: keccak([]),
         };
         state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
@@ -114,7 +116,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         let to_account_before = AccountRlp {
             nonce: 12.into(),
             balance: 0.into(),
-            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            storage_root: Node::Empty.hash(),
             code_hash: keccak(&code),
         };
         state_trie_after.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
@@ -136,16 +138,15 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x80").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
     )?;
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
@@ -159,7 +160,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         tries: tries_before,
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

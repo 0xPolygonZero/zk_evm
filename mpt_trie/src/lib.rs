@@ -5,7 +5,7 @@
 //! - You only need a portion of an existing larger trie.
 //! - You need this partial trie to produce the same hash as the full trie.
 //!
-//! The core of this library is the [`PartialTrie`][partial_trie::PartialTrie]
+//! The core of this library is the [`Node`]
 //! type, which represents a trie that is a subset of an existing larger one.
 //! Nodes that are not to be included in the `PartialTrie` are replaced with
 //! [`Hash`][partial_trie::Node::Hash] nodes, which contains the merkle
@@ -14,11 +14,10 @@
 #![allow(incomplete_features)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(missing_debug_implementations)]
-#![deny(missing_docs)]
 
 pub mod builder;
 pub mod nibbles;
-pub mod partial_trie;
+mod partial_trie;
 pub mod special_query;
 mod trie_hashing;
 pub mod trie_ops;
@@ -30,3 +29,5 @@ pub mod debug_tools;
 
 #[cfg(test)]
 pub(crate) mod testing_utils;
+
+pub use partial_trie::{FrozenNode, Node};

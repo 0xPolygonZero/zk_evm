@@ -1,7 +1,3 @@
-use core::ops::Deref;
-
-use mpt_trie::partial_trie::HashedPartialTrie;
-
 use crate::Node;
 
 #[derive(Copy, Clone, Debug)]
@@ -16,8 +12,8 @@ pub(crate) enum PartialTrieType {
 impl PartialTrieType {
     pub(crate) const COUNT: usize = 5;
 
-    pub(crate) fn of(trie: &HashedPartialTrie) -> Self {
-        match trie.deref() {
+    pub(crate) fn of(trie: &Node) -> Self {
+        match trie {
             Node::Empty => Self::Empty,
             Node::Hash(_) => Self::Hash,
             Node::Branch { .. } => Self::Branch,

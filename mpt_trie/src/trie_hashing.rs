@@ -3,10 +3,7 @@ use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
-use crate::{
-    partial_trie::{Node, PartialTrie, TrieNodeIntern},
-    utils::bytes_to_h256,
-};
+use crate::{partial_trie::Node, utils::bytes_to_h256};
 
 /// The node type used for calculating the hash of a trie.
 #[derive(Debug)]
@@ -28,14 +25,12 @@ impl From<&EncodedNode> for H256 {
 
 /// Calculates the hash of a node.
 /// Assumes that all leaf values are already rlp encoded.
-pub(crate) fn hash_trie<N: PartialTrie + TrieNodeIntern>(node: &Node<N>) -> H256 {
+pub(crate) fn hash_trie(node: &Node) -> H256 {
     let trie_hash_bytes = rlp_encode_and_hash_node(node);
     (&trie_hash_bytes).into()
 }
 
-pub(crate) fn rlp_encode_and_hash_node<N: PartialTrie + TrieNodeIntern>(
-    node: &Node<N>,
-) -> EncodedNode {
+pub(crate) fn rlp_encode_and_hash_node(node: &Node) -> EncodedNode {
     let res = match node {
         Node::Empty => EncodedNode::Raw(Bytes::from_static(&rlp::NULL_RLP)),
         Node::Hash(h) => EncodedNode::Hashed(h.0),
@@ -106,7 +101,7 @@ mod tests {
 
     use crate::{
         nibbles::{Nibble, Nibbles},
-        partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode},
+        partial_trie::Node,
         testing_utils::{
             common_setup, entry, generate_n_random_fixed_even_nibble_padded_trie_value_entries,
             generate_n_random_fixed_trie_value_entries,
@@ -232,7 +227,7 @@ mod tests {
     fn get_root_hashes_for_our_trie_after_each_insert(
         entries: impl Iterator<Item = TestInsertValEntry>,
     ) -> impl Iterator<Item = H256> {
-        let mut trie = HashedPartialTrie::new(Node::Empty);
+        let mut trie = Node::Empty;
 
         entries.map(move |(k, v)| {
             trie.insert(k, v).unwrap();
@@ -255,7 +250,7 @@ mod tests {
     fn empty_hash_is_correct() {
         common_setup();
 
-        let trie = HashedPartialTrie::new(Node::Empty);
+        let trie = Node::Empty;
         assert_eq!(keccak_hash::KECCAK_NULL_RLP, trie.get_hash());
     }
 
@@ -277,7 +272,7 @@ mod tests {
             get_lib_trie_root_hashes_after_each_insert(once(ins_entry.clone()))
                 .next()
                 .unwrap();
-        let our_hash = HashedPartialTrie::try_from_iter(once(ins_entry))?.get_hash();
+        let our_hash = Node::try_from_iter(once(ins_entry))?.get_hash();
 
         assert_eq!(py_evm_truth_val, our_hash);
         assert_eq!(eth_trie_lib_truth_val, our_hash);
@@ -371,7 +366,7 @@ mod tests {
         )
         .collect();
 
-        let mut our_trie = HashedPartialTrie::try_from_iter(entries.iter().cloned())?;
+        let mut our_trie = Node::try_from_iter(entries.iter().cloned())?;
         let mut truth_trie = create_truth_trie();
 
         for (k, v) in entries.iter() {
@@ -393,7 +388,7 @@ mod tests {
 
     #[test]
     fn replacing_branch_of_leaves_with_hash_nodes_produced_same_hash() -> TrieOpResult<()> {
-        let mut trie = HashedPartialTrie::try_from_iter([
+        let mut trie = Node::try_from_iter([
             large_entry(0x1),
             large_entry(0x2),
             large_entry(0x3),
@@ -412,9 +407,7 @@ mod tests {
         Ok(())
     }
 
-    fn get_branch_children_expected(
-        node: &mut Node<HashedPartialTrie>,
-    ) -> &mut [WrappedNode<HashedPartialTrie>; 16] {
+    fn get_branch_children_expected(node: &mut Node) -> &mut [Arc<Node>; 16] {
         match node {
             Node::Branch { children, .. } => children,
             _ => unreachable!(),
@@ -437,10 +430,10 @@ mod tests {
             })
         });
 
-        let mut trie = HashedPartialTrie::try_from_iter(entries)?;
+        let mut trie = Node::try_from_iter(entries)?;
         let orig_hash = trie.get_hash();
 
-        let root_branch_children = match &mut *trie {
+        let root_branch_children = match &mut trie {
             Node::Branch { children, .. } => children,
             _ => unreachable!(),
         };

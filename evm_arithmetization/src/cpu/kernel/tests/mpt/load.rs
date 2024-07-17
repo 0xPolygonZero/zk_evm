@@ -4,7 +4,6 @@ use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256, U256};
 use hex_literal::hex;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -55,7 +54,7 @@ fn load_all_mpts_leaf() -> Result<()> {
             nibbles: 0xABC_u64.into(),
             value: test_account_1_rlp(),
         }
-        .into(),
+        .freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
@@ -101,7 +100,7 @@ fn load_all_mpts_leaf() -> Result<()> {
 fn load_all_mpts_hash() -> Result<()> {
     let hash = H256::random();
     let trie_inputs = TrieInputs {
-        state_trie: Node::Hash(hash).into(),
+        state_trie: Node::Hash(hash).freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
@@ -137,7 +136,7 @@ fn load_all_mpts_empty_branch() -> Result<()> {
         children,
         value: vec![],
     }
-    .into();
+    .freeze();
     let trie_inputs = TrieInputs {
         state_trie,
         transactions_trie: Default::default(),
@@ -191,7 +190,7 @@ fn load_all_mpts_empty_branch() -> Result<()> {
 #[test]
 fn load_all_mpts_ext_to_leaf() -> Result<()> {
     let trie_inputs = TrieInputs {
-        state_trie: extension_to_leaf(test_account_1_rlp()),
+        state_trie: extension_to_leaf(test_account_1_rlp()).freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
@@ -235,10 +234,11 @@ fn load_mpt_txn_trie() -> Result<()> {
 
     let trie_inputs = TrieInputs {
         state_trie: Default::default(),
-        transactions_trie: HashedPartialTrie::from(Node::Leaf {
+        transactions_trie: Node::Leaf {
             nibbles: Nibbles::from_str("0x80").unwrap(),
             value: txn.clone(),
-        }),
+        }
+        .freeze(),
         receipts_trie: Default::default(),
         storage_tries: vec![],
     };

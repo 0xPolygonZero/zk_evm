@@ -5,7 +5,7 @@ use ethereum_types::{Address, BigEndianHash, H256};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
+use mpt_trie::Node;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -71,13 +71,16 @@ fn test_add11_yml() {
         .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
         .unwrap();
 
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    storage_tries.push((to_hashed, Node::Empty));
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
@@ -111,10 +114,10 @@ fn test_add11_yml() {
             balance: 0xde0b6b3a76586a0u64.into(),
             code_hash,
             // Storage map: { 0 => 2 }
-            storage_root: HashedPartialTrie::from(Node::Leaf {
+            storage_root: Node::Leaf {
                 nibbles: Nibbles::from_h256_be(keccak([0u8; 32])),
                 value: vec![2],
-            })
+            }
             .hash(),
             ..AccountRlp::default()
         };
@@ -127,7 +130,7 @@ fn test_add11_yml() {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+        let mut expected_state_trie_after = Node::Empty;
         expected_state_trie_after
             .insert(
                 beneficiary_nibbles,
@@ -160,18 +163,17 @@ fn test_add11_yml() {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie
         .insert(
             Nibbles::from_str("0x80").unwrap(),
             rlp::encode(&receipt_0).to_vec(),
         )
         .unwrap();
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
@@ -187,7 +189,7 @@ fn test_add11_yml() {
         trie_roots_after,
         contract_code: contract_code.clone(),
         block_metadata,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: gas_used,
@@ -259,13 +261,16 @@ fn test_add11_yml_with_exception() {
         .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
         .unwrap();
 
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    storage_tries.push((to_hashed, Node::Empty));
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: Node::Empty.freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
@@ -307,7 +312,7 @@ fn test_add11_yml_with_exception() {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+        let mut expected_state_trie_after = Node::Empty;
         expected_state_trie_after
             .insert(
                 beneficiary_nibbles,
@@ -341,18 +346,17 @@ fn test_add11_yml_with_exception() {
         bloom: vec![0; 256].into(),
         logs: vec![],
     };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie
         .insert(
             Nibbles::from_str("0x80").unwrap(),
             rlp::encode(&receipt_0).to_vec(),
         )
         .unwrap();
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
@@ -368,7 +372,7 @@ fn test_add11_yml_with_exception() {
         trie_roots_after,
         contract_code: contract_code.clone(),
         block_metadata,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: txn_gas_limit.into(),

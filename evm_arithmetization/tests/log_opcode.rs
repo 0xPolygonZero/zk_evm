@@ -21,7 +21,6 @@ use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
@@ -96,7 +95,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
-    storage_tries.push((to_hashed, Node::Empty.into()));
+    storage_tries.push((to_hashed, Node::Empty));
 
     // We now add two receipts with logs and data. This updates the receipt trie as
     // well.
@@ -121,17 +120,20 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 
     // Insert the first receipt into the initial receipt trie. The initial receipts
     // trie has an initial node with a random nibble.
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
+    let mut receipts_trie = Node::Empty;
     receipts_trie.insert(
         Nibbles::from_str("0x1337").unwrap(),
         rlp::encode(&receipt_0).to_vec(),
     )?;
 
     let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: receipts_trie.clone(),
-        storage_tries,
+        state_trie: state_trie_before.freeze(),
+        transactions_trie: Node::Empty.freeze(),
+        receipts_trie: receipts_trie.clone().freeze(),
+        storage_tries: storage_tries
+            .into_iter()
+            .map(|(k, v)| (k, v.freeze()))
+            .collect(),
     };
 
     // Prove a transaction which carries out two LOG opcodes.
@@ -208,7 +210,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
 
     // Update the state trie.
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+    let mut expected_state_trie_after = Node::Empty;
     expected_state_trie_after.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_after).to_vec(),
@@ -225,11 +227,10 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
     )?;
 
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
+    let transactions_trie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
-    }
-    .into();
+    };
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
@@ -244,7 +245,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         tries: tries_before,
         trie_roots_after,
         contract_code,
-        checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_state_trie_root: Node::Empty.hash(),
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
@@ -278,8 +279,8 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 #[test]
 fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     // This test checks that inserting into the transaction and receipt
-    // `HashedPartialTrie`s works as expected.
-    let mut example_txn_trie = HashedPartialTrie::from(Node::Empty);
+    // `Node`s works as expected.
+    let mut example_txn_trie = Node::Empty;
 
     // We consider two transactions, with one log each.
     let transaction_0 = LegacyTransactionRlp {
@@ -323,7 +324,7 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     )?;
 
     // Receipts:
-    let mut example_receipt_trie = HashedPartialTrie::from(Node::Empty);
+    let mut example_receipt_trie = Node::Empty;
 
     let log_0 = LogRlp {
         address: hex!("7ef66b77759e12Caf3dDB3E4AFF524E577C59D8D").into(),

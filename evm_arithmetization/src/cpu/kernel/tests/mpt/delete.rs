@@ -1,7 +1,6 @@
 use anyhow::Result;
 use ethereum_types::{BigEndianHash, H256};
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
-use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use rand::random;
 
@@ -24,8 +23,7 @@ fn mpt_delete_leaf_nonoverlapping_keys() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: nibbles_64(0xABC),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0x123), test_account_2())
 }
 
@@ -34,8 +32,7 @@ fn mpt_delete_leaf_overlapping_keys() -> Result<()> {
     let state_trie = Node::Leaf {
         nibbles: nibbles_64(0xABC),
         value: test_account_1_rlp(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0xADE), test_account_2())
 }
 
@@ -45,8 +42,7 @@ fn mpt_delete_branch_into_hash() -> Result<()> {
     let state_trie = Node::Extension {
         nibbles: nibbles_64(0xADF),
         child: hash.into(),
-    }
-    .into();
+    };
     test_state_trie(state_trie, nibbles_64(0xADE), test_account_2())
 }
 
@@ -67,8 +63,7 @@ fn test_after_mpt_delete_extension_branch() -> Result<()> {
     let state_trie = Node::Extension {
         nibbles,
         child: branch.into(),
-    }
-    .into();
+    };
     let key = nibbles.merge_nibbles(&Nibbles {
         packed: NibblesIntern::zero(),
         count: 64 - nibbles.count,
@@ -79,18 +74,14 @@ fn test_after_mpt_delete_extension_branch() -> Result<()> {
 /// Note: The account's storage_root is ignored, as we can't insert a new
 /// storage_root without the accompanying trie data. An empty trie's
 /// storage_root is used instead.
-fn test_state_trie(
-    state_trie: HashedPartialTrie,
-    k: Nibbles,
-    mut account: AccountRlp,
-) -> Result<()> {
+fn test_state_trie(state_trie: Node, k: Nibbles, mut account: AccountRlp) -> Result<()> {
     assert_eq!(k.count, 64);
 
     // Ignore any storage_root; see documentation note.
-    account.storage_root = HashedPartialTrie::from(Node::Empty).hash();
+    account.storage_root = Node::Empty.hash();
 
     let trie_inputs = TrieInputs {
-        state_trie: state_trie.clone(),
+        state_trie: state_trie.clone().freeze(),
         transactions_trie: Default::default(),
         receipts_trie: Default::default(),
         storage_tries: vec![],

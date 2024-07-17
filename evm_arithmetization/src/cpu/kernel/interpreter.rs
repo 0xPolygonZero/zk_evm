@@ -10,7 +10,6 @@ use std::collections::{BTreeSet, HashMap};
 use anyhow::anyhow;
 use ethereum_types::{BigEndianHash, U256};
 use log::Level;
-use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
 
 use crate::byte_packing::byte_packing_stark::BytePackingOp;

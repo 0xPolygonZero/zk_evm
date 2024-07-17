@@ -1,9 +1,11 @@
 //! Code for extracting trie data after witness generation. This is intended
 //! only for debugging.
 
+use std::sync::Arc;
+
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::{Nibbles, NibblesIntern};
-use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie, WrappedNode};
+use mpt_trie::Node;
 
 use super::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp};
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
@@ -93,10 +95,9 @@ pub(crate) fn read_state_rlp_value(
     memory: &MemoryState,
     slice: &MemoryValues,
 ) -> Result<Vec<u8>, ProgramError> {
-    let storage_trie: HashedPartialTrie =
-        get_trie(memory, slice[2].unwrap_or_default().as_usize(), |_, x| {
-            Ok(rlp::encode(&read_storage_trie_value(x)).to_vec())
-        })?;
+    let storage_trie: Node = get_trie(memory, slice[2].unwrap_or_default().as_usize(), |_, x| {
+        Ok(rlp::encode(&read_storage_trie_value(x)).to_vec())
+    })?;
     let account = AccountRlp {
         nonce: slice[0].unwrap_or_default(),
         balance: slice[1].unwrap_or_default(),
@@ -130,51 +131,37 @@ pub(crate) fn read_receipt_rlp_value(
     Ok(bytes)
 }
 
-pub(crate) fn get_state_trie<N: PartialTrie>(
-    memory: &MemoryState,
-    ptr: usize,
-) -> Result<N, ProgramError> {
+pub(crate) fn get_state_trie(memory: &MemoryState, ptr: usize) -> Result<Node, ProgramError> {
     get_trie(memory, ptr, read_state_rlp_value)
 }
 
-pub(crate) fn get_txn_trie<N: PartialTrie>(
-    memory: &MemoryState,
-    ptr: usize,
-) -> Result<N, ProgramError> {
+pub(crate) fn get_txn_trie(memory: &MemoryState, ptr: usize) -> Result<Node, ProgramError> {
     get_trie(memory, ptr, read_txn_rlp_value)
 }
 
-pub(crate) fn get_receipt_trie<N: PartialTrie>(
-    memory: &MemoryState,
-    ptr: usize,
-) -> Result<N, ProgramError> {
+pub(crate) fn get_receipt_trie(memory: &MemoryState, ptr: usize) -> Result<Node, ProgramError> {
     get_trie(memory, ptr, read_receipt_rlp_value)
 }
 
 type MemoryValues = Vec<Option<U256>>;
-pub(crate) fn get_trie<N: PartialTrie>(
+pub(crate) fn get_trie(
     memory: &MemoryState,
     ptr: usize,
     read_rlp_value: fn(&MemoryState, &MemoryValues) -> Result<Vec<u8>, ProgramError>,
-) -> Result<N, ProgramError> {
+) -> Result<Node, ProgramError> {
     let empty_nibbles = Nibbles {
         count: 0,
         packed: NibblesIntern::zero(),
     };
-    Ok(N::new(get_trie_helper(
-        memory,
-        ptr,
-        read_rlp_value,
-        empty_nibbles,
-    )?))
+    get_trie_helper(memory, ptr, read_rlp_value, empty_nibbles)
 }
 
-pub(crate) fn get_trie_helper<N: PartialTrie>(
+pub(crate) fn get_trie_helper(
     memory: &MemoryState,
     ptr: usize,
     read_value: fn(&MemoryState, &MemoryValues) -> Result<Vec<u8>, ProgramError>,
     prefix: Nibbles,
-) -> Result<Node<N>, ProgramError> {
+) -> Result<Node, ProgramError> {
     let load = |offset| {
         memory.get(MemoryAddress {
             context: 0,
@@ -203,7 +190,7 @@ pub(crate) fn get_trie_helper<N: PartialTrie>(
                     get_trie_helper(memory, child_ptr, read_value, prefix.merge_nibble(i as u8))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let children = core::array::from_fn(|i| WrappedNode::from(children[i].clone()));
+            let children = core::array::from_fn(|i| Arc::new(children[i].clone()));
             let value_ptr = u256_to_usize(load(ptr_payload + 16).unwrap_or_default())?;
             let mut value: Vec<u8> = vec![];
             if value_ptr != 0 {
@@ -219,7 +206,7 @@ pub(crate) fn get_trie_helper<N: PartialTrie>(
                 packed: packed.into(),
             };
             let child_ptr = u256_to_usize(load(ptr + 3).unwrap_or_default())?;
-            let child = WrappedNode::from(get_trie_helper(
+            let child = Arc::new(get_trie_helper(
                 memory,
                 child_ptr,
                 read_value,
