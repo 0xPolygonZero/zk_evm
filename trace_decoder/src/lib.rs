@@ -326,13 +326,15 @@ pub fn entrypoint(
                     |mut acc, (nibbles, hash_or_val)| {
                         let path = TriePath::from_nibbles(nibbles);
                         match hash_or_val {
-                            mpt_trie::trie_ops::ValOrHash::Val(bytes) => acc.insert_by_path(
-                                path,
-                                rlp::decode(&bytes)
-                                    .context("invalid AccountRlp in direct state trie")?,
-                            ),
+                            mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
+                                acc.insert_by_path(
+                                    path,
+                                    rlp::decode(&bytes)
+                                        .context("invalid AccountRlp in direct state trie")?,
+                                )?;
+                            }
                             mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                acc.insert_branch_by_path(path, h)
+                                acc.insert_hash_by_path(path, h)?;
                             }
                         };
                         anyhow::Ok(acc)
@@ -346,10 +348,10 @@ pub fn entrypoint(
                                 let path = TriePath::from_nibbles(nibbles);
                                 match hash_or_val {
                                     mpt_trie::trie_ops::ValOrHash::Val(value) => {
-                                        acc.insert(path, value)
+                                        acc.insert(path, value)?;
                                     }
                                     mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                        acc.insert_branch(path, h)
+                                        acc.insert_hash(path, h)?;
                                     }
                                 };
                                 anyhow::Ok(acc)
@@ -392,7 +394,7 @@ pub fn entrypoint(
         .tries
         .state
         .iter()
-        .filter_map(|(addr, data)| Some((addr.into_hash_left_padded(), data.right()?)))
+        .map(|(addr, data)| (addr.into_hash_left_padded(), data))
         .collect::<Vec<_>>();
 
     let code_db = {

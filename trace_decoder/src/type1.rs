@@ -52,10 +52,9 @@ fn visit(
 ) -> anyhow::Result<()> {
     match node {
         Node::Hash(Hash { raw_hash }) => {
-            let clobbered = frontend
+            frontend
                 .state
-                .insert_branch_by_path(TriePath::new(path.iter().copied())?, raw_hash.into());
-            ensure!(clobbered.is_none(), "duplicate hash")
+                .insert_hash_by_path(TriePath::new(path.iter().copied())?, raw_hash.into())?;
         }
         Node::Leaf(Leaf { key, value }) => {
             let path = TriePath::new(path.iter().copied().chain(key))?;
@@ -94,7 +93,7 @@ fn visit(
                             }
                         },
                     };
-                    let clobbered = frontend.state.insert_by_path(path, account);
+                    let clobbered = frontend.state.insert_by_path(path, account)?;
                     ensure!(clobbered.is_none(), "duplicate account");
                 }
             }
@@ -129,14 +128,14 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
     ) -> anyhow::Result<()> {
         match node {
             Node::Hash(Hash { raw_hash }) => {
-                mpt.insert_branch(TriePath::new(path.iter().copied())?, raw_hash.into());
+                mpt.insert_hash(TriePath::new(path.iter().copied())?, raw_hash.into())?;
             }
             Node::Leaf(Leaf { key, value }) => {
                 match value {
                     Either::Left(Value { raw_value }) => mpt.insert(
                         TriePath::new(path.iter().copied().chain(key))?,
                         raw_value.into_vec(),
-                    ),
+                    )?,
                     Either::Right(_) => bail!("unexpected account node in storage trie"),
                 };
             }
@@ -379,12 +378,9 @@ fn test() {
         let frontend = frontend(instructions).unwrap();
         assert_eq!(case.expected_state_root, frontend.state.root());
 
-        for (path, hash_or_acct) in frontend.state {
-            if let Either::Right(acct) = hash_or_acct {
-                if acct.storage_root != mpt_trie::partial_trie::HashedPartialTrie::default().hash()
-                {
-                    assert!(frontend.storage.contains_key(&path))
-                }
+        for (path, acct) in &frontend.state {
+            if acct.storage_root != mpt_trie::partial_trie::HashedPartialTrie::default().hash() {
+                assert!(frontend.storage.contains_key(&path))
             }
         }
     }

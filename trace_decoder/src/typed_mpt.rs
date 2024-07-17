@@ -1,13 +1,124 @@
 //! Principled MPT types used in this library.
 
-use std::collections::BTreeMap;
+use std::marker::PhantomData;
 
 use copyvec::CopyVec;
-use either::Either;
 use ethereum_types::{Address, H256};
 use evm_arithmetization::generation::mpt::AccountRlp;
-use mpt_trie::partial_trie::PartialTrie as _;
+use mpt_trie::{
+    partial_trie::{HashedPartialTrie, Node, PartialTrie as _},
+    trie_ops::TrieOpError,
+};
 use u4::{AsNibbles, U4};
+
+/// Map where keys are [up to 64 nibbles](TriePath),
+/// and values are [`rlp::Encodable`]/[`rlp::Decodable`].
+///
+/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
+///
+/// Portions of the trie may be deferred: see [`Self::insert_hash`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TypedMpt<T> {
+    inner: HashedPartialTrie,
+    _ty: PhantomData<fn() -> T>,
+}
+
+impl<T> TypedMpt<T> {
+    fn new() -> Self {
+        Self {
+            inner: HashedPartialTrie::new(Node::Empty),
+            _ty: PhantomData,
+        }
+    }
+    /// Insert a node which represents an out-of-band sub-trie.
+    fn insert_hash(&mut self, path: TriePath, hash: H256) -> Result<(), Error> {
+        self.inner
+            .insert(path.into_nibbles(), hash)
+            .map_err(|source| Error { source })
+    }
+    /// Returns an [`Error`] if the `path` crosses into a part of the trie that
+    /// isn't hydrated.
+    fn insert(&mut self, path: TriePath, value: T) -> Result<Option<T>, Error>
+    where
+        T: rlp::Encodable + rlp::Decodable,
+    {
+        let prev = self.get(path);
+        self.inner
+            .insert(path.into_nibbles(), rlp::encode(&value).to_vec())
+            .map_err(|source| Error { source })
+            .map(|_| prev)
+    }
+    /// Note that this returns [`None`] if `path` crosses into a part of the
+    /// trie that isn't hydrated.
+    ///
+    /// # Panics
+    /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
+    fn get(&self, path: TriePath) -> Option<T>
+    where
+        T: rlp::Decodable,
+    {
+        let bytes = self.inner.get(path.into_nibbles())?;
+        Some(rlp::decode(bytes).expect(
+            "T encoding/decoding should round-trip,\
+            and only encoded `T`s are ever inserted",
+        ))
+    }
+    /// # Panics
+    /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
+    fn remove(&mut self, path: TriePath) -> Result<Option<T>, Error>
+    where
+        T: rlp::Decodable,
+    {
+        match self.inner.delete(path.into_nibbles()) {
+            Ok(None) => Ok(None),
+            Ok(Some(bytes)) => Ok(Some(rlp::decode(&bytes).expect(
+                "T encoding/decoding should round-trip,\
+                    and only encoded `T`s are ever inserted",
+            ))),
+            // TODO(0xaatif): why is this fallible if `get` isn't?
+            Err(source) => Err(Error { source }),
+        }
+    }
+    fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
+        &self.inner
+    }
+    fn root(&self) -> H256 {
+        self.inner.hash()
+    }
+    /// Note that this returns owned paths and items.
+    fn iter(&self) -> impl Iterator<Item = (TriePath, T)> + '_
+    where
+        T: rlp::Decodable,
+    {
+        self.inner.keys().filter_map(|nib| {
+            let path = TriePath::from_nibbles(nib);
+            Some((path, self.get(path)?))
+        })
+    }
+}
+
+impl<T> Default for TypedMpt<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a TypedMpt<T>
+where
+    T: rlp::Decodable,
+{
+    type Item = (TriePath, T);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(self.iter())
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+#[error(transparent)]
+pub struct Error {
+    source: TrieOpError,
+}
 
 /// Bounded sequence of [`U4`],
 /// used as a key for [`TypedMpt`].
@@ -39,8 +150,7 @@ impl TriePath {
             "\
             rlp of an usize goes through a u64, which is 8 bytes,
             which will be 9 bytes RLP'ed.
-            9 < 32
-        ",
+            9 < 32",
         )
     }
     fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
@@ -63,96 +173,7 @@ impl TriePath {
     }
 }
 
-/// Map where keys are [up to 64 nibbles](TriePath), and values are either an
-/// out-of-band [hash](H256) or an inline [`rlp::Encodable`]/[`rlp::Decodable`]
-/// value.
-///
-/// [Merkle Patricia Trees](https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie)
-/// are _maps_, where keys are typically _sequences_ of an _alphabet_.
-///
-/// Map values are typically indirect (i.e a _hash_),
-/// but in this structure may be stored _inline_.
-///
-/// Semantically equivalent to a [`mpt_trie::partial_trie::HashedPartialTrie`].
-#[derive(Debug, Clone)]
-struct TypedMpt<T> {
-    map: BTreeMap<TriePath, Either<H256, T>>,
-}
-
-impl<T> Default for TypedMpt<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T> TypedMpt<T> {
-    pub const fn new() -> Self {
-        Self {
-            map: BTreeMap::new(),
-        }
-    }
-    // pub fn remove(&mut self, path: TriePath) -> Option<Either<H256, T>> {
-    //     self.map.remove(&path)
-    // }
-    pub fn insert(&mut self, path: TriePath, value: T) -> Option<Either<H256, T>> {
-        self.map.insert(path, Either::Right(value))
-    }
-    pub fn insert_branch(&mut self, path: TriePath, hash: H256) -> Option<Either<H256, T>> {
-        self.map.insert(path, Either::Left(hash))
-    }
-    // pub fn get(&self, path: TriePath) -> Option<Either<H256, &T>> {
-    //     self.map.get(&path).map(|it| it.as_ref().map_left(|it| *it))
-    // }
-    pub fn root(&self) -> H256
-    where
-        T: rlp::Encodable,
-    {
-        self.as_hashed_partial_trie().hash()
-    }
-    pub fn iter(&self) -> impl Iterator<Item = (&TriePath, &Either<H256, T>)> {
-        self.map.iter()
-    }
-    pub fn as_hashed_partial_trie(&self) -> mpt_trie::partial_trie::HashedPartialTrie
-    where
-        T: rlp::Encodable,
-    {
-        let mut theirs = mpt_trie::partial_trie::HashedPartialTrie::default();
-        for (path, v) in &self.map {
-            let nibbles = path.into_nibbles();
-            match v {
-                Either::Left(h) => theirs.insert(nibbles, *h),
-                Either::Right(v) => theirs.insert(nibbles, &*rlp::encode(v)),
-            }
-            .expect("internal error in legacy MPT library")
-        }
-        theirs
-    }
-}
-
-impl<'a, T> IntoIterator for &'a TypedMpt<T> {
-    type Item = (&'a TriePath, &'a Either<H256, T>);
-
-    type IntoIter = Box<dyn Iterator<Item = (&'a TriePath, &'a Either<H256, T>)> + 'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.iter())
-    }
-}
-
-impl<T> IntoIterator for TypedMpt<T>
-where
-    T: 'static,
-{
-    type Item = (TriePath, Either<H256, T>);
-
-    type IntoIter = Box<dyn Iterator<Item = (TriePath, Either<H256, T>)>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.map.into_iter())
-    }
-}
-
-/// Per-block, keyed by transaction index.
+/// Per-block, `txn_ix -> [u8]`.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#receipts-trie>
 #[derive(Debug, Clone, Default)]
@@ -161,18 +182,18 @@ pub struct TransactionTrie {
 }
 
 impl TransactionTrie {
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Option<Either<H256, Vec<u8>>> {
+    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
         self.typed.insert(TriePath::from_txn_ix(txn_ix), val)
     }
     pub fn root(&self) -> H256 {
         self.typed.root()
     }
-    pub fn as_hashed_partial_trie(&self) -> mpt_trie::partial_trie::HashedPartialTrie {
+    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
 }
 
-/// Per-block, keyed by transaction index.
+/// Per-block, `txn_ix -> [u8]`.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#transaction-trie>
 #[derive(Debug, Clone, Default)]
@@ -181,15 +202,15 @@ pub struct ReceiptTrie {
 }
 
 impl ReceiptTrie {
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) {
-        self.typed.insert(TriePath::from_txn_ix(txn_ix), val);
+    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+        self.typed.insert(TriePath::from_txn_ix(txn_ix), val)
     }
-    pub fn as_hashed_partial_trie(&self) -> mpt_trie::partial_trie::HashedPartialTrie {
+    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
 }
 
-/// Global, keyed by address
+/// Global, [`Address`] `->` [`AccountRlp`].
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
@@ -202,44 +223,40 @@ impl StateTrie {
         &mut self,
         address: Address,
         account: AccountRlp,
-    ) -> Option<Either<H256, AccountRlp>> {
+    ) -> Result<Option<AccountRlp>, Error> {
         self.insert_by_path(TriePath::from_address(address), account)
     }
     pub fn insert_by_path(
         &mut self,
         path: TriePath,
         account: AccountRlp,
-    ) -> Option<Either<H256, AccountRlp>> {
+    ) -> Result<Option<AccountRlp>, Error> {
         self.typed.insert(path, account)
     }
-    pub fn insert_branch_by_path(
-        &mut self,
-        path: TriePath,
-        hash: H256,
-    ) -> Option<Either<H256, AccountRlp>> {
-        self.typed.insert_branch(path, hash)
+    pub fn insert_hash_by_path(&mut self, path: TriePath, hash: H256) -> Result<(), Error> {
+        self.typed.insert_hash(path, hash)
     }
-    pub fn get_by_path(&self, path: TriePath) -> Option<Either<H256, AccountRlp>> {
-        self.typed.map.get(&path).copied()
+    pub fn get_by_path(&self, path: TriePath) -> Option<AccountRlp> {
+        self.typed.get(path)
     }
-    pub fn get_by_address(&self, address: Address) -> Option<Either<H256, AccountRlp>> {
+    pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
         self.get_by_path(TriePath::from_hash(keccak_hash::keccak(address)))
     }
     pub fn root(&self) -> H256 {
         self.typed.root()
     }
-    pub fn iter(&self) -> impl Iterator<Item = (&TriePath, &Either<H256, AccountRlp>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (TriePath, AccountRlp)> + '_ {
         self.typed.iter()
     }
-    pub fn as_hashed_partial_trie(&self) -> mpt_trie::partial_trie::HashedPartialTrie {
+    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
 }
 
-impl IntoIterator for StateTrie {
-    type Item = (TriePath, Either<H256, AccountRlp>);
+impl<'a> IntoIterator for &'a StateTrie {
+    type Item = (TriePath, AccountRlp);
 
-    type IntoIter = Box<dyn Iterator<Item = (TriePath, Either<H256, AccountRlp>)>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.typed.into_iter()
@@ -252,33 +269,22 @@ impl IntoIterator for StateTrie {
 #[derive(Debug, Clone, Default)]
 pub struct StorageTrie {
     /// This does NOT use [`TypedMpt`] - T could be anything!
-    map: BTreeMap<TriePath, Either<H256, Vec<u8>>>,
+    typed: TypedMpt<Vec<u8>>,
 }
 impl StorageTrie {
-    pub fn insert(&mut self, path: TriePath, value: Vec<u8>) -> Option<Either<H256, Vec<u8>>> {
-        self.map.insert(path, Either::Right(value))
+    pub fn insert(&mut self, path: TriePath, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+        self.typed.insert(path, value)
     }
-    pub fn insert_branch(&mut self, path: TriePath, hash: H256) -> Option<Either<H256, Vec<u8>>> {
-        self.map.insert(path, Either::Left(hash))
+    pub fn insert_hash(&mut self, path: TriePath, hash: H256) -> Result<(), Error> {
+        self.typed.insert_hash(path, hash)
     }
     pub fn root(&self) -> H256 {
-        self.as_hashed_partial_trie().hash()
+        self.typed.root()
     }
-    pub fn remove(&mut self, path: TriePath) -> Option<Either<H256, Vec<u8>>> {
-        self.map.remove(&path)
+    pub fn remove(&mut self, path: TriePath) -> Result<Option<Vec<u8>>, Error> {
+        self.typed.remove(path)
     }
-    pub fn as_hashed_partial_trie(&self) -> mpt_trie::partial_trie::HashedPartialTrie {
-        let mut theirs = mpt_trie::partial_trie::HashedPartialTrie::default();
-        for (k, v) in &self.map {
-            let nibbles = k.into_nibbles();
-            match v {
-                Either::Left(h) => theirs.insert(nibbles, *h),
-                // TODO(0xaatif): why is RLP-encoding here the right thing to do?
-                //                (Our tests fail without it).
-                Either::Right(v) => theirs.insert(nibbles, &*rlp::encode(v)),
-            }
-            .expect("error in mpt_trie")
-        }
-        theirs
+    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
+        self.typed.as_hashed_partial_trie()
     }
 }

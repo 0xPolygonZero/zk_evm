@@ -224,24 +224,24 @@ impl ProcessedBlockTrace {
         other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<GenerationInputs>> {
         let mut curr_block_tries = PartialTrieState {
-            state: self.tries.state.as_hashed_partial_trie(),
+            state: self.tries.state.as_hashed_partial_trie().clone(),
             storage: self
                 .tries
                 .storage
                 .iter()
-                .map(|(k, v)| (*k, v.as_hashed_partial_trie()))
+                .map(|(k, v)| (*k, v.as_hashed_partial_trie().clone()))
                 .collect(),
             ..Default::default()
         };
 
         // This is just a copy of `curr_block_tries`.
         let initial_tries_for_dummies = PartialTrieState {
-            state: self.tries.state.as_hashed_partial_trie(),
+            state: self.tries.state.as_hashed_partial_trie().clone(),
             storage: self
                 .tries
                 .storage
                 .iter()
-                .map(|(k, v)| (*k, v.as_hashed_partial_trie()))
+                .map(|(k, v)| (*k, v.as_hashed_partial_trie().clone()))
                 .collect(),
             ..Default::default()
         };
