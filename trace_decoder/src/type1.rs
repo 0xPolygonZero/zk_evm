@@ -455,6 +455,3 @@ fn test_tries() {
         }
     }
 }
-
-#[test]
-fn test_witness_processing() {}

@@ -457,11 +457,11 @@ Finally, note that both of these testing scripts force proof generation to be se
 
 The trace decoder module has some basic regression tests, using the json witness data from the `trace_decoder/tests/data/witnesses` subdirectories.
 When needed (e.g. some block with corner-case discovered), additional input witness data should be generated using the following procedure:
-1. Run the `rpc` tool to fetch the block witness:
+1. Run the `rpc` tool to fetch the block (or multiple blocks) witness:
 ```sh
 cargo run --bin rpc fetch --rpc-url <node_rpc_endpoint> --start-block <start> --end-block <end> > ./b<number>_<network>.json
 ```
-2. Download the header file for the block or range of blocks:
+2. Download the header file for the block (or range of blocks), making the json array of headers:
 ```sh
 file_name = "b<number>_<network>_header.json"
 echo "[" > $file_name && cast rpc eth_getBlockByNumber "0x<block_number>" 'false' --rpc-url <node_rpc_endpoint>  >> $file_name && echo "]" >> $file_name

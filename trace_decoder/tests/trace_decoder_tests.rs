@@ -34,24 +34,20 @@ const JERIGON_WITNESS_DIR: &str = "tests/data/witnesses/zero_jerigon";
 //const CDK_ERIGON_WITNESS_DIR: &str =
 // "tests/data/witnesses/hermez_cdk_erigon";
 
-enum JsonFileType {
-    Witness,
-}
-
 fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }
 
-fn find_json_data_files(dir: &str, file_type: JsonFileType) -> anyhow::Result<Vec<PathBuf>> {
+fn find_witness_data_files(dir: &str) -> anyhow::Result<Vec<PathBuf>> {
     let read_dir = fs::read_dir(dir)?;
     read_dir
         .into_iter()
         .map(|dir_entry| dir_entry.map(|it| it.path()))
-        .filter_ok(|path| match file_type {
-            JsonFileType::Witness => !path
+        .filter_ok(|path| {
+            !path
                 .to_str()
                 .expect("valid str file path")
-                .contains("header"),
+                .contains("header")
         })
         .collect::<Result<Vec<_>, _>>()
         .context(format!("Failed to find witness files in dir {dir}"))
@@ -65,6 +61,18 @@ fn read_witness_file(file_path: &Path) -> anyhow::Result<Vec<BlockProverInput>> 
         "Failed to deserialize json file {}",
         file_path.display()
     ))
+}
+
+fn derive_header_file_name(witness_file_path: &Path) -> Result<PathBuf, anyhow::Error> {
+    let mut header_file_path = witness_file_path.to_path_buf();
+    header_file_path.set_extension("");
+    let mut block_header_file_name = header_file_path
+        .file_name()
+        .context("Invalid header file name")?
+        .to_os_string();
+    block_header_file_name.push("_header.json");
+    header_file_path.set_file_name(block_header_file_name);
+    Ok(header_file_path)
 }
 
 fn decode_generation_inputs(
@@ -160,7 +168,7 @@ fn verify_generation_inputs(
 fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
     init_logger();
 
-    let results = find_json_data_files(test_witness_directory, JsonFileType::Witness)
+    let results = find_witness_data_files(test_witness_directory)
         .expect("valid json data files found")
         .into_iter()
         .map(|file_path| {
@@ -177,7 +185,9 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                     .into_par_iter()
                     .map(|generation_inputs| {
                         // For every generation input, simulate execution.
-                        // Execution will be simulated in parallel
+                        // Execution will be simulated in parallel.
+                        // If system runs out of memory, limit the rayon
+                        // with setting env variable RAYON_NUM_THREADS=<number>.
                         let timing = TimingTree::new(
                             &format!(
                                 "Simulating zkEVM CPU for block {} txn {:?}",
@@ -206,57 +216,48 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
 
 /// This test checks for the parsing and decoding of the block witness
 /// received from Jerigon and CDK Erigon into zkEVM `GenerationInputs`, and
-/// checks if trace decoder output generation inputs are valid and consistent
+/// checks if trace decoder output generation inputs are valid and consistent.
 #[rstest]
 #[case(JERIGON_WITNESS_DIR)]
 //#[case(CDK_ERIGON_WITNESS_DIR)]
 fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
     init_logger();
 
-    let result: Vec<Result<(), anyhow::Error>> =
-        find_json_data_files(test_witness_directory, JsonFileType::Witness)
-            .expect("valid json data files found")
-            .into_iter()
-            .map(|file_path| {
-                {
-                    // Read json header file of the block. We need it to check tracer output
-                    // consistency
-                    let mut header_file_path = file_path.clone();
-                    header_file_path.set_extension("");
-                    let mut block_header_file_name = header_file_path
-                        .file_name()
-                        .expect("valid header file name")
-                        .to_os_string();
-                    block_header_file_name.push("_header.json");
-                    header_file_path.set_file_name(block_header_file_name);
-                    let header_file = fs::File::open(header_file_path.as_path()).context(
-                        format!("Unable to open header file {}", header_file_path.display()),
-                    )?;
-                    let mut header_reader = std::io::BufReader::new(header_file);
-                    let block_header = serde_json::from_reader::<_, Vec<Header>>(
-                        &mut header_reader,
-                    )
+    let result: Vec<Result<(), anyhow::Error>> = find_witness_data_files(test_witness_directory)
+        .expect("valid json data files found")
+        .into_iter()
+        .map(|file_path| {
+            {
+                // Read json header file of the block. We need it to check tracer output
+                // consistency
+                let header_file_path = derive_header_file_name(&file_path)?;
+                let header_file = fs::File::open(header_file_path.as_path()).context(format!(
+                    "Unable to open header file {}",
+                    header_file_path.display()
+                ))?;
+                let mut header_reader = std::io::BufReader::new(header_file);
+                let block_headers = serde_json::from_reader::<_, Vec<Header>>(&mut header_reader)
                     .context(format!(
-                        "Failed to deserialize header json file {}",
-                        header_file_path.display()
-                    ))?;
-                    // Read one json witness file and get list of BlockProverInputs
-                    let block_prover_inputs = read_witness_file(&file_path)?;
-                    Ok(block_header
-                        .into_iter()
-                        .zip(block_prover_inputs.into_iter()))
-                }
-            })
-            .flatten_ok()
-            .map_ok(|(block_header, block_prover_input)| {
-                let other_block_data = block_prover_input.other_data.clone();
-                // Run trace decoder, create generation inputs for this block
-                let block_generation_inputs = decode_generation_inputs(block_prover_input)?;
-                // Verify generation inputs for this block
-                verify_generation_inputs(&block_header, &other_block_data, block_generation_inputs)
-            })
-            .map(|it: Result<Result<(), anyhow::Error>, anyhow::Error>| it?)
-            .collect();
+                    "Failed to deserialize header json file {}",
+                    header_file_path.display()
+                ))?;
+                // Read one json witness file and get list of BlockProverInputs
+                let block_prover_inputs = read_witness_file(&file_path)?;
+                Ok(block_headers
+                    .into_iter()
+                    .zip(block_prover_inputs.into_iter()))
+            }
+        })
+        .flatten_ok()
+        .map_ok(|(block_header, block_prover_input)| {
+            let other_block_data = block_prover_input.other_data.clone();
+            // Run trace decoder, create generation inputs for this block
+            let block_generation_inputs = decode_generation_inputs(block_prover_input)?;
+            // Verify generation inputs for this block
+            verify_generation_inputs(&block_header, &other_block_data, block_generation_inputs)
+        })
+        .map(|it: Result<Result<(), anyhow::Error>, anyhow::Error>| it?)
+        .collect();
 
     result.iter().for_each(|it| {
         if let Err(e) = it {
