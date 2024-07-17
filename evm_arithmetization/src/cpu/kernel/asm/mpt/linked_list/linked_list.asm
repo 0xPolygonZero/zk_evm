@@ -316,28 +316,26 @@ global store_initial_slots:
 
 loop_store_initial_slots:
     // stack: current_node_ptr
-    %get_trie_data_size
-    DUP2
+    DUP1
     MLOAD_GENERAL
-    // stack: current_addr_key, cpy_ptr, current_node_ptr, retdest
+    // stack: current_addr_key, current_node_ptr, retdest
     %eq_const(@U256_MAX)
     %jumpi(store_initial_slots_end)
-    DUP2
+    DUP1
     %add_const(2)
     MLOAD_GENERAL
-    // stack: payload_ptr, cpy_ptr, current_node_ptr, retdest
-    %mload_trie_data
-    %append_to_trie_data
-    // stack: cpy_ptr, current_node_ptr, retdest
+    // stack: value, current_node_ptr, retdest
     DUP2
     %add_const(@STORAGE_COPY_PAYLOAD_PTR)
+    // stack: cpy_value_ptr, value, current_node_ptr, retdest
     SWAP1
-    MSTORE_GENERAL // Store cpy_ptr
+    MSTORE_GENERAL // Store cpy_value
+    // stack: current_node_ptr, retdest
     %next_slot
     %jump(loop_store_initial_slots)
 
 store_initial_slots_end:
-    %pop2
+    POP
     JUMP
 
 
@@ -350,7 +348,6 @@ store_initial_slots_end:
 
 %macro insert_slot_no_return
     %insert_slot
-    POP
 %endmacro
 
 // Multiplies the value at the top of the stack, denoted by ptr/5, by 5
@@ -481,41 +478,31 @@ next_node_ok_with_value:
     // stack: new_ptr + 1, next_ptr, addr_key, key, value, retdest
     // Append the value to `TrieDataSegment` and write the resulting payload_ptr.
     %increment
-    DUP1
-    %get_trie_data_size
-    // stack: new_payload_ptr, new_ptr+2, new_ptr+2, next_ptr, addr_key, key, value, retdest
-    %stack (new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr_key, key, value, retdest)
-        -> (value, new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, new_payload_ptr, retdest)
-    %append_to_trie_data
-    MSTORE_GENERAL
+    DUP1 %increment
+    // stack: new_ptr+2, next_ptr, addr_key, key, value, retdest
+    %stack (new_cloned_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr_key, key, value, retdest)
+        -> (value, new_cloned_payload_ptr_ptr, value, new_payload_ptr_ptr, new_cloned_payload_ptr_ptr, next_ptr, retdest)
+    MSTORE_GENERAL // Store copied value.
+    MSTORE_GENERAL // Store value.
 
-    // stack: new_ptr + 2, next_ptr, new_payload_ptr, retdest
-    // Store the payload ptr copy
+    // stack: new_ptr + 3, next_ptr, retdest
     %increment
     DUP1
-    DUP4
-    %clone_slot
-    MSTORE_GENERAL
-    // stack: new_ptr + 3, next_ptr, new_payload_ptr, retdest
-    %increment
-    DUP1
-    // stack: new_next_ptr, new_next_ptr, next_ptr, new_payload_ptr, retdest
+    // stack: new_next_ptr_ptr, new_next_ptr_ptr, next_ptr, retdest
     SWAP2
     MSTORE_GENERAL
-    // stack: new_next_ptr, new_payload_ptr, retdest
+    // stack: new_next_ptr_ptr, retdest
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
-    // stack: new_payload_ptr, retdest
-    SWAP1
+    // stack: retdest
     JUMP
 
 slot_found_write_value:
     // stack: pred_ptr, addr_key, key, value, retdest
-    %add_const(2) MLOAD_GENERAL
-    %stack (payload_ptr, addr_key, key, value) -> (payload_ptr, value, payload_ptr)
-    %mstore_trie_data
-    // stack: payload_ptr, retdest
-    %stack (payload_ptr, retdest) -> (retdest, payload_ptr)
+    %add_const(2)
+    %stack (payload_ptr, addr_key, key, value) -> (value, payload_ptr)
+    MSTORE_GENERAL
+    // stack: retdest
     JUMP
 
 %macro insert_slot_with_value
@@ -526,7 +513,6 @@ slot_found_write_value:
     %stack (slot_key, addr_key, value) -> (addr_key, slot_key, value, %%after)
     %jump(insert_slot_with_value)
 %%after:
-    // stack: value_ptr
 %endmacro
 
 /// Inserts the pair (address_key, storage_key) and payload pointer into the linked list if it is not already present,
@@ -732,8 +718,8 @@ slot_found_no_write:
     // Load the the payload pointer and access counter
     %add_const(2)
     MLOAD_GENERAL
-    // stack: orig_payload_ptr, addr_key, key, payload_ptr, retdest
-    %stack (orig_payload_ptr, addr_key, key, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
+    // stack: orig_value, addr_key, key, payload_ptr, retdest
+    %stack (orig_value, addr_key, key, payload_ptr, retdest) -> (retdest, orig_value)
     JUMP
 
 

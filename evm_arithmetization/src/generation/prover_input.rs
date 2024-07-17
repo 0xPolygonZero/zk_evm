@@ -90,6 +90,10 @@ impl<F: Field> GenerationState<F> {
                 Some(state_root_ptr) => Ok(state_root_ptr),
                 None => {
                     self.set_preinit = true;
+                    let l = self.memory.contexts[0].segments[Segment::TrieData.unscale()]
+                        .content
+                        .len();
+
                     let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
 
                     let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
@@ -100,6 +104,7 @@ impl<F: Field> GenerationState<F> {
                             content: new_content,
                         },
                     );
+
                     Ok(n)
                 }
             }

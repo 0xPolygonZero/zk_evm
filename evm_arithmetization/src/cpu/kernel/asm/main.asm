@@ -165,6 +165,10 @@ global perform_final_checks:
     PROVER_INPUT(trie_ptr::state)
 
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+
+    PROVER_INPUT(trie_ptr::trie_data_size)
+    %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+
     %set_initial_tries
     %get_trie_data_size
     %mpt_hash_state_trie

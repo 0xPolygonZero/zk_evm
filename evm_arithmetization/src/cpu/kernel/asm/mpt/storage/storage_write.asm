@@ -111,18 +111,10 @@ sstore_after_refund:
     // stack: slot, value, kexit_info
     DUP2 ISZERO %jumpi(sstore_delete)
 
-    // First we write the value to MPT data, and get a pointer to it.
-    %get_trie_data_size
-    // stack: value_ptr, slot, value, kexit_info
-    SWAP2
-    // stack: value, slot, value_ptr, kexit_info
-    %append_to_trie_data
-    // stack: slot, value_ptr, kexit_info
 
-    %slot_to_storage_key
+    // stack: slot, value, kexit_info
     %address
-    %addr_to_state_key
-    %insert_slot_no_return
+    %insert_slot_with_value
 
     EXIT_KERNEL
 
