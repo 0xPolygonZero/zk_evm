@@ -1,3 +1,4 @@
+use std::any::type_name;
 use std::iter::once;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -95,7 +96,7 @@ pub(crate) fn zkevm_fast_config() -> StarkConfig {
             proof_of_work_bits: 16,
             // This strategy allows us to hit all intermediary STARK leaves while going through the
             // batched Field Merkle Trees.
-            reduction_strategy: FriReductionStrategy::Fixed(vec![3, 2, 2, 2, 4, 4, 2]),
+            reduction_strategy: FriReductionStrategy::Fixed(vec![2, 2, 2, 4, 4, 2]),
             num_query_rounds: 84,
         },
     }
@@ -477,13 +478,13 @@ where
         "Opening point is in the subgroup."
     );
 
-    let mut all_fri_instances = all_fri_instance_info(
+    let all_fri_instances = all_fri_instance_info::<F, C, D>(
         all_stark,
-        &trace_commitment,
-        &auxiliary_commitment,
-        &ctl_data_per_table,
-        alphas,
         zeta,
+        &trace_poly_values_sorted,
+        &auxiliary_columns_sorted,
+        &quotient_polys_sorted,
+        &ctl_data_per_table,
         config,
     );
 
@@ -754,6 +755,7 @@ where
     C: GenericConfig<D, F = F>,
     S: Stark<F, D>,
 {
+    println!("Computing quotients for {:?}...", type_name::<S>(),);
     let (index_outer, index_inner) =
         Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
     let mut num_trace_polys_before = 0;
@@ -957,156 +959,184 @@ where
 }
 
 /// Generates all FRI instances. They are sorted by decreasing degree.
+fn fri_instance_info_single_stark<F, C, S, const D: usize>(
+    table: Table,
+    stark: &S,
+    zeta: F::Extension,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    config: &StarkConfig,
+) -> FriInstanceInfo<F, D>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    S: Stark<F, D>,
+{
+    let g = F::primitive_root_of_unity(
+        Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
+    );
+    let sorted_index = Table::table_to_sorted_index()[*table];
+    let num_ctl_helper_polys = ctl_data_per_table[*table].num_ctl_helper_polys();
+    let mut num_trace_polys_before = 0;
+    let mut num_aux_polys_before = 0;
+    let mut num_quotient_polys_before = 0;
+    for i in 0..sorted_index {
+        let prev_sorted_table = Table::table_to_sorted_index()[*table] - i - 1;
+        num_trace_polys_before += trace_poly_values_sorted[i].len();
+        num_aux_polys_before += auxiliary_columns_sorted[i].len();
+        num_quotient_polys_before += quotient_polys_sorted[i].len();
+    }
+    let num_aux_columns = auxiliary_columns_sorted[sorted_index].len();
+    let num_quotient_polys = quotient_polys_sorted[sorted_index].len();
+    let num_cols_before_ctlzs = num_aux_polys_before
+        + stark.num_lookup_helper_columns(config)
+        + ctl_data_per_table[*table]
+            .num_ctl_helper_polys()
+            .iter()
+            .sum::<usize>();
+
+    stark.fri_instance_batch(
+        zeta,
+        g,
+        num_trace_polys_before,
+        num_aux_polys_before,
+        num_aux_columns,
+        num_quotient_polys_before,
+        num_quotient_polys,
+        num_cols_before_ctlzs,
+    )
+}
+
+/// Generates all FRI instances. They are sorted by decreasing degree.
 fn all_fri_instance_info<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
-    trace_commitment: &BatchFriOracle<F, C, D>,
-    auxiliary_commitment: &BatchFriOracle<F, C, D>,
-    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
-    alphas: Vec<F>,
     zeta: F::Extension,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
     config: &StarkConfig,
-    // ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
-    // ctl_challenges: &GrandProductChallengeSet<F>,
 ) -> Vec<FriInstanceInfo<F, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    let degree_bits = Table::all_degree_logs();
     let mut res = Vec::new();
 
     // Arithmetic.
-    {
-        let g = F::primitive_root_of_unity(
-            degree_bits[Table::table_to_sorted_index()[*Table::Arithmetic]],
-        );
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::Arithmetic].num_ctl_helper_polys();
-        res.push(all_stark.arithmetic_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Arithmetic,
+        &all_stark.arithmetic_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
     // BytePacking.
-    {
-        let g = F::primitive_root_of_unity(
-            degree_bits[Table::table_to_sorted_index()[*Table::BytePacking]],
-        );
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::BytePacking].num_ctl_helper_polys();
-        res.push(all_stark.byte_packing_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::BytePacking,
+        &all_stark.byte_packing_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
     // Cpu.
-    {
-        let g =
-            F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*Table::Cpu]]);
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::Cpu].num_ctl_helper_polys();
-        res.push(all_stark.cpu_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Cpu,
+        &all_stark.cpu_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
     // Keccak.
-    {
-        let g =
-            F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*Table::Keccak]]);
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::Keccak].num_ctl_helper_polys();
-        res.push(all_stark.keccak_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Keccak,
+        &all_stark.keccak_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
     // KeccakSponge.
-    {
-        let g = F::primitive_root_of_unity(
-            degree_bits[Table::table_to_sorted_index()[*Table::KeccakSponge]],
-        );
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::KeccakSponge].num_ctl_helper_polys();
-        res.push(all_stark.keccak_sponge_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::KeccakSponge,
+        &all_stark.keccak_sponge_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
     // Logic.
-    {
-        let g =
-            F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*Table::Logic]]);
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::Logic].num_ctl_helper_polys();
-        res.push(all_stark.logic_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Logic,
+        &all_stark.logic_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
     // Memory.
-    {
-        let g =
-            F::primitive_root_of_unity(degree_bits[Table::table_to_sorted_index()[*Table::Memory]]);
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::Memory].num_ctl_helper_polys();
-        res.push(all_stark.memory_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Memory,
+        &all_stark.memory_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
     // MemBefore.
-    {
-        let g = F::primitive_root_of_unity(
-            degree_bits[Table::table_to_sorted_index()[*Table::MemBefore]],
-        );
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::MemBefore].num_ctl_helper_polys();
-        res.push(all_stark.mem_before_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::MemBefore,
+        &all_stark.mem_before_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
-    // Memory.
-    {
-        let g = F::primitive_root_of_unity(
-            degree_bits[Table::table_to_sorted_index()[*Table::MemAfter]],
-        );
-        let num_ctl_helper_polys = ctl_data_per_table[*Table::MemAfter].num_ctl_helper_polys();
-        res.push(all_stark.mem_after_stark.fri_instance(
-            zeta,
-            g,
-            num_ctl_helper_polys.iter().sum(),
-            num_ctl_helper_polys,
-            config,
-        ));
-    }
+    // MemAfter.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::MemAfter,
+        &all_stark.mem_after_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
 
-    res
+    Table::all_sorted()
+        .iter()
+        .map(|&table| res[*table].clone())
+        .collect()
 }
 
 fn all_openings_single_stark<F, C, S, const D: usize>(
