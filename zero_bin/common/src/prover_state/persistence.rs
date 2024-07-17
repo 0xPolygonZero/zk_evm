@@ -35,7 +35,7 @@ const NUM_HASH_NIBS_TO_USE_IN_CIRCUIT_VERSION: usize = 8;
 /// the kernel hash of the circuit that we are loading in from disk differs,
 /// then using these circuits could potentially lead to incorrect results (but
 /// most likely just a crash).
-static CIRCUIT_VERSION: Lazy<String> =
+pub static CIRCUIT_VERSION: Lazy<String> =
     Lazy::new(|| hex::encode(KERNEL.hash())[..NUM_HASH_NIBS_TO_USE_IN_CIRCUIT_VERSION].to_string());
 
 fn get_serializers() -> (
