@@ -134,11 +134,11 @@ sstore_noop:
 // Delete the slot from the storage trie.
 sstore_delete:
     // stack: slot, value, kexit_info
-    SWAP1 POP
-    // stack: slot, kexit_info
-    %slot_to_storage_key
-    // stack: storage_key, kexit_info
     %address
     %addr_to_state_key
+    // stack: addr_key, slot, value, kexit_info
+    SWAP2 POP
+    // stack: slot, addr_key, kexit_info
+    %slot_to_storage_key
     %remove_slot
     EXIT_KERNEL

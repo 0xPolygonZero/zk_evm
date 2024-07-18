@@ -93,3 +93,9 @@
     SET_CONTEXT
     // stack: (empty)
 %endmacro
+
+%macro mstore_u256_max
+    // stack (empty)
+    PUSH @U256_MAX
+    MSTORE_GENERAL
+%endmacro

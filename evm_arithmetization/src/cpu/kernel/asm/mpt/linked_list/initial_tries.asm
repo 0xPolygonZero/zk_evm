@@ -165,7 +165,7 @@ after_set_storage_payload:
     %mstore_trie_data // The dynamic account pointer in the linked list has no storage root so we need to manually set it.
     %mstore_trie_data // Set the leaf payload pointing to next account in the linked list.
     // stack: account_ptr_ptr, storage_ptr_ptr', retdest
-    %add_const(4) // The next pointer is at distance 4
+    %add_const(@STORAGE_NEXT_NODE_PTR) // The next pointer is at distance `STORAGE_NEXT_NODE_PTR`
     // stack: payload_ptr_ptr', storage_ptr_ptr', retdest
     SWAP1
     SWAP2
@@ -181,7 +181,7 @@ set_payload_storage_leaf:
     SWAP1
     %mstore_trie_data
     // stack: storage_ptr_ptr, retdest
-    %add_const(5) // The next pointer is at distance 5
+    %add_const(@STORAGE_LINKED_LISTS_NODE_SIZE) // The next pointer is at distance `STORAGE_LINKED_LISTS_NODE_SIZE`
     // stack: storage_ptr_ptr', retdest
     SWAP1
     JUMP

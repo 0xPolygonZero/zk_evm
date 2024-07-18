@@ -71,8 +71,10 @@ fn test_process_receipt() -> Result<()> {
 
     let segment_read = interpreter.get_memory_segment(Segment::TrieData);
 
-    // The expected TrieData has the form [payload_len, status, cum_gas_used,
-    // bloom_filter, logs_payload_len, num_logs, [logs]]
+    // The expected TrieData has the form [0, payload_len, status, cum_gas_used,
+    // bloom_filter, logs_payload_len, num_logs, [logs]].
+    // The 0 is always the first element of `TrieSegmentData`, as it corresponds to
+    // the null pointer.
     let mut expected_trie_data: Vec<U256> = vec![0.into(), 323.into(), success, 2000.into()];
     expected_trie_data.extend(
         expected_bloom

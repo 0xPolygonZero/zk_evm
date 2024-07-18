@@ -23,7 +23,7 @@
 %macro clone_account
     // stack: account_ptr
     %get_trie_data_size
-    // stack: cloned_accouint_ptr
+    // stack: cloned_account_ptr
     SWAP1
     DUP1
     // Balance

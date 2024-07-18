@@ -131,7 +131,7 @@ after_delete_removed_slots:
     %mstore_trie_data
     // stack: storage_ptr_ptr', account_ptr_ptr, root_ptr, retdest
     SWAP1
-    %add_const(4) // The next account in memory
+    %add_const(@ACCOUNTS_LINKED_LISTS_NODE_SIZE) // The next account in memory
     // stack: account_ptr_ptr', storage_ptr_ptr', root_ptr, retdest
     SWAP1 SWAP2 SWAP1
     %jump(delete_removed_accounts)
@@ -151,7 +151,7 @@ delete_account:
 after_mpt_delete:
     // stack: root_ptr', account_ptr_ptr, storage_ptr_ptr, retdest
     SWAP1
-    %add_const(4)
+    %add_const(@ACCOUNTS_LINKED_LISTS_NODE_SIZE)
     %jump(delete_removed_accounts)
 
 // Delete all slots in `storage_ptr_ptr` with address == `addr` and
@@ -165,11 +165,13 @@ delete_removed_slots:
     // stack: address, addr, root_ptr, storage_ptr_ptr, retdest
     DUP2
     EQ
+    // stack: loaded_address == addr, addr, root_ptr, storage_ptr_ptr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
     DUP5
     LT
     MUL // AND
-    // jump if we either change the address or reach the en of the initial linked list
+    // stack: loaded_address == addr AND storage_ptr_ptr < GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN, addr, root_ptr, storage_ptr_ptr, retdest
+    // jump if we either change the address or reach the end of the initial linked list
     %jumpi(maybe_delete_this_slot)
     // If we are here we have deleted all the slots for this key
     %stack (addr, root_ptr, storage_ptr_ptr, retdest) -> (retdest, root_ptr, storage_ptr_ptr)
@@ -183,7 +185,7 @@ maybe_delete_this_slot:
     // The slot was not deleted, so we skip it.
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     SWAP2
-    %add_const(5)
+    %add_const(@STORAGE_LINKED_LISTS_NODE_SIZE)
     SWAP2
     %jump(delete_removed_slots)
 delete_this_slot:
@@ -196,17 +198,17 @@ delete_this_slot:
 after_mpt_delete_slot:
     // stack: root_ptr', addr, storage_ptr_ptr
     SWAP2
-    %add_const(5)
+    %add_const(@STORAGE_LINKED_LISTS_NODE_SIZE)
     %stack (storage_ptr_ptr_p, addr, root_ptr_p) -> (addr, root_ptr_p, storage_ptr_ptr_p)
     %jump(delete_removed_slots)
 
 global set_final_tries:
     PUSH set_final_tries_after
     PUSH @SEGMENT_STORAGE_LINKED_LIST
-    %add_const(5) // Skip the first node.
+    %add_const(@STORAGE_LINKED_LISTS_NODE_SIZE) // Skip the first node.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
-    %add_const(4) // Skip the first node.
+    %add_const(@ACCOUNTS_LINKED_LISTS_NODE_SIZE) // Skip the first node.
     %jump(delete_removed_accounts)
 set_final_tries_after:
     // stack: new_state_root

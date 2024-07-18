@@ -1,10 +1,13 @@
-/// Access lists for addresses and storage keys.
-/// The access list is stored in a sorted linked list in SEGMENT_ACCESSED_ADDRESSES for addresses and
-/// SEGMENT_ACCESSED_STORAGE_KEYS segment for storage keys. The length of
-/// the segments is stored in the global metadata.
+/// Linked lists for accounts and storage slots.
+/// The accounts linked list is stored in SEGMENT_ACCOUNTS_LINKED_LIST while the slots 
+/// are stored in SEGMENT_STORAGE_LINKED_LIST. The length of
+/// the segments is stored in the associated global metadata.
 /// Both arrays are stored in the kernel memory (context=0).
 /// Searching and inserting is done by guessing the predecessor in the list.
-/// If the address/storage key isn't found in the array, it is inserted at the end.
+/// If the address/storage key isn't found in the array, it is inserted 
+/// at the correct location. These linked lists are used to keep track of
+/// inserted and deleted accounts/slots during the execution, so that the 
+/// initial and final MPT state tries can be reconstructed at the end of the execution.
 
 // Initialize an empty account linked list (@U256_MAX)
 // which is written as [@U256_MAX, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST
@@ -28,10 +31,9 @@ global init_linked_lists:
     // Store @U256_MAX at the beginning of the segment.
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST // ctx == virt == 0
     DUP1
-    PUSH @U256_MAX
-    MSTORE_GENERAL
-    // Store @SEGMENT_ACCOUNTS_LINKED_LIST at address 2
-    %add_const(3)
+    %mstore_u256_max
+    // Store @SEGMENT_ACCOUNTS_LINKED_LIST at address `ACCOUNTS_NEXT_NODE_PTR`.
+    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     DUP1
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
     MSTORE_GENERAL
@@ -44,10 +46,9 @@ global init_linked_lists:
     // Store @U256_MAX at the beginning of the segment.
     PUSH @SEGMENT_STORAGE_LINKED_LIST // ctx == virt == 0
     DUP1
-    PUSH @U256_MAX
-    MSTORE_GENERAL
-    // Store @SEGMENT_ACCOUNTS_LINKED_LIST at address 2
-    %add_const(4)
+    %mstore_u256_max
+    // Store @SEGMENT_STORAGE_LINKED_LIST at address `STORAGE_NEXT_NODE_PTR`
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     DUP1
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     MSTORE_GENERAL
@@ -186,7 +187,7 @@ global insert_account_to_linked_list:
     // stack: pred_ptr, addr, payload_ptr, retdest
     // Check that this is not a deleted node
     DUP1
-    %add_const(3)
+    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     MLOAD_GENERAL
     %jump_neq_const(@U256_MAX, account_found)
     // The storage key is not in the list.
@@ -205,7 +206,7 @@ insert_new_account:
     // stack: pred_addr, pred_ptr, addr, payload_ptr, retdest
     POP
     // get the value of the next address
-    %add_const(3)
+    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     // stack: next_ptr_ptr, addr, payload_ptr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     DUP2
@@ -280,7 +281,7 @@ global insert_account_with_overwrite:
     // stack: pred_ptr, addr, payload_ptr, retdest
     // Check that this is not a deleted node
     DUP1
-    %add_const(3)
+    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     MLOAD_GENERAL
     %jump_neq_const(@U256_MAX, account_found_with_overwrite)
     // The storage key is not in the list.
@@ -337,7 +338,7 @@ global search_account:
     // stack: pred_ptr, addr, payload_ptr, retdest
     // Check that this is not a deleted node
     DUP1
-    %add_const(3)
+    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     MLOAD_GENERAL
     %jump_neq_const(@U256_MAX, account_found)
     // The storage key is not in the list.
@@ -363,7 +364,7 @@ global remove_account:
     // stack: pred_ptr/4, addr, retdest
     %get_valid_account_ptr
     // stack: pred_ptr, addr, retdest
-    %add_const(3)
+    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     // stack: next_ptr_ptr, addr, retdest
     DUP1
     MLOAD_GENERAL
@@ -374,14 +375,13 @@ global remove_account:
     DUP4
     %assert_eq
     // stack: next_ptr, next_ptr_ptr, addr, retdest
-    %add_const(3)
+    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     // stack: next_next_ptr_ptr, next_ptr_ptr, addr, key, retdest
     DUP1
     MLOAD_GENERAL
     // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, addr, retdest
     SWAP1
-    PUSH @U256_MAX
-    MSTORE_GENERAL
+    %mstore_u256_max
     // stack: next_next_ptr, next_ptr_ptr, addr, retdest
     MSTORE_GENERAL
     POP
@@ -424,7 +424,7 @@ loop_store_initial_slots:
     %append_to_trie_data
     // stack: cpy_ptr, current_node_ptr, retdest
     DUP2
-    %add_const(3)
+    %add_const(@STORAGE_COPY_PAYLOAD_PTR)
     SWAP1
     MSTORE_GENERAL // Store cpy_ptr
     %next_slot
@@ -510,7 +510,7 @@ global insert_slot_with_value:
     // stack: pred_ptr, addr, key, value, retdest
     // Check that this is not a deleted node
     DUP1
-    %add_const(4)
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     MLOAD_GENERAL
     %jump_neq_const(@U256_MAX, slot_found_write_value)
     // The storage key is not in the list.
@@ -520,7 +520,7 @@ insert_new_slot_with_value:
     // stack: pred_addr or pred_key, pred_ptr, addr, key, value, retdest
     POP
     // get the value of the next address
-    %add_const(4)
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     // stack: next_ptr_ptr, addr, key, value, retdest
     %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     DUP2
@@ -663,7 +663,7 @@ global insert_slot:
     // stack: pred_ptr, addr, key, payload_ptr, retdest
     // Check that this is not a deleted node
     DUP1
-    %add_const(4)
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     MLOAD_GENERAL
     %jump_neq_const(@U256_MAX, slot_found_write)
     // The storage key is not in the list.
@@ -686,7 +686,7 @@ insert_new_slot:
     // stack: pred_addr or pred_key, pred_ptr, addr, key, payload_ptr, retdest
     POP
     // get the value of the next address
-    %add_const(4)
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     // stack: next_ptr_ptr, addr, key, payload_ptr, retdest
     %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
     DUP2
@@ -806,7 +806,7 @@ global search_slot:
     // stack: pred_ptr, addr, key, payload_ptr, retdest
     // Check that this is not a deleted node
     DUP1
-    %add_const(4)
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     MLOAD_GENERAL
     %jump_neq_const(@U256_MAX, slot_found_no_write)
     // The storage key is not in the list.
@@ -829,7 +829,7 @@ slot_found_no_write:
 
 
 %macro remove_slot
-    %stack (addr, key) -> (addr, key, %%after)
+    %stack (key, addr) -> (addr, key, %%after)
     %jump(remove_slot)
 %%after:
 %endmacro
@@ -842,7 +842,7 @@ global remove_slot:
     // stack: pred_ptr/5, addr, key, retdest
     %get_valid_slot_ptr
     // stack: pred_ptr, addr, key, retdest
-    %add_const(4)
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     // stack: next_ptr_ptr, addr, key, retdest
     DUP1
     MLOAD_GENERAL
@@ -860,15 +860,14 @@ global remove_slot:
     DUP5
     %assert_eq
     // stack: next_ptr, next_ptr_ptr, addr, key, retdest
-    %add_const(4)
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     // stack: next_next_ptr_ptr, next_ptr_ptr, addr, key, retdest
     DUP1
     MLOAD_GENERAL
     // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, addr, key, retdest
     // Mark the next node as deleted
     SWAP1
-    PUSH @U256_MAX
-    MSTORE_GENERAL
+    %mstore_u256_max
     // stack: next_next_ptr, next_ptr_ptr, addr, key, retdest
     MSTORE_GENERAL
     %pop2
@@ -891,10 +890,10 @@ global remove_all_account_slots:
 // Now, while the next address is `addr`, remove the next slot.
 remove_all_slots_loop:
     // stack: pred_ptr, pred_ptr, addr, retdest
-    %add_const(4) DUP1 MLOAD_GENERAL
+    %add_const(@STORAGE_NEXT_NODE_PTR) DUP1 MLOAD_GENERAL
     // stack: cur_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
     DUP1 %eq_const(@U256_MAX) %jumpi(remove_all_slots_end)
-    DUP1 %add_const(4) MLOAD_GENERAL 
+    DUP1 %add_const(@STORAGE_NEXT_NODE_PTR) MLOAD_GENERAL 
     // stack: next_ptr, cur_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
     SWAP1 DUP1
     // stack: cur_ptr, cur_ptr, next_ptr, cur_ptr_ptr, pred_ptr, addr, retdest
@@ -907,8 +906,8 @@ remove_all_slots_loop:
     // stack: next_ptr, cur_ptr_ptr, cur_ptr, pred_ptr, addr, retdest
     MSTORE_GENERAL
     // stack: cur_ptr, pred_ptr, addr, retdest
-    %add_const(4) PUSH @U256_MAX
-    MSTORE_GENERAL
+    %add_const(@STORAGE_NEXT_NODE_PTR) 
+    %mstore_u256_max
     // stack: pred_ptr, addr, retdest
     DUP1
     %jump(remove_all_slots_loop)
@@ -963,7 +962,7 @@ remove_all_slots_end:
 
 %macro next_account
     // stack: node_ptr
-    %add_const(3)
+    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     MLOAD_GENERAL
     // stack: next_node_ptr
 %endmacro
@@ -976,7 +975,7 @@ remove_all_slots_end:
 
 %macro next_slot
     // stack: node_ptr
-    %add_const(4)
+    %add_const(@STORAGE_NEXT_NODE_PTR)
     MLOAD_GENERAL
     // stack: next_node_ptr
 %endmacro

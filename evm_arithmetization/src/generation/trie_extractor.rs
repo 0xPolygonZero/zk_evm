@@ -230,7 +230,10 @@ pub(crate) fn read_receipt_rlp_value(
     Ok(bytes)
 }
 
-pub fn get_state_trie<N: PartialTrie>(memory: &MemoryState, ptr: usize) -> Result<N, ProgramError> {
+pub(crate) fn get_state_trie<N: PartialTrie>(
+    memory: &MemoryState,
+    ptr: usize,
+) -> Result<N, ProgramError> {
     get_trie(memory, ptr, read_state_rlp_value)
 }
 
