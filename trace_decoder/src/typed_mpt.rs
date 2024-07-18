@@ -293,6 +293,15 @@ impl StateTrie {
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         self.typed.as_mut_hashed_partial_trie_unchecked()
     }
+
+    /// This allows users to break the [`TypedMpt`] invariant.
+    /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
+    /// subsequent API calls may panic.
+    pub fn from_hashed_partial_trie_unchecked(hpt: HashedPartialTrie) -> Self {
+        Self {
+            typed: TypedMpt::from_hashed_partial_trie_unchecked(hpt),
+        }
+    }
 }
 
 impl<'a> IntoIterator for &'a StateTrie {

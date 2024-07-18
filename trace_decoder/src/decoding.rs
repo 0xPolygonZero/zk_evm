@@ -432,6 +432,8 @@ impl ProcessedBlockTrace {
                 .into_iter(),
         )?;
 
+        for _ in &state_trie {}
+
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
 
         let transactions_trie = prune_txn(&curr_block_tries.txn, once(txn_k))?
@@ -452,7 +454,7 @@ impl ProcessedBlockTrace {
         .collect();
 
         Ok(TrieInputs {
-            state_trie,
+            state_trie: state_trie.as_hashed_partial_trie().clone(),
             transactions_trie,
             receipts_trie,
             storage_tries,
@@ -642,7 +644,9 @@ impl ProcessedBlockTrace {
                 &final_trie_state.state,
                 withdrawal_addrs,
                 additional_paths.into_iter(),
-            )?;
+            )?
+            .as_hashed_partial_trie()
+            .clone();
         }
 
         Self::update_trie_state_from_withdrawals(
@@ -812,7 +816,7 @@ fn create_minimal_state_partial_trie(
     state_trie: &StateTrie,
     state_accesses: impl Iterator<Item = H256>,
     additional_state_trie_paths_to_not_hash: impl Iterator<Item = Nibbles>,
-) -> TraceParsingResult<HashedPartialTrie> {
+) -> TraceParsingResult<StateTrie> {
     create_trie_subset_wrapped(
         state_trie.as_hashed_partial_trie(),
         state_accesses
@@ -821,6 +825,7 @@ fn create_minimal_state_partial_trie(
             .chain(additional_state_trie_paths_to_not_hash),
         TrieType::State,
     )
+    .map(StateTrie::from_hashed_partial_trie_unchecked)
 }
 
 // TODO!!!: We really need to be appending the empty storage tries to the base
