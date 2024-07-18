@@ -24,6 +24,7 @@ use plonky2::plonk::config::{GenericConfig, GenericHashOut};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use plonky2_maybe_rayon::*;
 use serde::{Deserialize, Serialize};
 use starky::batch_proof::{BatchStarkProof, BatchStarkProofWithPublicInputs};
 use starky::config::StarkConfig;
@@ -425,7 +426,7 @@ where
     );
     challenger.observe_cap(&auxiliary_commitment.batch_merkle_tree.cap);
 
-    // Quotient polynomials.
+    // Quotient polynomials. They are already chunked in `degree` pieces.
     let alphas = challenger.get_n_challenges(config.num_challenges);
     let quotient_polys = all_quotient_polys::<F, P, C, D>(
         all_stark,
@@ -755,7 +756,7 @@ where
     C: GenericConfig<D, F = F>,
     S: Stark<F, D>,
 {
-    println!("Computing quotients for {:?}...", type_name::<S>(),);
+    let degree_bits = Table::all_degree_logs()[Table::table_to_sorted_index()[*table]];
     let (index_outer, index_inner) =
         Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
     let mut num_trace_polys_before = 0;
@@ -786,7 +787,7 @@ where
         )
     };
 
-    compute_quotient_polys::<F, P, C, _, D>(
+    let quotient_polys = compute_quotient_polys::<F, P, C, _, D>(
         stark,
         &get_trace_packed,
         &get_aux_packed,
@@ -794,11 +795,24 @@ where
         Some(&ctl_data_per_table[*table]),
         &vec![],
         alphas,
-        Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
+        degree_bits,
         stark.num_lookup_helper_columns(config),
         config,
     )
-    .expect("Couldn't compute quotient polys.")
+    .expect("Couldn't compute quotient polys.");
+
+    // Chunk the quotient polynomials.
+    let degree = 1 << degree_bits;
+    quotient_polys
+        .into_par_iter()
+        .flat_map(|mut quotient_poly| {
+            quotient_poly
+                .trim_to_len(degree * stark.quotient_degree_factor())
+                .expect("Quotient has failed, the vanishing polynomial is not divisible by Z_H");
+            // Split quotient into degree-n chunks.
+            quotient_poly.chunks(degree)
+        })
+        .collect()
 }
 
 /// Generates all quotient polynomials.
