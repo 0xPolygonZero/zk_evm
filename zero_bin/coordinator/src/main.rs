@@ -3,11 +3,18 @@
 use std::{
     env,
     path::PathBuf,
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use anyhow::Result;
+use coordinator::manyprover::ManyProver;
+pub use coordinator::{
+    benchmarking, fetch,
+    input::{self, ProveBlocksInput},
+    manyprover, proofout, psm,
+};
 use dotenvy::dotenv;
 use ops::register;
 use paladin::{
@@ -17,13 +24,6 @@ use paladin::{
 // use leader::init;
 use tracing::{debug, error, info, warn};
 use zero_bin_common::prover_state;
-
-pub mod benchmarking;
-pub mod fetch;
-pub mod input;
-pub mod manyprover;
-pub mod proofout;
-pub mod psm;
 
 pub const SERVER_ADDR_ENVKEY: &str = "SERVER_ADDR";
 pub const DFLT_SERVER_ADDR: &str = "0.0.0.0:8080";
@@ -55,11 +55,23 @@ async fn main() -> Result<()> {
     // init::tracing();
 
     //------------------------------------------------------------------------
+    // Request queue
+    //------------------------------------------------------------------------
+
+    info!("Initializing the request queue");
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<ProveBlocksInput>(50);
+
+    // Store it in a Data for server
+    let post_queue = web::Data::new(tx);
+
+    //------------------------------------------------------------------------
     // Runtime
     //------------------------------------------------------------------------
 
+    info!("Starting to build Paladin Runtime");
+
     let runtime = {
-        debug!("Attempting to build paladin config for Runtime");
+        info!("Attempting to build paladin config for Runtime");
         let config = build_paladin_config_from_env();
 
         debug!("Determining if should initialize a prover state config...");
@@ -96,6 +108,7 @@ async fn main() -> Result<()> {
                 );
             }
         }
+
         info!("Building Paladin Runtime");
         match Runtime::from_config(&config, register()).await {
             Ok(runtime) => {
@@ -110,8 +123,8 @@ async fn main() -> Result<()> {
         }
     };
 
-    // Store it in an Arc
-    let webdata_runtime = web::Data::new(runtime);
+    debug!("Wrapping Paladin Runtime in Arc");
+    let runtime_arc = Arc::new(runtime);
 
     //------------------------------------------------------------------------
     // Server
@@ -134,28 +147,57 @@ async fn main() -> Result<()> {
         }
     };
 
-    info!("Starting HTTP Server: {}", server_addr);
-
     // Set up the server
     let server = match HttpServer::new(move || {
         App::new()
-            .app_data(webdata_runtime.clone())
+            .app_data(post_queue.clone())
             .service(web::resource("/").route(web::post().to(handle_post)))
             .route("/health", web::get().to(handle_health))
     })
     .workers(NUM_SERVER_WORKERS)
-    .bind(server_addr)
+    .bind(server_addr.as_str())
     {
         Ok(item) => item,
         Err(err) => panic!("Failed to start the server: {}", err),
     };
 
-    // Run the server, panic if there's an error with it.
-    if let Err(err) = server.run().await {
-        error!("Error with running the server: {}", err);
-        panic!("Failed to run the server: {}", err);
+    // Move the http server to its own tokio thread
+    info!("Starting HTTP Server: {}", server_addr);
+    tokio::task::spawn(server.run());
+
+    // Start the processing loop
+    info!("Starting the processing loop.");
+    let mut run_cnt: usize = 0;
+    loop {
+        run_cnt += 1;
+        info!("Awaiting request for run {} in current session.", run_cnt);
+        match rx.recv().await {
+            Some(input) => {
+                info!("Received request for run #{} in current session", run_cnt);
+                info!("From queue: {:?}", input);
+                match ManyProver::new(input, runtime_arc.clone()).await {
+                    Ok(mut manyprover) => {
+                        match manyprover.prove_blocks().await {
+                            Ok(_) => info!("Completed a request."),
+                            Err(err) => error!("Critical error: {}", err),
+                        };
+                    }
+                    Err(err) => error!("Critical configuration error: {}", err),
+                }
+            }
+            None => {
+                info!("Channel to process posts is closed.");
+                // Attempt to close the runtime proper.
+                match runtime_arc.close().await {
+                    Ok(_) => info!("Successfully terminated the runtime."),
+                    Err(err) => error!("Error closing the runtime: {}", err),
+                }
+                break;
+            }
+        }
     }
 
+    info!("Closing Coordinator");
     Ok(())
 }
 
@@ -167,8 +209,8 @@ async fn handle_health() -> impl Responder {
 
 /// Recevies a request for [manyprover::ManyProver::prove_blocks]
 async fn handle_post(
-    runtime: web::Data<Runtime>,
-    input: web::Json<input::ProveBlocksInput>,
+    wdtx: web::Data<tokio::sync::mpsc::Sender<ProveBlocksInput>>,
+    input: web::Json<ProveBlocksInput>,
 ) -> impl Responder {
     let start_time = match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => duration.as_secs(),
@@ -176,39 +218,18 @@ async fn handle_post(
             panic!("Unable to determine current time: {}", err);
         }
     };
-    info!("Received request to prove blocks (Request: {})", start_time);
+    info!("Received request to prove blocks Request {}", start_time);
 
-    // Get the Arc Runtime and pass that to the prover.
-    let arc_runtime = runtime.clone().into_inner();
-
-    // Try to make the prover
-    let mut prover = match manyprover::ManyProver::new(input.0, arc_runtime).await {
-        Ok(prover) => {
-            info!(
-                "Successfully instansiated proving mechanism (Request: {})",
-                start_time
-            );
-            prover
-        }
-        // If there was an error, log it and return an InternalServerError so the user knows that
-        // it will not be working at all.
+    match wdtx.send(input.0).await {
+        Ok(_) => info!("Successfully queued Request {}", start_time),
         Err(err) => {
             error!(
-                "Critical error occured while attempting to perform proofs ({}): {}",
+                "Critical error while trying to queue Request {}: {}",
                 start_time, err
             );
             return HttpResponse::InternalServerError();
         }
-    };
-
-    // Start the prover in a new thread
-    match prover.prove_blocks().await {
-        Ok(_) => info!("Completed request started (Request: {})", start_time),
-        Err(err) => error!(
-            "Critical error occured while attempting to perform proofs ({}): {}",
-            start_time, err
-        ),
-    };
+    }
 
     // Respond the Accepted response
     HttpResponse::Accepted()

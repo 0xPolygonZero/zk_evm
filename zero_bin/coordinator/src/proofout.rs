@@ -45,6 +45,8 @@ pub enum ProofOutputMethod {
     },
 }
 
+unsafe impl Send for ProofOutputMethod {}
+
 #[derive(Debug, Clone)]
 pub enum ProofOutputData {
     LocalDirectory { dirpath: PathBuf },
