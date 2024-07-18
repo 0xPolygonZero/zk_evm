@@ -28,13 +28,14 @@ pub struct BenchmarkingStats {
     pub cumulative_n_txs: Option<u64>,
     /// The duration fo time took to fetch [prover::ProverInput], stored as a
     /// [Duration].
-    pub fetch_duration: Duration,
+    pub fetch_duration: Option<Duration>,
     /// The amount of time elapsed during the process of proving this block,
     /// stored as a [Duration]
     pub total_proof_duration: Duration,
 
     pub prep_duration: Option<Duration>,
     pub txproof_duration: Option<Duration>,
+    pub agg_wait_duration: Option<Duration>,
     pub agg_duration: Option<Duration>,
     /// The start time of the proof.  [BenchmarkingStats::proof_duration] is a
     /// more reliable value to use for the proof duration.  Timestamps measured
@@ -65,7 +66,7 @@ impl BenchmarkingStats {
     /// Returns a header row
     pub fn header_row() -> String {
         String::from(
-            "block_number, number_txs, cumulative_number_txs, fetch_duration, unique_proof_duration, prep_duration, txproof_duration, agg_duration, start_time, end_time, cumulative_elapsed_time, proof_out_duration, gas_used, cumulative_gas_used, difficulty, gas_used_per_tx",
+            "block_number, number_txs, cumulative_number_txs, fetch_duration, unique_proof_duration, prep_duration, txproof_duration, agg_wait_duration, agg_duration, start_time, end_time, cumulative_elapsed_time, proof_out_duration, gas_used, cumulative_gas_used, difficulty, gas_used_per_tx",
         )
     }
 
@@ -102,14 +103,15 @@ impl BenchmarkingStats {
     #[allow(clippy::format_in_format_args)]
     pub fn as_csv_row(&self) -> String {
         format!(
-            "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, \"{}\"",
+            "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, \"{}\"",
             self.block_number,
             self.n_txs,
             Self::unwrap_to_string(self.cumulative_n_txs),
-            self.fetch_duration.as_secs_f64(),
+            Self::unwrap_duration_to_string(self.fetch_duration),
             self.total_proof_duration.as_secs_f64(),
             Self::unwrap_duration_to_string(self.prep_duration),
             Self::unwrap_duration_to_string(self.txproof_duration),
+            Self::unwrap_duration_to_string(self.agg_wait_duration),
             Self::unwrap_duration_to_string(self.agg_duration),
             self.start_time.format("%d-%m-%Y %H:%M:%S"),
             self.end_time.format("%d-%m-%Y %H:%M:%S"),
