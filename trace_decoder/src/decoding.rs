@@ -647,9 +647,7 @@ impl ProcessedBlockTrace {
 
         Self::update_trie_state_from_withdrawals(
             withdrawals_with_hashed_addrs_iter(),
-            final_trie_state
-                .state
-                .as_mut_hashed_partial_trie_unchecked(),
+            &mut final_trie_state.state,
         )?;
 
         last_inputs.withdrawals = withdrawals;
@@ -662,12 +660,10 @@ impl ProcessedBlockTrace {
     /// our local trie state.
     fn update_trie_state_from_withdrawals<'a>(
         withdrawals: impl IntoIterator<Item = (Address, H256, U256)> + 'a,
-        state: &mut HashedPartialTrie,
+        state: &mut StateTrie,
     ) -> TraceParsingResult<()> {
         for (addr, h_addr, amt) in withdrawals {
-            let h_addr_nibs = Nibbles::from_h256_be(h_addr);
-
-            let acc_bytes = state.get(h_addr_nibs).ok_or_else(|| {
+            let mut acc_data = state.get_by_address(addr).ok_or_else(|| {
                 let mut e = TraceParsingError::new(
                     TraceParsingErrorReason::MissingWithdrawalAccount(addr, h_addr, amt),
                 );
@@ -675,13 +671,11 @@ impl ProcessedBlockTrace {
                 e.h_addr(h_addr);
                 e
             })?;
-            let mut acc_data = account_from_rlped_bytes(acc_bytes)?;
 
             acc_data.balance += amt;
 
-            state
-                .insert(h_addr_nibs, rlp::encode(&acc_data).to_vec())
-                .map_err(TraceParsingError::from)?;
+            // TODO(0xaatif): entry api
+            state.insert_by_address(addr, acc_data).unwrap();
         }
 
         Ok(())
