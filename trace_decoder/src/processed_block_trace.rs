@@ -93,7 +93,7 @@ impl TxnInfo {
             nodes_used_by_txn.storage_accesses.push((
                 hashed_addr,
                 storage_access_keys
-                    .map(|k| Nibbles::from_h256_be(hash(&k.0)))
+                    .map(|H256(bytes)| Nibbles::from_h256_be(hash(bytes)))
                     .collect(),
             ));
 

@@ -16,6 +16,7 @@ bitvec = { workspace = true }
 bytes = { workspace = true }
 ciborium = { workspace = true }
 ciborium-io = { workspace = true }
+copyvec = "0.2.0"
 either = { workspace = true }
 enum-as-inner = { workspace = true }
 ethereum-types = { workspace = true }
@@ -31,6 +32,7 @@ plonky2 = { workspace = true }
 rlp = { workspace = true }
 serde = { workspace = true }
 smt_trie = { workspace = true }
+stackstack = "0.3.0"
 thiserror = { workspace = true }
 u4 = { workspace = true }
 winnow = { workspace = true }
