@@ -193,9 +193,12 @@ impl ManyProver {
         let mut cumulative_n_txs: u64 = 0;
         let mut cumulative_gas_used: u64 = 0;
 
-        for ((blocknum, maybe_block_proof), fetch_time) in
-            block_proofs.iter().zip(prover_input.fetch_times.iter())
-        {
+        let mut fetch_times = prover_input.fetch_times.iter();
+
+        for (blocknum, maybe_block_proof) in block_proofs.iter() {
+
+            let fetch_time = fetch_times.next();
+
             let benchmark_block_proof = match maybe_block_proof {
                 Some(benchmark_block_proof) => benchmark_block_proof,
                 None => {
@@ -224,12 +227,13 @@ impl ManyProver {
                     block_number: benchmark_block_proof.proof.b_height,
                     n_txs: benchmark_block_proof.n_txs,
                     cumulative_n_txs: Some(cumulative_n_txs),
-                    fetch_duration: *fetch_time,
+                    fetch_duration: fetch_time.copied(),
                     total_proof_duration: benchmark_block_proof
                         .total_dur
                         .expect("Value is expected"),
                     prep_duration: benchmark_block_proof.prep_dur,
                     proof_out_duration: proof_out_time,
+                    agg_wait_duration: benchmark_block_proof.agg_wait_dur,
                     agg_duration: benchmark_block_proof.agg_dur,
                     gas_used: benchmark_block_proof.gas_used,
                     gas_used_per_tx: benchmark_block_proof.gas_used_per_tx.clone(),

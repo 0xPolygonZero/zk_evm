@@ -38,6 +38,7 @@ pub struct BenchmarkedGeneratedBlockProof {
     pub proof: GeneratedBlockProof,
     pub prep_dur: Option<Duration>,
     pub proof_dur: Option<Duration>,
+    pub agg_wait_dur: Option<Duration>,
     pub agg_dur: Option<Duration>,
     pub total_dur: Option<Duration>,
     pub n_txs: u64,
@@ -119,15 +120,17 @@ impl BlockProverInput {
         );
 
         if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
-            let agg_start = Instant::now();
+            let agg_wait_start = Instant::now();
             let block_number = block_number
-                .to_u64()
-                .context("block number overflows u64")?;
+            .to_u64()
+            .context("block number overflows u64")?;
             let prev = match previous {
                 Some(it) => Some(it.await?),
                 None => None,
             };
-
+            let agg_wait_dur = agg_wait_start.elapsed();
+        
+            let agg_start = Instant::now();
             let block_proof = paladin::directive::Literal(proof)
                 .map(&ops::BlockProof {
                     prev: prev.map(|p| p.proof),
@@ -153,6 +156,7 @@ impl BlockProverInput {
                 total_dur: Some(prep_start.elapsed()),
                 proof_dur: Some(proof_dur),
                 prep_dur: Some(prep_dur),
+                agg_wait_dur: Some(agg_wait_dur),
                 agg_dur: Some(agg_dur),
                 n_txs: n_txs as u64,
                 gas_used,
