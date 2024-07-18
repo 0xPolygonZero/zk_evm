@@ -13,7 +13,7 @@ use crate::benchmarking::{
     BenchmarkingOutput, BenchmarkingOutputBuildError, BenchmarkingOutputError, BenchmarkingStats,
 };
 use crate::fetch::{fetch, FetchError};
-use crate::input::{ProveBlocksInput, TerminateOn};
+use crate::input::ProveBlocksInput;
 use crate::proofout::{ProofOutput, ProofOutputBuildError, ProofOutputError};
 
 //===========================================================================================
@@ -25,7 +25,6 @@ pub enum ManyProverError {
     Proof(anyhow::Error),
     BenchmarkingOutput(BenchmarkingOutputError),
     ProofOutError(ProofOutputError),
-    UnsupportedTerminationCondition(TerminateOn),
     ParallelJoinError(JoinError),
     FailedToSendTask(u64),
 }
@@ -82,6 +81,8 @@ pub struct ManyProver {
     pub benchmark_out: Option<BenchmarkingOutput>,
 }
 
+unsafe impl Send for ManyProver {}
+
 impl ManyProver {
     /// Returns the [ManyProver] object.  This can be used to run many proofs
     /// and gather benchmarking statistics simultaneously.
@@ -103,7 +104,7 @@ impl ManyProver {
 
         debug!("Preparing means of outputting the generated proofs...");
         // get the proof
-        let proof_out = match &input.proof_output {
+        let proof_out = match input.get_proof_output() {
             Some(proof_method) => match ProofOutput::from_method(proof_method) {
                 Ok(proof_out) => {
                     info!("Instansiated means of proof output");
@@ -121,7 +122,7 @@ impl ManyProver {
         };
 
         debug!("Preparing benchmark output...");
-        let benchmark_out = match &input.benchmark_output {
+        let benchmark_out = match input.get_benchmark_output() {
             Some(benchmark_config) => {
                 match BenchmarkingOutput::from_config(
                     benchmark_config.clone(),
@@ -172,8 +173,8 @@ impl ManyProver {
             self.input_request
                 .get_block_interval()
                 .map_err(FetchError::ZeroBinRpcFetchError)?,
-            &self.input_request.checkpoint,
-            &self.input_request.block_source,
+            self.input_request.get_checkpoint(),
+            self.input_request.get_blocksource(),
         )
         .await?;
         info!("Fetch completed");

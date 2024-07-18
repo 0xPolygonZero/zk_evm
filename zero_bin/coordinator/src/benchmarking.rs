@@ -154,6 +154,8 @@ pub enum BenchmarkOutputConfig {
     },
 }
 
+unsafe impl Send for BenchmarkOutputConfig {}
+
 //----------------------------------------------------------------------------------
 // Benchmarking Output Building
 //----------------------------------------------------------------------------------

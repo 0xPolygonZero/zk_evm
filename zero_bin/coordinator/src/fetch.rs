@@ -32,9 +32,12 @@ impl std::error::Error for FetchError {}
 
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub enum Checkpoint {
+    Default,
     Constant(BlockId),
     BlockNumberNegativeOffset(u64),
 }
+
+unsafe impl Send for Checkpoint {}
 
 impl Default for Checkpoint {
     fn default() -> Self {
@@ -52,6 +55,7 @@ impl Checkpoint {
             Self::BlockNumberNegativeOffset(offset) => {
                 BlockId::Number(BlockNumberOrTag::Number(block_number - *offset))
             }
+            _ => BlockId::Number(BlockNumberOrTag::Number(block_number - 1)),
         }
     }
 
