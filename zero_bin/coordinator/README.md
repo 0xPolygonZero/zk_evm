@@ -6,53 +6,28 @@ Coordinator serves as modified Leader for evaluating multiple blocks.  It serves
 
 We set up various benchmarking opportunities to evaluate the amount of time it takes to run several operations per block.
 
-```rust
-pub struct BenchmarkingStats {
-    /// The block number of the block proved
-    pub block_number: u64,
-    /// The number of transactions in the block proved
-    pub n_txs: u64,
-    /// The cumulative transaction count.  This is the number of transactions
-    /// from this block and all blocks beforehand.  None implies data not
-    /// available, not 0.
-    pub cumulative_n_txs: Option<u64>,
-    /// Currently not applicable
-    pub avg_tx_proof_duration: Option<f64>,
-    /// The duration fo time took to fetch [prover::ProverInput], stored as a
-    /// [Duration].
-    pub fetch_duration: Duration,
-    /// The amount of time elapsed during the process of proving this block,
-    /// stored as a [Duration]
-    pub proof_duration: Duration,
-    /// The start time of the proof.  [BenchmarkingStats::proof_duration] is a
-    /// more reliable value to use for the proof duration.  Timestamps measured
-    /// in UTC.
-    pub start_time: DateTime<Utc>,
-    /// The end time of the proof.  [BenchmarkingStats::proof_duration] is a
-    /// more reliable value to use for the proof duration.  Timestamps measured
-    /// in UTC.
-    pub end_time: DateTime<Utc>,
-    /// The number of seconds elapsed from the first block in the benchmarking
-    /// process and the end of the current block being proven
-    pub overall_elapsed_seconds: Option<u64>,
-    /// The amount of time elapsed during the process of saving this block's
-    /// proof to its output, stored as a [Duration]
-    pub proof_out_duration: Option<Duration>,
-    /// The gas used by the block we proved
-    pub gas_used: u64,
-    /// The gas used per transaction in the block in the original chain
-    pub gas_used_per_tx: Vec<u64>,
-    /// The cumulative gas used by the block we proved.  None implies
-    /// not filled in, not 0.
-    pub cumulative_gas_used: Option<u64>,
-    /// The difficulty of the block we proved
-    pub difficulty: u64,
-}
-```
+| block_number             | The block number of the proof                                                                                                                                                                                                             |
+|--------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|  number_txs              | The number of transactions in the block                                                                                                                                                                                                   |
+|  cumulative_number_txs   | The number of transactions in the range of blocks we have proven                                                                                                                                                                          |
+|  fetch_duration          | The amount of time (if applicable) it took to load the witness                                                                                                                                                                            |
+|  unique_proof_duration   | The amount of time from the start of the proof towards the end.  NOTE: Since ZeroBin operates in Parallel now, this is less of an accurate measurement since the block proof may have to wait for all previous blocks to be proven first. |
+|  prep_duration           | Everything that happens prior to actually proving                                                                                                                                                                                         |
+|  txproof_duration        | The time took to prove the transactions in the block                                                                                                                                                                                      |
+| agg_wait_duration        | The time spent waiting for the previous block to be aggregated                                                                                                                                                                            |
+|  agg_duration            | The time spent to aggregate the previous blocks into a singular proof including this one                                                                                                                                                  |
+|  start_time              | The time the block proof was started                                                                                                                                                                                                      |
+|  end_time                | The time the block proof was ended (including aggregation)                                                                                                                                                                                |
+|  cumulative_elapsed_time | The overall elapsed time in the run when the                                                                                                                                                                                              |
+|  proof_out_duration      | (if applicable) the time it took to output the proof                                                                                                                                                                                      |
+|  gas_used                | The amount of gas used in the block                                                                                                                                                                                                       |
+|  cumulative_gas_used     | The amount of gas used in all the blocks in the run up to this block                                                                                                                                                                      |
+|  difficulty              | The block difficulty                                                                                                                                                                                                                      |
+|  gas_used_per_tx         | The gas used per transaction as a list separated by `;`                                                                                                                                                                                   |
 
 ## Concurrency
 
-We have attempted both a sequential approach and two concurrent approaches.
+We have attempted both a sequential approach and two concurrent approaches before ZeroBin itself became parallelized.  Now this section is irrelevant.
 
 ### Sequential
 
