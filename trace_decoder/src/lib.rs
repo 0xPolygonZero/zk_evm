@@ -104,7 +104,7 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
-use typed_mpt::{StateTrie, StorageTrie, TriePath};
+use typed_mpt::{MptKey, StateTrie, StorageTrie};
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -325,7 +325,7 @@ pub fn entrypoint(
                 state: state.items().try_fold(
                     StateTrie::default(),
                     |mut acc, (nibbles, hash_or_val)| {
-                        let path = TriePath::from_nibbles(nibbles);
+                        let path = MptKey::from_nibbles(nibbles);
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
                                 acc.insert_by_path(
@@ -346,7 +346,7 @@ pub fn entrypoint(
                     .map(|(k, SeparateTriePreImage::Direct(v))| {
                         v.items()
                             .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
-                                let path = TriePath::from_nibbles(nibbles);
+                                let path = MptKey::from_nibbles(nibbles);
                                 match hash_or_val {
                                     mpt_trie::trie_ops::ValOrHash::Val(value) => {
                                         acc.insert(path, value)?;

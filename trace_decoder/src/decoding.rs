@@ -13,7 +13,7 @@ use evm_arithmetization::{
 use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node, PartialTrie},
+    partial_trie::{HashedPartialTrie, PartialTrie},
     special_query::path_for_query,
     trie_ops::{TrieOpError, TrieOpResult},
     trie_subsets::{create_trie_subset, SubsetTrieError},
@@ -26,19 +26,13 @@ use crate::{
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
     },
-    OtherBlockData,
+    typed_mpt::{MptKey, ReceiptTrie, StateTrie, StorageTrie, TransactionTrie},
+    OtherBlockData, PartialTriePreImages,
 };
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
 /// failure.
 pub type TraceParsingResult<T> = Result<T, Box<TraceParsingError>>;
-
-const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
-    248, 68, 128, 128, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248,
-    110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 197, 210, 70,
-    1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59,
-    123, 250, 216, 4, 93, 133, 164, 112,
-];
 
 // This is just `rlp(0)`.
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
@@ -179,13 +173,8 @@ impl From<TrieOpError> for TraceParsingError {
 /// An enum to cover all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
 #[derive(Debug)]
 pub enum TrieType {
-    /// State trie.
     State,
-    /// Storage trie.
-    Storage,
-    /// Receipt trie.
     Receipt,
-    /// Transaction trie.
     Txn,
 }
 
@@ -193,7 +182,6 @@ impl Display for TrieType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             TrieType::State => write!(f, "state"),
-            TrieType::Storage => write!(f, "storage"),
             TrieType::Receipt => write!(f, "receipt"),
             TrieType::Txn => write!(f, "transaction"),
         }
@@ -204,10 +192,10 @@ impl Display for TrieType {
 /// after every txn we process in the trace.
 #[derive(Clone, Debug, Default)]
 struct PartialTrieState {
-    state: HashedPartialTrie,
-    storage: HashMap<H256, HashedPartialTrie>,
-    txn: HashedPartialTrie,
-    receipt: HashedPartialTrie,
+    state: StateTrie,
+    storage: HashMap<H256, StorageTrie>,
+    txn: TransactionTrie,
+    receipt: ReceiptTrie,
 }
 
 /// Additional information discovered during delta application.
@@ -219,19 +207,23 @@ struct TrieDeltaApplicationOutput {
     additional_storage_trie_paths_to_not_hash: HashMap<H256, Vec<Nibbles>>,
 }
 
+fn err2err(_: crate::typed_mpt::Error) -> TraceParsingError {
+    todo!()
+}
+
 impl ProcessedBlockTrace {
     pub fn into_txn_proof_gen_ir(
         self,
         other_data: OtherBlockData,
     ) -> TraceParsingResult<Vec<GenerationInputs>> {
+        let Self {
+            tries: PartialTriePreImages { state, storage },
+            txn_info,
+            withdrawals,
+        } = self;
         let mut curr_block_tries = PartialTrieState {
-            state: self.tries.state.as_hashed_partial_trie().clone(),
-            storage: self
-                .tries
-                .storage
-                .iter()
-                .map(|(k, v)| (*k, v.as_hashed_partial_trie().clone()))
-                .collect(),
+            state,
+            storage: storage.iter().map(|(k, v)| (*k, v.clone())).collect(),
             ..Default::default()
         };
 
@@ -247,8 +239,7 @@ impl ProcessedBlockTrace {
         // For actual transactions, it will match their position in the block.
         let mut txn_idx = 0;
 
-        let mut txn_gen_inputs = self
-            .txn_info
+        let mut txn_gen_inputs = txn_info
             .into_iter()
             .map(|txn_info| {
                 let is_initial_payload = txn_idx == 0;
@@ -278,12 +269,8 @@ impl ProcessedBlockTrace {
                 e
             })?;
 
-        if !self.withdrawals.is_empty() {
-            Self::add_withdrawals_to_txns(
-                &mut txn_gen_inputs,
-                &mut curr_block_tries,
-                self.withdrawals,
-            )?;
+        if !withdrawals.is_empty() {
+            Self::add_withdrawals_to_txns(&mut txn_gen_inputs, &mut curr_block_tries, withdrawals)?;
         }
 
         Ok(txn_gen_inputs)
@@ -335,13 +322,9 @@ impl ProcessedBlockTrace {
             // If we are writing a zero, then we actually need to perform a delete.
             match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
                 false => {
-                    storage_trie.insert(slot, val.clone()).map_err(|err| {
-                        let mut e =
-                            TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err));
-                        e.slot(U512::from_big_endian(slot.bytes_be().as_slice()));
-                        e.slot_value(U512::from_big_endian(val.as_slice()));
-                        e
-                    })?;
+                    storage_trie
+                        .insert(crate::typed_mpt::MptKey::from_nibbles(slot), val.clone())
+                        .map_err(err2err)?;
 
                     delta_out
                         .additional_storage_trie_paths_to_not_hash
@@ -352,7 +335,7 @@ impl ProcessedBlockTrace {
                 true => {
                     if let Ok(Some(remaining_slot_key)) =
                         Self::delete_node_and_report_remaining_key_if_branch_collapsed(
-                            storage_trie,
+                            storage_trie.as_mut_hashed_partial_trie_unchecked(),
                             &slot,
                         )
                     {
@@ -372,23 +355,19 @@ impl ProcessedBlockTrace {
         delta_out
             .additional_state_trie_paths_to_not_hash
             .push(addr_nibbles);
-        let addr_bytes = trie_state.state.get(addr_nibbles).ok_or_else(|| {
-            TraceParsingError::new(TraceParsingErrorReason::MissingAccountStorageTrie(ADDRESS))
-        })?;
-        let mut account = account_from_rlped_bytes(addr_bytes)?;
-
-        account.storage_root = storage_trie.hash();
-
-        let updated_account_bytes = rlp::encode(&account);
-        trie_state
+        let mut account = trie_state
             .state
-            .insert(addr_nibbles, updated_account_bytes.to_vec())
-            .map_err(|err| {
-                let mut e = TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err));
-                e.slot(U512::from_big_endian(addr_nibbles.bytes_be().as_slice()));
-                e
+            .get_by_key(MptKey::from_nibbles(addr_nibbles))
+            .ok_or_else(|| {
+                TraceParsingError::new(TraceParsingErrorReason::MissingAccountStorageTrie(ADDRESS))
             })?;
 
+        account.storage_root = storage_trie.root();
+
+        trie_state
+            .state
+            .insert_by_path(MptKey::from_nibbles(addr_nibbles), account)
+            .unwrap(); // TODO(0xaatif): entry API
         Ok(())
     }
 
@@ -402,19 +381,23 @@ impl ProcessedBlockTrace {
             return Ok(());
         }
 
-        let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
-        trie_state.txn.insert(txn_k, meta.txn_bytes())?;
+        trie_state
+            .txn
+            .insert(txn_idx, meta.txn_bytes())
+            .map_err(|_| -> TrieOpError { todo!() })?;
 
         trie_state
             .receipt
-            .insert(txn_k, meta.receipt_node_bytes.as_ref())
+            .insert(txn_idx, meta.receipt_node_bytes.clone())
+            .map_err(|_| -> TrieOpError { todo!() })?;
+        Ok(())
     }
 
     /// If the account does not have a storage trie or does but is not
     /// accessed by any txns, then we still need to manually create an entry for
     /// them.
     fn init_any_needed_empty_storage_tries<'a>(
-        storage_tries: &mut HashMap<H256, HashedPartialTrie>,
+        storage_tries: &mut HashMap<H256, StorageTrie>,
         accounts_with_storage: impl Iterator<Item = &'a H256>,
         state_accounts_with_no_accesses_but_storage_tries: &'a HashMap<H256, H256>,
     ) {
@@ -422,7 +405,11 @@ impl ProcessedBlockTrace {
             if !storage_tries.contains_key(h_addr) {
                 let trie = state_accounts_with_no_accesses_but_storage_tries
                     .get(h_addr)
-                    .map(|s_root| HashedPartialTrie::new(Node::Hash(*s_root)))
+                    .map(|s_root| {
+                        let mut it = StorageTrie::default();
+                        it.insert_hash(MptKey::default(), *s_root).unwrap();
+                        it
+                    })
                     .unwrap_or_default();
 
                 storage_tries.insert(*h_addr, trie);
@@ -447,17 +434,22 @@ impl ProcessedBlockTrace {
 
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
 
-        let transactions_trie =
-            create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
+        let transactions_trie = prune_txn(&curr_block_tries.txn, once(txn_k))?
+            .as_hashed_partial_trie()
+            .clone();
 
-        let receipts_trie =
-            create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
+        let receipts_trie = prune_receipt(&curr_block_tries.receipt, once(txn_k))?
+            .as_hashed_partial_trie()
+            .clone();
 
         let storage_tries = create_minimal_storage_partial_tries(
             &curr_block_tries.storage,
             nodes_used_by_txn.storage_accesses.iter(),
             &delta_application_out.additional_storage_trie_paths_to_not_hash,
-        )?;
+        )?
+        .into_iter()
+        .map(|(k, v)| (k, v.as_hashed_partial_trie().clone()))
+        .collect();
 
         Ok(TrieInputs {
             state_trie,
@@ -489,17 +481,15 @@ impl ProcessedBlockTrace {
             {
                 // If we are writing a zero, then we actually need to perform a delete.
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
-                    false => storage_trie.insert(slot, val.clone()).map_err(|err| {
-                        let mut e =
-                            TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err));
-                        e.slot(U512::from_big_endian(slot.bytes_be().as_slice()));
-                        e.slot_value(U512::from_big_endian(val.as_slice()));
-                        e
-                    })?,
+                    false => {
+                        storage_trie
+                            .insert(MptKey::from_nibbles(slot), val.clone())
+                            .map_err(|_| -> TraceParsingError { todo!() })?;
+                    }
                     true => {
                         if let Some(remaining_slot_key) =
                             Self::delete_node_and_report_remaining_key_if_branch_collapsed(
-                                storage_trie,
+                                storage_trie.as_mut_hashed_partial_trie_unchecked(),
                                 &slot,
                             )
                             .map_err(TraceParsingError::from)?
@@ -508,7 +498,7 @@ impl ProcessedBlockTrace {
                                 .entry(*hashed_acc_addr)
                                 .or_default()
                                 .push(remaining_slot_key);
-                        }
+                        };
                     }
                 };
             }
@@ -518,12 +508,10 @@ impl ProcessedBlockTrace {
             let val_k = Nibbles::from_h256_be(*hashed_acc_addr);
 
             // If the account was created, then it will not exist in the trie.
-            let val_bytes = trie_state
+            let mut account = trie_state
                 .state
-                .get(val_k)
-                .unwrap_or(&EMPTY_ACCOUNT_BYTES_RLPED);
-
-            let mut account = account_from_rlped_bytes(val_bytes)?;
+                .get_by_key(MptKey::from_nibbles(val_k))
+                .unwrap_or_default();
 
             s_trie_writes.apply_writes_to_state_node(
                 &mut account,
@@ -531,11 +519,10 @@ impl ProcessedBlockTrace {
                 &trie_state.storage,
             )?;
 
-            let updated_account_bytes = rlp::encode(&account);
             trie_state
                 .state
-                .insert(val_k, updated_account_bytes.to_vec())
-                .map_err(TraceParsingError::from)?;
+                .insert_by_path(MptKey::from_nibbles(val_k), account)
+                .unwrap(); // TODO(0xaatif): entry API
         }
 
         // Remove any accounts that self-destructed.
@@ -556,7 +543,7 @@ impl ProcessedBlockTrace {
 
             if let Some(remaining_account_key) =
                 Self::delete_node_and_report_remaining_key_if_branch_collapsed(
-                    &mut trie_state.state,
+                    trie_state.state.as_mut_hashed_partial_trie_unchecked(),
                     &k,
                 )
                 .map_err(TraceParsingError::from)?
@@ -660,11 +647,13 @@ impl ProcessedBlockTrace {
 
         Self::update_trie_state_from_withdrawals(
             withdrawals_with_hashed_addrs_iter(),
-            &mut final_trie_state.state,
+            final_trie_state
+                .state
+                .as_mut_hashed_partial_trie_unchecked(),
         )?;
 
         last_inputs.withdrawals = withdrawals;
-        last_inputs.trie_roots_after.state_root = final_trie_state.state.hash();
+        last_inputs.trie_roots_after.state_root = final_trie_state.state.root();
 
         Ok(())
     }
@@ -790,7 +779,7 @@ impl StateTrieWrites {
         &self,
         state_node: &mut AccountRlp,
         h_addr: &H256,
-        acc_storage_tries: &HashMap<H256, HashedPartialTrie>,
+        acc_storage_tries: &HashMap<H256, StorageTrie>,
     ) -> TraceParsingResult<()> {
         let storage_root_hash_change = match self.storage_trie_change {
             false => None,
@@ -804,7 +793,7 @@ impl StateTrieWrites {
                     e
                 })?;
 
-                Some(storage_trie.hash())
+                Some(storage_trie.root())
             }
         };
 
@@ -819,19 +808,19 @@ impl StateTrieWrites {
 
 fn calculate_trie_input_hashes(t_inputs: &PartialTrieState) -> TrieRoots {
     TrieRoots {
-        state_root: t_inputs.state.hash(),
-        transactions_root: t_inputs.txn.hash(),
-        receipts_root: t_inputs.receipt.hash(),
+        state_root: t_inputs.state.root(),
+        transactions_root: t_inputs.txn.root(),
+        receipts_root: t_inputs.receipt.root(),
     }
 }
 
 fn create_minimal_state_partial_trie(
-    state_trie: &HashedPartialTrie,
+    state_trie: &StateTrie,
     state_accesses: impl Iterator<Item = H256>,
     additional_state_trie_paths_to_not_hash: impl Iterator<Item = Nibbles>,
 ) -> TraceParsingResult<HashedPartialTrie> {
     create_trie_subset_wrapped(
-        state_trie,
+        state_trie.as_hashed_partial_trie(),
         state_accesses
             .into_iter()
             .map(Nibbles::from_h256_be)
@@ -843,10 +832,10 @@ fn create_minimal_state_partial_trie(
 // TODO!!!: We really need to be appending the empty storage tries to the base
 // trie somewhere else! This is a big hack!
 fn create_minimal_storage_partial_tries<'a>(
-    storage_tries: &HashMap<H256, HashedPartialTrie>,
+    storage_tries: &HashMap<H256, StorageTrie>,
     accesses_per_account: impl Iterator<Item = &'a (H256, Vec<Nibbles>)>,
     additional_storage_trie_paths_to_not_hash: &HashMap<H256, Vec<Nibbles>>,
-) -> TraceParsingResult<Vec<(H256, HashedPartialTrie)>> {
+) -> TraceParsingResult<Vec<(H256, StorageTrie)>> {
     accesses_per_account
         .map(|(h_addr, mem_accesses)| {
             // Guaranteed to exist due to calling `init_any_needed_empty_storage_tries`
@@ -860,15 +849,48 @@ fn create_minimal_storage_partial_tries<'a>(
                     .flat_map(|slots| slots.iter().cloned()),
             );
 
-            let partial_storage_trie = create_trie_subset_wrapped(
-                base_storage_trie,
-                storage_slots_to_not_hash,
-                TrieType::Storage,
-            )?;
+            let partial_storage_trie = prune_storage(base_storage_trie, storage_slots_to_not_hash)?;
 
             Ok((*h_addr, partial_storage_trie))
         })
         .collect::<TraceParsingResult<_>>()
+}
+
+fn prune_txn(
+    trie: &TransactionTrie,
+    accesses: impl IntoIterator<Item = Nibbles>,
+) -> TraceParsingResult<TransactionTrie> {
+    Ok(TransactionTrie::from_hashed_partial_trie_unchecked(
+        create_trie_subset_wrapped(
+            trie.as_hashed_partial_trie(),
+            accesses.into_iter(),
+            TrieType::Txn,
+        )?,
+    ))
+}
+fn prune_receipt(
+    trie: &ReceiptTrie,
+    accesses: impl IntoIterator<Item = Nibbles>,
+) -> TraceParsingResult<ReceiptTrie> {
+    Ok(ReceiptTrie::from_hashed_partial_trie_unchecked(
+        create_trie_subset_wrapped(
+            trie.as_hashed_partial_trie(),
+            accesses.into_iter(),
+            TrieType::Receipt,
+        )?,
+    ))
+}
+fn prune_storage(
+    trie: &StorageTrie,
+    accesses: impl IntoIterator<Item = Nibbles>,
+) -> TraceParsingResult<StorageTrie> {
+    Ok(StorageTrie::from_hashed_partial_trie_unchecked(
+        create_trie_subset_wrapped(
+            trie.as_hashed_partial_trie(),
+            accesses.into_iter(),
+            TrieType::Receipt,
+        )?,
+    ))
 }
 
 fn create_trie_subset_wrapped(
