@@ -18,7 +18,7 @@ pub struct Frontend {
     pub state: StateTrie,
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     /// The key here matches the [`TriePath`] inside [`Self::state`] for
-    /// accounts which had inline storage
+    /// accounts which had inline storage.
     pub storage: BTreeMap<TriePath, StorageTrie>,
 }
 
@@ -59,9 +59,7 @@ fn visit(
         Node::Leaf(Leaf { key, value }) => {
             let path = TriePath::new(path.iter().copied().chain(key))?;
             match value {
-                // TODO(0xaatif): what should this be interpreted as?
-                //                (this branch isn't hit in our tests)
-                Either::Left(Value { .. }) => bail!("unsupported value node"),
+                Either::Left(Value { .. }) => bail!("unsupported value node at top level"),
                 Either::Right(Account {
                     nonce,
                     balance,
