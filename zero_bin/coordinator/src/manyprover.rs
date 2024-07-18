@@ -197,7 +197,6 @@ impl ManyProver {
         let mut fetch_times = prover_input.fetch_times.iter();
 
         for (blocknum, maybe_block_proof) in block_proofs.iter() {
-
             let fetch_time = fetch_times.next();
 
             let benchmark_block_proof = match maybe_block_proof {
