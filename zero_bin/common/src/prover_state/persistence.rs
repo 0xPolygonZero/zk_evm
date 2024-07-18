@@ -7,7 +7,6 @@ use std::{
 };
 
 use directories::ProjectDirs;
-use once_cell::sync::Lazy;
 use plonky2::util::serialization::{
     Buffer, DefaultGateSerializer, DefaultGeneratorSerializer, IoError,
 };
@@ -23,16 +22,6 @@ const PROVER_STATE_FILE_PREFIX: &str = "prover_state";
 const VERIFIER_STATE_FILE_PREFIX: &str = "verifier_state";
 const ZK_EVM_CACHE_DIR_NAME: &str = "zk_evm_circuit_cache";
 const ZK_EVM_CACHE_DIR_ENV: &str = "ZK_EVM_CACHE_DIR";
-
-static CIRCUIT_CACHE_DIR: Lazy<String> = Lazy::new(|| {
-    // Guaranteed to be set by the binary if not set by the user.
-    std::env::var(ZK_EVM_CACHE_DIR_ENV).unwrap_or_else(|_| {
-        format!(
-            "expected the env var \"{}\" to be set",
-            ZK_EVM_CACHE_DIR_ENV
-        )
-    })
-});
 
 fn get_serializers() -> (
     DefaultGateSerializer,
@@ -85,14 +74,15 @@ pub(crate) trait DiskResource {
         p: &Self::PathConstrutor,
         r: &Self::Resource,
     ) -> Result<(), DiskResourceError<Self::Error>> {
-        let circuits_dir = &*CIRCUIT_CACHE_DIR;
+        let circuits_dir = circuit_dir();
 
         // Create the base folder if non-existent.
-        if std::fs::metadata(circuits_dir).is_err() {
-            std::fs::create_dir(circuits_dir).map_err(|_| {
-                DiskResourceError::IoError::<Self::Error>(std::io::Error::other(
-                    "Could not create circuits folder",
-                ))
+        if std::fs::metadata(&circuits_dir).is_err() {
+            std::fs::create_dir_all(&circuits_dir).map_err(|err| {
+                DiskResourceError::IoError::<Self::Error>(std::io::Error::other(format!(
+                    "Could not create circuits folder with error \"{:?}\"",
+                    err
+                )))
             })?;
         }
 
@@ -119,7 +109,7 @@ impl DiskResource for BaseProverResource {
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_base_{}_{}",
-            *CIRCUIT_CACHE_DIR,
+            circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
             env!("EVM_ARITHMETIZATION_PKG_VER"),
             p.get_configuration_digest()
@@ -155,7 +145,7 @@ impl DiskResource for MonolithicProverResource {
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_monolithic_{}_{}",
-            *CIRCUIT_CACHE_DIR,
+            circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
             env!("EVM_ARITHMETIZATION_PKG_VER"),
             p.get_configuration_digest()
@@ -190,7 +180,7 @@ impl DiskResource for RecursiveCircuitResource {
     fn path((circuit_type, size): &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_{}_{}_{}",
-            *CIRCUIT_CACHE_DIR,
+            circuit_dir(),
             PROVER_STATE_FILE_PREFIX,
             env!("EVM_ARITHMETIZATION_PKG_VER"),
             circuit_type.as_short_str(),
@@ -234,7 +224,7 @@ impl DiskResource for VerifierResource {
     fn path(p: &Self::PathConstrutor) -> impl AsRef<Path> {
         format!(
             "{}/{}_{}_{}",
-            *CIRCUIT_CACHE_DIR,
+            circuit_dir(),
             VERIFIER_STATE_FILE_PREFIX,
             env!("EVM_ARITHMETIZATION_PKG_VER"),
             p.get_configuration_digest()
@@ -287,6 +277,16 @@ fn prover_to_disk(
     }
 
     Ok(())
+}
+
+fn circuit_dir() -> String {
+    // Guaranteed to be set by the binary if not set by the user.
+    std::env::var(ZK_EVM_CACHE_DIR_ENV).unwrap_or_else(|_| {
+        format!(
+            "expected the env var \"{}\" to be set",
+            ZK_EVM_CACHE_DIR_ENV
+        )
+    })
 }
 
 /// We store serialized circuits inside the cache directory specified by an env
