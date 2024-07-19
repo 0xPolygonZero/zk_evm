@@ -196,7 +196,7 @@ impl Table {
             } else {
                 inner += 1;
             }
-            pairs[i] = (inner, outer);
+            pairs[i] = (outer, inner);
             i += 1;
         }
 
@@ -208,7 +208,7 @@ impl Table {
         let mut res = [0; NUM_TABLES];
         let mut i = 0;
         while i < NUM_TABLES {
-            res[i] = TABLE_DEGREES[Self::all()[i] as usize];
+            res[i] = TABLE_DEGREES[Self::all_sorted()[i] as usize];
             i += 1;
         }
 

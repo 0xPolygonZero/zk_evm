@@ -92,7 +92,7 @@ pub fn zkevm_fast_config() -> StarkConfig {
     let mut strategy = Vec::new();
     for window in Table::all_degree_logs().windows(2) {
         if window[0] != window[1] {
-            strategy.push(window[1] - window[0]);
+            strategy.push(window[0] - window[1]);
         }
     }
     let mut last_degree = Table::all_degree_logs()[NUM_TABLES - 1];
