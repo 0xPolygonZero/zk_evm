@@ -22,9 +22,9 @@ use zero_bin_common::fs::generate_block_proof_file_name;
 // Limit the number of segments that are proven in parallel
 // to prevent excessive memory consumption
 #[cfg(not(feature = "test_only"))]
-const GENERATION_INPUTS_AGG_CHUNK_SIZE_INNER: usize = 2;
+const GENERATION_INPUTS_AGG_CHUNK_SIZE_INNER: usize = 4;
 #[cfg(not(feature = "test_only"))]
-const GENERATION_INPUTS_AGG_CHUNK_SIZE: usize = 5;
+const GENERATION_INPUTS_AGG_CHUNK_SIZE: usize = 4;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
