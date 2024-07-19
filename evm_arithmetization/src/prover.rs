@@ -88,16 +88,34 @@ impl GenerationSegmentData {
 }
 
 pub fn zkevm_fast_config() -> StarkConfig {
+    let cap_height = 4;
+    let mut strategy = Vec::new();
+    for window in Table::all_degree_logs().windows(2) {
+        if window[0] != window[1] {
+            strategy.push(window[1] - window[0]);
+        }
+    }
+    let mut last_degree = Table::all_degree_logs()[NUM_TABLES - 1];
+    while last_degree > cap_height {
+        if last_degree >= cap_height + 4 {
+            strategy.push(4);
+            last_degree -= 4;
+        } else {
+            strategy.push(last_degree - cap_height);
+            last_degree = cap_height;
+        }
+    }
+
     StarkConfig {
         security_bits: 100,
         num_challenges: 2,
         fri_config: FriConfig {
             rate_bits: 1,
-            cap_height: 4,
+            cap_height,
             proof_of_work_bits: 16,
             // This strategy allows us to hit all intermediary STARK leaves while going through the
             // batched Field Merkle Trees.
-            reduction_strategy: FriReductionStrategy::Fixed(vec![1, 2, 2, 2, 4, 4, 4]),
+            reduction_strategy: FriReductionStrategy::Fixed(strategy),
             num_query_rounds: 84,
         },
     }
