@@ -15,7 +15,7 @@ use plonky2::field::polynomial::{PolynomialCoeffs, PolynomialValues};
 use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::reduction_strategies::FriReductionStrategy;
-use plonky2::fri::structure::{FriInstanceInfo, FriOpeningBatch};
+use plonky2::fri::structure::{FriInstanceInfo, FriOpeningBatch, FriOracleInfo};
 use plonky2::fri::FriConfig;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
@@ -87,7 +87,7 @@ impl GenerationSegmentData {
     }
 }
 
-pub(crate) fn zkevm_fast_config() -> StarkConfig {
+pub fn zkevm_fast_config() -> StarkConfig {
     StarkConfig {
         security_bits: 100,
         num_challenges: 2,
@@ -515,8 +515,10 @@ where
         &quotient_commitment,
     ];
 
+    let mut degree_bits_squashed = Table::all_degree_logs().to_vec();
+    degree_bits_squashed.dedup();
     let opening_proof = BatchFriOracle::prove_openings(
-        &Table::all_degree_logs(),
+        &degree_bits_squashed,
         &all_fri_instances,
         &initial_merkle_trees,
         &mut challenger,
@@ -1147,10 +1149,60 @@ where
         config,
     ));
 
-    Table::all_sorted()
+    let res_sorted: Vec<_> = Table::all_sorted()
         .iter()
         .map(|&table| res[*table].clone())
-        .collect()
+        .collect();
+
+    let mut squashed_res = Vec::new();
+    let mut i = 0;
+    let mut current_instance = FriInstanceInfo {
+        oracles: vec![
+            FriOracleInfo {
+                num_polys: 0,
+                blinding: false,
+            },
+            FriOracleInfo {
+                num_polys: 0,
+                blinding: false,
+            },
+            FriOracleInfo {
+                num_polys: 0,
+                blinding: false,
+            },
+        ],
+        batches: vec![],
+    };
+
+    while i < NUM_TABLES {
+        let instance = &res_sorted[i];
+        for (k, oracle) in instance.oracles.iter().enumerate() {
+            current_instance.oracles[k].num_polys += oracle.num_polys;
+        }
+        current_instance.batches.extend(instance.batches.clone());
+
+        if i == NUM_TABLES - 1 || Table::all_degree_logs()[i + 1] < Table::all_degree_logs()[i] {
+            squashed_res.push(current_instance.clone());
+            current_instance.oracles = vec![
+                FriOracleInfo {
+                    num_polys: 0,
+                    blinding: false,
+                },
+                FriOracleInfo {
+                    num_polys: 0,
+                    blinding: false,
+                },
+                FriOracleInfo {
+                    num_polys: 0,
+                    blinding: false,
+                },
+            ];
+            current_instance.batches = vec![];
+        }
+        i += 1;
+    }
+
+    squashed_res
 }
 
 fn all_openings_single_stark<F, C, S, const D: usize>(

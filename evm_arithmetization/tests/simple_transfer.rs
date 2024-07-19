@@ -8,6 +8,7 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::{prove_all_segments, prove_all_segments_batch};
+use evm_arithmetization::prover::zkevm_fast_config;
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -31,7 +32,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     init_logger();
 
     let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
+    let config = zkevm_fast_config();
 
     let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
     let sender = hex!("2c7536e3605d9c16a7a3d7b1898e529396a65c23");
