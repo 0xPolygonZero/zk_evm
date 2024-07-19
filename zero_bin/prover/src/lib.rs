@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
-use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
+use futures::stream::FuturesOrdered;
+use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
@@ -50,7 +51,7 @@ impl BlockProverInput {
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
         use evm_arithmetization::prover::SegmentDataIterator;
-        use futures::{stream::FuturesUnordered, FutureExt};
+        use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
         use paladin::directive::{Directive, IndexedStream};
 
         let block_number = self.get_block_number();
@@ -82,10 +83,10 @@ impl BlockProverInput {
         let mut all_txn_aggregatable_proofs = Vec::new();
         for chunk in txs.chunks(GENERATION_INPUTS_AGG_CHUNK_SIZE) {
             // Map the chunk of transactions to transaction proofs.
-            let chunk_tx_proof_futs: FuturesUnordered<_> = chunk
+            let chunk_tx_proof_futs = chunk
                 .chunks(GENERATION_INPUTS_AGG_CHUNK_SIZE_INNER)
                 .map(|generation_inputs| {
-                    let chunk_tx_proof_futs: FuturesUnordered<_> = generation_inputs
+                    let chunk_tx_proof_futs: FuturesOrdered<_> = generation_inputs
                         .iter()
                         .enumerate()
                         .map(|(idx, generation_inputs)| {
@@ -112,12 +113,13 @@ impl BlockProverInput {
                     Directive::fold(IndexedStream::new(chunk_tx_proof_futs), &txn_agg_proof)
                         .run(runtime)
                 })
-                .collect();
+                .collect::<FuturesOrdered<_>>()
+                .collect::<Vec<_>>()
+                .await;
 
-            // Await for the chunk to be computed
+            // Keep the chunk computation result
             all_txn_aggregatable_proofs.extend(
-                futures::future::join_all(chunk_tx_proof_futs)
-                    .await
+                chunk_tx_proof_futs
                     .into_iter()
                     .collect::<Result<Vec<_>, _>>()?,
             );
