@@ -60,6 +60,9 @@ OUTPUT_TO_TERMINAL="${OUTPUT_TO_TERMINAL:-false}"
 # Only generate proof by default
 RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
 
+# Recommended soft file handle limit. Will warn if it is set lower.
+RECOMMENDED_FILE_HANDLE_LIMIT=4096
+
 mkdir -p $PROOF_OUTPUT_DIR
 
 if [ $IGNORE_PREVIOUS_PROOFS ]; then
@@ -88,6 +91,19 @@ else
     BLOCK_INTERVAL=$START_BLOCK..=$END_BLOCK
 fi
 
+# Print out a warning if the we're using `native` and our file descriptor limit is too low. Don't bother if we can't find `ulimit`.
+if [ $(command -v ulimit) ] && [ $NODE_RPC_TYPE == "native" ]
+then
+    file_desc_limit=$(ulimit -n)
+
+    if [[ $file_desc_limit -lt $RECOMMENDED_FILE_HANDLE_LIMIT ]]
+    then
+        echo "WARNING: Maximum file descriptor limit may be too low to run native mode (current: $file_desc_limit, Recommended: ${RECOMMENDED_FILE_HANDLE_LIMIT}).
+        Consider increasing it with:
+
+        ulimit -s ${RECOMMENDED_FILE_HANDLE_LIMIT}"
+    fi
+fi
 
 # If we set test_only flag, we'll generate a dummy
 # proof. This is useful for quickly testing decoding and all of the
