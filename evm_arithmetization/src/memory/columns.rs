@@ -14,10 +14,10 @@ pub(crate) struct MemoryColumnsView<T> {
     /// 1 if this is an actual memory operation, or 0 if it's a padding row.
     pub filter: T,
     /// Each memory operation is associated to a unique timestamp.
-    /// For a given memory operation `op_i`, its timestamp is computed as `C * N
-    /// + i` where `C` is the CPU clock at that time, `N` is the number of
-    /// general memory channels, and `i` is the index of the memory channel
-    /// at which the memory operation is performed.
+    /// For a given memory operation `op_i`, its timestamp is computed as
+    /// `C * N + i` where `C` is the CPU clock at that time, `N` is the number
+    /// of general memory channels, and `i` is the index of the memory
+    /// channel at which the memory operation is performed.
     pub timestamp: T,
     /// 1 if this is a read operation, 0 if it is a write one.
     pub is_read: T,
