@@ -285,7 +285,7 @@ mod tests {
 
         let active_features = HashSet::from(["feature_2"]);
 
-        let parsed_code = parse(&code, active_features);
+        let parsed_code = parse(code, active_features);
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
@@ -307,7 +307,7 @@ mod tests {
             MOD
         "#;
 
-        let parsed_expected = parse(&expected_code, HashSet::new());
+        let parsed_expected = parse(expected_code, HashSet::new());
         let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
 
         assert_eq!(final_code.code, final_expected.code);
@@ -315,7 +315,7 @@ mod tests {
         // Test `feature_1` on macro call
         let active_features = HashSet::from(["feature_1"]);
 
-        let parsed_code = parse(&code, active_features);
+        let parsed_code = parse(code, active_features);
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
@@ -339,7 +339,7 @@ mod tests {
             DIV
         "#;
 
-        let parsed_expected = parse(&expected_code, HashSet::new());
+        let parsed_expected = parse(expected_code, HashSet::new());
         let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
 
         assert_eq!(final_code.code, final_expected.code);
@@ -347,7 +347,7 @@ mod tests {
         // Test with all features enabled
         let active_features = HashSet::from(["feature_1", "feature_2"]);
 
-        let parsed_code = parse(&code, active_features);
+        let parsed_code = parse(code, active_features);
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
@@ -376,7 +376,7 @@ mod tests {
             MOD
         "#;
 
-        let parsed_expected = parse(&expected_code, HashSet::new());
+        let parsed_expected = parse(expected_code, HashSet::new());
         let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
 
         assert_eq!(final_code.code, final_expected.code);
@@ -384,7 +384,7 @@ mod tests {
         // Test with all features disabled
         let active_features = HashSet::new();
 
-        let parsed_code = parse(&code, active_features);
+        let parsed_code = parse(code, active_features);
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
@@ -401,7 +401,7 @@ mod tests {
             DIV
         "#;
 
-        let parsed_expected = parse(&expected_code, HashSet::new());
+        let parsed_expected = parse(expected_code, HashSet::new());
         let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
 
         assert_eq!(final_code.code, final_expected.code);
