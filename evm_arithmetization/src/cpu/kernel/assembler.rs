@@ -168,7 +168,7 @@ fn find_macros(files: &[File]) -> HashMap<MacroSignature, Macro> {
 fn find_macros_internal(items: &[Item], macros: &mut HashMap<MacroSignature, Macro>) {
     for item in items {
         if let Item::ConditionalBlock(_, local_items) = item {
-            find_macros_internal(&local_items, macros);
+            find_macros_internal(local_items, macros);
         }
         if let Item::MacroDef(name, params, local_items) = item {
             let signature = MacroSignature {
