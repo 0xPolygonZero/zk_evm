@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
 use ethereum_types::U256;
 use pest::iterators::Pair;
@@ -12,22 +12,26 @@ use crate::cpu::kernel::ast::{File, Item, PushTarget, StackReplacement};
 #[grammar = "cpu/kernel/evm_asm.pest"]
 struct AsmParser;
 
-pub(crate) fn parse(s: &str) -> File {
+pub(crate) fn parse(s: &str, active_features: HashSet<&str>) -> File {
     let file = AsmParser::parse(Rule::file, s)
         .expect("Parsing failed")
         .next()
         .unwrap();
-    let body = file.into_inner().map(parse_item).collect();
+    let body = file
+        .into_inner()
+        .map(|i| parse_item(i, &active_features))
+        .collect();
     File { body }
 }
 
-fn parse_item(item: Pair<Rule>) -> Item {
+fn parse_item(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
     assert_eq!(item.as_rule(), Rule::item);
     let item = item.into_inner().next().unwrap();
     match item.as_rule() {
-        Rule::macro_def => parse_macro_def(item),
+        Rule::conditional_block => parse_conditional_block(item, active_features),
+        Rule::macro_def => parse_macro_def(item, active_features),
         Rule::macro_call => parse_macro_call(item),
-        Rule::repeat => parse_repeat(item),
+        Rule::repeat => parse_repeat(item, active_features),
         Rule::stack => parse_stack(item),
         Rule::global_label_decl => {
             Item::GlobalLabelDeclaration(item.into_inner().next().unwrap().as_str().into())
@@ -57,7 +61,23 @@ fn parse_item(item: Pair<Rule>) -> Item {
     }
 }
 
-fn parse_macro_def(item: Pair<Rule>) -> Item {
+fn parse_conditional_block(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
+    assert_eq!(item.as_rule(), Rule::conditional_block);
+    let mut inner = item.into_inner().peekable();
+
+    let name = inner.next().unwrap().as_str();
+
+    if active_features.contains(&name) {
+        Item::ConditionalBlock(
+            name.into(),
+            inner.map(|i| parse_item(i, active_features)).collect(),
+        )
+    } else {
+        Item::ConditionalBlock(name.into(), vec![])
+    }
+}
+
+fn parse_macro_def(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
     assert_eq!(item.as_rule(), Rule::macro_def);
     let mut inner = item.into_inner().peekable();
 
@@ -71,7 +91,11 @@ fn parse_macro_def(item: Pair<Rule>) -> Item {
         vec![]
     };
 
-    Item::MacroDef(name, params, inner.map(parse_item).collect())
+    Item::MacroDef(
+        name,
+        params,
+        inner.map(|i| parse_item(i, active_features)).collect(),
+    )
 }
 
 fn parse_macro_call(item: Pair<Rule>) -> Item {
@@ -91,11 +115,14 @@ fn parse_macro_call(item: Pair<Rule>) -> Item {
     Item::MacroCall(name, args)
 }
 
-fn parse_repeat(item: Pair<Rule>) -> Item {
+fn parse_repeat(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
     assert_eq!(item.as_rule(), Rule::repeat);
     let mut inner = item.into_inner();
     let count = parse_literal_u256(inner.next().unwrap());
-    Item::Repeat(count, inner.map(parse_item).collect())
+    Item::Repeat(
+        count,
+        inner.map(|i| parse_item(i, active_features)).collect(),
+    )
 }
 
 fn parse_stack(item: Pair<Rule>) -> Item {
@@ -207,4 +234,176 @@ fn parse_hex(hex: Pair<Rule>) -> String {
     let prefix = &hex.as_str()[..2];
     debug_assert!(prefix == "0x" || prefix == "0X");
     hex.as_str()[2..].to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::cpu::kernel::assembler::assemble;
+
+    #[test]
+    fn test_feature() {
+        let code = r#"
+        #[cfg(feature = feature_1)]
+        {
+            %macro bar
+                PUSH 2
+                MUL
+            %endmacro
+        }
+
+        global foo_1:
+            PUSH 1
+            PUSH 2
+
+            #[cfg(feature = feature_1)]
+            {
+                %bar
+                PUSH 1
+            }
+            PUSH 3
+            PUSH 4
+            ADD
+
+        global foo_3:
+            PUSH 5
+            PUSH 6
+            DIV
+
+        #[cfg(feature = feature_2)]
+        {
+            global foo_4:
+            PUSH 7
+            PUSH 8
+            MOD
+        }
+        "#;
+
+        // Test `feature_2` on global label definitions
+
+        let active_features = HashSet::from(["feature_2"]);
+
+        let parsed_code = parse(&code, active_features);
+        let final_code = assemble(vec![parsed_code], HashMap::new(), false);
+
+        let expected_code = r#"
+        global foo_1:
+            PUSH 1
+            PUSH 2
+            PUSH 3
+            PUSH 4
+            ADD
+
+        global foo_3:
+            PUSH 5
+            PUSH 6
+            DIV
+
+        global foo_4:
+            PUSH 7
+            PUSH 8
+            MOD
+        "#;
+
+        let parsed_expected = parse(&expected_code, HashSet::new());
+        let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
+
+        assert_eq!(final_code.code, final_expected.code);
+
+        // Test `feature_1` on macro call
+        let active_features = HashSet::from(["feature_1"]);
+
+        let parsed_code = parse(&code, active_features);
+        let final_code = assemble(vec![parsed_code], HashMap::new(), false);
+
+        let expected_code = r#"
+        %macro bar
+            PUSH 2
+            MUL
+        %endmacro
+
+        global foo_1:
+            PUSH 1
+            PUSH 2
+            %bar
+            PUSH 1
+            PUSH 3
+            PUSH 4
+            ADD
+
+        global foo_3:
+            PUSH 5
+            PUSH 6
+            DIV
+        "#;
+
+        let parsed_expected = parse(&expected_code, HashSet::new());
+        let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
+
+        assert_eq!(final_code.code, final_expected.code);
+
+        // Test with all features enabled
+        let active_features = HashSet::from(["feature_1", "feature_2"]);
+
+        let parsed_code = parse(&code, active_features);
+        let final_code = assemble(vec![parsed_code], HashMap::new(), false);
+
+        let expected_code = r#"
+        %macro bar
+            PUSH 2
+            MUL
+        %endmacro
+
+        global foo_1:
+            PUSH 1
+            PUSH 2
+            %bar
+            PUSH 1
+            PUSH 3
+            PUSH 4
+            ADD
+
+        global foo_3:
+            PUSH 5
+            PUSH 6
+            DIV
+
+        global foo_4:
+            PUSH 7
+            PUSH 8
+            MOD
+        "#;
+
+        let parsed_expected = parse(&expected_code, HashSet::new());
+        let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
+
+        assert_eq!(final_code.code, final_expected.code);
+
+        // Test with all features disabled
+        let active_features = HashSet::new();
+
+        let parsed_code = parse(&code, active_features);
+        let final_code = assemble(vec![parsed_code], HashMap::new(), false);
+
+        let expected_code = r#"
+        global foo_1:
+            PUSH 1
+            PUSH 2
+            PUSH 3
+            PUSH 4
+            ADD
+
+        global foo_3:
+            PUSH 5
+            PUSH 6
+            DIV
+        "#;
+
+        let parsed_expected = parse(&expected_code, HashSet::new());
+        let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
+
+        assert_eq!(final_code.code, final_expected.code);
+    }
 }
