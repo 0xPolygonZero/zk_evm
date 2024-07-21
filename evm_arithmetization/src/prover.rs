@@ -694,32 +694,9 @@ pub mod testing {
     where
         F: RichField,
     {
-        let max_cpu_len_log = Some(max_cpu_len_log);
-        let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
-            KERNEL.global_labels["init"],
-            vec![],
-            &inputs,
-            max_cpu_len_log,
-        );
-
-        let mut segment_index = 0;
-
-        let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
-
-        while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
-            segment_index += 1;
-
-            let (updated_registers, mem_after) =
-                set_registers_and_run(segment_data.registers_before, &mut interpreter)?;
-
-            segment_data = build_segment_data(
-                segment_index,
-                Some(updated_registers),
-                Some(updated_registers),
-                mem_after,
-                &interpreter,
-            );
-        }
+        let _ = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log))
+            .into_iter()
+            .collect::<Vec<_>>();
 
         Ok(())
     }

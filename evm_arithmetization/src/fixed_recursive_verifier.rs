@@ -1561,13 +1561,12 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
-        println!("Entering prove all segments");
-        let mut it_segment_data =
+        let mut segment_iterator =
             SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
 
         let mut proofs = vec![];
 
-        for mut next_data in it_segment_data {
+        for mut next_data in segment_iterator {
             let proof = self.prove_segment(
                 all_stark,
                 config,
