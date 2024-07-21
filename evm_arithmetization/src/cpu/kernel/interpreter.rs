@@ -646,10 +646,10 @@ impl<F: Field> State<F> for Interpreter<F> {
                 memory_state.contexts[ctx_idx] = ctx.clone();
             }
         }
-        if self.generation_state.set_preinit {
-            memory_state.preinitialized_segments =
-                self.generation_state.memory.preinitialized_segments.clone();
-        }
+
+        memory_state.preinitialized_segments =
+            self.generation_state.memory.preinitialized_segments.clone();
+
         Some(memory_state)
     }
 

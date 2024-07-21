@@ -452,17 +452,12 @@ impl<F: Field> GenerationState<F> {
             withdrawal_prover_inputs: Vec::new(),
             state_key_to_address: HashMap::new(),
             bignum_modmul_result_limbs: Vec::new(),
-            trie_root_ptrs: TrieRootPtrs {
-                state_root_ptr: Some(0),
-                txn_root_ptr: 0,
-                receipt_root_ptr: 0,
-            },
+            trie_root_ptrs: TrieRootPtrs::default(),
             jumpdest_table: None,
         };
-        let trie_root_ptrs =
-            state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
 
-        state.trie_root_ptrs = trie_root_ptrs;
+        state.memory.preinitialized_segments = segment_data.memory.preinitialized_segments.clone();
+
         Ok(state)
     }
 
