@@ -687,7 +687,7 @@ pub mod testing {
         Ok(proofs)
     }
 
-    pub fn simulate_all_segments_interpreter<F>(
+    pub fn simulate_execution_all_segments<F>(
         inputs: GenerationInputs,
         max_cpu_len_log: usize,
     ) -> anyhow::Result<()>

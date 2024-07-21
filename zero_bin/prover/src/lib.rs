@@ -125,7 +125,7 @@ impl BlockProverInput {
         batch_size: usize,
         _save_inputs_on_error: bool,
     ) -> Result<GeneratedBlockProof> {
-        use evm_arithmetization::prover::testing::simulate_all_segments_interpreter;
+        use evm_arithmetization::prover::testing::simulate_execution_all_segments;
         use plonky2::field::goldilocks_field::GoldilocksField;
 
         let block_number = self.get_block_number();
@@ -140,7 +140,7 @@ impl BlockProverInput {
 
         type F = GoldilocksField;
         for txn in txs.into_iter() {
-            simulate_all_segments_interpreter::<F>(txn, max_cpu_len_log)?;
+            simulate_execution_all_segments::<F>(txn, max_cpu_len_log)?;
         }
 
         info!("Successfully generated witness for block {block_number}.");
