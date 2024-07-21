@@ -49,10 +49,8 @@ use crate::proof::{
     FinalPublicValues, MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget,
     TrieRoots, TrieRootsTarget, TARGET_HASH_SIZE,
 };
-use crate::prover::{
-    check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData,
-    SegmentDataIterator,
-};
+use crate::prover::testing::prove_all_segments;
+use crate::prover::{check_abort_signal, prove, GenerationSegmentData, SegmentDataIterator};
 use crate::recursive_verifier::{
     add_common_recursion_gates, add_virtual_public_values, get_memory_extra_looking_sum_circuit,
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,

@@ -614,47 +614,6 @@ fn generate_next_segment<F: RichField>(
     }
 }
 
-/// Returns a vector containing the data required to generate all the segments
-/// of a transaction.
-pub fn generate_all_data_segments<F: RichField>(
-    max_cpu_len_log: Option<usize>,
-    inputs: &GenerationInputs,
-) -> anyhow::Result<Vec<GenerationSegmentData>> {
-    let mut all_seg_data = vec![];
-
-    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
-        KERNEL.global_labels["init"],
-        vec![],
-        inputs,
-        max_cpu_len_log,
-    );
-
-    let mut segment_index = 0;
-
-    let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
-
-    while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
-        let (updated_registers, mem_after) =
-            set_registers_and_run(segment_data.registers_before, &mut interpreter)?;
-
-        // Set `registers_after` correctly and push the data.
-        segment_data.registers_after = updated_registers;
-        all_seg_data.push(segment_data);
-
-        segment_index += 1;
-
-        segment_data = build_segment_data(
-            segment_index,
-            Some(updated_registers),
-            Some(updated_registers),
-            mem_after,
-            &interpreter,
-        );
-    }
-
-    Ok(all_seg_data)
-}
-
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use mpt_trie::partial_trie::HashedPartialTrie;
@@ -710,16 +669,15 @@ pub mod testing {
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
     {
-        let mut segment_idx = 0;
-        let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
+        let data_iterator = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log));
+        let mut proofs = vec![];
 
-        let mut proofs = Vec::with_capacity(data.len());
-        for mut d in data {
+        for mut next_data in data_iterator {
             let proof = prove(
                 all_stark,
                 config,
                 inputs.clone(),
-                &mut d,
+                &mut next_data.1,
                 timing,
                 abort_signal.clone(),
             )?;
