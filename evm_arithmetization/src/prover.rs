@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -39,9 +40,6 @@ use crate::witness::state::RegistersState;
 pub struct GenerationSegmentData {
     /// Indicates whether this corresponds to a dummy segment.
     pub(crate) is_dummy: bool,
-    /// Indicates whether we should set the preinitialized segments before
-    /// proving.
-    pub(crate) set_preinit: bool,
     /// Indicates the position of this segment in a sequence of
     /// executions for a larger payload.
     pub(crate) segment_index: usize,
@@ -497,7 +495,6 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 #[allow(clippy::unwrap_or_default)]
 fn build_segment_data<F: RichField>(
     segment_index: usize,
-    set_preinit: bool,
     registers_before: Option<RegistersState>,
     registers_after: Option<RegistersState>,
     memory: Option<MemoryState>,
@@ -505,7 +502,6 @@ fn build_segment_data<F: RichField>(
 ) -> GenerationSegmentData {
     GenerationSegmentData {
         is_dummy: false,
-        set_preinit,
         segment_index,
         registers_before: registers_before.unwrap_or(RegistersState::new()),
         registers_after: registers_after.unwrap_or(RegistersState::new()),
@@ -528,25 +524,34 @@ fn build_segment_data<F: RichField>(
     }
 }
 
-pub struct SegmentDataIterator<'a> {
-    pub partial_next_data: Option<GenerationSegmentData>,
-    pub inputs: &'a GenerationInputs,
-    pub max_cpu_len_log: Option<usize>,
+pub struct SegmentDataIterator<'a, F: RichField> {
+    partial_next_data: Option<GenerationSegmentData>,
+    inputs: &'a GenerationInputs,
+    max_cpu_len_log: Option<usize>,
+
+    _phantom: PhantomData<F>,
 }
 
-type F = GoldilocksField;
-impl<'a> Iterator for SegmentDataIterator<'a> {
+impl<'a, F: RichField> SegmentDataIterator<'a, F> {
+    pub fn new(inputs: &'a GenerationInputs, max_cpu_len_log: Option<usize>) -> Self {
+        Self {
+            partial_next_data: None,
+            inputs,
+            max_cpu_len_log,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, F: RichField> Iterator for SegmentDataIterator<'a, F> {
     type Item = (GenerationInputs, GenerationSegmentData);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let cur_and_next_data = generate_next_segment::<F>(
+        if let Some((data, next_data)) = generate_next_segment::<F>(
             self.max_cpu_len_log,
             self.inputs,
             self.partial_next_data.clone(),
-        );
-
-        if cur_and_next_data.is_some() {
-            let (data, next_data) = cur_and_next_data.expect("Data cannot be `None`");
+        ) {
             self.partial_next_data = next_data;
             Some((self.inputs.clone(), data))
         } else {
@@ -557,7 +562,7 @@ impl<'a> Iterator for SegmentDataIterator<'a> {
 
 /// Returns the data for the current segment, as well as the data -- except
 /// registers_after -- for the next segment.
-pub(crate) fn generate_next_segment<F: RichField>(
+fn generate_next_segment<F: RichField>(
     max_cpu_len_log: Option<usize>,
     inputs: &GenerationInputs,
     partial_segment_data: Option<GenerationSegmentData>,
@@ -581,7 +586,7 @@ pub(crate) fn generate_next_segment<F: RichField>(
         interpreter.generation_state.memory = partial.memory.clone();
         partial
     } else {
-        build_segment_data(0, false, None, None, None, &interpreter)
+        build_segment_data(0, None, None, None, &interpreter)
     };
 
     let segment_index = segment_data.segment_index;
@@ -596,7 +601,6 @@ pub(crate) fn generate_next_segment<F: RichField>(
 
         let partial_segment_data = Some(build_segment_data(
             segment_index + 1,
-            interpreter.generation_state.set_preinit || segment_data.set_preinit,
             Some(updated_registers),
             Some(updated_registers),
             mem_after,
@@ -627,7 +631,7 @@ pub fn generate_all_data_segments<F: RichField>(
 
     let mut segment_index = 0;
 
-    let mut segment_data = build_segment_data(segment_index, false, None, None, None, &interpreter);
+    let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
 
     while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
         let (updated_registers, mem_after) =
@@ -641,7 +645,6 @@ pub fn generate_all_data_segments<F: RichField>(
 
         segment_data = build_segment_data(
             segment_index,
-            interpreter.generation_state.set_preinit,
             Some(updated_registers),
             Some(updated_registers),
             mem_after,
@@ -743,8 +746,7 @@ pub mod testing {
 
         let mut segment_index = 0;
 
-        let mut segment_data =
-            build_segment_data(segment_index, false, None, None, None, &interpreter);
+        let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
 
         while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
             segment_index += 1;
@@ -754,7 +756,6 @@ pub mod testing {
 
             segment_data = build_segment_data(
                 segment_index,
-                interpreter.generation_state.set_preinit,
                 Some(updated_registers),
                 Some(updated_registers),
                 mem_after,

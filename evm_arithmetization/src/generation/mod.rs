@@ -416,7 +416,6 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     // previous segment execution, if any.
     let GenerationSegmentData {
         is_dummy,
-        set_preinit,
         segment_index,
         max_cpu_len_log,
         memory,

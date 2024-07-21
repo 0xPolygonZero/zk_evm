@@ -1564,11 +1564,8 @@ where
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
         println!("Entering prove all segments");
-        let mut it_segment_data = SegmentDataIterator {
-            inputs: &generation_inputs,
-            partial_next_data: None,
-            max_cpu_len_log: Some(max_cpu_len_log),
-        };
+        let mut it_segment_data =
+            SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
 
         let mut proofs = vec![];
 

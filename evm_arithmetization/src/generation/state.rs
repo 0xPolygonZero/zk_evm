@@ -340,9 +340,6 @@ pub struct GenerationState<F: Field> {
 
     pub(crate) next_txn_index: usize,
 
-    /// Indicates whether we should set the preinitialized segments before
-    /// proving.
-    pub(crate) set_preinit: bool,
     /// Memory used by stale contexts can be pruned so proving segments can be
     /// smaller.
     pub(crate) stale_contexts: Vec<usize>,
@@ -415,7 +412,6 @@ impl<F: Field> GenerationState<F> {
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
             next_txn_index: 0,
-            set_preinit: false,
             stale_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
@@ -446,7 +442,6 @@ impl<F: Field> GenerationState<F> {
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
             next_txn_index: 0,
-            set_preinit: false,
             stale_contexts: Vec::new(),
             rlp_prover_inputs: Vec::new(),
             withdrawal_prover_inputs: Vec::new(),
@@ -532,7 +527,6 @@ impl<F: Field> GenerationState<F> {
             memory: self.memory.clone(),
             traces: Traces::default(),
             next_txn_index: 0,
-            set_preinit: self.set_preinit,
             stale_contexts: Vec::new(),
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),
             state_key_to_address: self.state_key_to_address.clone(),

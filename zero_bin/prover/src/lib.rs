@@ -45,6 +45,7 @@ impl BlockProverInput {
         use evm_arithmetization::prover::SegmentDataIterator;
         use futures::{stream::FuturesUnordered, FutureExt};
         use paladin::directive::{Directive, IndexedStream};
+        use proof_gen::types::Field;
 
         let block_number = self.get_block_number();
 
@@ -69,11 +70,7 @@ impl BlockProverInput {
             .iter()
             .enumerate()
             .map(|(idx, txn)| {
-                let data_iterator = SegmentDataIterator {
-                    partial_next_data: None,
-                    inputs: txn,
-                    max_cpu_len_log: Some(max_cpu_len_log),
-                };
+                let data_iterator = SegmentDataIterator::<Field>::new(txn, Some(max_cpu_len_log));
 
                 Directive::map(IndexedStream::from(data_iterator), &seg_ops)
                     .fold(&agg_ops)
