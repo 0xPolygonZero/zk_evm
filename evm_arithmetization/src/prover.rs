@@ -637,18 +637,6 @@ pub mod testing {
             Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
         let result = interpreter.run();
 
-        let final_state_trie: HashedPartialTrie = get_state_trie(
-            &interpreter.get_generation_state().memory,
-            u256_to_usize(
-                interpreter
-                    .get_generation_state()
-                    .memory
-                    .read_global_metadata(GlobalMetadata::StateTrieRoot),
-            )
-            .unwrap(),
-        )
-        .unwrap();
-
         if result.is_err() {
             output_debug_tries(interpreter.get_generation_state())?;
         }
