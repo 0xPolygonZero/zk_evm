@@ -401,7 +401,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         GenerationState::<F>::new(inputs, &KERNEL.code)
             .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?
     } else {
-        GenerationState::<F>::new_with_segment_data(inputs, &segment_data, &KERNEL.code)
+        GenerationState::<F>::new_with_segment_data(inputs, &segment_data)
             .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?
     };
 

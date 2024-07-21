@@ -434,12 +434,11 @@ impl<F: Field> GenerationState<F> {
     pub(crate) fn new_with_segment_data(
         inputs: &GenerationInputs,
         segment_data: &GenerationSegmentData,
-        kernel_code: &[u8],
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
             inputs: inputs.trim(),
             registers: Default::default(),
-            memory: MemoryState::new(kernel_code),
+            memory: MemoryState::default(),
             traces: Traces::default(),
             next_txn_index: 0,
             stale_contexts: Vec::new(),
