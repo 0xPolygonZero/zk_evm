@@ -281,38 +281,7 @@ mod tests {
         }
         "#;
 
-        // Test `feature_2` on global label definitions
-
-        let active_features = HashSet::from(["feature_2"]);
-
-        let parsed_code = parse(code, active_features);
-        let final_code = assemble(vec![parsed_code], HashMap::new(), false);
-
-        let expected_code = r#"
-        global foo_1:
-            PUSH 1
-            PUSH 2
-            PUSH 3
-            PUSH 4
-            ADD
-
-        global foo_3:
-            PUSH 5
-            PUSH 6
-            DIV
-
-        global foo_4:
-            PUSH 7
-            PUSH 8
-            MOD
-        "#;
-
-        let parsed_expected = parse(expected_code, HashSet::new());
-        let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
-
-        assert_eq!(final_code.code, final_expected.code);
-
-        // Test `feature_1` on macro call
+        // Test `feature_1`.
         let active_features = HashSet::from(["feature_1"]);
 
         let parsed_code = parse(code, active_features);
@@ -344,7 +313,37 @@ mod tests {
 
         assert_eq!(final_code.code, final_expected.code);
 
-        // Test with all features enabled
+        // Test `feature_2`.
+        let active_features = HashSet::from(["feature_2"]);
+
+        let parsed_code = parse(code, active_features);
+        let final_code = assemble(vec![parsed_code], HashMap::new(), false);
+
+        let expected_code = r#"
+        global foo_1:
+            PUSH 1
+            PUSH 2
+            PUSH 3
+            PUSH 4
+            ADD
+
+        global foo_3:
+            PUSH 5
+            PUSH 6
+            DIV
+
+        global foo_4:
+            PUSH 7
+            PUSH 8
+            MOD
+        "#;
+
+        let parsed_expected = parse(expected_code, HashSet::new());
+        let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
+
+        assert_eq!(final_code.code, final_expected.code);
+
+        // Test with both features enabled.
         let active_features = HashSet::from(["feature_1", "feature_2"]);
 
         let parsed_code = parse(code, active_features);
@@ -381,7 +380,7 @@ mod tests {
 
         assert_eq!(final_code.code, final_expected.code);
 
-        // Test with all features disabled
+        // Test with all features disabled.
         let active_features = HashSet::new();
 
         let parsed_code = parse(code, active_features);
