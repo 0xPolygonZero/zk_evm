@@ -435,6 +435,37 @@ impl<F: Field> GenerationState<F> {
         Ok(state)
     }
 
+    pub(crate) fn new_with_segment_data(
+        inputs: &GenerationInputs,
+        segment_data: &GenerationSegmentData,
+        kernel_code: &[u8],
+    ) -> Result<Self, ProgramError> {
+        let mut state = Self {
+            inputs: inputs.trim(),
+            registers: Default::default(),
+            memory: MemoryState::new(kernel_code),
+            traces: Traces::default(),
+            next_txn_index: 0,
+            set_preinit: false,
+            stale_contexts: Vec::new(),
+            rlp_prover_inputs: Vec::new(),
+            withdrawal_prover_inputs: Vec::new(),
+            state_key_to_address: HashMap::new(),
+            bignum_modmul_result_limbs: Vec::new(),
+            trie_root_ptrs: TrieRootPtrs {
+                state_root_ptr: Some(0),
+                txn_root_ptr: 0,
+                receipt_root_ptr: 0,
+            },
+            jumpdest_table: None,
+        };
+        let trie_root_ptrs =
+            state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
+
+        state.trie_root_ptrs = trie_root_ptrs;
+        Ok(state)
+    }
+
     /// Updates `program_counter`, and potentially adds some extra handling if
     /// we're jumping to a special location.
     pub(crate) fn jump_to(&mut self, dst: usize) -> Result<(), ProgramError> {
