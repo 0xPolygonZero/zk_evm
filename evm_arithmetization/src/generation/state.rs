@@ -450,7 +450,16 @@ impl<F: Field> GenerationState<F> {
             jumpdest_table: None,
         };
 
-        state.memory.preinitialized_segments = segment_data.memory.preinitialized_segments.clone();
+        if segment_data.segment_index == 0 {
+            // We will copy the `trie_root_ptrs` in `set_segment_data()` below,
+            // but we still need to process the tries data in memory.
+            let _ = state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
+        } else {
+            state.memory.preinitialized_segments =
+                segment_data.memory.preinitialized_segments.clone();
+        }
+
+        state.set_segment_data(segment_data);
 
         Ok(state)
     }
