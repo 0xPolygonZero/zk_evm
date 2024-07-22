@@ -257,11 +257,6 @@ impl<F: Field> Interpreter<F> {
             load_linked_lists_and_txn_and_receipt_mpts(&inputs.tries)
                 .expect("Invalid MPT data for preinitialization");
 
-        self.generation_state.memory.contexts[0].segments[Segment::AccountsLinkedList.unscale()]
-            .content = vec![];
-        self.generation_state.memory.contexts[0].segments[Segment::StorageLinkedList.unscale()]
-            .content = vec![];
-
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
 

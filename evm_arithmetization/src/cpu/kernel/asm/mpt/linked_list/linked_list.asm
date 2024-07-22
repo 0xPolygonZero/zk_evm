@@ -579,7 +579,7 @@ next_node_ok_with_value:
     %get_trie_data_size
     // stack: new_payload_ptr, new_ptr+2, new_ptr+2, next_ptr, addr, key, value, retdest
     %stack (new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr, key, value, retdest)
-        -> (value, new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, retdest, new_payload_ptr)
+        -> (value, new_payload_ptr, new_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, new_payload_ptr, retdest)
     %append_to_trie_data
     MSTORE_GENERAL
 
@@ -593,13 +593,14 @@ next_node_ok_with_value:
     // stack: new_ptr + 3, next_ptr, new_payload_ptr, retdest
     %increment
     DUP1
-    // stack: new_next_ptr, new_next_ptr, next_ptr, retdest, new_payload_ptr
+    // stack: new_next_ptr, new_next_ptr, next_ptr, new_payload_ptr, retdest
     SWAP2
     MSTORE_GENERAL
-    // stack: new_next_ptr, retdest, new_payload_ptr
+    // stack: new_next_ptr, new_payload_ptr, retdest
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
-    // stack: retdest, new_payload_ptr
+    // stack: new_payload_ptr, retdest
+    SWAP1
     JUMP
 
 slot_found_write_value:
