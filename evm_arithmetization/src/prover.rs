@@ -491,7 +491,14 @@ fn build_segment_data<F: RichField>(
         segment_index,
         registers_before: registers_before.unwrap_or(RegistersState::new()),
         registers_after: registers_after.unwrap_or(RegistersState::new()),
-        memory: memory.unwrap_or_default(),
+        memory: memory.unwrap_or(MemoryState {
+            preinitialized_segments: interpreter
+                .generation_state
+                .memory
+                .preinitialized_segments
+                .clone(),
+            ..Default::default()
+        }),
         max_cpu_len_log: interpreter.get_max_cpu_len_log(),
         extra_data: ExtraSegmentData {
             bignum_modmul_result_limbs: interpreter
