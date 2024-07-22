@@ -61,7 +61,7 @@ OUTPUT_TO_TERMINAL="${OUTPUT_TO_TERMINAL:-false}"
 RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
 
 # Recommended soft file handle limit. Will warn if it is set lower.
-RECOMMENDED_FILE_HANDLE_LIMIT=4096
+RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p $PROOF_OUTPUT_DIR
 
@@ -101,7 +101,7 @@ then
         echo "WARNING: Maximum file descriptor limit may be too low to run native mode (current: $file_desc_limit, Recommended: ${RECOMMENDED_FILE_HANDLE_LIMIT}).
         Consider increasing it with:
 
-        ulimit -s ${RECOMMENDED_FILE_HANDLE_LIMIT}"
+        ulimit -n ${RECOMMENDED_FILE_HANDLE_LIMIT}"
     fi
 fi
 
