@@ -9,7 +9,7 @@ pub(crate) struct File {
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub(crate) enum Item {
-    /// Defines a new macro: name, params, body.
+    /// Defines a conditional, feature-gated, block of items.
     ConditionalBlock(String, Vec<Item>),
     /// Defines a new macro: name, params, body.
     MacroDef(String, Vec<String>, Vec<Item>),
