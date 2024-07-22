@@ -6,11 +6,11 @@ use zk_evm_proc_macro::{Columns, DerefColumns};
 
 use crate::{memory::VALUE_LIMBS, util::indices_arr};
 
-/// Columns for the `MemoryStark`.
+/// Columns for the `MemoryStark`. Memory operations are ordered by
+/// (addr, timestamp).
 #[repr(C)]
 #[derive(Columns, DerefColumns, Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct MemoryColumnsView<T> {
-    // Columns for memory operations, ordered by (addr, timestamp).
     /// 1 if this is an actual memory operation, or 0 if it's a padding row.
     pub filter: T,
     /// Each memory operation is associated to a unique timestamp.
