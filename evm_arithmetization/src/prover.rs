@@ -6,9 +6,7 @@ use anyhow::{anyhow, Result};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::field::extension::Extendable;
-use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
@@ -27,19 +25,16 @@ use starky::stark::Stark;
 use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
-use crate::generation::state::{GenerationState, State};
+use crate::generation::state::State;
 use crate::generation::{generate_traces, GenerationInputs};
 use crate::get_challenges::observe_public_values;
-use crate::memory::segments::Segment;
-use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
-use crate::witness::memory::{MemoryAddress, MemoryState};
+use crate::proof::{AllProof, MemCap, PublicValues};
+use crate::witness::memory::MemoryState;
 use crate::witness::state::RegistersState;
 
 /// Structure holding the data needed to initialize a segment.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct GenerationSegmentData {
-    /// Indicates whether this corresponds to a dummy segment.
-    pub(crate) is_dummy: bool,
     /// Indicates the position of this segment in a sequence of
     /// executions for a larger payload.
     pub(crate) segment_index: usize,
@@ -56,11 +51,6 @@ pub struct GenerationSegmentData {
 }
 
 impl GenerationSegmentData {
-    /// Indicates if this segment is a dummy one.
-    pub fn is_dummy(&self) -> bool {
-        self.is_dummy
-    }
-
     /// Retrieves the index of this segment.
     pub fn segment_index(&self) -> usize {
         self.segment_index
@@ -490,8 +480,6 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 }
 
 /// Builds a new `GenerationSegmentData`.
-/// This new segment's `is_dummy` field must be updated manually
-/// in case it corresponds to a dummy segment.
 #[allow(clippy::unwrap_or_default)]
 fn build_segment_data<F: RichField>(
     segment_index: usize,
@@ -501,7 +489,6 @@ fn build_segment_data<F: RichField>(
     interpreter: &Interpreter<F>,
 ) -> GenerationSegmentData {
     GenerationSegmentData {
-        is_dummy: false,
         segment_index,
         registers_before: registers_before.unwrap_or(RegistersState::new()),
         registers_after: registers_after.unwrap_or(RegistersState::new()),
@@ -596,9 +583,6 @@ fn generate_next_segment<F: RichField>(
     if let Ok((updated_registers, mem_after)) =
         set_registers_and_run(segment_data.registers_after, &mut interpreter)
     {
-        // Set `registers_after` correctly and push the data.
-        let before_registers = segment_data.registers_after;
-
         let partial_segment_data = Some(build_segment_data(
             segment_index + 1,
             Some(updated_registers),
@@ -616,13 +600,7 @@ fn generate_next_segment<F: RichField>(
 
 /// A utility module designed to test witness generation externally.
 pub mod testing {
-    use mpt_trie::partial_trie::HashedPartialTrie;
-
     use super::*;
-    use crate::{
-        cpu::kernel::constants::global_metadata::GlobalMetadata,
-        generation::trie_extractor::get_state_trie, util::u256_to_usize,
-    };
     use crate::{
         cpu::kernel::interpreter::Interpreter,
         generation::{output_debug_tries, state::State},

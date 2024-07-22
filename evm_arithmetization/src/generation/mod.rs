@@ -408,13 +408,10 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     // Initialize the state with the one at the end of the
     // previous segment execution, if any.
     let GenerationSegmentData {
-        is_dummy,
-        segment_index,
         max_cpu_len_log,
-        memory,
         registers_before,
         registers_after,
-        extra_data,
+        ..
     } = segment_data;
 
     for &(address, val) in &actual_mem_before {
@@ -428,7 +425,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let cpu_res = timed!(
         timing,
         "simulate CPU",
-        simulate_cpu(&mut state, *max_cpu_len_log, *is_dummy)
+        simulate_cpu(&mut state, *max_cpu_len_log)
     );
     if cpu_res.is_err() {
         output_debug_tries(&state)?;
@@ -493,7 +490,6 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 fn simulate_cpu<F: Field>(
     state: &mut GenerationState<F>,
     max_cpu_len_log: Option<usize>,
-    is_dummy: bool,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
     let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log)?;
 
