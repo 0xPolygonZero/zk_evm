@@ -41,7 +41,7 @@ use starky::stark::Stark;
 
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::GenerationInputs;
+use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
@@ -1483,7 +1483,7 @@ where
         &self,
         all_stark: &AllStark<F, D>,
         config: &StarkConfig,
-        generation_inputs: GenerationInputs,
+        generation_inputs: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
@@ -1570,7 +1570,7 @@ where
             let proof = self.prove_segment(
                 all_stark,
                 config,
-                generation_inputs.clone(),
+                generation_inputs.trim(),
                 &mut next_data.1,
                 timing,
                 abort_signal.clone(),

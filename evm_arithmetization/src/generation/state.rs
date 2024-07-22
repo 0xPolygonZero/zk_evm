@@ -429,22 +429,15 @@ impl<F: Field> GenerationState<F> {
     }
 
     pub(crate) fn new_with_segment_data(
-        inputs: &GenerationInputs,
+        trimmed_inputs: &TrimmedGenerationInputs,
         segment_data: &GenerationSegmentData,
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
-            inputs: inputs.trim(),
+            inputs: trimmed_inputs.clone(),
             ..Default::default()
         };
 
-        if segment_data.segment_index == 0 {
-            // We will copy the `trie_root_ptrs` in `set_segment_data()` below,
-            // but we still need to process the tries data in memory.
-            let _ = state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
-        } else {
-            state.memory.preinitialized_segments =
-                segment_data.memory.preinitialized_segments.clone();
-        }
+        state.memory.preinitialized_segments = segment_data.memory.preinitialized_segments.clone();
 
         state.set_segment_data(segment_data);
 

@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -26,7 +25,7 @@ use crate::all_stark::{AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
 use crate::generation::state::State;
-use crate::generation::{generate_traces, GenerationInputs};
+use crate::generation::{debug_inputs, generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
 use crate::proof::{AllProof, MemCap, PublicValues};
 use crate::witness::memory::MemoryState;
@@ -61,7 +60,7 @@ impl GenerationSegmentData {
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
-    inputs: GenerationInputs,
+    inputs: TrimmedGenerationInputs,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -511,90 +510,83 @@ fn build_segment_data<F: RichField>(
     }
 }
 
-pub struct SegmentDataIterator<'a, F: RichField> {
+pub struct SegmentDataIterator<F: RichField> {
+    interpreter: Interpreter<F>,
     partial_next_data: Option<GenerationSegmentData>,
-    inputs: &'a GenerationInputs,
-    max_cpu_len_log: Option<usize>,
-
-    _phantom: PhantomData<F>,
 }
 
-impl<'a, F: RichField> SegmentDataIterator<'a, F> {
-    pub fn new(inputs: &'a GenerationInputs, max_cpu_len_log: Option<usize>) -> Self {
-        Self {
-            partial_next_data: None,
+impl<F: RichField> SegmentDataIterator<F> {
+    pub fn new(inputs: &GenerationInputs, max_cpu_len_log: Option<usize>) -> Self {
+        debug_inputs(inputs);
+
+        let interpreter = Interpreter::<F>::new_with_generation_inputs(
+            KERNEL.global_labels["init"],
+            vec![],
             inputs,
             max_cpu_len_log,
-            _phantom: PhantomData,
+        );
+
+        Self {
+            interpreter,
+            partial_next_data: None,
+        }
+    }
+
+    /// Returns the data for the current segment, as well as the data -- except
+    /// registers_after -- for the next segment.
+    fn generate_next_segment(
+        &mut self,
+        partial_segment_data: Option<GenerationSegmentData>,
+    ) -> Option<(GenerationSegmentData, Option<GenerationSegmentData>)> {
+        // Get the (partial) current segment data, if it is provided. Otherwise,
+        // initialize it.
+        let mut segment_data = if let Some(partial) = partial_segment_data {
+            if partial.registers_after.program_counter == KERNEL.global_labels["halt"] {
+                return None;
+            }
+            self.interpreter
+                .get_mut_generation_state()
+                .set_segment_data(&partial);
+            self.interpreter.generation_state.memory = partial.memory.clone();
+            partial
+        } else {
+            build_segment_data(0, None, None, None, &self.interpreter)
+        };
+
+        let segment_index = segment_data.segment_index;
+
+        // Run the interpreter to get `registers_after` and the partial data for the
+        // next segment.
+        if let Ok((updated_registers, mem_after)) =
+            set_registers_and_run(segment_data.registers_after, &mut self.interpreter)
+        {
+            let partial_segment_data = Some(build_segment_data(
+                segment_index + 1,
+                Some(updated_registers),
+                Some(updated_registers),
+                mem_after,
+                &self.interpreter,
+            ));
+
+            segment_data.registers_after = updated_registers;
+            Some((segment_data, partial_segment_data))
+        } else {
+            panic!("Segment generation failed");
         }
     }
 }
 
-impl<'a, F: RichField> Iterator for SegmentDataIterator<'a, F> {
-    type Item = (GenerationInputs, GenerationSegmentData);
+impl<F: RichField> Iterator for SegmentDataIterator<F> {
+    type Item = (TrimmedGenerationInputs, GenerationSegmentData);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((data, next_data)) = generate_next_segment::<F>(
-            self.max_cpu_len_log,
-            self.inputs,
-            self.partial_next_data.clone(),
-        ) {
+        if let Some((data, next_data)) = self.generate_next_segment(self.partial_next_data.clone())
+        {
             self.partial_next_data = next_data;
-            Some((self.inputs.clone(), data))
+            Some((self.interpreter.generation_state.inputs.clone(), data))
         } else {
             None
         }
-    }
-}
-
-/// Returns the data for the current segment, as well as the data -- except
-/// registers_after -- for the next segment.
-fn generate_next_segment<F: RichField>(
-    max_cpu_len_log: Option<usize>,
-    inputs: &GenerationInputs,
-    partial_segment_data: Option<GenerationSegmentData>,
-) -> Option<(GenerationSegmentData, Option<GenerationSegmentData>)> {
-    let mut interpreter = Interpreter::<F>::new_with_generation_inputs(
-        KERNEL.global_labels["init"],
-        vec![],
-        inputs,
-        max_cpu_len_log,
-    );
-
-    // Get the (partial) current segment data, if it is provided. Otherwise,
-    // initialize it.
-    let mut segment_data = if let Some(partial) = partial_segment_data {
-        if partial.registers_after.program_counter == KERNEL.global_labels["halt"] {
-            return None;
-        }
-        interpreter
-            .get_mut_generation_state()
-            .set_segment_data(&partial);
-        interpreter.generation_state.memory = partial.memory.clone();
-        partial
-    } else {
-        build_segment_data(0, None, None, None, &interpreter)
-    };
-
-    let segment_index = segment_data.segment_index;
-
-    // Run the interpreter to get `registers_after` and the partial data for the
-    // next segment.
-    if let Ok((updated_registers, mem_after)) =
-        set_registers_and_run(segment_data.registers_after, &mut interpreter)
-    {
-        let partial_segment_data = Some(build_segment_data(
-            segment_index + 1,
-            Some(updated_registers),
-            Some(updated_registers),
-            mem_after,
-            &interpreter,
-        ));
-
-        segment_data.registers_after = updated_registers;
-        Some((segment_data, partial_segment_data))
-    } else {
-        panic!("Segment generation failed");
     }
 }
 
@@ -636,6 +628,7 @@ pub mod testing {
         C: GenericConfig<D, F = F>,
     {
         let data_iterator = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log));
+        let inputs = inputs.trim();
         let mut proofs = vec![];
 
         for mut next_data in data_iterator {

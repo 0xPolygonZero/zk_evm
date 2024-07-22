@@ -1,7 +1,6 @@
 use std::time::Instant;
 
-use evm_arithmetization::{proof::PublicValues, GenerationInputs};
-use keccak_hash::keccak;
+use evm_arithmetization::{generation::TrimmedGenerationInputs, proof::PublicValues};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
@@ -42,7 +41,7 @@ impl Operation for SegmentProof {
                             "b{}_txns_{}-{}-({})_input.log",
                             input.block_metadata.block_number,
                             input.txn_number_before,
-                            input.txn_number_before + input.signed_txns.len(),
+                            input.txn_number_before + input.txns_len,
                             segment_index
                         ),
                         input,
@@ -115,8 +114,8 @@ struct SegmentProofSpan {
 
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
-    fn get_id(ir: &GenerationInputs, segment_index: usize) -> String {
-        if ir.signed_txns.len() == 1 {
+    fn get_id(ir: &TrimmedGenerationInputs, segment_index: usize) -> String {
+        if ir.txns_len == 1 {
             format!(
                 "b{} - {} ({})",
                 ir.block_metadata.block_number, ir.txn_number_before, segment_index
@@ -126,7 +125,7 @@ impl SegmentProofSpan {
                 "b{} - {}_{} ({})",
                 ir.block_metadata.block_number,
                 ir.txn_number_before,
-                ir.txn_number_before + ir.signed_txns.len(),
+                ir.txn_number_before + ir.txns_len,
                 segment_index
             )
         }
@@ -136,35 +135,24 @@ impl SegmentProofSpan {
     ///
     /// Either the first 8 characters of the hex-encoded hash of the first and
     /// last transactions, or "Dummy" if there is no transaction.
-    fn get_descriptor(ir: &GenerationInputs) -> String {
-        if ir.signed_txns.is_empty() {
+    fn get_descriptor(ir: &TrimmedGenerationInputs) -> String {
+        if ir.txns_len == 0 {
             "Dummy".to_string()
-        } else if ir.signed_txns.len() == 1 {
-            format!(
-                "{:x?}",
-                u64::from_be_bytes(keccak(&ir.signed_txns[0][..])[0..8].try_into().unwrap())
-            )
+        } else if ir.txns_len == 1 {
+            format!("{:x?}", ir.txn_number_before)
         } else {
-            let first_encoding =
-                u64::from_be_bytes(keccak(&ir.signed_txns[0][..])[0..8].try_into().unwrap());
-            let last_encoding = u64::from_be_bytes(
-                keccak(
-                    ir.signed_txns
-                        .last()
-                        .expect("the vector of transactions is not empty"),
-                )[0..8]
-                    .try_into()
-                    .unwrap(),
-            );
-
-            format!("[0x{:x?}..0x{:x?}]", first_encoding, last_encoding)
+            format!(
+                "{:?}..{:?}",
+                ir.txn_number_before,
+                ir.txn_number_before + ir.txns_len
+            )
         }
     }
 
     /// Create a new transaction proof span.
     ///
     /// When dropped, it logs the time taken by the transaction proof.
-    fn new(ir: &GenerationInputs, segment_index: usize) -> Self {
+    fn new(ir: &TrimmedGenerationInputs, segment_index: usize) -> Self {
         let id = Self::get_id(ir, segment_index);
         let span = info_span!("p_gen", id).entered();
         let start = Instant::now();
