@@ -331,7 +331,7 @@ pub(crate) trait State<F: Field> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GenerationState<F: Field> {
     pub(crate) inputs: TrimmedGenerationInputs,
     pub(crate) registers: RegistersState,
@@ -437,17 +437,7 @@ impl<F: Field> GenerationState<F> {
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
             inputs: inputs.trim(),
-            registers: Default::default(),
-            memory: MemoryState::default(),
-            traces: Traces::default(),
-            next_txn_index: 0,
-            stale_contexts: Vec::new(),
-            rlp_prover_inputs: Vec::new(),
-            withdrawal_prover_inputs: Vec::new(),
-            state_key_to_address: HashMap::new(),
-            bignum_modmul_result_limbs: Vec::new(),
-            trie_root_ptrs: TrieRootPtrs::default(),
-            jumpdest_table: None,
+            ..Default::default()
         };
 
         if segment_data.segment_index == 0 {
