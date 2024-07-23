@@ -75,7 +75,7 @@ pub(crate) enum Command {
         save_inputs_on_error: bool,
         /// Network block time in milliseconds. This value is used
         /// to determine the blockchain node polling interval.
-        #[arg(short, long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
+        #[arg(long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
         block_time: u64,
         /// Keep intermediate proofs. Default action is to
         /// delete them after the final proof is generated.
