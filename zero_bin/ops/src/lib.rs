@@ -1,8 +1,13 @@
+#[cfg(not(feature = "test_only"))]
 use std::time::Instant;
 
-use evm_arithmetization::{generation::TrimmedGenerationInputs, proof::PublicValues};
+#[cfg(not(feature = "test_only"))]
+use evm_arithmetization::generation::TrimmedGenerationInputs;
+use evm_arithmetization::proof::PublicValues;
+#[cfg(not(feature = "test_only"))]
+use paladin::operation::FatalStrategy;
 use paladin::{
-    operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
+    operation::{FatalError, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
 use proof_gen::{
@@ -13,7 +18,9 @@ use proof_gen::{
 };
 use serde::{Deserialize, Serialize};
 use trace_decoder::types::AllData;
-use tracing::{error, event, info_span, Level};
+use tracing::error;
+#[cfg(not(feature = "test_only"))]
+use tracing::{event, info_span, Level};
 use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
@@ -66,39 +73,8 @@ impl Operation for SegmentProof {
     type Input = AllData;
     type Output = ();
 
-    fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let gen_input = input.0;
-        let segment_index = input.1.segment_index();
-        let _span = SegmentProofSpan::new(&gen_input, input.1.segment_index());
-
-        if self.save_inputs_on_error {
-            evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                gen_input.clone(),
-            )
-            .map_err(|err| {
-                if let Err(write_err) = save_inputs_to_disk(
-                    format!(
-                        "b{}_txns_{}-{}-({})_input.log",
-                        gen_input.block_metadata.block_number,
-                        gen_input.txn_number_before,
-                        gen_input.txn_number_before + gen_input.signed_txns.len(),
-                        segment_index
-                    ),
-                    gen_input,
-                ) {
-                    error!("Failed to save txn proof input to disk: {:?}", write_err);
-                }
-
-                FatalError::from_anyhow(err, FatalStrategy::Terminate)
-            })?;
-        } else {
-            evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                gen_input.clone(),
-            )
-            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
-        }
-
-        Ok(())
+    fn execute(&self, _input: Self::Input) -> Result<Self::Output> {
+        todo!() // currently unused, change or remove
     }
 }
 
@@ -106,12 +82,14 @@ impl Operation for SegmentProof {
 ///
 /// - When created, it starts a span with the transaction proof id.
 /// - When dropped, it logs the time taken by the transaction proof.
+#[cfg(not(feature = "test_only"))]
 struct SegmentProofSpan {
     _span: tracing::span::EnteredSpan,
     start: Instant,
     descriptor: String,
 }
 
+#[cfg(not(feature = "test_only"))]
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
     fn get_id(ir: &TrimmedGenerationInputs, segment_index: usize) -> String {
@@ -165,6 +143,7 @@ impl SegmentProofSpan {
     }
 }
 
+#[cfg(not(feature = "test_only"))]
 impl Drop for SegmentProofSpan {
     fn drop(&mut self) {
         event!(
