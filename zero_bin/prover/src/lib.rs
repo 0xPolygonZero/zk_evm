@@ -54,34 +54,41 @@ impl BlockProverInput {
         use evm_arithmetization::prover::{SegmentDataChunkIterator, SegmentDataIterator};
         use paladin::directive::{Directive, IndexedStream};
 
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            segment_chunk_size,
+            save_inputs_on_error,
+        } = prover_config;
+
         let block_number = self.get_block_number();
         let other_data = self.other_data;
         let block_generation_inputs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
-            prover_config.batch_size,
+            batch_size,
         )?;
         info!(
             "Proving block {}, generation inputs count: {}, batch size: {}, segment chunk size: {}",
             block_number,
             block_generation_inputs.len(),
-            prover_config.batch_size,
-            prover_config.segment_chunk_size
+            batch_size,
+            segment_chunk_size
         );
 
         // Create segment proof
         let seg_ops = ops::SegmentProof {
-            save_inputs_on_error: prover_config.save_inputs_on_error,
+            save_inputs_on_error,
         };
 
         // Generate segment data.
         let agg_ops = ops::SegmentAggProof {
-            save_inputs_on_error: prover_config.save_inputs_on_error,
+            save_inputs_on_error,
         };
 
         // Aggregate transaction proofs
         let txn_agg_proof = ops::TxnAggProof {
-            save_inputs_on_error: prover_config.save_inputs_on_error,
+            save_inputs_on_error,
         };
 
         let mut all_block_txn_aggregatable_proofs = Vec::new();
@@ -90,12 +97,10 @@ impl BlockProverInput {
             let mut segment_data_iter = SegmentDataIterator {
                 partial_next_data: None,
                 inputs: &generation_inputs,
-                max_cpu_len_log: Some(prover_config.max_cpu_len_log),
+                max_cpu_len_log: Some(max_cpu_len_log),
             };
-            let mut chunk_segment_iter = SegmentDataChunkIterator::new(
-                &mut segment_data_iter,
-                prover_config.segment_chunk_size,
-            );
+            let mut chunk_segment_iter =
+                SegmentDataChunkIterator::new(&mut segment_data_iter, segment_chunk_size);
 
             let mut chunk_txn_aggregatable_proofs = Vec::new();
             // We take one chunk of segments, perform proving and
@@ -147,7 +152,7 @@ impl BlockProverInput {
             let block_proof = paladin::directive::Literal(proof)
                 .map(&ops::BlockProof {
                     prev,
-                    save_inputs_on_error: prover_config.save_inputs_on_error,
+                    save_inputs_on_error,
                 })
                 .run(runtime)
                 .await?;
