@@ -95,7 +95,7 @@
 %endmacro
 
 %macro mstore_u256_max
-    // stack (empty)
+    // stack: addr
     PUSH @U256_MAX
     MSTORE_GENERAL
 %endmacro
