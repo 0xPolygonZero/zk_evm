@@ -9,7 +9,7 @@
 # 2 --> Test run only flag `test_only` (optional)
 
 # We're going to set the parallelism in line with the total cpu count
-num_procs=12
+num_procs=$(nproc)
 
 # Force the working directory to always be the `tools/` directory. 
 TOOLS_DIR=$(dirname $(realpath "$0"))
