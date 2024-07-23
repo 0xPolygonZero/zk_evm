@@ -401,7 +401,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
 ) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
-    let mut state = GenerationState::<F>::new_with_segment_data(inputs, &segment_data)
+    let mut state = GenerationState::<F>::new_with_segment_data(inputs, segment_data)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 
     initialize_kernel_code_and_shift_table(&mut segment_data.memory);

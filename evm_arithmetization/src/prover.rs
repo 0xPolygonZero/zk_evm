@@ -660,9 +660,7 @@ pub mod testing {
     where
         F: RichField,
     {
-        let _ = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log))
-            .into_iter()
-            .collect::<Vec<_>>();
+        let _ = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)).collect::<Vec<_>>();
 
         Ok(())
     }
