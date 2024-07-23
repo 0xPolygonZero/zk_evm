@@ -22,6 +22,7 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
+    //TODO unify parameters for all use cases
     /// Reads input from stdin and writes output to stdout.
     Stdio {
         /// The previous proof output.
@@ -29,8 +30,12 @@ pub(crate) enum Command {
         previous_proof: Option<PathBuf>,
         #[arg(short, long, default_value_t = 20)]
         max_cpu_len_log: usize,
+        /// Number of transactions in a batch to process at once
         #[arg(short, long, default_value_t = 1)]
         batch_size: usize,
+        /// Number of segments to keep in memory and prove in parallel
+        #[arg(long, default_value_t = 64)]
+        segment_chunk_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
         save_inputs_on_error: bool,
@@ -59,8 +64,12 @@ pub(crate) enum Command {
         /// The log of the max number of CPU cycles per proof.
         #[arg(short, long, default_value_t = 20)]
         max_cpu_len_log: usize,
+        /// Number of transactions in a batch to process at once
         #[arg(short, long, default_value_t = 1)]
         batch_size: usize,
+        /// Number of segments to keep in memory and prove in parallel
+        #[arg(long, default_value_t = 64)]
+        segment_chunk_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
         save_inputs_on_error: bool,
@@ -94,8 +103,12 @@ pub(crate) enum Command {
         output_dir: PathBuf,
         #[arg(short, long, default_value_t = 20)]
         max_cpu_len_log: usize,
+        /// Number of transactions in a batch to process at once
         #[arg(short, long, default_value_t = 1)]
         batch_size: usize,
+        /// Number of segments to keep in memory and prove in parallel
+        #[arg(long, default_value_t = 64)]
+        segment_chunk_size: usize,
         /// If true, save the public inputs to disk on error.
         #[arg(short, long, default_value_t = false)]
         save_inputs_on_error: bool,

@@ -550,6 +550,43 @@ impl<'a> Iterator for SegmentDataIterator<'a> {
     }
 }
 
+pub struct SegmentDataChunkIterator<'a> {
+    segment_data_iter: &'a mut SegmentDataIterator<'a>,
+    chunk_size: usize,
+}
+
+impl<'a> SegmentDataChunkIterator<'a> {
+    pub fn new(segment_data_iter: &'a mut SegmentDataIterator<'a>, chunk_size: usize) -> Self {
+        Self {
+            segment_data_iter,
+            chunk_size,
+        }
+    }
+}
+
+impl<'a> Iterator for SegmentDataChunkIterator<'a> {
+    type Item = Vec<(GenerationInputs, GenerationSegmentData)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut chunk_empty_space = self.chunk_size as isize;
+        let mut chunk = Vec::with_capacity(self.chunk_size);
+        while chunk_empty_space > 0 {
+            chunk_empty_space -= 1;
+            if let Some(it) = self.segment_data_iter.next() {
+                chunk.push(it);
+            } else {
+                break;
+            }
+        }
+
+        if chunk.is_empty() {
+            None
+        } else {
+            Some(chunk)
+        }
+    }
+}
+
 /// Returns the data for the current segment, as well as the data -- except
 /// registers_after -- for the next segment.
 pub(crate) fn generate_next_segment<F: RichField>(

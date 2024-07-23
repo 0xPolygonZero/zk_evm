@@ -67,6 +67,7 @@ async fn main() -> Result<()> {
             previous_proof,
             max_cpu_len_log,
             batch_size,
+            segment_chunk_size,
             save_inputs_on_error,
         } => {
             let previous_proof = get_previous_proof(previous_proof)?;
@@ -74,7 +75,10 @@ async fn main() -> Result<()> {
                 runtime,
                 max_cpu_len_log,
                 previous_proof,
-                batch_size,
+                prover::ProverParams {
+                    batch_size,
+                    segment_chunk_size,
+                },
                 save_inputs_on_error,
             )
             .await?;
@@ -84,6 +88,7 @@ async fn main() -> Result<()> {
             output_dir,
             max_cpu_len_log,
             batch_size,
+            segment_chunk_size,
             save_inputs_on_error,
         } => {
             // check if output_dir exists, is a directory, and is writable
@@ -100,7 +105,10 @@ async fn main() -> Result<()> {
                 port,
                 output_dir,
                 max_cpu_len_log,
-                batch_size,
+                prover::ProverParams {
+                    batch_size,
+                    segment_chunk_size,
+                },
                 save_inputs_on_error,
             )
             .await?;
@@ -114,6 +122,7 @@ async fn main() -> Result<()> {
             proof_output_dir,
             max_cpu_len_log,
             batch_size,
+            segment_chunk_size,
             save_inputs_on_error,
             block_time,
             keep_intermediate_proofs,
@@ -147,6 +156,7 @@ async fn main() -> Result<()> {
                     proof_output_dir,
                     max_cpu_len_log,
                     batch_size,
+                    segment_chunk_size,
                     save_inputs_on_error,
                     keep_intermediate_proofs,
                 },

@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use anyhow::Result;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::ProverInput;
+use prover::{ProverInput, ProverParams};
 use tracing::info;
 
 /// The main function for the stdio mode.
@@ -11,7 +11,7 @@ pub(crate) async fn stdio_main(
     runtime: Runtime,
     max_cpu_len_log: usize,
     previous: Option<GeneratedBlockProof>,
-    batch_size: usize,
+    prover_params: ProverParams,
     save_inputs_on_error: bool,
 ) -> Result<()> {
     let mut buffer = String::new();
@@ -27,7 +27,7 @@ pub(crate) async fn stdio_main(
             &runtime,
             max_cpu_len_log,
             previous,
-            batch_size,
+            prover_params,
             save_inputs_on_error,
             None,
         )

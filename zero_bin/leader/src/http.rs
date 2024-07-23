@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::BlockProverInput;
+use prover::{BlockProverInput, ProverParams};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
@@ -16,7 +16,7 @@ pub(crate) async fn http_main(
     port: u16,
     output_dir: PathBuf,
     max_cpu_len_log: usize,
-    batch_size: usize,
+    prover_params: ProverParams,
     save_inputs_on_error: bool,
 ) -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -33,7 +33,7 @@ pub(crate) async fn http_main(
                     runtime,
                     output_dir.clone(),
                     max_cpu_len_log,
-                    batch_size,
+                    prover_params,
                     save_inputs_on_error,
                 )
             }
@@ -77,7 +77,7 @@ async fn prove(
     runtime: Arc<Runtime>,
     output_dir: PathBuf,
     max_cpu_len_log: usize,
-    batch_size: usize,
+    prover_params: ProverParams,
     save_inputs_on_error: bool,
 ) -> StatusCode {
     debug!("Received payload: {:#?}", payload);
@@ -90,7 +90,7 @@ async fn prove(
             &runtime,
             max_cpu_len_log,
             payload.previous.map(futures::future::ok),
-            batch_size,
+            prover_params,
             save_inputs_on_error,
         )
         .await
