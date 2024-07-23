@@ -129,6 +129,7 @@ pub(crate) fn assemble(
     for file in files {
         let start = Instant::now();
         let mut file = file.body;
+        file = expand_conditional_blocks(file);
         file = expand_macros(file, &macros, &mut macro_counter);
         file = inline_constants(file, &constants);
         file = expand_stack_manipulation(file);
@@ -159,22 +160,44 @@ pub(crate) fn assemble(
 fn find_macros(files: &[File]) -> HashMap<MacroSignature, Macro> {
     let mut macros = HashMap::new();
     for file in files {
-        for item in &file.body {
-            if let Item::MacroDef(name, params, items) = item {
-                let signature = MacroSignature {
-                    name: name.clone(),
-                    num_params: params.len(),
-                };
-                let macro_ = Macro {
-                    params: params.clone(),
-                    items: items.clone(),
-                };
-                let old = macros.insert(signature.clone(), macro_);
-                assert!(old.is_none(), "Duplicate macro signature: {signature:?}");
+        find_macros_internal(&file.body, &mut macros);
+    }
+    macros
+}
+
+fn find_macros_internal(items: &[Item], macros: &mut HashMap<MacroSignature, Macro>) {
+    for item in items {
+        if let Item::ConditionalBlock(_, local_items) = item {
+            find_macros_internal(local_items, macros);
+        }
+        if let Item::MacroDef(name, params, local_items) = item {
+            let signature = MacroSignature {
+                name: name.clone(),
+                num_params: params.len(),
+            };
+            let macro_ = Macro {
+                params: params.clone(),
+                items: local_items.clone(),
+            };
+            let old = macros.insert(signature.clone(), macro_);
+            assert!(old.is_none(), "Duplicate macro signature: {signature:?}");
+        }
+    }
+}
+
+fn expand_conditional_blocks(body: Vec<Item>) -> Vec<Item> {
+    let mut expanded = vec![];
+    for item in body {
+        match item {
+            Item::ConditionalBlock(_, items) => {
+                expanded.extend(items);
+            }
+            _ => {
+                expanded.push(item);
             }
         }
     }
-    macros
+    expanded
 }
 
 fn expand_macros(
@@ -325,7 +348,8 @@ fn find_labels(
     let mut local_labels = HashMap::<String, usize>::new();
     for item in body {
         match item {
-            Item::MacroDef(_, _, _)
+            Item::ConditionalBlock(_, _)
+            | Item::MacroDef(_, _, _)
             | Item::MacroCall(_, _)
             | Item::Repeat(_, _)
             | Item::StackManipulation(_, _)
@@ -379,7 +403,8 @@ fn assemble_file(
     // Assemble the file.
     for item in body {
         match item {
-            Item::MacroDef(_, _, _)
+            Item::ConditionalBlock(_, _)
+            | Item::MacroDef(_, _, _)
             | Item::MacroCall(_, _)
             | Item::Repeat(_, _)
             | Item::StackManipulation(_, _)
@@ -437,6 +462,8 @@ fn push_target_size(target: &PushTarget) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     use crate::cpu::kernel::parser::parse;
 
@@ -734,7 +761,7 @@ mod tests {
         constants: HashMap<String, U256>,
         optimize: bool,
     ) -> Kernel {
-        let parsed_files = files.iter().map(|f| parse(f)).collect_vec();
+        let parsed_files = files.iter().map(|f| parse(f, HashSet::new())).collect_vec();
         assemble(parsed_files, constants, optimize)
     }
 }
