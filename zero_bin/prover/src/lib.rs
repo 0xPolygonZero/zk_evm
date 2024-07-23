@@ -1,3 +1,5 @@
+pub mod cli;
+
 use std::future::Future;
 use std::path::PathBuf;
 
@@ -20,9 +22,11 @@ use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
 
 #[derive(Debug, Clone, Copy)]
-pub struct ProverParams {
+pub struct ProverConfig {
     pub batch_size: usize,
     pub segment_chunk_size: usize,
+    pub max_cpu_len_log: usize,
+    pub save_inputs_on_error: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -43,28 +47,33 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        max_cpu_len_log: usize,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        prover_params: ProverParams,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
         use evm_arithmetization::prover::{SegmentDataChunkIterator, SegmentDataIterator};
         use paladin::directive::{Directive, IndexedStream};
+
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            segment_chunk_size,
+            save_inputs_on_error,
+        } = prover_config;
 
         let block_number = self.get_block_number();
         let other_data = self.other_data;
         let block_generation_inputs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
-            prover_params.batch_size,
+            batch_size,
         )?;
         info!(
             "Proving block {}, generation inputs count: {}, batch size: {}, segment chunk size: {}",
             block_number,
             block_generation_inputs.len(),
-            prover_params.batch_size,
-            prover_params.segment_chunk_size
+            batch_size,
+            segment_chunk_size
         );
 
         // Create segment proof
@@ -90,10 +99,8 @@ impl BlockProverInput {
                 inputs: &generation_inputs,
                 max_cpu_len_log: Some(max_cpu_len_log),
             };
-            let mut chunk_segment_iter = SegmentDataChunkIterator::new(
-                &mut segment_data_iter,
-                prover_params.segment_chunk_size,
-            );
+            let mut chunk_segment_iter =
+                SegmentDataChunkIterator::new(&mut segment_data_iter, segment_chunk_size);
 
             let mut chunk_txn_aggregatable_proofs = Vec::new();
             // We take one chunk of segments, perform proving and
@@ -162,10 +169,8 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         _runtime: &Runtime,
-        max_cpu_len_log: usize,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        prover_params: ProverParams,
-        _save_inputs_on_error: bool,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use evm_arithmetization::prover::testing::simulate_all_segments_interpreter;
         use plonky2::field::goldilocks_field::GoldilocksField;
@@ -177,12 +182,12 @@ impl BlockProverInput {
         let txs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
-            prover_params.batch_size,
+            prover_config.batch_size,
         )?;
 
         type F = GoldilocksField;
         for txn in txs.into_iter() {
-            simulate_all_segments_interpreter::<F>(txn, max_cpu_len_log)?;
+            simulate_all_segments_interpreter::<F>(txn, prover_config.max_cpu_len_log)?;
         }
 
         // Wait for previous block proof
@@ -215,10 +220,8 @@ impl ProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        max_cpu_len_log: usize,
         previous_proof: Option<GeneratedBlockProof>,
-        prover_params: ProverParams,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
         let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
@@ -233,13 +236,7 @@ impl ProverInput {
                 // Prove the block
                 let proof_output_dir = proof_output_dir.clone();
                 let fut = block
-                    .prove(
-                        runtime,
-                        max_cpu_len_log,
-                        prev.take(),
-                        prover_params,
-                        save_inputs_on_error,
-                    )
+                    .prove(runtime, prev.take(), prover_config)
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;
