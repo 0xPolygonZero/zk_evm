@@ -13,7 +13,7 @@ use paladin::{
 use proof_gen::{
     proof_gen::{generate_block_proof, generate_segment_agg_proof, generate_transaction_agg_proof},
     proof_types::{
-        GeneratedBlockProof, GeneratedTxnAggProof, SegmentAggregatableProof, TxnAggregatableProof,
+        BatchAggregatableProof, GeneratedBlockProof, GeneratedTxnAggProof, SegmentAggregatableProof,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -207,23 +207,23 @@ impl Monoid for SegmentAggProof {
 }
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct TxnAggProof {
+pub struct BatchAggProof {
     pub save_inputs_on_error: bool,
 }
-fn get_agg_proof_public_values(elem: TxnAggregatableProof) -> PublicValues {
+fn get_agg_proof_public_values(elem: BatchAggregatableProof) -> PublicValues {
     match elem {
-        TxnAggregatableProof::Segment(info) => info.p_vals,
-        TxnAggregatableProof::Txn(info) => info.p_vals,
-        TxnAggregatableProof::Agg(info) => info.p_vals,
+        BatchAggregatableProof::Segment(info) => info.p_vals,
+        BatchAggregatableProof::Txn(info) => info.p_vals,
+        BatchAggregatableProof::Agg(info) => info.p_vals,
     }
 }
 
-impl Monoid for TxnAggProof {
-    type Elem = TxnAggregatableProof;
+impl Monoid for BatchAggProof {
+    type Elem = BatchAggregatableProof;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
         let lhs = match a {
-            TxnAggregatableProof::Segment(segment) => TxnAggregatableProof::from(
+            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::from(
                 generate_segment_agg_proof(
                     p_state(),
                     &SegmentAggregatableProof::from(segment.clone()),
@@ -236,7 +236,7 @@ impl Monoid for TxnAggProof {
         };
 
         let rhs = match b {
-            TxnAggregatableProof::Segment(segment) => TxnAggregatableProof::from(
+            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::from(
                 generate_segment_agg_proof(
                     p_state(),
                     &SegmentAggregatableProof::from(segment.clone()),

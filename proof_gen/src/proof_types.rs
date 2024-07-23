@@ -67,7 +67,7 @@ pub enum SegmentAggregatableProof {
 /// we can combine it into an agg proof. For these cases, we want to abstract
 /// away whether or not the proof was a txn or agg proof.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum TxnAggregatableProof {
+pub enum BatchAggregatableProof {
     /// The underlying proof is a segment proof. It first needs to be aggregated
     /// with another segment proof, or a dummy one.
     Segment(GeneratedSegmentProof),
@@ -100,28 +100,28 @@ impl SegmentAggregatableProof {
     }
 }
 
-impl TxnAggregatableProof {
+impl BatchAggregatableProof {
     pub(crate) fn public_values(&self) -> PublicValues {
         match self {
-            TxnAggregatableProof::Segment(info) => info.p_vals.clone(),
-            TxnAggregatableProof::Txn(info) => info.p_vals.clone(),
-            TxnAggregatableProof::Agg(info) => info.p_vals.clone(),
+            BatchAggregatableProof::Segment(info) => info.p_vals.clone(),
+            BatchAggregatableProof::Txn(info) => info.p_vals.clone(),
+            BatchAggregatableProof::Agg(info) => info.p_vals.clone(),
         }
     }
 
     pub(crate) fn is_agg(&self) -> bool {
         match self {
-            TxnAggregatableProof::Segment(_) => false,
-            TxnAggregatableProof::Txn(_) => false,
-            TxnAggregatableProof::Agg(_) => true,
+            BatchAggregatableProof::Segment(_) => false,
+            BatchAggregatableProof::Txn(_) => false,
+            BatchAggregatableProof::Agg(_) => true,
         }
     }
 
     pub(crate) fn intern(&self) -> &PlonkyProofIntern {
         match self {
-            TxnAggregatableProof::Segment(info) => &info.intern,
-            TxnAggregatableProof::Txn(info) => &info.intern,
-            TxnAggregatableProof::Agg(info) => &info.intern,
+            BatchAggregatableProof::Segment(info) => &info.intern,
+            BatchAggregatableProof::Txn(info) => &info.intern,
+            BatchAggregatableProof::Agg(info) => &info.intern,
         }
     }
 }
@@ -138,23 +138,23 @@ impl From<GeneratedSegmentAggProof> for SegmentAggregatableProof {
     }
 }
 
-impl From<GeneratedSegmentAggProof> for TxnAggregatableProof {
+impl From<GeneratedSegmentAggProof> for BatchAggregatableProof {
     fn from(v: GeneratedSegmentAggProof) -> Self {
         Self::Txn(v)
     }
 }
 
-impl From<GeneratedTxnAggProof> for TxnAggregatableProof {
+impl From<GeneratedTxnAggProof> for BatchAggregatableProof {
     fn from(v: GeneratedTxnAggProof) -> Self {
         Self::Agg(v)
     }
 }
 
-impl From<SegmentAggregatableProof> for TxnAggregatableProof {
+impl From<SegmentAggregatableProof> for BatchAggregatableProof {
     fn from(v: SegmentAggregatableProof) -> Self {
         match v {
-            SegmentAggregatableProof::Agg(agg) => TxnAggregatableProof::Txn(agg),
-            SegmentAggregatableProof::Seg(seg) => TxnAggregatableProof::Segment(seg),
+            SegmentAggregatableProof::Agg(agg) => BatchAggregatableProof::Txn(agg),
+            SegmentAggregatableProof::Seg(seg) => BatchAggregatableProof::Segment(seg),
         }
     }
 }
