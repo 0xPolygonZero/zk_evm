@@ -1,5 +1,7 @@
 //! Loads each kernel assembly file and concatenates them.
 
+use std::collections::HashSet;
+
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 
@@ -179,7 +181,7 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
 pub static KERNEL: Lazy<Kernel> = Lazy::new(combined_kernel);
 
 pub(crate) fn combined_kernel_from_files<const N: usize>(files: [&str; N]) -> Kernel {
-    let parsed_files = files.iter().map(|f| parse(f)).collect_vec();
+    let parsed_files = files.iter().map(|f| parse(f, HashSet::new())).collect_vec();
     assemble(parsed_files, evm_constants(), true)
 }
 
