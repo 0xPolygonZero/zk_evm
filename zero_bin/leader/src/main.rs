@@ -62,35 +62,14 @@ async fn main() -> Result<()> {
 
     let runtime = Runtime::from_config(&args.paladin, register()).await?;
 
+    let cli_prover_config = args.prover_config;
+
     match args.command {
-        Command::Stdio {
-            previous_proof,
-            max_cpu_len_log,
-            batch_size,
-            segment_chunk_size,
-            save_inputs_on_error,
-        } => {
+        Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(
-                runtime,
-                max_cpu_len_log,
-                previous_proof,
-                prover::ProverParams {
-                    batch_size,
-                    segment_chunk_size,
-                },
-                save_inputs_on_error,
-            )
-            .await?;
+            stdio::stdio_main(runtime, previous_proof, cli_prover_config.into()).await?;
         }
-        Command::Http {
-            port,
-            output_dir,
-            max_cpu_len_log,
-            batch_size,
-            segment_chunk_size,
-            save_inputs_on_error,
-        } => {
+        Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
             let output_dir_metadata = std::fs::metadata(&output_dir);
             if output_dir_metadata.is_err() {
@@ -100,18 +79,7 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(
-                runtime,
-                port,
-                output_dir,
-                max_cpu_len_log,
-                prover::ProverParams {
-                    batch_size,
-                    segment_chunk_size,
-                },
-                save_inputs_on_error,
-            )
-            .await?;
+            http::http_main(runtime, port, output_dir, cli_prover_config.into()).await?;
         }
         Command::Rpc {
             rpc_url,
@@ -120,10 +88,6 @@ async fn main() -> Result<()> {
             checkpoint_block_number,
             previous_proof,
             proof_output_dir,
-            max_cpu_len_log,
-            batch_size,
-            segment_chunk_size,
-            save_inputs_on_error,
             block_time,
             keep_intermediate_proofs,
             backoff,
@@ -154,10 +118,7 @@ async fn main() -> Result<()> {
                     checkpoint_block_number,
                     previous_proof,
                     proof_output_dir,
-                    max_cpu_len_log,
-                    batch_size,
-                    segment_chunk_size,
-                    save_inputs_on_error,
+                    prover_config: cli_prover_config.into(),
                     keep_intermediate_proofs,
                 },
             )
