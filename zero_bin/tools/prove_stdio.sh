@@ -11,7 +11,11 @@ set -exo pipefail
 # 2 --> Test run only flag `test_only` (optional)
 
 # We're going to set the parallelism in line with the total cpu count
-num_procs=$(nproc)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    num_procs=$(sysctl -n hw.physicalcpu)
+else
+    num_procs=$(nproc)
+fi
 
 # Force the working directory to always be the `tools/` directory. 
 TOOLS_DIR=$(dirname $(realpath "$0"))
