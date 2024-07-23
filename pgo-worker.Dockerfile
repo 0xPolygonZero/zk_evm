@@ -3,39 +3,41 @@
 # BONUS NOTE: recommended block=4825, checkpoint=4824
 #   but this will need to be specified by the coordinator
 
-FROM rustlang/rust:nightly-bullseye-slim@sha256:2be4bacfc86e0ec62dfa287949ceb47f9b6d9055536769bdee87b7c1788077a9 as builder
+FROM rustlang/rust:nightly-bullseye-slim as builder
 
-# Install jemalloc
-RUN apt-get update && apt-get install -y ca-certificates libjemalloc2 libjemalloc-dev make clang-16
+RUN apt-get update && apt-get install -y libjemalloc2 libjemalloc-dev make libssl-dev pkg-config
 
 # Install cargo-pgo, used for building a binary with profiling enabled
 RUN cargo install cargo-pgo
 
-RUN \
-    mkdir -p common/src  && touch common/src/lib.rs && \
-    mkdir -p ops/src     && touch ops/src/lib.rs && \
-    mkdir -p worker/src  && echo "fn main() {println!(\"YO!\");}" > worker/src/main.rs
-
+RUN mkdir -p zero_bin
 COPY Cargo.toml .
-RUN sed -i "2s/.*/members = [\"common\", \"ops\", \"worker\"]/" Cargo.toml
+# Cleanup all workspace members and add selected crates again
+RUN sed -i '/members =/{:a;N;/]/!ba};//d' Cargo.toml
+RUN sed -i 's#\[workspace\]#\[workspace\]\nmembers = \["zero_bin\/worker", "zero_bin\/common", "zero_bin\/ops"\, "evm_arithmetization", "mpt_trie", "proc_macro"\]#' Cargo.toml
 COPY Cargo.lock .
-
-COPY common/Cargo.toml ./common/Cargo.toml
-COPY ops/Cargo.toml ./ops/Cargo.toml
-COPY worker/Cargo.toml ./worker/Cargo.toml
-
 COPY ./rust-toolchain.toml ./
 
-# do not need to specify `--release`, it is added automatically by `cargo pgo`.
-RUN cargo pgo build -- --bin worker
+COPY proof_gen proof_gen
+COPY mpt_trie mpt_trie
+COPY evm_arithmetization evm_arithmetization
+COPY proc_macro proc_macro
+COPY zero_bin/common zero_bin/common
+COPY zero_bin/ops zero_bin/ops
+COPY zero_bin/worker zero_bin/worker
 
-COPY common ./common
-COPY ops ./ops
-COPY worker ./worker
 RUN \
-    touch common/src/lib.rs && \
-    touch ops/src/lib.rs && \
-    touch worker/src/main.rs
+  touch zero_bin/common/src/lib.rs && \
+  touch zero_bin/ops/src/lib.rs && \
+  touch zero_bin/worker/src/main.rs && \
+  touch evm_arithmetization/src/lib.rs && \
+  touch mpt_trie/src/lib.rs && \
+  touch proc_macro/src/lib.rs
+
+# Disable the lld linker for now, as it's causing issues with the linkme package.
+# https://github.com/rust-lang/rust/pull/124129
+# https://github.com/dtolnay/linkme/pull/88
+ENV RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
 RUN cargo pgo build -- --bin worker
 
