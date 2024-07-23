@@ -323,8 +323,11 @@ impl ProcessedBlockTrace {
             match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
                 false => {
                     storage_trie
-                        .insert(crate::typed_mpt::MptKey::from_nibbles(slot), val.clone())
-                        .map_err(err2err)?;
+                        .insert(
+                            crate::typed_mpt::MptKey::from_nibbles(slot).into_nibbles(),
+                            val.clone(),
+                        )
+                        .map_err(|_| -> TraceParsingError { todo!() })?;
 
                     delta_out
                         .additional_storage_trie_paths_to_not_hash
@@ -335,7 +338,7 @@ impl ProcessedBlockTrace {
                 true => {
                     if let Ok(Some(remaining_slot_key)) =
                         Self::delete_node_and_report_remaining_key_if_branch_collapsed(
-                            storage_trie.as_mut_hashed_partial_trie_unchecked(),
+                            storage_trie,
                             &slot,
                         )
                     {
@@ -362,7 +365,7 @@ impl ProcessedBlockTrace {
                 TraceParsingError::new(TraceParsingErrorReason::MissingAccountStorageTrie(ADDRESS))
             })?;
 
-        account.storage_root = storage_trie.root();
+        account.storage_root = storage_trie.hash();
 
         trie_state
             .state
@@ -407,7 +410,8 @@ impl ProcessedBlockTrace {
                     .get(h_addr)
                     .map(|s_root| {
                         let mut it = StorageTrie::default();
-                        it.insert_hash(MptKey::default(), *s_root).unwrap();
+                        it.insert(MptKey::default().into_nibbles(), *s_root)
+                            .unwrap();
                         it
                     })
                     .unwrap_or_default();
@@ -432,8 +436,6 @@ impl ProcessedBlockTrace {
                 .into_iter(),
         )?;
 
-        for _ in &state_trie {}
-
         let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
 
         let transactions_trie = prune_txn(&curr_block_tries.txn, once(txn_k))?
@@ -450,7 +452,7 @@ impl ProcessedBlockTrace {
             &delta_application_out.additional_storage_trie_paths_to_not_hash,
         )?
         .into_iter()
-        .map(|(k, v)| (k, v.as_hashed_partial_trie().clone()))
+        .map(|(k, v)| (k, v))
         .collect();
 
         Ok(TrieInputs {
@@ -485,13 +487,13 @@ impl ProcessedBlockTrace {
                 match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
                     false => {
                         storage_trie
-                            .insert(MptKey::from_nibbles(slot), val.clone())
+                            .insert(MptKey::from_nibbles(slot).into_nibbles(), val.clone())
                             .map_err(|_| -> TraceParsingError { todo!() })?;
                     }
                     true => {
                         if let Some(remaining_slot_key) =
                             Self::delete_node_and_report_remaining_key_if_branch_collapsed(
-                                storage_trie.as_mut_hashed_partial_trie_unchecked(),
+                                storage_trie,
                                 &slot,
                             )
                             .map_err(TraceParsingError::from)?
@@ -791,7 +793,7 @@ impl StateTrieWrites {
                     e
                 })?;
 
-                Some(storage_trie.root())
+                Some(storage_trie.hash())
             }
         };
 
@@ -883,13 +885,11 @@ fn prune_storage(
     trie: &StorageTrie,
     accesses: impl IntoIterator<Item = Nibbles>,
 ) -> TraceParsingResult<StorageTrie> {
-    Ok(StorageTrie::from_hashed_partial_trie_unchecked(
-        create_trie_subset_wrapped(
-            trie.as_hashed_partial_trie(),
-            accesses.into_iter(),
-            TrieType::Receipt,
-        )?,
-    ))
+    Ok(create_trie_subset_wrapped(
+        trie,
+        accesses.into_iter(),
+        TrieType::Receipt,
+    )?)
 }
 
 fn create_trie_subset_wrapped(

@@ -349,10 +349,10 @@ pub fn entrypoint(
                                 let path = MptKey::from_nibbles(nibbles);
                                 match hash_or_val {
                                     mpt_trie::trie_ops::ValOrHash::Val(value) => {
-                                        acc.insert(path, value)?;
+                                        acc.insert(path.into_nibbles(), value)?;
                                     }
                                     mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                        acc.insert_hash(path, h)?;
+                                        acc.insert(path.into_nibbles(), h)?;
                                     }
                                 };
                                 anyhow::Ok(acc)

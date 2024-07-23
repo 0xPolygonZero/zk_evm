@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
 use evm_arithmetization::generation::mpt::AccountRlp;
+use mpt_trie::{partial_trie::PartialTrie as _, trie_ops::ValOrHash};
 use nunny::NonEmpty;
 use u4::U4;
 
@@ -74,7 +75,7 @@ fn visit(
                                 Some(it) => *it,
                                 None => Node::Empty,
                             })?;
-                            let storage_root = storage.root();
+                            let storage_root = storage.hash();
                             let clobbered = frontend.storage.insert(path, storage);
                             ensure!(clobbered.is_none(), "duplicate storage");
                             storage_root
@@ -126,12 +127,17 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
     ) -> anyhow::Result<()> {
         match node {
             Node::Hash(Hash { raw_hash }) => {
-                mpt.insert_hash(MptKey::new(path.iter().copied())?, raw_hash.into())?;
+                mpt.insert(
+                    MptKey::new(path.iter().copied())?.into_nibbles(),
+                    ValOrHash::Hash(raw_hash.into()),
+                )?;
+                // mpt.insert_hash(MptKey::new(path.iter().copied())?,
+                // raw_hash.into())?;
             }
             Node::Leaf(Leaf { key, value }) => {
                 match value {
                     Either::Left(Value { raw_value }) => mpt.insert(
-                        MptKey::new(path.iter().copied().chain(key))?,
+                        MptKey::new(path.iter().copied().chain(key))?.into_nibbles(),
                         raw_value.into_vec(),
                     )?,
                     Either::Right(_) => bail!("unexpected account node in storage trie"),

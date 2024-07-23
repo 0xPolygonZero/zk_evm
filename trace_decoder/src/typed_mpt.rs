@@ -168,7 +168,7 @@ impl MptKey {
             9 < 32",
         )
     }
-    fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
+    pub fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
         let mut theirs = mpt_trie::nibbles::Nibbles::default();
         for component in self.0 {
             theirs.push_nibble_back(component as u8)
@@ -314,46 +314,48 @@ impl<'a> IntoIterator for &'a StateTrie {
     }
 }
 
-/// Global, per-account.
-///
-/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
-#[derive(Debug, Clone, Default)]
-pub struct StorageTrie {
-    /// This does NOT use [`TypedMpt`] - T could be anything!
-    typed: TypedMpt<Vec<u8>>,
-}
-impl StorageTrie {
-    pub fn insert(&mut self, path: MptKey, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
-        self.typed.insert(path, value)
-    }
-    pub fn insert_hash(&mut self, path: MptKey, hash: H256) -> Result<(), Error> {
-        self.typed.insert_hash(path, hash)
-    }
-    pub fn root(&self) -> H256 {
-        self.typed.root()
-    }
-    pub fn remove(&mut self, path: MptKey) -> Result<Option<Vec<u8>>, Error> {
-        self.typed.remove(path)
-    }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
-    }
+pub type StorageTrie = HashedPartialTrie;
 
-    /// This allows users to break the [`TypedMpt`] invariant.
-    /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
-    /// subsequent API calls may panic.
-    pub fn as_mut_hashed_partial_trie_unchecked(
-        &mut self,
-    ) -> &mut mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_mut_hashed_partial_trie_unchecked()
-    }
+// /// Global, per-account.
+// ///
+// /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
+// #[derive(Debug, Clone, Default)]
+// pub struct StorageTrie {
+//     /// This does NOT use [`TypedMpt`] - T could be anything!
+//     typed: TypedMpt<Vec<u8>>,
+// }
+// impl StorageTrie {
+//     pub fn insert(&mut self, path: MptKey, value: Vec<u8>) ->
+// Result<Option<Vec<u8>>, Error> {         self.typed.insert(path, value)
+//     }
+//     pub fn insert_hash(&mut self, path: MptKey, hash: H256) -> Result<(),
+// Error> {         self.typed.insert_hash(path, hash)
+//     }
+//     pub fn root(&self) -> H256 {
+//         self.typed.root()
+//     }
+//     pub fn remove(&mut self, path: MptKey) -> Result<Option<Vec<u8>>, Error>
+// {         self.typed.remove(path)
+//     }
+//     pub fn as_hashed_partial_trie(&self) ->
+// &mpt_trie::partial_trie::HashedPartialTrie {         self.typed.
+// as_hashed_partial_trie()     }
 
-    /// This allows users to break the [`TypedMpt`] invariant.
-    /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
-    /// subsequent API calls may panic.
-    pub fn from_hashed_partial_trie_unchecked(hpt: HashedPartialTrie) -> Self {
-        Self {
-            typed: TypedMpt::from_hashed_partial_trie_unchecked(hpt),
-        }
-    }
-}
+//     /// This allows users to break the [`TypedMpt`] invariant.
+//     /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
+//     /// subsequent API calls may panic.
+//     pub fn as_mut_hashed_partial_trie_unchecked(
+//         &mut self,
+//     ) -> &mut mpt_trie::partial_trie::HashedPartialTrie {
+//         self.typed.as_mut_hashed_partial_trie_unchecked()
+//     }
+
+//     /// This allows users to break the [`TypedMpt`] invariant.
+//     /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
+//     /// subsequent API calls may panic.
+//     pub fn from_hashed_partial_trie_unchecked(hpt: HashedPartialTrie) -> Self
+// {         Self {
+//             typed: TypedMpt::from_hashed_partial_trie_unchecked(hpt),
+//         }
+//     }
+// }
