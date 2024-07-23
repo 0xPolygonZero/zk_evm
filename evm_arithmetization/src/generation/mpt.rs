@@ -411,7 +411,6 @@ associated storage trie hash"
                 empty_nibbles(),
                 storage_trie,
                 storage_leaves,
-                trie_data,
                 &parse_storage_value,
             )?;
 
@@ -426,7 +425,6 @@ pub(crate) fn get_storage_leaves<F>(
     key: Nibbles,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<Option<U256>>,
-    trie_data: &mut Vec<Option<U256>>,
     parse_value: &F,
 ) -> Result<(), ProgramError>
 where
@@ -440,14 +438,7 @@ where
                     count: 1,
                     packed: i.into(),
                 });
-                get_storage_leaves(
-                    address,
-                    extended_key,
-                    child,
-                    storage_leaves,
-                    trie_data,
-                    parse_value,
-                )?;
+                get_storage_leaves(address, extended_key, child, storage_leaves, parse_value)?;
             }
 
             Ok(())
@@ -455,14 +446,7 @@ where
 
         Node::Extension { nibbles, child } => {
             let extended_key = key.merge_nibbles(nibbles);
-            get_storage_leaves(
-                address,
-                extended_key,
-                child,
-                storage_leaves,
-                trie_data,
-                parse_value,
-            )?;
+            get_storage_leaves(address, extended_key, child, storage_leaves, parse_value)?;
 
             Ok(())
         }
