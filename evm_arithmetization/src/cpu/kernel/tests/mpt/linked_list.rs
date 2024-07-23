@@ -149,7 +149,7 @@ fn test_insert_account() -> Result<()> {
         (Segment::AccountsLinkedList as usize + init_len).into(),
     );
 
-    let insert_account_label = KERNEL.global_labels["insert_account_to_linked_list"];
+    let insert_account_label = KERNEL.global_labels["insert_account_with_overwrite"];
 
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
@@ -164,7 +164,6 @@ fn test_insert_account() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[payload_ptr]);
 
     let accounts_mem = interpreter
         .generation_state
@@ -292,7 +291,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         (Segment::AccountsLinkedList as usize + init_len).into(),
     );
 
-    let insert_account_label = KERNEL.global_labels["insert_account_to_linked_list"];
+    let insert_account_label = KERNEL.global_labels["insert_account_with_overwrite"];
 
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
@@ -318,10 +317,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         interpreter.push(addr);
         interpreter.generation_state.registers.program_counter = insert_account_label;
         interpreter.run()?;
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
-            addr + delta_ptr
-        );
+
         // The copied ptr is at distance 4, the size of an account, from the previous
         // copied ptr.
         assert_eq!(
@@ -342,13 +338,13 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         U256::from(offset + (n + 1) * 4)
     );
 
+    let search_account_label = KERNEL.global_labels["search_account"];
     // Test for address already in list.
     for i in 0..n {
         let addr_in_list = U256::from(addresses[i].0.as_slice());
         interpreter.push(retaddr);
-        interpreter.push(U256::zero());
         interpreter.push(addr_in_list);
-        interpreter.generation_state.registers.program_counter = insert_account_label;
+        interpreter.generation_state.registers.program_counter = search_account_label;
         interpreter.run()?;
 
         assert_eq!(
@@ -364,11 +360,6 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-
-    assert_eq!(
-        interpreter.pop().expect("The stack can't be empty"),
-        U256::from(addr_not_in_list.0.as_slice()) + delta_ptr
-    );
 
     // Now the list of accounts have address 4
     addresses.push(addr_not_in_list);

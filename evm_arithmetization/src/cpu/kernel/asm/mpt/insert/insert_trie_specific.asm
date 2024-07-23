@@ -6,7 +6,7 @@
 // TODO: Have this take an address and do %mpt_insert_state_trie? To match mpt_read_state_trie.
 global mpt_insert_state_trie:
     // stack: key, value_ptr, retdest
-    %insert_account_with_overwrite_no_return
+    %insert_account_with_overwrite
     JUMP
 
 %macro mpt_insert_state_trie

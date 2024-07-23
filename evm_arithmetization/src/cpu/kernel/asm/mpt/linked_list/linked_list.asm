@@ -81,24 +81,10 @@ store_initial_accounts_end:
     %pop2
     JUMP
 
-
-%macro insert_account_to_linked_list
-    %stack (addr_key, ptr) -> (addr_key, ptr, %%after)
-    %jump(insert_account_to_linked_list)
-%%after:
-    // stack: payload_ptr
-%endmacro
-
 %macro insert_account_with_overwrite
     %stack (addr_key, ptr) -> (addr_key, ptr, %%after)
     %jump(insert_account_with_overwrite)
 %%after:
-    // stack: payload_ptr
-%endmacro
-
-%macro insert_account_with_overwrite_no_return
-    %insert_account_with_overwrite
-    POP
 %endmacro
 
 // Multiplies the value at the top of the stack, denoted by ptr/4, by 4
@@ -126,9 +112,7 @@ store_initial_accounts_end:
     %mul_const(4)
 %endmacro
 
-/// Inserts the account addr and payload pointer into the linked list if it is not already present.
-/// Returns `payload_ptr` if the account was inserted, `original_ptr` if it was already present.
-global insert_account_to_linked_list:
+global insert_account_with_overwrite:
     // stack: addr_key, payload_ptr, retdest
     PROVER_INPUT(linked_list::insert_account)
     // stack: pred_ptr/4, addr_key, payload_ptr, retdest
@@ -149,24 +133,24 @@ global insert_account_to_linked_list:
     // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
     DUP3
     %assert_eq
-    // stack: pred_ptr, addr_key, payload_ptr, retdest
     
     // stack: pred_ptr, addr_key, payload_ptr, retdest
     // Check that this is not a deleted node
     DUP1
     %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     MLOAD_GENERAL
-    %jump_neq_const(@U256_MAX, account_found)
+    %jump_neq_const(@U256_MAX, account_found_with_overwrite)
     // The storage key is not in the list.
     PANIC
-account_found:
+
+account_found_with_overwrite:
     // The address was already in the list
     // stack: pred_ptr, addr_key, payload_ptr, retdest
     // Load the payload pointer
     %increment
-    MLOAD_GENERAL
-    // stack: orig_payload_ptr, addr_key, payload_ptr, retdest
-    %stack (orig_payload_ptr, addr_key, payload_ptr, retdest) -> (retdest, orig_payload_ptr)
+    // stack: payload_ptr_ptr, addr_key, payload_ptr, retdest
+    DUP3 MSTORE_GENERAL
+    %pop2
     JUMP
 
 insert_new_account:
@@ -219,76 +203,22 @@ insert_new_account:
     %increment
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
     // stack: addr_key, payload_ptr, retdest
-    %stack (addr_key, payload_ptr, retdest) -> (retdest, payload_ptr)
+    %pop2
     JUMP
 
-global insert_account_with_overwrite:
-    // stack: addr_key, payload_ptr, retdest
-    PROVER_INPUT(linked_list::insert_account)
-    // stack: pred_ptr/4, addr_key, payload_ptr, retdest
-    %get_valid_account_ptr
-    // stack: pred_ptr, addr_key, payload_ptr, retdest
-    DUP1
-    MLOAD_GENERAL
-    DUP1
-    // stack: pred_addr_key, pred_addr_key, pred_ptr, addr_key, payload_ptr, retdest
-    DUP4 GT
-    DUP3 %eq_const(@SEGMENT_ACCOUNTS_LINKED_LIST)
-    ADD // OR
-    // If the predesessor is strictly smaller or the predecessor is the special
-    // node with key @U256_MAX (and hence we're inserting a new minimum), then
-    // we need to insert a new node.
-    %jumpi(insert_new_account)
-    // stack: pred_addr_key, pred_ptr, addr_key, payload_ptr, retdest
-    // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
-    DUP3
-    %assert_eq
-    // stack: pred_ptr, addr_key, payload_ptr, retdest
-    
-    // stack: pred_ptr, addr_key, payload_ptr, retdest
-    // Check that this is not a deleted node
-    DUP1
-    %add_const(@ACCOUNTS_NEXT_NODE_PTR)
-    MLOAD_GENERAL
-    %jump_neq_const(@U256_MAX, account_found_with_overwrite)
-    // The storage key is not in the list.
-    PANIC
 
-account_found_with_overwrite:
-    // The address was already in the list
-    // stack: pred_ptr, addr_key, payload_ptr, retdest
-    // Load the payload pointer
-    %increment
-    // stack: payload_ptr_ptr, addr_key, payload_ptr, retdest
-    DUP3 MSTORE_GENERAL
-    %stack (addr_key, payload_ptr, retdest) -> (retdest, payload_ptr)
-    JUMP
-
-%macro search_account
-    %stack (addr_key, ptr) -> (addr_key, ptr, %%after)
-    %jump(search_account)
-%%after:
-    // stack:
-%endmacro
-
-%macro search_account_no_return
-    %search_account
-    POP
-%endmacro
-
-
-/// Searches the account addr andin the linked list.
+/// Searches the account addr in the linked list.
 /// Returns `payload_ptr` if the account was not found, `original_ptr` if it was already present.
 global search_account:
-    // stack: addr_key, payload_ptr, retdest
+    // stack: addr_key, retdest
     PROVER_INPUT(linked_list::insert_account)
-    // stack: pred_ptr/4, addr_key, payload_ptr, retdest
+    // stack: pred_ptr/4, addr_key, retdest
     %get_valid_account_ptr
-    // stack: pred_ptr, addr_key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, retdest
     DUP1
     MLOAD_GENERAL
     DUP1
-    // stack: pred_addr_key, pred_addr_key, pred_ptr, addr_key, payload_ptr, retdest
+    // stack: pred_addr_key, pred_addr_key, pred_ptr, addr_key, retdest
     DUP4 GT
     DUP3 %eq_const(@SEGMENT_ACCOUNTS_LINKED_LIST)
     ADD // OR
@@ -296,13 +226,12 @@ global search_account:
     // node with key @U256_MAX (and hence we're inserting a new minimum), then
     // we need to insert a new node.
     %jumpi(account_not_found)
-    // stack: pred_addr_key, pred_ptr, addr_key, payload_ptr, retdest
-    // If we are here we know that addr <= pred_addr. But this is only possible if pred_addr == addr.
+    // stack: pred_addr_key, pred_ptr, addr_key, retdest
+    // If we are here we know that addr_key <= pred_addr_key. But this is only possible if pred_addr == addr.
     DUP3
     %assert_eq
-    // stack: pred_ptr, addr_key, payload_ptr, retdest
     
-    // stack: pred_ptr, addr_key, payload_ptr, retdest
+    // stack: pred_ptr, addr_key, retdest
     // Check that this is not a deleted node
     DUP1
     %add_const(@ACCOUNTS_NEXT_NODE_PTR)
@@ -311,9 +240,19 @@ global search_account:
     // The storage key is not in the list.
     PANIC
 
+account_found:
+    // The address was already in the list
+    // stack: pred_ptr, addr_key, retdest
+    // Load the payload pointer
+    %increment
+    MLOAD_GENERAL
+    // stack: orig_payload_ptr, addr_key, retdest
+    %stack (orig_payload_ptr, addr_key, retdest) -> (retdest, orig_payload_ptr)
+    JUMP
+
 account_not_found:
-    // stack: pred_addr_key, pred_ptr, addr_key, payload_ptr, retdest
-    %stack (pred_addr_key, pred_ptr, addr_key, payload_ptr, retdest) -> (retdest, payload_ptr)
+    // stack: pred_addr_key, pred_ptr, addr_key, retdest
+    %stack (pred_addr_key, pred_ptr, addr_key, retdest) -> (retdest, 0)
     JUMP
 
 %macro remove_account_from_linked_list
@@ -895,7 +834,7 @@ remove_all_slots_end:
 %endmacro
 
 %macro read_accounts_linked_list
-    %stack (addr) -> (addr, 0, %%after)
+    %stack (addr) -> (addr, %%after)
     %addr_to_state_key
     %jump(search_account)
 %%after:
