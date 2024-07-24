@@ -79,14 +79,14 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D>
     pub(crate) fn generate_trace(
         &self,
         propagated_values: Vec<Vec<F>>,
+        log_padded: usize,
     ) -> Vec<PolynomialValues<F>> {
         // Set the trace to the `propagated_values` provided either by `MemoryStark`
         // (for final values) or the previous segment (for initial values).
         let mut rows = propagated_values;
 
         let num_rows = rows.len();
-        let num_rows_padded =
-            1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::MemBefore]];
+        let num_rows_padded = 1 << log_padded;
         for _ in num_rows..num_rows_padded {
             rows.push(vec![F::ZERO; NUM_COLUMNS]);
         }
