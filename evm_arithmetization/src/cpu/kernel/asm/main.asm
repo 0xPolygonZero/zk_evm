@@ -179,4 +179,5 @@ global check_receipt_trie:
 
     // Reinitialize `chain_id` for legacy txns
     PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)
+    PUSH 0 %mstore_txn_field(@TXN_FIELD_TO)
 %endmacro
