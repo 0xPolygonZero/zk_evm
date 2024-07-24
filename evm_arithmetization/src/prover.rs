@@ -537,7 +537,7 @@ impl<'a> Iterator for SegmentDataIterator<'a> {
         let cur_and_next_data = generate_next_segment::<F>(
             self.max_cpu_len_log,
             self.inputs,
-            self.partial_next_data.take(),
+            self.partial_next_data.clone(),
         );
 
         if cur_and_next_data.is_some() {

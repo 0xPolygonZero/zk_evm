@@ -110,9 +110,7 @@ impl BlockProverInput {
                     Directive::map(IndexedStream::from(chunk.into_iter()), &seg_ops)
                         .fold(&agg_ops)
                         .run(runtime)
-                        .map(move |e| {
-                            e.map(|p| proof_gen::proof_types::TxnAggregatableProof::from(p))
-                        })
+                        .map(move |e| e.map(proof_gen::proof_types::TxnAggregatableProof::from))
                         .await,
                 );
             }
