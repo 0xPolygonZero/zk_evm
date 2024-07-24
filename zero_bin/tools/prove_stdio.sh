@@ -91,6 +91,18 @@ else
 fi
 
 
+# Prover config. Override the defaults if needed by setting the env variables.
+PROVER_BATCH_SIZE="${PROVER_BATCH_SIZE:-1}"
+PROVER_SEGMENT_CHUNK_SIZE="${PROVER_SEGMENT_CHUNK_SIZE:-64}"
+PROVER_MAC_CPU_LEN_LOG="${PROVER_MAC_CPU_LEN_LOG:-20}"
+if [[ $PROVER_SAVE_INPUTS_ON_ERROR == "true" ]]; then
+    PROVER_SAVE_INPUTS_ON_ERROR="--save-inputs-on-error"
+else
+    PROVER_SAVE_INPUTS_ON_ERROR=""
+fi
+
+
+
 # If we run ./prove_stdio.sh <witness file name> test_only, we'll generate a dummy
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
@@ -108,7 +120,9 @@ fi
 cargo build --release --jobs "$num_procs"
 
 start_time=$(date +%s%N)
-"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee $LEADER_OUT_PATH
+"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --batch-size $PROVER_BATCH_SIZE \
+   --max-cpu-len-log $PROVER_MAC_CPU_LEN_LOG --segment-chunk-size $PROVER_SEGMENT_CHUNK_SIZE \
+   $PROVER_SAVE_INPUTS_ON_ERROR stdio < $INPUT_FILE | tee $LEADER_OUT_PATH
 end_time=$(date +%s%N)
 
 tail -n 1 $LEADER_OUT_PATH > $PROOFS_JSON_PATH

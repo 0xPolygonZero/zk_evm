@@ -64,6 +64,16 @@ OUTPUT_TO_TERMINAL="${OUTPUT_TO_TERMINAL:-false}"
 # Only generate proof by default
 RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
 
+# Prover config. Override the defaults if needed by setting the env variables.
+PROVER_BATCH_SIZE="${PROVER_BATCH_SIZE:-1}"
+PROVER_SEGMENT_CHUNK_SIZE="${PROVER_SEGMENT_CHUNK_SIZE:-64}"
+PROVER_MAC_CPU_LEN_LOG="${PROVER_MAC_CPU_LEN_LOG:-20}"
+if [[ $PROVER_SAVE_INPUTS_ON_ERROR == "true" ]]; then
+    PROVER_SAVE_INPUTS_ON_ERROR="--save-inputs-on-error"
+else
+    PROVER_SAVE_INPUTS_ON_ERROR=""
+fi
+
 mkdir -p $PROOF_OUTPUT_DIR
 
 if [ $IGNORE_PREVIOUS_PROOFS ]; then
@@ -122,7 +132,7 @@ if [[ $8 == "test_only" ]]; then
 else
     # normal run
     echo "Proving blocks ${BLOCK_INTERVAL} now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    command='cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand --batch-size $PROVER_BATCH_SIZE --max-cpu-len-log $PROVER_MAC_CPU_LEN_LOG --segment-chunk-size $PROVER_SEGMENT_CHUNK_SIZE $PROVER_SAVE_INPUTS_ON_ERROR rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
         echo -e "Proof generation finished with result: $?"
