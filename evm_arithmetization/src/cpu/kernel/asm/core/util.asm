@@ -14,6 +14,12 @@
     %add_const(0x10000000000000000) // scale each context by 2^64
     // stack: new_ctx
     DUP1
+    PUSH 0xffffffffffffffffffffffff // 2^96 - 1
+    // stack: max, new_ctx, new_ctx
+    LT
+    %jumpi(fault_exception)
+    // stack: new_ctx
+    DUP1
     %mstore_global_metadata(@GLOBAL_METADATA_LARGEST_CONTEXT)
     // stack: new_ctx
 %endmacro
