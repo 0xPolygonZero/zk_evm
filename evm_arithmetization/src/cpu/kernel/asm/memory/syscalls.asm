@@ -316,12 +316,12 @@ mcopy_empty:
 
     PUSH $segment SWAP1
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
-    DUP1 DUP8 DUP8 ADD
+    DUP1 DUP8 DUP8 %add_or_fault
     // stack: offset + size, total_size, total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     LT %jumpi(codecopy_within_bounds)
 
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
-    DUP7 DUP7 ADD
+    DUP7 DUP7 ADD // We already checked for overflow.
     // stack: offset + size, total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     SUB // extra_size = offset + size - total_size
     // stack: extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
@@ -329,7 +329,7 @@ mcopy_empty:
     // stack: copy_size = size - extra_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
 
     // Compute the new dest_offset after actual copies, at which we will start padding with zeroes.
-    DUP1 DUP7 ADD
+    DUP1 DUP7 ADD // We already checked for overflow.
     // stack: new_dest_offset, copy_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
 
     GET_CONTEXT
