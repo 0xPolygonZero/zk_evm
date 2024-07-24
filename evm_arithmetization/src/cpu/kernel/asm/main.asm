@@ -177,7 +177,7 @@ global check_receipt_trie:
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN)
 
-    // Reinitialize `chain_id` for legacy txns
+    // Reinitialize `chain_id` and `to` transaction fields
     PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)
     PUSH 0 %mstore_txn_field(@TXN_FIELD_TO)
 %endmacro
