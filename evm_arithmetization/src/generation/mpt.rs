@@ -266,7 +266,7 @@ fn load_state_trie(
             Ok(node_ptr)
         }
         Node::Leaf { nibbles, value } => {
-            let account: AccountRlp = rlp::decode(value).map_err(|_| ProgramError::InvalidRlp)?;
+            let account: AccountRlp = rlp::decode(value).expect("@@aatif: bad account");
             let AccountRlp {
                 nonce,
                 balance,
@@ -299,7 +299,8 @@ fn load_state_trie(
             let storage_ptr_ptr = trie_data.len();
             trie_data.push((trie_data.len() + 2).into());
             trie_data.push(code_hash.into_uint());
-            let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value)?;
+            let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value)
+                .expect("@@aatif: bad storage");
             if storage_ptr == 0 {
                 trie_data[storage_ptr_ptr] = 0.into();
             }
@@ -336,7 +337,8 @@ pub(crate) fn load_all_mpts(
         Ok(parsed_txn)
     })?;
 
-    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
+    let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)
+        .expect("@@aatif bad receipts");
 
     let trie_root_ptrs = TrieRootPtrs {
         state_root_ptr,
