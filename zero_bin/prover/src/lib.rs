@@ -77,21 +77,21 @@ impl BlockProverInput {
         );
 
         // Create segment proof
-        let seg_ops = ops::SegmentProof {
+        let seg_prove_ops = ops::SegmentProof {
             save_inputs_on_error,
         };
 
         // Generate segment data.
-        let agg_ops = ops::SegmentAggProof {
+        let seg_agg_ops = ops::SegmentAggProof {
             save_inputs_on_error,
         };
 
-        // Aggregate transaction proofs
-        let txn_agg_proof = ops::TxnAggProof {
+        // Aggregate batch proofs to a single proof
+        let batch_agg_ops = ops::BatchAggProof {
             save_inputs_on_error,
         };
 
-        let mut all_block_txn_aggregatable_proofs = Vec::new();
+        let mut all_block_batch_proofs = Vec::new();
         // Loop for all generation inputs in the block
         for generation_inputs in block_generation_inputs {
             let mut segment_data_iter = SegmentDataIterator {
@@ -102,42 +102,42 @@ impl BlockProverInput {
             let mut chunk_segment_iter =
                 SegmentDataChunkIterator::new(&mut segment_data_iter, segment_chunk_size);
 
-            let mut chunk_txn_aggregatable_proofs = Vec::new();
+            let mut chunk_seg_aggregatable_proofs = Vec::new();
             // We take one chunk of segments, perform proving and
-            // aggregate it to `TxnAggregatableProof`
+            // aggregate it into a single chunk proof
             while let Some(chunk) = chunk_segment_iter.next() {
-                chunk_txn_aggregatable_proofs.push(
-                    Directive::map(IndexedStream::from(chunk.into_iter()), &seg_ops)
-                        .fold(&agg_ops)
+                chunk_seg_aggregatable_proofs.push(
+                    Directive::map(IndexedStream::from(chunk.into_iter()), &seg_prove_ops)
+                        .fold(&seg_agg_ops)
                         .run(runtime)
-                        .map(move |e| e.map(proof_gen::proof_types::TxnAggregatableProof::from))
                         .await,
                 );
             }
 
-            // Fold all the generation input transaction proofs
-            // into a single transaction proof
-            let generation_input_txn_proof = Directive::fold(
-                IndexedStream::from(chunk_txn_aggregatable_proofs.into_iter().collect::<Result<
+            // Fold all the generation input segment chunk proofs
+            // into a single batch proof
+            let batch_aggregated_proof = Directive::fold(
+                IndexedStream::from(chunk_seg_aggregatable_proofs.into_iter().collect::<Result<
                     Vec<_>,
                     anyhow::Error,
                 >>(
                 )?),
-                &txn_agg_proof,
+                &seg_agg_ops,
             )
             .run(runtime)
+            .map(move |e| e.map(proof_gen::proof_types::BatchAggregatableProof::from))
             .await?;
-            all_block_txn_aggregatable_proofs.push(generation_input_txn_proof);
+            all_block_batch_proofs.push(batch_aggregated_proof);
         }
-        // Fold all the agg transaction proofs into a single transaction proof
+        // Fold all the aggregated batch proofs into a single batch proof
         let final_txn_proof = Directive::fold(
-            IndexedStream::from(all_block_txn_aggregatable_proofs.into_iter()),
-            &txn_agg_proof,
+            IndexedStream::from(all_block_batch_proofs.into_iter()),
+            &batch_agg_ops,
         )
         .run(runtime)
         .await?;
 
-        if let proof_gen::proof_types::TxnAggregatableProof::Agg(proof) = final_txn_proof {
+        if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_txn_proof {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;

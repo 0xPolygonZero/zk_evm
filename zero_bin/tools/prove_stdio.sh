@@ -57,14 +57,14 @@ else
         # These sizes are configured specifically for block 19240705. Don't use this in other scenarios.
         echo "Using specific circuit sizes for witness_b19240705.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..19"
-        export BYTE_PACKING_CIRCUIT_SIZE="11..15"
-        export CPU_CIRCUIT_SIZE="18..21"
-        export KECCAK_CIRCUIT_SIZE="14..18"
-        export KECCAK_SPONGE_CIRCUIT_SIZE="9..13"
-        export LOGIC_CIRCUIT_SIZE="12..17"
-        export MEMORY_CIRCUIT_SIZE="20..23"
-        export MEMORY_BEFORE_CIRCUIT_SIZE="16..17"
-        export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
+        export BYTE_PACKING_CIRCUIT_SIZE="10..15"
+        export CPU_CIRCUIT_SIZE="17..21"
+        export KECCAK_CIRCUIT_SIZE="12..18"
+        export KECCAK_SPONGE_CIRCUIT_SIZE="7..13"
+        export LOGIC_CIRCUIT_SIZE="10..17"
+        export MEMORY_CIRCUIT_SIZE="19..23"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="15..19"
+        export MEMORY_AFTER_CIRCUIT_SIZE="7..19"
     elif [[ $INPUT_FILE == *"witness_b2_b7"* ]]; then
         # These sizes are configured specifically for custom small blocks. Don't use this in other scenarios.
         echo "Using specific circuit sizes for witness_b2_b7.json"
@@ -94,11 +94,17 @@ fi
 # Prover config. Override the defaults if needed by setting the env variables.
 PROVER_BATCH_SIZE="${PROVER_BATCH_SIZE:-1}"
 PROVER_SEGMENT_CHUNK_SIZE="${PROVER_SEGMENT_CHUNK_SIZE:-64}"
-PROVER_MAC_CPU_LEN_LOG="${PROVER_MAC_CPU_LEN_LOG:-20}"
+PROVER_MAX_CPU_LEN_LOG="${PROVER_MAX_CPU_LEN_LOG:-20}"
 if [[ $PROVER_SAVE_INPUTS_ON_ERROR == "true" ]]; then
     PROVER_SAVE_INPUTS_ON_ERROR="--save-inputs-on-error"
 else
     PROVER_SAVE_INPUTS_ON_ERROR=""
+fi
+
+if [ -n "$NUM_WORKERS" ]; then
+    SET_NUM_WORKERS="--num-workers $NUM_WORKERS"
+else
+    SET_NUM_WORKERS=""
 fi
 
 
@@ -121,8 +127,8 @@ cargo build --release --jobs "$num_procs"
 
 start_time=$(date +%s%N)
 "${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --batch-size $PROVER_BATCH_SIZE \
-   --max-cpu-len-log $PROVER_MAC_CPU_LEN_LOG --segment-chunk-size $PROVER_SEGMENT_CHUNK_SIZE \
-   $PROVER_SAVE_INPUTS_ON_ERROR stdio < $INPUT_FILE | tee $LEADER_OUT_PATH
+   --max-cpu-len-log $PROVER_MAX_CPU_LEN_LOG --segment-chunk-size $PROVER_SEGMENT_CHUNK_SIZE \
+   $SET_NUM_WORKERS $PROVER_SAVE_INPUTS_ON_ERROR stdio < $INPUT_FILE | tee $LEADER_OUT_PATH
 end_time=$(date +%s%N)
 
 tail -n 1 $LEADER_OUT_PATH > $PROOFS_JSON_PATH
