@@ -74,7 +74,7 @@ impl<F: Field> GenerationState<F> {
     fn run_end_of_txns(&mut self) -> Result<U256, ProgramError> {
         // Reset the jumpdest table before the next transaction.
         self.jumpdest_table = None;
-        let end = self.next_txn_index == self.inputs.txns_len;
+        let end = self.next_txn_index == self.inputs.txn_hashes.len();
         if end {
             Ok(U256::one())
         } else {

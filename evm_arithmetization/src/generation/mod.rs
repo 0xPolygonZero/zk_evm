@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use keccak_hash::keccak;
 use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
@@ -96,22 +97,23 @@ pub struct GenerationInputs {
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TrimmedGenerationInputs {
     pub trimmed_tries: TrimmedTrieInputs,
-    /// The index of the transaction being proven within its block.
+    /// The index of the first transaction in this payload being proven within
+    /// its block.
     pub txn_number_before: U256,
     /// The cumulative gas used through the execution of all transactions prior
-    /// the current one.
+    /// the current ones.
     pub gas_used_before: U256,
-    /// The cumulative gas used after the execution of the current transaction.
-    /// The exact gas used by the current transaction is `gas_used_after` -
-    /// `gas_used_before`.
+    /// The cumulative gas used after the execution of the current batch of
+    /// transactions. The exact gas used by the current batch of transactions
+    /// is `gas_used_after` - `gas_used_before`.
     pub gas_used_after: U256,
 
-    /// Indicates the number of signed transactions contained in this payload.
-    pub txns_len: usize,
+    /// The list of txn hashes contained in this batch.
+    pub txn_hashes: Vec<H256>,
 
-    /// Expected trie roots before the transactions are executed.
+    /// Expected trie roots before these transactions are executed.
     pub trie_roots_before: TrieRoots,
-    /// Expected trie roots after the transactions are executed.
+    /// Expected trie roots after these transactions are executed.
     pub trie_roots_after: TrieRoots,
 
     /// State trie root of the checkpoint block.
@@ -180,12 +182,18 @@ impl GenerationInputs {
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
     pub(crate) fn trim(&self) -> TrimmedGenerationInputs {
+        let txn_hashes = self
+            .signed_txns
+            .iter()
+            .map(|tx_bytes| keccak(&tx_bytes[..]))
+            .collect();
+
         TrimmedGenerationInputs {
             trimmed_tries: self.tries.trim(),
             txn_number_before: self.txn_number_before,
             gas_used_before: self.gas_used_before,
             gas_used_after: self.gas_used_after,
-            txns_len: self.signed_txns.len(),
+            txn_hashes,
             trie_roots_before: TrieRoots {
                 state_root: self.tries.state_trie.hash(),
                 transactions_root: self.tries.transactions_trie.hash(),
@@ -233,7 +241,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
         (
             GlobalMetadata::TxnNumberAfter,
-            inputs.txn_number_before + inputs.txns_len,
+            inputs.txn_number_before + inputs.txn_hashes.len(),
         ),
         (
             GlobalMetadata::StateTrieRootDigestBefore,

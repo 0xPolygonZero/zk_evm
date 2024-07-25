@@ -48,7 +48,7 @@ impl Operation for SegmentProof {
                             "b{}_txns_{}-{}-({})_input.log",
                             input.block_metadata.block_number,
                             input.txn_number_before,
-                            input.txn_number_before + input.txns_len,
+                            input.txn_number_before + input.txn_hashes.len(),
                             segment_index
                         ),
                         input,
@@ -93,7 +93,7 @@ struct SegmentProofSpan {
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
     fn get_id(ir: &TrimmedGenerationInputs, segment_index: usize) -> String {
-        if ir.txns_len == 1 {
+        if ir.txn_hashes.len() == 1 {
             format!(
                 "b{} - {} ({})",
                 ir.block_metadata.block_number, ir.txn_number_before, segment_index
@@ -103,7 +103,7 @@ impl SegmentProofSpan {
                 "b{} - {}_{} ({})",
                 ir.block_metadata.block_number,
                 ir.txn_number_before,
-                ir.txn_number_before + ir.txns_len,
+                ir.txn_number_before + ir.txn_hashes.len(),
                 segment_index
             )
         }
@@ -114,16 +114,22 @@ impl SegmentProofSpan {
     /// Either the first 8 characters of the hex-encoded hash of the first and
     /// last transactions, or "Dummy" if there is no transaction.
     fn get_descriptor(ir: &TrimmedGenerationInputs) -> String {
-        if ir.txns_len == 0 {
+        if ir.txn_hashes.is_empty() {
             "Dummy".to_string()
-        } else if ir.txns_len == 1 {
-            format!("{:x?}", ir.txn_number_before)
+        } else if ir.txn_hashes.len() == 1 {
+            format!("{:x?}", ir.txn_hashes[0])
         } else {
-            format!(
-                "{:?}..{:?}",
-                ir.txn_number_before,
-                ir.txn_number_before + ir.txns_len
-            )
+            let first_encoding = u64::from_be_bytes(ir.txn_hashes[0].0[0..8].try_into().unwrap());
+            let last_encoding = u64::from_be_bytes(
+                ir.txn_hashes
+                    .last()
+                    .expect("We have at least 2 transactions.")
+                    .0[0..8]
+                    .try_into()
+                    .unwrap(),
+            );
+
+            format!("[0x{:x?}..0x{:x?}]", first_encoding, last_encoding)
         }
     }
 
