@@ -33,9 +33,13 @@ RUN \
   touch mpt_trie/src/lib.rs && \
   touch proc_macro/src/lib.rs
 
+ENV RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
+
+COPY ./target/pgo-profiles/*.profraw ./target/pgo-profiles/
+
 RUN cargo pgo optimize build -- --bin worker
 
 FROM debian:bullseye-slim
-RUN apt-get update && apt-get install -y ca-certificates libjemalloc2
-COPY --from=builder ./target/release/worker /usr/local/bin/worker
-ENTRYPOINT ["/usr/local/bin/worker"]
+RUN apt-get update && apt-get install -y ca-certificates libjemalloc2 make libssl-dev
+COPY --from=builder ./target/x86_64-unknown-linux-gnu/release/worker /usr/local/bin/worker
+CMD ["worker"]
