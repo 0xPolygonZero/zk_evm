@@ -5,6 +5,7 @@ hull:
       fullnameOverride: zero-bin
     specific:
       version: develop
+      workerImageName: zero-bin-worker
   objects:
     serviceaccount:
       default:
@@ -98,7 +99,7 @@ hull:
           containers:
             worker:
               image:
-                repository: us.gcr.io/immutable-418115/zero-bin-worker
+                repository: _HT!us.gcr.io/immutable-418115/{{ (index . "$").Values.hull.config.specific.workerImageName }}
                 tag: _HT*hull.config.specific.version
               imagePullPolicy: Always
               env:
