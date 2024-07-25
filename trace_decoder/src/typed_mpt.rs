@@ -63,22 +63,6 @@ impl<T> TypedMpt<T> {
             and only encoded `T`s are ever inserted",
         ))
     }
-    /// # Panics
-    /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
-    fn remove(&mut self, path: TriePath) -> Result<Option<T>, Error>
-    where
-        T: rlp::Decodable,
-    {
-        match self.inner.delete(path.into_nibbles()) {
-            Ok(None) => Ok(None),
-            Ok(Some(bytes)) => Ok(Some(rlp::decode(&bytes).expect(
-                "T encoding/decoding should round-trip,\
-                    and only encoded `T`s are ever inserted",
-            ))),
-            // TODO(0xaatif): why is this fallible if `get` isn't?
-            Err(source) => Err(Error { source }),
-        }
-    }
     fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
     }
@@ -328,15 +312,4 @@ impl StorageTrie {
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
     }
-}
-
-#[test]
-fn test() {
-    let hash = H256(std::array::from_fn(|ix| ix as _));
-    let mut ours = StorageTrie::default();
-    ours.insert_hash(TriePath::default(), hash).unwrap();
-    assert_eq!(
-        ours.as_hashed_partial_trie(),
-        &HashedPartialTrie::new(Node::Hash(hash))
-    );
 }
