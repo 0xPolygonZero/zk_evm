@@ -177,7 +177,7 @@ jobs:
           RUST_BACKTRACE: 1
 
   simple_proof_witness_only:
-    name: Execute bash script to generate the proof witness for a small block.
+    name: Test witness for a small block.
     runs-on: zero-ci
 
     steps:
@@ -191,7 +191,7 @@ jobs:
 
 
   simple_proof_regular:
-    name: Execute bash script to generate and verify a proof for a small block.
+    name: Test real proof for a small block.
     runs-on: zero-ci
 
     steps:
@@ -204,7 +204,7 @@ jobs:
           ./prove_stdio.sh artifacts/witness_b19240705.json
 
   simple_proof_using_continuations:
-    name: Execute bash script to generate and verify a proof for a small block utilizing custom batch and segment chunk size
+    name: Test proof for a small block with custom batch and segment chunk size
     runs-on: zero-ci
 
     steps:
@@ -218,7 +218,7 @@ jobs:
 
 
   multi_blocks_proof_regular:
-    name: Execute bash script to generate and verify a proof for multiple blocks using parallel proving.
+    name: Test proof for multiple blocks using parallel proving.
     runs-on: zero-ci
 
     steps:
