@@ -95,6 +95,12 @@ impl<T> TypedMpt<T> {
             Some((path, self.get(path)?))
         })
     }
+    /// This allows users to break the [`TypedMpt`] invariant.
+    /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
+    /// subsequent API calls may panic.
+    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
+        &mut self.inner
+    }
 }
 
 impl<T> Default for TypedMpt<T> {
@@ -124,7 +130,7 @@ pub struct Error {
 /// used as a key for [`TypedMpt`].
 ///
 /// Semantically equivalent to [`mpt_trie::nibbles::Nibbles`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct TriePath(CopyVec<U4, 64>);
 
 impl TriePath {
@@ -142,7 +148,7 @@ impl TriePath {
     fn from_address(address: Address) -> Self {
         Self::from_hash(keccak_hash::keccak(address))
     }
-    fn from_hash(H256(bytes): H256) -> Self {
+    pub fn from_hash(H256(bytes): H256) -> Self {
         Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
     }
     fn from_txn_ix(txn_ix: usize) -> Self {
@@ -178,18 +184,25 @@ impl TriePath {
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#receipts-trie>
 #[derive(Debug, Clone, Default)]
 pub struct TransactionTrie {
-    typed: TypedMpt<Vec<u8>>,
+    untyped: HashedPartialTrie,
 }
 
 impl TransactionTrie {
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
-        self.typed.insert(TriePath::from_txn_ix(txn_ix), val)
+        let prev = self
+            .untyped
+            .get(TriePath::from_txn_ix(txn_ix).into_nibbles())
+            .map(Vec::from);
+        self.untyped
+            .insert(TriePath::from_txn_ix(txn_ix).into_nibbles(), val)
+            .map_err(|source| Error { source })?;
+        Ok(prev)
     }
     pub fn root(&self) -> H256 {
-        self.typed.root()
+        self.untyped.hash()
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
+        &self.untyped
     }
 }
 
@@ -198,15 +211,25 @@ impl TransactionTrie {
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#transaction-trie>
 #[derive(Debug, Clone, Default)]
 pub struct ReceiptTrie {
-    typed: TypedMpt<Vec<u8>>,
+    untyped: HashedPartialTrie,
 }
 
 impl ReceiptTrie {
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
-        self.typed.insert(TriePath::from_txn_ix(txn_ix), val)
+        let prev = self
+            .untyped
+            .get(TriePath::from_txn_ix(txn_ix).into_nibbles())
+            .map(Vec::from);
+        self.untyped
+            .insert(TriePath::from_txn_ix(txn_ix).into_nibbles(), val)
+            .map_err(|source| Error { source })?;
+        Ok(prev)
+    }
+    pub fn root(&self) -> H256 {
+        self.untyped.hash()
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
+        &self.untyped
     }
 }
 
@@ -251,6 +274,13 @@ impl StateTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
+
+    /// This allows users to break the [`TypedMpt`] invariant.
+    /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
+    /// subsequent API calls may panic.
+    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
+        self.typed.as_mut_hashed_partial_trie_unchecked()
+    }
 }
 
 impl<'a> IntoIterator for &'a StateTrie {
@@ -268,23 +298,45 @@ impl<'a> IntoIterator for &'a StateTrie {
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
 #[derive(Debug, Clone, Default)]
 pub struct StorageTrie {
-    /// This does NOT use [`TypedMpt`] - T could be anything!
-    typed: TypedMpt<Vec<u8>>,
+    untyped: HashedPartialTrie,
 }
 impl StorageTrie {
     pub fn insert(&mut self, path: TriePath, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
-        self.typed.insert(path, value)
+        let prev = self.untyped.get(path.into_nibbles()).map(Vec::from);
+        self.untyped
+            .insert(path.into_nibbles(), value)
+            .map_err(|source| Error { source })?;
+        Ok(prev)
     }
     pub fn insert_hash(&mut self, path: TriePath, hash: H256) -> Result<(), Error> {
-        self.typed.insert_hash(path, hash)
+        self.untyped
+            .insert(path.into_nibbles(), hash)
+            .map_err(|source| Error { source })
     }
     pub fn root(&self) -> H256 {
-        self.typed.root()
+        self.untyped.hash()
     }
     pub fn remove(&mut self, path: TriePath) -> Result<Option<Vec<u8>>, Error> {
-        self.typed.remove(path)
+        self.untyped
+            .delete(path.into_nibbles())
+            .map_err(|source| Error { source })
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
+        &self.untyped
     }
+
+    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
+        &mut self.untyped
+    }
+}
+
+#[test]
+fn test() {
+    let hash = H256(std::array::from_fn(|ix| ix as _));
+    let mut ours = StorageTrie::default();
+    ours.insert_hash(TriePath::default(), hash).unwrap();
+    assert_eq!(
+        ours.as_hashed_partial_trie(),
+        &HashedPartialTrie::new(Node::Hash(hash))
+    );
 }
