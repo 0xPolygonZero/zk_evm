@@ -33,7 +33,7 @@ RUN \
   touch mpt_trie/src/lib.rs && \
   touch proc_macro/src/lib.rs
 
-RUN cargo pgo optimize -- --bin worker
+RUN cargo pgo optimize build -- --bin worker
 
 FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y ca-certificates libjemalloc2

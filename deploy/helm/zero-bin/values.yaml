@@ -109,6 +109,8 @@ hull:
                       staticName: true
                       name: rmq-credentials
                       key: amqp_uri
+                GCS_UPLOAD_DIR:
+                  value: profiles/
                 RUST_LOG:
                   value: info
                 RUST_BACKTRACE:
