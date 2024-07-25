@@ -282,7 +282,7 @@ fn prover_to_disk(
 fn circuit_dir() -> String {
     // Guaranteed to be set by the binary if not set by the user.
     std::env::var(ZK_EVM_CACHE_DIR_ENV).unwrap_or_else(|_| {
-        format!(
+        panic!(
             "expected the env var \"{}\" to be set",
             ZK_EVM_CACHE_DIR_ENV
         )
