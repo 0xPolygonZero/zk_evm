@@ -18,6 +18,8 @@ RUN sed -i 's#\[workspace\]#\[workspace\]\nmembers = \["zero_bin\/worker", "zero
 COPY Cargo.lock .
 COPY ./rust-toolchain.toml ./
 
+COPY pgo_worker_wrapper.py ./zero_bin/pgo_worker_wrapper.py
+
 COPY proof_gen proof_gen
 COPY mpt_trie mpt_trie
 COPY evm_arithmetization evm_arithmetization
@@ -62,4 +64,4 @@ ENV PROFILE_DIRECTORY=./target/pgo-profiles/
 #   1. execute the pgo-worker binary
 #   2. wait to receive a signal (either SIGTERM or SIGKILL), then sends a SIGTERM to the pgo-worker binary
 #   3. upload the created pgo .profraw file to GCS
-CMD ["python3", "pgo_worker_wrapper.py"]
+CMD ["python3", "zero_bin/pgo_worker_wrapper.py"]
