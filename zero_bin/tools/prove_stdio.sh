@@ -57,12 +57,12 @@ else
         # These sizes are configured specifically for block 19240705. Don't use this in other scenarios.
         echo "Using specific circuit sizes for witness_b19240705.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..19"
-        export BYTE_PACKING_CIRCUIT_SIZE="10..15"
-        export CPU_CIRCUIT_SIZE="17..21"
-        export KECCAK_CIRCUIT_SIZE="12..18"
+        export BYTE_PACKING_CIRCUIT_SIZE="9..15"
+        export CPU_CIRCUIT_SIZE="14..21"
+        export KECCAK_CIRCUIT_SIZE="10..18"
         export KECCAK_SPONGE_CIRCUIT_SIZE="7..13"
-        export LOGIC_CIRCUIT_SIZE="10..17"
-        export MEMORY_CIRCUIT_SIZE="19..23"
+        export LOGIC_CIRCUIT_SIZE="8..17"
+        export MEMORY_CIRCUIT_SIZE="18..23"
         export MEMORY_BEFORE_CIRCUIT_SIZE="15..19"
         export MEMORY_AFTER_CIRCUIT_SIZE="7..19"
     elif [[ $INPUT_FILE == *"witness_b2_b7"* ]]; then

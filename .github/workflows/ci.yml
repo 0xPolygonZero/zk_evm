@@ -214,7 +214,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
-          time PROVER_BATCH_SIZE=5 PROVER_SEGMENT_CHUNK_SIZE=4 PROVER_MAX_CPU_LEN_LOG=17 ./prove_stdio.sh ./artifacts/witness_b19240705.json          
+          PROVER_BATCH_SIZE=3 PROVER_SEGMENT_CHUNK_SIZE=4 PROVER_MAX_CPU_LEN_LOG=17 ./prove_stdio.sh ./artifacts/witness_b19240705.json          
 
 
   multi_blocks_proof_regular:
