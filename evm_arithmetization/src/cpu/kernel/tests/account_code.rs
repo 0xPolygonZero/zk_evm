@@ -401,7 +401,7 @@ fn prepare_interpreter_all_accounts<F: Field>(
         KERNEL.global_labels["store_initial_slots"];
     interpreter.run()?;
 
-    // Set the pointers to the intial payloads.
+    // Set the pointers to the initial payloads.
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");

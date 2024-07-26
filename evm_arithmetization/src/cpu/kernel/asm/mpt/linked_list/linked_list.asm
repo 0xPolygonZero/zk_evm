@@ -15,7 +15,7 @@
 /// The values at the respective positions are:
 /// - 0: The account key
 /// - 1: A ptr to the payload (the account values)
-/// - 2: A ptr to the intial payload.
+/// - 2: A ptr to the initial payload.
 /// - 3: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
 /// Similarly, an empty storage linked list is written as
 /// [@U256_MAX, _, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST.

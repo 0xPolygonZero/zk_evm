@@ -85,7 +85,7 @@ after_insert_slot:
     %jump(insert_all_slots)
 
 // Delete all the accounts, referenced by the respective nodes in the linked list starting at 
-// `account_ptr_ptr`, which where deleted from the intial state. Delete also all slots of non-deleted accounts 
+// `account_ptr_ptr`, which where deleted from the initial state. Delete also all slots of non-deleted accounts 
 // deleted from the storage trie.
 // Pre stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr.
