@@ -26,6 +26,7 @@ revert_account_destroyed_contd:
     DUP2 %mload_trie_data
     // stack: target_balance, prev_balance, target_balance_ptr, address, prev_balance, retdest
     SUB SWAP1 %mstore_trie_data
+    // Set `address`'s balance to `prev_balance`.
     // stack: address, prev_balance, retdest
     %read_accounts_linked_list
     // stack: account_payload_ptr, prev_balance, retdest

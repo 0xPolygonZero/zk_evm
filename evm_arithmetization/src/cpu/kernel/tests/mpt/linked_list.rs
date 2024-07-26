@@ -28,14 +28,8 @@ fn init_logger() {
 #[test]
 fn test_init_linked_lists() -> Result<()> {
     init_logger();
-    let init_label = KERNEL.global_labels["init_linked_lists"];
 
-    // Check the initial state of the linked list in the kernel.
-    let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
-    interpreter.run()?;
-
-    assert!(interpreter.stack().is_empty());
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
 
     // Check the initial accounts linked list
     let acc_addr_list: Vec<U256> = (0..4)
@@ -82,11 +76,8 @@ fn test_init_linked_lists() -> Result<()> {
 #[test]
 fn test_list_iterator() -> Result<()> {
     init_logger();
-    let init_label = KERNEL.global_labels["init_linked_lists"];
 
-    let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
-    interpreter.run()?;
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
 
     // test the list iterator
     let accounts_mem = interpreter
@@ -139,14 +130,26 @@ fn test_list_iterator() -> Result<()> {
 #[test]
 fn test_insert_account() -> Result<()> {
     init_logger();
-    let init_label = KERNEL.global_labels["init_linked_lists"];
 
-    // Test for address already in list.
-    let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
-    interpreter.run()?;
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
 
-    let insert_account_label = KERNEL.global_labels["insert_account_to_linked_list"];
+    // Initialize the accounts linked list.
+    let init_accounts_ll = vec![
+        Some(U256::MAX),
+        Some(0.into()),
+        Some(0.into()),
+        Some((Segment::AccountsLinkedList as usize).into()),
+    ];
+    let init_len = init_accounts_ll.len();
+    interpreter.generation_state.memory.contexts[0].segments
+        [Segment::AccountsLinkedList.unscale()]
+    .content = init_accounts_ll;
+    interpreter.set_global_metadata_field(
+        GlobalMetadata::AccountsLinkedListLen,
+        (Segment::AccountsLinkedList as usize + init_len).into(),
+    );
+
+    let insert_account_label = KERNEL.global_labels["insert_account_with_overwrite"];
 
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
@@ -161,7 +164,6 @@ fn test_insert_account() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-    assert_eq!(interpreter.stack(), &[payload_ptr]);
 
     let accounts_mem = interpreter
         .generation_state
@@ -196,12 +198,25 @@ fn test_insert_account() -> Result<()> {
 #[test]
 fn test_insert_storage() -> Result<()> {
     init_logger();
-    let init_label = KERNEL.global_labels["init_linked_lists"];
 
-    // Test for address already in list.
-    let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
-    interpreter.run()?;
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+
+    // Initialize the storage linked list.
+    let init_storage_ll = vec![
+        Some(U256::MAX),
+        Some(0.into()),
+        Some(0.into()),
+        Some(0.into()),
+        Some((Segment::StorageLinkedList as usize).into()),
+    ];
+    let init_len = init_storage_ll.len();
+    interpreter.generation_state.memory.contexts[0].segments
+        [Segment::StorageLinkedList.unscale()]
+    .content = init_storage_ll;
+    interpreter.set_global_metadata_field(
+        GlobalMetadata::StorageLinkedListLen,
+        (Segment::StorageLinkedList as usize + init_len).into(),
+    );
 
     let insert_account_label = KERNEL.global_labels["insert_slot"];
 
@@ -258,14 +273,25 @@ fn test_insert_storage() -> Result<()> {
 fn test_insert_and_delete_accounts() -> Result<()> {
     init_logger();
 
-    let init_label = KERNEL.global_labels["init_linked_lists"];
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
 
-    // Test for address already in list.
-    let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
-    interpreter.run()?;
+    // Initialize the accounts linked list.
+    let init_accounts_ll = vec![
+        Some(U256::MAX),
+        Some(0.into()),
+        Some(0.into()),
+        Some((Segment::AccountsLinkedList as usize).into()),
+    ];
+    let init_len = init_accounts_ll.len();
+    interpreter.generation_state.memory.contexts[0].segments
+        [Segment::AccountsLinkedList.unscale()]
+    .content = init_accounts_ll;
+    interpreter.set_global_metadata_field(
+        GlobalMetadata::AccountsLinkedListLen,
+        (Segment::AccountsLinkedList as usize + init_len).into(),
+    );
 
-    let insert_account_label = KERNEL.global_labels["insert_account_to_linked_list"];
+    let insert_account_label = KERNEL.global_labels["insert_account_with_overwrite"];
 
     let retaddr = 0xdeadbeefu32.into();
     let mut rng = thread_rng();
@@ -291,10 +317,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         interpreter.push(addr);
         interpreter.generation_state.registers.program_counter = insert_account_label;
         interpreter.run()?;
-        assert_eq!(
-            interpreter.pop().expect("The stack can't be empty"),
-            addr + delta_ptr
-        );
+
         // The copied ptr is at distance 4, the size of an account, from the previous
         // copied ptr.
         assert_eq!(
@@ -315,13 +338,13 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         U256::from(offset + (n + 1) * 4)
     );
 
+    let search_account_label = KERNEL.global_labels["search_account"];
     // Test for address already in list.
     for i in 0..n {
         let addr_in_list = U256::from(addresses[i].0.as_slice());
         interpreter.push(retaddr);
-        interpreter.push(U256::zero());
         interpreter.push(addr_in_list);
-        interpreter.generation_state.registers.program_counter = insert_account_label;
+        interpreter.generation_state.registers.program_counter = search_account_label;
         interpreter.run()?;
 
         assert_eq!(
@@ -337,11 +360,6 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     interpreter.generation_state.registers.program_counter = insert_account_label;
 
     interpreter.run()?;
-
-    assert_eq!(
-        interpreter.pop().expect("The stack can't be empty"),
-        U256::from(addr_not_in_list.0.as_slice()) + delta_ptr
-    );
 
     // Now the list of accounts have address 4
     addresses.push(addr_not_in_list);
@@ -405,12 +423,24 @@ fn test_insert_and_delete_accounts() -> Result<()> {
 fn test_insert_and_delete_storage() -> Result<()> {
     init_logger();
 
-    let init_label = KERNEL.global_labels["init_linked_lists"];
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
 
-    // Test for address already in list.
-    let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
-    interpreter.run()?;
+    // Initialize the storage linked list.
+    let init_storage_ll = vec![
+        Some(U256::MAX),
+        Some(0.into()),
+        Some(0.into()),
+        Some(0.into()),
+        Some((Segment::StorageLinkedList as usize).into()),
+    ];
+    let init_len = init_storage_ll.len();
+    interpreter.generation_state.memory.contexts[0].segments
+        [Segment::StorageLinkedList.unscale()]
+    .content = init_storage_ll;
+    interpreter.set_global_metadata_field(
+        GlobalMetadata::StorageLinkedListLen,
+        (Segment::StorageLinkedList as usize + init_len).into(),
+    );
 
     let insert_slot_label = KERNEL.global_labels["insert_slot"];
 
