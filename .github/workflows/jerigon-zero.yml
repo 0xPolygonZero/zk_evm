@@ -16,8 +16,8 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  test_jerigon_zero_input_proving:
-    name: Zero tracer input proof generation
+  test_jerigon_zero_tracer_proving:
+    name: Zero tracer proof generation
     runs-on: zero-ci
     timeout-minutes: 40
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"

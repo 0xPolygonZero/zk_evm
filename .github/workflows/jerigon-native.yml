@@ -16,8 +16,8 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  test_jerigon_native_input_proving:
-    name: Native tracer input proof generation
+  test_jerigon_native_tracer_proving:
+    name: Native tracer proof generation
     runs-on: zero-ci
     timeout-minutes: 40
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
