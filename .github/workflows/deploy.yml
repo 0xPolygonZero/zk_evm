@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - develop
-      - deployment
+      - pgo-rebase
 
 env:
   DEFAULT_TAGS: |
@@ -16,8 +16,9 @@ env:
   IMAGE_BASE_NAME: us.gcr.io/${{ secrets.GCP_PROJECT_ID }}
 
 jobs:
-  build:
-    name: Build docker images
+  build-pgo:
+    # if: ${{ false }}  # disable for now
+    name: Build pgo docker image
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
@@ -29,18 +30,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Get docker image meta (leader)
-        id: leader-meta
+      - name: Get docker image meta (pgo-worker)
+        id: pgo-worker-meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_BASE_NAME }}/zero-bin-leader
-          tags: ${{ env.DEFAULT_TAGS }}
-
-      - name: Get docker image meta (worker)
-        id: worker-meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_BASE_NAME }}/zero-bin-worker
+          images: ${{ env.IMAGE_BASE_NAME }}/zero-bin-pgo-worker
           tags: ${{ env.DEFAULT_TAGS }}
 
       - name: Authenticate to Google Cloud
@@ -60,11 +54,174 @@ jobs:
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
 
+      - name: Build and push pgo worker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: pgo-worker.Dockerfile
+          push: true
+          tags: ${{ steps.pgo-worker-meta.outputs.tags }}
+          labels: ${{ steps.pgo-worker-meta.outputs.labels }}
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
+
+  deploy-pgo:
+    name: Deploy pgo-worker to GKE
+    # if: ${{ false }}  # disable for now
+    runs-on: ubuntu-latest
+    needs: build-pgo
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_ID }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Get GKE credentials
+        id: 'get-credentials'
+        uses: 'google-github-actions/get-gke-credentials@v2'
+        with:
+          cluster_name: 'immutable-prod'
+          location: 'us-central1'
+
+      - name: Install helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: 3.14.3
+        id: install
+
+      - name: Deploy pgo-worker to GKE
+        id: deploy
+        run: |-
+          cd ./deploy/helm
+          helm template zero-bin ./zero-bin -f ./zero-bin/values.yaml --set hull.config.specific.version=sha-${GITHUB_SHA} --set hull.config.specific.workerImageName=zero-bin-pgo-worker -n zkevm | kubectl apply -f - -l app.kubernetes.io/component=worker
+
+  run-benchmark:
+    name: Run benchmarks tests
+    # if: ${{ false }}  # disable for now
+    runs-on: gha-runner-set
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    needs: deploy-pgo
+    env:
+      USE_GKE_GCLOUD_AUTH_PLUGIN: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_ID }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: 'gke-gcloud-auth-plugin'
+
+      - name: Get GKE credentials
+        id: 'get-credentials'
+        uses: 'google-github-actions/get-gke-credentials@v2'
+        with:
+          cluster_name: 'immutable-prod'
+          location: 'us-central1'
+          use_auth_provider: true
+
+      - uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.2'
+
+      - name: Run benchmark script
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_WORKLOAD_IDENTITY_ID: ${{ secrets.GCP_WORKLOAD_IDENTITY_ID }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          MACHINE_TYPE: "t2d-standard-60"
+          NUM_WORKERS: 1
+          CPU: 55
+          MEMORY: 32Gi
+          BLOCK_START: 177
+          BLOCK_END: 177
+          OTHER_ARGS: "pgo.test.run"
+          RPC_ENDPOINT: "INTERNAL_RPC"
+          CPU_THRESHOLD: 1200
+        run: |-
+          export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+          gcloud container clusters get-credentials immutable-prod --project ${{ secrets.GCP_PROJECT_ID }} --region us-central1
+          ./tools/run-benchmark.sh ${{ env.MACHINE_TYPE }} ${{ env.NUM_WORKERS }} ${{ env.CPU }} ${{ env.CPU }} ${{ env.MEMORY }} ${{ env.MEMORY }} ${{ env.BLOCK_START }} ${{ env.BLOCK_END }} ${{ env.OTHER_ARGS }} ${{ env.RPC_ENDPOINT }}
+          kubectl scale --replicas=0 deployment/zero-bin-worker -n zkevm
+
+  build:
+    name: Build docker images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    needs: run-benchmark
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get docker image meta (leader)
+        id: leader-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE_NAME }}/zero-bin-leader
+          tags: ${{ env.DEFAULT_TAGS }}
+
+      - name: Get docker image meta (worker optimized)
+        id: worker-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE_NAME }}/zero-bin-worker
+          tags: ${{ env.DEFAULT_TAGS }}
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_ID }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: 'access_token'
+          access_token_lifetime: '1800s'
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Pull pgo file from GCS
+        run: |-
+          mkdir -p ./target/pgo-profiles
+          gsutil cp $(gsutil -m ls -l gs://zkevm-csv/profiles | grep $(date -I) | sed 's/.*\(gs:\/\/\)/\1/' | tail -n -1) ./target/pgo-profiles
+          ls -lh ./target/pgo-profiles
+
+      - name: Login to GCR
+        uses: docker/login-action@v3
+        with:
+          registry: us.gcr.io
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
       - name: Build and push worker
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: worker.Dockerfile
+          file: optimized-worker.Dockerfile
           push: true
           tags: ${{ steps.worker-meta.outputs.tags }}
           labels: ${{ steps.worker-meta.outputs.labels }}

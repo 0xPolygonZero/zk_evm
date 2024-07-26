@@ -22,14 +22,12 @@ W_DEPLOYMENT_LABEL="app.kubernetes.io/component=worker"
 L_DEPLOYMENT_LABEL="app.kubernetes.io/component=leader"
 LEADER_ENDPOINT="http://35.238.105.189:8080"
 LOG_STRING_TO_WATCH_FOR="Finalized benchmarked proofs"
-CPU_THRESHOLD=100
+CPU_THRESHOLD="${CPU_THRESHOLD:-100}"
 DISK_TYPE=""
 NUM_WORKERS_LIMIT=200
 IMX_RPC="http://35.208.84.178:8545"
 INTERNAL_RPC="http://35.208.68.173:8545"
 RPC_ADDRESS=""
-SUBFOLDER_NAME=""
-ENVIRONMENT="${ENVIRONMENT:-test}"
 
 # parameters
 machine_type=$1
@@ -62,10 +60,8 @@ fi
 
 if [[ $RPC_ENDPOINT == "IMX_RPC" ]]; then
   RPC_ADDRESS=$IMX_RPC
-  SUBFOLDER_NAME="external"
 elif [[ $RPC_ENDPOINT == "INTERNAL_RPC" ]]; then
   RPC_ADDRESS=$INTERNAL_RPC
-  SUBFOLDER_NAME="internal"
 else
   echo "error: Wrong RPC endpoint" >&2; exit 1
 fi
