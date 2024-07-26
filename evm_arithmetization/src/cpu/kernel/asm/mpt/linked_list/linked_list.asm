@@ -34,7 +34,7 @@
 %%after:
 %endmacro
 
-/// Iterates over the inital account linked list and shallow copies
+/// Iterates over the initial account linked list and shallow copies
 /// the accounts, storing a pointer to the copied account in the node.
 global store_initial_accounts:
     // stack: retdest
@@ -208,7 +208,7 @@ insert_new_account:
 
 
 /// Searches the account addr in the linked list.
-/// Returns `payload_ptr` if the account was not found, `original_ptr` if it was already present.
+/// Returns 0 if the account was not found or `original_ptr` if it was already present.
 global search_account:
     // stack: addr_key, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -307,7 +307,7 @@ global remove_account:
 %endmacro
 
 
-/// Iterates over the inital account linked list and shallow copies
+/// Iterates over the initial account linked list and shallow copies
 /// the accounts, storing a pointer to the copied account in the node.
 global store_initial_slots:
     // stack: retdest

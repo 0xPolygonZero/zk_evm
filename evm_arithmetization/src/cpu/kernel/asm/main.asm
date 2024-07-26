@@ -83,7 +83,7 @@ global main:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
 global store_initial:
-    // Store the inital accounts and slots for hashing later
+    // Store the initial accounts and slots for hashing later
     %store_initial_accounts
     %store_initial_slots
    

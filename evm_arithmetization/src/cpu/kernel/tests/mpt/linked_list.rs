@@ -50,7 +50,7 @@ fn test_init_linked_lists() -> Result<()> {
         acc_addr_list
     );
 
-    // Check the inital storage linked list
+    // Check the initial storage linked list
     let acc_addr_list: Vec<U256> = (0..5)
         .map(|i| {
             interpreter

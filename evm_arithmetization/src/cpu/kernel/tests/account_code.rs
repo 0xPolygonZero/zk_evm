@@ -422,7 +422,7 @@ fn prepare_interpreter_all_accounts<F: Field>(
     assert_eq!(
         interpreter.stack().len(),
         2,
-        "Expected 2 items on stack after setting the inital trie payloads, found {:?}",
+        "Expected 2 items on stack after setting the initial trie payloads, found {:?}",
         interpreter.stack()
     );
 
