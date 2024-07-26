@@ -77,7 +77,7 @@ jobs:
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           cd zero_bin/tools
           ulimit -n 8192
-          OUTPUT_TO_TERMINAL=true ./prove_rpc.sh 0x1 0xf $ETH_RPC_URL native true 3000 100 test_only
+          OUTPUT_TO_TERMINAL=true ./prove_rpc.sh 0x2 0xf $ETH_RPC_URL native true 3000 100 test_only
           echo "Proving blocks in test_only mode finished"
 
 
