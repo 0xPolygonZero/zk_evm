@@ -638,12 +638,12 @@ pub mod testing {
         let inputs = inputs.trim();
         let mut proofs = vec![];
 
-        for mut next_data in data_iterator {
+        for (_, mut next_data) in data_iterator {
             let proof = prove(
                 all_stark,
                 config,
                 inputs.clone(),
-                &mut next_data.1,
+                &mut next_data,
                 timing,
                 abort_signal.clone(),
             )?;
