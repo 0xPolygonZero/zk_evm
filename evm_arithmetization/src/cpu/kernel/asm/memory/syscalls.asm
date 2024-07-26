@@ -79,7 +79,14 @@ calldataload_large_offset:
     // stack: kexit_info, dest_offset, offset, size
     %wcopy_charge_gas
 
-    %stack (kexit_info, dest_offset, offset, size) -> (dest_offset, size, kexit_info, dest_offset, offset, size)
+    // Ensure that `offset + size` won't overflow the reserved 32-bit limb
+    // of the `virtual` component of the source memory address.
+    DUP4 DUP4
+    // stack: offset, size, kexit_info, dest_offset, offset, size
+    %add_u32_or_fault
+
+    %stack (offset_plus_size, kexit_info, dest_offset, offset, size) ->
+        (dest_offset, size, kexit_info, dest_offset, offset, size)
     %add_or_fault
     // stack: expanded_num_bytes, kexit_info, dest_offset, offset, size, kexit_info
     DUP1 %ensure_reasonable_offset
