@@ -214,7 +214,6 @@ fn load_state_trie(
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<usize, ProgramError> {
     let node_ptr = trie_data.len();
-    log::debug!("node ptr {:?}", node_ptr);
     let type_of_trie = PartialTrieType::of(trie) as u32;
     if type_of_trie > 0 {
         trie_data.push(Some(type_of_trie.into()));
@@ -471,9 +470,8 @@ where
                 .map(Some)
                 .collect::<Vec<_>>();
             let leaf = match leaves.len() {
-                0 => Some(0.into()),
                 1 => leaves[0],
-                _ => panic!("Slot can only store one value."),
+                _ => panic!("Slot can only store exactly one value."),
             };
             storage_leaves.push(leaf);
             // Write the counter.
