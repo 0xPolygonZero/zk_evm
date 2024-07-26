@@ -47,6 +47,8 @@ plonky2_maybe_rayon = { workspace = true }
 alloy = { workspace = true }
 rstest = "0.21.0"
 
+[features]
+cdk_erigon = []
 
 [[bench]]
 name = "block_processing"

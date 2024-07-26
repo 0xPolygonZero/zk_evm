@@ -154,6 +154,8 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     };
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,

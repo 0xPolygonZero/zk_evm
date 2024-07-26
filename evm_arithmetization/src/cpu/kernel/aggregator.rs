@@ -175,7 +175,15 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
 pub static KERNEL: Lazy<Kernel> = Lazy::new(combined_kernel);
 
 pub(crate) fn combined_kernel_from_files<const N: usize>(files: [&str; N]) -> Kernel {
-    let parsed_files = files.iter().map(|f| parse(f, HashSet::new())).collect_vec();
+    #[cfg(feature = "cdk_erigon")]
+    let active_features = HashSet::from(["cdk_erigon"]);
+    #[cfg(not(feature = "cdk_erigon"))]
+    let active_features = HashSet::new();
+
+    let parsed_files = files
+        .iter()
+        .map(|f| parse(f, active_features.clone()))
+        .collect_vec();
     assemble(parsed_files, evm_constants(), true)
 }
 

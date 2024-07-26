@@ -154,6 +154,8 @@ where
             GlobalMetadata::BlockBeneficiary,
             U256::from_big_endian(&public_values.block_metadata.block_beneficiary.0),
         ),
+        #[cfg(feature = "cdk_erigon")]
+        (GlobalMetadata::BurnAddr, public_values.burn_addr),
         (
             GlobalMetadata::BlockTimestamp,
             public_values.block_metadata.block_timestamp,

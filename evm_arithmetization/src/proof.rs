@@ -11,6 +11,8 @@ use starky::lookup::GrandProductChallengeSet;
 use starky::proof::{MultiProof, StarkProofChallenges};
 
 use crate::all_stark::NUM_TABLES;
+#[cfg(feature = "cdk_erigon")]
+use crate::util::get_u256;
 use crate::util::{get_h160, get_h256, h2u};
 
 /// A STARK proof for each table, plus some metadata used to create recursive
@@ -46,6 +48,9 @@ pub struct PublicValues {
     pub trie_roots_before: TrieRoots,
     /// Trie hashes after the execution of the local state transition.
     pub trie_roots_after: TrieRoots,
+    #[cfg(feature = "cdk_erigon")]
+    /// Address to store the base fee to be burnt.
+    pub burn_addr: U256,
     /// Block metadata: it remains unchanged within a block.
     pub block_metadata: BlockMetadata,
     /// 256 previous block hashes and current block's hash.
@@ -61,19 +66,35 @@ impl PublicValues {
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(PublicValuesTarget::SIZE <= pis.len());
 
+        #[cfg(not(feature = "cdk_erigon"))]
+        let burn_addr_offset = 0;
+        #[cfg(feature = "cdk_erigon")]
+        let burn_addr_offset = BurnAddrTarget::SIZE;
         let trie_roots_before = TrieRoots::from_public_inputs(&pis[0..TrieRootsTarget::SIZE]);
         let trie_roots_after =
             TrieRoots::from_public_inputs(&pis[TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2]);
+        #[cfg(feature = "cdk_erigon")]
+        let burn_addr = get_u256(
+            &pis[TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + BurnAddrTarget::SIZE],
+        );
         let block_metadata = BlockMetadata::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE],
+            &pis[burn_addr_offset + TrieRootsTarget::SIZE * 2
+                ..burn_addr_offset + TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE],
         );
         let block_hashes = BlockHashes::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE],
+            &pis[burn_addr_offset + TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
+                ..burn_addr_offset
+                    + TrieRootsTarget::SIZE * 2
+                    + BlockMetadataTarget::SIZE
+                    + BlockHashesTarget::SIZE],
         );
         let extra_block_data = ExtraBlockData::from_public_inputs(
-            &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2
+            &pis[burn_addr_offset
+                + TrieRootsTarget::SIZE * 2
+                + BlockMetadataTarget::SIZE
+                + BlockHashesTarget::SIZE
+                ..burn_addr_offset
+                    + TrieRootsTarget::SIZE * 2
                     + BlockMetadataTarget::SIZE
                     + BlockHashesTarget::SIZE
                     + ExtraBlockDataTarget::SIZE],
@@ -82,6 +103,8 @@ impl PublicValues {
         Self {
             trie_roots_before,
             trie_roots_after,
+            #[cfg(feature = "cdk_erigon")]
+            burn_addr,
             block_metadata,
             block_hashes,
             extra_block_data,
@@ -278,6 +301,9 @@ pub struct PublicValuesTarget {
     pub trie_roots_before: TrieRootsTarget,
     /// Trie hashes after the execution of the local state transition.
     pub trie_roots_after: TrieRootsTarget,
+    #[cfg(feature = "cdk_erigon")]
+    /// Address to store the base fee to be burnt.
+    pub burn_addr: BurnAddrTarget,
     /// Block metadata: it remains unchanged within a block.
     pub block_metadata: BlockMetadataTarget,
     /// 256 previous block hashes and current block's hash.
@@ -380,6 +406,11 @@ impl PublicValuesTarget {
             receipts_root: buffer.read_target_array()?,
         };
 
+        #[cfg(feature = "cdk_erigon")]
+        let burn_addr = BurnAddrTarget {
+            burn_addr: buffer.read_target_array()?,
+        };
+
         let block_metadata = BlockMetadataTarget {
             block_beneficiary: buffer.read_target_array()?,
             block_timestamp: buffer.read_target()?,
@@ -412,6 +443,8 @@ impl PublicValuesTarget {
         Ok(Self {
             trie_roots_before,
             trie_roots_after,
+            #[cfg(feature = "cdk_erigon")]
+            burn_addr,
             block_metadata,
             block_hashes,
             extra_block_data,
@@ -431,24 +464,37 @@ impl PublicValuesTarget {
                     - 1
         );
 
+        #[cfg(not(feature = "cdk_erigon"))]
+        let burn_addr_offset = 0;
+        #[cfg(feature = "cdk_erigon")]
+        let burn_addr_offset = BurnAddrTarget::SIZE;
         Self {
             trie_roots_before: TrieRootsTarget::from_public_inputs(&pis[0..TrieRootsTarget::SIZE]),
             trie_roots_after: TrieRootsTarget::from_public_inputs(
                 &pis[TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2],
             ),
+            #[cfg(feature = "cdk_erigon")]
+            burn_addr: BurnAddrTarget::from_public_inputs(
+                &pis[TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + BurnAddrTarget::SIZE],
+            ),
             block_metadata: BlockMetadataTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2
-                    ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE],
+                &pis[burn_addr_offset + TrieRootsTarget::SIZE * 2
+                    ..burn_addr_offset + TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE],
             ),
             block_hashes: BlockHashesTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
+                &pis[burn_addr_offset + TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
+                    ..burn_addr_offset
+                        + TrieRootsTarget::SIZE * 2
                         + BlockMetadataTarget::SIZE
                         + BlockHashesTarget::SIZE],
             ),
             extra_block_data: ExtraBlockDataTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
+                &pis[burn_addr_offset
+                    + TrieRootsTarget::SIZE * 2
+                    + BlockMetadataTarget::SIZE
+                    + BlockHashesTarget::SIZE
+                    ..burn_addr_offset
+                        + TrieRootsTarget::SIZE * 2
                         + BlockMetadataTarget::SIZE
                         + BlockHashesTarget::SIZE
                         + ExtraBlockDataTarget::SIZE],
@@ -476,6 +522,8 @@ impl PublicValuesTarget {
                 pv0.trie_roots_after,
                 pv1.trie_roots_after,
             ),
+            #[cfg(feature = "cdk_erigon")]
+            burn_addr: BurnAddrTarget::select(builder, condition, pv0.burn_addr, pv1.burn_addr),
             block_metadata: BlockMetadataTarget::select(
                 builder,
                 condition,
@@ -566,6 +614,54 @@ impl TrieRootsTarget {
             builder.connect(tr0.state_root[i], tr1.state_root[i]);
             builder.connect(tr0.transactions_root[i], tr1.transactions_root[i]);
             builder.connect(tr0.receipts_root[i], tr1.receipts_root[i]);
+        }
+    }
+}
+
+/// Circuit version of `BurnAddr`.
+/// Address used to store the base fee to be burnt.
+#[derive(Eq, PartialEq, Debug, Copy, Clone)]
+#[cfg(feature = "cdk_erigon")]
+pub struct BurnAddrTarget {
+    pub(crate) burn_addr: [Target; 8],
+}
+
+#[cfg(feature = "cdk_erigon")]
+impl BurnAddrTarget {
+    /// Number of `Target`s required for the block metadata.
+    pub(crate) const SIZE: usize = 8;
+
+    /// Extracts block metadata `Target`s from the provided public input
+    /// `Target`s. The provided `pis` should start with the block metadata.
+    pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
+        let burn_addr = pis[0..8].try_into().unwrap();
+
+        Self { burn_addr }
+    }
+
+    /// If `condition`, returns the block metadata in `bm0`,
+    /// otherwise returns the block metadata in `bm1`.
+    pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        ba0: Self,
+        ba1: Self,
+    ) -> Self {
+        Self {
+            burn_addr: core::array::from_fn(|i| {
+                builder.select(condition, ba0.burn_addr[i], ba1.burn_addr[i])
+            }),
+        }
+    }
+
+    /// Connects the block metadata in `bm0` to the block metadata in `bm1`.
+    pub(crate) fn connect<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        ba0: Self,
+        ba1: Self,
+    ) {
+        for i in 0..5 {
+            builder.connect(ba0.burn_addr[i], ba1.burn_addr[i]);
         }
     }
 }

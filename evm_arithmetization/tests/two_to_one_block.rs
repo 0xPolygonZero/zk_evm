@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, BigEndianHash, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_public_values, extract_two_to_one_block_hash,
 };
@@ -174,6 +174,8 @@ fn get_test_block_proof(
     let inputs = inputs0.clone();
     let dummy0 = GenerationInputs {
         txn_number_before: inputs.txn_number_before,
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: Some(Address::from(H160::random())),
         gas_used_before: inputs.gas_used_after,
         gas_used_after: inputs.gas_used_after,
         signed_txn: None,

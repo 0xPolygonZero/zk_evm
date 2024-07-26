@@ -112,6 +112,18 @@ pub(crate) fn u256_limbs<F: Field>(u256: U256) -> [F; 8] {
         .unwrap()
 }
 
+#[allow(unused)]
+pub(crate) fn get_u256<F: RichField>(u256_limbs: &[F]) -> U256 {
+    U256(
+        u256_limbs
+            .chunks(2)
+            .map(|c| c[0].to_canonical_u64() + ((c[1].to_canonical_u64()) << 32))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap(),
+    )
+}
+
 /// Returns the 32-bit little-endian limbs of a `H256`.
 pub(crate) fn h256_limbs<F: Field>(h256: H256) -> [F; 8] {
     let mut temp_h256 = h256.0;

@@ -75,6 +75,11 @@ global buy_gas:
     // stack: deduct_eth_status, retdest
     %jumpi(panic)
     // stack: retdest
+    #[cfg(feature = cdk_erigon)]
+    {
+        %add_max_burnt_eth
+        // stack: retdest
+    }
 
 global increment_sender_nonce:
     %mload_txn_field(@TXN_FIELD_ORIGIN)
@@ -324,45 +329,82 @@ process_message_txn_fail:
     %transfer_eth %jumpi(panic)
     %jump(process_message_txn_after_call_contd)
 
-%macro pay_coinbase_and_refund_sender
-    // stack: leftover_gas
+global pay_coinbase_and_refund_sender:
+    // stack: leftover_gas, retdest
     DUP1
-    // stack: leftover_gas, leftover_gas
+    // stack: leftover_gas, leftover_gas, retdest
     %mload_txn_field(@TXN_FIELD_GAS_LIMIT)
     SUB
-    // stack: used_gas, leftover_gas
+    // stack: used_gas, leftover_gas, retdest
     %mload_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
-    // stack: refund, used_gas, leftover_gas
+    // stack: refund, used_gas, leftover_gas, retdest
     DUP2 %div_const(@MAX_REFUND_QUOTIENT) // max_refund = used_gas/5
-    // stack: max_refund, refund, used_gas, leftover_gas
+    // stack: max_refund, refund, used_gas, leftover_gas, retdest
     %min
     %stack (refund, used_gas, leftover_gas) -> (leftover_gas, refund, refund, used_gas)
     ADD
-    // stack: leftover_gas', refund, used_gas
+    // stack: leftover_gas', refund, used_gas, retdest
     SWAP2
-    // stack: used_gas, refund, leftover_gas'
+    // stack: used_gas, refund, leftover_gas', retdest
     SUB
-    // stack: used_gas', leftover_gas'
+    // stack: used_gas', leftover_gas', retdest
 
     // Pay the coinbase.
     %mload_txn_field(@TXN_FIELD_COMPUTED_PRIORITY_FEE_PER_GAS)
     MUL
     // stack: used_gas_tip, leftover_gas'
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_BENEFICIARY)
-    // stack: coinbase, used_gas_tip, leftover_gas'
+    // stack: coinbase, used_gas_tip, leftover_gas', retdest
     %add_eth
-    // stack: leftover_gas'
+    // stack: leftover_gas', retdest
     DUP1
 
     // Refund gas to the origin.
     %mload_txn_field(@TXN_FIELD_COMPUTED_FEE_PER_GAS)
     MUL
-    // stack: leftover_gas_cost, leftover_gas'
+    // stack: leftover_gas_cost, leftover_gas', retdest
     %mload_txn_field(@TXN_FIELD_ORIGIN)
-    // stack: origin, leftover_gas_cost, leftover_gas'
+    // stack: origin, leftover_gas_cost, leftover_gas', retdest
     %add_eth
-    // stack: leftover_gas'
+    // stack: leftover_gas', retdest
+
+    #[cfg(feature = cdk_erigon)]
+    {
+        %deduct_extra_burn_fees
+    }
+    SWAP1 JUMP
+
+%macro pay_coinbase_and_refund_sender
+    // stack: leftover_gas
+    %stack (leftover_gas) -> (leftover_gas, %%after)
+    %jump(pay_coinbase_and_refund_sender)
+%%after:
 %endmacro
+
+#[cfg(feature = cdk_erigon)]
+{
+    %macro deduct_extra_burn_fees
+        // stack: leftover_gas'
+        // Deduct the extra burn fees from the burn target.
+        %mload_global_metadata(@GLOBAL_METADATA_BURN_ADDR) DUP1
+        %eq_const(@U256_MAX) %jumpi(%%deduct_extra_burn_fees_pop)
+        // stack: burn_target, leftover_gas'
+        DUP2
+        %mload_global_metadata(@GLOBAL_METADATA_BLOCK_BASE_FEE)
+        MUL
+        // stack: refund_base_cost, burn_target, leftover_gas'
+        SWAP1
+        %deduct_eth
+        // stack: deduct_status, leftover_gas'
+        %jumpi(panic)
+        %jump(%%deduct_extra_burn_fees_end)
+    %%deduct_extra_burn_fees_pop:
+        // stack: burn_target, leftover_gas'
+        POP
+    %%deduct_extra_burn_fees_end:
+        // stack: leftover_gas'
+    %endmacro
+}
 
 // Sets @TXN_FIELD_MAX_FEE_PER_GAS and @TXN_FIELD_MAX_PRIORITY_FEE_PER_GAS.
 %macro compute_fees
@@ -395,6 +437,29 @@ process_message_txn_fail:
     // stack: gas_limit - intrinsic_gas
 %endmacro
 
+#[cfg(feature = cdk_erigon)]
+{
+    %macro add_max_burnt_eth
+        // stack: (empty)
+        %mload_global_metadata(@GLOBAL_METADATA_BURN_ADDR)
+        // If there is no burn target, we skip the transfer.
+        DUP1 %eq_const(@U256_MAX) %jumpi(%%add_max_burnt_eth_pop)
+        // stack: burn_target
+        %mload_global_metadata(@GLOBAL_METADATA_BLOCK_BASE_FEE)
+        %mload_txn_field(@TXN_FIELD_GAS_LIMIT)
+        MUL
+        // stack: max_burnt_cost, burn_target
+        SWAP1 
+        %add_eth
+        %jump(%%add_max_burnt_eth_end)
+    %%add_max_burnt_eth_pop:
+        // stack: burn_target
+        POP
+    %%add_max_burnt_eth_end:
+        // stack: (empty)
+    %endmacro
+}
+    
 create_contract_account_fault:
     %revert_checkpoint
     // stack: address, retdest

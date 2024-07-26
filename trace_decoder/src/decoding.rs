@@ -4,7 +4,7 @@ use std::{
     iter::once,
 };
 
-use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
+use ethereum_types::{Address, BigEndianHash, H160, H256, U256, U512};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::{BlockMetadata, ExtraBlockData, TrieRoots},
@@ -761,6 +761,9 @@ impl ProcessedBlockTrace {
         let trie_roots_after = calculate_trie_input_hashes(curr_block_tries);
         let gen_inputs = GenerationInputs {
             txn_number_before: extra_data.txn_number_before,
+            // TODO: retrieve the actual burn address from cdk-erigon.
+            #[cfg(feature = "cdk_erigon")]
+            burn_addr: Some(H160::zero()),
             gas_used_before: extra_data.gas_used_before,
             gas_used_after: extra_data.gas_used_after,
             signed_txn: txn_info.meta.txn_bytes,

@@ -38,6 +38,8 @@ use starky::stark::Stark;
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
+#[cfg(feature = "cdk_erigon")]
+use crate::proof::BurnAddrTarget;
 use crate::proof::{
     AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
     PublicValues, PublicValuesTarget, TrieRoots, TrieRootsTarget,
@@ -784,6 +786,13 @@ where
             lhs_public_values.trie_roots_after,
             rhs_public_values.trie_roots_before,
         );
+        #[cfg(feature = "cdk_erigon")]
+        // Connect the burn targets.
+        BurnAddrTarget::connect(
+            &mut builder,
+            lhs_public_values.burn_addr,
+            rhs_public_values.burn_addr,
+        );
 
         Self::connect_extra_public_values(
             &mut builder,
@@ -931,6 +940,9 @@ where
             public_values.extra_block_data,
             agg_pv.extra_block_data,
         );
+        #[cfg(feature = "cdk_erigon")]
+        // Connect the burn targets.
+        BurnAddrTarget::connect(&mut builder, parent_pv.burn_addr, parent_pv.burn_addr);
 
         // Make connections between block proofs, and check initial and final block
         // values.
@@ -1405,6 +1417,8 @@ where
         let agg_public_values = PublicValues {
             trie_roots_before: lhs_public_values.trie_roots_before,
             trie_roots_after: rhs_public_values.trie_roots_after,
+            #[cfg(feature = "cdk_erigon")]
+            burn_addr: lhs_public_values.burn_addr,
             extra_block_data: ExtraBlockData {
                 checkpoint_state_trie_root: lhs_public_values
                     .extra_block_data

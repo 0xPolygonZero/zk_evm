@@ -86,6 +86,8 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
     let inputs = GenerationInputs {
         signed_txn: None,
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: None,
         withdrawals,
         global_exit_roots: vec![],
         tries: TrieInputs {
