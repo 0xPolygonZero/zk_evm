@@ -17,7 +17,7 @@ env:
 
 jobs:
   build-pgo:
-    # if: ${{ false }}  # disable for now
+    if: ${{ false }}  # disable for now
     name: Build pgo docker image
     runs-on: ubuntu-latest
     permissions:
@@ -67,7 +67,7 @@ jobs:
 
   deploy-pgo:
     name: Deploy pgo-worker to GKE
-    # if: ${{ false }}  # disable for now
+    if: ${{ false }}  # disable for now
     runs-on: ubuntu-latest
     needs: build-pgo
     permissions:
@@ -106,7 +106,7 @@ jobs:
 
   run-benchmark:
     name: Run benchmarks tests
-    # if: ${{ false }}  # disable for now
+    if: ${{ false }}  # disable for now
     runs-on: gha-runner-set
     permissions:
       contents: 'read'
@@ -169,7 +169,7 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
-    needs: run-benchmark
+    # needs: run-benchmark
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
