@@ -73,12 +73,7 @@ global main:
     // Encode constant nodes
     %initialize_rlp_segment
 
-    // Initialize linked list and trie data constants.
-    // TODO: Validate them.
-    PROVER_INPUT(linked_list::accounts_linked_list_len)
-    %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
-    PROVER_INPUT(linked_list::storage_linked_list_len)
-    %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
+    // Initialize trie data size.
     PROVER_INPUT(trie_ptr::trie_data_size)
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 

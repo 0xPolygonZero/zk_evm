@@ -68,12 +68,12 @@ pub(crate) fn initialize_mpts<F: Field>(
     let accounts_len_addr = MemoryAddress {
         context: 0,
         segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::AccountsLinkedListLen.unscale(),
+        virt: GlobalMetadata::AccountsLinkedListNextAvailable.unscale(),
     };
     let storage_len_addr = MemoryAddress {
         context: 0,
         segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::StorageLinkedListLen.unscale(),
+        virt: GlobalMetadata::StorageLinkedListNextAvailable.unscale(),
     };
     let initial_accounts_len_addr = MemoryAddress {
         context: 0,
