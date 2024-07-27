@@ -564,9 +564,8 @@ impl<F: RichField> SegmentDataIterator<F> {
 
         // Run the interpreter to get `registers_after` and the partial data for the
         // next segment.
-        if let Ok((updated_registers, mem_after)) =
-            set_registers_and_run(segment_data.registers_after, &mut self.interpreter)
-        {
+        let run = set_registers_and_run(segment_data.registers_after, &mut self.interpreter);
+        if let Ok((updated_registers, mem_after)) = run {
             let partial_segment_data = Some(build_segment_data(
                 segment_index + 1,
                 Some(updated_registers),
@@ -578,7 +577,24 @@ impl<F: RichField> SegmentDataIterator<F> {
             segment_data.registers_after = updated_registers;
             Some((segment_data, partial_segment_data))
         } else {
-            panic!("Segment generation failed");
+            let inputs = &self.interpreter.get_generation_state().inputs;
+            let block = inputs.block_metadata.block_number;
+            let txn_range = match inputs.txn_hashes.len() {
+                0 => "Dummy".to_string(),
+                1 => format!("{:?}", inputs.txn_number_before),
+                _ => format!(
+                    "{:?}_{:?}",
+                    inputs.txn_number_before,
+                    inputs.txn_number_before + inputs.txn_hashes.len()
+                ),
+            };
+            panic!(
+                "Segment generation {:?} for block {:?} ({}) failed with error {:?}",
+                segment_index,
+                block,
+                txn_range,
+                run.unwrap_err()
+            );
         }
     }
 }
