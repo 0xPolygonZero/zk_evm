@@ -21,6 +21,8 @@ mod init;
 mod stdio;
 
 const EVM_ARITH_VER_KEY: &str = "EVM_ARITHMETIZATION_PKG_VER";
+const VERGEN_BUILD_TIMESTAMP: &str = "VERGEN_BUILD_TIMESTAMP";
+const VERGEN_RUSTC_COMMIT_HASH: &str = "VERGEN_RUSTC_COMMIT_HASH";
 
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
     if path.is_none() {
@@ -49,7 +51,29 @@ async fn main() -> Result<()> {
                 env!("EVM_ARITHMETIZATION_PACKAGE_VERSION"),
             );
         }
-    };
+    }
+    if env::var_os(VERGEN_BUILD_TIMESTAMP).is_none() {
+        // Safety:
+        // - we're early enough in main that nothing else should race
+        unsafe {
+            env::set_var(
+                VERGEN_BUILD_TIMESTAMP,
+                // see build.rs
+                env!("VERGEN_BUILD_TIMESTAMP"),
+            );
+        }
+    }
+    if env::var_os(VERGEN_RUSTC_COMMIT_HASH).is_none() {
+        // Safety:
+        // - we're early enough in main that nothing else should race
+        unsafe {
+            env::set_var(
+                VERGEN_RUSTC_COMMIT_HASH,
+                // see build.rs
+                env!("VERGEN_RUSTC_COMMIT_HASH"),
+            );
+        }
+    }
 
     let args = cli::Cli::parse();
     if let paladin::config::Runtime::InMemory = args.paladin.runtime {
@@ -60,13 +84,20 @@ async fn main() -> Result<()> {
             .initialize()?;
     }
 
-    let runtime = Runtime::from_config(&args.paladin, register()).await?;
-
     match args.command {
+        Command::Version {} => {
+            println!(
+                "Evm Arithmetization package version: {}",
+                env::var(EVM_ARITH_VER_KEY)?
+            );
+            println!("Build Commit Hash: {}", env::var(VERGEN_RUSTC_COMMIT_HASH)?);
+            println!("Build Timestamp: {}", env::var(VERGEN_BUILD_TIMESTAMP)?);
+        }
         Command::Stdio {
             previous_proof,
             save_inputs_on_error,
         } => {
+            let runtime = Runtime::from_config(&args.paladin, register()).await?;
             let previous_proof = get_previous_proof(previous_proof)?;
             stdio::stdio_main(runtime, previous_proof, save_inputs_on_error).await?;
         }
@@ -75,6 +106,7 @@ async fn main() -> Result<()> {
             output_dir,
             save_inputs_on_error,
         } => {
+            let runtime = Runtime::from_config(&args.paladin, register()).await?;
             // check if output_dir exists, is a directory, and is writable
             let output_dir_metadata = std::fs::metadata(&output_dir);
             if output_dir_metadata.is_err() {
@@ -99,6 +131,7 @@ async fn main() -> Result<()> {
             backoff,
             max_retries,
         } => {
+            let runtime = Runtime::from_config(&args.paladin, register()).await?;
             let previous_proof = get_previous_proof(previous_proof)?;
             let mut block_interval = BlockInterval::new(&block_interval)?;
 

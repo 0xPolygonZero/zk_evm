@@ -87,4 +87,5 @@ pub(crate) enum Command {
         #[arg(short, long, default_value_t = false)]
         save_inputs_on_error: bool,
     },
+    Version {},
 }

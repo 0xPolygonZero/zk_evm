@@ -1,4 +1,4 @@
-use std::io;
+use std::{env, io};
 
 use alloy::rpc::types::eth::BlockId;
 use clap::{Parser, ValueHint};
@@ -8,8 +8,14 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero_bin_common::block_interval::BlockInterval;
 
+const EVM_ARITH_VER_KEY: &str = "EVM_ARITHMETIZATION_PKG_VER";
+const VERGEN_BUILD_TIMESTAMP: &str = "VERGEN_BUILD_TIMESTAMP";
+const VERGEN_RUSTC_COMMIT_HASH: &str = "VERGEN_RUSTC_COMMIT_HASH";
+
 #[derive(Parser)]
 pub enum Cli {
+    /// Print the version of the rpc package
+    Version {},
     /// Fetch and generate prover input from the RPC endpoint
     Fetch {
         // Starting block of interval to fetch
@@ -41,6 +47,14 @@ impl Cli {
     /// Execute the cli command.
     pub async fn execute(self) -> anyhow::Result<()> {
         match self {
+            Self::Version {} => {
+                println!(
+                    "Evm Arithmetization package version: {}",
+                    env::var(EVM_ARITH_VER_KEY)?
+                );
+                println!("Build Commit Hash: {}", env::var(VERGEN_RUSTC_COMMIT_HASH)?);
+                println!("Build Timestamp: {}", env::var(VERGEN_BUILD_TIMESTAMP)?);
+            }
             Self::Fetch {
                 start_block,
                 end_block,
@@ -78,6 +92,40 @@ impl Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    if env::var_os(EVM_ARITH_VER_KEY).is_none() {
+        // Safety:
+        // - we're early enough in main that nothing else should race
+        unsafe {
+            env::set_var(
+                EVM_ARITH_VER_KEY,
+                // see build.rs
+                env!("EVM_ARITHMETIZATION_PACKAGE_VERSION"),
+            );
+        }
+    }
+    if env::var_os(VERGEN_BUILD_TIMESTAMP).is_none() {
+        // Safety:
+        // - we're early enough in main that nothing else should race
+        unsafe {
+            env::set_var(
+                VERGEN_BUILD_TIMESTAMP,
+                // see build.rs
+                env!("VERGEN_BUILD_TIMESTAMP"),
+            );
+        }
+    }
+    if env::var_os(VERGEN_RUSTC_COMMIT_HASH).is_none() {
+        // Safety:
+        // - we're early enough in main that nothing else should race
+        unsafe {
+            env::set_var(
+                VERGEN_RUSTC_COMMIT_HASH,
+                // see build.rs
+                env!("VERGEN_RUSTC_COMMIT_HASH"),
+            );
+        }
+    }
+
     tracing_subscriber::Registry::default()
         .with(
             tracing_subscriber::fmt::layer()

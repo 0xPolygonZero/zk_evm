@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
+build = "build.rs"
 
 [dependencies]
 paladin-core = { workspace = true }
@@ -38,3 +39,4 @@ test_only = ["ops/test_only", "prover/test_only"]
 [build-dependencies]
 cargo_metadata = "0.18.1"
 anyhow = { workspace = true }
+vergen = { version = "9.0.0", features = ["build", "rustc"] }

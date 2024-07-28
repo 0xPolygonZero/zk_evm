@@ -87,7 +87,8 @@ Usage: leader [OPTIONS] <COMMAND>
 Commands:
   stdio    Reads input from stdin and writes output to stdout
   jerigon  Reads input from a Jerigon node and writes output to stdout
-  native   Reads input from a native node and writes output to stdout 
+  native   Reads input from a native node and writes output to stdout
+  version  Fetch the version, build commit hash, build timestamp
   http     Reads input from HTTP and writes output to a directory
   help     Print this message or the help of the given subcommand(s)
 
@@ -366,6 +367,7 @@ cargo r --bin verifier -- --help
 Usage: verifier --file-path <FILE_PATH>
 
 Options:
+  version                      Fetch the version, build commit hash, build timestamp
   -f, --file-path <FILE_PATH>  The file containing the proof to verify
   -h, --help                   Print help
 ```
@@ -386,8 +388,9 @@ cargo r --bin rpc -- --help
 Usage: rpc <COMMAND>
 
 Commands:
-  fetch  Fetch and generate prover input from the RPC endpoint
-  help   Print this message or the help of the given subcommand(s)
+  fetch   Fetch and generate prover input from the RPC endpoint
+  version Fetch the version, build commit hash, build timestamp
+  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
@@ -457,15 +460,20 @@ Finally, note that both of these testing scripts force proof generation to be se
 
 The trace decoder module has some basic regression tests, using the json witness data from the `trace_decoder/tests/data/witnesses` subdirectories.
 When needed (e.g. some block with corner-case discovered), additional input witness data should be generated using the following procedure:
+
 1. Run the `rpc` tool to fetch the block (or multiple blocks) witness:
+
 ```sh
 cargo run --bin rpc fetch --rpc-url <node_rpc_endpoint> --start-block <start> --end-block <end> > ./b<number>_<network>.json
 ```
+
 2. Download the header file for the block (or range of blocks), making the json array of headers:
+
 ```sh
 file_name = "b<number>_<network>_header.json"
 echo "[" > $file_name && cast rpc eth_getBlockByNumber "0x<block_number>" 'false' --rpc-url <node_rpc_endpoint>  >> $file_name && echo "]" >> $file_name
 ```
+
 Move the generated files to the appropriate subdirectory, and they will be automatically included in the test run.
 
 ## License
