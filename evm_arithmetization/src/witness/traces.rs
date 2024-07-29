@@ -59,7 +59,12 @@ impl<T: Copy> Traces<T> {
                 .map(|op| match op {
                     Operation::TernaryOperation { .. } => 2,
                     Operation::BinaryOperation { operator, .. } => match operator {
-                        BinaryOperator::Div | BinaryOperator::Mod => 2,
+                        BinaryOperator::Div
+                        | BinaryOperator::Mod
+                        | BinaryOperator::AddFp254
+                        | BinaryOperator::SubFp254
+                        | BinaryOperator::MulFp254
+                        | BinaryOperator::Shr => 2,
                         _ => 1,
                     },
                     Operation::RangeCheckOperation { .. } => 1,
