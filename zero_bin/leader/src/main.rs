@@ -11,6 +11,7 @@ use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use tracing::{info, warn};
 use zero_bin_common::block_interval::BlockInterval;
+use zero_bin_common::version;
 
 use crate::client::{client_main, ProofParams};
 
@@ -20,9 +21,7 @@ mod http;
 mod init;
 mod stdio;
 
-const EVM_ARITH_VER_KEY: &str = "EVM_ARITHMETIZATION_PKG_VER";
-const VERGEN_BUILD_TIMESTAMP: &str = "VERGEN_BUILD_TIMESTAMP";
-const VERGEN_RUSTC_COMMIT_HASH: &str = "VERGEN_RUSTC_COMMIT_HASH";
+const EVM_ARITHMETIZATION_PKG_VER: &str = "EVM_ARITHMETIZATION_PKG_VER";
 
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
     if path.is_none() {
@@ -41,36 +40,14 @@ async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
     init::tracing();
 
-    if env::var_os(EVM_ARITH_VER_KEY).is_none() {
+    if env::var_os(EVM_ARITHMETIZATION_PKG_VER).is_none() {
         // Safety:
         // - we're early enough in main that nothing else should race
         unsafe {
             env::set_var(
-                EVM_ARITH_VER_KEY,
-                // see build.rs
-                env!("EVM_ARITHMETIZATION_PACKAGE_VERSION"),
-            );
-        }
-    }
-    if env::var_os(VERGEN_BUILD_TIMESTAMP).is_none() {
-        // Safety:
-        // - we're early enough in main that nothing else should race
-        unsafe {
-            env::set_var(
-                VERGEN_BUILD_TIMESTAMP,
-                // see build.rs
-                env!("VERGEN_BUILD_TIMESTAMP"),
-            );
-        }
-    }
-    if env::var_os(VERGEN_RUSTC_COMMIT_HASH).is_none() {
-        // Safety:
-        // - we're early enough in main that nothing else should race
-        unsafe {
-            env::set_var(
-                VERGEN_RUSTC_COMMIT_HASH,
-                // see build.rs
-                env!("VERGEN_RUSTC_COMMIT_HASH"),
+                EVM_ARITHMETIZATION_PKG_VER,
+                // see version.rs
+                env!("EVM_ARITHMETIZATION_PKG_VER"),
             );
         }
     }
@@ -85,14 +62,11 @@ async fn main() -> Result<()> {
     }
 
     match args.command {
-        Command::Version {} => {
-            println!(
-                "Evm Arithmetization package version: {}",
-                env::var(EVM_ARITH_VER_KEY)?
-            );
-            println!("Build Commit Hash: {}", env::var(VERGEN_RUSTC_COMMIT_HASH)?);
-            println!("Build Timestamp: {}", env::var(VERGEN_BUILD_TIMESTAMP)?);
-        }
+        Command::Version {} => version::print_version(
+            env!("EVM_ARITHMETIZATION_PKG_VER"),
+            env!("VERGEN_RUSTC_COMMIT_HASH"),
+            env!("VERGEN_BUILD_TIMESTAMP"),
+        ),
         Command::Stdio {
             previous_proof,
             save_inputs_on_error,

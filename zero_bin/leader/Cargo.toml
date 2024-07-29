@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-build = "build.rs"
+build = "../version.rs"
 
 [dependencies]
 paladin-core = { workspace = true }
