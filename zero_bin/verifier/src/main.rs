@@ -56,19 +56,14 @@ fn main() -> Result<()> {
         }
     }
 
-    if args.command.is_some() {
-        match args.command {
-            Some(Command::Version {}) => {
-                println!(
-                    "Evm Arithmetization package version: {}",
-                    env::var(EVM_ARITH_VER_KEY)?
-                );
-                println!("Build Commit Hash: {}", env::var(VERGEN_RUSTC_COMMIT_HASH)?);
-                println!("Build Timestamp: {}", env::var(VERGEN_BUILD_TIMESTAMP)?);
-                return Ok(());
-            }
-            None => {}
-        }
+    if let Some(Command::Version {}) = args.command {
+        println!(
+            "Evm Arithmetization package version: {}",
+            env::var(EVM_ARITH_VER_KEY)?
+        );
+        println!("Build Commit Hash: {}", env::var(VERGEN_RUSTC_COMMIT_HASH)?);
+        println!("Build Timestamp: {}", env::var(VERGEN_BUILD_TIMESTAMP)?);
+        return Ok(());
     }
 
     let file = File::open(args.file_path.unwrap())?;

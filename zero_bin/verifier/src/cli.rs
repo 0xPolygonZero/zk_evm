@@ -1,4 +1,4 @@
-use std::{path::PathBuf, string};
+use std::string;
 
 use clap::{Parser, Subcommand, ValueHint};
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
