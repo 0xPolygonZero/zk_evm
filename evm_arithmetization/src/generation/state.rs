@@ -350,6 +350,10 @@ impl<F: Field> GenerationState<F> {
     /// we're jumping to a special location.
     pub(crate) fn jump_to(&mut self, dst: usize) -> Result<(), ProgramError> {
         self.registers.program_counter = dst;
+        if self.stack().is_empty() {
+            // We cannot observe anything as the stack is empty.
+            return Ok(());
+        }
         if dst == KERNEL.global_labels["observe_new_address"] {
             let tip_u256 = stack_peek(self, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
