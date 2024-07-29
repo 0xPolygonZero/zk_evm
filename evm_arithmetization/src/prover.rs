@@ -716,17 +716,16 @@ where
         "The degree of the Stark constraints must be <= blowup_factor + 1"
     );
 
-    let lookup_challenges: Vec<_> = ctl_challenges.challenges.iter().map(|ch| ch.beta).collect();
     // Add lookup columns.
     let lookups = stark.lookups();
     let mut res = {
         let mut columns = Vec::new();
         for lookup in &lookups {
-            for &challenge in lookup_challenges.iter() {
+            for &challenge in ctl_challenges.challenges.iter() {
                 columns.extend(lookup_helper_columns(
                     lookup,
                     trace_poly_values,
-                    challenge,
+                    challenge.beta,
                     constraint_degree,
                 ));
             }
