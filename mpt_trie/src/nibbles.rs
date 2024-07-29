@@ -254,7 +254,7 @@ impl From<U256> for NibblesIntern {
     }
 }
 
-#[derive(Copy, Clone, Deserialize, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Copy, Clone, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 /// A sequence of nibbles which is used as the key type into
 /// [`PartialTrie`][`crate::partial_trie::PartialTrie`].
 ///
@@ -323,6 +323,14 @@ impl Debug for Nibbles {
     }
 }
 
+/// While we could just derive `Default` and it would be correct, it's a bit
+/// cleaner to instead call [`Nibbles::empty`] explicitly.
+impl Default for Nibbles {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl FromStr for Nibbles {
     type Err = StrToNibblesError;
 
@@ -355,6 +363,17 @@ impl UpperHex for Nibbles {
 }
 
 impl Nibbles {
+    /// Create `Nibbles` that is empty.
+    ///
+    /// Note that mean that the key size is `0` and does not mean that the key
+    /// contains the `0` [`Nibble`].
+    pub fn empty() -> Self {
+        Self {
+            count: 0,
+            packed: NibblesIntern::default(),
+        }
+    }
+
     /// Creates `Nibbles` from big endian bytes.
     ///
     /// Returns an error if the byte slice is empty or is longer than `32`
@@ -1126,7 +1145,7 @@ mod tests {
 
     #[test]
     fn push_nibble_front_works() {
-        test_and_assert_nib_push_func(Nibbles::default(), 0x1, |n| n.push_nibble_front(0x1));
+        test_and_assert_nib_push_func(Nibbles::empty(), 0x1, |n| n.push_nibble_front(0x1));
         test_and_assert_nib_push_func(0x1, 0x21, |n| n.push_nibble_front(0x2));
         test_and_assert_nib_push_func(
             Nibbles::from_str(ZERO_NIBS_63).unwrap(),
@@ -1137,7 +1156,7 @@ mod tests {
 
     #[test]
     fn push_nibble_back_works() {
-        test_and_assert_nib_push_func(Nibbles::default(), 0x1, |n| n.push_nibble_back(0x1));
+        test_and_assert_nib_push_func(Nibbles::empty(), 0x1, |n| n.push_nibble_back(0x1));
         test_and_assert_nib_push_func(0x1, 0x12, |n| n.push_nibble_back(0x2));
         test_and_assert_nib_push_func(
             Nibbles::from_str(ZERO_NIBS_63).unwrap(),
@@ -1148,7 +1167,7 @@ mod tests {
 
     #[test]
     fn push_nibbles_front_works() {
-        test_and_assert_nib_push_func(Nibbles::default(), 0x1234, |n| {
+        test_and_assert_nib_push_func(Nibbles::empty(), 0x1234, |n| {
             n.push_nibbles_front(&0x1234.into())
         });
         test_and_assert_nib_push_func(0x1234, 0x5671234, |n| n.push_nibbles_front(&0x567.into()));
@@ -1161,7 +1180,7 @@ mod tests {
 
     #[test]
     fn push_nibbles_back_works() {
-        test_and_assert_nib_push_func(Nibbles::default(), 0x1234, |n| {
+        test_and_assert_nib_push_func(Nibbles::empty(), 0x1234, |n| {
             n.push_nibbles_back(&0x1234.into())
         });
         test_and_assert_nib_push_func(0x1234, 0x1234567, |n| n.push_nibbles_back(&0x567.into()));
@@ -1187,13 +1206,13 @@ mod tests {
     fn get_next_nibbles_works() -> Result<(), StrToNibblesError> {
         let n: Nibbles = 0x1234.into();
 
-        assert_eq!(n.get_next_nibbles(0), Nibbles::default());
+        assert_eq!(n.get_next_nibbles(0), Nibbles::empty());
         assert_eq!(n.get_next_nibbles(1), Nibbles::from(0x1));
         assert_eq!(n.get_next_nibbles(2), Nibbles::from(0x12));
         assert_eq!(n.get_next_nibbles(3), Nibbles::from(0x123));
         assert_eq!(n.get_next_nibbles(4), Nibbles::from(0x1234));
 
-        assert_eq!(Nibbles::from(0x0).get_next_nibbles(0), Nibbles::default());
+        assert_eq!(Nibbles::from(0x0).get_next_nibbles(0), Nibbles::empty());
 
         let n = Nibbles::from_str(
             "0x3ab76c381c0f8ea617ea96780ffd1e165c754b28a41a95922f9f70682c581353",

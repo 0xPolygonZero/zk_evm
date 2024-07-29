@@ -41,7 +41,7 @@ use crate::{
 /// [branch][`Node::Branch`]s have no [`Nibble`] directly associated with them.
 fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>) -> Nibbles {
     match n {
-        Node::Empty | Node::Hash(_) | Node::Branch { .. } => Nibbles::default(),
+        Node::Empty | Node::Hash(_) | Node::Branch { .. } => Nibbles::empty(),
         Node::Extension { nibbles, child: _ } | Node::Leaf { nibbles, value: _ } => *nibbles,
     }
 }
@@ -187,7 +187,7 @@ fn find_latest_diff_point_between_tries(
     a: &HashedPartialTrie,
     b: &HashedPartialTrie,
 ) -> Option<DiffPoint> {
-    let state = DepthDiffPerCallState::new(a, b, Nibbles::default(), 0);
+    let state = DepthDiffPerCallState::new(a, b, Nibbles::empty(), 0);
     let mut longest_state = DepthNodeDiffState::default();
 
     find_latest_diff_point_between_tries_rec(&state, &mut longest_state);
@@ -327,7 +327,7 @@ fn find_latest_diff_point_between_tries_rec(
                 create_diff_detection_state_based_from_hashes(
                     a_hash,
                     b_hash,
-                    &state.new_from_parent(state.a, state.b, &Nibbles::default()),
+                    &state.new_from_parent(state.a, state.b, &Nibbles::empty()),
                     depth_state,
                 )
             }
@@ -461,7 +461,7 @@ mod tests {
         let expected = DiffPoint {
             depth: 0,
             path: TriePath(vec![]),
-            key: Nibbles::default(),
+            key: Nibbles::empty(),
             a_info: expected_a,
             b_info: expected_b,
         };

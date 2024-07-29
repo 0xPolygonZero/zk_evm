@@ -23,7 +23,7 @@ fn get_key_piece_from_node_pulling_from_key_for_branches<T: PartialTrie>(
     curr_key: &Nibbles,
 ) -> Nibbles {
     match n {
-        Node::Empty | Node::Hash(_) => Nibbles::default(),
+        Node::Empty | Node::Hash(_) => Nibbles::empty(),
         Node::Branch { .. } => curr_key.get_next_nibbles(1),
         Node::Extension { nibbles, child: _ } | Node::Leaf { nibbles, value: _ } => *nibbles,
     }

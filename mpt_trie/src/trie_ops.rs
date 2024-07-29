@@ -240,7 +240,7 @@ impl<N: PartialTrie> Iterator for PartialTrieIter<N> {
 
             next_iter_item = match stack_entry {
                 IterStackEntry::Root(root) => {
-                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::default())
+                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::empty())
                 }
                 IterStackEntry::Extension(num_nibbles) => {
                     // Drop nibbles that extension added since we are going back up the trie.
@@ -379,7 +379,7 @@ impl<T: PartialTrie> Node<T> {
 
     pub(crate) fn trie_items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         PartialTrieIter {
-            curr_key_after_last_branch: Nibbles::default(),
+            curr_key_after_last_branch: Nibbles::empty(),
             trie_stack: vec![IterStackEntry::Root(self.clone().into())],
         }
     }

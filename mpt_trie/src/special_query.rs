@@ -157,13 +157,13 @@ mod test {
                 TrieSegment::Branch(2),
                 TrieSegment::Extension(Nibbles::from_str("0x00").unwrap()),
                 TrieSegment::Branch(0x1),
-                TrieSegment::Leaf(Nibbles::default()),
+                TrieSegment::Leaf(Nibbles::empty()),
             ],
             vec![
                 TrieSegment::Branch(2),
                 TrieSegment::Extension(Nibbles::from_str("0x00").unwrap()),
                 TrieSegment::Branch(0x2),
-                TrieSegment::Leaf(Nibbles::default()),
+                TrieSegment::Leaf(Nibbles::empty()),
             ],
         ];
 
