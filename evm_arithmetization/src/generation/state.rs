@@ -350,13 +350,16 @@ impl<F: Field> GenerationState<F> {
     /// we're jumping to a special location.
     pub(crate) fn jump_to(&mut self, dst: usize) -> Result<(), ProgramError> {
         self.registers.program_counter = dst;
-        if dst == KERNEL.global_labels["observe_new_address"] {
-            let tip_u256 = stack_peek(self, 0)?;
+        if dst == KERNEL.global_labels["observe_new_address"] && self.get_registers().stack_len > 0
+        {
+            let tip_u256 = stack_peek(self, 0).expect("There cannot be a stack underflow");
             let tip_h256 = H256::from_uint(&tip_u256);
             let tip_h160 = H160::from(tip_h256);
             self.observe_address(tip_h160);
-        } else if dst == KERNEL.global_labels["observe_new_contract"] {
-            let tip_u256 = stack_peek(self, 0)?;
+        } else if dst == KERNEL.global_labels["observe_new_contract"]
+            && self.get_registers().stack_len > 0
+        {
+            let tip_u256 = stack_peek(self, 0).expect("There cannot be a stack underflow");
             let tip_h256 = H256::from_uint(&tip_u256);
             self.observe_contract(tip_h256)?;
         }
