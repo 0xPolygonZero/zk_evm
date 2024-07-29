@@ -179,6 +179,7 @@ impl<F: RichField, const D: usize> ArithmeticStark<F, D> {
         // to accommodate the range check columns. Also make sure the
         // trace length is a power of two.
         let padded_len = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Arithmetic]];
+        assert!(padded_len >= trace_rows.len());
         for _ in trace_rows.len()..std::cmp::max(padded_len, RANGE_MAX) {
             trace_rows.push(vec![F::ZERO; columns::NUM_ARITH_COLUMNS]);
         }

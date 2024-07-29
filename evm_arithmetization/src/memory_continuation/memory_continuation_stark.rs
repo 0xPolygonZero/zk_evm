@@ -87,6 +87,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D>
 
         let num_rows = rows.len();
         let num_rows_padded = 1 << log_padded;
+        assert!(num_rows_padded >= num_rows);
         for _ in num_rows..num_rows_padded {
             rows.push(vec![F::ZERO; NUM_COLUMNS]);
         }

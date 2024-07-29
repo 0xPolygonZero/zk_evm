@@ -184,6 +184,7 @@ impl<F: RichField + Extendable<D>, const D: usize> BytePackingStark<F, D> {
                 rows.push(self.generate_row_for_op(op));
             }
         }
+        assert!(num_rows >= rows.len());
 
         for _ in rows.len()..num_rows {
             rows.push(self.generate_padding_row());

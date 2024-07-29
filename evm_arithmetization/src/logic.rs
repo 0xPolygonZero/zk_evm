@@ -221,6 +221,7 @@ impl<F: RichField, const D: usize> LogicStark<F, D> {
     ) -> Vec<[F; NUM_COLUMNS]> {
         let len = operations.len();
         let padded_len = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Logic]];
+        assert!(padded_len >= len);
 
         let mut rows = Vec::with_capacity(padded_len);
         for op in operations {

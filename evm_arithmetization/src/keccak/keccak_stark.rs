@@ -80,6 +80,7 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakStark<F, D> {
             rows.extend(rows_for_perm);
         }
 
+        assert!(num_rows >= rows.len());
         while rows.len() < num_rows {
             rows.push([F::ZERO; NUM_COLUMNS]);
         }

@@ -291,6 +291,7 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
         }
         // Pad the trace.
         let padded_rows = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::KeccakSponge]];
+        assert!(padded_rows >= rows.len());
         for _ in rows.len()..padded_rows {
             rows.push(self.generate_padding_row());
         }

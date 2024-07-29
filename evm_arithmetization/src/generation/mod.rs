@@ -486,6 +486,9 @@ fn simulate_cpu<F: Field>(
     row.gas = F::from_canonical_u64(state.registers.gas_used);
     row.stack_len = F::from_canonical_usize(state.registers.stack_len);
 
+    let padded_len = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Cpu]];
+    assert!(padded_len >= state.traces.clock());
+
     loop {
         // Padding.
         state.push_cpu(row);
