@@ -354,7 +354,13 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         // We want at least one padding row, so that the last real operation can have
         // its flags set correctly.
         let num_ops_padded = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Memory]];
-        assert!(num_ops_padded >= num_ops);
+        assert!(
+            num_ops_padded >= num_ops,
+            "Padded length {:?} is smaller than actual trace length {:?}",
+            num_ops_padded,
+            num_ops
+        );
+
         for _ in num_ops..num_ops_padded {
             memory_ops.push(padding_op);
         }

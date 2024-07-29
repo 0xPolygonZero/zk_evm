@@ -487,7 +487,12 @@ fn simulate_cpu<F: Field>(
     row.stack_len = F::from_canonical_usize(state.registers.stack_len);
 
     let padded_len = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Cpu]];
-    assert!(padded_len >= state.traces.clock());
+    assert!(
+        padded_len >= state.traces.clock(),
+        "Padded length {:?} is smaller than actual trace length {:?}",
+        padded_len,
+        state.traces.clock()
+    );
 
     loop {
         // Padding.

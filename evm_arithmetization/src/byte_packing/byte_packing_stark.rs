@@ -185,6 +185,12 @@ impl<F: RichField + Extendable<D>, const D: usize> BytePackingStark<F, D> {
             }
         }
         assert!(num_rows >= rows.len());
+        assert!(
+            num_rows >= rows.len(),
+            "Padded length {:?} is smaller than actual trace length {:?}",
+            num_rows,
+            rows.len()
+        );
 
         for _ in rows.len()..num_rows {
             rows.push(self.generate_padding_row());
