@@ -21,7 +21,7 @@ use starky::stark::Stark;
 
 use super::columns::{MEM_AFTER_FILTER, STALE_CONTEXTS, STALE_CONTEXTS_FREQUENCIES};
 use super::segments::Segment;
-use crate::all_stark::{EvmStarkFrame, Table};
+use crate::all_stark::{EvmStarkFrame, Table, ALL_DEGREE_LOGS, TABLE_TO_SORTED_INDEX};
 use crate::memory::columns::{
     value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, CONTEXT_FIRST_CHANGE, COUNTER, FILTER,
     FREQUENCIES, INITIALIZE_AUX, IS_PRUNED, IS_READ, IS_STALE, NUM_COLUMNS, RANGE_CHECK,
@@ -353,8 +353,7 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
         let num_ops = memory_ops.len();
         // We want at least one padding row, so that the last real operation can have
         // its flags set correctly.
-        let num_ops_padded =
-            1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Memory]];
+        let num_ops_padded = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Memory]];
         for _ in num_ops..num_ops_padded {
             memory_ops.push(padding_op);
         }

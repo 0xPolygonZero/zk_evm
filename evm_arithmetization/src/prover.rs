@@ -1,5 +1,6 @@
 use std::any::type_name;
 use std::iter::once;
+use std::mem::swap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -36,7 +37,10 @@ use starky::proof::{
 use starky::prover::{compute_quotient_polys, prove_with_commitment};
 use starky::stark::Stark;
 
-use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
+use crate::all_stark::{
+    all_cross_table_lookups, AllStark, Table, ALL_DEGREE_LOGS, ALL_SORTED_TABLES, NUM_TABLES,
+    SORTED_INDEX_PAIR, TABLE_TO_SORTED_INDEX,
+};
 use crate::arithmetic::arithmetic_stark::ArithmeticStark;
 use crate::byte_packing::byte_packing_stark::BytePackingStark;
 use crate::cpu::cpu_stark::CpuStark;
@@ -90,12 +94,12 @@ impl GenerationSegmentData {
 pub fn zkevm_fast_config() -> StarkConfig {
     let cap_height = 4;
     let mut strategy = Vec::new();
-    for window in Table::all_degree_logs().windows(2) {
+    for window in ALL_DEGREE_LOGS.windows(2) {
         if window[0] != window[1] {
             strategy.push(window[0] - window[1]);
         }
     }
-    let mut last_degree = Table::all_degree_logs()[NUM_TABLES - 1];
+    let mut last_degree = ALL_DEGREE_LOGS[NUM_TABLES - 1];
     while last_degree > cap_height {
         if last_degree >= cap_height + 4 {
             strategy.push(4);
@@ -172,7 +176,7 @@ where
 {
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
 
-    let (traces, mut public_values) = timed!(
+    let (mut traces, mut public_values) = timed!(
         timing,
         "generate all traces",
         generate_traces(all_stark, &inputs, config, segment_data, timing)?
@@ -357,12 +361,13 @@ where
     let rate_bits = config.fri_config.rate_bits;
     let cap_height = config.fri_config.cap_height;
 
-    let trace_poly_values_sorted: [_; NUM_TABLES] = Table::all_sorted()
+    let trace_poly_values_sorted: [_; NUM_TABLES] = ALL_SORTED_TABLES
         .iter()
         .map(|&table| trace_poly_values[*table].clone())
         .collect::<Vec<_>>()
         .try_into()
         .unwrap();
+    // reorder_slice(trace_poly_values, ALL_SORTED_TABLES);
 
     // We compute the Field Merkle Tree of all STARK traces.
     let trace_polys_values_sorted_flat: Vec<_> = trace_poly_values_sorted
@@ -411,7 +416,7 @@ where
         .map(|ch| ch.beta)
         .collect::<Vec<_>>();
 
-    let auxiliary_columns = all_auxiliary_columns::<F, C, D>(
+    let mut auxiliary_columns = all_auxiliary_columns::<F, C, D>(
         all_stark,
         config,
         &trace_poly_values,
@@ -420,15 +425,9 @@ where
     );
 
     // We compute the Field Merkle Tree of all auxiliary columns.
-    let auxiliary_columns_sorted: Vec<_> = Table::all_sorted()
-        .iter()
-        .map(|&table| auxiliary_columns[*table].clone())
-        .collect();
-    let auxiliary_columns_sorted_flat: Vec<_> = auxiliary_columns_sorted
-        .clone()
-        .into_iter()
-        .flatten()
-        .collect();
+    reorder_slice(auxiliary_columns.as_mut_slice(), ALL_SORTED_TABLES);
+    let auxiliary_columns_sorted_flat: Vec<_> =
+        auxiliary_columns.clone().into_iter().flatten().collect();
     let num_aux_polys = auxiliary_columns_sorted_flat.len();
     let auxiliary_commitment = timed!(
         timing,
@@ -446,13 +445,12 @@ where
 
     // Quotient polynomials. They are already chunked in `degree` pieces.
     let alphas = challenger.get_n_challenges(config.num_challenges);
-    let quotient_polys = all_quotient_polys::<F, P, C, D>(
+    let mut quotient_polys = all_quotient_polys::<F, P, C, D>(
         all_stark,
         &trace_poly_values_sorted,
         &trace_commitment,
-        &auxiliary_columns_sorted,
-        &auxiliary_commitment,
         &auxiliary_columns,
+        &auxiliary_commitment,
         None,
         &ctl_data_per_table,
         alphas.clone(),
@@ -460,15 +458,8 @@ where
     );
 
     // We compute the Field Merkle Tree of all quotient polynomials.
-    let quotient_polys_sorted: Vec<_> = Table::all_sorted()
-        .iter()
-        .map(|&table| quotient_polys[*table].clone())
-        .collect();
-    let quotient_polys_sorted_flat: Vec<_> = quotient_polys_sorted
-        .clone()
-        .into_iter()
-        .flatten()
-        .collect();
+    reorder_slice(quotient_polys.as_mut_slice(), ALL_SORTED_TABLES);
+    let quotient_polys_sorted_flat: Vec<_> = quotient_polys.clone().into_iter().flatten().collect();
     let num_quotient_polys = quotient_polys_sorted_flat.len();
     let quotient_commitment = timed!(
         timing,
@@ -501,8 +492,8 @@ where
         all_stark,
         zeta,
         &trace_poly_values_sorted,
-        &auxiliary_columns_sorted,
-        &quotient_polys_sorted,
+        &auxiliary_columns,
+        &quotient_polys,
         &ctl_data_per_table,
         config,
     );
@@ -514,9 +505,9 @@ where
         all_stark,
         &trace_poly_values_sorted,
         &trace_commitment,
-        &auxiliary_columns_sorted,
+        &auxiliary_columns,
         &auxiliary_commitment,
-        &quotient_polys_sorted,
+        &quotient_polys,
         &quotient_commitment,
         &ctl_data_per_table,
         zeta,
@@ -533,7 +524,7 @@ where
         &quotient_commitment,
     ];
 
-    let mut degree_bits_squashed = Table::all_degree_logs().to_vec();
+    let mut degree_bits_squashed = ALL_DEGREE_LOGS.to_vec();
     degree_bits_squashed.dedup();
     let opening_proof = BatchFriOracle::prove_openings(
         &degree_bits_squashed,
@@ -591,7 +582,7 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    let mut res = Vec::new();
+    let mut res = Vec::with_capacity(NUM_TABLES);
 
     // Arithmetic.
     res.push(auxiliary_columns_single_stark::<
@@ -764,7 +755,6 @@ fn quotient_polys_single_stark<F, P, C, S, const D: usize>(
     trace_commitment: &BatchFriOracle<F, C, D>,
     auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
     auxiliary_commitment: &BatchFriOracle<F, C, D>,
-    all_auxiliary_columns: &Vec<Vec<PolynomialValues<F>>>,
     lookup_challenges: Option<&Vec<F>>,
     ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
     alphas: Vec<F>,
@@ -776,17 +766,16 @@ where
     C: GenericConfig<D, F = F>,
     S: Stark<F, D>,
 {
-    let degree_bits = Table::all_degree_logs()[Table::table_to_sorted_index()[*table]];
-    let (index_outer, index_inner) =
-        Table::sorted_index_pair()[Table::table_to_sorted_index()[*table]];
+    let degree_bits = ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]];
+    let (index_outer, index_inner) = SORTED_INDEX_PAIR[TABLE_TO_SORTED_INDEX[*table]];
     let mut num_trace_polys_before = 0;
     let mut num_aux_polys_before = 0;
     for i in 0..index_inner {
-        let prev_sorted_table = Table::table_to_sorted_index()[*table] - i - 1;
+        let prev_sorted_table = TABLE_TO_SORTED_INDEX[*table] - i - 1;
         num_trace_polys_before += trace_poly_values_sorted[prev_sorted_table].len();
         num_aux_polys_before += auxiliary_columns_sorted[prev_sorted_table].len();
     }
-    let trace_leave_len = trace_poly_values_sorted[Table::table_to_sorted_index()[*table]].len();
+    let trace_leave_len = trace_poly_values_sorted[TABLE_TO_SORTED_INDEX[*table]].len();
     let get_trace_packed = |index, step| {
         trace_commitment.get_lde_values_packed::<P>(
             index_outer,
@@ -796,7 +785,7 @@ where
             trace_leave_len,
         )
     };
-    let aux_leave_len = auxiliary_columns_sorted[Table::table_to_sorted_index()[*table]].len();
+    let aux_leave_len = auxiliary_columns_sorted[TABLE_TO_SORTED_INDEX[*table]].len();
     let get_aux_packed = |index, step| {
         auxiliary_commitment.get_lde_values_packed(
             index_outer,
@@ -842,7 +831,6 @@ fn all_quotient_polys<F, P, C, const D: usize>(
     trace_commitment: &BatchFriOracle<F, C, D>,
     auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
     auxiliary_commitment: &BatchFriOracle<F, C, D>,
-    all_auxiliary_columns: &Vec<Vec<PolynomialValues<F>>>,
     lookup_challenges: Option<&Vec<F>>,
     ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
     alphas: Vec<F>,
@@ -853,7 +841,7 @@ where
     P: PackedField<Scalar = F>,
     C: GenericConfig<D, F = F>,
 {
-    let mut res = Vec::new();
+    let mut res = Vec::with_capacity(NUM_TABLES);
 
     // Arithmetic.
     res.push(quotient_polys_single_stark::<F, P, C, _, D>(
@@ -863,7 +851,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -878,7 +865,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -893,7 +879,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -908,7 +893,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -923,7 +907,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -938,7 +921,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -952,7 +934,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -967,7 +948,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -982,7 +962,6 @@ where
         trace_commitment,
         auxiliary_columns_sorted,
         auxiliary_commitment,
-        all_auxiliary_columns,
         lookup_challenges,
         ctl_data_per_table,
         alphas.clone(),
@@ -1008,16 +987,14 @@ where
     C: GenericConfig<D, F = F>,
     S: Stark<F, D>,
 {
-    let g = F::primitive_root_of_unity(
-        Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
-    );
-    let sorted_index = Table::table_to_sorted_index()[*table];
+    let g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]]);
+    let sorted_index = TABLE_TO_SORTED_INDEX[*table];
     let num_ctl_helper_polys = ctl_data_per_table[*table].num_ctl_helper_polys();
     let mut num_trace_polys_before = 0;
     let mut num_aux_polys_before = 0;
     let mut num_quotient_polys_before = 0;
     for i in 0..sorted_index {
-        let prev_sorted_table = Table::table_to_sorted_index()[*table] - i - 1;
+        let prev_sorted_table = TABLE_TO_SORTED_INDEX[*table] - i - 1;
         num_trace_polys_before += trace_poly_values_sorted[i].len();
         num_aux_polys_before += auxiliary_columns_sorted[i].len();
         num_quotient_polys_before += quotient_polys_sorted[i].len();
@@ -1057,7 +1034,7 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    let mut res = Vec::new();
+    let mut res = Vec::with_capacity(NUM_TABLES);
 
     // Arithmetic.
     res.push(fri_instance_info_single_stark::<F, C, _, D>(
@@ -1167,7 +1144,7 @@ where
         config,
     ));
 
-    let res_sorted: Vec<_> = Table::all_sorted()
+    let res_sorted: Vec<_> = ALL_SORTED_TABLES
         .iter()
         .map(|&table| res[*table].clone())
         .collect();
@@ -1199,7 +1176,7 @@ where
         }
         current_instance.batches.extend(instance.batches.clone());
 
-        if i == NUM_TABLES - 1 || Table::all_degree_logs()[i + 1] < Table::all_degree_logs()[i] {
+        if i == NUM_TABLES - 1 || ALL_DEGREE_LOGS[i + 1] < ALL_DEGREE_LOGS[i] {
             squashed_res.push(current_instance.clone());
             current_instance.oracles = vec![
                 FriOracleInfo {
@@ -1241,16 +1218,14 @@ where
     C: GenericConfig<D, F = F>,
     S: Stark<F, D>,
 {
-    let g = F::primitive_root_of_unity(
-        Table::all_degree_logs()[Table::table_to_sorted_index()[*table]],
-    );
-    let table_sorted_index = Table::table_to_sorted_index()[*table];
-    let (_, index_inner) = Table::sorted_index_pair()[table_sorted_index];
+    let g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]]);
+    let table_sorted_index = TABLE_TO_SORTED_INDEX[*table];
+    let (_, index_inner) = SORTED_INDEX_PAIR[table_sorted_index];
     let mut num_trace_polys_before = 0;
     let mut num_aux_polys_before = 0;
     let mut num_quotient_polys_before = 0;
     for i in 0..index_inner {
-        let prev_sorted_table = Table::table_to_sorted_index()[*table] - i - 1;
+        let prev_sorted_table = TABLE_TO_SORTED_INDEX[*table] - i - 1;
         num_trace_polys_before += trace_poly_values_sorted[i].len();
         num_aux_polys_before += auxiliary_columns_sorted[i].len();
         num_quotient_polys_before += quotient_polys_sorted[i].len();
@@ -1291,7 +1266,7 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
-    let degree_bits = Table::all_degree_logs();
+    let degree_bits = ALL_DEGREE_LOGS;
     let mut res = Vec::new();
 
     // Arithmetic.
@@ -1826,6 +1801,20 @@ pub fn generate_all_data_segments<F: RichField>(
     }
 
     Ok(all_seg_data)
+}
+
+fn reorder_slice<T>(slice: &mut [T], ordering: [Table; NUM_TABLES]) {
+    let mut current_order = Table::all();
+    for i in 0..NUM_TABLES - 1 {
+        if current_order[i] != ordering[i] {
+            let j = current_order
+                .iter()
+                .position(|&x| x == ordering[i])
+                .expect("Bad ordering?");
+            current_order.swap(i, j);
+            slice.swap(i, j);
+        }
+    }
 }
 
 /// A utility module designed to test witness generation externally.

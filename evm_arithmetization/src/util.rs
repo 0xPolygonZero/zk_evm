@@ -1,7 +1,7 @@
 use core::mem::{size_of, transmute_copy, ManuallyDrop};
 
 use ethereum_types::{H160, H256, U256};
-use itertools::Itertools;
+use itertools::{assert_equal, Itertools};
 use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::packed::PackedField;

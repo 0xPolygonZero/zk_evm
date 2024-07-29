@@ -106,16 +106,24 @@ impl Deref for Table {
 pub(crate) const NUM_TABLES: usize = Table::MemAfter as usize + 1;
 
 pub(crate) const TABLE_DEGREES: [usize; NUM_TABLES] = [
-    20, // Arithmetic
-    20, // BytePacking,
-    20, // Cpu,
-    18, // Keccak,
-    16, // KeccakSponge,
-    20, // Logic,
-    23, // Memory,
-    22, // MemBefore,
-    22, // MemAfter,
+    18, // Arithmetic
+    18, // BytePacking,
+    18, // Cpu,
+    14, // Keccak,
+    14, // KeccakSponge,
+    18, // Logic,
+    18, // Memory,
+    18, // MemBefore,
+    15, // MemAfter,
 ];
+
+pub(crate) const ALL_SORTED_TABLES: [Table; NUM_TABLES] = Table::all_sorted();
+
+pub(crate) const TABLE_TO_SORTED_INDEX: [usize; NUM_TABLES] = Table::table_to_sorted_index();
+
+pub(crate) const SORTED_INDEX_PAIR: [(usize, usize); NUM_TABLES] = Table::sorted_index_pair();
+
+pub(crate) const ALL_DEGREE_LOGS: [usize; NUM_TABLES] = Table::all_degree_logs();
 
 impl Table {
     /// Returns all STARK table indices.
@@ -135,7 +143,7 @@ impl Table {
 
     /// Returns all STARK table indices in descending order of their padded
     /// trace degrees.
-    pub(crate) const fn all_sorted() -> [Self; NUM_TABLES] {
+    const fn all_sorted() -> [Self; NUM_TABLES] {
         let mut sorted_pairs = [(0, Table::Arithmetic); NUM_TABLES];
         let mut i = 0;
         while i < NUM_TABLES {
@@ -170,7 +178,7 @@ impl Table {
 
     /// Returns the ordered position of the tables. This is the inverse of
     /// `all_sorted()`.
-    pub(crate) const fn table_to_sorted_index() -> [usize; NUM_TABLES] {
+    const fn table_to_sorted_index() -> [usize; NUM_TABLES] {
         let mut res = [0; NUM_TABLES];
         let mut i = 0;
         while i < NUM_TABLES {
@@ -183,7 +191,7 @@ impl Table {
 
     /// Returns the ordered position of the tables in a batch Merkle tree. Each
     /// entry is a couple to account for duplicate sizes.
-    pub(crate) const fn sorted_index_pair() -> [(usize, usize); NUM_TABLES] {
+    const fn sorted_index_pair() -> [(usize, usize); NUM_TABLES] {
         let mut pairs = [(0, 0); NUM_TABLES];
 
         let mut outer = 0;
@@ -204,7 +212,7 @@ impl Table {
     }
 
     /// Returns all STARK padded trace degrees in descending order.
-    pub(crate) const fn all_degree_logs() -> [usize; NUM_TABLES] {
+    const fn all_degree_logs() -> [usize; NUM_TABLES] {
         let mut res = [0; NUM_TABLES];
         let mut i = 0;
         while i < NUM_TABLES {

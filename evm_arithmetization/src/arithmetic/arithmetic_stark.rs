@@ -18,7 +18,7 @@ use static_assertions::const_assert;
 
 use super::columns::{op_flags, NUM_ARITH_COLUMNS};
 use super::shift;
-use crate::all_stark::{EvmStarkFrame, Table};
+use crate::all_stark::{EvmStarkFrame, Table, ALL_DEGREE_LOGS, TABLE_TO_SORTED_INDEX};
 use crate::arithmetic::columns::{NUM_SHARED_COLS, RANGE_COUNTER, RC_FREQUENCIES, SHARED_COLS};
 use crate::arithmetic::{addcy, byte, columns, divmod, modular, mul, Operation};
 
@@ -178,8 +178,7 @@ impl<F: RichField, const D: usize> ArithmeticStark<F, D> {
         // Pad the trace with zero rows if it doesn't have enough rows
         // to accommodate the range check columns. Also make sure the
         // trace length is a power of two.
-        let padded_len =
-            1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Arithmetic]];
+        let padded_len = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Arithmetic]];
         for _ in trace_rows.len()..std::cmp::max(padded_len, RANGE_MAX) {
             trace_rows.push(vec![F::ZERO; columns::NUM_ARITH_COLUMNS]);
         }

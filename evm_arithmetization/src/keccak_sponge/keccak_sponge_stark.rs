@@ -19,7 +19,7 @@ use starky::evaluation_frame::StarkEvaluationFrame;
 use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
-use crate::all_stark::{EvmStarkFrame, Table};
+use crate::all_stark::{EvmStarkFrame, Table, ALL_DEGREE_LOGS, TABLE_TO_SORTED_INDEX};
 use crate::cpu::kernel::keccak_util::keccakf_u32s;
 use crate::keccak_sponge::columns::*;
 use crate::witness::memory::MemoryAddress;
@@ -290,8 +290,7 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
             rows.extend(self.generate_rows_for_op(op));
         }
         // Pad the trace.
-        let padded_rows =
-            1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::KeccakSponge]];
+        let padded_rows = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::KeccakSponge]];
         for _ in rows.len()..padded_rows {
             rows.push(self.generate_padding_row());
         }

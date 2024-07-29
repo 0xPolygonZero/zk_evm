@@ -45,7 +45,7 @@ use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
 use super::NUM_BYTES;
-use crate::all_stark::{EvmStarkFrame, Table};
+use crate::all_stark::{EvmStarkFrame, Table, ALL_DEGREE_LOGS, TABLE_TO_SORTED_INDEX};
 use crate::byte_packing::columns::{
     index_len, value_bytes, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, IS_READ, LEN_INDICES_COLS,
     NUM_COLUMNS, RANGE_COUNTER, RC_FREQUENCIES, TIMESTAMP,
@@ -175,8 +175,7 @@ impl<F: RichField + Extendable<D>, const D: usize> BytePackingStark<F, D> {
         ops: Vec<BytePackingOp>,
         min_rows: usize,
     ) -> Vec<[F; NUM_COLUMNS]> {
-        let num_rows =
-            1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::BytePacking]];
+        let num_rows = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::BytePacking]];
 
         let mut rows = Vec::with_capacity(num_rows);
 

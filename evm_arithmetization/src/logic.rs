@@ -17,7 +17,7 @@ use starky::lookup::{Column, Filter};
 use starky::stark::Stark;
 use starky::util::trace_rows_to_poly_values;
 
-use crate::all_stark::{EvmStarkFrame, Table};
+use crate::all_stark::{EvmStarkFrame, Table, ALL_DEGREE_LOGS, TABLE_TO_SORTED_INDEX};
 use crate::logic::columns::{LogicColumnsView, LOGIC_COL_MAP, NUM_COLUMNS};
 use crate::util::{limb_from_bits_le, limb_from_bits_le_recursive};
 
@@ -220,8 +220,7 @@ impl<F: RichField, const D: usize> LogicStark<F, D> {
         min_rows: usize,
     ) -> Vec<[F; NUM_COLUMNS]> {
         let len = operations.len();
-        let padded_len =
-            1 << Table::all_degree_logs()[Table::table_to_sorted_index()[*Table::Logic]];
+        let padded_len = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Logic]];
 
         let mut rows = Vec::with_capacity(padded_len);
         for op in operations {
