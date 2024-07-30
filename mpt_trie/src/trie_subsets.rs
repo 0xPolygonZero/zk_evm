@@ -22,7 +22,7 @@ use crate::{
 pub type SubsetTrieResult<T> = Result<T, SubsetTrieError>;
 
 /// Errors that may occur when creating a subset [`PartialTrie`].
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error, Hash)]
 pub enum SubsetTrieError {
     #[error("Tried to mark nodes in a tracked trie for a key that does not exist! (Key: {0}, trie: {1})")]
     /// The key does not exist in the trie.

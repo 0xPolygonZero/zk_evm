@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// The node type used for calculating the hash of a trie.
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum EncodedNode {
     /// Node that is RLPed but not hashed.
     Raw(Bytes),

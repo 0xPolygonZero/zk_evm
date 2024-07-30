@@ -72,7 +72,7 @@ pub trait ToNibbles {
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq, Hash)]
 /// Errors encountered when converting from `Bytes` to `Nibbles`.
 pub enum BytesToNibblesError {
     #[error("Tried constructing `Nibbles` from a zero byte slice")]
@@ -84,7 +84,7 @@ pub enum BytesToNibblesError {
     TooManyBytes(usize),
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq, Hash)]
 /// Errors encountered when converting to hex prefix encoding to nibbles.
 pub enum FromHexPrefixError {
     #[error("Tried to convert a hex prefix byte string into `Nibbles` with invalid flags at the start: {0:#04b}")]
@@ -97,7 +97,7 @@ pub enum FromHexPrefixError {
 }
 
 /// Error type for conversion.
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq, Hash)]
 pub enum NibblesToTypeError {
     #[error("Overflow encountered when converting to U256: {0}")]
     /// Overflow encountered.

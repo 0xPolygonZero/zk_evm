@@ -19,7 +19,7 @@ use crate::{
 pub type TrieOpResult<T> = Result<T, TrieOpError>;
 
 /// An error type for trie operation.
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, Hash, PartialEq)]
 pub enum TrieOpError {
     /// An error that occurs when a hash node is found during an insert
     /// operation.
@@ -165,21 +165,21 @@ enum ExistingOrNewBranchValuePlacement<N> {
     BothBranchChildren((Nibble, WrappedNode<N>), (Nibble, WrappedNode<N>)),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash)]
 enum IterStackEntry<N> {
     Root(WrappedNode<N>),
     Extension(usize),
     Branch(BranchStackEntry<N>),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash)]
 struct BranchStackEntry<N> {
     children: [WrappedNode<N>; 16],
     value: Vec<u8>,
     curr_nib: Nibble,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash)]
 /// An iterator that ranges over all the leafs and hash nodes
 /// of the trie, in lexicographic order.
 pub struct PartialTrieIter<N> {
