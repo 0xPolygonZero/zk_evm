@@ -871,6 +871,7 @@ fn create_node_if_ins_val_not_hash<N, F: FnOnce(Vec<u8>) -> WrappedNode<N>>(
 mod tests {
     use std::{collections::HashSet, iter::once};
 
+    use keccak_hash::H256;
     use log::debug;
 
     use super::ValOrHash;
@@ -884,7 +885,7 @@ mod tests {
             generate_n_random_variable_trie_value_entries, get_non_hash_values_in_trie,
             unwrap_iter_item_to_val, TestInsertValEntry,
         },
-        trie_ops::TrieOpResult,
+        trie_ops::{TrieOpError, TrieOpResult},
         utils::{create_mask_of_1s, TryFromIterator},
     };
 
@@ -1199,6 +1200,38 @@ mod tests {
         assert!(res.is_none());
 
         Ok(())
+    }
+
+    #[test]
+    fn collapsing_an_extension_to_a_hash_node_returns_error() -> TrieOpResult<()> {
+        common_setup();
+
+        // We want to create a trie like this:
+        // ```
+        //       B
+        //      / \
+        //     L   H
+        // ```
+        // If we delete the Leaf, then the Branch will collapse into an Extension and
+        // then the extension will attempt to collapse into it's child (the Hash node).
+        // An extension collapsing into a hash node is an error, so we should expect
+        // that an error is returned.
+
+        // Branch at `0x1`
+        // Leaf at `0x12`
+        // Hash at `0x13`
+        let mut trie = HashedPartialTrie::default();
+
+        trie.insert(0x12, vec![10])?;
+        trie.insert(0x13, H256::zero())?;
+
+        // Delete the leaf to trigger the collapse.
+        let res = trie.delete(0x12);
+        if let Err(TrieOpError::ExtensionCollapsedIntoHashError(_, _)) = res {
+            return Ok(());
+        }
+
+        panic!("Expected an extension collapsed into a hash error!");
     }
 
     #[test]
