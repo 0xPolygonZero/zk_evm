@@ -88,7 +88,7 @@ Commands:
   stdio    Reads input from stdin and writes output to stdout
   jerigon  Reads input from a Jerigon node and writes output to stdout
   native   Reads input from a native node and writes output to stdout
-  version  Fetch the version, build commit hash, build timestamp
+  version  Fetch the `evm_arithmetization` package version, build commit hash and build timestamp
   http     Reads input from HTTP and writes output to a directory
   help     Print this message or the help of the given subcommand(s)
 
