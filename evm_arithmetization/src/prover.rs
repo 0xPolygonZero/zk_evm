@@ -187,7 +187,7 @@ where
     let proof = prove_with_traces_batch::<F, P, C, D>(
         all_stark,
         config,
-        traces,
+        &mut traces,
         public_values,
         timing,
         abort_signal,
@@ -348,7 +348,7 @@ type ProofWithMemCaps<F, C, H, const D: usize> = (
 pub(crate) fn prove_with_traces_batch<F, P, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
-    trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
+    mut trace_poly_values: &mut [Vec<PolynomialValues<F>>; NUM_TABLES],
     public_values: PublicValues,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -361,20 +361,10 @@ where
     let rate_bits = config.fri_config.rate_bits;
     let cap_height = config.fri_config.cap_height;
 
-    let trace_poly_values_sorted: [_; NUM_TABLES] = ALL_SORTED_TABLES
-        .iter()
-        .map(|&table| trace_poly_values[*table].clone())
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap();
-    // reorder_slice(trace_poly_values, ALL_SORTED_TABLES);
-
     // We compute the Field Merkle Tree of all STARK traces.
-    let trace_polys_values_sorted_flat: Vec<_> = trace_poly_values_sorted
-        .clone()
-        .into_iter()
-        .flatten()
-        .collect();
+    reorder_slice(trace_poly_values, Table::all(), ALL_SORTED_TABLES);
+    let trace_polys_values_sorted_flat: Vec<_> =
+        trace_poly_values.clone().into_iter().flatten().collect();
     let num_trace_polys = trace_polys_values_sorted_flat.len();
     let trace_commitment = timed!(
         timing,
@@ -397,6 +387,9 @@ where
 
     // For each STARK, compute its cross-table lookup Z polynomials and get the
     // associated `CtlData`.
+    // We need `trace_poly_values` in canonical order. We will sort it again
+    // afterwards.
+    reorder_slice(trace_poly_values, ALL_SORTED_TABLES, Table::all());
     let (ctl_challenges, ctl_data_per_table) = timed!(
         timing,
         "compute CTL data",
@@ -423,9 +416,15 @@ where
         &ctl_data_per_table,
         &ctl_challenges,
     );
+    // From now on we need `trace_poly_values` sorted again.
+    reorder_slice(trace_poly_values, Table::all(), ALL_SORTED_TABLES);
 
     // We compute the Field Merkle Tree of all auxiliary columns.
-    reorder_slice(auxiliary_columns.as_mut_slice(), ALL_SORTED_TABLES);
+    reorder_slice(
+        auxiliary_columns.as_mut_slice(),
+        Table::all(),
+        ALL_SORTED_TABLES,
+    );
     let auxiliary_columns_sorted_flat: Vec<_> =
         auxiliary_columns.clone().into_iter().flatten().collect();
     let num_aux_polys = auxiliary_columns_sorted_flat.len();
@@ -447,7 +446,7 @@ where
     let alphas = challenger.get_n_challenges(config.num_challenges);
     let mut quotient_polys = all_quotient_polys::<F, P, C, D>(
         all_stark,
-        &trace_poly_values_sorted,
+        &trace_poly_values,
         &trace_commitment,
         &auxiliary_columns,
         &auxiliary_commitment,
@@ -458,7 +457,11 @@ where
     );
 
     // We compute the Field Merkle Tree of all quotient polynomials.
-    reorder_slice(quotient_polys.as_mut_slice(), ALL_SORTED_TABLES);
+    reorder_slice(
+        quotient_polys.as_mut_slice(),
+        Table::all(),
+        ALL_SORTED_TABLES,
+    );
     let quotient_polys_sorted_flat: Vec<_> = quotient_polys.clone().into_iter().flatten().collect();
     let num_quotient_polys = quotient_polys_sorted_flat.len();
     let quotient_commitment = timed!(
@@ -491,7 +494,7 @@ where
     let all_fri_instances = all_fri_instance_info::<F, C, D>(
         all_stark,
         zeta,
-        &trace_poly_values_sorted,
+        &trace_poly_values,
         &auxiliary_columns,
         &quotient_polys,
         &ctl_data_per_table,
@@ -503,7 +506,7 @@ where
     // necessary, at `g * zeta`.
     let openings = all_openings(
         all_stark,
-        &trace_poly_values_sorted,
+        &trace_poly_values,
         &trace_commitment,
         &auxiliary_columns,
         &auxiliary_commitment,
@@ -550,7 +553,7 @@ where
             get_memory_extra_looking_values(&public_values),
         );
         check_ctls(
-            &trace_poly_values_sorted,
+            trace_poly_values,
             &all_stark.cross_table_lookups,
             &extra_values,
         );
@@ -1802,15 +1805,19 @@ pub fn generate_all_data_segments<F: RichField>(
     Ok(all_seg_data)
 }
 
-fn reorder_slice<T>(slice: &mut [T], ordering: [Table; NUM_TABLES]) {
-    let mut current_order = Table::all();
+fn reorder_slice<T>(
+    slice: &mut [T],
+    current_order: [Table; NUM_TABLES],
+    target_order: [Table; NUM_TABLES],
+) {
+    let mut order = current_order.clone();
     for i in 0..NUM_TABLES - 1 {
-        if current_order[i] != ordering[i] {
-            let j = current_order
+        if order[i] != target_order[i] {
+            let j = order
                 .iter()
-                .position(|&x| x == ordering[i])
+                .position(|&x| x == target_order[i])
                 .expect("Bad ordering?");
-            current_order.swap(i, j);
+            order.swap(i, j);
             slice.swap(i, j);
         }
     }

@@ -196,6 +196,8 @@ pub mod memory_continuation;
 
 // Proving system components
 pub mod all_stark;
+mod batch_proof;
+mod batch_verifier;
 pub mod fixed_recursive_verifier;
 mod get_challenges;
 pub mod proof;

@@ -16,7 +16,7 @@ use starky::lookup::GrandProductChallenge;
 use starky::stark::Stark;
 use starky::verifier::verify_stark_proof_with_challenges;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, ALL_DEGREE_LOGS, NUM_TABLES, TABLE_TO_SORTED_INDEX};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
@@ -66,7 +66,8 @@ pub(crate) fn initial_memory_merkle_cap<
 
     // Padding.
     let num_rows = trace.len();
-    let num_rows_padded = num_rows.next_power_of_two();
+    let num_rows_padded = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::MemBefore]];
+    assert!(num_rows_padded >= num_rows);
     trace.resize(
         num_rows_padded,
         vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS],
