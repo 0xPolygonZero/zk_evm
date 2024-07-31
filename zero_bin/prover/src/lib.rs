@@ -17,6 +17,7 @@ use tokio::sync::oneshot;
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
+use evm_arithmetization::prover::testing::simulate_execution;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
@@ -77,8 +78,8 @@ impl BlockProverInput {
         }
     }
 
-    #[cfg(feature = "test_only")]
-    pub async fn prove(
+    // #[cfg(feature = "test_only")]
+    pub async fn _prove(
         self,
         runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
@@ -89,6 +90,10 @@ impl BlockProverInput {
 
         let txs =
             trace_decoder::entrypoint(self.block_trace, self.other_data, |_| unimplemented!())?;
+
+        txs.into_iter()
+            .map(|tx_batch| simulate_execution::<Field>(tx_batch))
+            .try_for_each(|res| res)?;
 
         IndexedStream::from(txs)
             .map(&TxProof {
