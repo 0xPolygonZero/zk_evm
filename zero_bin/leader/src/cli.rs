@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use alloy::transports::http::reqwest::Url;
 use clap::{Parser, Subcommand, ValueHint};
+use prover::cli::CliProverConfig;
 use rpc::RpcType;
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
 
@@ -14,6 +15,9 @@ pub(crate) struct Cli {
     #[clap(flatten)]
     pub(crate) paladin: paladin::config::Config,
 
+    #[clap(flatten)]
+    pub(crate) prover_config: CliProverConfig,
+
     // Note this is only relevant for the leader when running in in-memory
     // mode.
     #[clap(flatten)]
@@ -22,18 +26,12 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
+    //TODO unify parameters for all use cases
     /// Reads input from stdin and writes output to stdout.
     Stdio {
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,
-        #[arg(short, long, default_value_t = 20)]
-        max_cpu_len_log: usize,
-        #[arg(short, long, default_value_t = 1)]
-        batch_size: usize,
-        /// If true, save the public inputs to disk on error.
-        #[arg(short, long, default_value_t = false)]
-        save_inputs_on_error: bool,
     },
     /// Reads input from a node rpc and writes output to stdout.
     Rpc {
@@ -56,14 +54,6 @@ pub(crate) enum Command {
         /// stdout.
         #[arg(long, short = 'o', value_hint = ValueHint::FilePath)]
         proof_output_dir: Option<PathBuf>,
-        /// The log of the max number of CPU cycles per proof.
-        #[arg(short, long, default_value_t = 20)]
-        max_cpu_len_log: usize,
-        #[arg(short, long, default_value_t = 1)]
-        batch_size: usize,
-        /// If true, save the public inputs to disk on error.
-        #[arg(short, long, default_value_t = false)]
-        save_inputs_on_error: bool,
         /// Network block time in milliseconds. This value is used
         /// to determine the blockchain node polling interval.
         #[arg(short, long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
@@ -92,12 +82,5 @@ pub(crate) enum Command {
         /// The directory to which output should be written.
         #[arg(short, long, value_hint = ValueHint::DirPath)]
         output_dir: PathBuf,
-        #[arg(short, long, default_value_t = 20)]
-        max_cpu_len_log: usize,
-        #[arg(short, long, default_value_t = 1)]
-        batch_size: usize,
-        /// If true, save the public inputs to disk on error.
-        #[arg(short, long, default_value_t = false)]
-        save_inputs_on_error: bool,
     },
 }

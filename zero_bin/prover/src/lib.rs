@@ -1,9 +1,12 @@
+pub mod cli;
+
 use std::future::Future;
 use std::path::PathBuf;
 
 use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
-use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
+use futures::stream::FuturesOrdered;
+use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
@@ -17,6 +20,13 @@ use trace_decoder::{
 };
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
+
+#[derive(Debug, Clone, Copy)]
+pub struct ProverConfig {
+    pub batch_size: usize,
+    pub max_cpu_len_log: usize,
+    pub save_inputs_on_error: bool,
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
@@ -36,37 +46,39 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        max_cpu_len_log: usize,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        batch_size: usize,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
         use evm_arithmetization::prover::SegmentDataIterator;
-        use futures::{stream::FuturesUnordered, FutureExt};
+        use futures::stream::FuturesUnordered;
         use paladin::directive::{Directive, IndexedStream};
         use proof_gen::types::Field;
 
-        let block_number = self.get_block_number();
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            save_inputs_on_error,
+        } = prover_config;
 
+        let block_number = self.get_block_number();
         let other_data = self.other_data;
-        let txs = self.block_trace.into_txn_proof_gen_ir(
+        let block_generation_inputs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
             batch_size,
         )?;
 
-        // Generate segment data.
-        let agg_ops = ops::SegmentAggProof {
-            save_inputs_on_error,
-        };
-
         let seg_ops = ops::SegmentProof {
             save_inputs_on_error,
         };
 
+        let agg_ops = ops::SegmentAggProof {
+            save_inputs_on_error,
+        };
+
         // Map the transactions to a stream of transaction proofs.
-        let tx_proof_futs: FuturesUnordered<_> = txs
+        let tx_proof_futs: FuturesUnordered<_> = block_generation_inputs
             .iter()
             .enumerate()
             .map(|(idx, txn)| {
@@ -100,6 +112,7 @@ impl BlockProverInput {
                 None => None,
             };
 
+            // Generate the block proof
             let block_proof = paladin::directive::Literal(proof)
                 .map(&ops::BlockProof {
                     prev,
@@ -120,10 +133,8 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         _runtime: &Runtime,
-        max_cpu_len_log: usize,
-        _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        batch_size: usize,
-        _save_inputs_on_error: bool,
+        previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use evm_arithmetization::prover::testing::simulate_execution_all_segments;
         use plonky2::field::goldilocks_field::GoldilocksField;
@@ -135,13 +146,19 @@ impl BlockProverInput {
         let txs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
-            batch_size,
+            prover_config.batch_size,
         )?;
 
         type F = GoldilocksField;
         for txn in txs.into_iter() {
-            simulate_execution_all_segments::<F>(txn, max_cpu_len_log)?;
+            simulate_execution_all_segments::<F>(txn, prover_config.max_cpu_len_log)?;
         }
+
+        // Wait for previous block proof
+        let _prev = match previous {
+            Some(it) => Some(it.await?),
+            None => None,
+        };
 
         info!("Successfully generated witness for block {block_number}.");
 
@@ -167,10 +184,8 @@ impl ProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        max_cpu_len_log: usize,
         previous_proof: Option<GeneratedBlockProof>,
-        batch_size: usize,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
         let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
@@ -180,21 +195,12 @@ impl ProverInput {
             .blocks
             .into_iter()
             .map(|block| {
-                let block_number = block.get_block_number();
-                info!("Proving block {block_number}");
-
                 let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
 
                 // Prove the block
                 let proof_output_dir = proof_output_dir.clone();
                 let fut = block
-                    .prove(
-                        runtime,
-                        max_cpu_len_log,
-                        prev.take(),
-                        batch_size,
-                        save_inputs_on_error,
-                    )
+                    .prove(runtime, prev.take(), prover_config)
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;
