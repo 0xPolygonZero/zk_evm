@@ -30,7 +30,8 @@ revert_account_destroyed_contd:
     // stack: address, prev_balance, retdest
     %read_accounts_linked_list
     // stack: account_payload_ptr, prev_balance, retdest
-    DUP1 %assert_nonzero
+    DUP1 
+    %assert_nonzero
     %increment
     // stack: account_balance_payload_ptr, prev_balance, retdest
     %mstore_trie_data

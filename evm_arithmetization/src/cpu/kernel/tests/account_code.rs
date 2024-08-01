@@ -68,12 +68,12 @@ pub(crate) fn initialize_mpts<F: Field>(
     let accounts_len_addr = MemoryAddress {
         context: 0,
         segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::AccountsLinkedListLen.unscale(),
+        virt: GlobalMetadata::AccountsLinkedListNextAvailable.unscale(),
     };
     let storage_len_addr = MemoryAddress {
         context: 0,
         segment: Segment::GlobalMetadata.unscale(),
-        virt: GlobalMetadata::StorageLinkedListLen.unscale(),
+        virt: GlobalMetadata::StorageLinkedListNextAvailable.unscale(),
     };
     let initial_accounts_len_addr = MemoryAddress {
         context: 0,
@@ -401,7 +401,7 @@ fn prepare_interpreter_all_accounts<F: Field>(
         KERNEL.global_labels["store_initial_slots"];
     interpreter.run()?;
 
-    // Set the pointers to the intial payloads.
+    // Set the pointers to the initial payloads.
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
@@ -422,7 +422,7 @@ fn prepare_interpreter_all_accounts<F: Field>(
     assert_eq!(
         interpreter.stack().len(),
         2,
-        "Expected 2 items on stack after setting the inital trie payloads, found {:?}",
+        "Expected 2 items on stack after setting the initial trie payloads, found {:?}",
         interpreter.stack()
     );
 

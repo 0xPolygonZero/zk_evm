@@ -73,17 +73,12 @@ global main:
     // Encode constant nodes
     %initialize_rlp_segment
 
-    // Initialize linked list and trie data constants.
-    // TODO: Validate them.
-    PROVER_INPUT(linked_list::accounts_linked_list_len)
-    %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
-    PROVER_INPUT(linked_list::storage_linked_list_len)
-    %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
+    // Initialize trie data size.
     PROVER_INPUT(trie_ptr::trie_data_size)
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
 global store_initial:
-    // Store the inital accounts and slots for hashing later
+    // Store the initial accounts and slots for hashing later
     %store_initial_accounts
     %store_initial_slots
    
@@ -206,6 +201,7 @@ global check_receipt_trie:
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_SELFDESTRUCT_LIST_LEN)
 
-    // Reinitialize `chain_id` for legacy txns
+    // Reinitialize `chain_id` for legacy transactions and `to` transaction field
     PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)
+    PUSH 0 %mstore_txn_field(@TXN_FIELD_TO)
 %endmacro
