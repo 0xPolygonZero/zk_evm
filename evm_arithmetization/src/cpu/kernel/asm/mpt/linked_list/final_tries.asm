@@ -74,8 +74,11 @@ insert_next_slot:
     %add_const(2)
     MLOAD_GENERAL
     // stack: value, key, addr, storage_ptr_ptr, root_ptr, retdest
+    // If the value is 0, then payload_ptr = 0, and we don't need to insert a value in the `TrieData` segment.
+    DUP1 ISZERO %jumpi(insert_with_payload_ptr)
     %get_trie_data_size // payload_ptr
     SWAP1 %append_to_trie_data // append the value to the trie data segment
+insert_with_payload_ptr:
     %stack (payload_ptr, key, addr, storage_ptr_ptr, root_ptr) -> (root_ptr, 64, key, payload_ptr, after_insert_slot, storage_ptr_ptr, addr)
     %jump(mpt_insert)
 after_insert_slot:

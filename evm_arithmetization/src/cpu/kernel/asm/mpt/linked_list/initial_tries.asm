@@ -176,12 +176,17 @@ set_payload_storage_leaf:
     POP
     // stack: after_node_type, storage_ptr_ptr, retdest
     %add_const(2) // The value pointer starts at index 3, after num_nibbles and packed_nibbles.
+    // stack: value_ptr_ptr, storage_ptr_ptr, retdest
+    DUP2 MLOAD_GENERAL
+    // stack: value, value_ptr_ptr, storage_ptr_ptr, retdest
+    // If value == 0, then value_ptr = 0, and we don't need to append the value to the `TrieData` segment.
+    DUP1 ISZERO %jumpi(set_payload_storage_leaf_end)
     %get_trie_data_size
-    // stack: value_ptr, value_ptr_ptr, storage_ptr_ptr, retdest
-    DUP3
-    MLOAD_GENERAL
-    // stack: value, value_ptr, value_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: value_ptr, value, value_ptr_ptr, storage_ptr_ptr, retdest
+    SWAP1
     %append_to_trie_data
+set_payload_storage_leaf_end:
+    // stack: value_ptr, value_ptr_ptr, storage_ptr_ptr, retdest
     SWAP1
     %mstore_trie_data
     // stack: storage_ptr_ptr, retdest
