@@ -5778,6 +5778,7 @@ dependencies = [
  "alloy",
  "anyhow",
  "async-stream",
+ "cargo_metadata",
  "clap",
  "evm_arithmetization",
  "futures",
@@ -5788,6 +5789,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "vergen",
 ]
 
 [[package]]

@@ -7,20 +7,18 @@ use dotenvy::dotenv;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde_json::Deserializer;
 use tracing::info;
-use zero_bin_common::version;
+use zero_bin_common::build_version;
 
 mod cli;
 mod init;
 
-use cli::Command;
-
 fn main() -> Result<()> {
     dotenv().ok();
     init::tracing();
-    let args = cli::Cli::parse();
 
-    if let Some(Command::Version {}) = args.command {
-        version::print_version(
+    let args: Vec<String> = env::args().collect();
+    if args.contains(&"--version".to_string()) {
+        build_version::print_version(
             env!("EVM_ARITHMETIZATION_PKG_VER"),
             env!("VERGEN_RUSTC_COMMIT_HASH"),
             env!("VERGEN_BUILD_TIMESTAMP"),
@@ -28,7 +26,9 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let file = File::open(args.file_path.unwrap())?;
+    let args = cli::Cli::parse();
+
+    let file = File::open(args.file_path)?;
     let des = &mut Deserializer::from_reader(&file);
     let input_proofs: Vec<GeneratedBlockProof> = serde_path_to_error::deserialize(des)?;
 

@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-build = "../version.rs"
+build = "../common/src/build_version.rs"
 
 [dependencies]
 paladin-core = { workspace = true }
@@ -25,6 +25,6 @@ zero_bin_common = { workspace = true }
 jemallocator = "0.5.4"
 
 [build-dependencies]
-vergen = { version = "9.0.0", features = ["build", "rustc"] }
+cargo_metadata = { workspace = true }
+vergen = { workspace = true }
 anyhow = { workspace = true }
-cargo_metadata = "0.18.1"

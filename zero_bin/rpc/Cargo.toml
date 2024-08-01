@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-build = "../version.rs"
+build = "../common/src/build_version.rs"
 
 [dependencies]
 __compat_primitive_types = { workspace = true }
@@ -33,6 +33,6 @@ zero_bin_common = { workspace = true }
 prover = { workspace = true }
 
 [build-dependencies]
-vergen = { version = "9.0.0", features = ["build", "rustc"] }
+cargo_metadata = { workspace = true }
+vergen = { workspace = true }
 anyhow = { workspace = true }
-cargo_metadata = "0.18.1"

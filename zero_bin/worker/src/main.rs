@@ -1,12 +1,12 @@
 use std::env;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::WorkerRuntime;
+use zero_bin_common::build_version;
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
-use zero_bin_common::version;
 
 mod init;
 
@@ -18,33 +18,27 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[derive(Parser)]
 struct Cli {
-    #[command(subcommand)]
-    pub(crate) command: Option<Command>,
     #[clap(flatten)]
     paladin: paladin::config::Config,
     #[clap(flatten)]
     prover_state_config: CliProverStateConfig,
 }
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum Command {
-    Version {},
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    dotenv().ok();
-    init::tracing();
-    let args = Cli::parse();
-
-    if let Some(Command::Version {}) = args.command {
-        version::print_version(
+    let args: Vec<String> = env::args().collect();
+    if args.contains(&"--version".to_string()) {
+        build_version::print_version(
             env!("EVM_ARITHMETIZATION_PKG_VER"),
             env!("VERGEN_RUSTC_COMMIT_HASH"),
             env!("VERGEN_BUILD_TIMESTAMP"),
         );
         return Ok(());
     }
+
+    dotenv().ok();
+    init::tracing();
+    let args = Cli::parse();
 
     args.prover_state_config
         .into_prover_state_manager()

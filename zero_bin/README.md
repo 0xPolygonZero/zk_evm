@@ -88,13 +88,14 @@ Commands:
   stdio    Reads input from stdin and writes output to stdout
   jerigon  Reads input from a Jerigon node and writes output to stdout
   native   Reads input from a native node and writes output to stdout
-  version  Fetch the version, build commit hash, build timestamp
   http     Reads input from HTTP and writes output to a directory
   help     Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help
           Print help (see a summary with '-h')
+  --version
+          Fetch the `evm_arithmetization` package version, build commit hash and build timestamp
 
 Paladin options:
   -t, --task-bus-routing-key <TASK_BUS_ROUTING_KEY>
@@ -367,7 +368,7 @@ cargo r --bin verifier -- --help
 Usage: verifier --file-path <FILE_PATH>
 
 Options:
-  version                      Fetch the version, build commit hash, build timestamp
+  --version                      Fetch the `evm_arithmetization` package version, build commit hash and build timestamp
   -f, --file-path <FILE_PATH>  The file containing the proof to verify
   -h, --help                   Print help
 ```
@@ -389,11 +390,12 @@ Usage: rpc <COMMAND>
 
 Commands:
   fetch   Fetch and generate prover input from the RPC endpoint
-  version Fetch the version, build commit hash, build timestamp
   help    Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
+  --version
+          Fetch the `evm_arithmetization` package version, build commit hash and build timestamp
 ```
 
 Example:
