@@ -1,35 +1,60 @@
+use std::any::type_name;
+use std::iter::once;
+use std::mem::swap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
+use plonky2::batch_fri::oracle::BatchFriOracle;
 use plonky2::field::extension::Extendable;
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::field::polynomial::PolynomialValues;
+use plonky2::field::packable::Packable;
+use plonky2::field::packed::PackedField;
+use plonky2::field::polynomial::{PolynomialCoeffs, PolynomialValues};
 use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
+use plonky2::fri::reduction_strategies::FriReductionStrategy;
+use plonky2::fri::structure::{FriInstanceInfo, FriOpeningBatch, FriOracleInfo};
+use plonky2::fri::FriConfig;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::challenger::Challenger;
 use plonky2::plonk::config::{GenericConfig, GenericHashOut};
+use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use plonky2_maybe_rayon::*;
 use serde::{Deserialize, Serialize};
+use starky::batch_proof::{BatchStarkProof, BatchStarkProofWithPublicInputs};
 use starky::config::StarkConfig;
-use starky::cross_table_lookup::{get_ctl_data, CtlData};
-use starky::lookup::GrandProductChallengeSet;
-use starky::proof::{MultiProof, StarkProofWithMetadata};
-use starky::prover::prove_with_commitment;
+use starky::cross_table_lookup::{get_ctl_auxiliary_polys, get_ctl_data, CtlData};
+use starky::lookup::{lookup_helper_columns, GrandProductChallengeSet};
+use starky::proof::{
+    MultiProof, StarkOpeningSet, StarkProof, StarkProofWithMetadata, StarkProofWithPublicInputs,
+};
+use starky::prover::{compute_quotient_polys, prove_with_commitment};
 use starky::stark::Stark;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{
+    all_cross_table_lookups, AllStark, Table, ALL_DEGREE_LOGS, ALL_SORTED_TABLES, NUM_TABLES,
+    SORTED_INDEX_PAIR, TABLE_TO_SORTED_INDEX,
+};
+use crate::arithmetic::arithmetic_stark::ArithmeticStark;
+use crate::byte_packing::byte_packing_stark::BytePackingStark;
+use crate::cpu::cpu_stark::CpuStark;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, Interpreter};
 use crate::generation::state::{GenerationState, State};
 use crate::generation::{generate_traces, GenerationInputs};
 use crate::get_challenges::observe_public_values;
+use crate::keccak::keccak_stark::KeccakStark;
+use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeStark;
+use crate::logic::LogicStark;
+use crate::memory::memory_stark::MemoryStark;
 use crate::memory::segments::Segment;
+use crate::memory_continuation::memory_continuation_stark::MemoryContinuationStark;
 use crate::proof::{AllProof, MemCap, PublicValues, RegistersData};
 use crate::witness::memory::{MemoryAddress, MemoryState};
 use crate::witness::state::RegistersState;
@@ -69,6 +94,40 @@ impl GenerationSegmentData {
     }
 }
 
+pub fn zkevm_fast_config() -> StarkConfig {
+    let cap_height = 4;
+    let mut strategy = Vec::new();
+    for window in ALL_DEGREE_LOGS.windows(2) {
+        if window[0] != window[1] {
+            strategy.push(window[0] - window[1]);
+        }
+    }
+    let mut last_degree = ALL_DEGREE_LOGS[NUM_TABLES - 1];
+    while last_degree > cap_height {
+        if last_degree >= cap_height + 4 {
+            strategy.push(4);
+            last_degree -= 4;
+        } else {
+            strategy.push(last_degree - cap_height);
+            last_degree = cap_height;
+        }
+    }
+
+    StarkConfig {
+        security_bits: 100,
+        num_challenges: 2,
+        fri_config: FriConfig {
+            rate_bits: 1,
+            cap_height,
+            proof_of_work_bits: 16,
+            // This strategy allows us to hit all intermediary STARK leaves while going through the
+            // batched Field Merkle Trees.
+            reduction_strategy: FriReductionStrategy::Fixed(strategy),
+            num_query_rounds: 84,
+        },
+    }
+}
+
 /// Generate traces, then create all STARK proofs.
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
@@ -97,6 +156,42 @@ where
         config,
         traces,
         &mut public_values,
+        timing,
+        abort_signal,
+    )?;
+
+    Ok(proof)
+}
+
+/// Generate traces, then create all STARK proofs.
+pub fn prove_batch<F, P, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    config: &StarkConfig,
+    inputs: GenerationInputs,
+    segment_data: &mut GenerationSegmentData,
+    timing: &mut TimingTree,
+    abort_signal: Option<Arc<AtomicBool>>,
+) -> Result<BatchStarkProofWithPublicInputs<F, C, D, 9>>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    P: PackedField<Scalar = F>,
+{
+    timed!(timing, "build kernel", Lazy::force(&KERNEL));
+
+    let (mut traces, mut public_values) = timed!(
+        timing,
+        "generate all traces",
+        generate_traces(all_stark, &inputs, config, segment_data, timing)?
+    );
+
+    check_abort_signal(abort_signal.clone())?;
+
+    let proof = prove_with_traces_batch::<F, P, C, D>(
+        all_stark,
+        config,
+        &mut traces,
+        public_values,
         timing,
         abort_signal,
     )?;
@@ -251,6 +346,1071 @@ type ProofWithMemCaps<F, C, H, const D: usize> = (
     MerkleCap<F, H>,
     MerkleCap<F, H>,
 );
+
+/// Compute all STARK proofs. STARK-batching version.
+pub(crate) fn prove_with_traces_batch<F, P, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    config: &StarkConfig,
+    mut trace_poly_values: &mut [Vec<PolynomialValues<F>>; NUM_TABLES],
+    public_values: PublicValues,
+    timing: &mut TimingTree,
+    abort_signal: Option<Arc<AtomicBool>>,
+) -> Result<BatchStarkProofWithPublicInputs<F, C, D, NUM_TABLES>>
+where
+    F: RichField + Extendable<D>,
+    P: PackedField<Scalar = F>,
+    C: GenericConfig<D, F = F>,
+{
+    let rate_bits = config.fri_config.rate_bits;
+    let cap_height = config.fri_config.cap_height;
+
+    // We compute the Field Merkle Tree of all STARK traces.
+    reorder_slice(trace_poly_values, Table::all(), ALL_SORTED_TABLES);
+    let trace_polys_values_sorted_flat: Vec<_> =
+        trace_poly_values.clone().into_iter().flatten().collect();
+    let num_trace_polys = trace_polys_values_sorted_flat.len();
+    let trace_commitment = timed!(
+        timing,
+        "compute trace commitments",
+        BatchFriOracle::<F, C, D>::from_values(
+            trace_polys_values_sorted_flat,
+            rate_bits,
+            false,
+            cap_height,
+            timing,
+            &vec![None; num_trace_polys],
+        )
+    );
+
+    let mut challenger = Challenger::<F, C::Hasher>::new();
+    challenger.observe_cap(&trace_commitment.batch_merkle_tree.cap);
+
+    observe_public_values::<F, C, D>(&mut challenger, &public_values)
+        .map_err(|_| anyhow::Error::msg("Invalid conversion of public values."))?;
+
+    // For each STARK, compute its cross-table lookup Z polynomials and get the
+    // associated `CtlData`.
+    // We need `trace_poly_values` in canonical order. We will sort it again
+    // afterwards.
+    reorder_slice(trace_poly_values, ALL_SORTED_TABLES, Table::all());
+    let (ctl_challenges, ctl_data_per_table) = timed!(
+        timing,
+        "compute CTL data",
+        get_ctl_data::<F, C, D, NUM_TABLES>(
+            config,
+            &trace_poly_values,
+            &all_stark.cross_table_lookups,
+            &mut challenger,
+            all_stark.arithmetic_stark.constraint_degree()
+        )
+    );
+
+    check_abort_signal(abort_signal)?;
+    let lookup_challenges = ctl_challenges
+        .challenges
+        .iter()
+        .map(|ch| ch.beta)
+        .collect::<Vec<_>>();
+
+    let mut auxiliary_columns = all_auxiliary_columns::<F, C, D>(
+        all_stark,
+        config,
+        &trace_poly_values,
+        &ctl_data_per_table,
+        &ctl_challenges,
+    );
+    // From now on we need `trace_poly_values` sorted again.
+    reorder_slice(trace_poly_values, Table::all(), ALL_SORTED_TABLES);
+
+    // We compute the Field Merkle Tree of all auxiliary columns.
+    reorder_slice(
+        auxiliary_columns.as_mut_slice(),
+        Table::all(),
+        ALL_SORTED_TABLES,
+    );
+    let auxiliary_columns_sorted_flat: Vec<_> =
+        auxiliary_columns.clone().into_iter().flatten().collect();
+    let num_aux_polys = auxiliary_columns_sorted_flat.len();
+    let auxiliary_commitment = timed!(
+        timing,
+        "compute auxiliary commitments",
+        BatchFriOracle::<F, C, D>::from_values(
+            auxiliary_columns_sorted_flat,
+            rate_bits,
+            false,
+            cap_height,
+            timing,
+            &vec![None; num_aux_polys],
+        )
+    );
+    challenger.observe_cap(&auxiliary_commitment.batch_merkle_tree.cap);
+
+    // Quotient polynomials. They are already chunked in `degree` pieces.
+    let alphas = challenger.get_n_challenges(config.num_challenges);
+    let mut quotient_polys = all_quotient_polys::<F, P, C, D>(
+        all_stark,
+        &trace_poly_values,
+        &trace_commitment,
+        &auxiliary_columns,
+        &auxiliary_commitment,
+        None,
+        &ctl_data_per_table,
+        alphas.clone(),
+        config,
+    );
+
+    // We compute the Field Merkle Tree of all quotient polynomials.
+    reorder_slice(
+        quotient_polys.as_mut_slice(),
+        Table::all(),
+        ALL_SORTED_TABLES,
+    );
+    let quotient_polys_sorted_flat: Vec<_> = quotient_polys.clone().into_iter().flatten().collect();
+    let num_quotient_polys = quotient_polys_sorted_flat.len();
+    let quotient_commitment = timed!(
+        timing,
+        "compute quotient commitments",
+        BatchFriOracle::<F, C, D>::from_coeffs(
+            quotient_polys_sorted_flat,
+            rate_bits,
+            false,
+            cap_height,
+            timing,
+            &vec![None; num_quotient_polys],
+        )
+    );
+    challenger.observe_cap(&quotient_commitment.batch_merkle_tree.cap);
+
+    let zeta = challenger.get_extension_challenge::<D>();
+
+    // To avoid leaking witness data, we want to ensure that our opening locations,
+    // `zeta` and `g * zeta`, are not in our subgroup `H`. It suffices to check
+    // `zeta` only, since `(g * zeta)^n = zeta^n`, where `n` is the order of
+    // `g`.
+    let degree_bits = trace_commitment.degree_bits[0];
+    let g = F::primitive_root_of_unity(degree_bits);
+    ensure!(
+        zeta.exp_power_of_2(degree_bits) != F::Extension::ONE,
+        "Opening point is in the subgroup."
+    );
+
+    let all_fri_instances = all_fri_instance_info::<F, C, D>(
+        all_stark,
+        zeta,
+        &trace_poly_values,
+        &auxiliary_columns,
+        &quotient_polys,
+        &ctl_data_per_table,
+        config,
+    );
+
+    // Get the FRI openings and observe them.
+    // Compute all openings: evaluate all committed polynomials at `zeta` and, when
+    // necessary, at `g * zeta`.
+    let openings = all_openings(
+        all_stark,
+        &trace_poly_values,
+        &trace_commitment,
+        &auxiliary_columns,
+        &auxiliary_commitment,
+        &quotient_polys,
+        &quotient_commitment,
+        &ctl_data_per_table,
+        zeta,
+        config,
+    );
+
+    for opening in openings.iter() {
+        challenger.observe_openings(&opening.to_fri_openings());
+    }
+
+    let initial_merkle_trees = [
+        &trace_commitment,
+        &auxiliary_commitment,
+        &quotient_commitment,
+    ];
+
+    let mut degree_bits_squashed = ALL_DEGREE_LOGS.to_vec();
+    degree_bits_squashed.dedup();
+    let opening_proof = BatchFriOracle::prove_openings(
+        &degree_bits_squashed,
+        &all_fri_instances,
+        &initial_merkle_trees,
+        &mut challenger,
+        &config.fri_params(degree_bits),
+        timing,
+    );
+
+    // This is an expensive check, hence is only run when `debug_assertions` are
+    // enabled.
+    #[cfg(debug_assertions)]
+    {
+        use hashbrown::HashMap;
+        use starky::cross_table_lookup::debug_utils::check_ctls;
+
+        use crate::verifier::debug_utils::get_memory_extra_looking_values;
+
+        let mut extra_values = HashMap::new();
+        extra_values.insert(
+            *Table::Memory,
+            get_memory_extra_looking_values(&public_values),
+        );
+        check_ctls(
+            trace_poly_values,
+            &all_stark.cross_table_lookups,
+            &extra_values,
+        );
+    }
+
+    let stark_proof = BatchStarkProof {
+        trace_cap: trace_commitment.batch_merkle_tree.cap.clone(),
+        auxiliary_polys_cap: Some(auxiliary_commitment.batch_merkle_tree.cap),
+        quotient_polys_cap: Some(quotient_commitment.batch_merkle_tree.cap),
+        openings: openings.try_into().unwrap(),
+        opening_proof,
+    };
+
+    Ok(BatchStarkProofWithPublicInputs {
+        proof: stark_proof,
+        public_inputs: vec![],
+    })
+}
+
+/// Generates all auxiliary columns.
+fn all_auxiliary_columns<F, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    config: &StarkConfig,
+    trace_poly_values: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    ctl_challenges: &GrandProductChallengeSet<F>,
+) -> Vec<Vec<PolynomialValues<F>>>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    let mut res = Vec::with_capacity(NUM_TABLES);
+
+    // Arithmetic.
+    res.push(auxiliary_columns_single_stark::<
+        F,
+        C,
+        ArithmeticStark<F, D>,
+        D,
+    >(
+        all_stark.arithmetic_stark,
+        config,
+        &trace_poly_values[*Table::Arithmetic],
+        &ctl_data_per_table[*Table::Arithmetic],
+        ctl_challenges,
+    ));
+
+    // BytePacking.
+    res.push(auxiliary_columns_single_stark::<
+        F,
+        C,
+        BytePackingStark<F, D>,
+        D,
+    >(
+        all_stark.byte_packing_stark,
+        config,
+        &trace_poly_values[*Table::BytePacking],
+        &ctl_data_per_table[*Table::BytePacking],
+        ctl_challenges,
+    ));
+
+    // Cpu.
+    res.push(auxiliary_columns_single_stark::<F, C, CpuStark<F, D>, D>(
+        all_stark.cpu_stark,
+        config,
+        &trace_poly_values[*Table::Cpu],
+        &ctl_data_per_table[*Table::Cpu],
+        ctl_challenges,
+    ));
+
+    // Keccak.
+    res.push(
+        auxiliary_columns_single_stark::<F, C, KeccakStark<F, D>, D>(
+            all_stark.keccak_stark,
+            config,
+            &trace_poly_values[*Table::Keccak],
+            &ctl_data_per_table[*Table::Keccak],
+            ctl_challenges,
+        ),
+    );
+
+    // KeccakSponge.
+    res.push(auxiliary_columns_single_stark::<
+        F,
+        C,
+        KeccakSpongeStark<F, D>,
+        D,
+    >(
+        all_stark.keccak_sponge_stark,
+        config,
+        &trace_poly_values[*Table::KeccakSponge],
+        &ctl_data_per_table[*Table::KeccakSponge],
+        ctl_challenges,
+    ));
+
+    // Logic.
+    res.push(auxiliary_columns_single_stark::<F, C, LogicStark<F, D>, D>(
+        all_stark.logic_stark,
+        config,
+        &trace_poly_values[*Table::Logic],
+        &ctl_data_per_table[*Table::Logic],
+        ctl_challenges,
+    ));
+
+    // Memory.
+    res.push(
+        auxiliary_columns_single_stark::<F, C, MemoryStark<F, D>, D>(
+            all_stark.memory_stark,
+            config,
+            &trace_poly_values[*Table::Memory],
+            &ctl_data_per_table[*Table::Memory],
+            ctl_challenges,
+        ),
+    );
+
+    // MemBefore.
+    res.push(auxiliary_columns_single_stark::<
+        F,
+        C,
+        MemoryContinuationStark<F, D>,
+        D,
+    >(
+        all_stark.mem_before_stark,
+        config,
+        &trace_poly_values[*Table::MemBefore],
+        &ctl_data_per_table[*Table::MemBefore],
+        ctl_challenges,
+    ));
+
+    // MemAfter.
+    res.push(auxiliary_columns_single_stark::<
+        F,
+        C,
+        MemoryContinuationStark<F, D>,
+        D,
+    >(
+        all_stark.mem_before_stark,
+        config,
+        &trace_poly_values[*Table::MemAfter],
+        &ctl_data_per_table[*Table::MemAfter],
+        ctl_challenges,
+    ));
+
+    res
+}
+
+fn auxiliary_columns_single_stark<F, C, S, const D: usize>(
+    stark: S,
+    config: &StarkConfig,
+    trace_poly_values: &[PolynomialValues<F>],
+    ctl_data: &CtlData<F>,
+    ctl_challenges: &GrandProductChallengeSet<F>,
+) -> Vec<PolynomialValues<F>>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    S: Stark<F, D>,
+{
+    let rate_bits = config.fri_config.rate_bits;
+    let constraint_degree = stark.constraint_degree();
+    assert!(
+        constraint_degree <= (1 << rate_bits) + 1,
+        "The degree of the Stark constraints must be <= blowup_factor + 1"
+    );
+
+    // Add lookup columns.
+    let lookups = stark.lookups();
+    let mut res = {
+        let mut columns = Vec::new();
+        for lookup in &lookups {
+            for &challenge in ctl_challenges.challenges.iter() {
+                columns.extend(lookup_helper_columns(
+                    lookup,
+                    trace_poly_values,
+                    challenge.beta,
+                    constraint_degree,
+                ));
+            }
+        }
+        columns
+    };
+    let num_lookup_columns = res.len();
+
+    // Add CTL columns.
+    if let Some(p) = get_ctl_auxiliary_polys(Some(ctl_data)) {
+        res.extend(p);
+    }
+
+    debug_assert!(
+        (stark.uses_lookups() || stark.requires_ctls()) || get_ctl_auxiliary_polys(Some(ctl_data)).is_none(),
+        "There should be auxiliary polynomials if and only if we have either lookups or require cross-table lookups."
+    );
+
+    res
+}
+
+fn quotient_polys_single_stark<F, P, C, S, const D: usize>(
+    table: Table,
+    stark: &S,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    trace_commitment: &BatchFriOracle<F, C, D>,
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    auxiliary_commitment: &BatchFriOracle<F, C, D>,
+    lookup_challenges: Option<&Vec<F>>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    alphas: Vec<F>,
+    config: &StarkConfig,
+) -> Vec<PolynomialCoeffs<F>>
+where
+    F: RichField + Extendable<D>,
+    P: PackedField<Scalar = F>,
+    C: GenericConfig<D, F = F>,
+    S: Stark<F, D>,
+{
+    let degree_bits = ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]];
+    let (index_outer, index_inner) = SORTED_INDEX_PAIR[TABLE_TO_SORTED_INDEX[*table]];
+    let mut num_trace_polys_before = 0;
+    let mut num_aux_polys_before = 0;
+    for i in 0..index_inner {
+        let prev_sorted_table = TABLE_TO_SORTED_INDEX[*table] - i - 1;
+        num_trace_polys_before += trace_poly_values_sorted[prev_sorted_table].len();
+        num_aux_polys_before += auxiliary_columns_sorted[prev_sorted_table].len();
+    }
+    let trace_leave_len = trace_poly_values_sorted[TABLE_TO_SORTED_INDEX[*table]].len();
+    let get_trace_packed = |index, step| {
+        trace_commitment.get_lde_values_packed::<P>(
+            index_outer,
+            index,
+            step,
+            num_trace_polys_before,
+            trace_leave_len,
+        )
+    };
+    let aux_leave_len = auxiliary_columns_sorted[TABLE_TO_SORTED_INDEX[*table]].len();
+    let get_aux_packed = |index, step| {
+        auxiliary_commitment.get_lde_values_packed(
+            index_outer,
+            index,
+            step,
+            num_aux_polys_before,
+            aux_leave_len,
+        )
+    };
+
+    let quotient_polys = compute_quotient_polys::<F, P, C, _, D>(
+        stark,
+        &get_trace_packed,
+        &get_aux_packed,
+        lookup_challenges,
+        Some(&ctl_data_per_table[*table]),
+        &vec![],
+        alphas,
+        degree_bits,
+        stark.num_lookup_helper_columns(config),
+        config,
+    )
+    .expect("Couldn't compute quotient polys.");
+
+    // Chunk the quotient polynomials.
+    let degree = 1 << degree_bits;
+    quotient_polys
+        .into_par_iter()
+        .flat_map(|mut quotient_poly| {
+            quotient_poly
+                .trim_to_len(degree * stark.quotient_degree_factor())
+                .expect("Quotient has failed, the vanishing polynomial is not divisible by Z_H");
+            // Split quotient into degree-n chunks.
+            quotient_poly.chunks(degree)
+        })
+        .collect()
+}
+
+/// Generates all quotient polynomials.
+fn all_quotient_polys<F, P, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    trace_commitment: &BatchFriOracle<F, C, D>,
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    auxiliary_commitment: &BatchFriOracle<F, C, D>,
+    lookup_challenges: Option<&Vec<F>>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    alphas: Vec<F>,
+    config: &StarkConfig,
+) -> Vec<Vec<PolynomialCoeffs<F>>>
+where
+    F: RichField + Extendable<D>,
+    P: PackedField<Scalar = F>,
+    C: GenericConfig<D, F = F>,
+{
+    let mut res = Vec::with_capacity(NUM_TABLES);
+
+    // Arithmetic.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::Arithmetic,
+        &all_stark.arithmetic_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+
+    // Bytepacking.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::BytePacking,
+        &all_stark.byte_packing_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+
+    // Cpu.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::Cpu,
+        &all_stark.cpu_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+
+    // Keccak.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::Keccak,
+        &all_stark.keccak_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+
+    // KeccakSponge.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::KeccakSponge,
+        &all_stark.keccak_sponge_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+
+    // Logic.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::Logic,
+        &all_stark.logic_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+    // Memory.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::Memory,
+        &all_stark.memory_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+
+    // MemBefore.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::MemBefore,
+        &all_stark.mem_before_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+
+    // MemAfter.
+    res.push(quotient_polys_single_stark::<F, P, C, _, D>(
+        Table::MemAfter,
+        &all_stark.mem_after_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        lookup_challenges,
+        ctl_data_per_table,
+        alphas.clone(),
+        config,
+    ));
+
+    res
+}
+
+/// Generates all FRI instances. They are sorted by decreasing degree.
+fn fri_instance_info_single_stark<F, C, S, const D: usize>(
+    table: Table,
+    stark: &S,
+    zeta: F::Extension,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    config: &StarkConfig,
+) -> FriInstanceInfo<F, D>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    S: Stark<F, D>,
+{
+    let g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]]);
+    let sorted_index = TABLE_TO_SORTED_INDEX[*table];
+    let num_ctl_helper_polys = ctl_data_per_table[*table].num_ctl_helper_polys();
+    let mut num_trace_polys_before = 0;
+    let mut num_aux_polys_before = 0;
+    let mut num_quotient_polys_before = 0;
+    for i in 0..sorted_index {
+        let prev_sorted_table = TABLE_TO_SORTED_INDEX[*table] - i - 1;
+        num_trace_polys_before += trace_poly_values_sorted[i].len();
+        num_aux_polys_before += auxiliary_columns_sorted[i].len();
+        num_quotient_polys_before += quotient_polys_sorted[i].len();
+    }
+    let num_aux_columns = auxiliary_columns_sorted[sorted_index].len();
+    let num_quotient_polys = quotient_polys_sorted[sorted_index].len();
+    let num_cols_before_ctlzs = num_aux_polys_before
+        + stark.num_lookup_helper_columns(config)
+        + ctl_data_per_table[*table]
+            .num_ctl_helper_polys()
+            .iter()
+            .sum::<usize>();
+
+    stark.fri_instance_batch(
+        zeta,
+        g,
+        num_trace_polys_before,
+        num_aux_polys_before,
+        num_aux_columns,
+        num_quotient_polys_before,
+        num_quotient_polys,
+        num_cols_before_ctlzs,
+    )
+}
+
+/// Generates all FRI instances. They are sorted by decreasing degree.
+fn all_fri_instance_info<F, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    zeta: F::Extension,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    config: &StarkConfig,
+) -> Vec<FriInstanceInfo<F, D>>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    let mut res = Vec::with_capacity(NUM_TABLES);
+
+    // Arithmetic.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Arithmetic,
+        &all_stark.arithmetic_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    // BytePacking.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::BytePacking,
+        &all_stark.byte_packing_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    // Cpu.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Cpu,
+        &all_stark.cpu_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    // Keccak.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Keccak,
+        &all_stark.keccak_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    // KeccakSponge.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::KeccakSponge,
+        &all_stark.keccak_sponge_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    // Logic.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Logic,
+        &all_stark.logic_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    // Memory.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::Memory,
+        &all_stark.memory_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    // MemBefore.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::MemBefore,
+        &all_stark.mem_before_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    // MemAfter.
+    res.push(fri_instance_info_single_stark::<F, C, _, D>(
+        Table::MemAfter,
+        &all_stark.mem_after_stark,
+        zeta,
+        trace_poly_values_sorted,
+        auxiliary_columns_sorted,
+        quotient_polys_sorted,
+        ctl_data_per_table,
+        config,
+    ));
+
+    let res_sorted: Vec<_> = ALL_SORTED_TABLES
+        .iter()
+        .map(|&table| res[*table].clone())
+        .collect();
+
+    let mut squashed_res = Vec::new();
+    let mut i = 0;
+    let mut current_instance = FriInstanceInfo {
+        oracles: vec![
+            FriOracleInfo {
+                num_polys: 0,
+                blinding: false,
+            },
+            FriOracleInfo {
+                num_polys: 0,
+                blinding: false,
+            },
+            FriOracleInfo {
+                num_polys: 0,
+                blinding: false,
+            },
+        ],
+        batches: vec![],
+    };
+
+    while i < NUM_TABLES {
+        let instance = &res_sorted[i];
+        for (k, oracle) in instance.oracles.iter().enumerate() {
+            current_instance.oracles[k].num_polys += oracle.num_polys;
+        }
+        current_instance.batches.extend(instance.batches.clone());
+
+        if i == NUM_TABLES - 1 || ALL_DEGREE_LOGS[i + 1] < ALL_DEGREE_LOGS[i] {
+            squashed_res.push(current_instance.clone());
+            current_instance.oracles = vec![
+                FriOracleInfo {
+                    num_polys: 0,
+                    blinding: false,
+                },
+                FriOracleInfo {
+                    num_polys: 0,
+                    blinding: false,
+                },
+                FriOracleInfo {
+                    num_polys: 0,
+                    blinding: false,
+                },
+            ];
+            current_instance.batches = vec![];
+        }
+        i += 1;
+    }
+
+    squashed_res
+}
+
+fn all_openings_single_stark<F, C, S, const D: usize>(
+    table: Table,
+    stark: &S,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    trace_commitment: &BatchFriOracle<F, C, D>,
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    auxiliary_commitment: &BatchFriOracle<F, C, D>,
+    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
+    quotient_commitment: &BatchFriOracle<F, C, D>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    zeta: F::Extension,
+    config: &StarkConfig,
+) -> StarkOpeningSet<F, D>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    S: Stark<F, D>,
+{
+    let g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]]);
+    let table_sorted_index = TABLE_TO_SORTED_INDEX[*table];
+    let (_, index_inner) = SORTED_INDEX_PAIR[table_sorted_index];
+    let mut num_trace_polys_before = 0;
+    let mut num_aux_polys_before = 0;
+    let mut num_quotient_polys_before = 0;
+    for i in 0..index_inner {
+        let prev_sorted_table = TABLE_TO_SORTED_INDEX[*table] - i - 1;
+        num_trace_polys_before += trace_poly_values_sorted[i].len();
+        num_aux_polys_before += auxiliary_columns_sorted[i].len();
+        num_quotient_polys_before += quotient_polys_sorted[i].len();
+    }
+
+    StarkOpeningSet::new_from_batch(
+        stark,
+        zeta,
+        g,
+        trace_commitment,
+        num_trace_polys_before
+            ..(num_trace_polys_before + trace_poly_values_sorted[table_sorted_index].len()),
+        auxiliary_commitment,
+        num_aux_polys_before
+            ..(num_aux_polys_before + auxiliary_columns_sorted[table_sorted_index].len()),
+        quotient_commitment,
+        num_quotient_polys_before
+            ..(num_quotient_polys_before + quotient_polys_sorted[table_sorted_index].len()),
+        stark.num_lookup_helper_columns(config),
+        &ctl_data_per_table[*table].num_ctl_helper_polys(),
+    )
+}
+
+/// Generates all opening sets.
+fn all_openings<F, C, const D: usize>(
+    all_stark: &AllStark<F, D>,
+    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
+    trace_commitment: &BatchFriOracle<F, C, D>,
+    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
+    auxiliary_commitment: &BatchFriOracle<F, C, D>,
+    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
+    quotient_commitment: &BatchFriOracle<F, C, D>,
+    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    zeta: F::Extension,
+    config: &StarkConfig,
+) -> Vec<StarkOpeningSet<F, D>>
+where
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+{
+    let degree_bits = ALL_DEGREE_LOGS;
+    let mut res = Vec::new();
+
+    // Arithmetic.
+    res.push(all_openings_single_stark(
+        Table::Arithmetic,
+        &all_stark.arithmetic_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    // Bytepacking.
+    res.push(all_openings_single_stark(
+        Table::BytePacking,
+        &all_stark.byte_packing_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    // Cpu.
+    res.push(all_openings_single_stark(
+        Table::Cpu,
+        &all_stark.cpu_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    // Keccak.
+    res.push(all_openings_single_stark(
+        Table::Keccak,
+        &all_stark.keccak_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    // KeccakSponge.
+    res.push(all_openings_single_stark(
+        Table::KeccakSponge,
+        &all_stark.keccak_sponge_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    // Logic.
+    res.push(all_openings_single_stark(
+        Table::Logic,
+        &all_stark.logic_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    // Memory.
+    res.push(all_openings_single_stark(
+        Table::Memory,
+        &all_stark.memory_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    // MemBefore.
+    res.push(all_openings_single_stark(
+        Table::MemBefore,
+        &all_stark.mem_before_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    // MemAfter.
+    res.push(all_openings_single_stark(
+        Table::MemAfter,
+        &all_stark.mem_after_stark,
+        trace_poly_values_sorted,
+        trace_commitment,
+        auxiliary_columns_sorted,
+        auxiliary_commitment,
+        quotient_polys_sorted,
+        quotient_commitment,
+        ctl_data_per_table,
+        zeta,
+        config,
+    ));
+
+    res
+}
 
 /// Generates a proof for each STARK.
 /// At this stage, we have computed the trace polynomials commitments for the
@@ -652,6 +1812,24 @@ pub fn generate_all_data_segments<F: RichField>(
     Ok(all_seg_data)
 }
 
+fn reorder_slice<T>(
+    slice: &mut [T],
+    current_order: [Table; NUM_TABLES],
+    target_order: [Table; NUM_TABLES],
+) {
+    let mut order = current_order.clone();
+    for i in 0..NUM_TABLES - 1 {
+        if order[i] != target_order[i] {
+            let j = order
+                .iter()
+                .position(|&x| x == target_order[i])
+                .expect("Bad ordering?");
+            order.swap(i, j);
+            slice.swap(i, j);
+        }
+    }
+}
+
 /// A utility module designed to test witness generation externally.
 pub mod testing {
     use mpt_trie::partial_trie::HashedPartialTrie;
@@ -713,6 +1891,38 @@ pub mod testing {
         let mut proofs = Vec::with_capacity(data.len());
         for mut d in data {
             let proof = prove(
+                all_stark,
+                config,
+                inputs.clone(),
+                &mut d,
+                timing,
+                abort_signal.clone(),
+            )?;
+            proofs.push(proof);
+        }
+
+        Ok(proofs)
+    }
+
+    pub fn prove_all_segments_batch<F, P, C, const D: usize>(
+        all_stark: &AllStark<F, D>,
+        config: &StarkConfig,
+        inputs: GenerationInputs,
+        max_cpu_len_log: usize,
+        timing: &mut TimingTree,
+        abort_signal: Option<Arc<AtomicBool>>,
+    ) -> Result<Vec<BatchStarkProofWithPublicInputs<F, C, D, NUM_TABLES>>>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        P: PackedField<Scalar = F>,
+    {
+        let mut segment_idx = 0;
+        let mut data = generate_all_data_segments::<F>(Some(max_cpu_len_log), &inputs)?;
+
+        let mut proofs = Vec::with_capacity(data.len());
+        for mut d in data {
+            let proof = prove_batch::<F, P, C, D>(
                 all_stark,
                 config,
                 inputs.clone(),

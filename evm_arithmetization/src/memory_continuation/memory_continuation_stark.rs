@@ -20,7 +20,7 @@ use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
 use super::columns::{value_limb, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, FILTER, NUM_COLUMNS};
-use crate::all_stark::EvmStarkFrame;
+use crate::all_stark::{EvmStarkFrame, Table};
 use crate::generation::MemBeforeValues;
 use crate::memory::VALUE_LIMBS;
 
@@ -79,13 +79,21 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryContinuationStark<F, D>
     pub(crate) fn generate_trace(
         &self,
         propagated_values: Vec<Vec<F>>,
+        log_padded: usize,
     ) -> Vec<PolynomialValues<F>> {
         // Set the trace to the `propagated_values` provided either by `MemoryStark`
         // (for final values) or the previous segment (for initial values).
         let mut rows = propagated_values;
 
         let num_rows = rows.len();
-        let num_rows_padded = max(128, num_rows.next_power_of_two());
+        let num_rows_padded = 1 << log_padded;
+        assert!(
+            num_rows_padded >= num_rows,
+            "Padded length {:?} is smaller than actual trace length {:?}",
+            num_rows_padded,
+            num_rows
+        );
+
         for _ in num_rows..num_rows_padded {
             rows.push(vec![F::ZERO; NUM_COLUMNS]);
         }

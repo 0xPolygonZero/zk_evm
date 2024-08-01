@@ -105,6 +105,26 @@ impl Deref for Table {
 /// Number of STARK tables.
 pub(crate) const NUM_TABLES: usize = Table::MemAfter as usize + 1;
 
+pub(crate) const TABLE_DEGREES: [usize; NUM_TABLES] = [
+    18, // Arithmetic
+    18, // BytePacking,
+    18, // Cpu,
+    14, // Keccak,
+    14, // KeccakSponge,
+    18, // Logic,
+    18, // Memory,
+    18, // MemBefore,
+    15, // MemAfter,
+];
+
+pub(crate) const ALL_SORTED_TABLES: [Table; NUM_TABLES] = Table::all_sorted();
+
+pub(crate) const TABLE_TO_SORTED_INDEX: [usize; NUM_TABLES] = Table::table_to_sorted_index();
+
+pub(crate) const SORTED_INDEX_PAIR: [(usize, usize); NUM_TABLES] = Table::sorted_index_pair();
+
+pub(crate) const ALL_DEGREE_LOGS: [usize; NUM_TABLES] = Table::all_degree_logs();
+
 impl Table {
     /// Returns all STARK table indices.
     pub(crate) const fn all() -> [Self; NUM_TABLES] {
@@ -119,6 +139,88 @@ impl Table {
             Self::MemBefore,
             Self::MemAfter,
         ]
+    }
+
+    /// Returns all STARK table indices in descending order of their padded
+    /// trace degrees.
+    const fn all_sorted() -> [Self; NUM_TABLES] {
+        let mut sorted_pairs = [(0, Table::Arithmetic); NUM_TABLES];
+        let mut i = 0;
+        while i < NUM_TABLES {
+            sorted_pairs[i] = (TABLE_DEGREES[i], Self::all()[i]);
+            i += 1;
+        }
+
+        // Simple bubble sort.
+        let mut i = 0;
+        while i < NUM_TABLES - 1 {
+            let mut j = 0;
+            while j < NUM_TABLES - i - 1 {
+                let (pair_a, pair_b) = (sorted_pairs[j], sorted_pairs[j + 1]);
+                if pair_a.0 < pair_b.0 {
+                    sorted_pairs[j] = pair_b;
+                    sorted_pairs[j + 1] = pair_a;
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+
+        let mut sorted_tables = [Table::Arithmetic; NUM_TABLES];
+        let mut i = 0;
+        while i < NUM_TABLES {
+            sorted_tables[i] = sorted_pairs[i].1;
+            i += 1;
+        }
+
+        sorted_tables
+    }
+
+    /// Returns the ordered position of the tables. This is the inverse of
+    /// `all_sorted()`.
+    const fn table_to_sorted_index() -> [usize; NUM_TABLES] {
+        let mut res = [0; NUM_TABLES];
+        let mut i = 0;
+        while i < NUM_TABLES {
+            res[Self::all_sorted()[i] as usize] = i;
+            i += 1;
+        }
+
+        res
+    }
+
+    /// Returns the ordered position of the tables in a batch Merkle tree. Each
+    /// entry is a couple to account for duplicate sizes.
+    const fn sorted_index_pair() -> [(usize, usize); NUM_TABLES] {
+        let mut pairs = [(0, 0); NUM_TABLES];
+
+        let mut outer = 0;
+        let mut inner = 0;
+        let mut i = 1;
+        while i < NUM_TABLES {
+            if Self::all_degree_logs()[i] < Self::all_degree_logs()[i - 1] {
+                outer += 1;
+                inner = 0;
+            } else {
+                inner += 1;
+            }
+            pairs[i] = (outer, inner);
+            i += 1;
+        }
+
+        pairs
+    }
+
+    /// Returns all STARK padded trace degrees in descending order.
+    const fn all_degree_logs() -> [usize; NUM_TABLES] {
+        let mut res = [0; NUM_TABLES];
+        let mut i = 0;
+        while i < NUM_TABLES {
+            res[i] = TABLE_DEGREES[Self::all_sorted()[i] as usize];
+            i += 1;
+        }
+
+        res
     }
 }
 

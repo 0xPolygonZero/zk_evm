@@ -45,7 +45,7 @@ use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
 use super::NUM_BYTES;
-use crate::all_stark::EvmStarkFrame;
+use crate::all_stark::{EvmStarkFrame, Table, ALL_DEGREE_LOGS, TABLE_TO_SORTED_INDEX};
 use crate::byte_packing::columns::{
     index_len, value_bytes, ADDR_CONTEXT, ADDR_SEGMENT, ADDR_VIRTUAL, IS_READ, LEN_INDICES_COLS,
     NUM_COLUMNS, RANGE_COUNTER, RC_FREQUENCIES, TIMESTAMP,
@@ -175,7 +175,8 @@ impl<F: RichField + Extendable<D>, const D: usize> BytePackingStark<F, D> {
         ops: Vec<BytePackingOp>,
         min_rows: usize,
     ) -> Vec<[F; NUM_COLUMNS]> {
-        let num_rows = core::cmp::max(ops.len().max(BYTE_RANGE_MAX), min_rows).next_power_of_two();
+        let num_rows = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::BytePacking]];
+
         let mut rows = Vec::with_capacity(num_rows);
 
         for op in ops {
@@ -183,6 +184,13 @@ impl<F: RichField + Extendable<D>, const D: usize> BytePackingStark<F, D> {
                 rows.push(self.generate_row_for_op(op));
             }
         }
+        assert!(num_rows >= rows.len());
+        assert!(
+            num_rows >= rows.len(),
+            "Padded length {:?} is smaller than actual trace length {:?}",
+            num_rows,
+            rows.len()
+        );
 
         for _ in rows.len()..num_rows {
             rows.push(self.generate_padding_row());

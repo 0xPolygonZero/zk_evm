@@ -6,7 +6,7 @@ use plonky2::util::timing::TimingTree;
 use starky::config::StarkConfig;
 use starky::util::trace_rows_to_poly_values;
 
-use crate::all_stark::{AllStark, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, ALL_DEGREE_LOGS, NUM_TABLES, TABLE_TO_SORTED_INDEX};
 use crate::arithmetic::{BinaryOperator, Operation};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
@@ -187,16 +187,18 @@ impl<T: Copy> Traces<T> {
         let mem_before_trace = timed!(
             timing,
             "generate mem_before trace",
-            all_stark
-                .mem_before_stark
-                .generate_trace(mem_before_values_to_rows(mem_before_values))
+            all_stark.mem_before_stark.generate_trace(
+                mem_before_values_to_rows(mem_before_values),
+                ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::MemBefore]]
+            )
         );
         let mem_after_trace = timed!(
             timing,
             "generate mem_after trace",
-            all_stark
-                .mem_after_stark
-                .generate_trace(final_values.clone())
+            all_stark.mem_after_stark.generate_trace(
+                final_values.clone(),
+                ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::MemAfter]]
+            )
         );
 
         log::info!(

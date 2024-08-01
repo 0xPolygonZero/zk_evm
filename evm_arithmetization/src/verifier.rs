@@ -1,5 +1,6 @@
 use anyhow::{ensure, Result};
 use ethereum_types::{BigEndianHash, U256};
+use hashbrown::HashMap;
 use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -15,7 +16,7 @@ use starky::lookup::GrandProductChallenge;
 use starky::stark::Stark;
 use starky::verifier::verify_stark_proof_with_challenges;
 
-use crate::all_stark::{AllStark, Table, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, ALL_DEGREE_LOGS, NUM_TABLES, TABLE_TO_SORTED_INDEX};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
@@ -65,7 +66,8 @@ pub(crate) fn initial_memory_merkle_cap<
 
     // Padding.
     let num_rows = trace.len();
-    let num_rows_padded = num_rows.next_power_of_two();
+    let num_rows_padded = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::MemBefore]];
+    assert!(num_rows_padded >= num_rows);
     trace.resize(
         num_rows_padded,
         vec![F::ZERO; crate::memory_continuation::columns::NUM_COLUMNS],
@@ -237,12 +239,15 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
 
     // Extra sums to add to the looked last value.
     // Only necessary for the Memory values.
-    let mut extra_looking_sums = vec![vec![F::ZERO; config.num_challenges]; NUM_TABLES];
+    let mut extra_looking_sums = HashMap::new();
 
     // Memory
-    extra_looking_sums[Table::Memory as usize] = (0..config.num_challenges)
-        .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
-        .collect_vec();
+    extra_looking_sums.insert(
+        Table::Memory as usize,
+        (0..config.num_challenges)
+            .map(|i| get_memory_extra_looking_sum(&public_values, ctl_challenges.challenges[i]))
+            .collect_vec(),
+    );
 
     verify_cross_table_lookups::<F, D, NUM_TABLES>(
         cross_table_lookups,
@@ -250,7 +255,7 @@ fn verify_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const 
             .multi_proof
             .stark_proofs
             .map(|p| p.proof.openings.ctl_zs_first.unwrap()),
-        Some(&extra_looking_sums),
+        &extra_looking_sums,
         config,
     )
 }

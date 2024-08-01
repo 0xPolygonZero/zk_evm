@@ -17,7 +17,7 @@ use starky::stark::Stark;
 use starky::util::trace_rows_to_poly_values;
 
 use super::columns::reg_input_limb;
-use crate::all_stark::EvmStarkFrame;
+use crate::all_stark::{EvmStarkFrame, Table, ALL_DEGREE_LOGS, TABLE_TO_SORTED_INDEX};
 use crate::keccak::columns::{
     reg_a, reg_a_prime, reg_a_prime_prime, reg_a_prime_prime_0_0_bit, reg_a_prime_prime_prime,
     reg_b, reg_c, reg_c_prime, reg_output_limb, reg_step, NUM_COLUMNS, TIMESTAMP,
@@ -72,15 +72,20 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakStark<F, D> {
         inputs_and_timestamps: Vec<([u64; NUM_INPUTS], usize)>,
         min_rows: usize,
     ) -> Vec<[F; NUM_COLUMNS]> {
-        let num_rows = (inputs_and_timestamps.len() * NUM_ROUNDS)
-            .max(min_rows)
-            .next_power_of_two();
+        let num_rows = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Keccak]];
 
         let mut rows = Vec::with_capacity(num_rows);
         for input_and_timestamp in inputs_and_timestamps.iter() {
             let rows_for_perm = self.generate_trace_rows_for_perm(*input_and_timestamp);
             rows.extend(rows_for_perm);
         }
+
+        assert!(
+            num_rows >= rows.len(),
+            "Padded length {:?} is smaller than actual trace length {:?}",
+            num_rows,
+            rows.len()
+        );
 
         while rows.len() < num_rows {
             rows.push([F::ZERO; NUM_COLUMNS]);

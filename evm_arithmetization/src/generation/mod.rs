@@ -17,7 +17,7 @@ use GlobalMetadata::{
     StateTrieRootDigestBefore, TransactionTrieRootDigestAfter, TransactionTrieRootDigestBefore,
 };
 
-use crate::all_stark::{AllStark, NUM_TABLES};
+use crate::all_stark::{AllStark, Table, ALL_DEGREE_LOGS, NUM_TABLES, TABLE_TO_SORTED_INDEX};
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
@@ -514,11 +514,19 @@ fn simulate_cpu<F: Field>(
     row.gas = F::from_canonical_u64(state.registers.gas_used);
     row.stack_len = F::from_canonical_usize(state.registers.stack_len);
 
+    let padded_len = 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Cpu]];
+    assert!(
+        padded_len >= state.traces.clock(),
+        "Padded length {:?} is smaller than actual trace length {:?}",
+        padded_len,
+        state.traces.clock()
+    );
+
     loop {
-        // Padding to a power of 2.
+        // Padding.
         state.push_cpu(row);
         row.clock += F::ONE;
-        if state.traces.clock().is_power_of_two() {
+        if state.traces.clock() == 1 << ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*Table::Cpu]] {
             break;
         }
     }
