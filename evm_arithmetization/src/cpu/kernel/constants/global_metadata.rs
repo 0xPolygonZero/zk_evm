@@ -94,10 +94,23 @@ pub(crate) enum GlobalMetadata {
 
     KernelHash,
     KernelLen,
+
+    /// The address of the next available address in
+    /// Segment::AccountsLinkedList
+    AccountsLinkedListNextAvailable,
+    /// The address of the next available address in
+    /// Segment::StorageLinkedList
+    StorageLinkedListNextAvailable,
+    /// Length of the `AccountsLinkedList` segment after insertion of the
+    /// initial accounts.
+    InitialAccountsLinkedListLen,
+    /// Length of the `StorageLinkedList` segment after insertion of the
+    /// initial storage slots.
+    InitialStorageLinkedListLen,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 47;
+    pub(crate) const COUNT: usize = 51;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -153,6 +166,10 @@ impl GlobalMetadata {
             Self::TxnNumberAfter,
             Self::KernelHash,
             Self::KernelLen,
+            Self::AccountsLinkedListNextAvailable,
+            Self::StorageLinkedListNextAvailable,
+            Self::InitialAccountsLinkedListLen,
+            Self::InitialStorageLinkedListLen,
         ]
     }
 
@@ -206,6 +223,16 @@ impl GlobalMetadata {
             Self::TxnNumberAfter => "GLOBAL_METADATA_TXN_NUMBER_AFTER",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
+            Self::AccountsLinkedListNextAvailable => {
+                "GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE"
+            }
+            Self::StorageLinkedListNextAvailable => {
+                "GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE"
+            }
+            Self::InitialAccountsLinkedListLen => {
+                "GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN"
+            }
+            Self::InitialStorageLinkedListLen => "GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN",
         }
     }
 }

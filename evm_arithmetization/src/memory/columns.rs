@@ -42,9 +42,12 @@ pub(crate) const VIRTUAL_FIRST_CHANGE: usize = SEGMENT_FIRST_CHANGE + 1;
 // Contains `next_segment * addr_changed * next_is_read`.
 pub(crate) const INITIALIZE_AUX: usize = VIRTUAL_FIRST_CHANGE + 1;
 
+// Used to allow pre-initialization of some context 0 segments.
+pub(crate) const PREINITIALIZED_SEGMENTS: usize = INITIALIZE_AUX + 1;
+
 // Contains `row_index` + 1 if and only if context `row_index` is stale,
 // and zero if not.
-pub(crate) const STALE_CONTEXTS: usize = INITIALIZE_AUX + 1;
+pub(crate) const STALE_CONTEXTS: usize = PREINITIALIZED_SEGMENTS + 1;
 
 // Flag indicating whether the current context needs to be pruned. It is set to
 // 1 when the value in `STALE_CONTEXTS` is non-zero.

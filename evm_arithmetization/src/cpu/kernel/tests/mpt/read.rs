@@ -25,7 +25,7 @@ fn mpt_read() -> Result<()> {
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
-    // Now, execute mpt_read on the state trie.
+    // Now, execute `mpt_read` on the state trie.
     interpreter.generation_state.registers.program_counter = mpt_read;
     interpreter
         .push(0xdeadbeefu32.into())

@@ -6,15 +6,19 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
+use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::types::Field;
 
-use super::mpt::{load_all_mpts, TrieRootPtrs};
+use super::mpt::TrieRootPtrs;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
+use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
+use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
+use crate::generation::trie_extractor::get_state_trie;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
@@ -180,7 +184,6 @@ pub(crate) trait State<F: Field> {
             max_cpu_len_log.map(|max_len_log| (1 << max_len_log) - NUM_EXTRA_CYCLES_AFTER);
 
         let mut final_registers = RegistersState::default();
-        let final_mem = self.get_active_memory();
         let mut running = true;
         let mut final_clock = 0;
         loop {
@@ -265,6 +268,7 @@ pub(crate) trait State<F: Field> {
                 if might_overflow_op(op) {
                     self.get_mut_registers().check_overflow = true;
                 }
+
                 Ok(())
             }
             Err(e) => {
@@ -336,6 +340,9 @@ pub struct GenerationState<F: Field> {
 
     pub(crate) next_txn_index: usize,
 
+    /// Indicates whether we should set the preinitialized segments before
+    /// proving.
+    pub(crate) set_preinit: bool,
     /// Memory used by stale contexts can be pruned so proving segments can be
     /// smaller.
     pub(crate) stale_contexts: Vec<usize>,
@@ -369,15 +376,34 @@ pub struct GenerationState<F: Field> {
 }
 
 impl<F: Field> GenerationState<F> {
-    fn preinitialize_mpts(&mut self, trie_inputs: &TrieInputs) -> TrieRootPtrs {
-        let (trie_roots_ptrs, trie_data) =
-            load_all_mpts(trie_inputs).expect("Invalid MPT data for preinitialization");
+    fn preinitialize_linked_lists_and_txn_and_receipt_mpts(
+        &mut self,
+        trie_inputs: &TrieInputs,
+    ) -> TrieRootPtrs {
+        let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
+                .expect("Invalid MPT data for preinitialization");
 
-        self.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
-            trie_data.iter().map(|&val| Some(val)).collect();
+        self.memory.insert_preinitialized_segment(
+            Segment::AccountsLinkedList,
+            crate::witness::memory::MemorySegmentState {
+                content: state_leaves,
+            },
+        );
+        self.memory.insert_preinitialized_segment(
+            Segment::StorageLinkedList,
+            crate::witness::memory::MemorySegmentState {
+                content: storage_leaves,
+            },
+        );
+        self.memory.insert_preinitialized_segment(
+            Segment::TrieData,
+            crate::witness::memory::MemorySegmentState { content: trie_data },
+        );
 
         trie_roots_ptrs
     }
+
     pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
@@ -389,19 +415,21 @@ impl<F: Field> GenerationState<F> {
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
             next_txn_index: 0,
+            set_preinit: false,
             stale_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
             state_key_to_address: HashMap::new(),
             bignum_modmul_result_limbs,
             trie_root_ptrs: TrieRootPtrs {
-                state_root_ptr: 0,
+                state_root_ptr: Some(0),
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
         };
-        let trie_root_ptrs = state.preinitialize_mpts(&inputs.tries);
+        let trie_root_ptrs =
+            state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
 
         state.trie_root_ptrs = trie_root_ptrs;
         Ok(state)
@@ -478,13 +506,14 @@ impl<F: Field> GenerationState<F> {
             memory: self.memory.clone(),
             traces: Traces::default(),
             next_txn_index: 0,
+            set_preinit: self.set_preinit,
             stale_contexts: Vec::new(),
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),
             state_key_to_address: self.state_key_to_address.clone(),
             bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),
             withdrawal_prover_inputs: self.withdrawal_prover_inputs.clone(),
             trie_root_ptrs: TrieRootPtrs {
-                state_root_ptr: 0,
+                state_root_ptr: Some(0),
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },

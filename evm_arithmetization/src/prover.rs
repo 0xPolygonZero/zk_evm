@@ -39,6 +39,9 @@ use crate::witness::state::RegistersState;
 pub struct GenerationSegmentData {
     /// Indicates whether this corresponds to a dummy segment.
     pub(crate) is_dummy: bool,
+    /// Indicates whether we should set the preinitialized segments before
+    /// proving.
+    pub(crate) set_preinit: bool,
     /// Indicates the position of this segment in a sequence of
     /// executions for a larger payload.
     pub(crate) segment_index: usize,
@@ -494,6 +497,7 @@ pub fn check_abort_signal(abort_signal: Option<Arc<AtomicBool>>) -> Result<()> {
 #[allow(clippy::unwrap_or_default)]
 fn build_segment_data<F: RichField>(
     segment_index: usize,
+    set_preinit: bool,
     registers_before: Option<RegistersState>,
     registers_after: Option<RegistersState>,
     memory: Option<MemoryState>,
@@ -501,6 +505,7 @@ fn build_segment_data<F: RichField>(
 ) -> GenerationSegmentData {
     GenerationSegmentData {
         is_dummy: false,
+        set_preinit,
         segment_index,
         registers_before: registers_before.unwrap_or(RegistersState::new()),
         registers_after: registers_after.unwrap_or(RegistersState::new()),
@@ -576,7 +581,7 @@ pub(crate) fn generate_next_segment<F: RichField>(
         interpreter.generation_state.memory = partial.memory.clone();
         partial
     } else {
-        build_segment_data(0, None, None, None, &interpreter)
+        build_segment_data(0, false, None, None, None, &interpreter)
     };
 
     let segment_index = segment_data.segment_index;
@@ -591,6 +596,7 @@ pub(crate) fn generate_next_segment<F: RichField>(
 
         let partial_segment_data = Some(build_segment_data(
             segment_index + 1,
+            interpreter.generation_state.set_preinit || segment_data.set_preinit,
             Some(updated_registers),
             Some(updated_registers),
             mem_after,
@@ -621,7 +627,7 @@ pub fn generate_all_data_segments<F: RichField>(
 
     let mut segment_index = 0;
 
-    let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
+    let mut segment_data = build_segment_data(segment_index, false, None, None, None, &interpreter);
 
     while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
         let (updated_registers, mem_after) =
@@ -635,6 +641,7 @@ pub fn generate_all_data_segments<F: RichField>(
 
         segment_data = build_segment_data(
             segment_index,
+            interpreter.generation_state.set_preinit,
             Some(updated_registers),
             Some(updated_registers),
             mem_after,
@@ -647,7 +654,13 @@ pub fn generate_all_data_segments<F: RichField>(
 
 /// A utility module designed to test witness generation externally.
 pub mod testing {
+    use mpt_trie::partial_trie::HashedPartialTrie;
+
     use super::*;
+    use crate::{
+        cpu::kernel::constants::global_metadata::GlobalMetadata,
+        generation::trie_extractor::get_state_trie, util::u256_to_usize,
+    };
     use crate::{
         cpu::kernel::interpreter::Interpreter,
         generation::{output_debug_tries, state::State},
@@ -661,6 +674,19 @@ pub mod testing {
         let mut interpreter: Interpreter<F> =
             Interpreter::new_with_generation_inputs(initial_offset, initial_stack, &inputs, None);
         let result = interpreter.run();
+
+        let final_state_trie: HashedPartialTrie = get_state_trie(
+            &interpreter.get_generation_state().memory,
+            u256_to_usize(
+                interpreter
+                    .get_generation_state()
+                    .memory
+                    .read_global_metadata(GlobalMetadata::StateTrieRoot),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
         if result.is_err() {
             output_debug_tries(interpreter.get_generation_state())?;
         }
@@ -717,7 +743,8 @@ pub mod testing {
 
         let mut segment_index = 0;
 
-        let mut segment_data = build_segment_data(segment_index, None, None, None, &interpreter);
+        let mut segment_data =
+            build_segment_data(segment_index, false, None, None, None, &interpreter);
 
         while segment_data.registers_after.program_counter != KERNEL.global_labels["halt"] {
             segment_index += 1;
@@ -727,6 +754,7 @@ pub mod testing {
 
             segment_data = build_segment_data(
                 segment_index,
+                interpreter.generation_state.set_preinit,
                 Some(updated_registers),
                 Some(updated_registers),
                 mem_after,

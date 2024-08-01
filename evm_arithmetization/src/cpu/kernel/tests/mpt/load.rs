@@ -70,14 +70,20 @@ fn load_all_mpts_leaf() -> Result<()> {
     assert_eq!(
         interpreter.get_trie_data(),
         vec![
-            0.into(),
+            0.into(), // First address is unused, so that 0 can be treated as a null pointer.
+            // The next four elements correspond to the account stored in the linked list.
+            test_account_1().nonce,
+            test_account_1().balance,
+            0.into(), // pointer to storage trie root before insertion
+            test_account_1().code_hash.into_uint(),
+            // Values used for hashing.
             type_leaf,
             3.into(),
             0xABC.into(),
-            5.into(), // value ptr
+            9.into(), // value ptr
             test_account_1().nonce,
             test_account_1().balance,
-            9.into(), // pointer to storage trie root
+            13.into(), // pointer to storage trie root
             test_account_1().code_hash.into_uint(),
             // These last two elements encode the storage trie, which is a hash node.
             (PartialTrieType::Hash as u32).into(),
@@ -208,17 +214,23 @@ fn load_all_mpts_ext_to_leaf() -> Result<()> {
         interpreter.get_trie_data(),
         vec![
             0.into(), // First address is unused, so that 0 can be treated as a null pointer.
+            // The next four elements correspond to the account stored in the linked list.
+            test_account_1().nonce,
+            test_account_1().balance,
+            0.into(), // pointer to storage trie root before insertion
+            test_account_1().code_hash.into_uint(),
+            // Values used for hashing.
             type_extension,
             3.into(),     // 3 nibbles
             0xABC.into(), // key part
-            5.into(),     // Pointer to the leaf node immediately below.
+            9.into(),     // Pointer to the leaf node immediately below.
             type_leaf,
             3.into(),     // 3 nibbles
             0xDEF.into(), // key part
-            9.into(),     // value pointer
+            13.into(),    // value pointer
             test_account_1().nonce,
             test_account_1().balance,
-            13.into(), // pointer to storage trie root
+            17.into(), // pointer to storage trie root
             test_account_1().code_hash.into_uint(),
             // These last two elements encode the storage trie, which is a hash node.
             (PartialTrieType::Hash as u32).into(),

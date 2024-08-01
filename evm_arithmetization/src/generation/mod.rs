@@ -32,11 +32,12 @@ use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
 
+pub(crate) mod linked_list;
 pub mod mpt;
 pub(crate) mod prover_input;
 pub(crate) mod rlp;
 pub(crate) mod state;
-mod trie_extractor;
+pub(crate) mod trie_extractor;
 
 use crate::witness::util::mem_write_log;
 
@@ -94,6 +95,7 @@ pub struct GenerationInputs {
 /// post pre-initialization processing.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub(crate) struct TrimmedGenerationInputs {
+    pub(crate) trimmed_tries: TrimmedTrieInputs,
     /// The index of the transaction being proven within its block.
     pub(crate) txn_number_before: U256,
     /// The cumulative gas used through the execution of all transactions prior
@@ -151,12 +153,33 @@ pub struct TrieInputs {
     pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct TrimmedTrieInputs {
+    /// A partial version of the state trie prior to these transactions. It
+    /// should include all nodes that will be accessed by these
+    /// transactions.
+    pub state_trie: HashedPartialTrie,
+    /// A partial version of each storage trie prior to these transactions. It
+    /// should include all storage tries, and nodes therein, that will be
+    /// accessed by these transactions.
+    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+}
+
+impl TrieInputs {
+    pub(crate) fn trim(&self) -> TrimmedTrieInputs {
+        TrimmedTrieInputs {
+            state_trie: self.state_trie.clone(),
+            storage_tries: self.storage_tries.clone(),
+        }
+    }
+}
 impl GenerationInputs {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
     pub(crate) fn trim(&self) -> TrimmedGenerationInputs {
         TrimmedGenerationInputs {
+            trimmed_tries: self.tries.trim(),
             txn_number_before: self.txn_number_before,
             gas_used_before: self.gas_used_before,
             gas_used_after: self.gas_used_after,
@@ -388,6 +411,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     // previous segment execution, if any.
     let GenerationSegmentData {
         is_dummy,
+        set_preinit,
         segment_index,
         max_cpu_len_log,
         memory,
@@ -395,6 +419,10 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         registers_after,
         extra_data,
     } = segment_data;
+
+    if segment_data.set_preinit {
+        state.memory.preinitialized_segments = segment_data.memory.preinitialized_segments.clone();
+    }
 
     for &(address, val) in &actual_mem_before {
         state.memory.set(address, val);

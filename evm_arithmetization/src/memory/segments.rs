@@ -76,10 +76,14 @@ pub(crate) enum Segment {
     /// Segment storing the registers before/after the current execution,
     /// as well as `exit_kernel` for the `registers_before`, in that order.
     RegistersStates = 33 << SEGMENT_SCALING_FACTOR,
+    /// List of accounts in the state trie,
+    AccountsLinkedList = 34 << SEGMENT_SCALING_FACTOR,
+    /// List of storage slots of all the accounts in state trie,
+    StorageLinkedList = 35 << SEGMENT_SCALING_FACTOR,
 }
 
 impl Segment {
-    pub(crate) const COUNT: usize = 34;
+    pub(crate) const COUNT: usize = 36;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
     pub(crate) const fn unscale(&self) -> usize {
@@ -122,6 +126,8 @@ impl Segment {
             Self::ContextCheckpoints,
             Self::BlockHashes,
             Self::RegistersStates,
+            Self::AccountsLinkedList,
+            Self::StorageLinkedList,
         ]
     }
 
@@ -162,6 +168,8 @@ impl Segment {
             Segment::ContextCheckpoints => "SEGMENT_CONTEXT_CHECKPOINTS",
             Segment::BlockHashes => "SEGMENT_BLOCK_HASHES",
             Segment::RegistersStates => "SEGMENT_REGISTERS_STATES",
+            Segment::AccountsLinkedList => "SEGMENT_ACCOUNTS_LINKED_LIST",
+            Segment::StorageLinkedList => "SEGMENT_STORAGE_LINKED_LIST",
         }
     }
 
@@ -201,6 +209,8 @@ impl Segment {
             Segment::ContextCheckpoints => 256,
             Segment::BlockHashes => 256,
             Segment::RegistersStates => 256,
+            Segment::AccountsLinkedList => 256,
+            Segment::StorageLinkedList => 256,
         }
     }
 }
