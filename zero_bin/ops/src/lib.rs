@@ -1,9 +1,13 @@
+#[cfg(not(feature = "test_only"))]
 use std::time::Instant;
 
-use evm_arithmetization::{proof::PublicValues, GenerationInputs};
-use keccak_hash::keccak;
+#[cfg(not(feature = "test_only"))]
+use evm_arithmetization::generation::TrimmedGenerationInputs;
+use evm_arithmetization::proof::PublicValues;
+#[cfg(not(feature = "test_only"))]
+use paladin::operation::FatalStrategy;
 use paladin::{
-    operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
+    operation::{FatalError, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
 use proof_gen::{
@@ -14,7 +18,9 @@ use proof_gen::{
 };
 use serde::{Deserialize, Serialize};
 use trace_decoder::types::AllData;
-use tracing::{error, event, info_span, Level};
+use tracing::error;
+#[cfg(not(feature = "test_only"))]
+use tracing::{event, info_span, Level};
 use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
@@ -42,7 +48,7 @@ impl Operation for SegmentProof {
                             "b{}_txns_{}-{}-({})_input.log",
                             input.block_metadata.block_number,
                             input.txn_number_before,
-                            input.txn_number_before + input.signed_txns.len(),
+                            input.txn_number_before + input.txn_hashes.len(),
                             segment_index
                         ),
                         input,
@@ -67,39 +73,8 @@ impl Operation for SegmentProof {
     type Input = AllData;
     type Output = ();
 
-    fn execute(&self, input: Self::Input) -> Result<Self::Output> {
-        let gen_input = input.0;
-        let segment_index = input.1.segment_index();
-        let _span = SegmentProofSpan::new(&gen_input, input.1.segment_index());
-
-        if self.save_inputs_on_error {
-            evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                gen_input.clone(),
-            )
-            .map_err(|err| {
-                if let Err(write_err) = save_inputs_to_disk(
-                    format!(
-                        "b{}_txns_{}-{}-({})_input.log",
-                        gen_input.block_metadata.block_number,
-                        gen_input.txn_number_before,
-                        gen_input.txn_number_before + gen_input.signed_txns.len(),
-                        segment_index
-                    ),
-                    gen_input,
-                ) {
-                    error!("Failed to save txn proof input to disk: {:?}", write_err);
-                }
-
-                FatalError::from_anyhow(err, FatalStrategy::Terminate)
-            })?;
-        } else {
-            evm_arithmetization::prover::testing::simulate_execution::<proof_gen::types::Field>(
-                gen_input.clone(),
-            )
-            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
-        }
-
-        Ok(())
+    fn execute(&self, _input: Self::Input) -> Result<Self::Output> {
+        todo!() // currently unused, change or remove
     }
 }
 
@@ -107,16 +82,18 @@ impl Operation for SegmentProof {
 ///
 /// - When created, it starts a span with the transaction proof id.
 /// - When dropped, it logs the time taken by the transaction proof.
+#[cfg(not(feature = "test_only"))]
 struct SegmentProofSpan {
     _span: tracing::span::EnteredSpan,
     start: Instant,
     descriptor: String,
 }
 
+#[cfg(not(feature = "test_only"))]
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
-    fn get_id(ir: &GenerationInputs, segment_index: usize) -> String {
-        if ir.signed_txns.len() == 1 {
+    fn get_id(ir: &TrimmedGenerationInputs, segment_index: usize) -> String {
+        if ir.txn_hashes.len() == 1 {
             format!(
                 "b{} - {} ({})",
                 ir.block_metadata.block_number, ir.txn_number_before, segment_index
@@ -126,7 +103,7 @@ impl SegmentProofSpan {
                 "b{} - {}_{} ({})",
                 ir.block_metadata.block_number,
                 ir.txn_number_before,
-                ir.txn_number_before + ir.signed_txns.len(),
+                ir.txn_number_before + ir.txn_hashes.len(),
                 segment_index
             )
         }
@@ -136,23 +113,18 @@ impl SegmentProofSpan {
     ///
     /// Either the first 8 characters of the hex-encoded hash of the first and
     /// last transactions, or "Dummy" if there is no transaction.
-    fn get_descriptor(ir: &GenerationInputs) -> String {
-        if ir.signed_txns.is_empty() {
+    fn get_descriptor(ir: &TrimmedGenerationInputs) -> String {
+        if ir.txn_hashes.is_empty() {
             "Dummy".to_string()
-        } else if ir.signed_txns.len() == 1 {
-            format!(
-                "{:x?}",
-                u64::from_be_bytes(keccak(&ir.signed_txns[0][..])[0..8].try_into().unwrap())
-            )
+        } else if ir.txn_hashes.len() == 1 {
+            format!("{:x?}", ir.txn_hashes[0])
         } else {
-            let first_encoding =
-                u64::from_be_bytes(keccak(&ir.signed_txns[0][..])[0..8].try_into().unwrap());
+            let first_encoding = u64::from_be_bytes(ir.txn_hashes[0].0[0..8].try_into().unwrap());
             let last_encoding = u64::from_be_bytes(
-                keccak(
-                    ir.signed_txns
-                        .last()
-                        .expect("the vector of transactions is not empty"),
-                )[0..8]
+                ir.txn_hashes
+                    .last()
+                    .expect("We have at least 2 transactions.")
+                    .0[0..8]
                     .try_into()
                     .unwrap(),
             );
@@ -164,7 +136,7 @@ impl SegmentProofSpan {
     /// Create a new transaction proof span.
     ///
     /// When dropped, it logs the time taken by the transaction proof.
-    fn new(ir: &GenerationInputs, segment_index: usize) -> Self {
+    fn new(ir: &TrimmedGenerationInputs, segment_index: usize) -> Self {
         let id = Self::get_id(ir, segment_index);
         let span = info_span!("p_gen", id).entered();
         let start = Instant::now();
@@ -177,6 +149,7 @@ impl SegmentProofSpan {
     }
 }
 
+#[cfg(not(feature = "test_only"))]
 impl Drop for SegmentProofSpan {
     fn drop(&mut self) {
         event!(

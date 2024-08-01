@@ -28,8 +28,8 @@ use crate::prover::GenerationSegmentData;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
+use crate::witness::memory::MemoryOpKind;
 use crate::witness::memory::{MemoryAddress, MemoryOp, MemoryState};
-use crate::witness::memory::{MemoryContextState, MemoryOpKind};
 use crate::witness::operation::{generate_exception, Operation};
 use crate::witness::state::RegistersState;
 use crate::witness::traces::{TraceCheckpoint, Traces};
@@ -331,7 +331,7 @@ pub(crate) trait State<F: Field> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GenerationState<F: Field> {
     pub(crate) inputs: TrimmedGenerationInputs,
     pub(crate) registers: RegistersState,
@@ -432,6 +432,22 @@ impl<F: Field> GenerationState<F> {
             state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
 
         state.trie_root_ptrs = trie_root_ptrs;
+        Ok(state)
+    }
+
+    pub(crate) fn new_with_segment_data(
+        trimmed_inputs: &TrimmedGenerationInputs,
+        segment_data: &GenerationSegmentData,
+    ) -> Result<Self, ProgramError> {
+        let mut state = Self {
+            inputs: trimmed_inputs.clone(),
+            ..Default::default()
+        };
+
+        state.memory.preinitialized_segments = segment_data.memory.preinitialized_segments.clone();
+
+        state.set_segment_data(segment_data);
+
         Ok(state)
     }
 

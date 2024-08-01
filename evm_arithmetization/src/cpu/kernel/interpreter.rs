@@ -67,8 +67,6 @@ pub(crate) struct Interpreter<F: Field> {
     pub(crate) clock: usize,
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
-    /// Indicates whethere this is a dummy run.
-    is_dummy: bool,
 }
 
 /// Simulates the CPU execution from `state` until the program counter reaches
@@ -168,22 +166,6 @@ impl<F: Field> Interpreter<F> {
         result
     }
 
-    /// Returns an instance of `Interpreter` given `GenerationInputs`, and
-    /// assuming we are initializing with the `KERNEL` code.
-    pub(crate) fn new_dummy_with_generation_inputs(
-        initial_offset: usize,
-        initial_stack: Vec<U256>,
-        inputs: &GenerationInputs,
-    ) -> Self {
-        debug_inputs(inputs);
-
-        let max_cpu_len = Some(NUM_EXTRA_CYCLES_BEFORE + NUM_EXTRA_CYCLES_AFTER);
-        let mut result =
-            Self::new_with_generation_inputs(initial_offset, initial_stack, inputs, max_cpu_len);
-        result.is_dummy = true;
-        result
-    }
-
     pub(crate) fn new(
         initial_offset: usize,
         initial_stack: Vec<U256>,
@@ -201,7 +183,6 @@ impl<F: Field> Interpreter<F> {
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
-            is_dummy: false,
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -233,7 +214,6 @@ impl<F: Field> Interpreter<F> {
             is_jumpdest_analysis: true,
             clock: 0,
             max_cpu_len_log,
-            is_dummy: false,
         }
     }
 
@@ -641,10 +621,10 @@ impl<F: Field> State<F> for Interpreter<F> {
                 memory_state.contexts[ctx_idx] = ctx.clone();
             }
         }
-        if self.generation_state.set_preinit {
-            memory_state.preinitialized_segments =
-                self.generation_state.memory.preinitialized_segments.clone();
-        }
+
+        memory_state.preinitialized_segments =
+            self.generation_state.memory.preinitialized_segments.clone();
+
         Some(memory_state)
     }
 
