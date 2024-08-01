@@ -5,8 +5,8 @@ use clap::Parser;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::WorkerRuntime;
-use zero_bin_common::build_version;
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
+use zero_bin_common::version;
 
 mod init;
 
@@ -28,7 +28,7 @@ struct Cli {
 async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.contains(&"--version".to_string()) {
-        build_version::print_version(
+        version::print_version(
             env!("EVM_ARITHMETIZATION_PKG_VER"),
             env!("VERGEN_RUSTC_COMMIT_HASH"),
             env!("VERGEN_BUILD_TIMESTAMP"),

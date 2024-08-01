@@ -3,7 +3,7 @@ name = "verifier"
 authors = ["Polygon Zero <zbrown@polygon.technology>"]
 version = "0.1.0"
 edition = "2021"
-build = "../common/src/build_version.rs"
+build = "../common/build.rs"
 
 [dependencies]
 clap = { workspace = true }

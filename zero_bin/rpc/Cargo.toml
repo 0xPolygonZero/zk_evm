@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-build = "../common/src/build_version.rs"
+build = "../common/build.rs"
 
 [dependencies]
 __compat_primitive_types = { workspace = true }

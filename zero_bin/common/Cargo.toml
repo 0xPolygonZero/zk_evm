@@ -28,3 +28,4 @@ vergen = { workspace = true }
 [build-dependencies]
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
+anyhow = { workspace = true }
