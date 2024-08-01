@@ -1,9 +1,12 @@
+pub mod cli;
+
 use std::future::Future;
 use std::path::PathBuf;
 
 use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
-use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
+use futures::stream::FuturesOrdered;
+use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
@@ -17,6 +20,14 @@ use trace_decoder::{
 };
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
+
+#[derive(Debug, Clone, Copy)]
+pub struct ProverConfig {
+    pub batch_size: usize,
+    pub segment_chunk_size: usize,
+    pub max_cpu_len_log: usize,
+    pub save_inputs_on_error: bool,
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
@@ -36,66 +47,97 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        max_cpu_len_log: usize,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        batch_size: usize,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
-        use evm_arithmetization::prover::SegmentDataIterator;
-        use futures::{stream::FuturesUnordered, FutureExt};
+        use evm_arithmetization::prover::{SegmentDataChunkIterator, SegmentDataIterator};
         use paladin::directive::{Directive, IndexedStream};
 
-        let block_number = self.get_block_number();
-        info!("Proving block {block_number}");
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            segment_chunk_size,
+            save_inputs_on_error,
+        } = prover_config;
 
+        let block_number = self.get_block_number();
         let other_data = self.other_data;
-        let txs = self.block_trace.into_txn_proof_gen_ir(
+        let block_generation_inputs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
             batch_size,
         )?;
+        info!(
+            "Proving block {}, generation inputs count: {}, batch size: {}, segment chunk size: {}",
+            block_number,
+            block_generation_inputs.len(),
+            batch_size,
+            segment_chunk_size
+        );
+
+        // Create segment proof
+        let seg_prove_ops = ops::SegmentProof {
+            save_inputs_on_error,
+        };
 
         // Generate segment data.
-        let agg_ops = ops::SegmentAggProof {
+        let seg_agg_ops = ops::SegmentAggProof {
             save_inputs_on_error,
         };
 
-        let seg_ops = ops::SegmentProof {
+        // Aggregate batch proofs to a single proof
+        let batch_agg_ops = ops::BatchAggProof {
             save_inputs_on_error,
         };
 
-        // Map the transactions to a stream of transaction proofs.
-        let tx_proof_futs: FuturesUnordered<_> = txs
-            .iter()
-            .enumerate()
-            .map(|(idx, txn)| {
-                let data_iterator = SegmentDataIterator {
-                    partial_next_data: None,
-                    inputs: txn,
-                    max_cpu_len_log: Some(max_cpu_len_log),
-                };
+        let mut all_block_batch_proofs = Vec::new();
+        // Loop for all generation inputs in the block
+        for generation_inputs in block_generation_inputs {
+            let mut segment_data_iter = SegmentDataIterator {
+                partial_next_data: None,
+                inputs: &generation_inputs,
+                max_cpu_len_log: Some(max_cpu_len_log),
+            };
+            let mut chunk_segment_iter =
+                SegmentDataChunkIterator::new(&mut segment_data_iter, segment_chunk_size);
 
-                Directive::map(IndexedStream::from(data_iterator), &seg_ops)
-                    .fold(&agg_ops)
-                    .run(runtime)
-                    .map(move |e| {
-                        e.map(|p| (idx, proof_gen::proof_types::TxnAggregatableProof::from(p)))
-                    })
-            })
-            .collect();
+            let mut chunk_seg_aggregatable_proofs = Vec::new();
+            // We take one chunk of segments, perform proving and
+            // aggregate it into a single chunk proof
+            while let Some(chunk) = chunk_segment_iter.next() {
+                chunk_seg_aggregatable_proofs.push(
+                    Directive::map(IndexedStream::from(chunk.into_iter()), &seg_prove_ops)
+                        .fold(&seg_agg_ops)
+                        .run(runtime)
+                        .await,
+                );
+            }
 
-        // Fold the transaction proof stream into a single transaction proof.
+            // Fold all the generation input segment chunk proofs
+            // into a single batch proof
+            let batch_aggregated_proof = Directive::fold(
+                IndexedStream::from(chunk_seg_aggregatable_proofs.into_iter().collect::<Result<
+                    Vec<_>,
+                    anyhow::Error,
+                >>(
+                )?),
+                &seg_agg_ops,
+            )
+            .run(runtime)
+            .map(move |e| e.map(proof_gen::proof_types::BatchAggregatableProof::from))
+            .await?;
+            all_block_batch_proofs.push(batch_aggregated_proof);
+        }
+        // Fold all the aggregated batch proofs into a single batch proof
         let final_txn_proof = Directive::fold(
-            IndexedStream::new(tx_proof_futs),
-            &ops::TxnAggProof {
-                save_inputs_on_error,
-            },
+            IndexedStream::from(all_block_batch_proofs.into_iter()),
+            &batch_agg_ops,
         )
         .run(runtime)
         .await?;
 
-        if let proof_gen::proof_types::TxnAggregatableProof::Agg(proof) = final_txn_proof {
+        if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_txn_proof {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;
@@ -104,6 +146,7 @@ impl BlockProverInput {
                 None => None,
             };
 
+            // Generate the block proof
             let block_proof = paladin::directive::Literal(proof)
                 .map(&ops::BlockProof {
                     prev,
@@ -124,10 +167,8 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         _runtime: &Runtime,
-        max_cpu_len_log: usize,
-        _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        batch_size: usize,
-        _save_inputs_on_error: bool,
+        previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use evm_arithmetization::prover::testing::simulate_all_segments_interpreter;
         use plonky2::field::goldilocks_field::GoldilocksField;
@@ -139,13 +180,19 @@ impl BlockProverInput {
         let txs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
-            batch_size,
+            prover_config.batch_size,
         )?;
 
         type F = GoldilocksField;
         for txn in txs.into_iter() {
-            simulate_all_segments_interpreter::<F>(txn, max_cpu_len_log)?;
+            simulate_all_segments_interpreter::<F>(txn, prover_config.max_cpu_len_log)?;
         }
+
+        // Wait for previous block proof
+        let _prev = match previous {
+            Some(it) => Some(it.await?),
+            None => None,
+        };
 
         info!("Successfully generated witness for block {block_number}.");
 
@@ -171,10 +218,8 @@ impl ProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        max_cpu_len_log: usize,
         previous_proof: Option<GeneratedBlockProof>,
-        batch_size: usize,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
         let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
@@ -184,21 +229,12 @@ impl ProverInput {
             .blocks
             .into_iter()
             .map(|block| {
-                let block_number = block.get_block_number();
-                info!("Proving block {block_number}");
-
                 let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
 
                 // Prove the block
                 let proof_output_dir = proof_output_dir.clone();
                 let fut = block
-                    .prove(
-                        runtime,
-                        max_cpu_len_log,
-                        prev.take(),
-                        batch_size,
-                        save_inputs_on_error,
-                    )
+                    .prove(runtime, prev.take(), prover_config)
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;

@@ -5,6 +5,7 @@ use alloy::transports::http::reqwest::Url;
 use anyhow::Result;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
+use prover::ProverConfig;
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing::{error, info, warn};
 use zero_bin_common::block_interval::BlockInterval;
@@ -18,14 +19,12 @@ pub struct RpcParams {
     pub max_retries: u32,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ProofParams {
     pub checkpoint_block_number: u64,
     pub previous_proof: Option<GeneratedBlockProof>,
     pub proof_output_dir: Option<PathBuf>,
-    pub max_cpu_len_log: usize,
-    pub batch_size: usize,
-    pub save_inputs_on_error: bool,
+    pub prover_config: ProverConfig,
     pub keep_intermediate_proofs: bool,
 }
 
@@ -56,10 +55,8 @@ pub(crate) async fn client_main(
     let proved_blocks = prover_input
         .prove(
             &runtime,
-            params.max_cpu_len_log,
             params.previous_proof.take(),
-            params.batch_size,
-            params.save_inputs_on_error,
+            params.prover_config,
             params.proof_output_dir.clone(),
         )
         .await;

@@ -3848,6 +3848,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
+ "clap",
  "evm_arithmetization",
  "futures",
  "num-traits",

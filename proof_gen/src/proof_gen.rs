@@ -16,8 +16,8 @@ use plonky2::{
 
 use crate::{
     proof_types::{
-        GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedSegmentProof, GeneratedTxnAggProof,
-        SegmentAggregatableProof, TxnAggregatableProof,
+        BatchAggregatableProof, GeneratedBlockProof, GeneratedSegmentAggProof,
+        GeneratedSegmentProof, GeneratedTxnAggProof, SegmentAggregatableProof,
     },
     prover_state::ProverState,
     types::{Field, PlonkyProofIntern, EXTENSION_DEGREE},
@@ -121,8 +121,8 @@ pub fn generate_segment_agg_proof(
 /// Note that the child proofs may be either transaction or aggregation proofs.
 pub fn generate_transaction_agg_proof(
     p_state: &ProverState,
-    lhs_child: &TxnAggregatableProof,
-    rhs_child: &TxnAggregatableProof,
+    lhs_child: &BatchAggregatableProof,
+    rhs_child: &BatchAggregatableProof,
 ) -> ProofGenResult<GeneratedTxnAggProof> {
     let (b_proof_intern, p_vals) = p_state
         .state
