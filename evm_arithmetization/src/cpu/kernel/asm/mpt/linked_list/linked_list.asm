@@ -34,51 +34,64 @@
 %%after:
 %endmacro
 
-/// Iterates over the inital account linked list and shallow copies
+/// Iterates over the initial account linked list and shallow copies
 /// the accounts, storing a pointer to the copied account in the node.
+/// Computes the length of `SEGMENT_ACCOUNTS_LINKED_LIST` and 
+/// stores it in `GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE`.
 global store_initial_accounts:
     // stack: retdest
-    PUSH  @SEGMENT_ACCOUNTS_LINKED_LIST
+    PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    ADD
+    // stack: cur_len, retdest
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
     %next_account
 loop_store_initial_accounts:
-    // stack: current_node_ptr
+    // stack: current_node_ptr, cur_len, retdest
     %get_trie_data_size
     DUP2
     MLOAD_GENERAL
-    // stack: current_addr_key, cpy_ptr, current_node_ptr, retdest
+    // stack: current_addr_key, cpy_ptr, current_node_ptr, cur_len, retdest
     %eq_const(@U256_MAX)
     %jumpi(store_initial_accounts_end)
     DUP2
     %increment
     MLOAD_GENERAL
-    // stack: nonce_ptr, cpy_ptr, current_node_ptr, retdest
+    // stack: nonce_ptr, cpy_ptr, current_node_ptr, cur_len, retdest
     DUP1
     %mload_trie_data // nonce
     %append_to_trie_data
     %increment
-    // stack: balance_ptr, cpy_ptr, current_node_ptr, retdest
+    // stack: balance_ptr, cpy_ptr, current_node_ptr, cur_len, retdest
     DUP1
     %mload_trie_data // balance
     %append_to_trie_data
     %increment // The storage_root_ptr is not really necessary
-    // stack: storage_root_ptr_ptr, cpy_ptr, current_node_ptr, retdest
+    // stack: storage_root_ptr_ptr, cpy_ptr, current_node_ptr, cur_len, retdest
     DUP1
     %mload_trie_data // storage_root_ptr
     %append_to_trie_data
     %increment
-    // stack: code_hash_ptr, cpy_ptr, current_node_ptr, retdest
+    // stack: code_hash_ptr, cpy_ptr, current_node_ptr, cur_len, retdest
     %mload_trie_data // code_hash
     %append_to_trie_data
-    // stack: cpy_ptr, current_node_ptr, retdest
+    // stack: cpy_ptr, current_node_ptr, cur_len, retdest
     DUP2
     %add_const(2)
     SWAP1
     MSTORE_GENERAL // Store cpy_ptr
+    // stack: current_node_ptr, cur_len, retdest
+    SWAP1 PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE 
+    ADD
+    SWAP1
+    // stack: current_node_ptr, cur_len', retdest
     %next_account
     %jump(loop_store_initial_accounts)
 
 store_initial_accounts_end:
     %pop2
+    // stack: cur_len, retdest
+    %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
     JUMP
 
 %macro insert_account_with_overwrite
@@ -88,7 +101,7 @@ store_initial_accounts_end:
 %endmacro
 
 // Multiplies the value at the top of the stack, denoted by ptr/4, by 4
-// and aborts if ptr/4 <= mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN]/4.
+// and aborts if ptr/4 <= mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE]/4.
 // Also checks that ptr >= @SEGMENT_ACCOUNTS_LINKED_LIST.
 // This way, 4*ptr/4 must be pointing to the beginning of a node.
 // TODO: Maybe we should check here if the node has been deleted.
@@ -103,7 +116,7 @@ store_initial_accounts_end:
     // stack: ptr/4
     DUP1
     PUSH 4
-    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
+    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
     // By construction, both @SEGMENT_ACCOUNTS_LINKED_LIST and the unscaled list len
     // must be multiples of 4
     DIV
@@ -159,7 +172,7 @@ insert_new_account:
     // get the value of the next address
     %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     // stack: next_ptr_ptr, addr_key, payload_ptr, retdest
-    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
+    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
     DUP2
     MLOAD_GENERAL
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, payload_ptr, retdest
@@ -201,7 +214,7 @@ insert_new_account:
     MSTORE_GENERAL
     // stack: new_next_ptr, addr_key, payload_ptr, retdest
     %increment
-    %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN)
+    %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
     // stack: addr_key, payload_ptr, retdest
     %pop2
     JUMP
@@ -309,33 +322,45 @@ global remove_account:
 
 /// Iterates over the inital account linked list and shallow copies
 /// the accounts, storing a pointer to the copied account in the node.
+/// Computes the length of `SEGMENT_STORAGE_LINKED_LIST` and 
+/// checks against `GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE`.
 global store_initial_slots:
     // stack: retdest
+    PUSH @STORAGE_LINKED_LISTS_NODE_SIZE
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
+    ADD
+    // stack: cur_len, retdest
     PUSH  @SEGMENT_STORAGE_LINKED_LIST
     %next_slot
 
 loop_store_initial_slots:
-    // stack: current_node_ptr
+    // stack: current_node_ptr, cur_len, retdest
     DUP1
     MLOAD_GENERAL
-    // stack: current_addr_key, current_node_ptr, retdest
+    // stack: current_addr_key, current_node_ptr, cur_len, retdest
     %eq_const(@U256_MAX)
     %jumpi(store_initial_slots_end)
     DUP1
     %add_const(2)
     MLOAD_GENERAL
-    // stack: value, current_node_ptr, retdest
+    // stack: value, current_node_ptr, cur_len, retdest
     DUP2
     %add_const(@STORAGE_COPY_PAYLOAD_PTR)
-    // stack: cpy_value_ptr, value, current_node_ptr, retdest
+    // stack: cpy_value_ptr, value, current_node_ptr, cur_len, retdest
     SWAP1
     MSTORE_GENERAL // Store cpy_value
-    // stack: current_node_ptr, retdest
+    // stack: current_node_ptr, cur_len, retdest
+    SWAP1 PUSH @STORAGE_LINKED_LISTS_NODE_SIZE
+    ADD
+    SWAP1
+    // stack: current_node_ptr, cur_len', retdest
     %next_slot
     %jump(loop_store_initial_slots)
 
 store_initial_slots_end:
     POP
+    // stack: cur_len, retdest
+    %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     JUMP
 
 
@@ -351,7 +376,7 @@ store_initial_slots_end:
 %endmacro
 
 // Multiplies the value at the top of the stack, denoted by ptr/5, by 5
-// and aborts if ptr/5 >= (mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_LEN] - @SEGMENT_STORAGE_LINKED_LIST)/5.
+// and aborts if ptr/5 >= (mem[@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE] - @SEGMENT_STORAGE_LINKED_LIST)/5.
 // This way, @SEGMENT_STORAGE_LINKED_LIST + 5*ptr/5 must be pointing to the beginning of a node.
 // TODO: Maybe we should check here if the node has been deleted.
 %macro get_valid_slot_ptr
@@ -360,7 +385,7 @@ store_initial_slots_end:
     PUSH 5
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     // stack: segment, 5, ptr/5, ptr/5
-    %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
+    %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     SUB
     // stack: accessed_strg_keys_len, 5, ptr/5, ptr/5
     // By construction, the unscaled list len must be multiple of 5
@@ -373,7 +398,6 @@ store_initial_slots_end:
 
 /// Inserts the pair (address_key, storage_key) and a new payload pointer into the linked list if it is not already present,
 /// or modifies its payload if it was already present.
-/// Returns `new_payload_ptr` if the storage key was inserted, `original_ptr` if it was already present.
 global insert_slot_with_value:
     // stack: addr_key, key, value, retdest
     PROVER_INPUT(linked_list::insert_slot)
@@ -425,7 +449,7 @@ insert_new_slot_with_value:
     // get the value of the next address
     %add_const(@STORAGE_NEXT_NODE_PTR)
     // stack: next_ptr_ptr, addr_key, key, value, retdest
-    %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
+    %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     DUP2
     MLOAD_GENERAL
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, value, retdest
@@ -493,7 +517,7 @@ next_node_ok_with_value:
     MSTORE_GENERAL
     // stack: new_next_ptr_ptr, retdest
     %increment
-    %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
+    %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     // stack: retdest
     JUMP
 
@@ -583,7 +607,7 @@ insert_new_slot:
     // get the value of the next address
     %add_const(@STORAGE_NEXT_NODE_PTR)
     // stack: next_ptr_ptr, addr_key, key, payload_ptr, retdest
-    %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
+    %mload_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     DUP2
     MLOAD_GENERAL
     // stack: next_ptr, new_ptr, next_ptr_ptr, addr_key, key, payload_ptr, retdest
@@ -654,7 +678,7 @@ next_node_ok:
     MSTORE_GENERAL
     // stack: new_next_ptr, addr_key, key, payload_ptr, retdest
     %increment
-    %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_LEN)
+    %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     // stack: addr_key, key, payload_ptr, retdest
     %stack (addr_key, key, payload_ptr, retdest) -> (retdest, payload_ptr)
     JUMP

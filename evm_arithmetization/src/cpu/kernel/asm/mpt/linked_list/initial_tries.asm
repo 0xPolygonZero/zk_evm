@@ -17,7 +17,9 @@ global mpt_set_payload:
     DUP1 %eq_const(@MPT_NODE_BRANCH)    %jumpi(set_payload_branch)
     DUP1 %eq_const(@MPT_NODE_EXTENSION) %jumpi(set_payload_extension)
     DUP1 %eq_const(@MPT_NODE_LEAF)      %jumpi(set_payload_leaf)
-
+    DUP1 %eq_const(@MPT_NODE_HASH)      %jumpi(skip)
+    PANIC
+    
 skip:
     // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     %stack (node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest) -> (retdest, account_ptr_ptr, storage_ptr_ptr)

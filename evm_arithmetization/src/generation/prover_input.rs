@@ -74,7 +74,7 @@ impl<F: Field> GenerationState<F> {
     fn run_end_of_txns(&mut self) -> Result<U256, ProgramError> {
         // Reset the jumpdest table before the next transaction.
         self.jumpdest_table = None;
-        let end = self.next_txn_index == self.inputs.txns_len;
+        let end = self.next_txn_index == self.inputs.txn_hashes.len();
         if end {
             Ok(U256::one())
         } else {
@@ -86,24 +86,27 @@ impl<F: Field> GenerationState<F> {
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let trie = input_fn.0[1].as_str();
         match trie {
-            "state" => match self.trie_root_ptrs.state_root_ptr {
-                Some(state_root_ptr) => Ok(state_root_ptr),
-                None => {
-                    self.set_preinit = true;
-                    let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
+            "state" => self
+                .trie_root_ptrs
+                .state_root_ptr
+                .map_or_else(
+                    || {
+                        self.set_preinit = true;
+                        let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
 
-                    let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
+                        let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
 
-                    self.memory.insert_preinitialized_segment(
-                        Segment::TrieData,
-                        crate::witness::memory::MemorySegmentState {
-                            content: new_content,
-                        },
-                    );
-                    Ok(n)
-                }
-            }
-            .map(U256::from),
+                        self.memory.insert_preinitialized_segment(
+                            Segment::TrieData,
+                            crate::witness::memory::MemorySegmentState {
+                                content: new_content,
+                            },
+                        );
+                        Ok(n)
+                    },
+                    Ok,
+                )
+                .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             "trie_data_size" => Ok(self

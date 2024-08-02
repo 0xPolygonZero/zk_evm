@@ -50,7 +50,7 @@ fn test_init_linked_lists() -> Result<()> {
         acc_addr_list
     );
 
-    // Check the inital storage linked list
+    // Check the initial storage linked list
     let acc_addr_list: Vec<U256> = (0..5)
         .map(|i| {
             interpreter
@@ -145,7 +145,7 @@ fn test_insert_account() -> Result<()> {
         [Segment::AccountsLinkedList.unscale()]
     .content = init_accounts_ll;
     interpreter.set_global_metadata_field(
-        GlobalMetadata::AccountsLinkedListLen,
+        GlobalMetadata::AccountsLinkedListNextAvailable,
         (Segment::AccountsLinkedList as usize + init_len).into(),
     );
 
@@ -214,7 +214,7 @@ fn test_insert_storage() -> Result<()> {
         [Segment::StorageLinkedList.unscale()]
     .content = init_storage_ll;
     interpreter.set_global_metadata_field(
-        GlobalMetadata::StorageLinkedListLen,
+        GlobalMetadata::StorageLinkedListNextAvailable,
         (Segment::StorageLinkedList as usize + init_len).into(),
     );
 
@@ -287,7 +287,7 @@ fn test_insert_and_delete_accounts() -> Result<()> {
         [Segment::AccountsLinkedList.unscale()]
     .content = init_accounts_ll;
     interpreter.set_global_metadata_field(
-        GlobalMetadata::AccountsLinkedListLen,
+        GlobalMetadata::AccountsLinkedListNextAvailable,
         (Segment::AccountsLinkedList as usize + init_len).into(),
     );
 
@@ -332,8 +332,10 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     // 1)*4.
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
-            MemoryAddress::new_bundle(U256::from(GlobalMetadata::AccountsLinkedListLen as usize))
-                .unwrap(),
+            MemoryAddress::new_bundle(U256::from(
+                GlobalMetadata::AccountsLinkedListNextAvailable as usize
+            ))
+            .unwrap(),
         ),
         U256::from(offset + (n + 1) * 4)
     );
@@ -368,8 +370,10 @@ fn test_insert_and_delete_accounts() -> Result<()> {
     // 2)*4.
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
-            MemoryAddress::new_bundle(U256::from(GlobalMetadata::AccountsLinkedListLen as usize))
-                .unwrap(),
+            MemoryAddress::new_bundle(U256::from(
+                GlobalMetadata::AccountsLinkedListNextAvailable as usize
+            ))
+            .unwrap(),
         ),
         U256::from(offset + (n + 2) * 4)
     );
@@ -438,7 +442,7 @@ fn test_insert_and_delete_storage() -> Result<()> {
         [Segment::StorageLinkedList.unscale()]
     .content = init_storage_ll;
     interpreter.set_global_metadata_field(
-        GlobalMetadata::StorageLinkedListLen,
+        GlobalMetadata::StorageLinkedListNextAvailable,
         (Segment::StorageLinkedList as usize + init_len).into(),
     );
 
@@ -492,8 +496,10 @@ fn test_insert_and_delete_storage() -> Result<()> {
     // 1)*5.
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
-            MemoryAddress::new_bundle(U256::from(GlobalMetadata::StorageLinkedListLen as usize))
-                .unwrap(),
+            MemoryAddress::new_bundle(U256::from(
+                GlobalMetadata::StorageLinkedListNextAvailable as usize
+            ))
+            .unwrap(),
         ),
         U256::from(offset + (n + 1) * 5)
     );
@@ -541,8 +547,10 @@ fn test_insert_and_delete_storage() -> Result<()> {
     // 2)*5.
     assert_eq!(
         interpreter.generation_state.memory.get_with_init(
-            MemoryAddress::new_bundle(U256::from(GlobalMetadata::StorageLinkedListLen as usize))
-                .unwrap(),
+            MemoryAddress::new_bundle(U256::from(
+                GlobalMetadata::StorageLinkedListNextAvailable as usize
+            ))
+            .unwrap(),
         ),
         U256::from(offset + (n + 2) * 5)
     );

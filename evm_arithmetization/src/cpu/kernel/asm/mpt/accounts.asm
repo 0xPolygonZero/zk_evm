@@ -23,15 +23,16 @@
 %macro clone_account
     // stack: account_ptr
     %get_trie_data_size
-    // stack: cloned_account_ptr
+    // stack: cloned_account_ptr, account_ptr
     SWAP1
     DUP1
-    // Balance
+    // stack: nonce_ptr, account_ptr, cloned_account_ptr
+    // Nonce
     %mload_trie_data
     %append_to_trie_data
+    // stack: account_ptr, cloned_account_ptr
     %increment
-    // Nonce
-    %increment
+    // Balance
     DUP1
     %mload_trie_data
     %append_to_trie_data

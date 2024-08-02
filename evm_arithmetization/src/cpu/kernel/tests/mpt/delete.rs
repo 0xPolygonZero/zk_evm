@@ -115,6 +115,7 @@ fn test_state_trie(
     interpreter.generation_state.registers.program_counter = KERNEL.global_labels["store_initial"];
     interpreter.run();
 
+    assert_eq!(interpreter.stack(), vec![]);
     // Set initial tries.
     interpreter
         .push(0xDEADBEEFu32.into())
