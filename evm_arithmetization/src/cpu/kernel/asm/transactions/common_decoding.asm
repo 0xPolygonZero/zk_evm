@@ -252,12 +252,11 @@ sload_with_addr:
 
     // Storage key not found. Return default value_ptr = 0,
     // which derefs to 0 since @SEGMENT_TRIE_DATA[0] = 0.
-    %stack (value_ptr, retdest) -> (retdest, 0)
+    %stack (value, retdest) -> (retdest, 0)
+    
     JUMP
 
 global storage_key_exists:
-    // stack: value_ptr, retdest
-    %mload_trie_data
     // stack: value, retdest
     SWAP1
     JUMP

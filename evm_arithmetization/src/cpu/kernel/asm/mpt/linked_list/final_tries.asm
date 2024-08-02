@@ -69,11 +69,16 @@ insert_next_slot:
     DUP2
     %increment
     MLOAD_GENERAL
-    // key, addr, storage_ptr_ptr, root_ptr, retdest
+    // stack: key, addr, storage_ptr_ptr, root_ptr, retdest
     DUP3
     %add_const(2)
     MLOAD_GENERAL
-    // stack: payload_ptr, key, addr, storage_ptr_ptr, root_ptr, retdest
+    // stack: value, key, addr, storage_ptr_ptr, root_ptr, retdest
+    // If the value is 0, then payload_ptr = 0, and we don't need to insert a value in the `TrieData` segment.
+    DUP1 ISZERO %jumpi(insert_with_payload_ptr)
+    %get_trie_data_size // payload_ptr
+    SWAP1 %append_to_trie_data // append the value to the trie data segment
+insert_with_payload_ptr:
     %stack (payload_ptr, key, addr, storage_ptr_ptr, root_ptr) -> (root_ptr, 64, key, payload_ptr, after_insert_slot, storage_ptr_ptr, addr)
     %jump(mpt_insert)
 after_insert_slot:
@@ -112,7 +117,7 @@ global delete_removed_accounts:
     // stack: key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
     DUP2
     %add_const(2)
-    MLOAD_GENERAL // get intitial payload_ptr
+    MLOAD_GENERAL // get initial payload_ptr
     %add_const(2) // storage_root_ptr_ptr = payload_ptr + 2
     %mload_trie_data
     // stack: storage_root_ptr, key, account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest

@@ -410,7 +410,6 @@ associated storage trie hash"
                 empty_nibbles(),
                 storage_trie,
                 storage_leaves,
-                trie_data,
                 &parse_storage_value,
             )?;
 
@@ -425,7 +424,6 @@ pub(crate) fn get_storage_leaves<F>(
     key: Nibbles,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<Option<U256>>,
-    trie_data: &mut Vec<Option<U256>>,
     parse_value: &F,
 ) -> Result<(), ProgramError>
 where
@@ -439,14 +437,7 @@ where
                     count: 1,
                     packed: i.into(),
                 });
-                get_storage_leaves(
-                    address,
-                    extended_key,
-                    child,
-                    storage_leaves,
-                    trie_data,
-                    parse_value,
-                )?;
+                get_storage_leaves(address, extended_key, child, storage_leaves, parse_value)?;
             }
 
             Ok(())
@@ -454,14 +445,7 @@ where
 
         Node::Extension { nibbles, child } => {
             let extended_key = key.merge_nibbles(nibbles);
-            get_storage_leaves(
-                address,
-                extended_key,
-                child,
-                storage_leaves,
-                trie_data,
-                parse_value,
-            )?;
+            get_storage_leaves(address, extended_key, child, storage_leaves, parse_value)?;
 
             Ok(())
         }
@@ -481,14 +465,19 @@ where
                     .map_err(|_| ProgramError::IntegerTooLarge)?,
             ));
             // Write `value_ptr_ptr`.
-            storage_leaves.push(Some((trie_data.len()).into()));
+            let leaves = parse_value(value)?
+                .into_iter()
+                .map(Some)
+                .collect::<Vec<_>>();
+            let leaf = match leaves.len() {
+                1 => leaves[0],
+                _ => panic!("Slot can only store exactly one value."),
+            };
+            storage_leaves.push(leaf);
             // Write the counter.
             storage_leaves.push(Some(0.into()));
             // Set the next node as the initial node.
             storage_leaves.push(Some((Segment::StorageLinkedList as usize).into()));
-
-            let leaf = parse_value(value)?.into_iter().map(Some);
-            trie_data.extend(leaf);
 
             Ok(())
         }
