@@ -36,8 +36,9 @@ use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
 use crate::proof::{
     BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, ExtraBlockData,
-    ExtraBlockDataTarget, MemCap, MemCapTarget, PublicValues, PublicValuesTarget, RegistersData,
-    RegistersDataTarget, TrieRoots, TrieRootsTarget,
+    ExtraBlockDataTarget, FinalPublicValues, FinalPublicValuesTarget, MemCap, MemCapTarget,
+    PublicValues, PublicValuesTarget, RegistersData, RegistersDataTarget, TrieRoots,
+    TrieRootsTarget,
 };
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
@@ -628,6 +629,24 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
     }
 }
 
+pub(crate) fn add_virtual_final_public_values<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+) -> FinalPublicValuesTarget {
+    let trie_roots_before = add_virtual_trie_roots(builder);
+    let trie_roots_after = add_virtual_trie_roots(builder);
+    let block_metadata = add_virtual_block_metadata(builder);
+    let block_hashes = add_virtual_block_hashes(builder);
+    let extra_block_data = add_virtual_extra_block_data(builder);
+
+    FinalPublicValuesTarget {
+        trie_roots_before,
+        trie_roots_after,
+        block_metadata,
+        block_hashes,
+        extra_block_data,
+    }
+}
+
 pub(crate) fn add_virtual_trie_roots<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> TrieRootsTarget {
@@ -714,18 +733,6 @@ pub(crate) fn add_virtual_registers_data<F: RichField + Extendable<D>, const D: 
     }
 }
 
-pub(crate) fn debug_public_values(public_values: &PublicValues) {
-    log::debug!("Public Values:");
-    log::debug!(
-        "  Trie Roots Before: {:?}",
-        &public_values.trie_roots_before
-    );
-    log::debug!("  Trie Roots After: {:?}", &public_values.trie_roots_after);
-    log::debug!("  Block Metadata: {:?}", &public_values.block_metadata);
-    log::debug!("  Block Hashes: {:?}", &public_values.block_hashes);
-    log::debug!("  Extra Block Data: {:?}", &public_values.extra_block_data);
-}
-
 pub fn set_public_value_targets<F, W, const D: usize>(
     witness: &mut W,
     public_values_target: &PublicValuesTarget,
@@ -735,8 +742,6 @@ where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
-    debug_public_values(public_values);
-
     set_trie_roots_target(
         witness,
         &public_values_target.trie_roots_before,
@@ -785,6 +790,42 @@ where
     )?;
 
     Ok(())
+}
+
+pub fn set_final_public_value_targets<F, W, const D: usize>(
+    witness: &mut W,
+    public_values_target: &FinalPublicValuesTarget,
+    public_values: &FinalPublicValues,
+) -> Result<(), ProgramError>
+where
+    F: RichField + Extendable<D>,
+    W: Witness<F>,
+{
+    set_trie_roots_target(
+        witness,
+        &public_values_target.trie_roots_before,
+        &public_values.trie_roots_before,
+    );
+    set_trie_roots_target(
+        witness,
+        &public_values_target.trie_roots_after,
+        &public_values.trie_roots_after,
+    );
+    set_block_metadata_target(
+        witness,
+        &public_values_target.block_metadata,
+        &public_values.block_metadata,
+    )?;
+    set_block_hashes_target(
+        witness,
+        &public_values_target.block_hashes,
+        &public_values.block_hashes,
+    );
+    set_extra_public_values_target(
+        witness,
+        &public_values_target.extra_block_data,
+        &public_values.extra_block_data,
+    )
 }
 
 pub(crate) fn set_trie_roots_target<F, W, const D: usize>(

@@ -654,10 +654,7 @@ impl PublicValuesTarget {
     pub(crate) fn from_public_inputs(pis: &[Target], len_mem_cap: usize) -> Self {
         assert!(
             pis.len()
-                > TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
+                > TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
                     - 1
         );
 
@@ -792,6 +789,220 @@ impl PublicValuesTarget {
             mem_before: MemCapTarget::select(builder, condition, pv0.mem_before, pv1.mem_before),
 
             mem_after: MemCapTarget::select(builder, condition, pv0.mem_after, pv1.mem_after),
+        }
+    }
+}
+
+/// Memory values which are public.
+/// Note: All the larger integers are encoded with 32-bit limbs in little-endian
+/// order.
+#[derive(Eq, PartialEq, Debug)]
+pub struct FinalPublicValuesTarget {
+    /// Trie hashes before the execution of the local state transition.
+    pub trie_roots_before: TrieRootsTarget,
+    /// Trie hashes after the execution of the local state transition.
+    pub trie_roots_after: TrieRootsTarget,
+    /// Block metadata: it remains unchanged within a block.
+    pub block_metadata: BlockMetadataTarget,
+    /// 256 previous block hashes and current block's hash.
+    pub block_hashes: BlockHashesTarget,
+    /// Extra block data that is specific to the current proof.
+    pub extra_block_data: ExtraBlockDataTarget,
+}
+
+impl FinalPublicValuesTarget {
+    const SIZE: usize = TrieRootsTarget::SIZE * 2
+        + BlockMetadataTarget::SIZE
+        + BlockHashesTarget::SIZE
+        + ExtraBlockDataTarget::SIZE;
+
+    /// Serializes final public value targets.
+    pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        let TrieRootsTarget {
+            state_root: state_root_before,
+            transactions_root: transactions_root_before,
+            receipts_root: receipts_root_before,
+        } = self.trie_roots_before;
+
+        buffer.write_target_array(&state_root_before)?;
+        buffer.write_target_array(&transactions_root_before)?;
+        buffer.write_target_array(&receipts_root_before)?;
+
+        let TrieRootsTarget {
+            state_root: state_root_after,
+            transactions_root: transactions_root_after,
+            receipts_root: receipts_root_after,
+        } = self.trie_roots_after;
+
+        buffer.write_target_array(&state_root_after)?;
+        buffer.write_target_array(&transactions_root_after)?;
+        buffer.write_target_array(&receipts_root_after)?;
+
+        let BlockMetadataTarget {
+            block_beneficiary,
+            block_timestamp,
+            block_number,
+            block_difficulty,
+            block_random,
+            block_gaslimit,
+            block_chain_id,
+            block_base_fee,
+            block_gas_used,
+            block_bloom,
+        } = self.block_metadata;
+
+        buffer.write_target_array(&block_beneficiary)?;
+        buffer.write_target(block_timestamp)?;
+        buffer.write_target(block_number)?;
+        buffer.write_target(block_difficulty)?;
+        buffer.write_target_array(&block_random)?;
+        buffer.write_target(block_gaslimit)?;
+        buffer.write_target(block_chain_id)?;
+        buffer.write_target_array(&block_base_fee)?;
+        buffer.write_target(block_gas_used)?;
+        buffer.write_target_array(&block_bloom)?;
+
+        let BlockHashesTarget {
+            prev_hashes,
+            cur_hash,
+        } = self.block_hashes;
+        buffer.write_target_array(&prev_hashes)?;
+        buffer.write_target_array(&cur_hash)?;
+
+        let ExtraBlockDataTarget {
+            checkpoint_state_trie_root,
+            txn_number_before,
+            txn_number_after,
+            gas_used_before,
+            gas_used_after,
+        } = self.extra_block_data;
+        buffer.write_target_array(&checkpoint_state_trie_root)?;
+        buffer.write_target(txn_number_before)?;
+        buffer.write_target(txn_number_after)?;
+        buffer.write_target(gas_used_before)?;
+        buffer.write_target(gas_used_after)?;
+
+        Ok(())
+    }
+
+    /// Deserializes final public value targets.
+    pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let trie_roots_before = TrieRootsTarget {
+            state_root: buffer.read_target_array()?,
+            transactions_root: buffer.read_target_array()?,
+            receipts_root: buffer.read_target_array()?,
+        };
+
+        let trie_roots_after = TrieRootsTarget {
+            state_root: buffer.read_target_array()?,
+            transactions_root: buffer.read_target_array()?,
+            receipts_root: buffer.read_target_array()?,
+        };
+
+        let block_metadata = BlockMetadataTarget {
+            block_beneficiary: buffer.read_target_array()?,
+            block_timestamp: buffer.read_target()?,
+            block_number: buffer.read_target()?,
+            block_difficulty: buffer.read_target()?,
+            block_random: buffer.read_target_array()?,
+            block_gaslimit: buffer.read_target()?,
+            block_chain_id: buffer.read_target()?,
+            block_base_fee: buffer.read_target_array()?,
+            block_gas_used: buffer.read_target()?,
+            block_bloom: buffer.read_target_array()?,
+        };
+
+        let block_hashes = BlockHashesTarget {
+            prev_hashes: buffer.read_target_array()?,
+            cur_hash: buffer.read_target_array()?,
+        };
+
+        let extra_block_data = ExtraBlockDataTarget {
+            checkpoint_state_trie_root: buffer.read_target_array()?,
+            txn_number_before: buffer.read_target()?,
+            txn_number_after: buffer.read_target()?,
+            gas_used_before: buffer.read_target()?,
+            gas_used_after: buffer.read_target()?,
+        };
+
+        Ok(Self {
+            trie_roots_before,
+            trie_roots_after,
+            block_metadata,
+            block_hashes,
+            extra_block_data,
+        })
+    }
+
+    /// Extracts public value `Target`s from the given public input `Target`s.
+    /// Public values are always the first public inputs added to the circuit,
+    /// so we can start extracting at index 0.
+    pub(crate) fn from_public_inputs(pis: &[Target], len_mem_cap: usize) -> Self {
+        assert!(pis.len() >= Self::SIZE);
+
+        Self {
+            trie_roots_before: TrieRootsTarget::from_public_inputs(&pis[0..TrieRootsTarget::SIZE]),
+            trie_roots_after: TrieRootsTarget::from_public_inputs(
+                &pis[TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2],
+            ),
+            block_metadata: BlockMetadataTarget::from_public_inputs(
+                &pis[TrieRootsTarget::SIZE * 2
+                    ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE],
+            ),
+            block_hashes: BlockHashesTarget::from_public_inputs(
+                &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
+                    ..TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE],
+            ),
+            extra_block_data: ExtraBlockDataTarget::from_public_inputs(
+                &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
+                    ..TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        + ExtraBlockDataTarget::SIZE],
+            ),
+        }
+    }
+
+    /// Returns the public values in `pv0` or `pv1` depending on `condition`.
+    pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        pv0: Self,
+        pv1: Self,
+    ) -> Self {
+        Self {
+            trie_roots_before: TrieRootsTarget::select(
+                builder,
+                condition,
+                pv0.trie_roots_before,
+                pv1.trie_roots_before,
+            ),
+            trie_roots_after: TrieRootsTarget::select(
+                builder,
+                condition,
+                pv0.trie_roots_after,
+                pv1.trie_roots_after,
+            ),
+            block_metadata: BlockMetadataTarget::select(
+                builder,
+                condition,
+                pv0.block_metadata,
+                pv1.block_metadata,
+            ),
+            block_hashes: BlockHashesTarget::select(
+                builder,
+                condition,
+                pv0.block_hashes,
+                pv1.block_hashes,
+            ),
+            extra_block_data: ExtraBlockDataTarget::select(
+                builder,
+                condition,
+                pv0.extra_block_data,
+                pv1.extra_block_data,
+            ),
         }
     }
 }

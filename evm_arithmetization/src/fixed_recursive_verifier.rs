@@ -46,15 +46,15 @@ use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
     AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
-    FinalPublicValues, MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget,
-    TrieRoots, TrieRootsTarget, TARGET_HASH_SIZE,
+    FinalPublicValues, FinalPublicValuesTarget, MemCapTarget, PublicValues, PublicValuesTarget,
+    RegistersDataTarget, TrieRoots, TrieRootsTarget, TARGET_HASH_SIZE,
 };
 use crate::prover::testing::prove_all_segments;
 use crate::prover::{check_abort_signal, prove, GenerationSegmentData, SegmentDataIterator};
 use crate::recursive_verifier::{
-    add_common_recursion_gates, add_virtual_public_values, get_memory_extra_looking_sum_circuit,
-    recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
-    StarkWrapperCircuit,
+    add_common_recursion_gates, add_virtual_final_public_values, add_virtual_public_values,
+    get_memory_extra_looking_sum_circuit, recursive_stark_circuit, set_final_public_value_targets,
+    set_public_value_targets, PlonkWrapperCircuit, PublicInputs, StarkWrapperCircuit,
 };
 use crate::util::{h160_limbs, h256_limbs, u256_limbs};
 use crate::verifier::initial_memory_merkle_cap;
@@ -388,7 +388,7 @@ where
     has_parent_block: BoolTarget,
     parent_block_proof: ProofWithPublicInputsTarget<D>,
     agg_root_proof: ProofWithPublicInputsTarget<D>,
-    public_values: PublicValuesTarget,
+    public_values: FinalPublicValuesTarget,
     cyclic_vk: VerifierCircuitTarget,
 }
 
@@ -421,7 +421,7 @@ where
         let has_parent_block = buffer.read_target_bool()?;
         let parent_block_proof = buffer.read_target_proof_with_public_inputs()?;
         let agg_root_proof = buffer.read_target_proof_with_public_inputs()?;
-        let public_values = PublicValuesTarget::from_buffer(buffer)?;
+        let public_values = FinalPublicValuesTarget::from_buffer(buffer)?;
         let cyclic_vk = buffer.read_target_verifier_circuit()?;
         Ok(Self {
             circuit,
@@ -1151,7 +1151,7 @@ where
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let mem_cap_len = agg.public_values.mem_before.mem_cap.0.len();
-        let public_values = add_virtual_public_values(&mut builder, mem_cap_len);
+        let public_values = add_virtual_final_public_values(&mut builder);
         let has_parent_block = builder.add_virtual_bool_target_safe();
         let parent_block_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
         let agg_root_proof = builder.add_virtual_proof_with_pis(&agg.circuit.common);
@@ -2140,9 +2140,10 @@ where
                 .map(|p| TrieRoots::from_public_inputs(&p.public_inputs[0..TrieRootsTarget::SIZE]))
                 .unwrap_or(public_values.trie_roots_before),
             ..public_values
-        };
+        }
+        .into();
 
-        set_public_value_targets(
+        set_final_public_value_targets(
             &mut block_inputs,
             &self.block.public_values,
             &block_public_values,
