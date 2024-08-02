@@ -1151,7 +1151,7 @@ where
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let mem_cap_len = agg.public_values.mem_before.mem_cap.0.len();
-        let public_values = add_virtual_final_public_values(&mut builder);
+        let public_values = add_virtual_public_values(&mut builder, mem_cap_len);
         let has_parent_block = builder.add_virtual_bool_target_safe();
         let parent_block_proof = builder.add_virtual_proof_with_pis(&expected_common_data);
         let agg_root_proof = builder.add_virtual_proof_with_pis(&agg.circuit.common);
@@ -1214,7 +1214,7 @@ where
             has_parent_block,
             parent_block_proof,
             agg_root_proof,
-            public_values,
+            public_values: public_values.into(),
             cyclic_vk,
         }
     }
