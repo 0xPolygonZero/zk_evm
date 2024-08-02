@@ -2153,7 +2153,7 @@ where
         })?;
 
         let block_proof = self.block.circuit.prove(block_inputs)?;
-        Ok((block_proof, block_public_values.into()))
+        Ok((block_proof, block_public_values))
     }
 
     pub fn verify_block(&self, block_proof: &ProofWithPublicInputs<F, C, D>) -> anyhow::Result<()> {
