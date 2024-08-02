@@ -4,6 +4,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
+use super::{test_account_1, test_account_1_empty_storage_rlp};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
@@ -13,6 +14,8 @@ use crate::cpu::kernel::tests::mpt::{
 };
 use crate::generation::mpt::AccountRlp;
 use crate::generation::TrieInputs;
+use crate::memory::segments::Segment;
+use crate::util::h2u;
 use crate::Node;
 
 #[test]
@@ -25,7 +28,7 @@ fn mpt_insert_leaf_identical_keys() -> Result<()> {
     let key = nibbles_64(0xABC);
     let state_trie = Node::Leaf {
         nibbles: key,
-        value: test_account_1_rlp(),
+        value: test_account_1_empty_storage_rlp(),
     }
     .into();
     test_state_trie(state_trie, key, test_account_2())
@@ -172,13 +175,43 @@ fn test_state_trie(
         storage_tries: vec![],
     };
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
-    let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
+    let check_state_trie = KERNEL.global_labels["check_state_trie"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
 
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
+
+    // Store initial accounts and storage.
+    interpreter
+        .halt_offsets
+        .push(KERNEL.global_labels["after_store_initial"]);
+    interpreter.generation_state.registers.program_counter = KERNEL.global_labels["store_initial"];
+    interpreter.run();
+
+    // Set initial tries.
+    interpreter
+        .push(0xDEADBEEFu32.into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push((Segment::StorageLinkedList as usize + 8).into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push((Segment::AccountsLinkedList as usize + 6).into())
+        .expect("The stack should not overflow");
+    interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
+
+    // Now, set the payload.
+    interpreter.generation_state.registers.program_counter =
+        KERNEL.global_labels["mpt_set_payload"];
+
+    interpreter.run()?;
+
+    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
+    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
+    interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
+    interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
 
     // Next, execute mpt_insert_state_trie.
     interpreter.generation_state.registers.program_counter = mpt_insert_state_trie;
@@ -216,27 +249,31 @@ fn test_state_trie(
         interpreter.stack()
     );
 
-    // Now, execute mpt_hash_state_trie.
-    interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
+    // Now, execute `mpt_hash_state_trie` and check the hash value (both are done
+    // under `check_state_trie`).
+    state_trie.insert(k, rlp::encode(&account).to_vec());
+    let expected_state_trie_hash = state_trie.hash();
+    interpreter.set_global_metadata_field(
+        GlobalMetadata::StateTrieRootDigestAfter,
+        h2u(expected_state_trie_hash),
+    );
+
+    interpreter.generation_state.registers.program_counter = check_state_trie;
     interpreter
-        .push(0xDEADBEEFu32.into())
-        .expect("The stack should not overflow");
+        .halt_offsets
+        .push(KERNEL.global_labels["check_txn_trie"]);
+
     interpreter
-        .push(1.into()) // Initial length of the trie data segment, unused.
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");
     interpreter.run()?;
 
     assert_eq!(
         interpreter.stack().len(),
-        2,
+        1,
         "Expected 2 items on stack after hashing, found {:?}",
         interpreter.stack()
     );
-    let hash = H256::from_uint(&interpreter.stack()[1]);
-
-    state_trie.insert(k, rlp::encode(&account).to_vec());
-    let expected_state_trie_hash = state_trie.hash();
-    assert_eq!(hash, expected_state_trie_hash);
 
     Ok(())
 }

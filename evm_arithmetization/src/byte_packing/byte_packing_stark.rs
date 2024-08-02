@@ -40,7 +40,7 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use plonky2::util::transpose;
 use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsumer};
-use starky::evaluation_frame::StarkEvaluationFrame;
+use starky::evaluation_frame::{StarkEvaluationFrame, StarkFrame};
 use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
@@ -175,8 +175,7 @@ impl<F: RichField + Extendable<D>, const D: usize> BytePackingStark<F, D> {
         ops: Vec<BytePackingOp>,
         min_rows: usize,
     ) -> Vec<[F; NUM_COLUMNS]> {
-        let base_len: usize = ops.iter().map(|op| usize::from(!op.bytes.is_empty())).sum();
-        let num_rows = core::cmp::max(base_len.max(BYTE_RANGE_MAX), min_rows).next_power_of_two();
+        let num_rows = core::cmp::max(ops.len().max(BYTE_RANGE_MAX), min_rows).next_power_of_two();
         let mut rows = Vec::with_capacity(num_rows);
 
         for op in ops {

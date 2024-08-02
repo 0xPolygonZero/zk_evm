@@ -21,11 +21,11 @@ fn mpt_read() -> Result<()> {
     let mpt_read = KERNEL.global_labels["mpt_read"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
-    // Now, execute mpt_read on the state trie.
+    // Now, execute `mpt_read` on the state trie.
     interpreter.generation_state.registers.program_counter = mpt_read;
     interpreter
         .push(0xdeadbeefu32.into())

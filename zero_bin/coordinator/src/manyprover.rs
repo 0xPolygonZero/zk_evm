@@ -169,21 +169,19 @@ impl ManyProver {
         info!("Startng to prove blocks");
 
         info!("Starting fetch");
-        let prover_input = fetch(
-            self.input_request
-                .get_block_interval()
-                .map_err(FetchError::ZeroBinRpcFetchError)?,
-            self.input_request.get_checkpoint(),
-            self.input_request.get_blocksource(),
-        )
-        .await?;
+        let prover_input = fetch(self.input_request.get_blocksource()).await?;
         info!("Fetch completed");
 
         info!("Starting proofs");
         let block_proof_start_time: DateTime<Utc> = Utc::now();
         let block_proofs = match prover_input
             .proverinput
-            .prove_and_benchmark(&self.runtime, None, true, None)
+            .prove_and_benchmark(
+                &self.runtime,
+                None,
+                self.input_request.get_prover_config(),
+                None,
+            )
             .await
         {
             Ok(block_proofs) => block_proofs,

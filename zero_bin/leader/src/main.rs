@@ -13,14 +13,14 @@ use tracing::{info, warn};
 use zero_bin_common::block_interval::BlockInterval;
 
 use crate::client::{client_main, ProofParams};
-use crate::utils::get_package_version;
 
 mod cli;
 mod client;
 mod http;
 mod init;
 mod stdio;
-mod utils;
+
+const EVM_ARITH_VER_KEY: &str = "EVM_ARITHMETIZATION_PKG_VER";
 
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
     if path.is_none() {
@@ -39,24 +39,17 @@ async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
     init::tracing();
 
-    if env::var("EVM_ARITHMETIZATION_PKG_VER").is_err() {
-        let pkg_ver = get_package_version("evm_arithmetization")?;
-        // Extract the major and minor version parts and append 'x' as the patch version
-        if let Some((major_minor, _)) = pkg_ver.as_ref().and_then(|s| s.rsplit_once('.')) {
-            let circuits_version = format!("{}.x", major_minor);
-            // Set the environment variable for the evm_arithmetization package version
-            #[allow(unused_unsafe)]
-            unsafe {
-                env::set_var("EVM_ARITHMETIZATION_PKG_VER", circuits_version);
-            }
-        } else {
-            // Set to "NA" if version extraction fails
-            #[allow(unused_unsafe)]
-            unsafe {
-                env::set_var("EVM_ARITHMETIZATION_PKG_VER", "NA");
-            }
+    if env::var_os(EVM_ARITH_VER_KEY).is_none() {
+        // Safety:
+        // - we're early enough in main that nothing else should race
+        unsafe {
+            env::set_var(
+                EVM_ARITH_VER_KEY,
+                // see build.rs
+                env!("EVM_ARITHMETIZATION_PACKAGE_VERSION"),
+            );
         }
-    }
+    };
 
     let args = cli::Cli::parse();
     if let paladin::config::Runtime::InMemory = args.paladin.runtime {
@@ -69,19 +62,14 @@ async fn main() -> Result<()> {
 
     let runtime = Runtime::from_config(&args.paladin, register()).await?;
 
+    let cli_prover_config = args.prover_config;
+
     match args.command {
-        Command::Stdio {
-            previous_proof,
-            save_inputs_on_error,
-        } => {
+        Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(runtime, previous_proof, save_inputs_on_error).await?;
+            stdio::stdio_main(runtime, previous_proof, cli_prover_config.into()).await?;
         }
-        Command::Http {
-            port,
-            output_dir,
-            save_inputs_on_error,
-        } => {
+        Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
             let output_dir_metadata = std::fs::metadata(&output_dir);
             if output_dir_metadata.is_err() {
@@ -91,7 +79,7 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(runtime, port, output_dir, save_inputs_on_error).await?;
+            http::http_main(runtime, port, output_dir, cli_prover_config.into()).await?;
         }
         Command::Rpc {
             rpc_url,
@@ -100,7 +88,6 @@ async fn main() -> Result<()> {
             checkpoint_block_number,
             previous_proof,
             proof_output_dir,
-            save_inputs_on_error,
             block_time,
             keep_intermediate_proofs,
             backoff,
@@ -131,7 +118,7 @@ async fn main() -> Result<()> {
                     checkpoint_block_number,
                     previous_proof,
                     proof_output_dir,
-                    save_inputs_on_error,
+                    prover_config: cli_prover_config.into(),
                     keep_intermediate_proofs,
                 },
             )

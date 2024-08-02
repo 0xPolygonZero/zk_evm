@@ -1,3 +1,5 @@
+pub mod cli;
+
 use std::path::PathBuf;
 use std::time::Instant;
 use std::{future::Future, time::Duration};
@@ -5,13 +7,11 @@ use std::{future::Future, time::Duration};
 use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
+use cli::CliProverConfig;
+use futures::stream::FuturesOrdered;
+use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
-use ops::TxProof;
-use paladin::{
-    directive::{Directive, IndexedStream},
-    runtime::Runtime,
-};
+use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -23,6 +23,14 @@ use trace_decoder::{
 };
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
+
+#[derive(Debug, Clone, Copy, serde::Deserialize, serde::Serialize)]
+pub struct ProverConfig {
+    pub batch_size: usize,
+    pub max_cpu_len_log: usize,
+    pub save_inputs_on_error: bool,
+}
+
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
@@ -67,7 +75,7 @@ impl BlockProverInput {
         self,
         runtime: &Runtime,
         previous: Option<impl Future<Output = Result<BenchmarkedGeneratedBlockProof>>>,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
     ) -> Result<BenchmarkedGeneratedBlockProof> {
         // Start timing for preparation
         let prep_start = Instant::now();
@@ -75,22 +83,42 @@ impl BlockProverInput {
 
         // Basic preparation
         use anyhow::Context as _;
+        use evm_arithmetization::prover::SegmentDataIterator;
+        use futures::stream::FuturesUnordered;
+        use paladin::directive::{Directive, IndexedStream};
+        use proof_gen::types::Field;
+
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            save_inputs_on_error,
+        } = prover_config;
+
         let block_number = self.get_block_number();
         let other_data = self.other_data;
-        let txs = self.block_trace.into_txn_proof_gen_ir(
+        let block_generation_inputs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
+            batch_size,
         )?;
 
-        let n_txs = txs.len();
+        let n_txs = block_generation_inputs.len();
         let gas_used = u64::try_from(other_data.b_data.b_meta.block_gas_used).expect("Overflow");
-        let gas_used_per_tx = txs
+        let gas_used_per_tx = block_generation_inputs
             .iter()
             .map(|tx| {
                 u64::try_from(tx.gas_used_after - tx.gas_used_before).expect("Overflow of gas")
             })
             .collect();
         let difficulty = other_data.b_data.b_meta.block_difficulty;
+
+        let seg_ops = ops::SegmentProof {
+            save_inputs_on_error,
+        };
+
+        let agg_ops = ops::SegmentAggProof {
+            save_inputs_on_error,
+        };
 
         // Get time took to prepare
         let prep_dur = prep_start.elapsed();
@@ -102,15 +130,31 @@ impl BlockProverInput {
         );
 
         let proof_start = Instant::now();
-        let agg_proof = IndexedStream::from(txs)
-            .map(&TxProof {
-                save_inputs_on_error,
+        let tx_proof_futs: FuturesUnordered<_> = block_generation_inputs
+            .iter()
+            .enumerate()
+            .map(|(idx, txn)| {
+                let data_iterator = SegmentDataIterator::<Field>::new(txn, Some(max_cpu_len_log));
+
+                Directive::map(IndexedStream::from(data_iterator), &seg_ops)
+                    .fold(&agg_ops)
+                    .run(runtime)
+                    .map(move |e| {
+                        e.map(|p| (idx, proof_gen::proof_types::TxnAggregatableProof::from(p)))
+                    })
             })
-            .fold(&ops::AggProof {
+            .collect();
+
+        // Fold the transaction proof stream into a single transaction proof.
+        let final_txn_proof = Directive::fold(
+            IndexedStream::new(tx_proof_futs),
+            &ops::TxnAggProof {
                 save_inputs_on_error,
-            })
-            .run(runtime)
-            .await?;
+            },
+        )
+        .run(runtime)
+        .await?;
+
         let proof_dur = proof_start.elapsed();
 
         info!(
@@ -119,7 +163,7 @@ impl BlockProverInput {
             proof_dur.as_secs_f64()
         );
 
-        if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
+        if let proof_gen::proof_types::TxnAggregatableProof::Agg(proof) = final_txn_proof {
             let agg_wait_start = Instant::now();
             let block_number = block_number
                 .to_u64()
@@ -170,34 +214,176 @@ impl BlockProverInput {
         }
     }
 
+    // #[cfg(not(feature = "test_only"))]
+    // pub async fn prove_and_benchmark(
+    //     self,
+    //     runtime: &Runtime,
+    //     previous: Option<impl Future<Output = Result<BenchmarkedGeneratedBlockProof>>>,
+    //     save_inputs_on_error: bool,
+    // ) -> Result<BenchmarkedGeneratedBlockProof> {
+    //     // Start timing for preparation
+    //     let prep_start = Instant::now();
+    //     let start_time: DateTime<Utc> = Utc::now();
+
+    //     // Basic preparation
+    //     use anyhow::Context as _;
+    //     let block_number = self.get_block_number();
+    //     let other_data = self.other_data;
+    //     let txs = self.block_trace.into_txn_proof_gen_ir(
+    //         &ProcessingMeta::new(resolve_code_hash_fn),
+    //         other_data.clone(),
+    //     )?;
+
+    //     let n_txs = txs.len();
+    //     let gas_used = u64::try_from(other_data.b_data.b_meta.block_gas_used).expect("Overflow");
+    //     let gas_used_per_tx = txs
+    //         .iter()
+    //         .map(|tx| {
+    //             u64::try_from(tx.gas_used_after - tx.gas_used_before).expect("Overflow of gas")
+    //         })
+    //         .collect();
+    //     let difficulty = other_data.b_data.b_meta.block_difficulty;
+
+    //     // Get time took to prepare
+    //     let prep_dur = prep_start.elapsed();
+
+    //     info!(
+    //         "Completed pre-proof work for block {} in {} secs",
+    //         block_number,
+    //         prep_dur.as_secs_f64()
+    //     );
+
+    //     let proof_start = Instant::now();
+    //     let agg_proof = IndexedStream::from(txs)
+    //         .map(&TxProof {
+    //             save_inputs_on_error,
+    //         })
+    //         .fold(&ops::AggProof {
+    //             save_inputs_on_error,
+    //         })
+    //         .run(runtime)
+    //         .await?;
+    //     let proof_dur = proof_start.elapsed();
+
+    //     info!(
+    //         "Completed tx proofs for block {} in {} secs",
+    //         block_number,
+    //         proof_dur.as_secs_f64()
+    //     );
+
+    //     if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
+    //         let agg_wait_start = Instant::now();
+    //         let block_number = block_number
+    //             .to_u64()
+    //             .context("block number overflows u64")?;
+    //         let prev = match previous {
+    //             Some(it) => Some(it.await?),
+    //             None => None,
+    //         };
+    //         let agg_wait_dur = agg_wait_start.elapsed();
+
+    //         let agg_start = Instant::now();
+    //         let block_proof = paladin::directive::Literal(proof)
+    //             .map(&ops::BlockProof {
+    //                 prev: prev.map(|p| p.proof),
+    //                 save_inputs_on_error,
+    //             })
+    //             .run(runtime)
+    //             .await?;
+    //         let agg_dur = agg_start.elapsed();
+    //         info!(
+    //             "Completed tx proof agg for block {} in {} secs",
+    //             block_number,
+    //             agg_dur.as_secs_f64()
+    //         );
+    //         let end_time: DateTime<Utc> = Utc::now();
+    //         let total_dur: Duration = prep_start.elapsed();
+    //         info!(
+    //             "Successfully proved block {block_number} (in {} secs)",
+    //             total_dur.as_secs_f64()
+    //         );
+    //         // Return the block proof
+    //         Ok(BenchmarkedGeneratedBlockProof {
+    //             proof: block_proof.0,
+    //             total_dur: Some(prep_start.elapsed()),
+    //             proof_dur: Some(proof_dur),
+    //             prep_dur: Some(prep_dur),
+    //             agg_wait_dur: Some(agg_wait_dur),
+    //             agg_dur: Some(agg_dur),
+    //             n_txs: n_txs as u64,
+    //             gas_used,
+    //             gas_used_per_tx,
+    //             difficulty: u64::try_from(difficulty).expect("Difficulty overflow"),
+    //             start_time,
+    //             end_time,
+    //         })
+    //     } else {
+    //         anyhow::bail!("AggProof is is not GeneratedAggProof")
+    //     }
+    // }
+
     #[cfg(not(feature = "test_only"))]
     pub async fn prove(
         self,
         runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
+        use evm_arithmetization::prover::SegmentDataIterator;
+        use futures::stream::FuturesUnordered;
+        use paladin::directive::{Directive, IndexedStream};
+        use proof_gen::types::Field;
+
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            save_inputs_on_error,
+        } = prover_config;
 
         let block_number = self.get_block_number();
-
         let other_data = self.other_data;
-        let txs = self.block_trace.into_txn_proof_gen_ir(
+        let block_generation_inputs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
+            batch_size,
         )?;
 
-        let agg_proof = IndexedStream::from(txs)
-            .map(&TxProof {
-                save_inputs_on_error,
-            })
-            .fold(&ops::AggProof {
-                save_inputs_on_error,
-            })
-            .run(runtime)
-            .await?;
+        let seg_ops = ops::SegmentProof {
+            save_inputs_on_error,
+        };
 
-        if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
+        let agg_ops = ops::SegmentAggProof {
+            save_inputs_on_error,
+        };
+
+        // Map the transactions to a stream of transaction proofs.
+        let tx_proof_futs: FuturesUnordered<_> = block_generation_inputs
+            .iter()
+            .enumerate()
+            .map(|(idx, txn)| {
+                let data_iterator = SegmentDataIterator::<Field>::new(txn, Some(max_cpu_len_log));
+
+                Directive::map(IndexedStream::from(data_iterator), &seg_ops)
+                    .fold(&agg_ops)
+                    .run(runtime)
+                    .map(move |e| {
+                        e.map(|p| (idx, proof_gen::proof_types::TxnAggregatableProof::from(p)))
+                    })
+            })
+            .collect();
+
+        // Fold the transaction proof stream into a single transaction proof.
+        let final_txn_proof = Directive::fold(
+            IndexedStream::new(tx_proof_futs),
+            &ops::TxnAggProof {
+                save_inputs_on_error,
+            },
+        )
+        .run(runtime)
+        .await?;
+
+        if let proof_gen::proof_types::TxnAggregatableProof::Agg(proof) = final_txn_proof {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;
@@ -206,6 +392,7 @@ impl BlockProverInput {
                 None => None,
             };
 
+            // Generate the block proof
             let block_proof = paladin::directive::Literal(proof)
                 .map(&ops::BlockProof {
                     prev,
@@ -215,6 +402,7 @@ impl BlockProverInput {
                 .await?;
 
             info!("Successfully proved block {block_number}");
+
             Ok(block_proof.0)
         } else {
             anyhow::bail!("AggProof is is not GeneratedAggProof")
@@ -224,10 +412,13 @@ impl BlockProverInput {
     #[cfg(feature = "test_only")]
     pub async fn prove(
         self,
-        runtime: &Runtime,
-        _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        save_inputs_on_error: bool,
+        _runtime: &Runtime,
+        previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
+        use evm_arithmetization::prover::testing::simulate_execution_all_segments;
+        use plonky2::field::goldilocks_field::GoldilocksField;
+
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
@@ -235,16 +426,21 @@ impl BlockProverInput {
         let txs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
+            prover_config.batch_size,
         )?;
 
-        IndexedStream::from(txs)
-            .map(&TxProof {
-                save_inputs_on_error,
-            })
-            .run(runtime)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+        type F = GoldilocksField;
+        for txn in txs.into_iter() {
+            simulate_execution_all_segments::<F>(txn, prover_config.max_cpu_len_log)?;
+        }
+
+        // Wait for previous block proof
+        let _prev = match previous {
+            Some(it) => Some(it.await?),
+            None => None,
+        };
+
+        info!("Successfully generated witness for block {block_number}.");
 
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
@@ -269,7 +465,7 @@ impl ProverInput {
         self,
         runtime: &Runtime,
         previous_proof: Option<GeneratedBlockProof>,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
         let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
@@ -279,15 +475,12 @@ impl ProverInput {
             .blocks
             .into_iter()
             .map(|block| {
-                let block_number = block.get_block_number();
-                info!("Proving block {block_number}");
-
                 let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
 
                 // Prove the block
                 let proof_output_dir = proof_output_dir.clone();
                 let fut = block
-                    .prove(runtime, prev.take(), save_inputs_on_error)
+                    .prove(runtime, prev.take(), prover_config)
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;
@@ -325,7 +518,7 @@ impl ProverInput {
         self,
         runtime: &Runtime,
         previous_proof: Option<BenchmarkedGeneratedBlockProof>,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<BenchmarkedGeneratedBlockProof>)>> {
         let mut prev: Option<BoxFuture<Result<BenchmarkedGeneratedBlockProof>>> =
@@ -343,7 +536,7 @@ impl ProverInput {
                 // Prove the block
                 let proof_output_dir = proof_output_dir.clone();
                 let fut = block
-                    .prove_and_benchmark(runtime, prev.take(), save_inputs_on_error)
+                    .prove_and_benchmark(runtime, prev.take(), prover_config)
                     .then(move |benchmarkproof| async move {
                         let benchmarkproof = benchmarkproof?;
                         let block_number = benchmarkproof.proof.b_height;
@@ -353,7 +546,7 @@ impl ProverInput {
                             if proof_output_dir.is_some() {
                                 ProverInput::write_proof(proof_output_dir, &benchmarkproof.proof)
                                     .await?;
-                                None
+                                Some(benchmarkproof.clone())
                             } else {
                                 Some(benchmarkproof.clone())
                             };

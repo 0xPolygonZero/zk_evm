@@ -54,6 +54,10 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
         c.insert(name.into(), U256::from(value));
     }
 
+    for (name, value) in LINKED_LISTS_CONSTANTS {
+        c.insert(name.into(), U256::from(value));
+    }
+
     c.insert(MAX_NONCE.0.into(), U256::from(MAX_NONCE.1));
     c.insert(CALL_STACK_LIMIT.0.into(), U256::from(CALL_STACK_LIMIT.1));
 
@@ -89,7 +93,7 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c
 }
 
-const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
+const MISC_CONSTANTS: [(&str, [u8; 32]); 5] = [
     // Base for limbs used in bignum arithmetic.
     (
         "BIGNUM_LIMB_BASE",
@@ -114,6 +118,13 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
         "INITIAL_TXN_RLP_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000b00000001"),
     ),
+    // Address where the final registers start. It is the offset 6 within the
+    // SEGMENT_REGISTERS_STATES.
+    // *Note*: Changing this will break some tests.
+    (
+        "FINAL_REGISTERS_ADDR",
+        hex!("0000000000000000000000000000000000000000000000000000002100000006"),
+    ),
 ];
 
 const HASH_CONSTANTS: [(&str, [u8; 32]); 2] = [
@@ -129,7 +140,7 @@ const HASH_CONSTANTS: [(&str, [u8; 32]); 2] = [
     ),
 ];
 
-const EC_CONSTANTS: [(&str, [u8; 32]); 24] = [
+const EC_CONSTANTS: [(&str, [u8; 32]); 25] = [
     (
         "U256_MAX",
         hex!("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
@@ -203,6 +214,11 @@ const EC_CONSTANTS: [(&str, [u8; 32]); 24] = [
     (
         "SECP_SCALAR",
         hex!("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"),
+    ),
+    (
+        "SECP_SCALAR_HALF",
+        // Corresponds to `ceil(SECP_SCALAR / 2)`.
+        hex!("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1"),
     ),
     (
         "SECP_GLV_BETA",
@@ -309,3 +325,11 @@ const CODE_SIZE_LIMIT: [(&str, u64); 3] = [
 
 const MAX_NONCE: (&str, u64) = ("MAX_NONCE", 0xffffffffffffffff);
 const CALL_STACK_LIMIT: (&str, u64) = ("CALL_STACK_LIMIT", 1024);
+
+const LINKED_LISTS_CONSTANTS: [(&str, u16); 5] = [
+    ("ACCOUNTS_LINKED_LISTS_NODE_SIZE", 4),
+    ("STORAGE_LINKED_LISTS_NODE_SIZE", 5),
+    ("ACCOUNTS_NEXT_NODE_PTR", 3),
+    ("STORAGE_NEXT_NODE_PTR", 4),
+    ("STORAGE_COPY_PAYLOAD_PTR", 3),
+];

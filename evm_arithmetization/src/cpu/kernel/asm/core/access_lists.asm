@@ -12,11 +12,16 @@
 // Initialize SEGMENT_ACCESSED_ADDRESSES
 global init_access_lists:
     // stack: (empty)
+
+    // Reset access lists data.
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_DATA_COST)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN)
+    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_START)
+    
     // Store @U256_MAX at the beginning of the segment
     PUSH @SEGMENT_ACCESSED_ADDRESSES // ctx == virt == 0
     DUP1
-    PUSH @U256_MAX
-    MSTORE_GENERAL
+    %mstore_u256_max
     // Store @SEGMENT_ACCESSED_ADDRESSES at address 1
     %increment
     DUP1
@@ -32,8 +37,7 @@ global init_access_lists:
     // Store @U256_MAX at the beginning of the segment
     PUSH @SEGMENT_ACCESSED_STORAGE_KEYS // ctx == virt == 0
     DUP1
-    PUSH @U256_MAX
-    MSTORE_GENERAL
+    %mstore_u256_max
     // Store @SEGMENT_ACCESSED_STORAGE_KEYS at address 3
     %add_const(3)
     DUP1
@@ -195,8 +199,7 @@ global remove_accessed_addresses:
     MLOAD_GENERAL
     // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, addr, retdest
     SWAP1
-    PUSH @U256_MAX
-    MSTORE_GENERAL
+    %mstore_u256_max
     // stack: next_next_ptr, next_ptr_ptr, addr, retdest
     MSTORE_GENERAL
     POP
@@ -379,8 +382,7 @@ global remove_accessed_storage_keys:
     MLOAD_GENERAL
     // stack: next_next_ptr, next_next_ptr_ptr, next_ptr_ptr, addr, key, retdest
     SWAP1
-    PUSH @U256_MAX
-    MSTORE_GENERAL
+    %mstore_u256_max
     // stack: next_next_ptr, next_ptr_ptr, addr, key, retdest
     MSTORE_GENERAL
     %pop2

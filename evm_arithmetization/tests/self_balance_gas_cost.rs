@@ -7,8 +7,8 @@ use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
-use evm_arithmetization::prover::prove;
-use evm_arithmetization::verifier::verify_proof;
+use evm_arithmetization::prover::testing::prove_all_segments;
+use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
@@ -162,8 +162,9 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
+
     let inputs = GenerationInputs {
-        signed_txn: Some(txn.to_vec()),
+        signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after,
@@ -179,11 +180,21 @@ fn self_balance_gas_cost() -> anyhow::Result<()> {
         },
     };
 
+    let max_cpu_len_log = 20;
     let mut timing = TimingTree::new("prove", log::Level::Debug);
-    let proof = prove::<F, C, D>(&all_stark, &config, inputs, &mut timing, None)?;
+
+    let proofs = prove_all_segments::<F, C, D>(
+        &all_stark,
+        &config,
+        inputs,
+        max_cpu_len_log,
+        &mut timing,
+        None,
+    )?;
+
     timing.filter(Duration::from_millis(100)).print();
 
-    verify_proof(&all_stark, proof, &config)
+    verify_all_proofs(&all_stark, &proofs, &config)
 }
 
 fn pad32(byte: u8) -> Vec<u8> {

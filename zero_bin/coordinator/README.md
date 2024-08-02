@@ -77,9 +77,28 @@ The example below proves blocks [1,10] using the RPC function listed in ZeroBin,
 ```json
 {
   "run_name": "run",
-  "block_interval": "3..=10",
   "block_source": {
-    "ZeroBinRpc": {"rpc_url": "http://35.208.84.178:8545/"}
+    "Rpc": {
+      "rpc_url": "http://35.208.84.178:8545/",
+      "block_interval": "3..=5",
+      "rpc_type": "Jerigon",
+    }
+  },
+  "benchmark_output": {
+    "LocalCsv": {"file_name": "test.csv"}
+  }
+}
+```
+
+```json
+{
+  "run_name": "run",
+  "block_source": {
+    "Rpc": {
+      "rpc_url": "http://35.208.84.178:8545/",
+      "block_interval": "3..=10",
+      "rpc_type": "Jerigon",
+    }
   },
   "proof_output": {
     "LocalDirectory": {"prefix": "test"}

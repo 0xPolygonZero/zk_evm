@@ -24,6 +24,7 @@ url = { workspace = true }
 __compat_primitive_types = { workspace = true }
 tower = { workspace = true, features = ["retry"] }
 chrono = {workspace = true}
+lru = { workspace = true }
 
 # Local dependencies
 compat = { workspace = true }

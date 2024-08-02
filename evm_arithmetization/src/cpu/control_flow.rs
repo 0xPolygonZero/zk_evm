@@ -29,15 +29,15 @@ const NATIVE_INSTRUCTIONS: [usize; 12] = [
     // not exceptions (also jump)
 ];
 
-/// Returns `halt`'s program counter.
+/// Returns `halt_final`'s program counter.
 pub(crate) fn get_halt_pc<F: Field>() -> F {
-    let halt_pc = KERNEL.global_labels["halt"];
+    let halt_pc = KERNEL.global_labels["halt_final"];
     F::from_canonical_usize(halt_pc)
 }
 
-/// Returns `main`'s program counter.
+/// Returns `init`'s program counter. All segments should start at that PC.
 pub(crate) fn get_start_pc<F: Field>() -> F {
-    let start_pc = KERNEL.global_labels["main"];
+    let start_pc = KERNEL.global_labels["init"];
 
     F::from_canonical_usize(start_pc)
 }
@@ -77,6 +77,13 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
         is_prover_input * (lv.program_counter - nv.program_counter + P::ONES),
     );
     yield_constr.constraint_transition(is_prover_input * (lv.is_kernel_mode - nv.is_kernel_mode));
+
+    // Check the helper value in the general columns. We do not need to enforce that
+    // it is set to 0 if the operation is a `PROVER_INPUT`, as the latter is a
+    // kernel-only instruction. This is enforced in the `decode` module.
+    yield_constr.constraint(
+        lv.op.push_prover_input * ((lv.is_kernel_mode + lv.general.push().is_not_kernel) - P::ONES),
+    );
 
     // If a non-CPU cycle row is followed by a CPU cycle row, then:
     //  - the `program_counter` of the CPU cycle row is `main` (the entry point of
@@ -138,6 +145,16 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
         yield_constr.constraint_transition(builder, pc_constr);
         let kernel_constr = builder.mul_extension(is_prover_input, kernel_diff);
         yield_constr.constraint_transition(builder, kernel_constr);
+    }
+
+    // Check the helper value in the general columns. We do not need to enforce that
+    // it is set to 0 if the operation is a `PROVER_INPUT`, as the latter is a
+    // kernel-only instruction. This is enforced in the `decode` module.
+    {
+        let temp = builder.add_extension(lv.is_kernel_mode, lv.general.push().is_not_kernel);
+        let constr =
+            builder.mul_sub_extension(lv.op.push_prover_input, temp, lv.op.push_prover_input);
+        yield_constr.constraint(builder, constr);
     }
 
     // If a non-CPU cycle row is followed by a CPU cycle row, then:

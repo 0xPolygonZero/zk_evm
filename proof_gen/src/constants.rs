@@ -16,3 +16,9 @@ pub(crate) const DEFAULT_KECCAK_SPONGE_RANGE: Range<usize> = 9..25;
 pub(crate) const DEFAULT_LOGIC_RANGE: Range<usize> = 12..28;
 /// Default range to be used for the `MemoryStark` table.
 pub(crate) const DEFAULT_MEMORY_RANGE: Range<usize> = 17..30;
+// TODO: adapt the ranges once we have a better idea of the more common ranges
+// for the next two STARKs.
+/// Default range to be used for the `MemoryBeforeStark` table.
+pub(crate) const DEFAULT_MEMORY_BEFORE_RANGE: Range<usize> = 8..20;
+/// Default range to be used for the `MemoryAfterStark` table.
+pub(crate) const DEFAULT_MEMORY_AFTER_RANGE: Range<usize> = 16..30;

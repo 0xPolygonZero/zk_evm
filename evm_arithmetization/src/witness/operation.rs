@@ -3,6 +3,7 @@ use itertools::Itertools;
 use keccak_hash::keccak;
 use plonky2::field::types::Field;
 
+use super::state::KERNEL_CONTEXT;
 use super::transition::Transition;
 use super::util::{
     byte_packing_log, byte_unpacking_log, mem_read_with_log, mem_write_log,
@@ -157,7 +158,6 @@ pub(crate) fn generate_keccak_general<F: Field, T: Transition<F>>(
     push_no_write(generation_state, hash.into_uint());
 
     state.log_debug(format!("Hashing {:?}", input));
-
     keccak_sponge_log(state, base_address, input);
 
     state.push_memory(log_in1);
@@ -286,6 +286,9 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
     // The popped value needs to be scaled down.
     let new_ctx = u256_to_usize(ctx >> CONTEXT_SCALING_FACTOR)?;
 
+    // Flag indicating whether the old context should be pruned.
+    let flag = ctx & 1.into();
+
     let sp_field = ContextMetadata::StackSize.unscale();
     let old_sp_addr = MemoryAddress::new(old_ctx, Segment::ContextMetadata, sp_field);
     let new_sp_addr = MemoryAddress::new(new_ctx, Segment::ContextMetadata, sp_field);
@@ -306,9 +309,6 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
         );
         (sp_to_save, op)
     } else {
-        // Even though we might be in the interpreter, `Stack` is not part of the
-        // preinitialized segments, so we don't need to carry out the additional checks
-        // when get the value from memory.
         mem_read_with_log(GeneralPurpose(2), new_sp_addr, generation_state)
     };
 
@@ -340,6 +340,11 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
         row.general.stack_mut().stack_inv_aux = F::ZERO;
         None
     };
+
+    if flag == 1.into() {
+        row.general.context_pruning_mut().pruning_flag = F::ONE;
+        generation_state.stale_contexts.push(old_ctx);
+    }
 
     generation_state.registers.context = new_ctx;
     generation_state.registers.stack_len = new_sp;
@@ -385,7 +390,13 @@ pub(crate) fn generate_push<F: Field, T: Transition<F>>(
     let val = U256::from_big_endian(&bytes);
     push_with_write(state, &mut row, val)?;
 
-    byte_packing_log(state, base_address, bytes);
+    // This is necessary to filter out PUSH instructions from the BytePackingStark
+    // CTl when happening in the KERNEL context.
+    row.general.push_mut().is_not_kernel = F::ONE - row.is_kernel_mode;
+
+    if code_context != KERNEL_CONTEXT {
+        byte_packing_log(state, base_address, bytes);
+    }
 
     state.push_cpu(row);
 
@@ -454,9 +465,6 @@ pub(crate) fn generate_dup<F: Field, T: Transition<F>>(
 
         (stack_top, op)
     } else {
-        // Even though we might be in the interpreter, `Stack` is not part of the
-        // preinitialized segments, so we don't need to carry out the additional checks
-        // when get the value from memory.
         mem_read_gp_with_log_and_fill(2, other_addr, generation_state, &mut row)
     };
     push_no_write(generation_state, val);
@@ -484,9 +492,7 @@ pub(crate) fn generate_swap<F: Field, T: Transition<F>>(
     );
 
     let [(in0, _)] = stack_pop_with_log_and_fill::<1, _>(generation_state, &mut row)?;
-    // Even though we might be in the interpreter, `Stack` is not part of the
-    // preinitialized segments, so we don't need to carry out the additional checks
-    // when get the value from memory.
+
     let (in1, log_in1) = mem_read_gp_with_log_and_fill(1, other_addr, generation_state, &mut row);
     let log_out0 = mem_write_gp_log_and_fill(2, other_addr, generation_state, &mut row, in0);
     push_no_write(generation_state, in1);
@@ -553,13 +559,9 @@ fn append_shift<F: Field, T: Transition<F>>(
     const LOOKUP_CHANNEL: usize = 2;
     let lookup_addr = MemoryAddress::new(0, Segment::ShiftTable, input0.low_u32() as usize);
     let read_op = if input0.bits() <= 32 {
-        // Even though we might be in the interpreter, `ShiftTable` is not part of the
-        // preinitialized segments, so we don't need to carry out the additional checks
-        // when get the value from memory.
         let (_, read) =
             mem_read_gp_with_log_and_fill(LOOKUP_CHANNEL, lookup_addr, generation_state, &mut row);
         Some(read)
-        // state.push_memory(read);
     } else {
         // The shift constraints still expect the address to be set, even though no read
         // will occur.
@@ -655,9 +657,7 @@ pub(crate) fn generate_syscall<F: Field, T: Transition<F>>(
                 virt: base_address.virt + i,
                 ..base_address
             };
-            // Even though we might be in the interpreter, `Code` is not part of the
-            // preinitialized segments, so we don't need to carry out the additional checks
-            // when get the value from memory.
+
             let val = generation_state.memory.get_with_init(address);
             val.low_u32() as u8
         })
@@ -938,7 +938,10 @@ pub(crate) fn generate_exception<F: Field, T: Transition<F>>(
 
     let gas = U256::from(generation_state.registers.gas_used);
 
-    let exc_info = U256::from(generation_state.registers.program_counter) + (gas << 192);
+    // `is_kernel_mode` is only necessary for the halting `exc_stop` exception.
+    let exc_info = U256::from(generation_state.registers.program_counter)
+        + (U256::from(generation_state.registers.is_kernel as u64) << 32)
+        + (gas << 192);
 
     // Get the opcode so we can provide it to the range_check operation.
     let code_context = generation_state.registers.code_context();

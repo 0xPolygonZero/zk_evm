@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use ethereum_types::U256;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 
 use crate::cpu::membus::{NUM_CHANNELS, NUM_GP_CHANNELS};
 
@@ -77,11 +79,17 @@ impl MemoryAddress {
     /// It will recover the virtual offset as the lowest 32-bit limb, the
     /// segment as the next limb, and the context as the next one.
     pub(crate) fn new_bundle(addr: U256) -> Result<Self, ProgramError> {
-        let virt = addr.low_u32().into();
-        let segment = (addr >> SEGMENT_SCALING_FACTOR).low_u32().into();
-        let context = (addr >> CONTEXT_SCALING_FACTOR).low_u32().into();
+        let virt = addr.low_u32() as usize;
+        let segment = (addr >> SEGMENT_SCALING_FACTOR).low_u32() as usize;
+        let context = (addr >> CONTEXT_SCALING_FACTOR).low_u32() as usize;
 
-        Self::new_u256s(context, segment, virt)
+        if segment >= Segment::COUNT {
+            return Err(MemoryError(SegmentTooLarge {
+                segment: segment.into(),
+            }));
+        }
+
+        Ok(Self::new(context, Segment::all()[segment], virt))
     }
 
     pub(crate) fn increment(&mut self) {
@@ -126,7 +134,9 @@ impl MemoryOp {
         kind: MemoryOpKind,
         value: U256,
     ) -> Self {
-        let timestamp = clock * NUM_CHANNELS + channel.index();
+        // Since the CPU clock starts at 1, and the `clock` value is the CPU length, the
+        // timestamps is: `timestamp = clock * NUM_CHANNELS + 1 + channel`
+        let timestamp = clock * NUM_CHANNELS + 1 + channel.index();
         MemoryOp {
             filter: true,
             timestamp,
@@ -160,7 +170,7 @@ impl MemoryOp {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct MemoryState {
     pub(crate) contexts: Vec<MemoryContextState>,
     pub(crate) preinitialized_segments: HashMap<Segment, MemorySegmentState>,
@@ -211,6 +221,28 @@ impl MemoryState {
         Some(val)
     }
 
+    /// Returns the memory values associated with a preinitialized segment. We
+    /// need a specific behaviour here, since the values can be stored either in
+    /// `preinitialized_segments` or in the memory itself.
+    pub(crate) fn get_preinit_memory(&self, segment: Segment) -> Vec<Option<U256>> {
+        assert!(
+            segment == Segment::AccountsLinkedList
+                || segment == Segment::StorageLinkedList
+                || segment == Segment::TrieData
+        );
+        let len = self
+            .preinitialized_segments
+            .get(&segment)
+            .unwrap_or(&MemorySegmentState { content: vec![] })
+            .content
+            .len()
+            .max(self.contexts[0].segments[segment.unscale()].content.len());
+
+        (0..len)
+            .map(|i| Some(self.get_with_init(MemoryAddress::new(0, segment, i))))
+            .collect::<Vec<_>>()
+    }
+
     /// Returns a memory value, or 0 if the memory is unset. If we have some
     /// preinitialized segments (in interpreter mode), then the values might not
     /// be stored in memory yet. If the value in memory is not set and the
@@ -232,7 +264,7 @@ impl MemoryState {
                             .len()
                 {
                     self.preinitialized_segments.get(&segment).unwrap().content[offset]
-                        .expect("We checked that the offset is not out of bounds.")
+                        .unwrap_or_default()
                 } else {
                     0.into()
                 }
@@ -293,8 +325,9 @@ impl Default for MemoryState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct MemoryContextState {
+    #[serde(with = "BigArray")]
     /// The content of each memory segment.
     pub(crate) segments: [MemorySegmentState; Segment::COUNT],
 }
@@ -307,7 +340,7 @@ impl Default for MemoryContextState {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub(crate) struct MemorySegmentState {
     pub(crate) content: Vec<Option<U256>>,
 }

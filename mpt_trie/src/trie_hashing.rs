@@ -121,6 +121,7 @@ mod tests {
     const NUM_INSERTS_FOR_ETH_TRIE_CRATE_MASSIVE_TEST: usize = 1000;
     const NODES_PER_BRANCH_FOR_HASH_REPLACEMENT_TEST: usize = 200;
 
+    #[allow(dead_code)]
     #[derive(Copy, Clone, Debug)]
     struct U256Rlpable(U256);
 

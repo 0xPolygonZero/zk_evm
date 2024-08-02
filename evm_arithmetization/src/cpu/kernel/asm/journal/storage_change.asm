@@ -11,47 +11,16 @@ global revert_storage_change:
     // stack: address, slot, prev_value, retdest
     DUP3 ISZERO %jumpi(delete)
     // stack: address, slot, prev_value, retdest
-    SWAP1 %slot_to_storage_key
-    // stack: storage_key, address, prev_value, retdest
-    PUSH 64 // storage_key has 64 nibbles
-    // stack: 64, storage_key, address, prev_value, retdest
-    DUP3 %mpt_read_state_trie
-    DUP1 ISZERO %jumpi(panic)
-    // stack: account_ptr, 64, storage_key, address, prev_value, retdest
-    %add_const(2)
-    // stack: storage_root_ptr_ptr, 64, storage_key, address, prev_value, retdest
-    %mload_trie_data
-    %get_trie_data_size
-    DUP6 %append_to_trie_data
-    %stack (prev_value_ptr, storage_root_ptr, num_nibbles, storage_key, address, prev_value, retdest) ->
-        (storage_root_ptr, num_nibbles, storage_key, prev_value_ptr, new_storage_root, address, retdest)
-    %jump(mpt_insert)
+    %insert_slot_with_value
+    // stack: value_ptr
+    POP
+    JUMP
 
 delete:
     // stack: address, slot, prev_value, retdest
     SWAP2 POP
-    %stack (slot, address, retdest) -> (slot, new_storage_root, address, retdest)
+    // stack: slot, address, retdest
     %slot_to_storage_key
-    // stack: storage_key, new_storage_root, address, retdest
-    PUSH 64 // storage_key has 64 nibbles
-    // stack: 64, storage_key, new_storage_root, address, retdest
-    DUP4 %mpt_read_state_trie
-    DUP1 ISZERO %jumpi(panic)
-    // stack: account_ptr, 64, storage_key, new_storage_root, address, retdest
-    %add_const(2)
-    // stack: storage_root_ptr_ptr, 64, storage_key, new_storage_root, address, retdest
-    %mload_trie_data
-    // stack: storage_root_ptr, 64, storage_key, new_storage_root, address, retdest
-    %jump(mpt_delete)
-
-new_storage_root:
-    // stack: new_storage_root_ptr, address, retdest
-    DUP2 %mpt_read_state_trie
-    // stack: account_ptr, new_storage_root_ptr, address, retdest
-
-    // Update account with our new storage root pointer.
-    %add_const(2)
-    // stack: account_storage_root_ptr_ptr, new_storage_root_ptr, address, retdest
-    %mstore_trie_data
-    // stack: address, retdest
-    POP JUMP
+    SWAP1 %addr_to_state_key
+    // stack: addr_key, slot_key, retdest
+    %jump(remove_slot)
