@@ -31,7 +31,6 @@ pub struct ProverConfig {
     pub save_inputs_on_error: bool,
 }
 
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
@@ -218,8 +217,8 @@ impl BlockProverInput {
     // pub async fn prove_and_benchmark(
     //     self,
     //     runtime: &Runtime,
-    //     previous: Option<impl Future<Output = Result<BenchmarkedGeneratedBlockProof>>>,
-    //     save_inputs_on_error: bool,
+    //     previous: Option<impl Future<Output =
+    // Result<BenchmarkedGeneratedBlockProof>>>,     save_inputs_on_error: bool,
     // ) -> Result<BenchmarkedGeneratedBlockProof> {
     //     // Start timing for preparation
     //     let prep_start = Instant::now();
@@ -235,12 +234,13 @@ impl BlockProverInput {
     //     )?;
 
     //     let n_txs = txs.len();
-    //     let gas_used = u64::try_from(other_data.b_data.b_meta.block_gas_used).expect("Overflow");
+    //     let gas_used =
+    // u64::try_from(other_data.b_data.b_meta.block_gas_used).expect("Overflow");
     //     let gas_used_per_tx = txs
     //         .iter()
     //         .map(|tx| {
-    //             u64::try_from(tx.gas_used_after - tx.gas_used_before).expect("Overflow of gas")
-    //         })
+    //             u64::try_from(tx.gas_used_after -
+    // tx.gas_used_before).expect("Overflow of gas")         })
     //         .collect();
     //     let difficulty = other_data.b_data.b_meta.block_difficulty;
 
@@ -271,8 +271,8 @@ impl BlockProverInput {
     //         proof_dur.as_secs_f64()
     //     );
 
-    //     if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
-    //         let agg_wait_start = Instant::now();
+    //     if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof
+    // {         let agg_wait_start = Instant::now();
     //         let block_number = block_number
     //             .to_u64()
     //             .context("block number overflows u64")?;
@@ -313,8 +313,8 @@ impl BlockProverInput {
     //             n_txs: n_txs as u64,
     //             gas_used,
     //             gas_used_per_tx,
-    //             difficulty: u64::try_from(difficulty).expect("Difficulty overflow"),
-    //             start_time,
+    //             difficulty: u64::try_from(difficulty).expect("Difficulty
+    // overflow"),             start_time,
     //             end_time,
     //         })
     //     } else {

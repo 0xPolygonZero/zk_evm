@@ -103,10 +103,12 @@ where
         let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
         let block_prover_input = match rpc_type {
             RpcType::Jerigon => {
-                jerigon::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root).await?
+                jerigon::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root)
+                    .await?
             }
             RpcType::Native => {
-                native::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root).await?
+                native::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root)
+                    .await?
             }
         };
         fetch_times.push(start.elapsed());

@@ -29,7 +29,7 @@ pub enum BlockSource {
         checkpoint: Option<Checkpoint>,
         backoff: Option<u64>,
         max_retries: Option<u32>,
-        rpc_type: Option<RpcType>
+        rpc_type: Option<RpcType>,
     },
 }
 
@@ -51,7 +51,7 @@ pub struct ProveBlocksInput {
     /// stats will be stored
     benchmark_output: Option<BenchmarkOutputConfig>,
     /// Prover Config
-    prover_config: Option<ProverConfig>
+    prover_config: Option<ProverConfig>,
 }
 
 unsafe impl Send for ProveBlocksInput {}
@@ -66,7 +66,7 @@ impl ProveBlocksInput {
     pub fn get_prover_config(&self) -> ProverConfig {
         match &self.prover_config {
             Some(prover_config) => prover_config.clone(),
-            None => ProverConfig::from(CliProverConfig::default())
+            None => ProverConfig::from(CliProverConfig::default()),
         }
     }
 
@@ -82,13 +82,18 @@ impl ProveBlocksInput {
 
     pub fn get_expected_number_proofs(&self) -> Option<u64> {
         match &self.block_source {
-            BlockSource::Rpc { rpc_url: _, block_interval, checkpoint: _, backoff: _, max_retries: _, rpc_type: _} => {
-                match BlockInterval::new(block_interval.as_ref()) {
-                    Ok(BlockInterval::SingleBlockId(_)) => Some(1),
-                    Ok(BlockInterval::Range(range)) => Some(range.end - range.start + 1),
-                    Ok(_) | Err(_) => None,
-                }
-            }
+            BlockSource::Rpc {
+                rpc_url: _,
+                block_interval,
+                checkpoint: _,
+                backoff: _,
+                max_retries: _,
+                rpc_type: _,
+            } => match BlockInterval::new(block_interval.as_ref()) {
+                Ok(BlockInterval::SingleBlockId(_)) => Some(1),
+                Ok(BlockInterval::Range(range)) => Some(range.end - range.start + 1),
+                Ok(_) | Err(_) => None,
+            },
         }
     }
 
