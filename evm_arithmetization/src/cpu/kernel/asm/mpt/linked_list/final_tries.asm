@@ -90,7 +90,7 @@ after_insert_slot:
     %jump(insert_all_slots)
 
 // Delete all the accounts, referenced by the respective nodes in the linked list starting at 
-// `account_ptr_ptr`, which where deleted from the intial state. Delete also all slots of non-deleted accounts 
+// `account_ptr_ptr`, which where deleted from the initial state. Delete also all slots of non-deleted accounts 
 // deleted from the storage trie.
 // Pre stack: account_ptr_ptr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr.
@@ -100,7 +100,7 @@ global delete_removed_accounts:
     // We assume that the size of the initial accounts linked list, containing the accounts
     // of the initial state, was stored at `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
-    // The inital accounts linked list was stored at addresses smaller than `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
+    // The initial accounts linked list was stored at addresses smaller than `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`.
     // If we also know that `@SEGMENT_ACCOUNT_LINKED_LIST <= account_ptr_ptr`, for deleting node at `addr_ptr_ptr` it
     // suffices to check that `account_ptr_ptr` != `@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN`
     EQ

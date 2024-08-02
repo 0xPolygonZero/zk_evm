@@ -48,7 +48,7 @@ skip:
     %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
 %endmacro
 
-// Pre stack: node_ptr, account_ptr_ptr, retdest
+// Pre stack: node_ptr, storage_ptr_ptr, retdest
 // Post stack: storage_ptr_ptr
 global mpt_set_storage_payload:
     // stack: node_ptr, storage_ptr_ptr, retdest
@@ -118,18 +118,19 @@ set_payload_storage_branch:
     JUMP
 
 set_payload_extension:
+    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr,retdest
+    POP
+    // stack: after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    %add_const(2) %mload_trie_data
+    // stack: child_ptr, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    %jump(mpt_set_payload)
+
+set_payload_storage_extension:
     // stack: node_type, after_node_type, storage_ptr_ptr, retdest
     POP
     // stack: after_node_type, storage_ptr_ptr, retdest
     %add_const(2) %mload_trie_data
-    // stack: child_ptr, after_node_type, storage_ptr_ptr, retdest
-    %jump(mpt_set_payload)
-set_payload_storage_extension:
-    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
-    POP
-    // stack: after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
-    %add_const(2) %mload_trie_data
-    // stack: child_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: child_ptr, storage_ptr_ptr, retdest
     %jump(mpt_set_storage_payload)
 
 set_payload_leaf:
@@ -137,15 +138,13 @@ set_payload_leaf:
     POP
     %add_const(2) // The payload pointer starts at index 3, after num_nibbles and packed_nibbles.
     DUP1 
-    // stack payload_ptr_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: payload_ptr_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
     %mload_trie_data 
-    // stack account_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: account_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
     %add_const(2)
     %mload_trie_data // storage_root_ptr = account[2]
 
-    DUP1 %mload_trie_data
-    POP
-    // stack storage_root_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: storage_root_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
     %stack
         (storage_root_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr) ->
         (storage_root_ptr, storage_ptr_ptr, after_set_storage_payload, storage_root_ptr, payload_ptr_ptr, account_ptr_ptr)
@@ -167,7 +166,7 @@ after_set_storage_payload:
     %mstore_trie_data // The dynamic account pointer in the linked list has no storage root so we need to manually set it.
     %mstore_trie_data // Set the leaf payload pointing to next account in the linked list.
     // stack: account_ptr_ptr, storage_ptr_ptr', retdest
-    %add_const(@STORAGE_NEXT_NODE_PTR) // The next pointer is at distance `STORAGE_NEXT_NODE_PTR`
+    %add_const(@ACCOUNTS_LINKED_LISTS_NODE_SIZE) // The next pointer is at distance `ACCOUNTS_LINKED_LISTS_NODE_SIZE`
     // stack: payload_ptr_ptr', storage_ptr_ptr', retdest
     SWAP1
     SWAP2

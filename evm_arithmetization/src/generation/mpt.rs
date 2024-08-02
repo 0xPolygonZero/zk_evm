@@ -396,7 +396,7 @@ associated storage trie hash"
             state_leaves.push(Some(trie_data.len().into()));
             // Set counter.
             state_leaves.push(Some(0.into()));
-            // Set the next node as the inital node.
+            // Set the next node as the initial node.
             state_leaves.push(Some((Segment::AccountsLinkedList as usize).into()));
 
             // Push the payload in the trie data.
@@ -476,7 +476,7 @@ where
             storage_leaves.push(leaf);
             // Write the counter.
             storage_leaves.push(Some(0.into()));
-            // Set the next node as the inital node.
+            // Set the next node as the initial node.
             storage_leaves.push(Some((Segment::StorageLinkedList as usize).into()));
 
             Ok(())

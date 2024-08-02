@@ -15,7 +15,7 @@
 /// The values at the respective positions are:
 /// - 0: The account key
 /// - 1: A ptr to the payload (the account values)
-/// - 2: A ptr to the intial payload.
+/// - 2: A ptr to the initial payload.
 /// - 3: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
 /// Similarly, an empty storage linked list is written as
 /// [@U256_MAX, _, _, _, @SEGMENT_ACCOUNTS_LINKED_LIST] in SEGMENT_ACCOUNTS_LINKED_LIST.
@@ -221,7 +221,7 @@ insert_new_account:
 
 
 /// Searches the account addr in the linked list.
-/// Returns `payload_ptr` if the account was not found, `original_ptr` if it was already present.
+/// Returns 0 if the account was not found or `original_ptr` if it was already present.
 global search_account:
     // stack: addr_key, retdest
     PROVER_INPUT(linked_list::insert_account)
@@ -320,7 +320,7 @@ global remove_account:
 %endmacro
 
 
-/// Iterates over the inital account linked list and shallow copies
+/// Iterates over the initial account linked list and shallow copies
 /// the accounts, storing a pointer to the copied account in the node.
 /// Computes the length of `SEGMENT_STORAGE_LINKED_LIST` and 
 /// checks against `GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE`.
@@ -503,7 +503,7 @@ next_node_ok_with_value:
     // Append the value to `TrieDataSegment` and write the resulting payload_ptr.
     %increment
     DUP1 %increment
-    // stack: new_ptr+2, next_ptr, addr_key, key, value, retdest
+    // stack: new_ptr+3, new_payload_ptr_ptr, next_ptr, addr_key, key, value, retdest
     %stack (new_cloned_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr_key, key, value, retdest)
         -> (value, new_cloned_payload_ptr_ptr, value, new_payload_ptr_ptr, new_cloned_payload_ptr_ptr, next_ptr, retdest)
     MSTORE_GENERAL // Store copied value.
