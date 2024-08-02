@@ -100,7 +100,7 @@ global perform_final_checks:
     PUSH 1 // initial trie data length
 global check_state_trie:
     %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
-global check_state_trie:
+global check_state_trie_before_eq:
     %assert_eq
 global check_txn_trie:
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq

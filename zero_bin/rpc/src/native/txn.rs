@@ -282,11 +282,11 @@ const fn process_self_destruct(
     post_state: Option<&AccountState>,
     pre_state: Option<&AccountState>,
 ) -> Option<bool> {
-    if post_state.is_none() && pre_state.is_some() {
-        Some(true)
-    } else {
+    // if post_state.is_none() && pre_state.is_none() {
+    //     Some(true)
+    // } else {
         None
-    }
+    // }
 }
 
 mod rlp {

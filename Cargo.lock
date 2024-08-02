@@ -3747,6 +3747,8 @@ dependencies = [
  "anyhow",
  "evm_arithmetization",
  "futures",
+ "keccak-hash 0.10.0",
+ "mpt_trie",
  "num-traits",
  "ops",
  "paladin-core",

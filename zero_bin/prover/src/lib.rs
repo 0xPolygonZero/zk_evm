@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
+use keccak_hash::keccak;
 use num_traits::ToPrimitive as _;
 use ops::TxProof;
 use paladin::{
@@ -15,9 +16,11 @@ use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::oneshot;
 use trace_decoder::{BlockTrace, OtherBlockData};
-use tracing::info;
+use tracing::{debug, info};
 use zero_bin_common::fs::generate_block_proof_file_name;
 use evm_arithmetization::prover::testing::simulate_execution;
+use proof_gen::types::Field;
+use mpt_trie::partial_trie::PartialTrie;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
@@ -31,7 +34,7 @@ impl BlockProverInput {
     }
 
     #[cfg(not(feature = "test_only"))]
-    pub async fn prove(
+    pub async fn _prove(
         self,
         runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
@@ -79,7 +82,7 @@ impl BlockProverInput {
     }
 
     // #[cfg(feature = "test_only")]
-    pub async fn _prove(
+    pub async fn prove(
         self,
         runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
@@ -88,21 +91,37 @@ impl BlockProverInput {
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
+        debug!("trie preimages = {:?}", self.block_trace.trie_pre_images);
+
         let txs =
             trace_decoder::entrypoint(self.block_trace, self.other_data, |_| unimplemented!())?;
+        debug!("Intial state hash {:?}", txs[0].tries.state_trie.hash());
+        debug!("Final state hash {:?}", txs.last().unwrap().trie_roots_after.state_root);
 
-        txs.into_iter()
-            .map(|tx_batch| simulate_execution::<Field>(tx_batch))
+        txs.clone().into_iter().skip(1).zip(txs.into_iter())
+            .map(|(next_tx_batch, tx_batch)| {
+                let expc_state_root = tx_batch.trie_roots_after.state_root;
+                info!("txn number = {:?}", tx_batch.txn_number_before);
+                info!("tnx hash = {:?}", keccak(tx_batch.signed_txn.clone().unwrap()));
+                let res = simulate_execution::<Field>(tx_batch);
+                
+                if res.is_err() {
+                    info!("Expected state trie = {:?}", next_tx_batch.tries.state_trie);
+                    info!("Expected hash = {:?}", next_tx_batch.tries.state_trie.hash());
+                    info!("Real expected hash = {:?}", expc_state_root);
+                }
+                res
+            })
             .try_for_each(|res| res)?;
 
-        IndexedStream::from(txs)
-            .map(&TxProof {
-                save_inputs_on_error,
-            })
-            .run(runtime)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
+        // IndexedStream::from(txs)
+        //     .map(&TxProof {
+        //         save_inputs_on_error,
+        //     })
+        //     .run(runtime)
+        //     .await?
+        //     .try_collect::<Vec<_>>()
+        //     .await?;
 
         // Wait for previous block proof
         let _prev = match previous {
