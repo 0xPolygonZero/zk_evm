@@ -330,7 +330,7 @@ global store_initial_slots:
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     ADD
     // stack: cur_len, retdest
-    PUSH  @SEGMENT_STORAGE_LINKED_LIST
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
     %next_slot
 
 loop_store_initial_slots:
@@ -500,12 +500,12 @@ next_node_ok_with_value:
     DUP5
     MSTORE_GENERAL
     // stack: new_ptr + 1, next_ptr, addr_key, key, value, retdest
-    // Append the value to `TrieDataSegment` and write the resulting payload_ptr.
+    // Write the value in the linked list.
     %increment
     DUP1 %increment
-    // stack: new_ptr+3, new_payload_ptr_ptr, next_ptr, addr_key, key, value, retdest
-    %stack (new_cloned_payload_ptr_ptr, new_payload_ptr_ptr, next_ptr, addr_key, key, value, retdest)
-        -> (value, new_cloned_payload_ptr_ptr, value, new_payload_ptr_ptr, new_cloned_payload_ptr_ptr, next_ptr, retdest)
+    // stack: new_ptr+3, new_value_ptr, next_ptr, addr_key, key, value, retdest
+    %stack (new_cloned_value_ptr, new_value_ptr, next_ptr, addr_key, key, value, retdest)
+        -> (value, new_cloned_value_ptr, value, new_value_ptr, new_cloned_value_ptr, next_ptr, retdest)
     MSTORE_GENERAL // Store copied value.
     MSTORE_GENERAL // Store value.
 

@@ -2,7 +2,7 @@
 // to mem[payload_ptr_ptr] + step*i,
 // for i =0..n_leaves. This is used to constraint the
 // initial state and account tries payload pointers such that they are exactly
-// those of the inital accounts and linked lists.
+// those of the initial accounts and linked lists.
 // Pre stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
 // Post stack: account_ptr_ptr, storage_ptr_ptr
 global mpt_set_payload:
@@ -19,7 +19,7 @@ global mpt_set_payload:
     DUP1 %eq_const(@MPT_NODE_LEAF)      %jumpi(set_payload_leaf)
     DUP1 %eq_const(@MPT_NODE_HASH)      %jumpi(skip)
     PANIC
-    
+
 skip:
     // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     %stack (node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest) -> (retdest, account_ptr_ptr, storage_ptr_ptr)
@@ -118,7 +118,7 @@ set_payload_storage_branch:
     JUMP
 
 set_payload_extension:
-    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr,retdest
+    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     POP
     // stack: after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     %add_const(2) %mload_trie_data
