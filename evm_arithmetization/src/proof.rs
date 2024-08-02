@@ -190,6 +190,12 @@ impl From<PublicValues> for FinalPublicValues {
     }
 }
 
+impl<'a> From<&'a PublicValues> for FinalPublicValues {
+    fn from(value: &'a PublicValues) -> Self {
+        value.clone().into()
+    }
+}
+
 /// Trie hashes.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrieRoots {
@@ -808,6 +814,24 @@ pub struct FinalPublicValuesTarget {
     pub block_hashes: BlockHashesTarget,
     /// Extra block data that is specific to the current proof.
     pub extra_block_data: ExtraBlockDataTarget,
+}
+
+impl From<PublicValuesTarget> for FinalPublicValuesTarget {
+    fn from(value: PublicValuesTarget) -> Self {
+        Self {
+            trie_roots_before: value.trie_roots_before,
+            trie_roots_after: value.trie_roots_after,
+            block_metadata: value.block_metadata,
+            block_hashes: value.block_hashes,
+            extra_block_data: value.extra_block_data,
+        }
+    }
+}
+
+impl<'a> From<&'a PublicValuesTarget> for FinalPublicValuesTarget {
+    fn from(value: &'a PublicValuesTarget) -> Self {
+        value.into()
+    }
 }
 
 impl FinalPublicValuesTarget {

@@ -601,11 +601,14 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
     builder: &mut CircuitBuilder<F, D>,
     len_mem_cap: usize,
 ) -> PublicValuesTarget {
-    let trie_roots_before = add_virtual_trie_roots(builder);
-    let trie_roots_after = add_virtual_trie_roots(builder);
-    let block_metadata = add_virtual_block_metadata(builder);
-    let block_hashes = add_virtual_block_hashes(builder);
-    let extra_block_data = add_virtual_extra_block_data(builder);
+    let FinalPublicValuesTarget {
+        trie_roots_before,
+        trie_roots_after,
+        block_metadata,
+        block_hashes,
+        extra_block_data,
+    } = add_virtual_final_public_values(builder);
+
     let registers_before = add_virtual_registers_data(builder);
     let registers_after = add_virtual_registers_data(builder);
 
@@ -742,31 +745,7 @@ where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
-    set_trie_roots_target(
-        witness,
-        &public_values_target.trie_roots_before,
-        &public_values.trie_roots_before,
-    );
-    set_trie_roots_target(
-        witness,
-        &public_values_target.trie_roots_after,
-        &public_values.trie_roots_after,
-    );
-    set_block_metadata_target(
-        witness,
-        &public_values_target.block_metadata,
-        &public_values.block_metadata,
-    )?;
-    set_block_hashes_target(
-        witness,
-        &public_values_target.block_hashes,
-        &public_values.block_hashes,
-    );
-    set_extra_public_values_target(
-        witness,
-        &public_values_target.extra_block_data,
-        &public_values.extra_block_data,
-    )?;
+    set_final_public_value_targets(witness, &public_values_target.into(), &public_values.into())?;
     set_registers_target(
         witness,
         &public_values_target.registers_before,
