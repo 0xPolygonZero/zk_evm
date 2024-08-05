@@ -16,7 +16,7 @@ use crate::{
     trie_ops::TrieOpResult,
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 /// Simplified trie node type to make logging cleaner.
 pub enum TrieNodeType {
     /// Empty node.
