@@ -26,7 +26,7 @@ use crate::{
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
     },
-    OtherBlockData,
+    OtherBlockData, PartialTriePreImages,
 };
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
@@ -219,71 +219,70 @@ struct TrieDeltaApplicationOutput {
     additional_storage_trie_paths_to_not_hash: HashMap<H256, Vec<Nibbles>>,
 }
 
-impl ProcessedBlockTrace {
-    pub fn into_txn_proof_gen_ir(
-        self,
-        other_data: OtherBlockData,
-    ) -> TraceParsingResult<Vec<GenerationInputs>> {
-        let mut curr_block_tries = PartialTrieState {
-            state: self.tries.state.as_hashed_partial_trie().clone(),
-            storage: self
-                .tries
-                .storage
-                .iter()
-                .map(|(k, v)| (*k, v.as_hashed_partial_trie().clone()))
-                .collect(),
-            ..Default::default()
-        };
+pub fn into_txn_proof_gen_ir(
+    ProcessedBlockTrace {
+        tries: PartialTriePreImages { state, storage },
+        txn_info,
+        withdrawals,
+    }: ProcessedBlockTrace,
+    other_data: OtherBlockData,
+) -> TraceParsingResult<Vec<GenerationInputs>> {
+    let mut curr_block_tries = PartialTrieState {
+        state: state.as_hashed_partial_trie().clone(),
+        storage: storage
+            .iter()
+            .map(|(k, v)| (*k, v.as_hashed_partial_trie().clone()))
+            .collect(),
+        ..Default::default()
+    };
 
-        let mut extra_data = ExtraBlockData {
-            checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
-            txn_number_before: U256::zero(),
-            txn_number_after: U256::zero(),
-            gas_used_before: U256::zero(),
-            gas_used_after: U256::zero(),
-        };
+    let mut extra_data = ExtraBlockData {
+        checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
+        txn_number_before: U256::zero(),
+        txn_number_after: U256::zero(),
+        gas_used_before: U256::zero(),
+        gas_used_after: U256::zero(),
+    };
 
-        // Dummy payloads do not increment this accumulator.
-        // For actual transactions, it will match their position in the block.
-        let mut txn_idx = 0;
+    // Dummy payloads do not increment this accumulator.
+    // For actual transactions, it will match their position in the block.
+    let mut txn_idx = 0;
 
-        let mut txn_gen_inputs = self
-            .txn_info
-            .into_iter()
-            .map(|txn_info| {
-                let is_initial_payload = txn_idx == 0;
+    let mut txn_gen_inputs = txn_info
+        .into_iter()
+        .map(|txn_info| {
+            let is_initial_payload = txn_idx == 0;
 
-                let current_idx = txn_idx;
-                if !txn_info.meta.is_dummy() {
-                    txn_idx += 1;
-                }
+            let current_idx = txn_idx;
+            if !txn_info.meta.is_dummy() {
+                txn_idx += 1;
+            }
 
-                process_txn_info(
-                    current_idx,
-                    is_initial_payload,
-                    txn_info,
-                    &mut curr_block_tries,
-                    &mut extra_data,
-                    &other_data,
-                )
-                .map_err(|mut e| {
-                    e.txn_idx(txn_idx);
-                    e
-                })
-            })
-            .collect::<TraceParsingResult<Vec<_>>>()
+            process_txn_info(
+                current_idx,
+                is_initial_payload,
+                txn_info,
+                &mut curr_block_tries,
+                &mut extra_data,
+                &other_data,
+            )
             .map_err(|mut e| {
-                e.block_num(other_data.b_data.b_meta.block_number);
-                e.block_chain_id(other_data.b_data.b_meta.block_chain_id);
+                e.txn_idx(txn_idx);
                 e
-            })?;
+            })
+        })
+        .collect::<TraceParsingResult<Vec<_>>>()
+        .map_err(|mut e| {
+            e.block_num(other_data.b_data.b_meta.block_number);
+            e.block_chain_id(other_data.b_data.b_meta.block_chain_id);
+            e
+        })?;
 
-        if !self.withdrawals.is_empty() {
-            add_withdrawals_to_txns(&mut txn_gen_inputs, &mut curr_block_tries, self.withdrawals)?;
-        }
-
-        Ok(txn_gen_inputs)
+    if !withdrawals.is_empty() {
+        add_withdrawals_to_txns(&mut txn_gen_inputs, &mut curr_block_tries, withdrawals)?;
     }
+
+    Ok(txn_gen_inputs)
 }
 
 /// Cancun HF specific: At the start of a block, prior txn execution, we
