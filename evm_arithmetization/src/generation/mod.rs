@@ -325,9 +325,7 @@ fn simulate_cpu<F: Field>(state: &mut GenerationState<F>) -> anyhow::Result<()> 
 /// This will do nothing if the CPU execution failed outside of the final trie
 /// root checks.
 pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> anyhow::Result<()> {
-    println!("Yapo, quieros los tries");
     if !log_enabled!(log::Level::Debug) {
-        println!("Santa cachucha!");
         return Ok(());
     }
 
@@ -348,15 +346,9 @@ pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> an
                 .read_global_metadata(GlobalMetadata::StateTrieRoot),
         )
         .map_err(|_| anyhow!("State trie pointer is too large to fit in a usize."))?;
-        let state_trie = get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr).unwrap();
-        log::debug!(
-            "Computed state trie hash: {:?}",
-            state_trie.hash()
-        );
-
         log::debug!(
             "Computed state trie: {:?}",
-            state_trie
+            get_state_trie::<HashedPartialTrie>(&state.memory, state_trie_ptr)
         );
 
         let txn_trie_ptr = u256_to_usize(

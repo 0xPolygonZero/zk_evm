@@ -731,7 +731,6 @@ impl ProcessedBlockTrace {
         )?;
 
         let trie_roots_after = calculate_trie_input_hashes(curr_block_tries);
-
         let gen_inputs = GenerationInputs {
             txn_number_before: extra_data.txn_number_before,
             gas_used_before: extra_data.gas_used_before,
