@@ -44,6 +44,7 @@ use crate::all_stark::{
     SORTED_INDEX_PAIR, TABLE_TO_SORTED_INDEX,
 };
 use crate::arithmetic::arithmetic_stark::ArithmeticStark;
+use crate::batch_proof::EvmProof;
 use crate::byte_packing::byte_packing_stark::BytePackingStark;
 use crate::cpu::cpu_stark::CpuStark;
 use crate::cpu::kernel::aggregator::KERNEL;
@@ -170,7 +171,7 @@ pub fn prove_batch<F, P, C, const D: usize>(
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<(BatchStarkProofWithPublicInputs<F, C, D, 9>, PublicValues)>
+) -> Result<EvmProof<F, C, D>>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -186,16 +187,14 @@ where
 
     check_abort_signal(abort_signal.clone())?;
 
-    let proof = prove_with_traces_batch::<F, P, C, D>(
+    prove_with_traces_batch::<F, P, C, D>(
         all_stark,
         config,
         &mut traces,
         &public_values,
         timing,
         abort_signal,
-    )?;
-
-    Ok((proof, public_values))
+    )
 }
 
 /// Compute all STARK proofs.
@@ -354,7 +353,7 @@ pub(crate) fn prove_with_traces_batch<F, P, C, const D: usize>(
     public_values: &PublicValues,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<BatchStarkProofWithPublicInputs<F, C, D, NUM_TABLES>>
+) -> Result<EvmProof<F, C, D>>
 where
     F: RichField + Extendable<D>,
     P: PackedField<Scalar = F>,
@@ -594,7 +593,7 @@ where
         );
     }
 
-    let stark_proof = BatchStarkProof {
+    let batch_proof = BatchStarkProof {
         trace_cap: trace_commitment.batch_merkle_tree.cap.clone(),
         auxiliary_polys_cap: Some(auxiliary_commitment.batch_merkle_tree.cap),
         quotient_polys_cap: Some(quotient_commitment.batch_merkle_tree.cap),
@@ -602,9 +601,9 @@ where
         opening_proof,
     };
 
-    Ok(BatchStarkProofWithPublicInputs {
-        proof: stark_proof,
-        public_inputs: vec![],
+    Ok(EvmProof {
+        batch_proof,
+        public_values: public_values.clone(),
     })
 }
 
@@ -1927,18 +1926,14 @@ pub mod testing {
 
         let mut proofs = Vec::with_capacity(data.len());
         for mut d in data {
-            let (proof, public_values) = prove_batch::<F, P, C, D>(
+            proofs.push(prove_batch::<F, P, C, D>(
                 all_stark,
                 config,
                 inputs.clone(),
                 &mut d,
                 timing,
                 abort_signal.clone(),
-            )?;
-            proofs.push(EvmProof {
-                batch_proof: proof.proof,
-                public_values: PublicValues::default(),
-            });
+            )?);
         }
 
         Ok(proofs)

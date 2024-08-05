@@ -74,7 +74,6 @@ impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> E
         for opening in &self.batch_proof.openings {
             challenger.observe_openings(&opening.to_fri_openings());
         }
-        let fri_alpha = challenger.get_extension_challenge::<D>();
 
         let FriProof {
             commit_phase_merkle_caps,
