@@ -101,7 +101,6 @@ global sys_selfdestruct:
     // stack: balance, address, recipient, kexit_info
     DUP2 %contract_just_created
     // stack: is_just_created, balance, address, recipient, kexit_info
-global debug_is_just_created:
     %jumpi(sys_selfdestruct_just_created)
 
     // Send the balance to the recipient. 

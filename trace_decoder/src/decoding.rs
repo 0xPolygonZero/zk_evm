@@ -250,9 +250,7 @@ impl ProcessedBlockTrace {
         let mut txn_gen_inputs = self
             .txn_info
             .into_iter()
-            .enumerate()
-            .map(|(i, txn_info)| {
-                log::debug!("Processing txn = {i}");
+            .map(|txn_info| {
                 let is_initial_payload = txn_idx == 0;
 
                 let current_idx = txn_idx;
@@ -540,35 +538,6 @@ impl ProcessedBlockTrace {
                 .map_err(TraceParsingError::from)?;
         }
 
-        // Remove any accounts that self-destructed.
-        for hashed_addr in deltas.self_destructed_accounts.iter() {
-            log::debug!("Deleting hashed addr = {:?}", hashed_addr);
-            let k = Nibbles::from_h256_be(*hashed_addr);
-
-            trie_state.storage.remove(hashed_addr).ok_or_else(|| {
-                let hashed_addr = *hashed_addr;
-                let mut e = TraceParsingError::new(
-                    TraceParsingErrorReason::MissingAccountStorageTrie(hashed_addr),
-                );
-                e.h_addr(hashed_addr);
-                e
-            })?;
-
-            // TODO: Once the mechanism for resolving code hashes settles, we probably want
-            // to also delete the code hash mapping here as well...
-
-            if let Some(remaining_account_key) =
-                Self::delete_node_and_report_remaining_key_if_branch_collapsed(
-                    &mut trie_state.state,
-                    &k,
-                )
-                .map_err(TraceParsingError::from)?
-            {
-                out.additional_state_trie_paths_to_not_hash
-                    .push(remaining_account_key);
-            }
-        }
-
         Ok(out)
     }
 
@@ -733,23 +702,11 @@ impl ProcessedBlockTrace {
         // do this clone every iteration.
         let tries_at_start_of_txn = curr_block_tries.clone();
 
-        if txn_idx == 107 {
-            log::debug!("hash = {:?}", curr_block_tries.state.hash());
-        }
-
         Self::update_txn_and_receipt_tries(curr_block_tries, &txn_info.meta, txn_idx)
             .map_err(TraceParsingError::from)?;
 
-        if txn_idx == 107 {
-            log::debug!("hash = {:?}", curr_block_tries.state.hash());
-        }
-
         let mut delta_out =
             Self::apply_deltas_to_trie_state(curr_block_tries, &txn_info.nodes_used_by_txn)?;
-
-        if txn_idx == 107 {
-            log::debug!("hash = {:?}", curr_block_tries.state.hash());
-        }
 
         let nodes_used_by_txn = if is_initial_payload {
             let mut nodes_used = txn_info.nodes_used_by_txn;
@@ -759,10 +716,6 @@ impl ProcessedBlockTrace {
                 &mut nodes_used,
                 &other_data.b_data.b_meta,
             )?;
-        
-        if txn_idx == 107 {
-            log::debug!("hash = {:?}", curr_block_tries.state.hash());
-        }
 
             nodes_used
         } else {
@@ -777,16 +730,8 @@ impl ProcessedBlockTrace {
             &other_data.b_data.b_meta.block_beneficiary,
         )?;
 
-        if txn_idx == 107 {
-            log::debug!("hash = {:?}", curr_block_tries.state.hash());
-        }
-
         let trie_roots_after = calculate_trie_input_hashes(curr_block_tries);
 
-        if txn_idx == 107 {
-            log::debug!("expected final_state_trie = {:?}", curr_block_tries.state);
-            log::debug!("expected hash = {:?}", curr_block_tries.state.hash());
-        }
         let gen_inputs = GenerationInputs {
             txn_number_before: extra_data.txn_number_before,
             gas_used_before: extra_data.gas_used_before,
