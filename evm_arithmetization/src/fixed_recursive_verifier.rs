@@ -50,7 +50,7 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
     StarkWrapperCircuit,
 };
-use crate::util::h256_limbs;
+use crate::util::{h256_limbs, u256_limbs};
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
 /// this size.
@@ -787,13 +787,19 @@ where
             rhs_public_values.trie_roots_before,
         );
         #[cfg(feature = "cdk_erigon")]
-        // Connect the burn targets.
-        BurnAddrTarget::connect(
-            &mut builder,
-            lhs_public_values.burn_addr,
-            rhs_public_values.burn_addr,
-        );
-
+        {
+            // Connect the burn address targets.
+            BurnAddrTarget::connect(
+                &mut builder,
+                lhs_public_values.burn_addr,
+                rhs_public_values.burn_addr,
+            );
+            BurnAddrTarget::connect(
+                &mut builder,
+                public_values.burn_addr,
+                rhs_public_values.burn_addr,
+            );
+        }
         Self::connect_extra_public_values(
             &mut builder,
             &public_values.extra_block_data,
@@ -941,8 +947,11 @@ where
             agg_pv.extra_block_data,
         );
         #[cfg(feature = "cdk_erigon")]
-        // Connect the burn targets.
-        BurnAddrTarget::connect(&mut builder, parent_pv.burn_addr, parent_pv.burn_addr);
+        // Connect the burn address targets.
+        {
+            BurnAddrTarget::connect(&mut builder, parent_pv.burn_addr, agg_pv.burn_addr);
+            BurnAddrTarget::connect(&mut builder, public_values.burn_addr, agg_pv.burn_addr);
+        }
 
         // Make connections between block proofs, and check initial and final block
         // values.
@@ -1540,13 +1549,29 @@ where
                 nonzero_pis.insert(key, value);
             }
 
+            #[cfg(not(feature = "cdk_erigon"))]
+            let burn_addr_offset = 0;
+            #[cfg(feature = "cdk_erigon")]
+            let burn_addr_offset = BurnAddrTarget::SIZE;
+
+            #[cfg(feature = "cdk_erigon")]
+            {
+                let burn_addr_keys =
+                    TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + BurnAddrTarget::SIZE;
+                for (key, &value) in burn_addr_keys.zip_eq(&u256_limbs(public_values.burn_addr)) {
+                    nonzero_pis.insert(key, value);
+                }
+            }
             // Initialize the checkpoint state root extra data.
-            let checkpoint_state_trie_keys =
-                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + 8;
+            let checkpoint_state_trie_keys = burn_addr_offset
+                + TrieRootsTarget::SIZE * 2
+                + BlockMetadataTarget::SIZE
+                + BlockHashesTarget::SIZE
+                ..burn_addr_offset
+                    + TrieRootsTarget::SIZE * 2
+                    + BlockMetadataTarget::SIZE
+                    + BlockHashesTarget::SIZE
+                    + 8;
             for (key, &value) in checkpoint_state_trie_keys.zip_eq(&h256_limbs::<F>(
                 public_values.extra_block_data.checkpoint_state_trie_root,
             )) {
@@ -1555,9 +1580,13 @@ where
 
             // Initialize checkpoint block hashes.
             // These will be all zeros the initial genesis checkpoint.
-            let block_hashes_keys = TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
-                ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    - 8;
+            let block_hashes_keys =
+                burn_addr_offset + TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
+                    ..burn_addr_offset
+                        + TrieRootsTarget::SIZE * 2
+                        + BlockMetadataTarget::SIZE
+                        + BlockHashesTarget::SIZE
+                        - 8;
 
             for i in 0..public_values.block_hashes.prev_hashes.len() - 1 {
                 let targets = h256_limbs::<F>(public_values.block_hashes.prev_hashes[i]);
@@ -1565,8 +1594,11 @@ where
                     nonzero_pis.insert(block_hashes_keys.start + 8 * (i + 1) + j, targets[j]);
                 }
             }
-            let block_hashes_current_start =
-                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE - 8;
+            let block_hashes_current_start = burn_addr_offset
+                + TrieRootsTarget::SIZE * 2
+                + BlockMetadataTarget::SIZE
+                + BlockHashesTarget::SIZE
+                - 8;
             let cur_targets = h256_limbs::<F>(public_values.block_hashes.prev_hashes[255]);
             for i in 0..8 {
                 nonzero_pis.insert(block_hashes_current_start + i, cur_targets[i]);
@@ -1575,7 +1607,7 @@ where
             // Initialize the checkpoint block number.
             // Subtraction would result in an invalid proof for genesis, but we shouldn't
             // try proving this block anyway.
-            let block_number_key = TrieRootsTarget::SIZE * 2 + 6;
+            let block_number_key = burn_addr_offset + TrieRootsTarget::SIZE * 2 + 6;
             nonzero_pis.insert(
                 block_number_key,
                 F::from_canonical_u64(public_values.block_metadata.block_number.low_u64() - 1),

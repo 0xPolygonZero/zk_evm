@@ -628,19 +628,19 @@ pub struct BurnAddrTarget {
 
 #[cfg(feature = "cdk_erigon")]
 impl BurnAddrTarget {
-    /// Number of `Target`s required for the block metadata.
+    /// Number of `Target`s required for the burn address.
     pub(crate) const SIZE: usize = 8;
 
-    /// Extracts block metadata `Target`s from the provided public input
-    /// `Target`s. The provided `pis` should start with the block metadata.
+    /// Extracts the burn address from the provided public input
+    /// `Target`s. The provided `pis` should start with the burn address.
     pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
         let burn_addr = pis[0..8].try_into().unwrap();
 
         Self { burn_addr }
     }
 
-    /// If `condition`, returns the block metadata in `bm0`,
-    /// otherwise returns the block metadata in `bm1`.
+    /// If `condition`, returns the burn address in `ba0`,
+    /// otherwise returns the burn address in `ba1`.
     pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         condition: BoolTarget,
@@ -654,7 +654,7 @@ impl BurnAddrTarget {
         }
     }
 
-    /// Connects the block metadata in `bm0` to the block metadata in `bm1`.
+    /// Connects the burn address in `ba0` to the burn address in `ba1`.
     pub(crate) fn connect<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         ba0: Self,
