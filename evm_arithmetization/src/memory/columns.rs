@@ -67,8 +67,13 @@ pub(crate) const STALE_CONTEXTS_FREQUENCIES: usize = IS_PRUNED + 1;
 // `ADDR_CONTEXT` + 1 is in `STALE_CONTEXTS`.
 pub(crate) const IS_STALE: usize = STALE_CONTEXTS_FREQUENCIES + 1;
 
-// Filter for the `MemAfter` CTL.
-pub(crate) const MEM_AFTER_FILTER: usize = IS_STALE + 1;
+// Flag indicating that a value can potentially be propagated.
+// Contains `filter * address_changed * is_not_stale`.
+pub(crate) const MAYBE_IN_MEM_AFTER: usize = IS_STALE + 1;
+
+// Filter for the `MemAfter` CTL. Is equal to `MAYBE_IN_MEM_AFTER` if segment is
+// preinitialized or the value is non-zero, is 0 otherwise.
+pub(crate) const MEM_AFTER_FILTER: usize = MAYBE_IN_MEM_AFTER + 1;
 
 // We use a range check to enforce the ordering.
 pub(crate) const RANGE_CHECK: usize = MEM_AFTER_FILTER + 1;

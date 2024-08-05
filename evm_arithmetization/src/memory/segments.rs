@@ -82,6 +82,14 @@ pub(crate) enum Segment {
     StorageLinkedList = 35 << SEGMENT_SCALING_FACTOR,
 }
 
+// These segments are not zero-initialized.
+pub(crate) const PREINITIALIZED_SEGMENTS_INDICES: [usize; 4] = [
+    Segment::Code.unscale(),
+    Segment::TrieData.unscale(),
+    Segment::AccountsLinkedList.unscale(),
+    Segment::StorageLinkedList.unscale(),
+];
+
 impl Segment {
     pub(crate) const COUNT: usize = 36;
 
