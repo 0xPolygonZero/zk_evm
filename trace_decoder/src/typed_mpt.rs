@@ -135,14 +135,6 @@ impl TriePath {
     pub fn from_hash(H256(bytes): H256) -> Self {
         Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
     }
-    fn from_txn_ix(txn_ix: usize) -> Self {
-        TriePath::new(AsNibbles(rlp::encode(&txn_ix))).expect(
-            "\
-            rlp of an usize goes through a u64, which is 8 bytes,
-            which will be 9 bytes RLP'ed.
-            9 < 32",
-        )
-    }
     fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
         let mut theirs = mpt_trie::nibbles::Nibbles::default();
         for component in self.0 {
@@ -160,60 +152,6 @@ impl TriePath {
             .expect("mpt_trie should not have more than 64 nibbles")
         }
         Self(ours)
-    }
-}
-
-/// Per-block, `txn_ix -> [u8]`.
-///
-/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#receipts-trie>
-#[derive(Debug, Clone, Default)]
-pub struct TransactionTrie {
-    untyped: HashedPartialTrie,
-}
-
-impl TransactionTrie {
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
-        let prev = self
-            .untyped
-            .get(TriePath::from_txn_ix(txn_ix).into_nibbles())
-            .map(Vec::from);
-        self.untyped
-            .insert(TriePath::from_txn_ix(txn_ix).into_nibbles(), val)
-            .map_err(|source| Error { source })?;
-        Ok(prev)
-    }
-    pub fn root(&self) -> H256 {
-        self.untyped.hash()
-    }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        &self.untyped
-    }
-}
-
-/// Per-block, `txn_ix -> [u8]`.
-///
-/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#transaction-trie>
-#[derive(Debug, Clone, Default)]
-pub struct ReceiptTrie {
-    untyped: HashedPartialTrie,
-}
-
-impl ReceiptTrie {
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
-        let prev = self
-            .untyped
-            .get(TriePath::from_txn_ix(txn_ix).into_nibbles())
-            .map(Vec::from);
-        self.untyped
-            .insert(TriePath::from_txn_ix(txn_ix).into_nibbles(), val)
-            .map_err(|source| Error { source })?;
-        Ok(prev)
-    }
-    pub fn root(&self) -> H256 {
-        self.untyped.hash()
-    }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        &self.untyped
     }
 }
 
@@ -300,16 +238,7 @@ impl StorageTrie {
     pub fn root(&self) -> H256 {
         self.untyped.hash()
     }
-    pub fn remove(&mut self, path: TriePath) -> Result<Option<Vec<u8>>, Error> {
-        self.untyped
-            .delete(path.into_nibbles())
-            .map_err(|source| Error { source })
-    }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
-    }
-
-    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
-        &mut self.untyped
     }
 }
