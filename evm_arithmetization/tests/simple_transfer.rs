@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use evm_arithmetization::batch_verifier::verify_evm_proof;
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
@@ -170,6 +171,10 @@ fn test_simple_transfer() -> anyhow::Result<()> {
     )?;
 
     timing.filter(Duration::from_millis(100)).print();
+
+    for proof in proofs {
+        verify_evm_proof(&all_stark, proof, &config, false)?;
+    }
 
     Ok(())
 

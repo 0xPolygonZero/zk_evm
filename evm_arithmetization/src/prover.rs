@@ -29,7 +29,9 @@ use plonky2_maybe_rayon::*;
 use serde::{Deserialize, Serialize};
 use starky::batch_proof::{BatchStarkProof, BatchStarkProofWithPublicInputs};
 use starky::config::StarkConfig;
-use starky::cross_table_lookup::{get_ctl_auxiliary_polys, get_ctl_data, CtlData};
+use starky::cross_table_lookup::{
+    get_ctl_auxiliary_polys, get_ctl_data, num_ctl_helper_columns_by_table, CtlData,
+};
 use starky::lookup::{lookup_helper_columns, GrandProductChallengeSet};
 use starky::proof::{
     MultiProof, StarkOpeningSet, StarkProof, StarkProofWithMetadata, StarkProofWithPublicInputs,
@@ -168,7 +170,7 @@ pub fn prove_batch<F, P, C, const D: usize>(
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
-) -> Result<BatchStarkProofWithPublicInputs<F, C, D, 9>>
+) -> Result<(BatchStarkProofWithPublicInputs<F, C, D, 9>, PublicValues)>
 where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -188,12 +190,12 @@ where
         all_stark,
         config,
         &mut traces,
-        public_values,
+        &public_values,
         timing,
         abort_signal,
     )?;
 
-    Ok(proof)
+    Ok((proof, public_values))
 }
 
 /// Compute all STARK proofs.
@@ -349,7 +351,7 @@ pub(crate) fn prove_with_traces_batch<F, P, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     mut trace_poly_values: &mut [Vec<PolynomialValues<F>>; NUM_TABLES],
-    public_values: PublicValues,
+    public_values: &PublicValues,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> Result<BatchStarkProofWithPublicInputs<F, C, D, NUM_TABLES>>
@@ -363,6 +365,12 @@ where
 
     // We compute the Field Merkle Tree of all STARK traces.
     reorder_slice(trace_poly_values, Table::all(), ALL_SORTED_TABLES);
+    let num_trace_polys_sorted_per_table: [usize; NUM_TABLES] = trace_poly_values
+        .iter()
+        .map(|polys| polys.len())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
     let trace_polys_values_sorted_flat: Vec<_> =
         trace_poly_values.clone().into_iter().flatten().collect();
     let num_trace_polys = trace_polys_values_sorted_flat.len();
@@ -425,6 +433,12 @@ where
         Table::all(),
         ALL_SORTED_TABLES,
     );
+    let num_auxiliary_columns_sorted_per_table: [usize; NUM_TABLES] = auxiliary_columns
+        .iter()
+        .map(|polys| polys.len())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
     let auxiliary_columns_sorted_flat: Vec<_> =
         auxiliary_columns.clone().into_iter().flatten().collect();
     let num_aux_polys = auxiliary_columns_sorted_flat.len();
@@ -462,6 +476,12 @@ where
         Table::all(),
         ALL_SORTED_TABLES,
     );
+    let num_quotient_polys_sorted_per_table: [usize; NUM_TABLES] = quotient_polys
+        .iter()
+        .map(|polys| polys.len())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
     let quotient_polys_sorted_flat: Vec<_> = quotient_polys.clone().into_iter().flatten().collect();
     let num_quotient_polys = quotient_polys_sorted_flat.len();
     let quotient_commitment = timed!(
@@ -491,13 +511,28 @@ where
         "Opening point is in the subgroup."
     );
 
+    let all_ctl_helper_columns = num_ctl_helper_columns_by_table(
+        &all_stark.cross_table_lookups,
+        all_stark.arithmetic_stark.constraint_degree(),
+    );
+    let num_ctl_helper_columns_per_table = (0..NUM_TABLES)
+        .map(|i| {
+            all_ctl_helper_columns
+                .iter()
+                .map(|ctl_cols: &[usize; NUM_TABLES]| ctl_cols[i])
+                .sum()
+        })
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
+
     let all_fri_instances = all_fri_instance_info::<F, C, D>(
         all_stark,
         zeta,
-        &trace_poly_values,
-        &auxiliary_columns,
-        &quotient_polys,
-        &ctl_data_per_table,
+        &num_trace_polys_sorted_per_table,
+        &num_auxiliary_columns_sorted_per_table,
+        &num_quotient_polys_sorted_per_table,
+        &num_ctl_helper_columns_per_table,
         config,
     );
 
@@ -978,10 +1013,10 @@ fn fri_instance_info_single_stark<F, C, S, const D: usize>(
     table: Table,
     stark: &S,
     zeta: F::Extension,
-    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
-    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
-    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
-    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    num_trace_polys_sorted: &[usize; NUM_TABLES],
+    num_auxiliary_columns_sorted: &[usize; NUM_TABLES],
+    num_quotient_polys_sorted: &[usize; NUM_TABLES],
+    num_ctl_helper_columns_per_table: &[usize; NUM_TABLES],
     config: &StarkConfig,
 ) -> FriInstanceInfo<F, D>
 where
@@ -991,24 +1026,19 @@ where
 {
     let g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]]);
     let sorted_index = TABLE_TO_SORTED_INDEX[*table];
-    let num_ctl_helper_polys = ctl_data_per_table[*table].num_ctl_helper_polys();
+    let num_ctl_helper_polys = num_ctl_helper_columns_per_table[*table];
     let mut num_trace_polys_before = 0;
     let mut num_aux_polys_before = 0;
     let mut num_quotient_polys_before = 0;
     for i in 0..sorted_index {
-        let prev_sorted_table = TABLE_TO_SORTED_INDEX[*table] - i - 1;
-        num_trace_polys_before += trace_poly_values_sorted[i].len();
-        num_aux_polys_before += auxiliary_columns_sorted[i].len();
-        num_quotient_polys_before += quotient_polys_sorted[i].len();
+        num_trace_polys_before += num_trace_polys_sorted[i];
+        num_aux_polys_before += num_auxiliary_columns_sorted[i];
+        num_quotient_polys_before += num_quotient_polys_sorted[i];
     }
-    let num_aux_columns = auxiliary_columns_sorted[sorted_index].len();
-    let num_quotient_polys = quotient_polys_sorted[sorted_index].len();
-    let num_cols_before_ctlzs = num_aux_polys_before
-        + stark.num_lookup_helper_columns(config)
-        + ctl_data_per_table[*table]
-            .num_ctl_helper_polys()
-            .iter()
-            .sum::<usize>();
+    let num_aux_columns = num_auxiliary_columns_sorted[sorted_index];
+    let num_quotient_polys = num_quotient_polys_sorted[sorted_index];
+    let num_cols_before_ctlzs =
+        num_aux_polys_before + stark.num_lookup_helper_columns(config) + num_ctl_helper_polys;
 
     stark.fri_instance_batch(
         zeta,
@@ -1023,13 +1053,13 @@ where
 }
 
 /// Generates all FRI instances. They are sorted by decreasing degree.
-fn all_fri_instance_info<F, C, const D: usize>(
+pub(crate) fn all_fri_instance_info<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     zeta: F::Extension,
-    trace_poly_values_sorted: &[Vec<PolynomialValues<F>>; NUM_TABLES],
-    auxiliary_columns_sorted: &Vec<Vec<PolynomialValues<F>>>,
-    quotient_polys_sorted: &Vec<Vec<PolynomialCoeffs<F>>>,
-    ctl_data_per_table: &[CtlData<F>; NUM_TABLES],
+    num_trace_polys_sorted: &[usize; NUM_TABLES],
+    num_auxiliary_columns_sorted: &[usize; NUM_TABLES],
+    num_quotient_polys_sorted: &[usize; NUM_TABLES],
+    num_ctl_helper_columns_per_table: &[usize; NUM_TABLES],
     config: &StarkConfig,
 ) -> Vec<FriInstanceInfo<F, D>>
 where
@@ -1043,10 +1073,10 @@ where
         Table::Arithmetic,
         &all_stark.arithmetic_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1055,10 +1085,10 @@ where
         Table::BytePacking,
         &all_stark.byte_packing_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1067,10 +1097,10 @@ where
         Table::Cpu,
         &all_stark.cpu_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1079,10 +1109,10 @@ where
         Table::Keccak,
         &all_stark.keccak_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1091,10 +1121,10 @@ where
         Table::KeccakSponge,
         &all_stark.keccak_sponge_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1103,10 +1133,10 @@ where
         Table::Logic,
         &all_stark.logic_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1115,10 +1145,10 @@ where
         Table::Memory,
         &all_stark.memory_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1127,10 +1157,10 @@ where
         Table::MemBefore,
         &all_stark.mem_before_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1139,10 +1169,10 @@ where
         Table::MemAfter,
         &all_stark.mem_after_stark,
         zeta,
-        trace_poly_values_sorted,
-        auxiliary_columns_sorted,
-        quotient_polys_sorted,
-        ctl_data_per_table,
+        num_trace_polys_sorted,
+        num_auxiliary_columns_sorted,
+        num_quotient_polys_sorted,
+        num_ctl_helper_columns_per_table,
         config,
     ));
 
@@ -1827,6 +1857,7 @@ fn reorder_slice<T>(
 pub mod testing {
     use super::*;
     use crate::{
+        batch_proof::EvmProof,
         cpu::kernel::interpreter::Interpreter,
         generation::{output_debug_tries, state::State},
     };
@@ -1885,7 +1916,7 @@ pub mod testing {
         max_cpu_len_log: usize,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
-    ) -> Result<Vec<BatchStarkProofWithPublicInputs<F, C, D, NUM_TABLES>>>
+    ) -> Result<Vec<EvmProof<F, C, D>>>
     where
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
@@ -1896,7 +1927,7 @@ pub mod testing {
 
         let mut proofs = Vec::with_capacity(data.len());
         for mut d in data {
-            let proof = prove_batch::<F, P, C, D>(
+            let (proof, public_values) = prove_batch::<F, P, C, D>(
                 all_stark,
                 config,
                 inputs.clone(),
@@ -1904,7 +1935,10 @@ pub mod testing {
                 timing,
                 abort_signal.clone(),
             )?;
-            proofs.push(proof);
+            proofs.push(EvmProof {
+                batch_proof: proof.proof,
+                public_values: PublicValues::default(),
+            });
         }
 
         Ok(proofs)
