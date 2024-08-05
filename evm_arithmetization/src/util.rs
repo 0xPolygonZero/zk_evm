@@ -112,6 +112,19 @@ pub(crate) fn u256_limbs<F: Field>(u256: U256) -> [F; 8] {
         .unwrap()
 }
 
+/// Returns the 32-bit little-endian limbs of a `H160`.
+pub(crate) fn h160_limbs<F: Field>(h160: H160) -> [F; 5] {
+    let mut temp_h160 = h160.0;
+    temp_h160.reverse();
+    temp_h160
+        .chunks(4)
+        .map(|chunk| u32::from_le_bytes(chunk.try_into().unwrap()))
+        .map(F::from_canonical_u32)
+        .collect_vec()
+        .try_into()
+        .unwrap()
+}
+
 /// Returns the 32-bit little-endian limbs of a `H256`.
 pub(crate) fn h256_limbs<F: Field>(h256: H256) -> [F; 8] {
     let mut temp_h256 = h256.0;
