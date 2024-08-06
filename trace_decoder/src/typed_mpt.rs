@@ -135,6 +135,7 @@ impl TriePath {
     pub fn from_hash(H256(bytes): H256) -> Self {
         Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
     }
+    #[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
     fn from_txn_ix(txn_ix: usize) -> Self {
         TriePath::new(AsNibbles(rlp::encode(&txn_ix))).expect(
             "\
@@ -163,6 +164,7 @@ impl TriePath {
     }
 }
 
+#[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
 /// Per-block, `txn_ix -> [u8]`.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#receipts-trie>
@@ -171,6 +173,7 @@ pub struct TransactionTrie {
     untyped: HashedPartialTrie,
 }
 
+#[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
 impl TransactionTrie {
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
         let prev = self
@@ -190,6 +193,7 @@ impl TransactionTrie {
     }
 }
 
+#[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
 /// Per-block, `txn_ix -> [u8]`.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#transaction-trie>
@@ -198,6 +202,7 @@ pub struct ReceiptTrie {
     untyped: HashedPartialTrie,
 }
 
+#[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
 impl ReceiptTrie {
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
         let prev = self
@@ -300,6 +305,7 @@ impl StorageTrie {
     pub fn root(&self) -> H256 {
         self.untyped.hash()
     }
+    #[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
     pub fn remove(&mut self, path: TriePath) -> Result<Option<Vec<u8>>, Error> {
         self.untyped
             .delete(path.into_nibbles())
@@ -308,7 +314,7 @@ impl StorageTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
-
+    #[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
     }
