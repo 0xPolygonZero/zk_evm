@@ -22,3 +22,4 @@ futures = { workspace = true }
 tokio = { workspace = true }
 alloy = { workspace = true }
 async-stream = { workspace = true }
+once_cell = { workspace = true }

@@ -1,4 +1,4 @@
-use std::{env, io};
+use std::io;
 use std::{fs::File, path::PathBuf};
 
 use anyhow::Result;
@@ -20,8 +20,6 @@ mod http;
 mod init;
 mod stdio;
 
-const EVM_ARITH_VER_KEY: &str = "EVM_ARITHMETIZATION_PKG_VER";
-
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
     if path.is_none() {
         return Ok(None);
@@ -38,18 +36,6 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProo
 async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
     init::tracing();
-
-    if env::var_os(EVM_ARITH_VER_KEY).is_none() {
-        // Safety:
-        // - we're early enough in main that nothing else should race
-        unsafe {
-            env::set_var(
-                EVM_ARITH_VER_KEY,
-                // see build.rs
-                env!("EVM_ARITHMETIZATION_PACKAGE_VERSION"),
-            );
-        }
-    };
 
     let args = cli::Cli::parse();
     if let paladin::config::Runtime::InMemory = args.paladin.runtime {
