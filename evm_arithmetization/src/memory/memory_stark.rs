@@ -535,8 +535,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             + address_unchanged * (next_timestamp - timestamp);
         yield_constr.constraint_transition(range_check - computed_range_check);
 
-        // Validate preinitialized_segments_aux. It contains `(next_segment -
-        // Segment::AccountsLinkedList) * (next_segment - Segment::StorageLinkedList)`.
+        // Validate `preinitialized_segments_aux`.
         let preinitialized_segments_aux = local_values[PREINITIALIZED_SEGMENTS_AUX];
         yield_constr.constraint_transition(
             preinitialized_segments_aux
@@ -546,8 +545,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
                         - P::Scalar::from_canonical_usize(Segment::StorageLinkedList.unscale())),
         );
 
-        // Validate preinitialized_segments. It contains `(next_segment - Segment::Code)
-        // * (next_segment - Segment::TrieData) * preinitialized_segments_aux`.
+        // Validate `preinitialized_segments`.
         let preinitialized_segments = local_values[PREINITIALIZED_SEGMENTS];
         yield_constr.constraint_transition(
             preinitialized_segments
@@ -557,8 +555,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
                     * preinitialized_segments_aux,
         );
 
-        // Validate initialize_aux. It contains `preinitialized_segments * addr_changed
-        // * next_is_read`.
+        // Validate `initialize_aux`.
         let initialize_aux = local_values[INITIALIZE_AUX];
         yield_constr.constraint_transition(
             initialize_aux - preinitialized_segments * not_address_unchanged * next_is_read,
@@ -576,15 +573,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             yield_constr.constraint_transition(initialize_aux * next_values_limbs[i]);
         }
 
-        // Validate `mem_after_filter`. Its value is `filter * address_changed * (1 -
-        // is_stale)`
+        // Validate `mem_after_filter`.
         let mem_after_filter = local_values[MEM_AFTER_FILTER];
         let is_stale = local_values[IS_STALE];
         yield_constr.constraint_transition(
             mem_after_filter + filter * not_address_unchanged * (is_stale - P::ONES),
         );
 
-        // Validate timestamp_inv. Since it's used as a CTL filter, its value must be
+        // Validate `timestamp_inv`. Since it's used as a CTL filter, its value must be
         // checked.
         let timestamp_inv = local_values[TIMESTAMP_INV];
         yield_constr.constraint(timestamp * (timestamp * timestamp_inv - P::ONES));
@@ -718,8 +714,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
         let range_check_diff = builder.sub_extension(range_check, computed_range_check);
         yield_constr.constraint_transition(builder, range_check_diff);
 
-        // Validate preinitialized_segments_aux. It contains `(next_segment -
-        // Segment::AccountsLinkedList) * (next_segment - Segment::StorageLinkedList)`.
+        // Validate `preinitialized_segments_aux`.
         let preinitialized_segments_aux = local_values[PREINITIALIZED_SEGMENTS_AUX];
         let segment_accounts_list = builder.add_const_extension(
             next_addr_segment,
@@ -734,8 +729,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             builder.sub_extension(preinitialized_segments_aux, segment_aux_prod);
         yield_constr.constraint_transition(builder, preinitialized_segments_aux_constraint);
 
-        // Validate preinitialized_segments. It contains `(next_segment - Segment::Code)
-        // * (next_segment - Segment::TrieData) * preinitialized_segments_aux`.
+        // Validate `preinitialized_segments`.
         let preinitialized_segments = local_values[PREINITIALIZED_SEGMENTS];
         let segment_code = builder.add_const_extension(
             next_addr_segment,
@@ -755,8 +749,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             builder.sub_extension(preinitialized_segments, segment_prod);
         yield_constr.constraint_transition(builder, preinitialized_segments_constraint);
 
-        // Validate initialize_aux. It contains `preinitialized_segments * addr_changed
-        // * next_is_read`.
+        // Validate `initialize_aux`.
         let initialize_aux = local_values[INITIALIZE_AUX];
         let computed_initialize_aux = builder.mul_extension(not_address_unchanged, next_is_read);
         let computed_initialize_aux =
@@ -779,8 +772,7 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             yield_constr.constraint_transition(builder, zero_init_constraint);
         }
 
-        // Validate `mem_after_filter`. Its value is `filter * address_changed * (1 -
-        // is_stale)`
+        // Validate `mem_after_filter`.
         let mem_after_filter = local_values[MEM_AFTER_FILTER];
         let is_stale = local_values[IS_STALE];
         {
