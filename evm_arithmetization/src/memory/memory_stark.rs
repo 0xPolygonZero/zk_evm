@@ -20,7 +20,8 @@ use starky::lookup::{Column, Filter, Lookup};
 use starky::stark::Stark;
 
 use super::columns::{
-    MEM_AFTER_FILTER, PREINITIALIZED_SEGMENTS, STALE_CONTEXTS, STALE_CONTEXTS_FREQUENCIES,
+    MEM_AFTER_FILTER, PREINITIALIZED_SEGMENTS, PREINITIALIZED_SEGMENTS_AUX, STALE_CONTEXTS,
+    STALE_CONTEXTS_FREQUENCIES,
 };
 use super::segments::Segment;
 use crate::all_stark::{EvmStarkFrame, Table};
@@ -184,14 +185,18 @@ pub(crate) fn generate_first_change_flags_and_rc<F: RichField>(
             row[RANGE_CHECK]
         );
 
-        let address_changed =
-            row[CONTEXT_FIRST_CHANGE] + row[SEGMENT_FIRST_CHANGE] + row[VIRTUAL_FIRST_CHANGE];
-        row[INITIALIZE_AUX] = next_segment * address_changed * next_is_read;
+        row[PREINITIALIZED_SEGMENTS_AUX] = (next_segment
+            - F::from_canonical_usize(Segment::AccountsLinkedList.unscale()))
+            * (next_segment - F::from_canonical_usize(Segment::StorageLinkedList.unscale()));
 
         row[PREINITIALIZED_SEGMENTS] = (next_segment
-            - F::from_canonical_usize(Segment::TrieData.unscale()))
-            * (next_segment - F::from_canonical_usize(Segment::AccountsLinkedList.unscale()))
-            * (next_segment - F::from_canonical_usize(Segment::StorageLinkedList.unscale()))
+            - F::from_canonical_usize(Segment::Code.unscale()))
+            * (next_segment - F::from_canonical_usize(Segment::TrieData.unscale()))
+            * row[PREINITIALIZED_SEGMENTS_AUX];
+
+        let address_changed =
+            row[CONTEXT_FIRST_CHANGE] + row[SEGMENT_FIRST_CHANGE] + row[VIRTUAL_FIRST_CHANGE];
+        row[INITIALIZE_AUX] = row[PREINITIALIZED_SEGMENTS] * address_changed * next_is_read;
     }
 }
 
@@ -530,23 +535,30 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             + address_unchanged * (next_timestamp - timestamp);
         yield_constr.constraint_transition(range_check - computed_range_check);
 
-        // Validate initialize_aux. It contains next_segment * addr_changed *
-        // next_is_read.
-        let initialize_aux = local_values[INITIALIZE_AUX];
+        // Validate `preinitialized_segments_aux`.
+        let preinitialized_segments_aux = local_values[PREINITIALIZED_SEGMENTS_AUX];
         yield_constr.constraint_transition(
-            initialize_aux - next_addr_segment * not_address_unchanged * next_is_read,
+            preinitialized_segments_aux
+                - (next_addr_segment
+                    - P::Scalar::from_canonical_usize(Segment::AccountsLinkedList.unscale()))
+                    * (next_addr_segment
+                        - P::Scalar::from_canonical_usize(Segment::StorageLinkedList.unscale())),
         );
 
-        // Validate preinitialized_segments.
+        // Validate `preinitialized_segments`.
         let preinitialized_segments = local_values[PREINITIALIZED_SEGMENTS];
         yield_constr.constraint_transition(
             preinitialized_segments
-                - (next_addr_segment
-                    - P::Scalar::from_canonical_usize(Segment::TrieData.unscale()))
+                - (next_addr_segment - P::Scalar::from_canonical_usize(Segment::Code.unscale()))
                     * (next_addr_segment
-                        - P::Scalar::from_canonical_usize(Segment::AccountsLinkedList.unscale()))
-                    * (next_addr_segment
-                        - P::Scalar::from_canonical_usize(Segment::StorageLinkedList.unscale())),
+                        - P::Scalar::from_canonical_usize(Segment::TrieData.unscale()))
+                    * preinitialized_segments_aux,
+        );
+
+        // Validate `initialize_aux`.
+        let initialize_aux = local_values[INITIALIZE_AUX];
+        yield_constr.constraint_transition(
+            initialize_aux - preinitialized_segments * not_address_unchanged * next_is_read,
         );
 
         for i in 0..8 {
@@ -557,27 +569,18 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             // By default, memory is initialized with 0. This means that if the first
             // operation of a new address is a read, then its value must be 0.
             // There are exceptions, though: this constraint zero-initializes everything but
-            // the code segment and context 0.
-            yield_constr
-                .constraint_transition(next_addr_context * initialize_aux * next_values_limbs[i]);
-            // We don't want to exclude the entirety of context 0. This constraint
-            // zero-initializes all segments except the specified ones (segment
-            // 0 is already included in initialize_aux). There is overlap with
-            // the previous constraint, but this is not a problem.
-            yield_constr.constraint_transition(
-                preinitialized_segments * initialize_aux * next_values_limbs[i],
-            );
+            // the preinitialized segments.
+            yield_constr.constraint_transition(initialize_aux * next_values_limbs[i]);
         }
 
-        // Validate `mem_after_filter`. Its value is `filter * address_changed * (1 -
-        // is_stale)`
+        // Validate `mem_after_filter`.
         let mem_after_filter = local_values[MEM_AFTER_FILTER];
         let is_stale = local_values[IS_STALE];
         yield_constr.constraint_transition(
             mem_after_filter + filter * not_address_unchanged * (is_stale - P::ONES),
         );
 
-        // Validate timestamp_inv. Since it's used as a CTL filter, its value must be
+        // Validate `timestamp_inv`. Since it's used as a CTL filter, its value must be
         // checked.
         let timestamp_inv = local_values[TIMESTAMP_INV];
         yield_constr.constraint(timestamp * (timestamp * timestamp_inv - P::ONES));
@@ -711,38 +714,49 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
         let range_check_diff = builder.sub_extension(range_check, computed_range_check);
         yield_constr.constraint_transition(builder, range_check_diff);
 
-        // Validate initialize_aux. It contains next_segment * addr_changed *
-        // next_is_read.
-        let initialize_aux = local_values[INITIALIZE_AUX];
-        let computed_initialize_aux = builder.mul_extension(not_address_unchanged, next_is_read);
-        let computed_initialize_aux =
-            builder.mul_extension(next_addr_segment, computed_initialize_aux);
-        let new_first_read_constraint =
-            builder.sub_extension(initialize_aux, computed_initialize_aux);
-        yield_constr.constraint_transition(builder, new_first_read_constraint);
-
-        // Validate preinitialized_segments.
-        let preinitialized_segments = local_values[PREINITIALIZED_SEGMENTS];
-        let segment_trie_data = builder.add_const_extension(
-            next_addr_segment,
-            F::NEG_ONE * F::from_canonical_usize(Segment::TrieData.unscale()),
-        );
+        // Validate `preinitialized_segments_aux`.
+        let preinitialized_segments_aux = local_values[PREINITIALIZED_SEGMENTS_AUX];
         let segment_accounts_list = builder.add_const_extension(
             next_addr_segment,
-            F::NEG_ONE * F::from_canonical_usize(Segment::AccountsLinkedList.unscale()),
+            -F::from_canonical_usize(Segment::AccountsLinkedList.unscale()),
         );
         let segment_storage_list = builder.add_const_extension(
             next_addr_segment,
-            F::NEG_ONE * F::from_canonical_usize(Segment::StorageLinkedList.unscale()),
+            -F::from_canonical_usize(Segment::StorageLinkedList.unscale()),
         );
+        let segment_aux_prod = builder.mul_extension(segment_accounts_list, segment_storage_list);
+        let preinitialized_segments_aux_constraint =
+            builder.sub_extension(preinitialized_segments_aux, segment_aux_prod);
+        yield_constr.constraint_transition(builder, preinitialized_segments_aux_constraint);
+
+        // Validate `preinitialized_segments`.
+        let preinitialized_segments = local_values[PREINITIALIZED_SEGMENTS];
+        let segment_code = builder.add_const_extension(
+            next_addr_segment,
+            -F::from_canonical_usize(Segment::Code.unscale()),
+        );
+        let segment_trie_data = builder.add_const_extension(
+            next_addr_segment,
+            -F::from_canonical_usize(Segment::TrieData.unscale()),
+        );
+
         let segment_prod = builder.mul_many_extension([
+            segment_code,
             segment_trie_data,
-            segment_accounts_list,
-            segment_storage_list,
+            preinitialized_segments_aux,
         ]);
         let preinitialized_segments_constraint =
             builder.sub_extension(preinitialized_segments, segment_prod);
         yield_constr.constraint_transition(builder, preinitialized_segments_constraint);
+
+        // Validate `initialize_aux`.
+        let initialize_aux = local_values[INITIALIZE_AUX];
+        let computed_initialize_aux = builder.mul_extension(not_address_unchanged, next_is_read);
+        let computed_initialize_aux =
+            builder.mul_extension(preinitialized_segments, computed_initialize_aux);
+        let new_first_read_constraint =
+            builder.sub_extension(initialize_aux, computed_initialize_aux);
+        yield_constr.constraint_transition(builder, new_first_read_constraint);
 
         for i in 0..8 {
             // Enumerate purportedly-ordered log.
@@ -753,25 +767,12 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for MemoryStark<F
             // By default, memory is initialized with 0. This means that if the first
             // operation of a new address is a read, then its value must be 0.
             // There are exceptions, though: this constraint zero-initializes everything but
-            // the code segment and context 0.
-            let context_zero_initializing_constraint =
-                builder.mul_extension(next_values_limbs[i], initialize_aux);
-            let initializing_constraint =
-                builder.mul_extension(next_addr_context, context_zero_initializing_constraint);
-            yield_constr.constraint_transition(builder, initializing_constraint);
-            // We don't want to exclude the entirety of context 0. This constraint
-            // zero-initializes all segments except the specified ones (segment
-            // 0 is already included in initialize_aux). There is overlap with
-            // the previous constraint, but this is not a problem.
-            let zero_init_constraint = builder.mul_extension(
-                preinitialized_segments,
-                context_zero_initializing_constraint,
-            );
+            // the preinitialized segments.
+            let zero_init_constraint = builder.mul_extension(initialize_aux, next_values_limbs[i]);
             yield_constr.constraint_transition(builder, zero_init_constraint);
         }
 
-        // Validate `mem_after_filter`. Its value is `filter * address_changed * (1 -
-        // is_stale)`
+        // Validate `mem_after_filter`.
         let mem_after_filter = local_values[MEM_AFTER_FILTER];
         let is_stale = local_values[IS_STALE];
         {
