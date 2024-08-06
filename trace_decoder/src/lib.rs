@@ -242,7 +242,6 @@ pub struct TxnTrace {
     /// Contract code that this account has accessed or created
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code_usage: Option<ContractCodeUsage>,
-
 }
 
 /// Contract code access type. Used by txn traces.
