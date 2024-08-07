@@ -32,13 +32,6 @@ use crate::{
 /// failure.
 pub type TraceParsingResult<T> = anyhow::Result<T>;
 
-const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
-    248, 68, 128, 128, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248,
-    110, 91, 72, 224, 27, 153, 108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33, 160, 197, 210, 70,
-    1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59,
-    123, 250, 216, 4, 93, 133, 164, 112,
-];
-
 // This is just `rlp(0)`.
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
@@ -374,12 +367,12 @@ fn apply_deltas_to_trie_state(
         let val_k = Nibbles::from_h256_be(*hashed_acc_addr);
 
         // If the account was created, then it will not exist in the trie.
-        let val_bytes = trie_state
+        let mut account = trie_state
             .state
             .get(val_k)
-            .unwrap_or(&EMPTY_ACCOUNT_BYTES_RLPED);
-
-        let mut account = account_from_rlped_bytes(val_bytes)?;
+            .map(account_from_rlped_bytes)
+            .transpose()?
+            .unwrap_or_default();
 
         s_trie_writes.apply_writes_to_state_node(
             &mut account,
