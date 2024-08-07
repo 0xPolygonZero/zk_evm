@@ -11,16 +11,14 @@ use evm_arithmetization::{
     proof::{BlockMetadata, ExtraBlockData, TrieRoots},
     testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH},
 };
-use itertools::{Itertools, Position};
 use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
-    trie_ops::{TrieOpError, TrieOpResult},
+    trie_ops::TrieOpResult,
     utils::{IntoTrieKey, TriePath},
 };
-use thiserror::Error;
 
 use crate::{
     hash,
@@ -44,67 +42,14 @@ const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
 // This is just `rlp(0)`.
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
-// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-//                replace this with tracing-error
-#[derive(Default, Debug)]
-struct LocatedError {
-    block_num: Option<U256>,
-    block_chain_id: Option<U256>,
-    txn_idx: Option<usize>,
-    addr: Option<Address>,
-    h_addr: Option<H256>,
-    slot: Option<U512>,
-    slot_value: Option<U512>,
-}
+/// Formatting aid for error context
+struct WithHash(U512);
 
-impl fmt::Display for LocatedError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fn cast(it: &Option<impl Display>) -> Option<&dyn Display> {
-            it.as_ref().map(|it| it as _)
-        }
-        let Self {
-            block_num,
-            block_chain_id,
-            txn_idx,
-            addr,
-            h_addr,
-            slot,
-            slot_value,
-        } = self;
-        let h_slot = slot.map(|slot| {
-            let mut buf = [0u8; 64];
-            slot.to_big_endian(&mut buf);
-            format!("0x{:064X}", hash(buf))
-        });
-        let slot_value = slot_value.map(|it| format!("0x{:064X}", it));
-        let mut labels = [
-            ("block num", cast(block_num)),
-            ("chain id", cast(block_chain_id)),
-            ("txn idx", cast(txn_idx)),
-            ("address", cast(addr)),
-            ("hashed address", cast(h_addr)),
-            ("hashed slot", cast(slot)),
-            ("slot", cast(&h_slot)),
-            ("slot value", cast(&slot_value)),
-        ]
-        .into_iter()
-        .filter_map(|(label, val)| Some((label, val?)))
-        .with_position()
-        .peekable();
-        match labels.peek().is_some() {
-            true => {
-                f.write_str("at ")?;
-                for (pos, (label, val)) in labels {
-                    f.write_fmt(format_args!("{}: {}", label, val))?;
-                    if matches!(pos, Position::First | Position::Middle) {
-                        f.write_str("; ")?;
-                    }
-                }
-            }
-            // this is only reachable if someone write `LocatedError::default()`
-            false => f.write_str("<error with no location information>")?,
-        }
-        Ok(())
+impl fmt::Display for WithHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut buf = [0u8; 64];
+        self.0.to_big_endian(&mut buf);
+        f.write_fmt(format_args!("{} (hashed: 0x{:064X})", self.0, hash(buf)))
     }
 }
 
@@ -198,17 +143,13 @@ pub fn into_txn_proof_gen_ir(
                 &mut extra_data,
                 &other_data,
             )
-            .context(LocatedError {
-                txn_idx: Some(txn_idx),
-                ..Default::default()
-            })
+            .context(format!("at transaction index {}", txn_idx))
         })
         .collect::<TraceParsingResult<Vec<_>>>()
-        .context(LocatedError {
-            block_num: Some(other_data.b_data.b_meta.block_number),
-            block_chain_id: Some(other_data.b_data.b_meta.block_chain_id),
-            ..Default::default()
-        })?;
+        .context(format!(
+            "at block num {} with chain id {}",
+            other_data.b_data.b_meta.block_number, other_data.b_data.b_meta.block_chain_id
+        ))?;
 
     if !withdrawals.is_empty() {
         add_withdrawals_to_txns(&mut txn_gen_inputs, &mut curr_block_tries, withdrawals)?;
@@ -259,13 +200,11 @@ fn update_beacon_block_root_contract_storage(
         // If we are writing a zero, then we actually need to perform a delete.
         match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
             false => {
-                storage_trie
-                    .insert(slot, val.clone())
-                    .context(LocatedError {
-                        slot: Some(U512::from_big_endian(slot.bytes_be().as_slice())),
-                        slot_value: Some(U512::from_big_endian(val.as_slice())),
-                        ..Default::default()
-                    })?;
+                storage_trie.insert(slot, val.clone()).context(format!(
+                    "at slot {} with value {}",
+                    WithHash(U512::from_big_endian(slot.bytes_be().as_slice())),
+                    U512::from_big_endian(val.as_slice())
+                ))?;
 
                 delta_out
                     .additional_storage_trie_paths_to_not_hash
@@ -305,10 +244,10 @@ fn update_beacon_block_root_contract_storage(
     trie_state
         .state
         .insert(addr_nibbles, updated_account_bytes.to_vec())
-        .context(LocatedError {
-            slot: Some(U512::from_big_endian(addr_nibbles.bytes_be().as_slice())),
-            ..Default::default()
-        })?;
+        .context(format!(
+            "at slot {}",
+            WithHash(U512::from_big_endian(addr_nibbles.bytes_be().as_slice()))
+        ))?;
 
     Ok(())
 }
@@ -401,11 +340,7 @@ fn apply_deltas_to_trie_state(
             .context(format!(
                 "missing account storage trie {:x}",
                 hashed_acc_addr
-            ))
-            .context(LocatedError {
-                h_addr: Some(*hashed_acc_addr),
-                ..Default::default()
-            })?;
+            ))?;
 
         for (slot, val) in storage_writes
             .iter()
@@ -413,13 +348,11 @@ fn apply_deltas_to_trie_state(
         {
             // If we are writing a zero, then we actually need to perform a delete.
             match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
-                false => storage_trie
-                    .insert(slot, val.clone())
-                    .context(LocatedError {
-                        slot: Some(U512::from_big_endian(slot.bytes_be().as_slice())),
-                        slot_value: Some(U512::from_big_endian(val.as_slice())),
-                        ..Default::default()
-                    })?,
+                false => storage_trie.insert(slot, val.clone()).context(format!(
+                    "at slot {} with value {}",
+                    WithHash(U512::from_big_endian(slot.bytes_be().as_slice())),
+                    U512::from_big_endian(val.as_slice())
+                ))?,
                 true => {
                     if let Some(remaining_slot_key) =
                         delete_node_and_report_remaining_key_if_branch_collapsed(
@@ -781,14 +714,6 @@ fn update_val_if_some<T>(target: &mut T, opt: Option<T>) {
     if let Some(new_val) = opt {
         *target = new_val;
     }
-}
-
-fn optional_field<T: std::fmt::Debug>(label: &str, value: Option<T>) -> String {
-    value.map_or(String::new(), |v| format!("{}: {:?}\n", label, v))
-}
-
-fn optional_field_hex<T: std::fmt::UpperHex>(label: &str, value: Option<T>) -> String {
-    value.map_or(String::new(), |v| format!("{}: 0x{:064X}\n", label, v))
 }
 
 fn eth_to_gwei(eth: U256) -> U256 {
