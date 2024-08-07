@@ -612,10 +612,10 @@ impl StateTrieWrites {
             }
         };
 
-        update_val_if_some(&mut state_node.balance, self.balance);
-        update_val_if_some(&mut state_node.nonce, self.nonce);
-        update_val_if_some(&mut state_node.storage_root, storage_root_hash_change);
-        update_val_if_some(&mut state_node.code_hash, self.code_hash);
+        state_node.balance = self.balance.unwrap_or(state_node.balance);
+        state_node.nonce = self.nonce.unwrap_or(state_node.nonce);
+        state_node.storage_root = storage_root_hash_change.unwrap_or(state_node.storage_root);
+        state_node.code_hash = self.code_hash.unwrap_or(state_node.code_hash);
 
         Ok(())
     }
@@ -700,12 +700,6 @@ impl TxnMetaState {
             Some(v) => v.clone(),
             None => Vec::default(),
         }
-    }
-}
-
-fn update_val_if_some<T>(target: &mut T, opt: Option<T>) {
-    if let Some(new_val) = opt {
-        *target = new_val;
     }
 }
 
