@@ -12,9 +12,22 @@ use zero_bin_common::version;
 mod cli;
 mod init;
 
+const EVM_ARITHMETIZATION_PKG_VER: &str = "EVM_ARITHMETIZATION_PKG_VER";
+
 fn main() -> Result<()> {
     dotenv().ok();
     init::tracing();
+
+    if env::var_os(EVM_ARITHMETIZATION_PKG_VER).is_none() {
+        // Safety:
+        // - we're early enough in main that nothing else should race
+        unsafe {
+            env::set_var(
+                EVM_ARITHMETIZATION_PKG_VER,
+                env!("EVM_ARITHMETIZATION_PKG_VER"),
+            );
+        }
+    }
 
     let args: Vec<String> = env::args().collect();
     if args.contains(&"--version".to_string()) {
