@@ -7,7 +7,6 @@ use evm_arithmetization::{
     proof::{BlockMetadata, ExtraBlockData, TrieRoots},
     testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH},
 };
-use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
@@ -471,7 +470,7 @@ fn process_txn_info(
     extra_data: &mut ExtraBlockData,
     other_data: &OtherBlockData,
 ) -> anyhow::Result<GenerationInputs> {
-    trace!("Generating proof IR for txn {}...", txn_idx);
+    log::trace!("Generating proof IR for txn {}...", txn_idx);
 
     init_any_needed_empty_storage_tries(
         &mut curr_block_tries.storage,
@@ -618,7 +617,7 @@ fn create_minimal_storage_partial_tries<'a>(
 
             Ok((*h_addr, partial_storage_trie))
         })
-        .collect::<anyhow::Result<_>>()
+        .collect()
 }
 
 fn create_trie_subset_wrapped(
