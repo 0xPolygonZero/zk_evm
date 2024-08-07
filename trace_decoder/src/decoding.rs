@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fmt::{self, Display, Formatter},
+    fmt::{self, Formatter},
     iter::once,
 };
 
@@ -35,7 +35,7 @@ pub type TraceParsingResult<T> = anyhow::Result<T>;
 // This is just `rlp(0)`.
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
-/// Formatting aid for error context
+/// Formatting aid for error context.
 struct WithHash(U512);
 
 impl fmt::Display for WithHash {
@@ -46,28 +46,15 @@ impl fmt::Display for WithHash {
     }
 }
 
-/// An enum to cover all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
-#[derive(Debug)]
+/// Aid for error context.
+/// Covers all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
+#[derive(Debug, strum::Display)]
+#[allow(missing_docs)]
 pub enum TrieType {
-    /// State trie.
     State,
-    /// Storage trie.
     Storage,
-    /// Receipt trie.
     Receipt,
-    /// Transaction trie.
     Txn,
-}
-
-impl Display for TrieType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            TrieType::State => write!(f, "state"),
-            TrieType::Storage => write!(f, "storage"),
-            TrieType::Receipt => write!(f, "receipt"),
-            TrieType::Txn => write!(f, "transaction"),
-        }
-    }
 }
 
 /// The current state of all tries as we process txn deltas. These are mutated
