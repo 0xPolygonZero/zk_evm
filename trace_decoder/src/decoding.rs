@@ -4,19 +4,20 @@ use std::{
     iter::once,
 };
 
+use anyhow::Context as _;
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
 use evm_arithmetization::{
     generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
     proof::{BlockMetadata, ExtraBlockData, TrieRoots},
     testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH},
 };
+use itertools::{Itertools, Position};
 use log::trace;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
     trie_ops::{TrieOpError, TrieOpResult},
-    trie_subsets::{create_trie_subset, SubsetTrieError},
     utils::{IntoTrieKey, TriePath},
 };
 use thiserror::Error;
@@ -31,7 +32,7 @@ use crate::{
 
 /// Stores the result of parsing tries. Returns a [TraceParsingError] upon
 /// failure.
-pub type TraceParsingResult<T> = Result<T, Box<TraceParsingError>>;
+pub type TraceParsingResult<T> = anyhow::Result<T>;
 
 const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
     248, 68, 128, 128, 160, 86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248,
@@ -43,15 +44,10 @@ const EMPTY_ACCOUNT_BYTES_RLPED: [u8; 70] = [
 // This is just `rlp(0)`.
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
-/// Represents errors that can occur during the processing of a block trace.
-///
-/// This struct is intended to encapsulate various kinds of errors that might
-/// arise when parsing, validating, or otherwise processing the trace data of
-/// blockchain blocks. It could include issues like malformed trace data,
-/// inconsistencies found during processing, or any other condition that
-/// prevents successful completion of the trace processing task.
-#[derive(Debug)]
-pub struct TraceParsingError {
+// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+//                replace this with tracing-error
+#[derive(Default, Debug)]
+struct LocatedError {
     block_num: Option<U256>,
     block_chain_id: Option<U256>,
     txn_idx: Option<usize>,
@@ -59,123 +55,59 @@ pub struct TraceParsingError {
     h_addr: Option<H256>,
     slot: Option<U512>,
     slot_value: Option<U512>,
-    reason: TraceParsingErrorReason, // The original error type
 }
 
-impl std::fmt::Display for TraceParsingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let h_slot = self.slot.map(|slot| {
+impl fmt::Display for LocatedError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn cast(it: &Option<impl Display>) -> Option<&dyn Display> {
+            it.as_ref().map(|it| it as _)
+        }
+        let Self {
+            block_num,
+            block_chain_id,
+            txn_idx,
+            addr,
+            h_addr,
+            slot,
+            slot_value,
+        } = self;
+        let h_slot = slot.map(|slot| {
             let mut buf = [0u8; 64];
             slot.to_big_endian(&mut buf);
-            hash(buf)
+            format!("0x{:064X}", hash(buf))
         });
-        write!(
-            f,
-            "Error processing trace: {}\n{}{}{}{}{}{}{}{}",
-            self.reason,
-            optional_field("Block num", self.block_num),
-            optional_field("Block chain id", self.block_chain_id),
-            optional_field("Txn idx", self.txn_idx),
-            optional_field("Address", self.addr.as_ref()),
-            optional_field("Hashed address", self.h_addr.as_ref()),
-            optional_field_hex("Slot", self.slot),
-            optional_field("Hashed Slot", h_slot),
-            optional_field_hex("Slot value", self.slot_value),
-        )
-    }
-}
-
-impl std::error::Error for TraceParsingError {}
-
-impl TraceParsingError {
-    /// Function to create a new TraceParsingError with mandatory fields
-    const fn new(reason: TraceParsingErrorReason) -> Self {
-        Self {
-            block_num: None,
-            block_chain_id: None,
-            txn_idx: None,
-            addr: None,
-            h_addr: None,
-            slot: None,
-            slot_value: None,
-            reason,
+        let slot_value = slot_value.map(|it| format!("0x{:064X}", it));
+        let mut labels = [
+            ("block num", cast(block_num)),
+            ("chain id", cast(block_chain_id)),
+            ("txn idx", cast(txn_idx)),
+            ("address", cast(addr)),
+            ("hashed address", cast(h_addr)),
+            ("hashed slot", cast(slot)),
+            ("slot", cast(&h_slot)),
+            ("slot value", cast(&slot_value)),
+        ]
+        .into_iter()
+        .filter_map(|(label, val)| Some((label, val?)))
+        .with_position()
+        .peekable();
+        match labels.peek().is_some() {
+            true => {
+                f.write_str("at ")?;
+                for (pos, (label, val)) in labels {
+                    f.write_fmt(format_args!("{}: {}", label, val))?;
+                    if matches!(pos, Position::First | Position::Middle) {
+                        f.write_str("; ")?;
+                    }
+                }
+            }
+            // this is only reachable if someone write `LocatedError::default()`
+            false => f.write_str("<error with no location information>")?,
         }
-    }
-
-    /// Builder method to set block_num
-    fn block_num(&mut self, block_num: U256) -> &mut Self {
-        self.block_num = Some(block_num);
-        self
-    }
-
-    /// Builder method to set block_chain_id
-    fn block_chain_id(&mut self, block_chain_id: U256) -> &mut Self {
-        self.block_chain_id = Some(block_chain_id);
-        self
-    }
-
-    /// Builder method to set txn_idx
-    pub fn txn_idx(&mut self, txn_idx: usize) -> &mut Self {
-        self.txn_idx = Some(txn_idx);
-        self
-    }
-
-    /// Builder method to set addr
-    pub fn addr(&mut self, addr: Address) -> &mut Self {
-        self.addr = Some(addr);
-        self
-    }
-
-    /// Builder method to set h_addr
-    pub fn h_addr(&mut self, h_addr: H256) -> &mut Self {
-        self.h_addr = Some(h_addr);
-        self
-    }
-
-    /// Builder method to set slot
-    pub fn slot(&mut self, slot: U512) -> &mut Self {
-        self.slot = Some(slot);
-        self
-    }
-
-    /// Builder method to set slot_value
-    pub fn slot_value(&mut self, slot_value: U512) -> &mut Self {
-        self.slot_value = Some(slot_value);
-        self
+        Ok(())
     }
 }
 
-/// An error reason for trie parsing.
-#[derive(Debug, Error)]
-pub enum TraceParsingErrorReason {
-    /// Failure to decode an Ethereum Account.
-    #[error("Failed to decode RLP bytes ({0}) as an Ethereum account due to the error: {1}")]
-    AccountDecode(String, String),
-
-    /// Failure due to trying to access or delete a storage trie missing
-    /// from the base trie.
-    #[error("Missing account storage trie in base trie when constructing subset partial trie for txn (account: {0:x})")]
-    MissingAccountStorageTrie(H256),
-
-    /// Failure due to missing keys when creating a sub-partial trie.
-    #[error("Missing key {0:x} when creating sub-partial tries (Trie type: {1})")]
-    MissingKeysCreatingSubPartialTrie(Nibbles, TrieType),
-
-    /// Failure due to trying to withdraw from a missing account
-    #[error("No account present at {0:x} (hashed: {1:x}) to withdraw {2} Gwei from!")]
-    MissingWithdrawalAccount(Address, H256, U256),
-
-    /// Failure due to a trie operation error.
-    #[error("Trie operation error: {0}")]
-    TrieOpError(TrieOpError),
-}
-
-impl From<TrieOpError> for TraceParsingError {
-    fn from(err: TrieOpError) -> Self {
-        // Convert TrieOpError into TraceParsingError
-        TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err))
-    }
-}
 /// An enum to cover all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
 #[derive(Debug)]
 pub enum TrieType {
@@ -266,16 +198,16 @@ pub fn into_txn_proof_gen_ir(
                 &mut extra_data,
                 &other_data,
             )
-            .map_err(|mut e| {
-                e.txn_idx(txn_idx);
-                e
+            .context(LocatedError {
+                txn_idx: Some(txn_idx),
+                ..Default::default()
             })
         })
         .collect::<TraceParsingResult<Vec<_>>>()
-        .map_err(|mut e| {
-            e.block_num(other_data.b_data.b_meta.block_number);
-            e.block_chain_id(other_data.b_data.b_meta.block_chain_id);
-            e
+        .context(LocatedError {
+            block_num: Some(other_data.b_data.b_meta.block_number),
+            block_chain_id: Some(other_data.b_data.b_meta.block_chain_id),
+            ..Default::default()
         })?;
 
     if !withdrawals.is_empty() {
@@ -309,9 +241,7 @@ fn update_beacon_block_root_contract_storage(
     let storage_trie = trie_state
         .storage
         .get_mut(&ADDRESS)
-        .ok_or(TraceParsingError::new(
-            TraceParsingErrorReason::MissingAccountStorageTrie(ADDRESS),
-        ))?;
+        .context(format!("missing account storage trie {:x}", ADDRESS))?;
 
     let mut slots_nibbles = vec![];
 
@@ -329,12 +259,13 @@ fn update_beacon_block_root_contract_storage(
         // If we are writing a zero, then we actually need to perform a delete.
         match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
             false => {
-                storage_trie.insert(slot, val.clone()).map_err(|err| {
-                    let mut e = TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err));
-                    e.slot(U512::from_big_endian(slot.bytes_be().as_slice()));
-                    e.slot_value(U512::from_big_endian(val.as_slice()));
-                    e
-                })?;
+                storage_trie
+                    .insert(slot, val.clone())
+                    .context(LocatedError {
+                        slot: Some(U512::from_big_endian(slot.bytes_be().as_slice())),
+                        slot_value: Some(U512::from_big_endian(val.as_slice())),
+                        ..Default::default()
+                    })?;
 
                 delta_out
                     .additional_storage_trie_paths_to_not_hash
@@ -362,9 +293,10 @@ fn update_beacon_block_root_contract_storage(
     delta_out
         .additional_state_trie_paths_to_not_hash
         .push(addr_nibbles);
-    let addr_bytes = trie_state.state.get(addr_nibbles).ok_or_else(|| {
-        TraceParsingError::new(TraceParsingErrorReason::MissingAccountStorageTrie(ADDRESS))
-    })?;
+    let addr_bytes = trie_state
+        .state
+        .get(addr_nibbles)
+        .context(format!("missing account storage trie {:x}", ADDRESS))?;
     let mut account = account_from_rlped_bytes(addr_bytes)?;
 
     account.storage_root = storage_trie.hash();
@@ -373,10 +305,9 @@ fn update_beacon_block_root_contract_storage(
     trie_state
         .state
         .insert(addr_nibbles, updated_account_bytes.to_vec())
-        .map_err(|err| {
-            let mut e = TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err));
-            e.slot(U512::from_big_endian(addr_nibbles.bytes_be().as_slice()));
-            e
+        .context(LocatedError {
+            slot: Some(U512::from_big_endian(addr_nibbles.bytes_be().as_slice())),
+            ..Default::default()
         })?;
 
     Ok(())
@@ -464,14 +395,17 @@ fn apply_deltas_to_trie_state(
     let mut out = TrieDeltaApplicationOutput::default();
 
     for (hashed_acc_addr, storage_writes) in deltas.storage_writes.iter() {
-        let storage_trie = trie_state.storage.get_mut(hashed_acc_addr).ok_or_else(|| {
-            let hashed_acc_addr = *hashed_acc_addr;
-            let mut e = TraceParsingError::new(TraceParsingErrorReason::MissingAccountStorageTrie(
-                hashed_acc_addr,
-            ));
-            e.h_addr(hashed_acc_addr);
-            e
-        })?;
+        let storage_trie = trie_state
+            .storage
+            .get_mut(hashed_acc_addr)
+            .context(format!(
+                "missing account storage trie {:x}",
+                hashed_acc_addr
+            ))
+            .context(LocatedError {
+                h_addr: Some(*hashed_acc_addr),
+                ..Default::default()
+            })?;
 
         for (slot, val) in storage_writes
             .iter()
@@ -479,19 +413,19 @@ fn apply_deltas_to_trie_state(
         {
             // If we are writing a zero, then we actually need to perform a delete.
             match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
-                false => storage_trie.insert(slot, val.clone()).map_err(|err| {
-                    let mut e = TraceParsingError::new(TraceParsingErrorReason::TrieOpError(err));
-                    e.slot(U512::from_big_endian(slot.bytes_be().as_slice()));
-                    e.slot_value(U512::from_big_endian(val.as_slice()));
-                    e
-                })?,
+                false => storage_trie
+                    .insert(slot, val.clone())
+                    .context(LocatedError {
+                        slot: Some(U512::from_big_endian(slot.bytes_be().as_slice())),
+                        slot_value: Some(U512::from_big_endian(val.as_slice())),
+                        ..Default::default()
+                    })?,
                 true => {
                     if let Some(remaining_slot_key) =
                         delete_node_and_report_remaining_key_if_branch_collapsed(
                             storage_trie,
                             &slot,
-                        )
-                        .map_err(TraceParsingError::from)?
+                        )?
                     {
                         out.additional_storage_trie_paths_to_not_hash
                             .entry(*hashed_acc_addr)
@@ -523,8 +457,7 @@ fn apply_deltas_to_trie_state(
         let updated_account_bytes = rlp::encode(&account);
         trie_state
             .state
-            .insert(val_k, updated_account_bytes.to_vec())
-            .map_err(TraceParsingError::from)?;
+            .insert(val_k, updated_account_bytes.to_vec())?;
     }
 
     Ok(out)
@@ -638,21 +571,14 @@ fn update_trie_state_from_withdrawals<'a>(
     for (addr, h_addr, amt) in withdrawals {
         let h_addr_nibs = Nibbles::from_h256_be(h_addr);
 
-        let acc_bytes = state.get(h_addr_nibs).ok_or_else(|| {
-            let mut e = TraceParsingError::new(TraceParsingErrorReason::MissingWithdrawalAccount(
-                addr, h_addr, amt,
-            ));
-            e.addr(addr);
-            e.h_addr(h_addr);
-            e
-        })?;
+        let acc_bytes = state.get(h_addr_nibs).context(format!(
+            "No account present at {addr:x} (hashed: {h_addr:x}) to withdraw {amt} Gwei from!"
+        ))?;
         let mut acc_data = account_from_rlped_bytes(acc_bytes)?;
 
         acc_data.balance += amt;
 
-        state
-            .insert(h_addr_nibs, rlp::encode(&acc_data).to_vec())
-            .map_err(TraceParsingError::from)?;
+        state.insert(h_addr_nibs, rlp::encode(&acc_data).to_vec())?;
     }
 
     Ok(())
@@ -690,8 +616,7 @@ fn process_txn_info(
     // do this clone every iteration.
     let tries_at_start_of_txn = curr_block_tries.clone();
 
-    update_txn_and_receipt_tries(curr_block_tries, &txn_info.meta, txn_idx)
-        .map_err(TraceParsingError::from)?;
+    update_txn_and_receipt_tries(curr_block_tries, &txn_info.meta, txn_idx)?;
 
     let mut delta_out = apply_deltas_to_trie_state(curr_block_tries, &txn_info.nodes_used_by_txn)?;
 
@@ -753,14 +678,9 @@ impl StateTrieWrites {
         let storage_root_hash_change = match self.storage_trie_change {
             false => None,
             true => {
-                let storage_trie = acc_storage_tries.get(h_addr).ok_or_else(|| {
-                    let h_addr = *h_addr;
-                    let mut e = TraceParsingError::new(
-                        TraceParsingErrorReason::MissingAccountStorageTrie(h_addr),
-                    );
-                    e.h_addr(h_addr);
-                    e
-                })?;
+                let storage_trie = acc_storage_tries
+                    .get(h_addr)
+                    .context(format!("missing account storage trie {:x}", h_addr))?;
 
                 Some(storage_trie.hash())
             }
@@ -834,23 +754,12 @@ fn create_trie_subset_wrapped(
     accesses: impl Iterator<Item = Nibbles>,
     trie_type: TrieType,
 ) -> TraceParsingResult<HashedPartialTrie> {
-    create_trie_subset(trie, accesses).map_err(|trie_err| {
-        let key = match trie_err {
-            SubsetTrieError::UnexpectedKey(key, _) => key,
-        };
-
-        Box::new(TraceParsingError::new(
-            TraceParsingErrorReason::MissingKeysCreatingSubPartialTrie(key, trie_type),
-        ))
-    })
+    mpt_trie::trie_subsets::create_trie_subset(trie, accesses)
+        .context(format!("missing keys when creating {}", trie_type))
 }
 
 fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {
-    rlp::decode(bytes).map_err(|err| {
-        Box::new(TraceParsingError::new(
-            TraceParsingErrorReason::AccountDecode(hex::encode(bytes), err.to_string()),
-        ))
-    })
+    Ok(rlp::decode(bytes)?)
 }
 
 impl TxnMetaState {
