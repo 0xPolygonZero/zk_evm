@@ -24,31 +24,6 @@ use crate::{
     OtherBlockData, PartialTriePreImages,
 };
 
-// This is just `rlp(0)`.
-const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
-
-/// Formatting aid for error context.
-struct WithHash(U512);
-
-impl fmt::Display for WithHash {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut buf = [0u8; 64];
-        self.0.to_big_endian(&mut buf);
-        f.write_fmt(format_args!("{} (hashed: 0x{:064X})", self.0, hash(buf)))
-    }
-}
-
-/// Aid for error context.
-/// Covers all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
-#[derive(Debug, strum::Display)]
-#[allow(missing_docs)]
-pub enum TrieType {
-    State,
-    Storage,
-    Receipt,
-    Txn,
-}
-
 /// The current state of all tries as we process txn deltas. These are mutated
 /// after every txn we process in the trace.
 #[derive(Clone, Debug, Default)]
@@ -685,4 +660,29 @@ impl TxnMetaState {
 fn eth_to_gwei(eth: U256) -> U256 {
     // 1 ether = 10^9 gwei.
     eth * U256::from(10).pow(9.into())
+}
+
+// This is just `rlp(0)`.
+const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
+
+/// Formatting aid for error context.
+struct WithHash(U512);
+
+impl fmt::Display for WithHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut buf = [0u8; 64];
+        self.0.to_big_endian(&mut buf);
+        f.write_fmt(format_args!("{} (hashed: 0x{:064X})", self.0, hash(buf)))
+    }
+}
+
+/// Aid for error context.
+/// Covers all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
+#[derive(Debug, strum::Display)]
+#[allow(missing_docs)]
+pub enum TrieType {
+    State,
+    Storage,
+    Receipt,
+    Txn,
 }
