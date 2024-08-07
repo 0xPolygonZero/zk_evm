@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    fmt::{self, Formatter},
-    iter::once,
-};
+use std::{collections::HashMap, fmt};
 
 use anyhow::Context as _;
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
@@ -35,7 +31,7 @@ const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 struct WithHash(U512);
 
 impl fmt::Display for WithHash {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut buf = [0u8; 64];
         self.0.to_big_endian(&mut buf);
         f.write_fmt(format_args!("{} (hashed: 0x{:064X})", self.0, hash(buf)))
@@ -284,10 +280,10 @@ fn create_minimal_partial_tries_needed_by_txn(
     let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
 
     let transactions_trie =
-        create_trie_subset_wrapped(&curr_block_tries.txn, once(txn_k), TrieType::Txn)?;
+        create_trie_subset_wrapped(&curr_block_tries.txn, [txn_k], TrieType::Txn)?;
 
     let receipts_trie =
-        create_trie_subset_wrapped(&curr_block_tries.receipt, once(txn_k), TrieType::Receipt)?;
+        create_trie_subset_wrapped(&curr_block_tries.receipt, [txn_k], TrieType::Receipt)?;
 
     let storage_tries = create_minimal_storage_partial_tries(
         &curr_block_tries.storage,
@@ -660,7 +656,7 @@ fn create_minimal_storage_partial_tries<'a>(
 
 fn create_trie_subset_wrapped(
     trie: &HashedPartialTrie,
-    accesses: impl Iterator<Item = Nibbles>,
+    accesses: impl IntoIterator<Item = Nibbles>,
     trie_type: TrieType,
 ) -> anyhow::Result<HashedPartialTrie> {
     mpt_trie::trie_subsets::create_trie_subset(trie, accesses)
