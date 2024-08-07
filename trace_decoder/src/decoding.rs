@@ -12,8 +12,7 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, Node, PartialTrie},
     special_query::path_for_query,
-    trie_ops::TrieOpResult,
-    utils::{IntoTrieKey, TriePath},
+    utils::{IntoTrieKey as _, TriePath},
 };
 
 use crate::{
@@ -203,7 +202,7 @@ fn update_txn_and_receipt_tries(
     trie_state: &mut PartialTrieState,
     meta: &TxnMetaState,
     txn_idx: usize,
-) -> TrieOpResult<()> {
+) -> anyhow::Result<()> {
     if meta.is_dummy() {
         // This is a dummy payload, that does not mutate these tries.
         return Ok(());
@@ -212,9 +211,9 @@ fn update_txn_and_receipt_tries(
     let txn_k = Nibbles::from_bytes_be(&rlp::encode(&txn_idx)).unwrap();
     trie_state.txn.insert(txn_k, meta.txn_bytes())?;
 
-    trie_state
+    Ok(trie_state
         .receipt
-        .insert(txn_k, meta.receipt_node_bytes.as_ref())
+        .insert(txn_k, meta.receipt_node_bytes.as_ref())?)
 }
 
 /// If the account does not have a storage trie or does but is not
@@ -352,7 +351,7 @@ fn get_trie_trace(trie: &HashedPartialTrie, k: &Nibbles) -> TriePath {
 fn delete_node_and_report_remaining_key_if_branch_collapsed(
     trie: &mut HashedPartialTrie,
     delete_k: &Nibbles,
-) -> TrieOpResult<Option<Nibbles>> {
+) -> anyhow::Result<Option<Nibbles>> {
     let old_trace = get_trie_trace(trie, delete_k);
     trie.delete(*delete_k)?;
     let new_trace = get_trie_trace(trie, delete_k);
@@ -520,7 +519,6 @@ fn process_txn_info(
         delta_out,
     )?;
 
-    let trie_roots_after = calculate_trie_input_hashes(curr_block_tries);
     let gen_inputs = GenerationInputs {
         txn_number_before: extra_data.txn_number_before,
         gas_used_before: extra_data.gas_used_before,
@@ -530,7 +528,11 @@ fn process_txn_info(
                                       * the block (see `[add_withdrawals_to_txns]`
                                       * for more info). */
         tries,
-        trie_roots_after,
+        trie_roots_after: TrieRoots {
+            state_root: curr_block_tries.state.hash(),
+            transactions_root: curr_block_tries.txn.hash(),
+            receipts_root: curr_block_tries.receipt.hash(),
+        },
         checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
         contract_code: txn_info.contract_code_accessed,
         block_metadata: other_data.b_data.b_meta.clone(),
@@ -570,14 +572,6 @@ impl StateTrieWrites {
         state_node.code_hash = self.code_hash.unwrap_or(state_node.code_hash);
 
         Ok(())
-    }
-}
-
-fn calculate_trie_input_hashes(t_inputs: &PartialTrieState) -> TrieRoots {
-    TrieRoots {
-        state_root: t_inputs.state.hash(),
-        transactions_root: t_inputs.txn.hash(),
-        receipts_root: t_inputs.receipt.hash(),
     }
 }
 
