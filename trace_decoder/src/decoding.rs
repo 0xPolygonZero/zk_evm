@@ -28,10 +28,6 @@ use crate::{
     OtherBlockData, PartialTriePreImages,
 };
 
-/// Stores the result of parsing tries. Returns a [TraceParsingError] upon
-/// failure.
-pub type TraceParsingResult<T> = anyhow::Result<T>;
-
 // This is just `rlp(0)`.
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
@@ -83,7 +79,7 @@ pub fn into_txn_proof_gen_ir(
         withdrawals,
     }: ProcessedBlockTrace,
     other_data: OtherBlockData,
-) -> TraceParsingResult<Vec<GenerationInputs>> {
+) -> anyhow::Result<Vec<GenerationInputs>> {
     let mut curr_block_tries = PartialTrieState {
         state: state.as_hashed_partial_trie().clone(),
         storage: storage
@@ -125,7 +121,7 @@ pub fn into_txn_proof_gen_ir(
             )
             .context(format!("at transaction index {}", txn_idx))
         })
-        .collect::<TraceParsingResult<Vec<_>>>()
+        .collect::<anyhow::Result<Vec<_>>>()
         .context(format!(
             "at block num {} with chain id {}",
             other_data.b_data.b_meta.block_number, other_data.b_data.b_meta.block_chain_id
@@ -146,7 +142,7 @@ fn update_beacon_block_root_contract_storage(
     delta_out: &mut TrieDeltaApplicationOutput,
     nodes_used: &mut NodesUsedByTxn,
     block_data: &BlockMetadata,
-) -> TraceParsingResult<()> {
+) -> anyhow::Result<()> {
     const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
     const ADDRESS: H256 = H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED);
 
@@ -276,7 +272,7 @@ fn create_minimal_partial_tries_needed_by_txn(
     txn_idx: usize,
     delta_application_out: TrieDeltaApplicationOutput,
     _coin_base_addr: &Address,
-) -> TraceParsingResult<TrieInputs> {
+) -> anyhow::Result<TrieInputs> {
     let state_trie = create_minimal_state_partial_trie(
         &curr_block_tries.state,
         nodes_used_by_txn.state_accesses.iter().cloned(),
@@ -310,7 +306,7 @@ fn create_minimal_partial_tries_needed_by_txn(
 fn apply_deltas_to_trie_state(
     trie_state: &mut PartialTrieState,
     deltas: &NodesUsedByTxn,
-) -> TraceParsingResult<TrieDeltaApplicationOutput> {
+) -> anyhow::Result<TrieDeltaApplicationOutput> {
     let mut out = TrieDeltaApplicationOutput::default();
 
     for (hashed_acc_addr, storage_writes) in deltas.storage_writes.iter() {
@@ -426,7 +422,7 @@ fn add_withdrawals_to_txns(
     txn_ir: &mut [GenerationInputs],
     final_trie_state: &mut PartialTrieState,
     mut withdrawals: Vec<(Address, U256)>,
-) -> TraceParsingResult<()> {
+) -> anyhow::Result<()> {
     // Scale withdrawals amounts.
     for (_addr, amt) in withdrawals.iter_mut() {
         *amt = eth_to_gwei(*amt)
@@ -480,7 +476,7 @@ fn add_withdrawals_to_txns(
 fn update_trie_state_from_withdrawals<'a>(
     withdrawals: impl IntoIterator<Item = (Address, H256, U256)> + 'a,
     state: &mut HashedPartialTrie,
-) -> TraceParsingResult<()> {
+) -> anyhow::Result<()> {
     for (addr, h_addr, amt) in withdrawals {
         let h_addr_nibs = Nibbles::from_h256_be(h_addr);
 
@@ -505,7 +501,7 @@ fn process_txn_info(
     curr_block_tries: &mut PartialTrieState,
     extra_data: &mut ExtraBlockData,
     other_data: &OtherBlockData,
-) -> TraceParsingResult<GenerationInputs> {
+) -> anyhow::Result<GenerationInputs> {
     trace!("Generating proof IR for txn {}...", txn_idx);
 
     init_any_needed_empty_storage_tries(
@@ -587,7 +583,7 @@ impl StateTrieWrites {
         state_node: &mut AccountRlp,
         h_addr: &H256,
         acc_storage_tries: &HashMap<H256, HashedPartialTrie>,
-    ) -> TraceParsingResult<()> {
+    ) -> anyhow::Result<()> {
         let storage_root_hash_change = match self.storage_trie_change {
             false => None,
             true => {
@@ -620,7 +616,7 @@ fn create_minimal_state_partial_trie(
     state_trie: &HashedPartialTrie,
     state_accesses: impl Iterator<Item = H256>,
     additional_state_trie_paths_to_not_hash: impl Iterator<Item = Nibbles>,
-) -> TraceParsingResult<HashedPartialTrie> {
+) -> anyhow::Result<HashedPartialTrie> {
     create_trie_subset_wrapped(
         state_trie,
         state_accesses
@@ -637,7 +633,7 @@ fn create_minimal_storage_partial_tries<'a>(
     storage_tries: &HashMap<H256, HashedPartialTrie>,
     accesses_per_account: impl Iterator<Item = &'a (H256, Vec<Nibbles>)>,
     additional_storage_trie_paths_to_not_hash: &HashMap<H256, Vec<Nibbles>>,
-) -> TraceParsingResult<Vec<(H256, HashedPartialTrie)>> {
+) -> anyhow::Result<Vec<(H256, HashedPartialTrie)>> {
     accesses_per_account
         .map(|(h_addr, mem_accesses)| {
             // Guaranteed to exist due to calling `init_any_needed_empty_storage_tries`
@@ -659,19 +655,19 @@ fn create_minimal_storage_partial_tries<'a>(
 
             Ok((*h_addr, partial_storage_trie))
         })
-        .collect::<TraceParsingResult<_>>()
+        .collect::<anyhow::Result<_>>()
 }
 
 fn create_trie_subset_wrapped(
     trie: &HashedPartialTrie,
     accesses: impl Iterator<Item = Nibbles>,
     trie_type: TrieType,
-) -> TraceParsingResult<HashedPartialTrie> {
+) -> anyhow::Result<HashedPartialTrie> {
     mpt_trie::trie_subsets::create_trie_subset(trie, accesses)
         .context(format!("missing keys when creating {}", trie_type))
 }
 
-fn account_from_rlped_bytes(bytes: &[u8]) -> TraceParsingResult<AccountRlp> {
+fn account_from_rlped_bytes(bytes: &[u8]) -> anyhow::Result<AccountRlp> {
     Ok(rlp::decode(bytes)?)
 }
 
