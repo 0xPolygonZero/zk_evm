@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+// use hex::ToHex;
 use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
@@ -10,6 +11,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use prover_input::JumpDestTableWitness;
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use GlobalMetadata::{
@@ -78,6 +80,9 @@ pub struct GenerationInputs {
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
     pub block_hashes: BlockHashes,
+
+    /// A jumptable describing each JUMPDEST reached(jumped to?).
+    pub jumpdest_table: JumpDestTableWitness,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -237,6 +242,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     timing: &mut TimingTree,
 ) -> anyhow::Result<([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues)> {
     debug_inputs(&inputs);
+    // TODO
     let mut state = GenerationState::<F>::new(inputs.clone(), &KERNEL.code)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
 

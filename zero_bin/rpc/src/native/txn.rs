@@ -1,30 +1,39 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::OnceLock,
+};
 
 use __compat_primitive_types::{H256, U256};
 use alloy::{
-    primitives::{keccak256, Address, B256},
+    primitives::{keccak256, Address, B256, U160},
     providers::{
         ext::DebugApi as _,
         network::{eip2718::Encodable2718, Ethereum, Network},
         Provider,
     },
     rpc::types::{
-        eth::Transaction,
-        eth::{AccessList, Block},
+        eth::{AccessList, Block, Transaction},
         trace::geth::{
-            AccountState, DiffMode, GethDebugBuiltInTracerType, GethTrace, PreStateConfig,
+            AccountState, DefaultFrame, DiffMode, GethDebugBuiltInTracerType, GethDebugTracerType,
+            GethDebugTracingOptions, GethDefaultTracingOptions, GethTrace, PreStateConfig,
             PreStateFrame, PreStateMode,
         },
-        trace::geth::{GethDebugTracerType, GethDebugTracingOptions},
     },
     transports::Transport,
 };
 use anyhow::Context as _;
+use evm_arithmetization::{CodeDb, JumpDestTableWitness};
 use futures::stream::{FuturesOrdered, TryStreamExt};
 use trace_decoder::{ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace};
 
-use super::CodeDb;
 use crate::Compat;
+
+/// Provides a way to check in constant time if an address points to a precompile.
+fn precompiles() -> &'static HashSet<Address> {
+    static PRECOMPILES: OnceLock<HashSet<Address>> = OnceLock::new();
+    PRECOMPILES
+        .get_or_init(|| HashSet::<Address>::from_iter((0..9).map(|x| Address::from(U160::from(x)))))
+}
 
 /// Processes the transactions in the given block and updates the code db.
 pub(super) async fn process_transactions<ProviderT, TransportT>(
@@ -63,16 +72,11 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    let (tx_receipt, pre_trace, diff_trace) = fetch_tx_data(provider, &tx.hash).await?;
+    let (tx_receipt, pre_trace, diff_trace, structlog_trace) =
+        fetch_tx_data(provider, &tx.hash).await?;
+
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
-
-    let tx_meta = TxnMeta {
-        byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
-        new_txn_trie_node_byte: vec![],
-        new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
-        gas_used: tx_receipt.gas_used as u64,
-    };
 
     let (code_db, tx_traces) = match (pre_trace, diff_trace) {
         (
@@ -80,6 +84,21 @@ where
             GethTrace::PreStateTracer(PreStateFrame::Diff(diff)),
         ) => process_tx_traces(access_list, read, diff).await?,
         _ => unreachable!(),
+    };
+
+    let jumpdest_table: JumpDestTableWitness =
+        if let GethTrace::Default(structlog_frame) = structlog_trace {
+            generate_jumpdest_table(tx, &structlog_frame, &tx_traces).await?
+        } else {
+            unreachable!()
+        };
+
+    let tx_meta = TxnMeta {
+        byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
+        new_txn_trie_node_byte: vec![],
+        new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
+        gas_used: tx_receipt.gas_used as u64,
+        jumpdest_table,
     };
 
     Ok((
@@ -98,7 +117,15 @@ where
 async fn fetch_tx_data<ProviderT, TransportT>(
     provider: &ProviderT,
     tx_hash: &B256,
-) -> anyhow::Result<(<Ethereum as Network>::ReceiptResponse, GethTrace, GethTrace), anyhow::Error>
+) -> anyhow::Result<
+    (
+        <Ethereum as Network>::ReceiptResponse,
+        GethTrace,
+        GethTrace,
+        GethTrace,
+    ),
+    anyhow::Error,
+>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
@@ -106,14 +133,21 @@ where
     let tx_receipt_fut = provider.get_transaction_receipt(*tx_hash);
     let pre_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(false));
     let diff_trace_fut = provider.debug_trace_transaction(*tx_hash, prestate_tracing_options(true));
+    let structlog_trace_fut =
+        provider.debug_trace_transaction(*tx_hash, structlog_tracing_options());
 
-    let (tx_receipt, pre_trace, diff_trace) =
-        futures::try_join!(tx_receipt_fut, pre_trace_fut, diff_trace_fut,)?;
+    let (tx_receipt, pre_trace, diff_trace, structlog_trace) = futures::try_join!(
+        tx_receipt_fut,
+        pre_trace_fut,
+        diff_trace_fut,
+        structlog_trace_fut
+    )?;
 
     Ok((
         tx_receipt.context("Transaction receipt not found.")?,
         pre_trace,
         diff_trace,
+        structlog_trace,
     ))
 }
 
@@ -163,6 +197,7 @@ async fn process_tx_traces(
 
         let balance = post_state.and_then(|x| x.balance.map(Compat::compat));
         let (storage_read, storage_written) = process_storage(
+            // Q: doesn't this remove the address from warm addresses?
             access_list.remove(&address).unwrap_or_default(),
             read_state,
             post_state,
@@ -181,7 +216,6 @@ async fn process_tx_traces(
 
         traces.insert(address, result);
     }
-
     Ok((code_db, traces))
 }
 
@@ -268,7 +302,6 @@ async fn process_code(
         (_, Some(read_code)) => {
             let code_hash = keccak256(read_code).compat();
             code_db.insert(code_hash, read_code.to_vec());
-
             Some(ContractCodeUsage::Read(code_hash))
         }
         _ => None,
@@ -325,4 +358,112 @@ fn prestate_tracing_options(diff_mode: bool) -> GethDebugTracingOptions {
         )),
         ..GethDebugTracingOptions::default()
     }
+}
+
+/// Tracing options for the debug_traceTransaction call used for filling
+/// JumpDest tables.
+fn structlog_tracing_options() -> GethDebugTracingOptions {
+    GethDebugTracingOptions {
+        config: GethDefaultTracingOptions {
+            disable_stack: Some(false),
+            disable_memory: Some(true),
+            disable_storage: Some(true),
+            ..GethDefaultTracingOptions::default()
+        },
+        tracer: None,
+        ..GethDebugTracingOptions::default()
+    }
+}
+
+async fn generate_jumpdest_table(
+    tx: &Transaction,
+    structlog_trace: &DefaultFrame,
+    tx_traces: &HashMap<Address, TxnTrace>,
+) -> anyhow::Result<JumpDestTableWitness> {
+    let mut jumpdest_table = JumpDestTableWitness::default();
+
+    if structlog_trace.struct_logs.is_empty() {
+        return Ok(jumpdest_table);
+    };
+
+    let callee_addr_to_code_hash: HashMap<Address, H256> = tx_traces
+        .iter()
+        .map(|(callee_addr, trace)| (callee_addr, &trace.code_usage))
+        .filter(|(_callee_addr, code_usage)| code_usage.is_some())
+        .map(|(callee_addr, code_usage)| {
+            (*callee_addr, code_usage.as_ref().unwrap().get_code_hash())
+        })
+        .collect();
+
+    let to_address: Address = tx
+        .to
+        .unwrap_or_else(|| panic!("No `to`-address for tx: {}.", tx.hash));
+
+    // Guard against transactions to a non-contract address.
+    if !callee_addr_to_code_hash.contains_key(&to_address) {
+        return Ok(jumpdest_table);
+    }
+    let entrypoint_code_hash: H256 = callee_addr_to_code_hash[&to_address];
+
+    // The next available context. Starts at 1. Never decrements.
+    let mut next_ctx_available = 1;
+    // Immediately use context 1;
+    let mut call_stack = vec![(entrypoint_code_hash, next_ctx_available)];
+    next_ctx_available += 1;
+
+    for entry in structlog_trace.struct_logs.iter() {
+        debug_assert!(entry.depth as usize <= next_ctx_available);
+        log::debug!("{}", entry.op.as_str());
+        match entry.op.as_str() {
+            "CALL" | "CALLCODE" | "DELEGATECALL" | "STATICCALL" => {
+                let callee_address = {
+                    // This is the same stack index (i.e. 2nd) for all four opcodes.  See https://ethervm.io/#F1
+                    let callee_raw = *entry
+                        .stack
+                        .as_ref()
+                        .expect("No stack found in structLog.")
+                        .iter()
+                        .rev()
+                        .nth(1)
+                        .expect("Stack must contain at least two values for a CALL instruction.");
+                    let lower_bytes = U160::from(callee_raw);
+                    Address::from(lower_bytes)
+                };
+
+                if precompiles().contains(&callee_address) {
+                    log::debug!("PRECOMPILE at address {} called.", &callee_address);
+                } else if callee_addr_to_code_hash.contains_key(&callee_address) {
+                    let code_hash = callee_addr_to_code_hash[&callee_address];
+                    call_stack.push((code_hash, next_ctx_available));
+                } else {
+                    log::debug!(
+                        "Callee address {} has no associated `code_hash`.  Please verify that this is not an EOA.",
+                        &callee_address
+                    );
+                }
+                next_ctx_available += 1;
+            }
+            "JUMPDEST" => {
+                let (code_hash, ctx) = call_stack
+                    .last()
+                    .expect("Call stack was empty when a JUMPDEST was encountered.");
+                jumpdest_table
+                    .0
+                    .entry(*code_hash)
+                    .or_default()
+                    .0
+                    .entry(*ctx)
+                    .or_default()
+                    .insert(entry.pc as usize);
+            }
+            "EXTCODECOPY" | "EXTCODESIZE" => {
+                next_ctx_available += 1;
+            }
+            "RETURN" => {
+                call_stack.pop().expect("Call stack was empty at POP.");
+            }
+            _ => (),
+        }
+    }
+    Ok(jumpdest_table)
 }

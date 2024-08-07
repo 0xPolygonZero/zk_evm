@@ -1,6 +1,7 @@
 use core::mem::transmute;
 use core::ops::Neg;
 use std::collections::{BTreeSet, HashMap};
+use std::fmt::Display;
 use std::str::FromStr;
 
 use anyhow::{bail, Error, Result};
@@ -17,7 +18,9 @@ use crate::cpu::kernel::constants::cancun_constants::{
 };
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
+use crate::cpu::kernel::interpreter::{
+    set_jumpdest_analysis_inputs_rpc, simulate_cpu_and_get_user_jumps,
+};
 use crate::curve_pairings::{bls381, CurveAff, CyclicGroup};
 use crate::extension_tower::{FieldExt, Fp12, Fp2, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
 use crate::generation::prover_input::EvmField::{
@@ -33,6 +36,44 @@ use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 use crate::witness::util::{current_context_peek, stack_peek};
+
+pub type CodeDb = HashMap<__compat_primitive_types::H256, Vec<u8>>;
+
+/// Each `CodeAddress` can be called one or more times, each time creating a new
+/// `Context`. Each `Context` may will have zero or more `JumpDests`.
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ContextJumpDests(pub HashMap<usize, BTreeSet<usize>>);
+
+/// Map from `CodeAddress -> (Context -> [JumpDests])`
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
+pub struct JumpDestTableWitness(pub HashMap<H256, ContextJumpDests>);
+
+#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize, Default)]
+pub struct JumpDestTableProcessed(pub HashMap<usize, Vec<usize>>);
+
+impl Display for JumpDestTableWitness {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "=== JumpDest table ===")?;
+
+        for (code, ctxtbls) in &self.0 {
+            write!(f, "codehash: {:?}\n{}", code, ctxtbls)?;
+        }
+        Ok(())
+    }
+}
+
+impl Display for ContextJumpDests {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (ctx, offsets) in &self.0 {
+            write!(f, "      ctx: {}, offsets: [", ctx)?;
+            for offset in offsets {
+                write!(f, "{:#10x} ", offset)?;
+            }
+            writeln!(f, "]")?;
+        }
+        Ok(())
+    }
+}
 
 /// Prover input function represented as a scoped function name.
 /// Example: `PROVER_INPUT(ff::bn254_base::inverse)` is represented as
@@ -292,6 +333,7 @@ impl<F: Field> GenerationState<F> {
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
 
+        // This should take care of itself when the table is already filled in..
         if self.jumpdest_table.is_none() {
             self.generate_jumpdest_table()?;
         }
@@ -557,7 +599,54 @@ impl<F: Field> GenerationState<F> {
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {
         // Simulate the user's code and (unnecessarily) part of the kernel code,
         // skipping the validate table call
-        self.jumpdest_table = simulate_cpu_and_get_user_jumps("terminate_common", self);
+
+        // TODO: This function will be pruned for everything not relating to
+        // `jumpdest_table_rpc`. Leaving it as is until test structure is in
+        // place. This is essentially the test property, we want to check:
+        // assert_eq!(&jumpdest_table_sim, &jumpdest_table_rpc);
+        let jumpdest_table_sim = simulate_cpu_and_get_user_jumps("terminate_common", self);
+        log::debug!("SIM JUMPDEST table");
+        log::debug!(
+            "{:?}",
+            &jumpdest_table_sim.as_ref().unwrap().keys().sorted()
+        );
+        log::debug!("{}", &jumpdest_table_sim.as_ref().unwrap().keys().len());
+
+        let jumpdest_table_rpc = {
+            let jumpdest_table = set_jumpdest_analysis_inputs_rpc(
+                &self.inputs.jumpdest_table,
+                &self.inputs.contract_code,
+            );
+            Some(jumpdest_table.0)
+        };
+        log::debug!("RPC JUMPDEST table");
+        log::debug!(
+            "{:?}",
+            &jumpdest_table_rpc.as_ref().unwrap().keys().sorted()
+        );
+        log::debug!("{}", &jumpdest_table_rpc.as_ref().unwrap().keys().len());
+
+        assert_eq!(
+            &jumpdest_table_sim.as_ref().unwrap().keys().len(),
+            &jumpdest_table_rpc.as_ref().unwrap().keys().len()
+        );
+        assert_eq!(
+            jumpdest_table_sim
+                .as_ref()
+                .unwrap()
+                .keys()
+                .sorted()
+                .collect::<Vec<_>>(),
+            jumpdest_table_rpc
+                .as_ref()
+                .unwrap()
+                .keys()
+                .sorted()
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(&jumpdest_table_sim, &jumpdest_table_rpc);
+
+        self.jumpdest_table = jumpdest_table_rpc;
 
         Ok(())
     }
@@ -666,7 +755,7 @@ impl<F: Field> GenerationState<F> {
 /// for which none of the previous 32 bytes in the code (including opcodes
 /// and pushed bytes) is a PUSHXX and the address is in its range. It returns
 /// a vector of even size containing proofs followed by their addresses.
-fn get_proofs_and_jumpdests(
+pub(crate) fn get_proofs_and_jumpdests(
     code: &[u8],
     largest_address: usize,
     jumpdest_table: std::collections::BTreeSet<usize>,
@@ -686,6 +775,7 @@ fn get_proofs_and_jumpdests(
                 false
             };
             let last_proof = if has_prefix { addr - 32 } else { last_proof };
+            // todo
             if jumpdest_table.contains(&addr) {
                 // Push the proof
                 proofs.push(last_proof);

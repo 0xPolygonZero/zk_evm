@@ -15,11 +15,12 @@ homepage.workspace = true
 keywords.workspace = true
 
 [dependencies]
+__compat_primitive_types = { workspace = true }
 anyhow = { workspace = true }
 bytes = { workspace = true }
 env_logger = { workspace = true }
 ethereum-types = { workspace = true }
-hex = { workspace = true, optional = true }
+hex = { workspace = true }
 hex-literal = { workspace = true }
 itertools = { workspace = true }
 keccak-hash = { workspace = true }
@@ -47,6 +48,7 @@ serde_json = { workspace = true }
 # Local dependencies
 mpt_trie = { workspace = true }
 zk_evm_proc_macro = { workspace = true }
+alloy.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -55,7 +57,7 @@ ripemd = { workspace = true }
 
 [features]
 default = ["parallel"]
-asmtools = ["hex"]
+#asmtools = ["hex"]
 parallel = [
   "plonky2/parallel",
   "plonky2_maybe_rayon/parallel",

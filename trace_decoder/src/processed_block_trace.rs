@@ -4,6 +4,7 @@ use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use evm_arithmetization::JumpDestTableWitness;
 use mpt_trie::nibbles::Nibbles;
 
 use crate::hash;
@@ -181,6 +182,7 @@ impl TxnInfo {
             txn_bytes,
             receipt_node_bytes,
             gas_used: self.meta.gas_used,
+            jumpdest_table: self.meta.jumpdest_table,
         };
 
         ProcessedTxnInfo {
@@ -233,4 +235,5 @@ pub(crate) struct TxnMetaState {
     pub(crate) txn_bytes: Option<Vec<u8>>,
     pub(crate) receipt_node_bytes: Vec<u8>,
     pub(crate) gas_used: u64,
+    pub(crate) jumpdest_table: JumpDestTableWitness,
 }

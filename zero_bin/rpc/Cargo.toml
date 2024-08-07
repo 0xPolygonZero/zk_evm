@@ -14,9 +14,11 @@ __compat_primitive_types = { workspace = true }
 alloy.workspace = true
 anyhow = { workspace = true }
 clap = { workspace = true }
+env_logger = { workspace = true }
 evm_arithmetization = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+log = { workspace = true }
 lru = { workspace = true }
 mpt_trie = { workspace = true }
 serde = { workspace = true }

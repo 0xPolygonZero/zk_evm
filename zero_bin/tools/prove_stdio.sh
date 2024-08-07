@@ -37,7 +37,7 @@ export RUST_BACKTRACE=full
 export RUST_LOG=info
 # Script users are running locally, and might benefit from extra perf.
 # See also .cargo/config.toml.
-export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
+export RUSTFLAGS='-C target-cpu=native -Z linker-features=-lld'
 
 INPUT_FILE=$1
 TEST_ONLY=$2
@@ -93,6 +93,7 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
+    echo $RUSTFLAGS
     cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"

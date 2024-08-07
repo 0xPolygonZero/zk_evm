@@ -35,7 +35,7 @@
 //! if we can get this information sent to us instead.
 //!
 //! This library generates an Intermediary Representation (IR) of
-//! a block's transactions, given a [BlockTrace] and some additional
+//! a block's transactions, given a [`BlockTrace`] and some additional
 //! data represented by [OtherBlockData].
 //!
 //! It first preprocesses the [BlockTrace] to provide transaction,
@@ -98,7 +98,7 @@ use std::collections::HashMap;
 
 use ethereum_types::{Address, U256};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
-use evm_arithmetization::GenerationInputs;
+use evm_arithmetization::{GenerationInputs, JumpDestTableWitness};
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
@@ -126,6 +126,7 @@ pub struct BlockTrace {
     /// Traces and other info per transaction. The index of the transaction
     /// within the block corresponds to the slot in this vec.
     pub txn_info: Vec<TxnInfo>,
+
 }
 
 /// Minimal hashed out tries needed by all txns in the block.
@@ -209,6 +210,10 @@ pub struct TxnMeta {
 
     /// Gas used by this txn (Note: not cumulative gas used).
     pub gas_used: u64,
+
+    /// JumpDest table
+    //#[serde(with = "crate::hex")]
+    pub jumpdest_table: JumpDestTableWitness,
 }
 
 /// A "trace" specific to an account for a txn.
@@ -257,7 +262,8 @@ pub enum ContractCodeUsage {
 }
 
 impl ContractCodeUsage {
-    fn get_code_hash(&self) -> H256 {
+    /// Get code hash from a read or write operation of contract code.
+    pub fn get_code_hash(&self) -> H256 {
         match self {
             ContractCodeUsage::Read(hash) => *hash,
             ContractCodeUsage::Write(bytes) => hash(bytes),

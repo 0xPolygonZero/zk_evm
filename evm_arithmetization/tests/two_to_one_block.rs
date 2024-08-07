@@ -194,6 +194,7 @@ fn get_test_block_proof(
         contract_code: Default::default(),
         block_metadata: inputs.block_metadata.clone(),
         block_hashes: inputs.block_hashes.clone(),
+        jumpdest_table: Default::default(),
     };
 
     let timing = &mut TimingTree::new(&format!("Blockproof {timestamp}"), log::Level::Info);

@@ -746,6 +746,7 @@ impl ProcessedBlockTrace {
             block_metadata: other_data.b_data.b_meta.clone(),
             block_hashes: other_data.b_data.b_hashes.clone(),
             global_exit_roots: vec![],
+            jumpdest_table: txn_info.meta.jumpdest_table,
         };
 
         // After processing a transaction, we update the remaining accumulators

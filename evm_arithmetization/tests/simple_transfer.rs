@@ -160,6 +160,7 @@ fn test_simple_transfer() -> anyhow::Result<()> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
+        jumpdest_table: Default::default(),
     };
 
     let mut timing = TimingTree::new("prove", log::Level::Debug);

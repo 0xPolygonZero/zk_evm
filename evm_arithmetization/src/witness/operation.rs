@@ -287,6 +287,7 @@ pub(crate) fn generate_set_context<F: Field, T: Transition<F>>(
     let old_ctx = generation_state.registers.context;
     // The popped value needs to be scaled down.
     let new_ctx = u256_to_usize(ctx >> CONTEXT_SCALING_FACTOR)?;
+    eprintln!("ctx: {} -> {}", &old_ctx, &new_ctx);
 
     let sp_field = ContextMetadata::StackSize.unscale();
     let old_sp_addr = MemoryAddress::new(old_ctx, Segment::ContextMetadata, sp_field);

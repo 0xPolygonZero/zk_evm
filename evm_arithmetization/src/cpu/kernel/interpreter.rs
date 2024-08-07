@@ -13,12 +13,17 @@ use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
 
+//use alloy::primitives::Address;
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::debug_inputs;
 use crate::generation::mpt::load_all_mpts;
+use crate::generation::prover_input::{
+    get_proofs_and_jumpdests, CodeDb, ContextJumpDests, JumpDestTableProcessed,
+    JumpDestTableWitness,
+};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
@@ -88,6 +93,51 @@ pub(crate) fn simulate_cpu_and_get_user_jumps<F: Field>(
             interpreter.generation_state.jumpdest_table
         }
     }
+}
+
+/// Computes the JUMPDEST proofs for each context.
+///
+/// # Arguments
+///
+/// - `jumpdest_table_rpc`:  The raw table received from RPC.
+/// - `code_db`: The corresponding database of contract code used in the trace.
+pub(crate) fn set_jumpdest_analysis_inputs_rpc(
+    jumpdest_table_rpc: &JumpDestTableWitness,
+    code_db: &CodeDb,
+) -> JumpDestTableProcessed {
+    let ctx_proofs = jumpdest_table_rpc
+        .0
+        .iter()
+        .flat_map(|(code_addr, ctx_jumpdests)| {
+            prove_context_jumpdests(&code_db[code_addr], ctx_jumpdests)
+        })
+        .collect();
+    JumpDestTableProcessed(ctx_proofs)
+}
+
+/// Orchestrates the proving of all contexts in a specific bytecode.
+///
+/// # Arguments
+///
+/// - `ctx_jumpdests`: Map from `ctx` to its list of offsets to reached
+///   `JUMPDEST`s.
+/// - `code`: The bytecode for the contexts.  This is the same for all contexts.
+fn prove_context_jumpdests(
+    code: &[u8],
+    ctx_jumpdests: &ContextJumpDests,
+) -> HashMap<usize, Vec<usize>> {
+    ctx_jumpdests
+        .0
+        .iter()
+        .map(|(&ctx, jumpdests)| {
+            let proofs = jumpdests
+                .last()
+                .map_or(Vec::default(), |&largest_address| {
+                    get_proofs_and_jumpdests(code, largest_address, jumpdests.clone())
+                });
+            (ctx, proofs)
+        })
+        .collect()
 }
 
 impl<F: Field> Interpreter<F> {
@@ -362,6 +412,8 @@ impl<F: Field> Interpreter<F> {
     }
 
     pub(crate) fn add_jumpdest_offset(&mut self, offset: usize) {
+        // println!("SIM: ({:?}, {:?})", &self.generation_state.registers.context,
+        // offset);
         if let Some(jumpdest_table) = self
             .jumpdest_table
             .get_mut(&self.generation_state.registers.context)
@@ -506,7 +558,7 @@ impl<F: Field> State<F> for Interpreter<F> {
         let registers = self.generation_state.registers;
         let (mut row, opcode) = self.base_row();
 
-        let op = decode(registers, opcode)?;
+        let op: Operation = decode(registers, opcode)?;
 
         fill_op_flag(op, &mut row);
 

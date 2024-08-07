@@ -298,6 +298,8 @@ pub(crate) struct GenerationState<F: Field> {
     /// Pointers, within the `TrieData` segment, of the three MPTs.
     pub(crate) trie_root_ptrs: TrieRootPtrs,
 
+    //pub(crate) jumpdest_table_rpc: HashMap<usize, BTreeSet<usize>>,
+
     /// A hash map where the key is a context in the user's code and the value
     /// is the set of jump destinations with its corresponding "proof". A
     /// "proof" for a jump destination is either 0 or an address i > 32 in
@@ -338,6 +340,7 @@ impl<F: Field> GenerationState<F> {
                 txn_root_ptr: 0,
                 receipt_root_ptr: 0,
             },
+            // TODO
             jumpdest_table: None,
         };
         let trie_root_ptrs = state.preinitialize_mpts(&inputs.tries);

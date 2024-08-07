@@ -1,4 +1,4 @@
 [build]
 # https://github.com/rust-lang/rust/pull/124129
 # https://github.com/dtolnay/linkme/pull/88
-rustflags = ["-Z", "linker-features=-lld"]
+rustflags = ["-C", "target-cpu=native", "-Z", "linker-features=-lld"]
