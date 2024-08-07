@@ -175,7 +175,7 @@ fn test_state_trie(
         storage_tries: vec![],
     };
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
-    let check_state_trie = KERNEL.global_labels["check_state_trie"];
+    let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
 
     let initial_stack = vec![];
     let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
