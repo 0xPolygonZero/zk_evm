@@ -170,7 +170,7 @@ fn update_beacon_block_root_contract_storage(
                         .push(remaining_slot_key);
                 }
             }
-        };
+        }
     }
 
     nodes_used.storage_accesses.push((ADDRESS, slots_nibbles));
@@ -242,7 +242,6 @@ fn create_minimal_partial_tries_needed_by_txn(
     nodes_used_by_txn: &NodesUsedByTxn,
     txn_idx: usize,
     delta_application_out: TrieDeltaApplicationOutput,
-    _coin_base_addr: &Address,
 ) -> anyhow::Result<TrieInputs> {
     let state_trie = create_minimal_state_partial_trie(
         &curr_block_tries.state,
@@ -519,7 +518,6 @@ fn process_txn_info(
         &nodes_used_by_txn,
         txn_idx,
         delta_out,
-        &other_data.b_data.b_meta.block_beneficiary,
     )?;
 
     let trie_roots_after = calculate_trie_input_hashes(curr_block_tries);
