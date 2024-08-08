@@ -532,10 +532,19 @@ impl ProcessedBlockTrace {
             )?;
 
             let updated_account_bytes = rlp::encode(&account);
-            trie_state
-                .state
-                .insert(val_k, updated_account_bytes.to_vec())
-                .map_err(TraceParsingError::from)?;
+            if *updated_account_bytes == EMPTY_ACCOUNT_BYTES_RLPED {
+                // If the account is still empty, this means we reverted its creation.
+                // We then need to remove it from the state trie.
+                trie_state
+                    .state
+                    .delete(val_k)
+                    .map_err(TraceParsingError::from)?;
+            } else {
+                trie_state
+                    .state
+                    .insert(val_k, updated_account_bytes.to_vec())
+                    .map_err(TraceParsingError::from)?;
+            }
         }
 
         Ok(out)
