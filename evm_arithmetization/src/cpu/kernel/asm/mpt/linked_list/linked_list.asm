@@ -879,10 +879,22 @@ remove_all_slots_end:
     %next_account
 %endmacro
 
+%macro first_initial_account
+    // stack: empty
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    %next_initial_account
+%endmacro
+
 %macro next_account
     // stack: node_ptr
     %add_const(@ACCOUNTS_NEXT_NODE_PTR)
     MLOAD_GENERAL
+    // stack: next_node_ptr
+%endmacro
+
+%macro next_initial_account
+    // stack: node_ptr
+    %add_const(@ACCOUNTS_LINKED_LISTS_NODE_SIZE)
     // stack: next_node_ptr
 %endmacro
 
@@ -892,9 +904,27 @@ remove_all_slots_end:
     %next_slot
 %endmacro
 
+%macro first_initial_slot
+    // stack: empty
+    PUSH @SEGMENT_STORAGE_LINKED_LIST
+    %next_initial_slot
+%endmacro
+
 %macro next_slot
     // stack: node_ptr
     %add_const(@STORAGE_NEXT_NODE_PTR)
     MLOAD_GENERAL
     // stack: next_node_ptr
+%endmacro
+
+%macro next_initial_slot
+    // stack: node_ptr
+    %add_const(@STORAGE_LINKED_LISTS_NODE_SIZE)
+    // stack: next_node_ptr
+%endmacro
+
+%macro next_hash_node
+    // stack: hash_node_ptr
+    %add_const(2)
+    // stack: next_hash_node_ptr
 %endmacro
