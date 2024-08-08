@@ -554,7 +554,7 @@ impl ProcessedBlockTrace {
                     ))
                 })?;
 
-                if receipt.status == false {
+                if !receipt.status {
                     // The transaction failed, hence any created account should be removed.
                     trie_state
                         .state
