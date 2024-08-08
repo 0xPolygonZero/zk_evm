@@ -539,6 +539,8 @@ impl ProcessedBlockTrace {
                     .state
                     .delete(val_k)
                     .map_err(TraceParsingError::from)?;
+
+                let _ = trie_state.storage.remove(hashed_acc_addr);
             } else {
                 trie_state
                     .state
