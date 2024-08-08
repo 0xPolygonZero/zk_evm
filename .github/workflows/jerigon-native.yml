@@ -16,8 +16,8 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  test_jerigon_input_proving:
-    name: Test proof generation with jerigon input
+  test_jerigon_native_tracer_proving:
+    name: Native tracer proof generation
     runs-on: zero-ci
     timeout-minutes: 40
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
@@ -72,21 +72,21 @@ jobs:
             cd jerigon-test-network && set -a && source .env && set +a
             bash ./tests/generate_transactions.sh
  
-      - name: Run prove blocks in test_only mode
+      - name: Run prove blocks with native tracer in test_only mode
         run: |
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           cd zero_bin/tools
           ulimit -n 8192
-          OUTPUT_TO_TERMINAL=true ./prove_rpc.sh 0x1 0xf $ETH_RPC_URL jerigon true 3000 100 test_only
+          OUTPUT_TO_TERMINAL=true ./prove_rpc.sh 0x5 0xf $ETH_RPC_URL native true 3000 100 test_only
           echo "Proving blocks in test_only mode finished"
 
 
-      - name: Run prove blocks in real mode
+      - name: Run prove blocks with native tracer in real mode
         run: |
           ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
           cd zero_bin/tools
           rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
-          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./prove_rpc.sh 0x2 0x5 $ETH_RPC_URL jerigon true 3000 100
+          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./prove_rpc.sh 0x5 0x7 $ETH_RPC_URL native true 3000 100
           echo "Proving blocks in real mode finished"
           
       - name: Shut down network

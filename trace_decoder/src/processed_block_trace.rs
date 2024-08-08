@@ -143,13 +143,6 @@ impl TxnInfo {
                     }
                 }
             }
-
-            if trace
-                .self_destructed
-                .map_or(false, |self_destructed| self_destructed)
-            {
-                nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
-            }
         }
 
         for &hashed_addr in extra_state_accesses {
@@ -225,7 +218,6 @@ pub(crate) struct NodesUsedByTxn {
     pub(crate) storage_accesses: Vec<(H256, StorageAccess)>,
     pub(crate) storage_writes: Vec<(H256, StorageWrite)>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
-    pub(crate) self_destructed_accounts: Vec<H256>,
 }
 
 #[derive(Debug)]

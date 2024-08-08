@@ -1,0 +1,98 @@
+name: Jerigon Integration
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches:
+      - "**"
+  workflow_dispatch:
+    branches:
+      - "**"
+
+
+env:
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+
+jobs:
+  test_jerigon_zero_tracer_proving:
+    name: Zero tracer proof generation
+    runs-on: zero-ci
+    timeout-minutes: 40
+    if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Checkout test-jerigon-network sources
+        uses: actions/checkout@v4        
+        with:
+          repository: 0xPolygonZero/jerigon-test-network
+          ref: 'feat/kurtosis-network' 
+          path: jerigon-test-network
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+  
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3        
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}        
+
+      - name: Set up rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install kurtosis
+        run: |
+          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+          sudo apt update
+          sudo apt install kurtosis-cli
+
+      #It is much easier to use cast tool in scripts so install foundry
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1          
+
+      - name: Run cancun test network
+        run: |
+          docker pull ghcr.io/0xpolygonzero/erigon:feat-zero
+          kurtosis run --enclave cancun-testnet github.com/ethpandaops/ethereum-package@4.0.0 --args-file jerigon-test-network/network_params.yml  
+
+      - name: Generate blocks with transactions
+        run: |
+            ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
+            cast rpc eth_blockNumber --rpc-url $ETH_RPC_URL
+            cd jerigon-test-network && set -a && source .env && set +a
+            bash ./tests/generate_transactions.sh
+ 
+      - name: Run prove blocks with zero tracer in test_only mode
+        run: |
+          ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
+          cd zero_bin/tools
+          ulimit -n 8192
+          OUTPUT_TO_TERMINAL=true ./prove_rpc.sh 0x1 0xf $ETH_RPC_URL jerigon true 3000 100 test_only
+          echo "Proving blocks in test_only mode finished"
+
+
+      - name: Run prove blocks with zero tracer in real mode
+        run: |
+          ETH_RPC_URL="$(kurtosis port print cancun-testnet el-2-erigon-lighthouse ws-rpc)"
+          cd zero_bin/tools
+          rm -rf proofs/* circuits/* ./proofs.json test.out verify.out leader.out
+          OUTPUT_TO_TERMINAL=true RUN_VERIFICATION=true ./prove_rpc.sh 0x2 0x5 $ETH_RPC_URL jerigon true 3000 100
+          echo "Proving blocks in real mode finished"
+          
+      - name: Shut down network
+        run: |
+          kurtosis enclave rm -f cancun-testnet
+          kurtosis engine stop
+
+
+

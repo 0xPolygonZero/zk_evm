@@ -61,6 +61,7 @@ parallel = [
   "plonky2_maybe_rayon/parallel",
   "starky/parallel",
 ]
+polygon_pos = []
 
 [[bin]]
 name = "assemble"

@@ -79,7 +79,14 @@ calldataload_large_offset:
     // stack: kexit_info, dest_offset, offset, size
     %wcopy_charge_gas
 
-    %stack (kexit_info, dest_offset, offset, size) -> (dest_offset, size, kexit_info, dest_offset, offset, size)
+    // Ensure that `offset + size` won't overflow the reserved 32-bit limb
+    // of the `virtual` component of the source memory address.
+    DUP4 DUP4
+    // stack: offset, size, kexit_info, dest_offset, offset, size
+    %add_u32_or_fault
+
+    %stack (offset_plus_size, kexit_info, dest_offset, offset, size) ->
+        (dest_offset, size, kexit_info, dest_offset, offset, size)
     %add_or_fault
     // stack: expanded_num_bytes, kexit_info, dest_offset, offset, size, kexit_info
     DUP1 %ensure_reasonable_offset
@@ -316,12 +323,12 @@ mcopy_empty:
 
     PUSH $segment SWAP1
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
-    DUP1 DUP8 DUP8 ADD
+    DUP1 DUP8 DUP8 %add_or_fault
     // stack: offset + size, total_size, total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     LT %jumpi(codecopy_within_bounds)
 
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
-    DUP7 DUP7 ADD
+    DUP7 DUP7 ADD // We already checked for overflow.
     // stack: offset + size, total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     SUB // extra_size = offset + size - total_size
     // stack: extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
@@ -329,7 +336,7 @@ mcopy_empty:
     // stack: copy_size = size - extra_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
 
     // Compute the new dest_offset after actual copies, at which we will start padding with zeroes.
-    DUP1 DUP7 ADD
+    DUP1 DUP7 ADD // We already checked for overflow.
     // stack: new_dest_offset, copy_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
 
     GET_CONTEXT

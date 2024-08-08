@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::File;
 
 use anyhow::Result;
@@ -6,6 +7,7 @@ use dotenvy::dotenv;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde_json::Deserializer;
 use tracing::info;
+use zero_bin_common::version;
 
 mod cli;
 mod init;
@@ -14,7 +16,18 @@ fn main() -> Result<()> {
     dotenv().ok();
     init::tracing();
 
+    let args: Vec<String> = env::args().collect();
+    if args.contains(&"--version".to_string()) {
+        version::print_version(
+            env!("EVM_ARITHMETIZATION_PKG_VER"),
+            env!("VERGEN_RUSTC_COMMIT_HASH"),
+            env!("VERGEN_BUILD_TIMESTAMP"),
+        );
+        return Ok(());
+    }
+
     let args = cli::Cli::parse();
+
     let file = File::open(args.file_path)?;
     let des = &mut Deserializer::from_reader(&file);
     let input_proofs: Vec<GeneratedBlockProof> = serde_path_to_error::deserialize(des)?;

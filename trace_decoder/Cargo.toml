@@ -44,7 +44,7 @@ serde_json = { workspace = true }
 prover = { workspace = true }
 serde_path_to_error = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }
-alloy-rpc-types-eth = "0.1.4"
+alloy = { workspace = true }
 rstest = "0.21.0"
 
 

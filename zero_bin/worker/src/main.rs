@@ -1,9 +1,12 @@
+use std::env;
+
 use anyhow::Result;
 use clap::Parser;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::WorkerRuntime;
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
+use zero_bin_common::version;
 
 mod init;
 
@@ -13,7 +16,7 @@ mod init;
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 struct Cli {
     #[clap(flatten)]
     paladin: paladin::config::Config,
@@ -23,6 +26,16 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args: Vec<String> = env::args().collect();
+    if args.contains(&"--version".to_string()) {
+        version::print_version(
+            env!("EVM_ARITHMETIZATION_PKG_VER"),
+            env!("VERGEN_RUSTC_COMMIT_HASH"),
+            env!("VERGEN_BUILD_TIMESTAMP"),
+        );
+        return Ok(());
+    }
+
     dotenv().ok();
     init::tracing();
     let args = Cli::parse();

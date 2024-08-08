@@ -132,7 +132,7 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
                 match value {
                     Either::Left(Value { raw_value }) => mpt.insert(
                         TriePath::new(path.iter().copied().chain(key))?,
-                        raw_value.into_vec(),
+                        rlp::encode(&raw_value.as_slice()).to_vec(),
                     )?,
                     Either::Right(_) => bail!("unexpected account node in storage trie"),
                 };

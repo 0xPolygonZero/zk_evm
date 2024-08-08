@@ -453,6 +453,19 @@ zero_hash:
     // stack: sum
 %endmacro
 
+// Adds the two top elements of the stack, and faults in case of overflow modulo 2^32.
+%macro add_u32_or_fault
+    // stack: x, y
+    %add_or_fault
+    DUP1
+    // stack: sum, sum
+    PUSH 0xffffffff // 2^32 - 1
+    LT
+    // stack: is_overflow, sum
+    %jumpi(fault_exception)
+    // stack: sum
+%endmacro
+
 %macro call_depth
     %mload_global_metadata(@GLOBAL_METADATA_CALL_STACK_DEPTH)
 %endmacro

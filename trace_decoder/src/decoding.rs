@@ -538,34 +538,6 @@ impl ProcessedBlockTrace {
                 .map_err(TraceParsingError::from)?;
         }
 
-        // Remove any accounts that self-destructed.
-        for hashed_addr in deltas.self_destructed_accounts.iter() {
-            let k = Nibbles::from_h256_be(*hashed_addr);
-
-            trie_state.storage.remove(hashed_addr).ok_or_else(|| {
-                let hashed_addr = *hashed_addr;
-                let mut e = TraceParsingError::new(
-                    TraceParsingErrorReason::MissingAccountStorageTrie(hashed_addr),
-                );
-                e.h_addr(hashed_addr);
-                e
-            })?;
-
-            // TODO: Once the mechanism for resolving code hashes settles, we probably want
-            // to also delete the code hash mapping here as well...
-
-            if let Some(remaining_account_key) =
-                Self::delete_node_and_report_remaining_key_if_branch_collapsed(
-                    &mut trie_state.state,
-                    &k,
-                )
-                .map_err(TraceParsingError::from)?
-            {
-                out.additional_state_trie_paths_to_not_hash
-                    .push(remaining_account_key);
-            }
-        }
-
         Ok(out)
     }
 

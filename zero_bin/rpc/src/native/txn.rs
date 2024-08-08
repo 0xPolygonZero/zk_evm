@@ -170,7 +170,6 @@ async fn process_tx_traces(
         );
         let code = process_code(post_state, read_state, &mut code_db).await;
         let nonce = process_nonce(post_state, &code);
-        let self_destructed = process_self_destruct(post_state, pre_state);
 
         let result = TxnTrace {
             balance,
@@ -178,7 +177,6 @@ async fn process_tx_traces(
             storage_read,
             storage_written,
             code_usage: code,
-            self_destructed,
         };
 
         traces.insert(address, result);
@@ -274,18 +272,6 @@ async fn process_code(
             Some(ContractCodeUsage::Read(code_hash))
         }
         _ => None,
-    }
-}
-
-/// Processes the self destruct for the given account state.
-const fn process_self_destruct(
-    post_state: Option<&AccountState>,
-    pre_state: Option<&AccountState>,
-) -> Option<bool> {
-    if post_state.is_none() && pre_state.is_some() {
-        Some(true)
-    } else {
-        None
     }
 }
 

@@ -1,4 +1,4 @@
-use std::io;
+use std::{env, io};
 
 use alloy::rpc::types::eth::BlockId;
 use clap::{Parser, ValueHint};
@@ -7,6 +7,7 @@ use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero_bin_common::block_interval::BlockInterval;
+use zero_bin_common::version;
 
 #[derive(Parser)]
 pub enum Cli {
@@ -78,6 +79,16 @@ impl Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    if args.contains(&"--version".to_string()) {
+        version::print_version(
+            env!("EVM_ARITHMETIZATION_PKG_VER"),
+            env!("VERGEN_RUSTC_COMMIT_HASH"),
+            env!("VERGEN_BUILD_TIMESTAMP"),
+        );
+        return Ok(());
+    }
+
     tracing_subscriber::Registry::default()
         .with(
             tracing_subscriber::fmt::layer()

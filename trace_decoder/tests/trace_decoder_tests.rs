@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use alloy_rpc_types_eth::Header;
+use alloy::rpc::types::eth::Header;
 use anyhow::Context as _;
 use evm_arithmetization::prover::testing::simulate_execution;
 use evm_arithmetization::GenerationInputs;

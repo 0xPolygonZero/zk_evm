@@ -46,7 +46,7 @@ fn get_key_piece_from_node<T: PartialTrie>(n: &Node<T>) -> Nibbles {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 /// The difference between two Tries, represented as the highest
 /// point of a structural divergence.
 pub struct TrieDiff {
