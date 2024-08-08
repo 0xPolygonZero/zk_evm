@@ -380,9 +380,14 @@ impl<F: Field> GenerationState<F> {
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
-        let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
-            load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
-                .expect("Invalid MPT data for preinitialization");
+        let (
+            trie_roots_ptrs,
+            state_leaves,
+            storage_leaves,
+             hashed_nodes,
+            trie_data,
+        ) = load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
+            .expect("Invalid MPT data for preinitialization");
 
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,

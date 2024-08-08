@@ -67,6 +67,7 @@ impl<F: Field> GenerationState<F> {
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
             "linked_list" => self.run_linked_list(input_fn),
+            "hash_nodes" => self.run_hash_nodes(input_fn),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
         }
     }
@@ -359,6 +360,26 @@ impl<F: Field> GenerationState<F> {
             }
             _ => Err(ProgramError::ProverInputError(InvalidInput)),
         }
+    }
+
+    /// Append either all the state or storage hashed nodes to, respectively, the AccountsLinkedList or
+    /// StorageLinkedList segments.
+    fn run_hash_nodes(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
+        match input_fn.0[1].as_str() {
+            "accounts" => self.run_accounts_hashed_nodes(),
+            "storage" => self.run_storage_hashed_nodes(),
+            _ => Err(ProgramError::ProverInputError(InvalidInput)),
+        }
+    }
+
+    /// Append all the state hashed nodes to the AccountsLinkedList segment and returns its length.
+    fn run_accounts_hashed_nodes(&mut self) -> Result<U256, ProgramError> {
+        unimplemented!()
+    }
+
+    /// Append all the storage hashed nodes to the StorageLinkedList segment and returns its length.
+    fn run_storage_hashed_nodes(&mut self) -> Result<U256, ProgramError> {
+        unimplemented!()
     }
 
     /// Returns the next used jump address.

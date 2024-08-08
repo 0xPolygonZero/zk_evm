@@ -29,7 +29,7 @@ pub(crate) fn initialize_mpts<F: Field>(
     trie_inputs: &TrieInputs,
 ) {
     // Load all MPTs.
-    let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+    let (mut trie_root_ptrs, state_leaves, storage_leaves, hash_nodes, trie_data) =
         load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
             .expect("Invalid MPT data for preinitialization");
 

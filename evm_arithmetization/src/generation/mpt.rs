@@ -317,6 +317,7 @@ fn get_state_and_storage_leaves(
     key: Nibbles,
     state_leaves: &mut Vec<Option<U256>>,
     storage_leaves: &mut Vec<Option<U256>>,
+    hash_nodes: &mut Vec<Option<U256>>,
     trie_data: &mut Vec<Option<U256>>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<(), ProgramError> {
@@ -339,6 +340,7 @@ fn get_state_and_storage_leaves(
                     extended_key,
                     state_leaves,
                     storage_leaves,
+                    hash_nodes,
                     trie_data,
                     storage_tries_by_state_key,
                 )?;
@@ -353,6 +355,7 @@ fn get_state_and_storage_leaves(
                 extended_key,
                 state_leaves,
                 storage_leaves,
+                hash_nodes,
                 trie_data,
                 storage_tries_by_state_key,
             )?;
@@ -388,10 +391,10 @@ associated storage trie hash"
                 Segment::AccountsLinkedList as usize + state_leaves.len(),
             ));
             // The nibbles are the address.
-            let address = merged_key
+            let addr_key = merged_key
                 .try_into()
                 .map_err(|_| ProgramError::IntegerTooLarge)?;
-            state_leaves.push(Some(address));
+            state_leaves.push(Some(addr_key));
             // Set `value_ptr_ptr`.
             state_leaves.push(Some(trie_data.len().into()));
             // Set counter.
@@ -406,13 +409,20 @@ associated storage trie hash"
             trie_data.push(Some(0.into()));
             trie_data.push(Some(code_hash.into_uint()));
             get_storage_leaves(
-                address,
+                addr_key,
                 empty_nibbles(),
                 storage_trie,
                 storage_leaves,
+                hash_nodes,
                 &parse_storage_value,
             )?;
 
+            Ok(())
+        }
+        Node::Hash(hash) => {
+            let addr_key = key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?;
+            hash_nodes.push(Some(addr_key));
+            hash_nodes.push(Some(hash.into_uint()));
             Ok(())
         }
         _ => Ok(()),
@@ -420,10 +430,11 @@ associated storage trie hash"
 }
 
 pub(crate) fn get_storage_leaves<F>(
-    address: U256,
+    addr_key: U256,
     key: Nibbles,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<Option<U256>>,
+    storage_hash_nodes: &mut Vec<Option<U256>>,
     parse_value: &F,
 ) -> Result<(), ProgramError>
 where
@@ -437,7 +448,14 @@ where
                     count: 1,
                     packed: i.into(),
                 });
-                get_storage_leaves(address, extended_key, child, storage_leaves, parse_value)?;
+                get_storage_leaves(
+                    addr_key,
+                    extended_key,
+                    child,
+                    storage_leaves,
+                    storage_hash_nodes,
+                    parse_value,
+                )?;
             }
 
             Ok(())
@@ -445,7 +463,14 @@ where
 
         Node::Extension { nibbles, child } => {
             let extended_key = key.merge_nibbles(nibbles);
-            get_storage_leaves(address, extended_key, child, storage_leaves, parse_value)?;
+            get_storage_leaves(
+                addr_key,
+                extended_key,
+                child,
+                storage_leaves,
+                storage_hash_nodes,
+                parse_value,
+            )?;
 
             Ok(())
         }
@@ -457,7 +482,7 @@ where
                 Segment::StorageLinkedList as usize + storage_leaves.len(),
             ));
             // Write the address.
-            storage_leaves.push(Some(address));
+            storage_leaves.push(Some(addr_key));
             // Write the key.
             storage_leaves.push(Some(
                 merged_key
@@ -481,6 +506,12 @@ where
 
             Ok(())
         }
+        Node::Hash(hash) => {
+            let slot_key = key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?;
+            storage_hash_nodes.push(Some(slot_key));
+            storage_hash_nodes.push(Some(hash.into_uint()));
+            Ok(())
+        }
         _ => Ok(()),
     }
 }
@@ -489,9 +520,11 @@ where
 ///     - the trie root pointers for all tries
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
+///     - the vector of state and storage hashed nodes
 ///     - the `TrieData` segment's memory content
 type TriePtrsLinkedLists = (
     TrieRootPtrs,
+    Vec<Option<U256>>,
     Vec<Option<U256>>,
     Vec<Option<U256>>,
     Vec<Option<U256>>,
@@ -504,6 +537,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList).to_vec();
     let mut storage_leaves =
         empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList).to_vec();
+    let mut hash_nodes = vec![];
     let mut trie_data = vec![Some(U256::zero())];
 
     let storage_tries_by_state_key = trie_inputs
@@ -529,6 +563,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         empty_nibbles(),
         &mut state_leaves,
         &mut storage_leaves,
+        &mut hash_nodes,
         &mut trie_data,
         &storage_tries_by_state_key,
     );
@@ -541,6 +576,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         },
         state_leaves,
         storage_leaves,
+        hash_nodes,
         trie_data,
     ))
 }
