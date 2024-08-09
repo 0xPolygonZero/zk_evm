@@ -6,7 +6,10 @@ use std::{
 
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
 use evm_arithmetization::{
-    generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
+    generation::{
+        mpt::{decode_receipt, AccountRlp},
+        GenerationInputs, TrieInputs,
+    },
     proof::{BlockMetadata, ExtraBlockData, TrieRoots},
     testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH},
 };
@@ -151,6 +154,10 @@ pub enum TraceParsingErrorReason {
     /// Failure to decode an Ethereum Account.
     #[error("Failed to decode RLP bytes ({0}) as an Ethereum account due to the error: {1}")]
     AccountDecode(String, String),
+
+    /// Failure to decode a transaction receipt.
+    #[error("Failed to decode RLP bytes ({0}) as a transaction receipt due to the error: {1}")]
+    ReceiptDecode(String, String),
 
     /// Failure due to trying to access or delete a storage trie missing
     /// from the base trie.
@@ -470,6 +477,7 @@ impl ProcessedBlockTrace {
     fn apply_deltas_to_trie_state(
         trie_state: &mut PartialTrieState,
         deltas: &NodesUsedByTxn,
+        meta: &TxnMetaState,
     ) -> TraceParsingResult<TrieDeltaApplicationOutput> {
         let mut out = TrieDeltaApplicationOutput::default();
 
@@ -517,11 +525,11 @@ impl ProcessedBlockTrace {
         for (hashed_acc_addr, s_trie_writes) in deltas.state_writes.iter() {
             let val_k = Nibbles::from_h256_be(*hashed_acc_addr);
 
-            // If the account was created, then it will not exist in the trie.
-            let val_bytes = trie_state
-                .state
-                .get(val_k)
-                .unwrap_or(&EMPTY_ACCOUNT_BYTES_RLPED);
+            // If the account was created, then it will not exist yet in the trie.
+            let (is_created, val_bytes) = match trie_state.state.get(val_k) {
+                Some(bytes) => (false, bytes),
+                None => (true, &EMPTY_ACCOUNT_BYTES_RLPED[..]),
+            };
 
             let mut account = account_from_rlped_bytes(val_bytes)?;
 
@@ -532,6 +540,33 @@ impl ProcessedBlockTrace {
             )?;
 
             let updated_account_bytes = rlp::encode(&account);
+            if is_created {
+                // If the account did not exist prior this transaction, we
+                // need to make sure the transaction didn't revert.
+
+                // Check status in the receipt.
+                let (_, _, receipt) = decode_receipt(&meta.receipt_node_bytes).map_err(|err| {
+                    Box::new(TraceParsingError::new(
+                        TraceParsingErrorReason::ReceiptDecode(
+                            hex::encode(&meta.receipt_node_bytes),
+                            format!("{:?}", err),
+                        ),
+                    ))
+                })?;
+
+                if !receipt.status {
+                    // The transaction failed, hence any created account should be removed.
+                    trie_state
+                        .state
+                        .delete(val_k)
+                        .map_err(TraceParsingError::from)?;
+
+                    trie_state.storage.remove(hashed_acc_addr);
+
+                    continue;
+                }
+            }
+
             trie_state
                 .state
                 .insert(val_k, updated_account_bytes.to_vec())
@@ -705,8 +740,11 @@ impl ProcessedBlockTrace {
         Self::update_txn_and_receipt_tries(curr_block_tries, &txn_info.meta, txn_idx)
             .map_err(TraceParsingError::from)?;
 
-        let mut delta_out =
-            Self::apply_deltas_to_trie_state(curr_block_tries, &txn_info.nodes_used_by_txn)?;
+        let mut delta_out = Self::apply_deltas_to_trie_state(
+            curr_block_tries,
+            &txn_info.nodes_used_by_txn,
+            &txn_info.meta,
+        )?;
 
         let nodes_used_by_txn = if is_initial_payload {
             let mut nodes_used = txn_info.nodes_used_by_txn;
