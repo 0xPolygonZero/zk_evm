@@ -229,6 +229,7 @@ impl MemoryState {
             segment == Segment::AccountsLinkedList
                 || segment == Segment::StorageLinkedList
                 || segment == Segment::TrieData
+                || segment == Segment::HashedNodes
         );
         let len = self
             .preinitialized_segments

@@ -16,7 +16,11 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
+use crate::generation::linked_list::LinkedList;
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
+use crate::generation::prover_input::{
+    ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
+};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::trie_extractor::get_state_trie;
 use crate::generation::CpuColumnsView;
@@ -186,6 +190,27 @@ pub(crate) trait State<F: Field> {
         let mut final_registers = RegistersState::default();
         let mut running = true;
         let mut final_clock = 0;
+
+        let mem = self
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!("Initial state = {:?}", {
+            LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &mem,
+                Segment::AccountsLinkedList,
+            )
+        });
+        let mem = self
+                .get_generation_state()
+                .memory
+                .get_preinit_memory(Segment::StorageLinkedList);
+        log::debug!("Initial storage = {:?}", {
+            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &mem,
+                Segment::StorageLinkedList,
+            )
+        });
         loop {
             let registers = self.get_registers();
             let pc = registers.program_counter;
@@ -380,14 +405,9 @@ impl<F: Field> GenerationState<F> {
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
-        let (
-            trie_roots_ptrs,
-            state_leaves,
-            storage_leaves,
-             hashed_nodes,
-            trie_data,
-        ) = load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
-            .expect("Invalid MPT data for preinitialization");
+        let (trie_roots_ptrs, state_leaves, storage_leaves, hashed_nodes, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
+                .expect("Invalid MPT data for preinitialization");
 
         self.memory.insert_preinitialized_segment(
             Segment::AccountsLinkedList,

@@ -10,6 +10,8 @@ use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
+use crate::generation::linked_list::LinkedList;
+use crate::generation::prover_input::{ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE};
 use crate::generation::state::State;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
@@ -278,6 +280,31 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     } else {
         log::Level::Trace
     };
+
+
+    if state.get_clock() == 51522 {
+        let mem = state
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::AccountsLinkedList);
+        log::debug!("state = {:?}", {
+            LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &mem,
+                Segment::AccountsLinkedList,
+            )
+        });
+        let mem = state
+                .get_generation_state()
+                .memory
+                .get_preinit_memory(Segment::StorageLinkedList);
+        log::debug!("storage = {:?}", {
+            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &mem,
+                Segment::StorageLinkedList,
+            )
+        });
+    }
+
     state.log(
         level,
         format!(

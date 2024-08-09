@@ -3,8 +3,12 @@
 global mpt_hash_state_trie_new:
     // stack: cur_len, retdest
     PUSH @SEGMENT_HASH_NODES
+    SWAP1
     %first_initial_slot
+    SWAP1
     %first_initial_account
+    SWAP1
+global debug_the_ll_ptrs:
     PUSH encode_account_new
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     // stack: node_ptr, encode_account, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
@@ -44,9 +48,11 @@ global encode_account_new:
     // Now, we start the encoding.
     // stack: rlp_addr, value_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
     DUP2 %mload_trie_data // nonce = value[0]
+global debug_nonce:
     %rlp_scalar_len
     // stack: nonce_rlp_len, rlp_addr, value_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
     DUP3 %increment %mload_trie_data // balance = value[1]
+global debug_balance:
     %rlp_scalar_len
     // stack: balance_rlp_len, nonce_rlp_len, rlp_addr, value_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
     PUSH 66 // storage_root and code_hash fields each take 1 + 32 bytes
@@ -78,7 +84,7 @@ global encode_account_new:
         (storage_root_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, rlp_pos_5, value_ptr, cur_len)
 
     // Hash storage trie.
-    %mpt_hash_storage_trie
+    %mpt_hash_storage_trie_new
 
     // stack: storage_root_digest, new_len, next_slot_ptr, next_hash_node_ptr, rlp_pos_5, value_ptr, cur_len, retdest
     %stack
@@ -94,8 +100,7 @@ global encode_account_new:
     JUMP
 
 global encode_storage_value_new:
-    // stack: rlp_addr, value_ptr, cur_len, next_hash_node_ptr, retdest
-    SWAP1 %mload_trie_data SWAP1
+    // stack: rlp_addr, value, cur_len, next_hash_node_ptr, retdest
 
     // A storage value is a scalar, so we only need to add 1 to the trie data length.
     SWAP2 %increment SWAP2

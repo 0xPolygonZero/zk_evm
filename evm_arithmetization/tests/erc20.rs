@@ -60,6 +60,7 @@ fn test_erc20() -> anyhow::Result<()> {
     let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
     let giver_nibbles = Nibbles::from_bytes_be(giver_state_key.as_bytes()).unwrap();
     let token_nibbles = Nibbles::from_bytes_be(token_state_key.as_bytes()).unwrap();
+    log::debug!("Sender nibbles = {:?}", sender_nibbles);
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account()).to_vec())?;
