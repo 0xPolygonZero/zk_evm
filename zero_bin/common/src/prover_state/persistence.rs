@@ -28,7 +28,7 @@ const ZK_EVM_CACHE_DIR_ENV: &str = "ZK_EVM_CACHE_DIR";
 /// We version serialized circuits by the kernel hash they were serialized with,
 /// but we really only need a few of the starting hex nibbles to reliably
 /// differentiate.
-const NUM_HASH_NIBS_TO_USE_IN_CIRCUIT_VERSION: usize = 8;
+const KERNEL_HASH_PREFIX: usize = 8;
 
 /// When we serialize/deserialize circuits, we rely on the hash of the plonky
 /// kernel to determine if the circuit is compatible with our current binary. If
@@ -36,7 +36,7 @@ const NUM_HASH_NIBS_TO_USE_IN_CIRCUIT_VERSION: usize = 8;
 /// then using these circuits could potentially lead to incorrect results (but
 /// most likely just a crash).
 pub static CIRCUIT_VERSION: Lazy<String> =
-    Lazy::new(|| hex::encode(KERNEL.hash())[..NUM_HASH_NIBS_TO_USE_IN_CIRCUIT_VERSION].to_string());
+    Lazy::new(|| hex::encode(KERNEL.hash())[..KERNEL_HASH_PREFIX].to_string());
 
 fn get_serializers() -> (
     DefaultGateSerializer,
