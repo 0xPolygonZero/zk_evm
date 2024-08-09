@@ -69,7 +69,6 @@ where
 
     let tx_meta = TxnMeta {
         byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
-        new_txn_trie_node_byte: vec![],
         new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
         gas_used: tx_receipt.gas_used as u64,
     };
