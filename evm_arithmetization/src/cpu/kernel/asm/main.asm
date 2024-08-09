@@ -112,8 +112,8 @@ global hash_initial_tries:
     // stack: trie_data_len
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_BEFORE)  %assert_eq
     // stack: trie_data_full_len
-    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
     // Check that the trie data length is correct.
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
     %assert_eq
 
 global start_txns:
@@ -198,11 +198,12 @@ global check_state_trie:
     %set_initial_tries
     %mpt_hash_state_trie
 
-    // Check that the stored trie data length is correct.
     // stack: init_state_hash, trie_data_len
-    SWAP1 %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
-    %assert_eq
+    // Check that the initial trie is correct.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
+    %assert_eq
+    // Check that the stored trie data length is correct.
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
     %assert_eq
 
     // We add a dummy value as an initial trie data length,
