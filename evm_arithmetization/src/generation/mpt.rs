@@ -67,7 +67,12 @@ impl LegacyReceiptRlp {
     }
 }
 
-pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
+/// Decodes a transaction receipt from an RLP string, outputting a tuple
+/// consisting of:
+///   - the receipt's [`PayloadInfo`],
+///   - the transaction type,
+///   - the decoded [`LegacyReceiptRlp`].
+pub fn decode_receipt(rlp: &[u8]) -> Result<(PayloadInfo, usize, LegacyReceiptRlp), ProgramError> {
     let txn_type = match rlp.first().ok_or(ProgramError::InvalidRlp)? {
         1 => 1,
         2 => 2,
@@ -82,6 +87,11 @@ pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     let decoded_receipt: LegacyReceiptRlp =
         rlp::decode(rlp).map_err(|_| ProgramError::InvalidRlp)?;
 
+    Ok((payload_info, txn_type, decoded_receipt))
+}
+
+pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
+    let (payload_info, txn_type, decoded_receipt) = decode_receipt(rlp)?;
     let mut parsed_receipt = if txn_type == 0 {
         Vec::new()
     } else {
