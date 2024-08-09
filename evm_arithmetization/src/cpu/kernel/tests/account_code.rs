@@ -139,7 +139,7 @@ pub(crate) fn prepare_interpreter<F: Field>(
     account: &AccountRlp,
 ) -> Result<()> {
     let mpt_insert_state_trie = KERNEL.global_labels["mpt_insert_state_trie"];
-    let check_state_trie = KERNEL.global_labels["check_state_trie"];
+    let check_state_trie = KERNEL.global_labels["check_final_state_trie"];
     let mut state_trie: HashedPartialTrie = HashedPartialTrie::from(Node::Empty);
     let trie_inputs = TrieInputs {
         state_trie: HashedPartialTrie::from(Node::Empty),
@@ -527,11 +527,9 @@ fn sstore() -> Result<()> {
         GlobalMetadata::StateTrieRootDigestAfter,
         h2u(expected_state_trie_hash),
     );
-    interpreter
-        .halt_offsets
-        .push(KERNEL.global_labels["check_txn_trie"]);
+
     // Now, execute `mpt_hash_state_trie` and check that the hash is correct.
-    let mpt_hash_state_trie = KERNEL.global_labels["check_state_trie"];
+    let mpt_hash_state_trie = KERNEL.global_labels["check_final_state_trie"];
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
     interpreter.set_is_kernel(true);
     interpreter.set_context(0);
