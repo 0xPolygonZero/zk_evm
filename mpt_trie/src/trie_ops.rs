@@ -253,7 +253,7 @@ impl<N: PartialTrie> Iterator for PartialTrieIter<N> {
 
             next_iter_item = match stack_entry {
                 IterStackEntry::Root(root) => {
-                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::empty())
+                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::default())
                 }
                 IterStackEntry::Extension(num_nibbles) => {
                     // Drop nibbles that extension added since we are going back up the trie.
@@ -389,7 +389,7 @@ impl<T: PartialTrie> Node<T> {
             // Final check at the root if we have an extension node. While this check also
             // exists as we recursively traverse down the trie, it can not perform this
             // check on the root node.
-            let wrapped_node = try_collapse_if_extension(updated_root, &Nibbles::empty())?;
+            let wrapped_node = try_collapse_if_extension(updated_root, &Nibbles::default())?;
             let node_ref: &Node<T> = &wrapped_node;
             *self = node_ref.clone();
 
@@ -399,7 +399,7 @@ impl<T: PartialTrie> Node<T> {
 
     pub(crate) fn trie_items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         PartialTrieIter {
-            curr_key_after_last_branch: Nibbles::empty(),
+            curr_key_after_last_branch: Nibbles::default(),
             trie_stack: vec![IterStackEntry::Root(self.clone().into())],
         }
     }

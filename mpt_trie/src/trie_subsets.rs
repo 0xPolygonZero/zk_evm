@@ -439,7 +439,12 @@ mod tests {
         return_on_empty_or_hash: bool,
     ) -> Vec<NodeFullNibbles> {
         let mut nodes = Vec::new();
-        get_nodes_in_trie_intern_rec(trie, Nibbles::empty(), &mut nodes, return_on_empty_or_hash);
+        get_nodes_in_trie_intern_rec(
+            trie,
+            Nibbles::default(),
+            &mut nodes,
+            return_on_empty_or_hash,
+        );
 
         nodes
     }
@@ -561,7 +566,7 @@ mod tests {
         assert_node_exists(
             &all_non_empty_and_hash_nodes,
             TrieNodeType::Branch,
-            Nibbles::empty(),
+            Nibbles::default(),
         );
         assert_node_exists(&all_non_empty_and_hash_nodes, TrieNodeType::Branch, 0x1);
         assert_node_exists(&all_non_empty_and_hash_nodes, TrieNodeType::Leaf, 0x1234);
@@ -588,7 +593,7 @@ mod tests {
         assert_node_exists(
             &all_non_empty_and_hash_nodes_partial,
             TrieNodeType::Branch,
-            Nibbles::empty(),
+            Nibbles::default(),
         );
         assert_node_exists(
             &all_non_empty_and_hash_nodes_partial,
@@ -613,7 +618,7 @@ mod tests {
         assert_node_exists(
             &all_non_empty_and_hash_nodes_partial,
             TrieNodeType::Branch,
-            Nibbles::empty(),
+            Nibbles::default(),
         );
         assert_node_exists(
             &all_non_empty_and_hash_nodes_partial,
