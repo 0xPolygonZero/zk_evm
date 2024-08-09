@@ -170,7 +170,9 @@ global perform_final_checks:
 
     SWAP1 %set_trie_data_size
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
+global debug_check_inital_state_trie:
     %assert_eq
+    %jump(halt)
 
     PUSH 1 // initial trie data length
     
