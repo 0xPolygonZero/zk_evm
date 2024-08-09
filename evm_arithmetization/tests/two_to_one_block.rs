@@ -1,18 +1,17 @@
-use std::collections::HashMap;
-use std::str::FromStr;
-
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H160, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_public_values, extract_two_to_one_block_hash,
 };
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
-use keccak_hash::keccak;
-use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::poseidon::PoseidonHash;
@@ -24,59 +23,14 @@ type F = GoldilocksField;
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
 
-fn eth_to_wei(eth: U256) -> U256 {
-    // 1 ether = 10^18 wei.
-    eth * U256::from(10).pow(18.into())
-}
-
 fn init_logger() {
     let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }
 
-/// Get `GenerationInputs` for a simple token transfer txn, where the block has
-/// the given timestamp.
-fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
-    init_logger();
-
+/// Get `GenerationInputs` for a dummy payload, where the block has the given
+/// timestamp.
+fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<GenerationInputs> {
     let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
-    let sender = hex!("2c7536e3605d9c16a7a3d7b1898e529396a65c23");
-    let to = hex!("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0");
-
-    let sender_state_key = keccak(sender);
-    let to_state_key = keccak(to);
-
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_state_key.as_bytes()).unwrap();
-
-    let sender_account_before = AccountRlp {
-        nonce: 5.into(),
-        balance: eth_to_wei(100_000.into()),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: keccak([]),
-    };
-    let to_account_before = AccountRlp::default();
-
-    let state_trie_before: HashedPartialTrie = Node::Leaf {
-        nibbles: sender_nibbles,
-        value: rlp::encode(&sender_account_before).to_vec(),
-    }
-    .into();
-    let checkpoint_state_trie_root = state_trie_before.hash();
-    assert_eq!(
-        checkpoint_state_trie_root,
-        hex!("ef46022eafbc33d70e6ea9c6aef1074c1ff7ad36417ffbc64307ad3a8c274b75").into()
-    );
-
-    let tries_before = TrieInputs {
-        state_trie: HashedPartialTrie::from(Node::Empty),
-        transactions_trie: HashedPartialTrie::from(Node::Empty),
-        receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries: vec![],
-    };
-
-    // Generated using a little py-evm script.
-    let txn = hex!("f861050a8255f094a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0648242421ba02c89eb757d9deeb1f5b3859a9d4d679951ef610ac47ad4608dc142beb1b7e313a05af7e9fbab825455d36c36c7f4cfcafbeafa9a77bdff936b52afb36d4fe4bcdd");
-    let value = U256::from(100u32);
 
     let block_metadata = BlockMetadata {
         block_beneficiary: Address::from(beneficiary),
@@ -90,73 +44,60 @@ fn empty_transfer(timestamp: u64) -> anyhow::Result<GenerationInputs> {
         ..Default::default()
     };
 
-    let contract_code = HashMap::new();
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    let checkpoint_state_trie_root = state_trie_before.hash();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+
+    update_beacon_roots_account_storage(
+        &mut beacon_roots_account_storage,
+        block_metadata.block_timestamp,
+        block_metadata.parent_beacon_block_root,
+    )?;
+    let updated_beacon_roots_account =
+        beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
+    if !is_first_payload {
+        // This isn't the first dummy payload being processed. We need to update the
+        // initial state trie to account for the update on the beacon roots contract.
+        state_trie_before.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&updated_beacon_roots_account).to_vec(),
+        )?;
+        storage_tries[0].1 = beacon_roots_account_storage;
+    }
+
+    let tries_before = TrieInputs {
+        state_trie: state_trie_before,
+        storage_tries,
+        ..Default::default()
+    };
 
     let expected_state_trie_after: HashedPartialTrie = {
-        let txdata_gas = 2 * 16;
-        let gas_used = 21_000 + txdata_gas;
+        let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
+        state_trie_after.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&updated_beacon_roots_account).to_vec(),
+        )?;
+        state_trie_after.insert(
+            ger_account_nibbles(),
+            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+        )?;
 
-        let sender_account_after = AccountRlp {
-            balance: sender_account_before.balance - value - gas_used * 10,
-            nonce: sender_account_before.nonce + 1,
-            ..sender_account_before
-        };
-        let to_account_after = AccountRlp {
-            balance: value,
-            ..to_account_before
-        };
-
-        let mut children = core::array::from_fn(|_| Node::Empty.into());
-        children[sender_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: sender_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&sender_account_after).to_vec(),
-        }
-        .into();
-        children[to_nibbles.get_nibble(0) as usize] = Node::Leaf {
-            nibbles: to_nibbles.truncate_n_nibbles_front(1),
-            value: rlp::encode(&to_account_after).to_vec(),
-        }
-        .into();
-        Node::Branch {
-            children,
-            value: vec![],
-        }
-        .into()
-    };
-
-    let receipt_0 = LegacyReceiptRlp {
-        status: true,
-        cum_gas_used: 21032.into(),
-        bloom: vec![0; 256].into(),
-        logs: vec![],
-    };
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    )?;
-    let transactions_trie: HashedPartialTrie = Node::Leaf {
-        nibbles: Nibbles::from_str("0x80").unwrap(),
-        value: txn.to_vec(),
-    }
-    .into();
-
-    let _trie_roots_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
-        transactions_root: transactions_trie.hash(),
-        receipts_root: receipts_trie.hash(),
+        state_trie_after
     };
 
     let trie_roots_after = TrieRoots {
-        state_root: tries_before.state_trie.hash(),
+        state_root: expected_state_trie_after.hash(),
         transactions_root: tries_before.transactions_trie.hash(),
         receipts_root: tries_before.receipts_trie.hash(),
     };
+
     let inputs = GenerationInputs {
         tries: tries_before.clone(),
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: Some(Address::from(H160::random())),
         trie_roots_after,
-        contract_code,
-        checkpoint_state_trie_root: tries_before.state_trie.hash(),
+        checkpoint_state_trie_root,
         block_metadata,
         ..Default::default()
     };
@@ -170,48 +111,24 @@ fn get_test_block_proof(
     all_stark: &AllStark<GoldilocksField, 2>,
     config: &StarkConfig,
 ) -> anyhow::Result<ProofWithPublicInputs<GoldilocksField, PoseidonGoldilocksConfig, 2>> {
-    let inputs0 = empty_transfer(timestamp)?;
-    let inputs = inputs0.clone();
-    let dummy0 = GenerationInputs {
-        txn_number_before: inputs.txn_number_before,
-        #[cfg(feature = "cdk_erigon")]
-        burn_addr: Some(Address::from(H160::random())),
-        gas_used_before: inputs.gas_used_after,
-        gas_used_after: inputs.gas_used_after,
-        signed_txn: None,
-        global_exit_roots: vec![],
-        withdrawals: vec![],
-        tries: TrieInputs {
-            state_trie: HashedPartialTrie::from(Node::Hash(inputs.trie_roots_after.state_root)),
-            transactions_trie: HashedPartialTrie::from(Node::Hash(
-                inputs.trie_roots_after.transactions_root,
-            )),
-            receipts_trie: HashedPartialTrie::from(Node::Hash(
-                inputs.trie_roots_after.receipts_root,
-            )),
-            storage_tries: vec![],
-        },
-        trie_roots_after: inputs.trie_roots_after,
-        checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
-        contract_code: Default::default(),
-        block_metadata: inputs.block_metadata.clone(),
-        block_hashes: inputs.block_hashes.clone(),
-    };
+    let dummy0 = dummy_payload(timestamp, true)?;
+    let dummy1 = dummy_payload(timestamp, false)?;
 
     let timing = &mut TimingTree::new(&format!("Blockproof {timestamp}"), log::Level::Info);
-    let (root_proof0, pv0) = all_circuits.prove_root(all_stark, config, inputs0, timing, None)?;
-    all_circuits.verify_root(root_proof0.clone())?;
     let (dummy_proof0, dummy_pv0) =
         all_circuits.prove_root(all_stark, config, dummy0, timing, None)?;
     all_circuits.verify_root(dummy_proof0.clone())?;
+    let (dummy_proof1, dummy_pv1) =
+        all_circuits.prove_root(all_stark, config, dummy1, timing, None)?;
+    all_circuits.verify_root(dummy_proof1.clone())?;
 
     let (agg_proof0, pv0) = all_circuits.prove_aggregation(
         false,
-        &root_proof0,
-        pv0,
-        false,
         &dummy_proof0,
         dummy_pv0,
+        false,
+        &dummy_proof1,
+        dummy_pv1,
     )?;
 
     all_circuits.verify_aggregation(&agg_proof0)?;
@@ -246,7 +163,7 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
     let config = StarkConfig::standard_fast_config();
     let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
         &all_stark,
-        &[16..17, 9..15, 12..18, 14..15, 9..10, 12..13, 17..20],
+        &[16..17, 8..10, 14..15, 14..15, 9..10, 12..13, 17..18],
         &config,
     );
 

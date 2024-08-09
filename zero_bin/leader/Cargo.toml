@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
+build = "../common/build.rs"
 
 [dependencies]
 paladin-core = { workspace = true }
@@ -36,5 +37,6 @@ default = []
 test_only = ["ops/test_only", "prover/test_only"]
 
 [build-dependencies]
-cargo_metadata = "0.18.1"
+cargo_metadata = { workspace = true }
+vergen = { workspace = true }
 anyhow = { workspace = true }

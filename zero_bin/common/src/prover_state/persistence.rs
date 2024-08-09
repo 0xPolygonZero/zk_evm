@@ -109,7 +109,7 @@ impl DiskResource for BaseProverResource {
             "{}/{}_base_{}_{}",
             &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
-            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
+            env!("EVM_ARITHMETIZATION_PKG_VER"),
             p.get_configuration_digest()
         )
     }
@@ -145,7 +145,7 @@ impl DiskResource for MonolithicProverResource {
             "{}/{}_monolithic_{}_{}",
             &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
-            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
+            env!("EVM_ARITHMETIZATION_PKG_VER"),
             p.get_configuration_digest()
         )
     }
@@ -180,7 +180,7 @@ impl DiskResource for RecursiveCircuitResource {
             "{}/{}_{}_{}_{}",
             &relative_circuit_dir_path(),
             PROVER_STATE_FILE_PREFIX,
-            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
+            env!("EVM_ARITHMETIZATION_PKG_VER"),
             circuit_type.as_short_str(),
             size
         )
@@ -224,7 +224,7 @@ impl DiskResource for VerifierResource {
             "{}/{}_{}_{}",
             &relative_circuit_dir_path(),
             VERIFIER_STATE_FILE_PREFIX,
-            env::var("EVM_ARITHMETIZATION_PKG_VER").unwrap_or("NA".to_string()),
+            env!("EVM_ARITHMETIZATION_PKG_VER"),
             p.get_configuration_digest()
         )
     }

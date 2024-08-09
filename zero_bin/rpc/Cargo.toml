@@ -7,6 +7,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
+build = "../common/build.rs"
 
 [dependencies]
 __compat_primitive_types = { workspace = true }
@@ -30,3 +31,8 @@ url = { workspace = true }
 compat = { workspace = true }
 zero_bin_common = { workspace = true }
 prover = { workspace = true }
+
+[build-dependencies]
+cargo_metadata = { workspace = true }
+vergen = { workspace = true }
+anyhow = { workspace = true }

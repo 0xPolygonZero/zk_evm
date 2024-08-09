@@ -22,3 +22,10 @@ futures = { workspace = true }
 tokio = { workspace = true }
 alloy = { workspace = true }
 async-stream = { workspace = true }
+cargo_metadata = { workspace = true }
+vergen = { workspace = true }
+
+[build-dependencies]
+cargo_metadata = { workspace = true }
+vergen = { workspace = true }
+anyhow = { workspace = true }
