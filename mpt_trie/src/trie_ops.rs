@@ -31,23 +31,10 @@ pub enum TrieOpError {
     #[error("Attempted to delete a value that ended up inside a hash node! (hash: {0})")]
     HashNodeDeleteError(H256),
 
-    /// An error that occurs when we encounter an non-existing type of node
-    /// during an extension node collapse.
-    #[error("Extension managed to get an non-existing child node type! (child: {0})")]
+    /// An error that occurs when encontered an unexisting type of node during
+    /// an extension node collapse.
+    #[error("Extension managed to get an unexisting child node type! (child: {0})")]
     HashNodeExtError(TrieNodeType),
-
-    /// An error that occurs when we attempted to collapse an extension node
-    /// into a hash node.
-    ///
-    /// If this occurs, then there is a chance that we can not collapse
-    /// correctly and will produce the incorrect trie (and also the incorrect
-    /// trie hash). If the hash node is a hash of a leaf, then we need to
-    /// collapse the extension key into the leaf. However, this information
-    /// is lost if the node is hashed, and we can not tell if the hash node
-    /// was made from a leaf. As such, it's the responsibility of whoever is
-    /// constructing & mutating the trie that this will never occur.
-    #[error("Attempted to collapse an extension node into a hash node! This is unsafe! (See https://github.com/0xPolygonZero/zk_evm/issues/237 for more info) (Extension key: {0:x}, child hash node: {1:x})")]
-    ExtensionCollapsedIntoHashError(Nibbles, H256),
 
     /// Failed to insert a hash node into the trie.
     #[error("Attempted to place a hash node on an existing node! (hash: {0})")]
@@ -253,7 +240,7 @@ impl<N: PartialTrie> Iterator for PartialTrieIter<N> {
 
             next_iter_item = match stack_entry {
                 IterStackEntry::Root(root) => {
-                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::empty())
+                    self.advance_iter_to_next_empty_leaf_or_hash_node(&root, Nibbles::default())
                 }
                 IterStackEntry::Extension(num_nibbles) => {
                     // Drop nibbles that extension added since we are going back up the trie.
@@ -373,11 +360,6 @@ impl<T: PartialTrie> Node<T> {
         }
     }
 
-    /// Deletes a key if it exists in the trie.
-    ///
-    /// If the key exists, then the existing node value that was deleted is
-    /// returned. Otherwise, if the key is not present, then `None` is returned
-    /// instead.
     pub(crate) fn trie_delete<K>(&mut self, k: K) -> TrieOpResult<Option<Vec<u8>>>
     where
         K: Into<Nibbles>,
@@ -386,10 +368,8 @@ impl<T: PartialTrie> Node<T> {
         trace!("Deleting a leaf node with key {} if it exists", k);
 
         delete_intern(&self.clone(), k)?.map_or(Ok(None), |(updated_root, deleted_val)| {
-            // Final check at the root if we have an extension node. While this check also
-            // exists as we recursively traverse down the trie, it can not perform this
-            // check on the root node.
-            let wrapped_node = try_collapse_if_extension(updated_root, &Nibbles::empty())?;
+            // Final check at the root if we have an extension node
+            let wrapped_node = try_collapse_if_extension(updated_root)?;
             let node_ref: &Node<T> = &wrapped_node;
             *self = node_ref.clone();
 
@@ -399,7 +379,7 @@ impl<T: PartialTrie> Node<T> {
 
     pub(crate) fn trie_items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
         PartialTrieIter {
-            curr_key_after_last_branch: Nibbles::empty(),
+            curr_key_after_last_branch: Nibbles::default(),
             trie_stack: vec![IterStackEntry::Root(self.clone().into())],
         }
     }
@@ -541,15 +521,12 @@ fn delete_intern<N: PartialTrie>(
                     {
                         false => {
                             // Branch stays.
-
                             let mut updated_children = children.clone();
                             updated_children[nibble as usize] =
-                                try_collapse_if_extension(updated_child, &curr_k)?;
+                                try_collapse_if_extension(updated_child)?;
                             branch(updated_children, value.clone())
                         }
                         true => {
-                            // We need to collapse the branch into an extension/leaf node.
-
                             let (child_nibble, non_empty_node) =
                                 get_other_non_empty_child_and_nibble_in_two_elem_branch(
                                     children, nibble,
@@ -582,7 +559,7 @@ fn delete_intern<N: PartialTrie>(
                     delete_intern(child, curr_k).and_then(|res| {
                         res.map_or(Ok(None), |(updated_child, value_deleted)| {
                             let updated_node =
-                                collapse_ext_node_if_needed(ext_nibbles, &updated_child, &curr_k)?;
+                                collapse_ext_node_if_needed(ext_nibbles, &updated_child)?;
                             Ok(Some((updated_node, value_deleted)))
                         })
                     })
@@ -599,44 +576,16 @@ fn delete_intern<N: PartialTrie>(
     }
 }
 
-fn try_collapse_if_extension<N: PartialTrie>(
-    node: WrappedNode<N>,
-    curr_key: &Nibbles,
-) -> TrieOpResult<WrappedNode<N>> {
+fn try_collapse_if_extension<N: PartialTrie>(node: WrappedNode<N>) -> TrieOpResult<WrappedNode<N>> {
     match node.as_ref() {
-        Node::Extension { nibbles, child } => collapse_ext_node_if_needed(nibbles, child, curr_key),
+        Node::Extension { nibbles, child } => collapse_ext_node_if_needed(nibbles, child),
         _ => Ok(node),
     }
 }
 
-/// Attempt to collapse an extension node if we are required.
-///
-/// The scenarios where we are required to do so are where the extension node is
-/// pointing to a:
-/// - Extension (the parent extension absorbs the child's key).
-/// - Leaf (the leaf absorbs the extension's key).
-///
-/// While an extension does not collapse when its child is a branch, we need to
-/// still check that a specific edge case does not exist for the branch node.
-/// Specifically, if all of the following holds true for the branch where:
-/// - It has exactly two children.
-/// - One child that is a hash node.
-/// - One child that is a leaf node.
-/// - The leaf child ends up getting deleted.
-///
-/// Then we need to return an error, because if the hash node was created from a
-/// leaf node, we are required to collapse the extension key into the leaf node.
-/// However, since it's a hash node, we:
-/// - Have no idea what the original node was.
-/// - Can not access the underlying key if we needed to collapse it.
-///
-/// Because of this, we need to rely on the user to not allow `mpt_trie` to
-/// arrive at this state, as we can not ensure that we will be able to produce
-/// the correct trie.
 fn collapse_ext_node_if_needed<N: PartialTrie>(
     ext_nibbles: &Nibbles,
     child: &WrappedNode<N>,
-    curr_key: &Nibbles,
 ) -> TrieOpResult<WrappedNode<N>> {
     trace!(
         "Collapsing extension node ({:x}) with child {}...",
@@ -657,11 +606,7 @@ fn collapse_ext_node_if_needed<N: PartialTrie>(
             nibbles: leaf_nibbles,
             value,
         } => Ok(leaf(ext_nibbles.merge_nibbles(leaf_nibbles), value.clone())),
-        Node::Hash(h) => Err(TrieOpError::ExtensionCollapsedIntoHashError(
-            curr_key.merge_nibbles(ext_nibbles),
-            *h,
-        )),
-        // Can never do this safely, so return an error.
+        Node::Hash(_) => Ok(extension(*ext_nibbles, child.clone())),
         _ => Err(TrieOpError::HashNodeExtError(TrieNodeType::from(child))),
     }
 }
@@ -871,7 +816,6 @@ fn create_node_if_ins_val_not_hash<N, F: FnOnce(Vec<u8>) -> WrappedNode<N>>(
 mod tests {
     use std::{collections::HashSet, iter::once};
 
-    use keccak_hash::H256;
     use log::debug;
 
     use super::ValOrHash;
@@ -885,7 +829,7 @@ mod tests {
             generate_n_random_variable_trie_value_entries, get_non_hash_values_in_trie,
             unwrap_iter_item_to_val, TestInsertValEntry,
         },
-        trie_ops::{TrieOpError, TrieOpResult},
+        trie_ops::TrieOpResult,
         utils::{create_mask_of_1s, TryFromIterator},
     };
 
@@ -1200,38 +1144,6 @@ mod tests {
         assert!(res.is_none());
 
         Ok(())
-    }
-
-    #[test]
-    fn collapsing_an_extension_to_a_hash_node_returns_error() -> TrieOpResult<()> {
-        common_setup();
-
-        // We want to create a trie like this:
-        // ```
-        //       B
-        //      / \
-        //     L   H
-        // ```
-        // If we delete the Leaf, then the Branch will collapse into an Extension and
-        // then the extension will attempt to collapse into it's child (the Hash node).
-        // An extension collapsing into a hash node is an error, so we should expect
-        // that an error is returned.
-
-        // Branch at `0x1`
-        // Leaf at `0x12`
-        // Hash at `0x13`
-        let mut trie = HashedPartialTrie::default();
-
-        trie.insert(0x12, vec![10])?;
-        trie.insert(0x13, H256::zero())?;
-
-        // Delete the leaf to trigger the collapse.
-        let res = trie.delete(0x12);
-        if let Err(TrieOpError::ExtensionCollapsedIntoHashError(_, _)) = res {
-            return Ok(());
-        }
-
-        panic!("Expected an extension collapsed into a hash error!");
     }
 
     #[test]

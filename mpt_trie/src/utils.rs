@@ -109,7 +109,7 @@ pub trait IntoTrieKey {
 
 impl<P: Borrow<TrieSegment>, T: Iterator<Item = P>> IntoTrieKey for T {
     fn into_key(self) -> Nibbles {
-        let mut key = Nibbles::empty();
+        let mut key = Nibbles::default();
 
         for seg in self {
             match seg.borrow() {
