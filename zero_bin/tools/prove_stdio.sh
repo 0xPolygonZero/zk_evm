@@ -93,9 +93,10 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee $TEST_OUT_PATH
+    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE &> $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
+        rm $TEST_OUT_PATH
         exit
     else
          echo "Failed to create proof witnesses. See \"zk_evm/tools/test.out\" for more details."
@@ -106,7 +107,7 @@ fi
 cargo build --release --jobs "$num_procs"
 
 start_time=$(date +%s%N)
-"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE | tee $LEADER_OUT_PATH
+"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE &> $LEADER_OUT_PATH
 end_time=$(date +%s%N)
 
 tail -n 1 $LEADER_OUT_PATH > $PROOFS_JSON_PATH
@@ -119,6 +120,7 @@ if grep -q 'All proofs verified successfully!' $VERIFY_OUT_PATH; then
     echo "Success!"
     echo "Duration:" $duration_sec " seconds"
     echo "Note, this duration is inclusive of circuit handling and overall process initialization";
+    rm $LEADER_OUT_PATH $VERIFY_OUT_PATH # we keep the generated proof for potential reuse
 else
     echo "there was an issue with proof verification";
     exit 1
