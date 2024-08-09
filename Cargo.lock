@@ -5128,6 +5128,7 @@ dependencies = [
  "serde_path_to_error",
  "smt_trie",
  "stackstack",
+ "strum",
  "thiserror",
  "u4",
  "winnow 0.6.13",

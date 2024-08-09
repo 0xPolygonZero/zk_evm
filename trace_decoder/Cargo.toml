@@ -33,6 +33,7 @@ rlp = { workspace = true }
 serde = { workspace = true }
 smt_trie = { workspace = true }
 stackstack = "0.3.0"
+strum = { version = "0.26.3", features = ["derive"] }
 thiserror = { workspace = true }
 u4 = { workspace = true }
 winnow = { workspace = true }

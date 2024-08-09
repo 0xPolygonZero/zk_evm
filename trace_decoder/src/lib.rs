@@ -437,12 +437,14 @@ pub fn entrypoint(
         txn_info.insert(0, ProcessedTxnInfo::default());
     }
 
-    Ok(ProcessedBlockTrace {
-        tries: pre_images.tries,
-        txn_info,
-        withdrawals: other.b_data.withdrawals.clone(),
-    }
-    .into_txn_proof_gen_ir(other)?)
+    decoding::into_txn_proof_gen_ir(
+        ProcessedBlockTrace {
+            tries: pre_images.tries,
+            txn_info,
+            withdrawals: other.b_data.withdrawals.clone(),
+        },
+        other,
+    )
 }
 
 #[derive(Debug, Default)]
