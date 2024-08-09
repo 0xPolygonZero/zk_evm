@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::anyhow;
+#[cfg(feature = "cdk_erigon")]
+use ethereum_types::H160;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
@@ -53,6 +55,10 @@ pub struct GenerationInputs {
     /// A None would yield an empty proof, otherwise this contains the encoding
     /// of a transaction.
     pub signed_txn: Option<Vec<u8>>,
+    #[cfg(feature = "cdk_erigon")]
+    /// Target address for the base fee to be 'burnt', if there is one. If
+    /// `None`, then the base fee is directly burnt.
+    pub burn_addr: Option<H160>,
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
@@ -110,6 +116,10 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
     let metadata = &inputs.block_metadata;
     let tries = &inputs.tries;
     let trie_roots_after = &inputs.trie_roots_after;
+    #[cfg(feature = "cdk_erigon")]
+    let burn_addr = inputs
+        .burn_addr
+        .map_or_else(U256::max_value, |addr| U256::from_big_endian(&addr.0));
     let fields = [
         (
             GlobalMetadata::BlockBeneficiary,
@@ -175,6 +185,8 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         ),
         (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
         (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
+        #[cfg(feature = "cdk_erigon")]
+        (GlobalMetadata::BurnAddr, burn_addr),
     ];
 
     let channel = MemoryChannel::GeneralPurpose(0);
@@ -280,6 +292,12 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let public_values = PublicValues {
         trie_roots_before,
         trie_roots_after,
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: if let Some(burn_addr) = inputs.burn_addr {
+            U256::from_big_endian(&burn_addr.0)
+        } else {
+            U256::MAX
+        },
         block_metadata: inputs.block_metadata,
         block_hashes: inputs.block_hashes,
         extra_block_data,

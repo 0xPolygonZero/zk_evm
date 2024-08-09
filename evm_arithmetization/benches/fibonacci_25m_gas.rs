@@ -178,6 +178,8 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
 
     Ok(GenerationInputs {
         signed_txn: Some(txn.to_vec()),
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: None,
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after,

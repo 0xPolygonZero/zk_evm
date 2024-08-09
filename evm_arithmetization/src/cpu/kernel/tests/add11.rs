@@ -15,7 +15,7 @@ use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use crate::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
-    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
     GLOBAL_EXIT_ROOT_ACCOUNT,
 };
 use crate::GenerationInputs;
@@ -181,6 +181,8 @@ fn test_add11_yml() {
 
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,
@@ -208,6 +210,7 @@ fn test_add11_yml() {
 
 #[test]
 fn test_add11_yml_with_exception() {
+    init_logger();
     // In this test, we make sure that the user code throws a stack underflow
     // exception.
     let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
@@ -362,6 +365,8 @@ fn test_add11_yml_with_exception() {
 
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,

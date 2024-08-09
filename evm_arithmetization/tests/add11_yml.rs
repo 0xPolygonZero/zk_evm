@@ -109,6 +109,13 @@ fn add11_yml() -> anyhow::Result<()> {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
+        #[cfg(feature = "cdk_erigon")]
+        let beneficiary_account_after = AccountRlp {
+            nonce: 1.into(),
+            balance: block_metadata.block_base_fee * block_metadata.block_gas_used,
+            ..AccountRlp::default()
+        };
+        #[cfg(not(feature = "cdk_erigon"))]
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -174,6 +181,8 @@ fn add11_yml() -> anyhow::Result<()> {
     };
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr: Some(Address::from(beneficiary)),
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,

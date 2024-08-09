@@ -138,6 +138,29 @@ fn observe_extra_block_data_target<
     challenger.observe_element(extra_data.gas_used_after);
 }
 
+#[cfg(feature = "cdk_erigon")]
+fn observe_burn_addr<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
+    challenger: &mut Challenger<F, C::Hasher>,
+    burn_addr: U256,
+) -> Result<(), ProgramError> {
+    challenger.observe_elements(&u256_limbs(burn_addr));
+    Ok(())
+}
+
+#[cfg(feature = "cdk_erigon")]
+fn observe_burn_addr_target<
+    F: RichField + Extendable<D>,
+    C: GenericConfig<D, F = F>,
+    const D: usize,
+>(
+    challenger: &mut RecursiveChallenger<F, C::Hasher, D>,
+    burn_addr: BurnAddrTarget,
+) where
+    C::Hasher: AlgebraicHasher<F>,
+{
+    challenger.observe_elements(&burn_addr.burn_addr);
+}
+
 fn observe_block_hashes<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -178,7 +201,13 @@ pub(crate) fn observe_public_values<
     observe_trie_roots::<F, C, D>(challenger, &public_values.trie_roots_after);
     observe_block_metadata::<F, C, D>(challenger, &public_values.block_metadata)?;
     observe_block_hashes::<F, C, D>(challenger, &public_values.block_hashes);
-    observe_extra_block_data::<F, C, D>(challenger, &public_values.extra_block_data)
+    #[cfg(not(feature = "cdk_erigon"))]
+    return observe_extra_block_data::<F, C, D>(challenger, &public_values.extra_block_data);
+    #[cfg(feature = "cdk_erigon")]
+    {
+        observe_extra_block_data::<F, C, D>(challenger, &public_values.extra_block_data)?;
+        observe_burn_addr::<F, C, D>(challenger, public_values.burn_addr)
+    }
 }
 
 pub(crate) fn observe_public_values_target<
@@ -196,6 +225,8 @@ pub(crate) fn observe_public_values_target<
     observe_block_metadata_target::<F, C, D>(challenger, &public_values.block_metadata);
     observe_block_hashes_target::<F, C, D>(challenger, &public_values.block_hashes);
     observe_extra_block_data_target::<F, C, D>(challenger, &public_values.extra_block_data);
+    #[cfg(feature = "cdk_erigon")]
+    observe_burn_addr_target::<F, C, D>(challenger, public_values.burn_addr);
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {

@@ -34,6 +34,8 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
+#[cfg(feature = "cdk_erigon")]
+use crate::proof::BurnAddrTarget;
 use crate::proof::{
     BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, ExtraBlockData,
     ExtraBlockDataTarget, PublicValues, PublicValuesTarget, TrieRoots, TrieRootsTarget,
@@ -424,6 +426,16 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
         );
     });
 
+    #[cfg(feature = "cdk_erigon")]
+    let mut sum = add_data_write(
+        builder,
+        challenge,
+        sum,
+        metadata_segment,
+        GlobalMetadata::BurnAddr.unscale(),
+        &public_values.burn_addr.burn_addr,
+    );
+
     block_fields_arrays.map(|(field, targets)| {
         sum = add_data_write(
             builder,
@@ -571,16 +583,28 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
 ) -> PublicValuesTarget {
     let trie_roots_before = add_virtual_trie_roots(builder);
     let trie_roots_after = add_virtual_trie_roots(builder);
+    #[cfg(feature = "cdk_erigon")]
+    let burn_addr = add_virtual_burn_addr(builder);
     let block_metadata = add_virtual_block_metadata(builder);
     let block_hashes = add_virtual_block_hashes(builder);
     let extra_block_data = add_virtual_extra_block_data(builder);
     PublicValuesTarget {
         trie_roots_before,
         trie_roots_after,
+        #[cfg(feature = "cdk_erigon")]
+        burn_addr,
         block_metadata,
         block_hashes,
         extra_block_data,
     }
+}
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) fn add_virtual_burn_addr<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+) -> BurnAddrTarget {
+    let burn_addr = builder.add_virtual_public_input_arr();
+    BurnAddrTarget { burn_addr }
 }
 
 pub(crate) fn add_virtual_trie_roots<F: RichField + Extendable<D>, const D: usize>(
@@ -704,6 +728,12 @@ where
         &public_values_target.extra_block_data,
         &public_values.extra_block_data,
     )?;
+    #[cfg(feature = "cdk_erigon")]
+    set_burn_addr_target(
+        witness,
+        &public_values_target.burn_addr,
+        public_values.burn_addr,
+    )?;
 
     Ok(())
 }
@@ -760,6 +790,22 @@ pub(crate) fn set_trie_roots_target<F, W, const D: usize>(
             F::from_canonical_u32((limb >> 32) as u32),
         );
     }
+}
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) fn set_burn_addr_target<F, W, const D: usize>(
+    witness: &mut W,
+    burn_addr_target: &BurnAddrTarget,
+    burn_addr: U256,
+) -> Result<(), ProgramError>
+where
+    F: RichField + Extendable<D>,
+    W: Witness<F>,
+{
+    let burn_addr_limbs: [F; 8] = u256_limbs::<F>(burn_addr);
+    witness.set_target_arr(&burn_addr_target.burn_addr, &burn_addr_limbs);
+
+    Ok(())
 }
 
 pub(crate) fn set_block_metadata_target<F, W, const D: usize>(
