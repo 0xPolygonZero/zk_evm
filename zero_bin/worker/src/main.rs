@@ -5,7 +5,7 @@ use clap::Parser;
 use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::WorkerRuntime;
-use zero_bin_common::prover_state::cli::CliProverStateConfig;
+use zero_bin_common::prover_state::{cli::CliProverStateConfig, persistence::set_circuit_cache_dir_env_if_not_set};
 use zero_bin_common::version;
 
 mod init;
@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
 
     dotenv().ok();
     init::tracing();
+    set_circuit_cache_dir_env_if_not_set()?;
     let args = Cli::parse();
 
     args.prover_state_config

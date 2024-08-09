@@ -10,7 +10,7 @@ use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use tracing::{info, warn};
-use zero_bin_common::block_interval::BlockInterval;
+use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set};
 use zero_bin_common::version;
 
 use crate::client::{client_main, ProofParams};
@@ -38,6 +38,7 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProo
 #[tokio::main]
 async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
+    set_circuit_cache_dir_env_if_not_set()?;
     init::tracing();
 
     if env::var_os(EVM_ARITHMETIZATION_PKG_VER).is_none() {

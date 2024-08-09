@@ -292,7 +292,7 @@ fn circuit_dir() -> String {
 /// We store serialized circuits inside the cache directory specified by an env
 /// variable. If the user does not set this, then we set it base to the OS's
 /// standard location for the cache directory.
-pub(crate) fn set_circuit_cache_dir_env_if_not_set() -> anyhow::Result<()> {
+pub fn set_circuit_cache_dir_env_if_not_set() -> anyhow::Result<()> {
     if std::env::var_os(ZK_EVM_CACHE_DIR_ENV).is_none() {
         let circuit_cache_dir = match ProjectDirs::from("", "", ZK_EVM_CACHE_DIR_NAME) {
             Some(proj_dir) => proj_dir.cache_dir().to_path_buf(),
