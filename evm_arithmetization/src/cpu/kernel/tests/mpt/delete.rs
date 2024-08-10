@@ -11,7 +11,10 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{nibbles_64, test_account_1_rlp, test_account_2};
 use crate::generation::mpt::AccountRlp;
+use crate::generation::state::State;
 use crate::generation::TrieInputs;
+use crate::memory::segments::Segment;
+use crate::util::h2u;
 use crate::Node;
 
 #[test]
@@ -105,6 +108,39 @@ fn test_state_trie(
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
+    // Store initial accounts and storage.
+    interpreter
+        .halt_offsets
+        .push(KERNEL.global_labels["after_store_initial"]);
+    interpreter.generation_state.registers.program_counter = KERNEL.global_labels["store_initial"];
+    interpreter.run();
+
+    assert_eq!(interpreter.stack(), vec![]);
+    // Set initial tries.
+    interpreter
+        .push(0xDEADBEEFu32.into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push((Segment::StorageLinkedList as usize + 8).into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push((Segment::AccountsLinkedList as usize + 6).into())
+        .expect("The stack should not overflow");
+    interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
+
+    // Now, set the payload.
+    interpreter.generation_state.registers.program_counter =
+        KERNEL.global_labels["mpt_set_payload"];
+
+    interpreter.run()?;
+
+    assert_eq!(interpreter.stack_len(), 2);
+
+    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
+    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
+    interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
+    interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
+
     // Next, execute mpt_insert_state_trie.
     interpreter.generation_state.registers.program_counter = mpt_insert_state_trie;
     let trie_data = interpreter.get_trie_data_mut();
@@ -140,6 +176,14 @@ fn test_state_trie(
         interpreter.stack()
     );
 
+    // Now, run `set_final_tries` so that the trie roots are correct.
+    interpreter
+        .push(0xDEADBEEFu32.into())
+        .expect("The stack should not overflow");
+    interpreter.generation_state.registers.program_counter =
+        KERNEL.global_labels["set_final_tries"];
+    interpreter.run()?;
+
     // Next, execute mpt_delete, deleting the account we just inserted.
     let state_trie_ptr = interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot);
     interpreter.generation_state.registers.program_counter = mpt_delete;
@@ -159,20 +203,32 @@ fn test_state_trie(
     let state_trie_ptr = interpreter.pop().expect("The stack should not be empty");
     interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_trie_ptr);
 
-    // Now, execute mpt_hash_state_trie.
+    // Now, execute `mpt_hash_state_trie`.
+    let expected_state_trie_hash = state_trie.hash();
+    interpreter.set_global_metadata_field(
+        GlobalMetadata::StateTrieRootDigestAfter,
+        h2u(expected_state_trie_hash),
+    );
+
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
+
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(1.into()) // Initial length of the trie data segment, unused.
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");
     interpreter.run()?;
 
-    let state_trie_hash =
-        H256::from_uint(&interpreter.pop().expect("The stack should not be empty"));
-    let expected_state_trie_hash = state_trie.hash();
-    assert_eq!(state_trie_hash, expected_state_trie_hash);
+    assert_eq!(
+        interpreter.stack().len(),
+        2,
+        "Expected 2 items on stack after hashing, found {:?}",
+        interpreter.stack()
+    );
+
+    let hash = interpreter.pop().expect("The stack should not be empty");
+    assert_eq!(hash, h2u(expected_state_trie_hash));
 
     Ok(())
 }

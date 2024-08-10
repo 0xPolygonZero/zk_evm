@@ -16,9 +16,10 @@ use std::{fmt::Display, sync::OnceLock};
 use clap::ValueEnum;
 use evm_arithmetization::{
     fixed_recursive_verifier::ProverOutputData,
+    generation::TrimmedGenerationInputs,
     proof::AllProof,
     prover::{prove, GenerationSegmentData},
-    AllStark, GenerationInputs, StarkConfig,
+    AllStark, StarkConfig,
 };
 use plonky2::{
     field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
@@ -196,7 +197,7 @@ impl ProverStateManager {
     /// and finally aggregating them to a final transaction proof.
     fn segment_proof_on_demand(
         &self,
-        input: GenerationInputs,
+        input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let config = StarkConfig::standard_fast_config();
@@ -205,7 +206,7 @@ impl ProverStateManager {
         let all_proof = prove(
             &all_stark,
             &config,
-            input.clone(),
+            input,
             segment_data,
             &mut TimingTree::default(),
             None,
@@ -225,13 +226,13 @@ impl ProverStateManager {
     /// circuit.
     fn segment_proof_monolithic(
         &self,
-        input: GenerationInputs,
+        input: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
     ) -> anyhow::Result<GeneratedSegmentProof> {
         let p_out = p_state().state.prove_segment(
             &AllStark::default(),
             &StarkConfig::standard_fast_config(),
-            input.clone(),
+            input,
             segment_data,
             &mut TimingTree::default(),
             None,

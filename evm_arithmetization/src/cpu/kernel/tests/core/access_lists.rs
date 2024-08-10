@@ -73,15 +73,14 @@ fn test_list_iterator() -> Result<()> {
         .get_addresses_access_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    let Some((pos_0, next_val_0, _)) = list.next() else {
+    let Some([next_val_0, _]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(pos_0, 0);
     assert_eq!(next_val_0, U256::MAX);
-    let Some((pos_0, _, _)) = list.next() else {
+    let Some([_, pos_0]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(pos_0, 0);
+    assert_eq!(pos_0, U256::from(Segment::AccessedAddresses as usize));
     Ok(())
 }
 

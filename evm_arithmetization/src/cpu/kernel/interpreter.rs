@@ -20,7 +20,7 @@ use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
-use crate::generation::mpt::{load_all_mpts, TrieRootPtrs};
+use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
     all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
@@ -67,8 +67,6 @@ pub(crate) struct Interpreter<F: Field> {
     pub(crate) clock: usize,
     /// Log of the maximal number of CPU cycles in one segment execution.
     max_cpu_len_log: Option<usize>,
-    /// Indicates whethere this is a dummy run.
-    is_dummy: bool,
 }
 
 /// Simulates the CPU execution from `state` until the program counter reaches
@@ -143,16 +141,10 @@ pub(crate) fn set_registers_and_run<F: Field>(
     .iter()
     .enumerate()
     .for_each(|(i, reg_content)| {
-        let (addr, val) = (
-            MemoryAddress::new_u256s(
-                0.into(),
-                (Segment::RegistersStates.unscale()).into(),
-                i.into(),
-            )
-            .expect("All input values are known to be valid for MemoryAddress"),
+        interpreter.generation_state.memory.set(
+            MemoryAddress::new(0, Segment::RegistersStates, i),
             *reg_content,
-        );
-        interpreter.generation_state.memory.set(addr, val);
+        )
     });
 
     interpreter.run()
@@ -174,22 +166,6 @@ impl<F: Field> Interpreter<F> {
         result
     }
 
-    /// Returns an instance of `Interpreter` given `GenerationInputs`, and
-    /// assuming we are initializing with the `KERNEL` code.
-    pub(crate) fn new_dummy_with_generation_inputs(
-        initial_offset: usize,
-        initial_stack: Vec<U256>,
-        inputs: &GenerationInputs,
-    ) -> Self {
-        debug_inputs(inputs);
-
-        let max_cpu_len = Some(NUM_EXTRA_CYCLES_BEFORE + NUM_EXTRA_CYCLES_AFTER);
-        let mut result =
-            Self::new_with_generation_inputs(initial_offset, initial_stack, inputs, max_cpu_len);
-        result.is_dummy = true;
-        result
-    }
-
     pub(crate) fn new(
         initial_offset: usize,
         initial_stack: Vec<U256>,
@@ -207,7 +183,6 @@ impl<F: Field> Interpreter<F> {
             is_jumpdest_analysis: false,
             clock: 0,
             max_cpu_len_log,
-            is_dummy: false,
         };
         interpreter.generation_state.registers.program_counter = initial_offset;
         let initial_stack_len = initial_stack.len();
@@ -239,7 +214,6 @@ impl<F: Field> Interpreter<F> {
             is_jumpdest_analysis: true,
             clock: 0,
             max_cpu_len_log,
-            is_dummy: false,
         }
     }
 
@@ -259,16 +233,27 @@ impl<F: Field> Interpreter<F> {
         self.generation_state.inputs = inputs.trim();
 
         // Initialize the MPT's pointers.
-        let (trie_root_ptrs, trie_data) =
-            load_all_mpts(tries).expect("Invalid MPT data for preinitialization");
+        let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(&inputs.tries)
+                .expect("Invalid MPT data for preinitialization");
+
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
 
         // Initialize the `TrieData` segment.
-        let preinit_trie_data_segment = MemorySegmentState {
-            content: trie_data.iter().map(|&elt| Some(elt)).collect::<Vec<_>>(),
+        let preinit_trie_data_segment = MemorySegmentState { content: trie_data };
+        let preinit_accounts_ll_segment = MemorySegmentState {
+            content: state_leaves,
+        };
+        let preinit_storage_ll_segment = MemorySegmentState {
+            content: storage_leaves,
         };
         self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
+        self.insert_preinitialized_segment(
+            Segment::AccountsLinkedList,
+            preinit_accounts_ll_segment,
+        );
+        self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
@@ -339,12 +324,7 @@ impl<F: Field> Interpreter<F> {
         let final_block_bloom_fields = (0..8)
             .map(|i| {
                 (
-                    MemoryAddress::new_u256s(
-                        U256::zero(),
-                        (Segment::GlobalBlockBloom.unscale()).into(),
-                        i.into(),
-                    )
-                    .expect("This cannot panic as `virt` fits in a `u32`"),
+                    MemoryAddress::new(0, Segment::GlobalBlockBloom, i),
                     metadata.block_bloom[i],
                 )
             })
@@ -356,12 +336,7 @@ impl<F: Field> Interpreter<F> {
         let block_hashes_fields = (0..256)
             .map(|i| {
                 (
-                    MemoryAddress::new_u256s(
-                        U256::zero(),
-                        (Segment::BlockHashes.unscale()).into(),
-                        i.into(),
-                    )
-                    .expect("This cannot panic as `virt` fits in a `u32`"),
+                    MemoryAddress::new(0, Segment::BlockHashes, i),
                     h2u(inputs.block_hashes.prev_hashes[i]),
                 )
             })
@@ -381,12 +356,7 @@ impl<F: Field> Interpreter<F> {
         let registers_before_fields = (0..registers_before.len())
             .map(|i| {
                 (
-                    MemoryAddress::new_u256s(
-                        0.into(),
-                        (Segment::RegistersStates.unscale()).into(),
-                        i.into(),
-                    )
-                    .unwrap(),
+                    MemoryAddress::new(0, Segment::RegistersStates, i),
                     registers_before[i],
                 )
             })
@@ -651,6 +621,10 @@ impl<F: Field> State<F> for Interpreter<F> {
                 memory_state.contexts[ctx_idx] = ctx.clone();
             }
         }
+
+        memory_state.preinitialized_segments =
+            self.generation_state.memory.preinitialized_segments.clone();
+
         Some(memory_state)
     }
 

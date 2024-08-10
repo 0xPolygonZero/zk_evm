@@ -53,6 +53,7 @@ impl BlockProverInput {
         use anyhow::Context as _;
         use evm_arithmetization::prover::{SegmentDataChunkIterator, SegmentDataIterator};
         use paladin::directive::{Directive, IndexedStream};
+        use proof_gen::types::Field;
 
         let ProverConfig {
             max_cpu_len_log,
@@ -94,11 +95,8 @@ impl BlockProverInput {
         let mut all_block_batch_proofs = Vec::new();
         // Loop for all generation inputs in the block
         for generation_inputs in block_generation_inputs {
-            let mut segment_data_iter = SegmentDataIterator {
-                partial_next_data: None,
-                inputs: &generation_inputs,
-                max_cpu_len_log: Some(max_cpu_len_log),
-            };
+            let mut segment_data_iter =
+                SegmentDataIterator::<Field>::new(&generation_inputs, Some(max_cpu_len_log));
             let mut chunk_segment_iter =
                 SegmentDataChunkIterator::new(&mut segment_data_iter, segment_chunk_size);
 
@@ -170,7 +168,7 @@ impl BlockProverInput {
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
-        use evm_arithmetization::prover::testing::simulate_all_segments_interpreter;
+        use evm_arithmetization::prover::testing::simulate_execution_all_segments;
         use plonky2::field::goldilocks_field::GoldilocksField;
 
         let block_number = self.get_block_number();
@@ -185,7 +183,7 @@ impl BlockProverInput {
 
         type F = GoldilocksField;
         for txn in txs.into_iter() {
-            simulate_all_segments_interpreter::<F>(txn, prover_config.max_cpu_len_log)?;
+            simulate_execution_all_segments::<F>(txn, prover_config.max_cpu_len_log)?;
         }
 
         // Wait for previous block proof

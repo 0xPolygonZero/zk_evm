@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::anyhow;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
+use keccak_hash::keccak;
 use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
@@ -32,11 +33,12 @@ use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
 
+pub(crate) mod linked_list;
 pub mod mpt;
 pub(crate) mod prover_input;
 pub(crate) mod rlp;
 pub(crate) mod state;
-mod trie_extractor;
+pub(crate) mod trie_extractor;
 
 use crate::witness::util::mem_write_log;
 
@@ -93,39 +95,43 @@ pub struct GenerationInputs {
 /// A lighter version of [`GenerationInputs`], which have been trimmed
 /// post pre-initialization processing.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub(crate) struct TrimmedGenerationInputs {
-    /// The index of the transaction being proven within its block.
-    pub(crate) txn_number_before: U256,
+pub struct TrimmedGenerationInputs {
+    pub trimmed_tries: TrimmedTrieInputs,
+    /// The index of the first transaction in this payload being proven within
+    /// its block.
+    pub txn_number_before: U256,
     /// The cumulative gas used through the execution of all transactions prior
-    /// the current one.
-    pub(crate) gas_used_before: U256,
-    /// The cumulative gas used after the execution of the current transaction.
-    /// The exact gas used by the current transaction is `gas_used_after` -
-    /// `gas_used_before`.
-    pub(crate) gas_used_after: U256,
+    /// the current ones.
+    pub gas_used_before: U256,
+    /// The cumulative gas used after the execution of the current batch of
+    /// transactions. The exact gas used by the current batch of transactions
+    /// is `gas_used_after` - `gas_used_before`.
+    pub gas_used_after: U256,
 
-    /// Indicates whether there is an actual transaction or a dummy payload.
-    pub(crate) txns_len: usize,
+    /// The list of txn hashes contained in this batch.
+    pub txn_hashes: Vec<H256>,
 
-    /// Expected trie roots after the transactions are executed.
-    pub(crate) trie_roots_after: TrieRoots,
+    /// Expected trie roots before these transactions are executed.
+    pub trie_roots_before: TrieRoots,
+    /// Expected trie roots after these transactions are executed.
+    pub trie_roots_after: TrieRoots,
 
     /// State trie root of the checkpoint block.
     /// This could always be the genesis block of the chain, but it allows a
     /// prover to continue proving blocks from certain checkpoint heights
     /// without requiring proofs for blocks past this checkpoint.
-    pub(crate) checkpoint_state_trie_root: H256,
+    pub checkpoint_state_trie_root: H256,
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
-    pub(crate) contract_code: HashMap<H256, Vec<u8>>,
+    pub contract_code: HashMap<H256, Vec<u8>>,
 
     /// Information contained in the block header.
-    pub(crate) block_metadata: BlockMetadata,
+    pub block_metadata: BlockMetadata,
 
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
-    pub(crate) block_hashes: BlockHashes,
+    pub block_hashes: BlockHashes,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -151,16 +157,48 @@ pub struct TrieInputs {
     pub storage_tries: Vec<(H256, HashedPartialTrie)>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct TrimmedTrieInputs {
+    /// A partial version of the state trie prior to these transactions. It
+    /// should include all nodes that will be accessed by these
+    /// transactions.
+    pub state_trie: HashedPartialTrie,
+    /// A partial version of each storage trie prior to these transactions. It
+    /// should include all storage tries, and nodes therein, that will be
+    /// accessed by these transactions.
+    pub storage_tries: Vec<(H256, HashedPartialTrie)>,
+}
+
+impl TrieInputs {
+    pub(crate) fn trim(&self) -> TrimmedTrieInputs {
+        TrimmedTrieInputs {
+            state_trie: self.state_trie.clone(),
+            storage_tries: self.storage_tries.clone(),
+        }
+    }
+}
 impl GenerationInputs {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
     pub(crate) fn trim(&self) -> TrimmedGenerationInputs {
+        let txn_hashes = self
+            .signed_txns
+            .iter()
+            .map(|tx_bytes| keccak(&tx_bytes[..]))
+            .collect();
+
         TrimmedGenerationInputs {
+            trimmed_tries: self.tries.trim(),
             txn_number_before: self.txn_number_before,
             gas_used_before: self.gas_used_before,
             gas_used_after: self.gas_used_after,
-            txns_len: self.signed_txns.len(),
+            txn_hashes,
+            trie_roots_before: TrieRoots {
+                state_root: self.tries.state_trie.hash(),
+                transactions_root: self.tries.transactions_trie.hash(),
+                receipts_root: self.tries.receipts_trie.hash(),
+            },
             trie_roots_after: self.trie_roots_after.clone(),
             checkpoint_state_trie_root: self.checkpoint_state_trie_root,
             contract_code: self.contract_code.clone(),
@@ -172,12 +210,11 @@ impl GenerationInputs {
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
     state: &mut GenerationState<F>,
-    inputs: &GenerationInputs,
+    inputs: &TrimmedGenerationInputs,
     registers_before: &RegistersData,
     registers_after: &RegistersData,
 ) {
     let metadata = &inputs.block_metadata;
-    let tries = &inputs.tries;
     let trie_roots_after = &inputs.trie_roots_after;
     let fields = [
         (
@@ -204,19 +241,19 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
         (
             GlobalMetadata::TxnNumberAfter,
-            inputs.txn_number_before + inputs.signed_txns.len(),
+            inputs.txn_number_before + inputs.txn_hashes.len(),
         ),
         (
             GlobalMetadata::StateTrieRootDigestBefore,
-            h2u(tries.state_trie.hash()),
+            h2u(inputs.trie_roots_before.state_root),
         ),
         (
             GlobalMetadata::TransactionTrieRootDigestBefore,
-            h2u(tries.transactions_trie.hash()),
+            h2u(inputs.trie_roots_before.transactions_root),
         ),
         (
             GlobalMetadata::ReceiptTrieRootDigestBefore,
-            h2u(tries.receipts_trie.hash()),
+            h2u(inputs.trie_roots_before.receipts_root),
         ),
         (
             GlobalMetadata::StateTrieRootDigestAfter,
@@ -367,17 +404,13 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
 type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues);
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
-    inputs: &GenerationInputs,
+    inputs: &TrimmedGenerationInputs,
     config: &StarkConfig,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
 ) -> anyhow::Result<TablesWithPVsAndFinalMem<F>> {
-    debug_inputs(inputs);
-
-    let mut state = GenerationState::<F>::new(inputs, &KERNEL.code)
+    let mut state = GenerationState::<F>::new_with_segment_data(inputs, segment_data)
         .map_err(|err| anyhow!("Failed to parse all the initial prover inputs: {:?}", err))?;
-
-    state.set_segment_data(segment_data);
 
     initialize_kernel_code_and_shift_table(&mut segment_data.memory);
 
@@ -387,13 +420,10 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     // Initialize the state with the one at the end of the
     // previous segment execution, if any.
     let GenerationSegmentData {
-        is_dummy,
-        segment_index,
         max_cpu_len_log,
-        memory,
         registers_before,
         registers_after,
-        extra_data,
+        ..
     } = segment_data;
 
     for &(address, val) in &actual_mem_before {
@@ -407,7 +437,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     let cpu_res = timed!(
         timing,
         "simulate CPU",
-        simulate_cpu(&mut state, *max_cpu_len_log, *is_dummy)
+        simulate_cpu(&mut state, *max_cpu_len_log)
     );
     if cpu_res.is_err() {
         output_debug_tries(&state)?;
@@ -472,7 +502,6 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 fn simulate_cpu<F: Field>(
     state: &mut GenerationState<F>,
     max_cpu_len_log: Option<usize>,
-    is_dummy: bool,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {
     let (final_registers, mem_after) = state.run_cpu(max_cpu_len_log)?;
 

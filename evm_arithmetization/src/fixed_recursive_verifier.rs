@@ -41,7 +41,7 @@ use starky::stark::Stark;
 
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
-use crate::generation::GenerationInputs;
+use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values_target;
 use crate::memory::segments::Segment;
 use crate::proof::{
@@ -49,10 +49,8 @@ use crate::proof::{
     FinalPublicValues, MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget,
     TrieRoots, TrieRootsTarget, TARGET_HASH_SIZE,
 };
-use crate::prover::{
-    check_abort_signal, generate_all_data_segments, prove, GenerationSegmentData,
-    SegmentDataIterator,
-};
+use crate::prover::testing::prove_all_segments;
+use crate::prover::{check_abort_signal, prove, GenerationSegmentData, SegmentDataIterator};
 use crate::recursive_verifier::{
     add_common_recursion_gates, add_virtual_public_values, get_memory_extra_looking_sum_circuit,
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
@@ -1485,7 +1483,7 @@ where
         &self,
         all_stark: &AllStark<F, D>,
         config: &StarkConfig,
-        generation_inputs: GenerationInputs,
+        generation_inputs: TrimmedGenerationInputs,
         segment_data: &mut GenerationSegmentData,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
@@ -1563,20 +1561,16 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<Vec<ProverOutputData<F, C, D>>> {
-        println!("Entering prove all segments");
-        let mut it_segment_data = SegmentDataIterator {
-            inputs: &generation_inputs,
-            partial_next_data: None,
-            max_cpu_len_log: Some(max_cpu_len_log),
-        };
+        let mut segment_iterator =
+            SegmentDataIterator::<F>::new(&generation_inputs, Some(max_cpu_len_log));
 
         let mut proofs = vec![];
 
-        for mut next_data in it_segment_data {
+        for mut next_data in segment_iterator {
             let proof = self.prove_segment(
                 all_stark,
                 config,
-                generation_inputs.clone(),
+                generation_inputs.trim(),
                 &mut next_data.1,
                 timing,
                 abort_signal.clone(),

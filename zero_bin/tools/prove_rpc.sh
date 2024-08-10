@@ -29,15 +29,15 @@ if [[ $8 == "test_only" ]]; then
     export MEMORY_BEFORE_CIRCUIT_SIZE="7..8"
     export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
 else
-    export ARITHMETIC_CIRCUIT_SIZE="16..23"
-    export BYTE_PACKING_CIRCUIT_SIZE="8..23"
-    export CPU_CIRCUIT_SIZE="8..25"
+    export ARITHMETIC_CIRCUIT_SIZE="16..21"
+    export BYTE_PACKING_CIRCUIT_SIZE="8..21"
+    export CPU_CIRCUIT_SIZE="8..21"
     export KECCAK_CIRCUIT_SIZE="4..20"
-    export KECCAK_SPONGE_CIRCUIT_SIZE="8..15"
-    export LOGIC_CIRCUIT_SIZE="8..18"
-    export MEMORY_CIRCUIT_SIZE="17..28"
-    export MEMORY_BEFORE_CIRCUIT_SIZE="7..27"
-    export MEMORY_AFTER_CIRCUIT_SIZE="7..27"
+    export KECCAK_SPONGE_CIRCUIT_SIZE="8..17"
+    export LOGIC_CIRCUIT_SIZE="4..21"
+    export MEMORY_CIRCUIT_SIZE="17..24"
+    export MEMORY_BEFORE_CIRCUIT_SIZE="16..23"
+    export MEMORY_AFTER_CIRCUIT_SIZE="7..23"
 fi
 
 # Force the working directory to always be the `tools/` directory. 

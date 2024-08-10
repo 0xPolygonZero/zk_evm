@@ -4,8 +4,8 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, prover::GenerationSegmentData, AllStark,
-    GenerationInputs, StarkConfig,
+    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs,
+    prover::GenerationSegmentData, AllStark, StarkConfig,
 };
 use hashbrown::HashMap;
 use plonky2::{
@@ -49,7 +49,7 @@ impl From<String> for ProofGenError {
 /// Generates a transaction proof from some IR data.
 pub fn generate_segment_proof(
     p_state: &ProverState,
-    gen_inputs: GenerationInputs,
+    gen_inputs: TrimmedGenerationInputs,
     segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedSegmentProof> {
