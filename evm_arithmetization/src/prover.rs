@@ -3,12 +3,13 @@ use std::iter::once;
 use std::mem::swap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::thread::current;
 
 use anyhow::{anyhow, ensure, Result};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use plonky2::batch_fri::oracle::BatchFriOracle;
-use plonky2::field::extension::Extendable;
+use plonky2::field::extension::{Extendable, FieldExtension};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::field::packable::Packable;
 use plonky2::field::packed::PackedField;
@@ -16,7 +17,7 @@ use plonky2::field::polynomial::{PolynomialCoeffs, PolynomialValues};
 use plonky2::field::types::Field;
 use plonky2::fri::oracle::PolynomialBatch;
 use plonky2::fri::reduction_strategies::FriReductionStrategy;
-use plonky2::fri::structure::{FriInstanceInfo, FriOpeningBatch, FriOracleInfo};
+use plonky2::fri::structure::{FriBatchInfo, FriInstanceInfo, FriOpeningBatch, FriOracleInfo};
 use plonky2::fri::FriConfig;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
@@ -362,6 +363,11 @@ where
     let rate_bits = config.fri_config.rate_bits;
     let cap_height = config.fri_config.cap_height;
 
+    // println!("Mem after trace poly degrees:");
+    // for poly in trace_poly_values[*Table::MemAfter].iter() {
+    //     print!("{} ", poly.degree_plus_one());
+    // }
+
     // We compute the Field Merkle Tree of all STARK traces.
     reorder_slice(trace_poly_values, Table::all(), ALL_SORTED_TABLES);
     let num_trace_polys_sorted_per_table: [usize; NUM_TABLES] = trace_poly_values
@@ -409,6 +415,15 @@ where
         )
     );
 
+    println!("CTL DATA:");
+    for i in 0..NUM_TABLES {
+        println!(
+            "table {}: {} Zs polys",
+            i,
+            ctl_data_per_table[i].zs_columns.len()
+        );
+    }
+
     check_abort_signal(abort_signal)?;
     let lookup_challenges = ctl_challenges
         .challenges
@@ -426,6 +441,10 @@ where
     // From now on we need `trace_poly_values` sorted again.
     reorder_slice(trace_poly_values, Table::all(), ALL_SORTED_TABLES);
 
+    // println!("Mem after aux poly degrees:");
+    // for poly in auxiliary_columns[*Table::MemAfter].iter() {
+    //     print!("{} ", poly.degree_plus_one());
+    // }
     // We compute the Field Merkle Tree of all auxiliary columns.
     reorder_slice(
         auxiliary_columns.as_mut_slice(),
@@ -504,21 +523,33 @@ where
     // `zeta` only, since `(g * zeta)^n = zeta^n`, where `n` is the order of
     // `g`.
     let degree_bits = trace_commitment.degree_bits[0];
-    let g = F::primitive_root_of_unity(degree_bits);
+    let g: F = F::primitive_root_of_unity(degree_bits);
     ensure!(
         zeta.exp_power_of_2(degree_bits) != F::Extension::ONE,
         "Opening point is in the subgroup."
     );
 
-    let all_ctl_helper_columns = num_ctl_helper_columns_by_table(
-        &all_stark.cross_table_lookups,
-        all_stark.arithmetic_stark.constraint_degree(),
-    );
-    let num_ctl_helper_columns_per_table = (0..NUM_TABLES)
-        .map(|i| {
-            all_ctl_helper_columns
+    // let all_ctl_helper_columns = num_ctl_helper_columns_by_table(
+    //     &all_stark.cross_table_lookups,
+    //     all_stark.arithmetic_stark.constraint_degree(),
+    // );
+    // let num_ctl_helper_columns_per_table = (0..NUM_TABLES)
+    //     .map(|i| {
+    //         all_ctl_helper_columns
+    //             .iter()
+    //             .map(|ctl_cols: &[usize; NUM_TABLES]| ctl_cols[i])
+    //             .sum()
+    //     })
+    //     .collect::<Vec<_>>()
+    //     .try_into()
+    //     .unwrap();
+
+    let num_ctl_helper_columns_per_table = Table::all()
+        .iter()
+        .map(|&table| {
+            ctl_data_per_table[*table]
+                .num_ctl_helper_polys()
                 .iter()
-                .map(|ctl_cols: &[usize; NUM_TABLES]| ctl_cols[i])
                 .sum()
         })
         .collect::<Vec<_>>()
@@ -534,6 +565,8 @@ where
         &num_ctl_helper_columns_per_table,
         config,
     );
+
+    // println!("Prover FRI instances:\n{:#?}", all_fri_instances);
 
     // Get the FRI openings and observe them.
     // Compute all openings: evaluate all committed polynomials at `zeta` and, when
@@ -561,8 +594,54 @@ where
         &quotient_commitment,
     ];
 
+    // println!("First instance: {:?}", all_fri_instances[0])
+    // println!("First instance oracles: {:?}", all_fri_instances[0].oracles);
+    // println!("Second instance : {:?}", all_fri_instances[1]);
+    // for batch in all_fri_instances[1].batches.iter() {
+    //     println!("New batch:");
+    //     for poly in batch.polynomials.iter() {
+    //         print!(
+    //             "{} ",
+    //
+    // initial_merkle_trees[poly.oracle_index].polynomials[poly.polynomial_index]
+    //                 .degree_plus_one()
+    //         )
+    //     }
+    // }
+
     let mut degree_bits_squashed = ALL_DEGREE_LOGS.to_vec();
     degree_bits_squashed.dedup();
+    assert_eq!(all_fri_instances.len(), degree_bits_squashed.len());
+
+    // BIG VERIF
+    for (i, instance) in all_fri_instances.iter().enumerate() {
+        let n = 1 << degree_bits_squashed[i];
+        for (
+            j,
+            &FriBatchInfo {
+                point,
+                ref polynomials,
+            },
+        ) in instance.batches.iter().enumerate()
+        {
+            for poly in polynomials {
+                let d_p_one = initial_merkle_trees[poly.oracle_index].polynomials
+                    [poly.polynomial_index]
+                    .degree_plus_one();
+                assert!(
+                    d_p_one <= n,
+                    "Problem at instance {}, batch {}, oracle {}, poly {}, d_p_one = {} while n = {}",
+                    i,
+                    j,
+                    poly.oracle_index,
+                    poly.polynomial_index,
+                    d_p_one,
+                    n,
+                );
+            }
+        }
+    }
+
     let opening_proof = BatchFriOracle::prove_openings(
         &degree_bits_squashed,
         &all_fri_instances,
@@ -597,7 +676,7 @@ where
         trace_cap: trace_commitment.batch_merkle_tree.cap.clone(),
         auxiliary_polys_cap: Some(auxiliary_commitment.batch_merkle_tree.cap),
         quotient_polys_cap: Some(quotient_commitment.batch_merkle_tree.cap),
-        openings: openings.try_into().unwrap(),
+        openings,
         opening_proof,
     };
 
@@ -1023,8 +1102,8 @@ where
     C: GenericConfig<D, F = F>,
     S: Stark<F, D>,
 {
-    let g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]]);
     let sorted_index = TABLE_TO_SORTED_INDEX[*table];
+    let g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[sorted_index]);
     let num_ctl_helper_polys = num_ctl_helper_columns_per_table[*table];
     let mut num_trace_polys_before = 0;
     let mut num_aux_polys_before = 0;
@@ -1038,6 +1117,12 @@ where
     let num_quotient_polys = num_quotient_polys_sorted[sorted_index];
     let num_cols_before_ctlzs =
         num_aux_polys_before + stark.num_lookup_helper_columns(config) + num_ctl_helper_polys;
+
+    println!(
+        "table {:?}, {} CTLZ polys",
+        table,
+        num_aux_columns - stark.num_lookup_helper_columns(config) - num_ctl_helper_polys
+    );
 
     stark.fri_instance_batch(
         zeta,
@@ -1182,6 +1267,7 @@ where
 
     let mut squashed_res = Vec::new();
     let mut i = 0;
+    let mut g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[0]);
     let mut current_instance = FriInstanceInfo {
         oracles: vec![
             FriOracleInfo {
@@ -1197,33 +1283,89 @@ where
                 blinding: false,
             },
         ],
-        batches: vec![],
+        batches: vec![
+            FriBatchInfo {
+                point: zeta,
+                polynomials: Vec::new(),
+            },
+            FriBatchInfo {
+                point: zeta.scalar_mul(g),
+                polynomials: Vec::new(),
+            },
+            FriBatchInfo {
+                point: F::Extension::ONE,
+                polynomials: Vec::new(),
+            },
+        ],
     };
 
     while i < NUM_TABLES {
         let instance = &res_sorted[i];
+        // println!("Sorted instance {}", i);
+        // for batch in instance.batches.iter() {
+        //     println!("Batch of {}", batch.polynomials.len());
+        // }
+        // println!("Sorted instance {}, batches: {:?}", i, instance.batches);
         for (k, oracle) in instance.oracles.iter().enumerate() {
             current_instance.oracles[k].num_polys += oracle.num_polys;
         }
-        current_instance.batches.extend(instance.batches.clone());
+        for (current_batch, table_batch) in current_instance
+            .batches
+            .iter_mut()
+            .zip_eq(instance.batches.iter())
+        {
+            assert_eq!(current_batch.point, table_batch.point, "i={}", i);
+            current_batch
+                .polynomials
+                .extend(table_batch.polynomials.iter());
+        }
+        // current_instance.batches.extend(instance.batches.clone());
 
         if i == NUM_TABLES - 1 || ALL_DEGREE_LOGS[i + 1] < ALL_DEGREE_LOGS[i] {
+            println!("Squashed instance {}", squashed_res.len());
+            for batch in current_instance.batches.iter() {
+                println!("Batch of {}", batch.polynomials.len());
+            }
+
+            for batch in current_instance.batches.iter_mut() {
+                batch.polynomials.sort_by_key(|p| p.oracle_index);
+            }
+
             squashed_res.push(current_instance.clone());
-            current_instance.oracles = vec![
-                FriOracleInfo {
-                    num_polys: 0,
-                    blinding: false,
-                },
-                FriOracleInfo {
-                    num_polys: 0,
-                    blinding: false,
-                },
-                FriOracleInfo {
-                    num_polys: 0,
-                    blinding: false,
-                },
-            ];
-            current_instance.batches = vec![];
+            if i < NUM_TABLES - 1 {
+                g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[i + 1]);
+                current_instance = FriInstanceInfo {
+                    oracles: vec![
+                        FriOracleInfo {
+                            num_polys: 0,
+                            blinding: false,
+                        },
+                        FriOracleInfo {
+                            num_polys: 0,
+                            blinding: false,
+                        },
+                        FriOracleInfo {
+                            num_polys: 0,
+                            blinding: false,
+                        },
+                    ],
+                    batches: vec![
+                        FriBatchInfo {
+                            point: zeta,
+                            polynomials: Vec::new(),
+                        },
+                        FriBatchInfo {
+                            point: zeta.scalar_mul(g),
+                            polynomials: Vec::new(),
+                        },
+                        FriBatchInfo {
+                            point: F::Extension::ONE,
+                            polynomials: Vec::new(),
+                        },
+                    ],
+                };
+            }
+            // current_instance.batches = vec![];
         }
         i += 1;
     }
@@ -1251,11 +1393,11 @@ where
 {
     let g = F::primitive_root_of_unity(ALL_DEGREE_LOGS[TABLE_TO_SORTED_INDEX[*table]]);
     let table_sorted_index = TABLE_TO_SORTED_INDEX[*table];
-    let (_, index_inner) = SORTED_INDEX_PAIR[table_sorted_index];
+    // let (_, index_inner) = SORTED_INDEX_PAIR[table_sorted_index];
     let mut num_trace_polys_before = 0;
     let mut num_aux_polys_before = 0;
     let mut num_quotient_polys_before = 0;
-    for i in 0..index_inner {
+    for i in 0..table_sorted_index {
         let prev_sorted_table = TABLE_TO_SORTED_INDEX[*table] - i - 1;
         num_trace_polys_before += trace_poly_values_sorted[i].len();
         num_aux_polys_before += auxiliary_columns_sorted[i].len();
@@ -1421,7 +1563,7 @@ where
     ));
 
     // MemAfter.
-    res.push(all_openings_single_stark(
+    let op = all_openings_single_stark(
         Table::MemAfter,
         &all_stark.mem_after_stark,
         trace_poly_values_sorted,
@@ -1433,7 +1575,9 @@ where
         ctl_data_per_table,
         zeta,
         config,
-    ));
+    );
+    // println!("Mem after opening: {:?}", op);
+    res.push(op);
 
     res
 }

@@ -8,6 +8,8 @@ use plonky2::batch_fri::verifier::verify_batch_fri_proof;
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
 use plonky2::fri::oracle::PolynomialBatch;
+use plonky2::fri::structure::FriInstanceInfo;
+use plonky2::fri::validate_shape::validate_batch_fri_proof_shape;
 use plonky2::hash::hash_types::RichField;
 use plonky2::hash::merkle_tree::MerkleCap;
 use plonky2::iop::challenger::Challenger;
@@ -50,8 +52,6 @@ pub fn verify_evm_proof<
     config: &StarkConfig,
     is_initial: bool,
 ) -> Result<()> {
-    // let mut challenger = Challenger::<F, C::Hasher>::new();
-
     let challenges = evm_proof
         .get_challenges(&config)
         .expect("Bad EVM proof challenges?");
@@ -142,11 +142,87 @@ pub fn verify_evm_proof<
         &num_ctl_helper_columns_per_table,
         config,
     );
+    // println!("Verifier FRI instances:\n{:#?}", instances);
 
-    let fri_openings = openings
+    validate_batch_fri_proof_shape::<F, C, D>(
+        &evm_proof.batch_proof.opening_proof,
+        &instances,
+        &config.fri_params(degree_bits_squashed[0]),
+    )?;
+
+    let sorted_openings: Vec<_> = ALL_SORTED_TABLES
+        .iter()
+        .map(|&table| openings[*table].clone())
+        .collect();
+
+    let mut squashed_openings = Vec::new();
+    let mut i = 0;
+    // local_values, next_values, auxiliary_polys, auxiluary_polys_next,
+    // quotient_polys
+    let mut current_values_extension = vec![Vec::new(); 5];
+    // ctl_zs_first
+    let mut current_values_base = Vec::new();
+
+    while i < NUM_TABLES {
+        let table_opening = &sorted_openings[i];
+        current_values_extension[0].extend(table_opening.local_values.iter());
+        current_values_extension[1].extend(table_opening.next_values.iter());
+        current_values_extension[2].extend(
+            table_opening
+                .auxiliary_polys
+                .as_ref()
+                .expect("No auxiliary values?"),
+        );
+        current_values_extension[3].extend(
+            table_opening
+                .auxiliary_polys_next
+                .as_ref()
+                .expect("No auxiliary values?"),
+        );
+        current_values_base.extend(
+            table_opening
+                .ctl_zs_first
+                .as_ref()
+                .expect("No auxiliary values?"),
+        );
+        current_values_extension[4].extend(
+            table_opening
+                .quotient_polys
+                .as_ref()
+                .expect("No auxiliary values?"),
+        );
+
+        if i == NUM_TABLES - 1 || ALL_DEGREE_LOGS[i + 1] < ALL_DEGREE_LOGS[i] {
+            let opening_set = StarkOpeningSet {
+                local_values: current_values_extension[0].clone(),
+                next_values: current_values_extension[1].clone(),
+                auxiliary_polys: Some(current_values_extension[2].clone()),
+                auxiliary_polys_next: Some(current_values_extension[3].clone()),
+                ctl_zs_first: Some(current_values_base.clone()),
+                quotient_polys: Some(current_values_extension[4].clone()),
+            };
+            squashed_openings.push(opening_set.clone());
+            current_values_extension = vec![Vec::new(); 5];
+            current_values_base = Vec::new();
+        }
+        i += 1;
+    }
+
+    for (i, op) in squashed_openings.iter().enumerate() {
+        println!("Squashed opening {}:", i);
+        println!("{} local values\n{} next_values\n{} aux values\n{} next aux values\n{} quotient values\n{} ctlzs first values", op.local_values.len(), op.next_values.len(), op.auxiliary_polys.as_ref().unwrap().len(), op.auxiliary_polys_next.as_ref().unwrap().len(), op.quotient_polys.as_ref().unwrap().len(), op.ctl_zs_first.as_ref().unwrap().len());
+    }
+
+    let fri_openings = squashed_openings
         .iter()
         .map(|opening| opening.to_fri_openings())
         .collect::<Vec<_>>();
+
+    // println!("\n\nOpening for instance 1:");
+    // println!("{:?}\n\n", fri_openings[1]);
+    // for batch in fri_openings[0].batches.iter() {
+    //     println!("{:?}", batch.values.len());
+    // }
 
     verify_batch_fri_proof::<F, C, D>(
         &degree_bits_squashed,
