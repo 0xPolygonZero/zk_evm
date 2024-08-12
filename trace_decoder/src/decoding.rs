@@ -147,7 +147,7 @@ fn update_beacon_block_root_contract_storage(
             false => {
                 storage_trie.insert(slot, val.clone()).context(format!(
                     "at slot {} with value {}",
-                    WithHash(U512::from_big_endian(slot.bytes_be().as_slice())),
+                    CustomFmt(U512::from_big_endian(slot.bytes_be().as_slice())),
                     U512::from_big_endian(val.as_slice())
                 ))?;
 
@@ -191,7 +191,7 @@ fn update_beacon_block_root_contract_storage(
         .insert(addr_nibbles, updated_account_bytes.to_vec())
         .context(format!(
             "at slot {}",
-            WithHash(U512::from_big_endian(addr_nibbles.bytes_be().as_slice()))
+            CustomFmt(U512::from_big_endian(addr_nibbles.bytes_be().as_slice()))
         ))?;
 
     Ok(())
@@ -294,7 +294,7 @@ fn apply_deltas_to_trie_state(
             match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
                 false => storage_trie.insert(slot, val.clone()).context(format!(
                     "at slot {} with value {}",
-                    WithHash(U512::from_big_endian(slot.bytes_be().as_slice())),
+                    CustomFmt(U512::from_big_endian(slot.bytes_be().as_slice())),
                     U512::from_big_endian(val.as_slice())
                 ))?,
                 true => {
@@ -657,9 +657,9 @@ fn eth_to_gwei(eth: U256) -> U256 {
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
 /// Formatting aid for error context.
-struct WithHash(U512);
+struct CustomFmt<T>(T);
 
-impl fmt::Display for WithHash {
+impl fmt::Display for CustomFmt<U512> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut buf = [0u8; 64];
         self.0.to_big_endian(&mut buf);
