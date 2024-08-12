@@ -21,6 +21,16 @@ handles initialization (input processing, transaction parsing, transaction trie 
 executing user code (transaction or contract code). In a non-zero user context, syscalls may be executed, which are specific instructions written in the kernel. They don't change the context
 but change the code context, which is where the instructions are read from.
 
+\paragraph*{Continuation}
+
+A full run of the zkEVM consists in initializing the zkEVM with the input state, executing a certain number of transactions, and then validating the output state.
+However, for performance reasons, a run is split in multiple segments of at most \texttt{MAX\_CPU\_CYCLES} cycles, which can be proven individually. Continuation ensures that the segments are part of the
+same run and guarantees that the state at the end of a segment is equal to the state at the beginning of the next.
+
+The state to propagate from one segment to another contains some of the zkEVM registers plus the current memory. These registers
+are stored in memory as dedicated global metadata, and the memory to propagate is stored in two STARK tables: \texttt{MemBefore} and \texttt{MemAfter}. To check the
+consistency of the memory, the Merkle cap of the previous \texttt{MemAfter} is compared to the Merkle cap of the next \texttt{MemBefore}.
+
 \subsubsection{CPU columns}
 
 \paragraph*{Registers:} \begin{itemize}
@@ -72,4 +82,6 @@ before) the instruction. \texttt{stack\_len\_bounds\_ aux} is used to check that
 See \ref{stackhandling} for more details.
     \label{push_general_view}
     \item  \texttt{Push}: \texttt{is\_not\_kernel} is used to skip range-checking the output of a PUSH operation when we are in privileged mode, as the kernel code is known and trusted.
+    \item  \texttt{Context pruning}: When \texttt{SET\_CONTEXT} is called to return to a parent context, this makes the current context stale. The kernel indicates it
+by setting one general column to 1. For more details about context pruning, see \ref{context-pruning}.
 \end{itemize}
