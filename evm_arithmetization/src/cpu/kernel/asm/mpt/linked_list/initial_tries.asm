@@ -6,7 +6,7 @@
 // Pre stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
 // Post stack: account_ptr_ptr, storage_ptr_ptr
 global mpt_set_payload:
-    // stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
     DUP1 %mload_trie_data
     // stack: node_type, node_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
     // Increment node_ptr, so it points to the node payload instead of its type.
@@ -21,18 +21,20 @@ global mpt_set_payload:
     PANIC
 
 skip:
-    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
-    %stack (node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest) -> (retdest, account_ptr_ptr, storage_ptr_ptr)
+    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
+    %stack (node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest) -> (retdest, account_ptr_ptr, storage_ptr_ptr)
     JUMP
 
 %macro mpt_set_payload
-    %stack(node_ptr, account_ptr_ptr, storage_ptr_ptr) -> (node_ptr, account_ptr_ptr, storage_ptr_ptr, %%after)
+    %stack(node_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles) -> (node_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, %%after)
     %jump(mpt_set_payload)
 %%after:
 %endmacro
 
 %macro set_initial_tries
     PUSH %%after
+    PUSH 0 // empty nibbles
+    PUSH 0 // num nibbles
     PUSH @SEGMENT_STORAGE_LINKED_LIST
     %add_const(8) // The first node is the special node, of size 5, so the first value is at position 5 + 3.
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
@@ -75,25 +77,32 @@ storage_skip:
 %endmacro
 
 set_payload_branch:
-    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
     POP
 
+    PUSH 0 // child counter
     // Call mpt_set_payload on each child
     %rep 16
         %stack
-        (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr) -> 
-        (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, child_ptr_ptr)
-        // stack: child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, child_ptr_ptr, retdest
+        (i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles) -> 
+        (num_nibbles, packed_nibbles, 1, i, i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, child_ptr_ptr)
+        // We do not check the stored nibbles here, as the current value is not written yet.
+        %merge_nibbles
+        // stack: num_merged_nibbles, merged_nibbles, i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, child_ptr_ptr
+        %stack (num_merged_nibbles, merged_nibbles, i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, child_ptr_ptr) -> (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_merged_nibbles, merged_nibbles, i, num_nibbles, packed_nibbles, child_ptr_ptr)
+        // stack: child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_merged_nibbles, merged_nibbles, i, num_nibbles, packed_nibbles, child_ptr_ptr, retdest
         %mload_trie_data
-        // stack: child_ptr, account_ptr_ptr, storage_ptr_ptr, child_ptr_ptr, retdest
+        // stack: child_ptr, account_ptr_ptr, storage_ptr_ptr, num_merged_nibbles, merged_nibbles, i, num_nibbles, packed_nibbles, child_ptr_ptr, retdest
         %mpt_set_payload
-        // stack: account_ptr_ptr', storage_ptr_ptr', child_ptr_ptr, retdest
+        // stack: account_ptr_ptr', storage_ptr_ptr', i, num_nibbles, packed_nibbles, child_ptr_ptr, retdest
+        %stack (account_ptr_ptr_p, storage_ptr_ptr_p, i, num_nibbles, packed_nibbles, child_ptr_ptr, retdest) -> (child_ptr_ptr, i, account_ptr_ptr_p, storage_ptr_ptr_p, num_nibbles, packed_nibbles, retdest)
+        %increment
         SWAP1
-        SWAP2
         %increment
     %endrep
-    // stack: child_ptr_ptr', account_ptr_ptr', storage_ptr_ptr', retdest
-    %stack (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest) -> (retdest, account_ptr_ptr, storage_ptr_ptr)
+    // stack: i, child_ptr_ptr', account_ptr_ptr', storage_ptr_ptr', num_nibbles, packed_nibbles, retdest
+    POP
+    %stack (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest) -> (retdest, account_ptr_ptr, storage_ptr_ptr)
     JUMP
 
 set_payload_storage_branch:
@@ -118,11 +127,18 @@ set_payload_storage_branch:
     JUMP
 
 set_payload_extension:
-    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
     POP
-    // stack: after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: after_node_type, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
+    DUP1 %mload_trie_data // num_nibbles
+    DUP2 %increment %mload_trie_data // nibbles
+    SWAP2
     %add_const(2) %mload_trie_data
-    // stack: child_ptr, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: child_ptr, loaded_num_nibbles, loaded_nibbles, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
+    %stack (child_ptr, loaded_num_nibbles, loaded_nibbles, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles) -> (num_nibbles, packed_nibbles, loaded_num_nibbles, loaded_nibbles, child_ptr, account_ptr_ptr, storage_ptr_ptr)
+    %merge_nibbles
+    // stack: merged_num_nibbles, merged_nibbles, child_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+    %stack (merged_num_nibbles, merged_nibbles, child_ptr, account_ptr_ptr, storage_ptr_ptr, retdest) -> (child_ptr, account_ptr_ptr, storage_ptr_ptr, merged_num_nibbles, merged_nibbles, retdest)
     %jump(mpt_set_payload)
 
 set_payload_storage_extension:
@@ -134,8 +150,19 @@ set_payload_storage_extension:
     %jump(mpt_set_storage_payload)
 
 set_payload_leaf:
-    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    // stack: node_type, after_node_type, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
     POP
+    DUP1 %increment %mload_trie_data
+    DUP2 %mload_trie_data
+    // stack: loaded_num_nibbles, loaded_packed_nibbles, after_node_type, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
+    %stack (loaded_num_nibbles, loaded_packed_nibbles, after_node_type, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest) -> (num_nibbles, packed_nibbles, loaded_num_nibbles, loaded_packed_nibbles, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest)
+    %merge_nibbles
+    // stack: merged_len, merged_nibbles, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    PUSH 64 %assert_eq
+    DUP3 %sub_const(2) MLOAD_GENERAL
+    // stack: addr_key, merged_nibbles, after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
+    %assert_eq
+    // stack: after_node_type, account_ptr_ptr, storage_ptr_ptr, retdest
     %add_const(2) // The payload pointer starts at index 3, after num_nibbles and packed_nibbles.
     DUP1 
     // stack: payload_ptr_ptr, payload_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
