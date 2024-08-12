@@ -1,9 +1,12 @@
 use std::{collections::HashMap, fmt};
 
-use anyhow::Context as _;
+use anyhow::{anyhow, Context as _};
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
 use evm_arithmetization::{
-    generation::{mpt::AccountRlp, GenerationInputs, TrieInputs},
+    generation::{
+        mpt::{decode_receipt, AccountRlp},
+        GenerationInputs, TrieInputs,
+    },
     proof::{BlockMetadata, ExtraBlockData, TrieRoots},
     testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH},
 };
@@ -274,6 +277,7 @@ fn create_minimal_partial_tries_needed_by_txn(
 fn apply_deltas_to_trie_state(
     trie_state: &mut PartialTrieState,
     deltas: &NodesUsedByTxn,
+    meta: &TxnMetaState,
 ) -> anyhow::Result<TrieDeltaApplicationOutput> {
     let mut out = TrieDeltaApplicationOutput::default();
 
@@ -317,7 +321,8 @@ fn apply_deltas_to_trie_state(
     for (hashed_acc_addr, s_trie_writes) in deltas.state_writes.iter() {
         let val_k = Nibbles::from_h256_be(*hashed_acc_addr);
 
-        // If the account was created, then it will not exist in the trie.
+        // If the account was created, then it will not exist in the trie yet.
+        let is_created = !trie_state.state.contains(val_k);
         let mut account = trie_state
             .state
             .get(val_k)
@@ -332,6 +337,21 @@ fn apply_deltas_to_trie_state(
         )?;
 
         let updated_account_bytes = rlp::encode(&account);
+        if is_created {
+            // If the account did not exist prior this transaction, we
+            // need to make sure the transaction didn't revert.
+
+            // Check status in the receipt.
+            let (_, _, receipt) = decode_receipt(&meta.receipt_node_bytes)
+                .map_err(|_| anyhow!("couldn't RLP-decode receipt node bytes"))?;
+
+            if !receipt.status {
+                // The transaction failed, hence any created account should be removed.
+                trie_state.state.delete(val_k)?;
+                trie_state.storage.remove(hashed_acc_addr);
+                continue;
+            }
+        }
         trie_state
             .state
             .insert(val_k, updated_account_bytes.to_vec())?;
@@ -495,7 +515,11 @@ fn process_txn_info(
 
     update_txn_and_receipt_tries(curr_block_tries, &txn_info.meta, txn_idx)?;
 
-    let mut delta_out = apply_deltas_to_trie_state(curr_block_tries, &txn_info.nodes_used_by_txn)?;
+    let mut delta_out = apply_deltas_to_trie_state(
+        curr_block_tries,
+        &txn_info.nodes_used_by_txn,
+        &txn_info.meta,
+    )?;
 
     let nodes_used_by_txn = if is_initial_payload {
         let mut nodes_used = txn_info.nodes_used_by_txn;
