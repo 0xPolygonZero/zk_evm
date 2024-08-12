@@ -52,7 +52,7 @@ jobs:
       - name: Run jerigon test network with docker compose
         run: |
           cd test-jerigon-network
-          docker-compose -f docker-compose.yml up -d
+          docker compose -f docker-compose.yml up -d
           docker logs -f smart-contracts
           echo "Jerigon network is up and running, ready for testing"
 
@@ -79,7 +79,7 @@ jobs:
       - name: Shut down network
         run: |
           cd test-jerigon-network
-          docker-compose -f docker-compose.yml down -v
+          docker compose -f docker-compose.yml down -v
 
 
 
