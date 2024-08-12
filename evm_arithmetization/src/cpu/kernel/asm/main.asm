@@ -170,7 +170,7 @@ global perform_final_checks:
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER) %assert_eq
     %pop3
 
-    // We add a dummy value as an initial trie data length,
+    // We set a dummy value as an initial trie data length,
     // since the final transaction and receipt tries have already been
     // added to `GLOBAL_METADATA_TRIE_DATA_SIZE`.
     PUSH 1
@@ -206,7 +206,7 @@ global check_state_trie:
     %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
     %assert_eq
 
-    // We add a dummy value as an initial trie data length,
+    // We set a dummy value as an initial trie data length,
     // as we do not need to compute the actual trie data length here.
     PUSH 1
 global check_final_state_trie:
