@@ -10,8 +10,10 @@ use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use tracing::{info, warn};
-use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set};
 use zero_bin_common::version;
+use zero_bin_common::{
+    block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
+};
 
 use crate::client::{client_main, ProofParams};
 

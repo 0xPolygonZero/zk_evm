@@ -17,7 +17,6 @@ use clap::ValueEnum;
 use evm_arithmetization::{
     proof::AllProof, prover::prove, AllStark, GenerationInputs, StarkConfig,
 };
-use persistence::set_circuit_cache_dir_env_if_not_set;
 use plonky2::{
     field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
     util::timing::TimingTree,
