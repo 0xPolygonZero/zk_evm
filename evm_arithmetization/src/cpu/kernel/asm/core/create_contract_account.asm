@@ -4,7 +4,6 @@
 %macro create_contract_account
     // stack: address
     DUP1 %insert_touched_addresses
-    DUP1 %append_created_contracts
     DUP1 %mpt_read_state_trie
     // stack: existing_account_ptr, address
     // If the account doesn't exist, there's no need to check its balance or nonce,
@@ -28,6 +27,7 @@
 
 %%add_account:
     // stack: existing_balance, address
+    DUP2 %append_created_contracts
     DUP2 PUSH 1
     // stack: is_contract, address, existing_balance, address
     %journal_add_account_created
