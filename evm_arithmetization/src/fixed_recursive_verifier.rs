@@ -50,7 +50,9 @@ use crate::recursive_verifier::{
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
     StarkWrapperCircuit,
 };
-use crate::util::{h256_limbs, u256_limbs};
+use crate::util::h256_limbs;
+#[cfg(feature = "cdk_erigon")]
+use crate::util::u256_limbs;
 
 /// The recursion threshold. We end a chain of recursive proofs once we reach
 /// this size.

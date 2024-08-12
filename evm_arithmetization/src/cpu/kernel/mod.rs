@@ -28,7 +28,7 @@ use crate::cpu::kernel::constants::evm_constants;
 /// Assemble files, outputting bytes.
 /// This is for debugging the kernel only.
 pub fn assemble_to_bytes(files: &[String]) -> Vec<u8> {
-    let parsed_files: Vec<_> = files.iter().map(|f| parse(f, HashSet::new())).collect();
+    let parsed_files: Vec<_> = files.iter().map(|f| parse(f, &HashSet::new())).collect();
     let kernel = assemble(parsed_files, evm_constants(), true);
     kernel.code
 }

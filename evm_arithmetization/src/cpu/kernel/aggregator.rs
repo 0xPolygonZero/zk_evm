@@ -182,7 +182,7 @@ pub(crate) fn combined_kernel_from_files<const N: usize>(files: [&str; N]) -> Ke
 
     let parsed_files = files
         .iter()
-        .map(|f| parse(f, active_features.clone()))
+        .map(|f| parse(f, &active_features))
         .collect_vec();
     assemble(parsed_files, evm_constants(), true)
 }
