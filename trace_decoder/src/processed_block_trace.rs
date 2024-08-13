@@ -134,7 +134,7 @@ impl TxnInfo {
             let is_precompile = (FIRST_PRECOMPILE_ADDRESS..LAST_PRECOMPILE_ADDRESS)
                 .contains(&U256::from_big_endian(&addr.0));
 
-            // Jerigon witnesses will only include accessed precompile accounts as hash
+            // Trie witnesses will only include accessed precompile accounts as hash
             // nodes if the transaction calling them reverted. If this is the case, we
             // shouldn't include them in this transaction's `state_accesses` to allow the
             // decoder to build a minimal state trie without hitting any hash node.
