@@ -89,7 +89,7 @@ pub fn into_txn_proof_gen_ir(
                 &mut extra_data,
                 &other_data,
             )
-            .context(format!("at transaction index {}", txn_idx))
+            .context(format!("at transaction index {}", current_idx))
         })
         .collect::<anyhow::Result<Vec<_>>>()
         .context(format!(
