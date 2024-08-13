@@ -6,10 +6,10 @@ const HELP_HEADING: &str = "Prover options";
 #[derive(Args, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct CliProverConfig {
     /// The log of the max number of CPU cycles per proof.
-    #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 20)]
+    #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 19)]
     max_cpu_len_log: usize,
     /// Number of transactions in a batch to process at once.
-    #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 1)]
+    #[arg(short, long, help_heading = HELP_HEADING, default_value_t = 10)]
     batch_size: usize,
     /// If true, save the public inputs to disk on error.
     #[arg(short='i', long, help_heading = HELP_HEADING, default_value_t = false)]
