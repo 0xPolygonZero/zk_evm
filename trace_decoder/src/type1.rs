@@ -10,7 +10,7 @@ use evm_arithmetization::generation::mpt::AccountRlp;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::typed_mpt::{StateTrie, StorageTrie, TriePath};
+use crate::typed_mpt::{StateTrie, StorageTrie, TrieKey};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Default, Clone)]
@@ -19,7 +19,7 @@ pub struct Frontend {
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     /// The key here matches the [`TriePath`] inside [`Self::state`] for
     /// accounts which had inline storage.
-    pub storage: BTreeMap<TriePath, StorageTrie>,
+    pub storage: BTreeMap<TrieKey, StorageTrie>,
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -54,10 +54,10 @@ fn visit(
         Node::Hash(Hash { raw_hash }) => {
             frontend
                 .state
-                .insert_hash_by_path(TriePath::new(path.iter().copied())?, raw_hash.into())?;
+                .insert_hash_by_path(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
         }
         Node::Leaf(Leaf { key, value }) => {
-            let path = TriePath::new(path.iter().copied().chain(key))?;
+            let path = TrieKey::new(path.iter().copied().chain(key))?;
             match value {
                 Either::Left(Value { .. }) => bail!("unsupported value node at top level"),
                 Either::Right(Account {
@@ -126,12 +126,12 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
     ) -> anyhow::Result<()> {
         match node {
             Node::Hash(Hash { raw_hash }) => {
-                mpt.insert_hash(TriePath::new(path.iter().copied())?, raw_hash.into())?;
+                mpt.insert_hash(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
             }
             Node::Leaf(Leaf { key, value }) => {
                 match value {
                     Either::Left(Value { raw_value }) => mpt.insert(
-                        TriePath::new(path.iter().copied().chain(key))?,
+                        TrieKey::new(path.iter().copied().chain(key))?,
                         rlp::encode(&raw_value.as_slice()).to_vec(),
                     )?,
                     Either::Right(_) => bail!("unexpected account node in storage trie"),
