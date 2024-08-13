@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use alloy::{
     primitives::{keccak256, Address, StorageKey, B256, U256},
@@ -20,7 +21,7 @@ use crate::Compat;
 
 /// Processes the state witness for the given block.
 pub async fn process_state_witness<ProviderT, TransportT>(
-    cached_provider: &CachedProvider<ProviderT, TransportT>,
+    cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block: Block,
     txn_infos: &[TxnInfo],
 ) -> anyhow::Result<BlockTraceTriePreImages>
@@ -115,7 +116,7 @@ fn insert_beacon_roots_update(
 async fn generate_state_witness<ProviderT, TransportT>(
     prev_state_root: B256,
     accounts_state: HashMap<Address, HashSet<StorageKey>>,
-    cached_provider: &CachedProvider<ProviderT, TransportT>,
+    cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: u64,
 ) -> anyhow::Result<(
     PartialTrieBuilder<HashedPartialTrie>,
@@ -164,7 +165,7 @@ where
 /// Fetches the proof data for the given accounts and associated storage keys.
 async fn fetch_proof_data<ProviderT, TransportT>(
     accounts_state: HashMap<Address, HashSet<StorageKey>>,
-    provider: &CachedProvider<ProviderT, TransportT>,
+    provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: u64,
 ) -> anyhow::Result<(
     Vec<(Address, EIP1186AccountProofResponse)>,
@@ -177,20 +178,23 @@ where
     let account_proofs_fut = accounts_state
         .clone()
         .into_iter()
-        .map(|(address, keys)| async move {
-            let proof = provider
-                .as_provider()
-                .get_proof(address, keys.into_iter().collect())
-                .block_id((block_number - 1).into())
-                .await
-                .context("Failed to get proof for account")?;
-            anyhow::Result::Ok((address, proof))
+        .map(|(address, keys)| {
+            let provider = provider.clone();
+            async move {
+                let proof = provider
+                    .as_provider()
+                    .get_proof(address, keys.into_iter().collect())
+                    .block_id((block_number - 1).into())
+                    .await
+                    .context("Failed to get proof for account")?;
+                anyhow::Result::Ok((address, proof))
+            }
         })
         .collect::<Vec<_>>();
 
-    let next_account_proofs_fut = accounts_state
-        .into_iter()
-        .map(|(address, keys)| async move {
+    let next_account_proofs_fut = accounts_state.into_iter().map(|(address, keys)| {
+        let provider = provider.clone();
+        async move {
             let proof = provider
                 .as_provider()
                 .get_proof(address, keys.into_iter().collect())
@@ -198,7 +202,8 @@ where
                 .await
                 .context("Failed to get proof for account")?;
             anyhow::Result::Ok((address, proof))
-        });
+        }
+    });
 
     try_join(
         try_join_all(account_proofs_fut),
