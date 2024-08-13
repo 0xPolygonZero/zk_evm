@@ -426,6 +426,7 @@ pub fn entrypoint(
             };
 
             t.into_processed_txn_info(
+                &pre_images.tries,
                 &all_accounts_in_pre_images,
                 &extra_state_accesses,
                 &mut code_hash_resolver,
