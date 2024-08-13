@@ -5,6 +5,7 @@ use std::iter::once;
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use mpt_trie::nibbles::Nibbles;
+use mpt_trie::partial_trie::PartialTrie;
 
 use crate::hash;
 use crate::PartialTriePreImages;
@@ -21,6 +22,9 @@ pub const EMPTY_TRIE_HASH: H256 = H256([
     86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
     108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
 ]);
+
+const FIRST_PRECOMPILE_ADDRESS: U256 = U256([1, 0, 0, 0]);
+const LAST_PRECOMPILE_ADDRESS: U256 = U256([10, 0, 0, 0]);
 
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
@@ -70,6 +74,7 @@ impl<F: Fn(&H256) -> Vec<u8>> CodeHashResolving<F> {
 impl TxnInfo {
     pub(crate) fn into_processed_txn_info<F: Fn(&H256) -> Vec<u8>>(
         self,
+        tries: &PartialTriePreImages,
         all_accounts_in_pre_image: &[(H256, AccountRlp)],
         extra_state_accesses: &[H256],
         code_hash_resolver: &mut CodeHashResolving<F>,
@@ -126,7 +131,22 @@ impl TxnInfo {
                 .storage_writes
                 .push((hashed_addr, storage_writes_vec));
 
-            nodes_used_by_txn.state_accesses.push(hashed_addr);
+            let is_precompile = (FIRST_PRECOMPILE_ADDRESS..LAST_PRECOMPILE_ADDRESS)
+                .contains(&U256::from_big_endian(&addr.0));
+
+            // Jerigon witnesses will only include accessed precompile accounts as hash
+            // nodes if the transaction calling them reverted. If this is the case, we
+            // shouldn't include them in this transaction's `state_accesses` to allow the
+            // decoder to build a minimal state trie without hitting any hash node.
+            if !is_precompile
+                || tries
+                    .state
+                    .as_hashed_partial_trie()
+                    .get(Nibbles::from_h256_be(hashed_addr))
+                    .is_some()
+            {
+                nodes_used_by_txn.state_accesses.push(hashed_addr);
+            }
 
             if let Some(c_usage) = trace.code_usage {
                 match c_usage {
