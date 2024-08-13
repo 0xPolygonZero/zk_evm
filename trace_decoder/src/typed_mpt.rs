@@ -11,7 +11,7 @@ use mpt_trie::{
 };
 use u4::{AsNibbles, U4};
 
-/// Map where keys are [up to 64 nibbles](TriePath),
+/// Map where keys are [up to 64 nibbles](TrieKey),
 /// and values are [`rlp::Encodable`]/[`rlp::Decodable`].
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
@@ -31,20 +31,20 @@ impl<T> TypedMpt<T> {
         }
     }
     /// Insert a node which represents an out-of-band sub-trie.
-    fn insert_hash(&mut self, path: TrieKey, hash: H256) -> Result<(), Error> {
+    fn insert_hash(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
         self.inner
-            .insert(path.into_nibbles(), hash)
+            .insert(key.into_nibbles(), hash)
             .map_err(|source| Error { source })
     }
     /// Returns an [`Error`] if the `path` crosses into a part of the trie that
     /// isn't hydrated.
-    fn insert(&mut self, path: TrieKey, value: T) -> Result<Option<T>, Error>
+    fn insert(&mut self, key: TrieKey, value: T) -> Result<Option<T>, Error>
     where
         T: rlp::Encodable + rlp::Decodable,
     {
-        let prev = self.get(path);
+        let prev = self.get(key);
         self.inner
-            .insert(path.into_nibbles(), rlp::encode(&value).to_vec())
+            .insert(key.into_nibbles(), rlp::encode(&value).to_vec())
             .map_err(|source| Error { source })
             .map(|_| prev)
     }
@@ -53,11 +53,11 @@ impl<T> TypedMpt<T> {
     ///
     /// # Panics
     /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
-    fn get(&self, path: TrieKey) -> Option<T>
+    fn get(&self, key: TrieKey) -> Option<T>
     where
         T: rlp::Decodable,
     {
-        let bytes = self.inner.get(path.into_nibbles())?;
+        let bytes = self.inner.get(key.into_nibbles())?;
         Some(rlp::decode(bytes).expect(
             "T encoding/decoding should round-trip,\
             and only encoded `T`s are ever inserted",
@@ -290,25 +290,25 @@ pub struct StorageTrie {
     untyped: HashedPartialTrie,
 }
 impl StorageTrie {
-    pub fn insert(&mut self, path: TrieKey, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
-        let prev = self.untyped.get(path.into_nibbles()).map(Vec::from);
+    pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+        let prev = self.untyped.get(key.into_nibbles()).map(Vec::from);
         self.untyped
-            .insert(path.into_nibbles(), value)
+            .insert(key.into_nibbles(), value)
             .map_err(|source| Error { source })?;
         Ok(prev)
     }
-    pub fn insert_hash(&mut self, path: TrieKey, hash: H256) -> Result<(), Error> {
+    pub fn insert_hash(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
         self.untyped
-            .insert(path.into_nibbles(), hash)
+            .insert(key.into_nibbles(), hash)
             .map_err(|source| Error { source })
     }
     pub fn root(&self) -> H256 {
         self.untyped.hash()
     }
     #[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-    pub fn remove(&mut self, path: TrieKey) -> Result<Option<Vec<u8>>, Error> {
+    pub fn remove(&mut self, key: TrieKey) -> Result<Option<Vec<u8>>, Error> {
         self.untyped
-            .delete(path.into_nibbles())
+            .delete(key.into_nibbles())
             .map_err(|source| Error { source })
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
