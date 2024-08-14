@@ -89,12 +89,6 @@ impl<T> TypedMpt<T> {
             Some((path, self.get(path)?))
         })
     }
-    /// This allows users to break the [`TypedMpt`] invariant.
-    /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
-    /// subsequent API calls may panic.
-    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
-        &mut self.inner
-    }
 }
 
 impl<T> Default for TypedMpt<T> {
@@ -208,9 +202,6 @@ impl TransactionTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
-    pub fn from_hashed_partial_trie_unchecked(src: HashedPartialTrie) -> Self {
-        Self { untyped: src }
-    }
 }
 
 /// Per-block, `txn_ix -> [u8]`.
@@ -237,9 +228,6 @@ impl ReceiptTrie {
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
-    }
-    pub fn from_hashed_partial_trie_unchecked(src: HashedPartialTrie) -> Self {
-        Self { untyped: src }
     }
 }
 
@@ -292,14 +280,6 @@ impl StateTrie {
             .as_hashed_partial_trie()
             .contains(key.into_nibbles())
     }
-
-    /// This allows users to break the [`TypedMpt`] invariant.
-    /// If data that isn't a [`rlp::encode`]-ed [`AccountRlp`] is inserted,
-    /// subsequent API calls may panic.
-    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
-        self.typed.as_mut_hashed_partial_trie_unchecked()
-    }
-
     /// This allows users to break the [`TypedMpt`] invariant.
     /// If data that isn't a [`rlp::encode`]-ed [`AccountRlp`] is inserted,
     /// subsequent API calls may panic.
@@ -347,12 +327,6 @@ impl StorageTrie {
     }
     pub fn root(&self) -> H256 {
         self.untyped.hash()
-    }
-
-    pub fn remove(&mut self, key: TrieKey) -> Result<Option<Vec<u8>>, Error> {
-        self.untyped
-            .delete(key.into_nibbles())
-            .map_err(|source| Error { source })
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
