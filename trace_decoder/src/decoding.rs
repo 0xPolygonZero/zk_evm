@@ -357,6 +357,20 @@ fn apply_deltas_to_trie_state(
             .insert(val_k, updated_account_bytes.to_vec())?;
     }
 
+    // Remove any accounts that self-destructed.
+    for hashed_addr in deltas.self_destructed_accounts.iter() {
+        let k = Nibbles::from_h256_be(*hashed_addr);
+
+        trie_state.storage.remove(hashed_addr);
+
+        if let Some(remaining_account_key) =
+            delete_node_and_report_remaining_key_if_branch_collapsed(&mut trie_state.state, &k)?
+        {
+            out.additional_state_trie_paths_to_not_hash
+                .push(remaining_account_key);
+        }
+    }
+
     Ok(out)
 }
 

@@ -170,6 +170,7 @@ async fn process_tx_traces(
         );
         let code = process_code(post_state, read_state, &mut code_db).await;
         let nonce = process_nonce(post_state, &code);
+        let self_destructed = process_self_destruct(post_state, pre_state);
 
         let result = TxnTrace {
             balance,
@@ -177,6 +178,7 @@ async fn process_tx_traces(
             storage_read,
             storage_written,
             code_usage: code,
+            self_destructed,
         };
 
         traces.insert(address, result);
@@ -201,6 +203,28 @@ fn process_nonce(
                 None
             }
         })
+}
+
+/// Processes the self destruct for the given account state.
+fn process_self_destruct(
+    post_state: Option<&AccountState>,
+    pre_state: Option<&AccountState>,
+) -> Option<bool> {
+    if post_state.is_none() {
+        // EIP-6780:
+        // A contract is considered created at the beginning of a create
+        // transaction or when a CREATE series operation begins execution (CREATE,
+        // CREATE2, and other operations that deploy contracts in the future). If a
+        // balance exists at the contract’s new address it is still considered to be a
+        // contract creation.
+        if let Some(acc) = pre_state {
+            if acc.code.is_none() && acc.storage.keys().collect::<Vec<_>>().is_empty() {
+                return Some(true);
+            }
+        }
+    }
+
+    None
 }
 
 /// Processes the storage for the given account state.
