@@ -39,7 +39,7 @@ impl<T> TypedMpt<T> {
             .insert(key.into_nibbles(), hash)
             .map_err(|source| Error { source })
     }
-    /// Returns an [`Error`] if the `path` crosses into a part of the trie that
+    /// Returns an [`Error`] if the `key` crosses into a part of the trie that
     /// isn't hydrated.
     fn insert(&mut self, key: TrieKey, value: T) -> Result<Option<T>, Error>
     where
@@ -51,7 +51,7 @@ impl<T> TypedMpt<T> {
             .map_err(|source| Error { source })
             .map(|_| prev)
     }
-    /// Note that this returns [`None`] if `path` crosses into a part of the
+    /// Note that this returns [`None`] if `key` crosses into a part of the
     /// trie that isn't hydrated.
     ///
     /// # Panics
@@ -245,23 +245,23 @@ impl StateTrie {
         address: Address,
         account: AccountRlp,
     ) -> Result<Option<AccountRlp>, Error> {
-        self.insert_by_path(TrieKey::from_address(address), account)
+        self.insert_by_key(TrieKey::from_address(address), account)
     }
-    pub fn insert_by_path(
+    pub fn insert_by_key(
         &mut self,
-        path: TrieKey,
+        key: TrieKey,
         account: AccountRlp,
     ) -> Result<Option<AccountRlp>, Error> {
-        self.typed.insert(path, account)
+        self.typed.insert(key, account)
     }
-    pub fn insert_hash_by_path(&mut self, path: TrieKey, hash: H256) -> Result<(), Error> {
-        self.typed.insert_hash(path, hash)
+    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
+        self.typed.insert_hash(key, hash)
     }
-    pub fn get_by_path(&self, path: TrieKey) -> Option<AccountRlp> {
-        self.typed.get(path)
+    pub fn get_by_key(&self, key: TrieKey) -> Option<AccountRlp> {
+        self.typed.get(key)
     }
     pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.get_by_path(TrieKey::from_hash(keccak_hash::keccak(address)))
+        self.get_by_key(TrieKey::from_hash(keccak_hash::keccak(address)))
     }
     pub fn root(&self) -> H256 {
         self.typed.root()

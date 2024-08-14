@@ -323,14 +323,14 @@ pub fn entrypoint(
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                                acc.insert_by_path(
+                                acc.insert_by_key(
                                     path,
                                     rlp::decode(&bytes)
                                         .context("invalid AccountRlp in direct state trie")?,
                                 )?;
                             }
                             mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                acc.insert_hash_by_path(path, h)?;
+                                acc.insert_hash_by_key(path, h)?;
                             }
                         };
                         anyhow::Ok(acc)

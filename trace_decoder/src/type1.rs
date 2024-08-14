@@ -54,7 +54,7 @@ fn visit(
         Node::Hash(Hash { raw_hash }) => {
             frontend
                 .state
-                .insert_hash_by_path(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
+                .insert_hash_by_key(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
         }
         Node::Leaf(Leaf { key, value }) => {
             let path = TrieKey::new(path.iter().copied().chain(key))?;
@@ -91,7 +91,7 @@ fn visit(
                             }
                         },
                     };
-                    let clobbered = frontend.state.insert_by_path(path, account)?;
+                    let clobbered = frontend.state.insert_by_key(path, account)?;
                     ensure!(clobbered.is_none(), "duplicate account");
                 }
             }

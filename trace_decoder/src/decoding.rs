@@ -180,14 +180,14 @@ fn update_beacon_block_root_contract_storage(
         .push(addr_nibbles);
     let mut account = trie_state
         .state
-        .get_by_path(addr_nibbles)
+        .get_by_key(addr_nibbles)
         .context(format!("missing account storage trie {:x}", ADDRESS))?;
 
     account.storage_root = storage_trie.root();
 
     trie_state
         .state
-        .insert_by_path(addr_nibbles, account)
+        .insert_by_key(addr_nibbles, account)
         .expect("TODO(0xaatif): entry API");
 
     Ok(())
@@ -328,7 +328,7 @@ fn apply_deltas_to_trie_state(
 
         // If the account was created, then it will not exist in the trie yet.
         let is_created = !trie_state.state.contains(val_k);
-        let mut account = trie_state.state.get_by_path(val_k).unwrap_or_default();
+        let mut account = trie_state.state.get_by_key(val_k).unwrap_or_default();
 
         s_trie_writes.apply_writes_to_state_node(
             &mut account,
@@ -351,7 +351,7 @@ fn apply_deltas_to_trie_state(
                 continue;
             }
         }
-        trie_state.state.insert_by_path(val_k, account)?;
+        trie_state.state.insert_by_key(val_k, account)?;
     }
 
     Ok(out)

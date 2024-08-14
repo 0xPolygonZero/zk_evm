@@ -140,7 +140,7 @@ impl TxnInfo {
             if !is_precompile
                 || tries
                     .state
-                    .get_by_path(TrieKey::from_hash(hashed_addr))
+                    .get_by_key(TrieKey::from_hash(hashed_addr))
                     .is_some()
             {
                 nodes_used_by_txn.state_accesses.push(hashed_addr);
