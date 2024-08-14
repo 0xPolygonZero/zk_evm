@@ -208,26 +208,27 @@ fn create_empty_code_access_map() -> HashMap<H256, Vec<u8>> {
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    pub(crate) state_accesses: Vec<H256>,
-    pub(crate) state_writes: Vec<(H256, StateTrieWrites)>,
+    pub state_accesses: Vec<H256>,
+    pub state_writes: Vec<(H256, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(H256, Vec<TrieKey>)>,
-    pub(crate) storage_writes: Vec<(H256, Vec<(TrieKey, Vec<u8>)>)>,
-    pub(crate) state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
+    pub storage_accesses: Vec<(H256, Vec<TrieKey>)>,
+    #[allow(clippy::type_complexity)]
+    pub storage_writes: Vec<(H256, Vec<(TrieKey, Vec<u8>)>)>,
+    pub state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
 }
 
 #[derive(Debug)]
 pub(crate) struct StateTrieWrites {
-    pub(crate) balance: Option<U256>,
-    pub(crate) nonce: Option<U256>,
-    pub(crate) storage_trie_change: bool,
-    pub(crate) code_hash: Option<H256>,
+    pub balance: Option<U256>,
+    pub nonce: Option<U256>,
+    pub storage_trie_change: bool,
+    pub code_hash: Option<H256>,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct TxnMetaState {
-    pub(crate) txn_bytes: Option<Vec<u8>>,
-    pub(crate) receipt_node_bytes: Vec<u8>,
-    pub(crate) gas_used: u64,
+    pub txn_bytes: Option<Vec<u8>>,
+    pub receipt_node_bytes: Vec<u8>,
+    pub gas_used: u64,
 }

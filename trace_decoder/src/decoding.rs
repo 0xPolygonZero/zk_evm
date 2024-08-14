@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
 use anyhow::{anyhow, Context as _};
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
@@ -12,7 +12,7 @@ use evm_arithmetization::{
 };
 use mpt_trie::{
     nibbles::Nibbles,
-    partial_trie::{HashedPartialTrie, Node, PartialTrie},
+    partial_trie::{HashedPartialTrie, PartialTrie as _},
     special_query::path_for_query,
     utils::{IntoTrieKey as _, TriePath},
 };
@@ -141,7 +141,7 @@ fn update_beacon_block_root_contract_storage(
         slots_nibbles.push(slot);
 
         // If we are writing a zero, then we actually need to perform a delete.
-        match val == &ZERO_STORAGE_SLOT_VAL_RLPED {
+        match val == ZERO_STORAGE_SLOT_VAL_RLPED {
             false => {
                 storage_trie.insert(slot, val.clone()).context(format!(
                     "at slot {:?} with value {}",
@@ -656,10 +656,6 @@ fn create_trie_subset_wrapped(
     .context(format!("missing keys when creating {}", trie_type))
 }
 
-fn account_from_rlped_bytes(bytes: &[u8]) -> anyhow::Result<AccountRlp> {
-    Ok(rlp::decode(bytes)?)
-}
-
 impl TxnMetaState {
     /// Outputs a boolean indicating whether this `TxnMetaState`
     /// represents a dummy payload or an actual transaction.
@@ -683,22 +679,11 @@ fn eth_to_gwei(eth: U256) -> U256 {
 // This is just `rlp(0)`.
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
-/// Formatting aid for error context.
-struct CustomFmt<T>(T);
-
-impl fmt::Display for CustomFmt<U512> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut buf = [0u8; 64];
-        self.0.to_big_endian(&mut buf);
-        f.write_fmt(format_args!("{} (hashed: 0x{:064X})", self.0, hash(buf)))
-    }
-}
-
 /// Aid for error context.
 /// Covers all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
 #[derive(Debug, strum::Display)]
 #[allow(missing_docs)]
-pub enum TrieType {
+enum TrieType {
     State,
     Storage,
     Receipt,
