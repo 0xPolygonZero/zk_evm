@@ -25,9 +25,6 @@ PROOFS_JSON_PATH="${TOOLS_DIR}/proofs.json"
 VERIFY_OUT_PATH="${TOOLS_DIR}/verify.out"
 TEST_OUT_PATH="${TOOLS_DIR}/test.out"
 
-# Set the environment variable to let the binary know that we're running in the project workspace.
-export ZK_EVM_WORKSPACE_DIR="${TOOLS_DIR}/../../"
-
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
 export TOKIO_WORKER_THREADS=$num_procs
