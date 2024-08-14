@@ -24,7 +24,8 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::state::{GenerationState, State};
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
-use crate::memory::segments::Segment;
+use crate::memory::columns::PREINITIALIZED_SEGMENTS;
+use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES};
 use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
 };
@@ -380,20 +381,24 @@ fn initialize_kernel_code_and_shift_table(memory: &mut MemoryState) {
 
 /// Returns the memory addresses and values that should comprise the state at
 /// the start of the segment's execution.
+/// Ignores zero values in non-preinitialized segments.
 fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(MemoryAddress, U256)> {
     let mut res = vec![];
     for (ctx_idx, ctx) in memory_before.contexts.iter().enumerate() {
         for (segment_idx, segment) in ctx.segments.iter().enumerate() {
             for (virt, value) in segment.content.iter().enumerate() {
                 if let &Some(val) = value {
-                    res.push((
-                        MemoryAddress {
-                            context: ctx_idx,
-                            segment: segment_idx,
-                            virt,
-                        },
-                        val,
-                    ));
+                    // We skip zero values in non-preinitialized segments.
+                    if !val.is_zero() || PREINITIALIZED_SEGMENTS_INDICES.contains(&segment_idx) {
+                        res.push((
+                            MemoryAddress {
+                                context: ctx_idx,
+                                segment: segment_idx,
+                                virt,
+                            },
+                            val,
+                        ));
+                    }
                 }
             }
         }
