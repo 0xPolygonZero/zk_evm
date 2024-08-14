@@ -93,15 +93,28 @@ global hash_initial_tries:
     // We compute the length of the trie data segment in `mpt_hash` so that we
     // can check the value provided by the prover.
     // The trie data segment is already written by the linked lists
-    %get_trie_data_size
 
-    // stack: trie_data_len
+    // First, we compute the initial size of the trie data segment.
+    PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
+    SUB
+    // stack: accounts_ll_full_len, accounts_ll_node_size
+    DIV
+    %decrement
+    // stack: actual_nb_accounts
+    // The initial payloads are written twice, and each payload requires 4 elements.
+    PUSH 8 MUL
+    %increment
+    // stack: init_trie_data_len
+
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_BEFORE)      %assert_eq
     // stack: trie_data_len
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_BEFORE)  %assert_eq
     // stack: trie_data_full_len
-
-    %set_trie_data_size
+    // Check that the trie data length is correct.
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+    %assert_eq
 
 global start_txns:
     // stack: (empty)
@@ -157,7 +170,10 @@ global perform_final_checks:
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER) %assert_eq
     %pop3
 
-    PUSH 1 // initial trie data length
+    // We set a dummy value as an initial trie data length,
+    // since the final transaction and receipt tries have already been
+    // added to `GLOBAL_METADATA_TRIE_DATA_SIZE`.
+    PUSH 1
     
 global check_txn_trie:
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq
@@ -165,6 +181,13 @@ global check_receipt_trie:
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_AFTER)   %assert_eq
 global check_state_trie:
     // First, check initial trie.
+    // We pop the dummy trie data length that was computed.
+    POP 
+    // Now, we get the trie data size so we can add the values from the 
+    // initial trie data size and check that the value stored in 
+    // `GLOBAL_METADATA_TRIE_DATA_SIZE` is correct.
+    %get_trie_data_size
+    // stack: trie_data_len
     PROVER_INPUT(trie_ptr::state)
 
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
@@ -173,13 +196,19 @@ global check_state_trie:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
     %set_initial_tries
-    %get_trie_data_size
     %mpt_hash_state_trie
 
-    SWAP1 %set_trie_data_size
+    // stack: init_state_hash, trie_data_len
+    // Check that the initial trie is correct.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
     %assert_eq
+    // Check that the stored trie data length is correct.
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
+    %assert_eq
 
+    // We set a dummy value as an initial trie data length,
+    // as we do not need to compute the actual trie data length here.
+    PUSH 1
 global check_final_state_trie:
     %set_final_tries
     %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq

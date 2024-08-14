@@ -122,6 +122,10 @@ fn parse_storage_value(value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     Ok(vec![value])
 }
 
+fn parse_storage_value_no_return(value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
+    Ok(vec![])
+}
+
 const fn empty_nibbles() -> Nibbles {
     Nibbles {
         count: 0,
@@ -302,7 +306,9 @@ fn load_state_trie(
             let storage_ptr_ptr = trie_data.len();
             trie_data.push(Some((trie_data.len() + 2).into()));
             trie_data.push(Some(code_hash.into_uint()));
-            let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value)?;
+            // We don't need to store the slot values, as they will be overwritten in
+            // `mpt_set_payload`.
+            let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value_no_return)?;
             if storage_ptr == 0 {
                 trie_data[storage_ptr_ptr] = Some(0.into());
             }
