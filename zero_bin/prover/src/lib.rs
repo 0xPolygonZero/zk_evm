@@ -144,6 +144,12 @@ impl BlockProverInput {
         use futures::StreamExt;
         use paladin::directive::{Directive, IndexedStream};
 
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            save_inputs_on_error,
+        } = prover_config;
+
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
@@ -151,13 +157,15 @@ impl BlockProverInput {
         let txs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
-            prover_config.batch_size,
+            batch_size,
         )?;
 
-        let batch_ops = ops::BatchTestOnly {};
+        let batch_ops = ops::BatchTestOnly {
+            save_inputs_on_error,
+        };
 
         let simulation = Directive::map(
-            IndexedStream::from(txs.into_iter().zip(repeat(prover_config.max_cpu_len_log))),
+            IndexedStream::from(txs.into_iter().zip(repeat(max_cpu_len_log))),
             &batch_ops,
         );
 

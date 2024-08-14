@@ -4,14 +4,13 @@ use std::time::Instant;
 #[cfg(not(feature = "test_only"))]
 use evm_arithmetization::generation::TrimmedGenerationInputs;
 use evm_arithmetization::proof::PublicValues;
-use evm_arithmetization::prover::SegmentDataIterator;
-use evm_arithmetization::GenerationInputs;
-#[cfg(not(feature = "test_only"))]
-use paladin::operation::FatalStrategy;
+#[cfg(feature = "test_only")]
+use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
 use paladin::{
-    operation::{FatalError, Monoid, Operation, Result},
+    operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
+#[cfg(feature = "test_only")]
 use proof_gen::types::Field;
 use proof_gen::{
     proof_gen::{generate_block_proof, generate_segment_agg_proof, generate_transaction_agg_proof},
@@ -30,7 +29,9 @@ registry!();
 
 #[cfg(feature = "test_only")]
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct BatchTestOnly {}
+pub struct BatchTestOnly {
+    pub save_inputs_on_error: bool,
+}
 
 #[cfg(feature = "test_only")]
 impl Operation for BatchTestOnly {
@@ -38,7 +39,8 @@ impl Operation for BatchTestOnly {
     type Output = ();
 
     fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
-        let _ = SegmentDataIterator::<Field>::new(&inputs.0, Some(inputs.1)).collect::<Vec<_>>();
+        simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
+            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
 
         Ok(())
     }
