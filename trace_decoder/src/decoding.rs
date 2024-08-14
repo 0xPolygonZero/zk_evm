@@ -133,7 +133,8 @@ fn update_beacon_block_root_contract_storage(
     let mut slots_nibbles = vec![];
 
     for (ix, val) in [(timestamp_idx, timestamp), (root_idx, calldata)] {
-        // TODO(0xaatif): what is this??
+        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+        //                document this
         let slot = TrieKey::from_nibbles(Nibbles::from_h256_be(hash(
             Nibbles::from_h256_be(H256::from_uint(&ix)).bytes_be(),
         )));
@@ -188,7 +189,9 @@ fn update_beacon_block_root_contract_storage(
     trie_state
         .state
         .insert_by_key(addr_nibbles, account)
-        .expect("TODO(0xaatif): entry API");
+        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+        //                Add an entry API
+        .unwrap();
 
     Ok(())
 }
@@ -473,7 +476,9 @@ fn update_trie_state_from_withdrawals<'a>(
 
         state
             .insert_by_address(addr, acc_data)
-            .expect("TODO(0xaatif): entry API");
+            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+            //                Add an entry API
+            .unwrap();
     }
 
     Ok(())

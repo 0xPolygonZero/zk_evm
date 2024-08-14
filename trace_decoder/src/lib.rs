@@ -17,7 +17,8 @@
 //! - Performance - this won't be the bottleneck in any proving system.
 //! - Robustness - malicious or malformed input may crash this library.
 //!
-//! TODO(0xaatif): refactor all the docs below
+//! TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+//!                refactor all the docs below
 //!
 //! It might not be obvious why we need traces for each txn in order to generate
 //! proofs. While it's true that we could just run all the txns of a block in an
@@ -83,11 +84,12 @@ const _DEVELOPER_DOCS: () = ();
 
 /// Defines the main functions used to generate the IR.
 mod decoding;
-// TODO(0xaatif): add backend/prod support
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
 mod processed_block_trace;
 mod type1;
+// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+//                add backend/prod support for type 2
 #[cfg(test)]
 #[allow(dead_code)]
 mod type2;

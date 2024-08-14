@@ -258,7 +258,8 @@ fn execute(
                 has_storage,
             } => {
                 // BUG: the spec sometimes writes Node::Account with 5 fields..
-                // TODO(0xaatif): should these fields even be optional?
+                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+                //                should these fields even be optional?
                 let nonce = nonce.unwrap_or_default();
                 let balance = balance.unwrap_or_default();
                 let account = match (has_code, has_storage) {
