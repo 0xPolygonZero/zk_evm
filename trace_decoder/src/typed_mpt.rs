@@ -1,5 +1,6 @@
 //! Principled MPT types used in this library.
 
+use core::fmt;
 use std::marker::PhantomData;
 
 use copyvec::CopyVec;
@@ -24,6 +25,8 @@ struct TypedMpt<T> {
 }
 
 impl<T> TypedMpt<T> {
+    const PANIC_MSG: &str = "T encoding/decoding should round-trip,\
+    and only encoded `T`s are ever inserted";
     fn new() -> Self {
         Self {
             inner: HashedPartialTrie::new(Node::Empty),
@@ -58,10 +61,17 @@ impl<T> TypedMpt<T> {
         T: rlp::Decodable,
     {
         let bytes = self.inner.get(key.into_nibbles())?;
-        Some(rlp::decode(bytes).expect(
-            "T encoding/decoding should round-trip,\
-            and only encoded `T`s are ever inserted",
-        ))
+        Some(rlp::decode(bytes).expect(Self::PANIC_MSG))
+    }
+    fn remove(&mut self, key: TrieKey) -> Result<Option<T>, Error>
+    where
+        T: rlp::Decodable,
+    {
+        match self.inner.delete(key.into_nibbles()) {
+            Ok(Some(it)) => Ok(Some(rlp::decode(&it).expect(Self::PANIC_MSG))),
+            Ok(None) => Ok(None),
+            Err(source) => Err(Error { source }),
+        }
     }
     fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
@@ -117,6 +127,15 @@ pub struct Error {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct TrieKey(CopyVec<U4, 64>);
 
+impl fmt::Display for TrieKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for u in self.0 {
+            f.write_fmt(format_args!("{:x}", u))?
+        }
+        Ok(())
+    }
+}
+
 impl TrieKey {
     pub fn new(components: impl IntoIterator<Item = U4>) -> anyhow::Result<Self> {
         Ok(TrieKey(CopyVec::try_from_iter(components)?))
@@ -136,7 +155,7 @@ impl TrieKey {
         Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
     }
     #[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-    fn from_txn_ix(txn_ix: usize) -> Self {
+    pub fn from_txn_ix(txn_ix: usize) -> Self {
         TrieKey::new(AsNibbles(rlp::encode(&txn_ix))).expect(
             "\
             rlp of an usize goes through a u64, which is 8 bytes,
@@ -144,7 +163,7 @@ impl TrieKey {
             9 < 32",
         )
     }
-    fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
+    pub fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
         let mut theirs = mpt_trie::nibbles::Nibbles::default();
         for component in self.0 {
             theirs.push_nibble_back(component as u8)
@@ -191,6 +210,9 @@ impl TransactionTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
+    pub fn from_hashed_partial_trie_unchecked(src: HashedPartialTrie) -> Self {
+        Self { untyped: src }
+    }
 }
 
 #[allow(unused)] // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -219,6 +241,9 @@ impl ReceiptTrie {
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
+    }
+    pub fn from_hashed_partial_trie_unchecked(src: HashedPartialTrie) -> Self {
+        Self { untyped: src }
     }
 }
 
@@ -263,12 +288,34 @@ impl StateTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
+    pub fn remove(&mut self, key: TrieKey) -> Result<Option<AccountRlp>, Error> {
+        self.typed.remove(key)
+    }
+    pub fn contains(&self, key: TrieKey) -> bool {
+        self.typed
+            .as_hashed_partial_trie()
+            .contains(key.into_nibbles())
+    }
 
     /// This allows users to break the [`TypedMpt`] invariant.
-    /// If data that isn't an [`rlp::encode`]-ed `T` is inserted,
+    /// If data that isn't a [`rlp::encode`]-ed [`AccountRlp`] is inserted,
     /// subsequent API calls may panic.
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         self.typed.as_mut_hashed_partial_trie_unchecked()
+    }
+
+    /// This allows users to break the [`TypedMpt`] invariant.
+    /// If data that isn't a [`rlp::encode`]-ed [`AccountRlp`] is inserted,
+    /// subsequent API calls may panic.
+    pub fn from_hashed_partial_trie_unchecked(
+        src: mpt_trie::partial_trie::HashedPartialTrie,
+    ) -> Self {
+        Self {
+            typed: TypedMpt {
+                inner: src,
+                _ty: PhantomData,
+            },
+        }
     }
 }
 

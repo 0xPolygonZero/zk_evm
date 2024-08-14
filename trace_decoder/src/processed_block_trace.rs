@@ -4,9 +4,9 @@ use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
-use mpt_trie::nibbles::Nibbles;
 
 use crate::hash;
+use crate::typed_mpt::TrieKey;
 use crate::PartialTriePreImages;
 use crate::{ContractCodeUsage, TxnInfo};
 
@@ -93,7 +93,7 @@ impl TxnInfo {
             nodes_used_by_txn.storage_accesses.push((
                 hashed_addr,
                 storage_access_keys
-                    .map(|H256(bytes)| Nibbles::from_h256_be(hash(bytes)))
+                    .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
                     .collect(),
             ));
 
@@ -119,7 +119,7 @@ impl TxnInfo {
 
             let storage_writes_vec = storage_writes
                 .into_iter()
-                .map(|(k, v)| (Nibbles::from_h256_be(k), rlp::encode(&v).to_vec()))
+                .map(|(k, v)| (TrieKey::from_hash(k), rlp::encode(&v).to_vec()))
                 .collect();
 
             nodes_used_by_txn
@@ -205,9 +205,6 @@ fn create_empty_code_access_map() -> HashMap<H256, Vec<u8>> {
     HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
-pub(crate) type StorageAccess = Vec<Nibbles>;
-pub(crate) type StorageWrite = Vec<(Nibbles, Vec<u8>)>;
-
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
@@ -215,8 +212,8 @@ pub(crate) struct NodesUsedByTxn {
     pub(crate) state_writes: Vec<(H256, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(H256, StorageAccess)>,
-    pub(crate) storage_writes: Vec<(H256, StorageWrite)>,
+    pub(crate) storage_accesses: Vec<(H256, Vec<TrieKey>)>,
+    pub(crate) storage_writes: Vec<(H256, Vec<(TrieKey, Vec<u8>)>)>,
     pub(crate) state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
 }
 
