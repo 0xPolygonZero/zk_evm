@@ -260,13 +260,11 @@ impl<F: RichField + Extendable<D>, const D: usize> MemoryStark<F, D> {
             {
                 // `maybe_in_mem_after = filter * address_changed * (1 - is_stale)`
                 trace_col_vecs[MAYBE_IN_MEM_AFTER][i] = F::ONE;
-                // For efficiency, `mem_after_filter` is forcefully left to 0 if:
-                // - value is zero AND
-                // - segment is not preinitialized.
-                // Else, it's set to `maybe_in_mem_after`, which is 1 only in the current case.
+
                 let addr_segment = trace_col_vecs[ADDR_SEGMENT][i];
                 let is_non_zero_value =
                     (0..VALUE_LIMBS).any(|limb| trace_col_vecs[value_limb(limb)][i].is_nonzero());
+                // We filter out zero values in non-preinitialized segments.
                 if is_non_zero_value
                     || PREINITIALIZED_SEGMENTS_INDICES
                         .contains(&(addr_segment.to_canonical_u64() as usize))

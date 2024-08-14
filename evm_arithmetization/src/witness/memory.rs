@@ -17,7 +17,7 @@ use MemoryChannel::{Code, GeneralPurpose, PartialChannel};
 
 use super::operation::CONTEXT_SCALING_FACTOR;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::memory::segments::{Segment, SEGMENT_SCALING_FACTOR};
+use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES, SEGMENT_SCALING_FACTOR};
 use crate::witness::errors::MemoryError::{ContextTooLarge, SegmentTooLarge, VirtTooLarge};
 use crate::witness::errors::ProgramError;
 use crate::witness::errors::ProgramError::MemoryError;
@@ -225,11 +225,7 @@ impl MemoryState {
     /// need a specific behaviour here, since the values can be stored either in
     /// `preinitialized_segments` or in the memory itself.
     pub(crate) fn get_preinit_memory(&self, segment: Segment) -> Vec<Option<U256>> {
-        assert!(
-            segment == Segment::AccountsLinkedList
-                || segment == Segment::StorageLinkedList
-                || segment == Segment::TrieData
-        );
+        assert!(PREINITIALIZED_SEGMENTS_INDICES.contains(&segment.unscale()));
         let len = self
             .preinitialized_segments
             .get(&segment)
@@ -301,6 +297,7 @@ impl MemoryState {
         segment: Segment,
         values: MemorySegmentState,
     ) {
+        assert!(PREINITIALIZED_SEGMENTS_INDICES.contains(&segment.unscale()));
         self.preinitialized_segments.insert(segment, values);
     }
 
