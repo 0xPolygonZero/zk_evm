@@ -5889,7 +5889,10 @@ dependencies = [
 name = "zk_evm_common"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "ethereum-types",
+ "keccak-hash 0.10.0",
+ "rlp",
 ]
 
 [[package]]
