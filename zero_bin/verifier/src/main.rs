@@ -7,7 +7,10 @@ use dotenvy::dotenv;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde_json::Deserializer;
 use tracing::info;
-use zero_bin_common::{prover_state::persistence::set_circuit_cache_dir_env_if_not_set, version};
+use zero_bin_common::{
+    prover_state::persistence::{set_circuit_cache_dir_env_if_not_set, CIRCUIT_VERSION},
+    version,
+};
 
 mod cli;
 mod init;
@@ -20,7 +23,7 @@ fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.contains(&"--version".to_string()) {
         version::print_version(
-            env!("EVM_ARITHMETIZATION_PKG_VER"),
+            CIRCUIT_VERSION.as_str(),
             env!("VERGEN_RUSTC_COMMIT_HASH"),
             env!("VERGEN_BUILD_TIMESTAMP"),
         );

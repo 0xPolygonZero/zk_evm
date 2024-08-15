@@ -10,10 +10,10 @@ use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use tracing::{info, warn};
-use zero_bin_common::version;
 use zero_bin_common::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
+use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
 
 use crate::client::{client_main, ProofParams};
 
@@ -22,8 +22,6 @@ mod client;
 mod http;
 mod init;
 mod stdio;
-
-const EVM_ARITHMETIZATION_PKG_VER: &str = "EVM_ARITHMETIZATION_PKG_VER";
 
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
     if path.is_none() {
@@ -43,22 +41,11 @@ async fn main() -> Result<()> {
     set_circuit_cache_dir_env_if_not_set()?;
     init::tracing();
 
-    if env::var_os(EVM_ARITHMETIZATION_PKG_VER).is_none() {
-        // Safety:
-        // - we're early enough in main that nothing else should race
-        unsafe {
-            env::set_var(
-                EVM_ARITHMETIZATION_PKG_VER,
-                env!("EVM_ARITHMETIZATION_PKG_VER"),
-            );
-        }
-    }
-
     let args: Vec<String> = env::args().collect();
 
     if args.contains(&"--version".to_string()) {
         version::print_version(
-            env!("EVM_ARITHMETIZATION_PKG_VER"),
+            CIRCUIT_VERSION.as_str(),
             env!("VERGEN_RUSTC_COMMIT_HASH"),
             env!("VERGEN_BUILD_TIMESTAMP"),
         );
