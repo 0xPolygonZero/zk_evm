@@ -193,15 +193,11 @@ pub struct TxnInfo {
 /// Structure holding metadata for one transaction.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TxnMeta {
-    /// Txn byte code.
+    /// Txn byte code. This is also the raw RLP bytestring inserted into the txn
+    /// trie by this txn. Note that the key is not included and this is only
+    /// the rlped value of the node!
     #[serde(with = "crate::hex")]
     pub byte_code: Vec<u8>,
-
-    /// Rlped bytes of the new txn value inserted into the txn trie by
-    /// this txn. Note that the key is not included and this is only the rlped
-    /// value of the node!
-    #[serde(with = "crate::hex")]
-    pub new_txn_trie_node_byte: Vec<u8>,
 
     /// Rlped bytes of the new receipt value inserted into the receipt trie by
     /// this txn. Note that the key is not included and this is only the rlped
