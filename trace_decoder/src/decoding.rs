@@ -191,7 +191,7 @@ fn update_beacon_block_root_contract_storage(
         .insert_by_key(addr_nibbles, account)
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
         //                Add an entry API
-        .unwrap();
+        .expect("insert must succeed with the same key as a successful `get`");
 
     Ok(())
 }
@@ -478,7 +478,7 @@ fn update_trie_state_from_withdrawals<'a>(
             .insert_by_address(addr, acc_data)
             // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
             //                Add an entry API
-            .unwrap();
+            .expect("insert must succeed with the same key as a successful `get`");
     }
 
     Ok(())
