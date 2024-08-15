@@ -10,7 +10,7 @@ use thiserror::Error;
 
 use crate::{
     nibbles::{Nibble, Nibbles},
-    partial_trie::{Node, PartialTrie, WrappedNode},
+    partial_trie::{CollapseStrategy, Node, PartialTrie, WrappedNode},
     utils::TrieNodeType,
 };
 
@@ -378,23 +378,34 @@ impl<T: PartialTrie> Node<T> {
     /// If the key exists, then the existing node value that was deleted is
     /// returned. Otherwise, if the key is not present, then `None` is returned
     /// instead.
-    pub(crate) fn trie_delete<K>(&mut self, k: K) -> TrieOpResult<Option<Vec<u8>>>
+    pub(crate) fn trie_delete<K>(
+        &mut self,
+        k: K,
+        collapse_strategy: CollapseStrategy,
+    ) -> TrieOpResult<Option<Vec<u8>>>
     where
         K: Into<Nibbles>,
     {
         let k: Nibbles = k.into();
         trace!("Deleting a leaf node with key {} if it exists", k);
 
-        delete_intern(&self.clone(), k)?.map_or(Ok(None), |(updated_root, deleted_val)| {
-            // Final check at the root if we have an extension node. While this check also
-            // exists as we recursively traverse down the trie, it can not perform this
-            // check on the root node.
-            let wrapped_node = try_collapse_if_extension(updated_root, &Nibbles::default())?;
-            let node_ref: &Node<T> = &wrapped_node;
-            *self = node_ref.clone();
+        delete_intern(&self.clone(), k, collapse_strategy)?.map_or(
+            Ok(None),
+            |(updated_root, deleted_val)| {
+                // Final check at the root if we have an extension node. While this check also
+                // exists as we recursively traverse down the trie, it can not perform this
+                // check on the root node.
+                let wrapped_node = try_collapse_if_extension(
+                    updated_root,
+                    &Nibbles::default(),
+                    collapse_strategy,
+                )?;
+                let node_ref: &Node<T> = &wrapped_node;
+                *self = node_ref.clone();
 
-            Ok(Some(deleted_val))
-        })
+                Ok(Some(deleted_val))
+            },
+        )
     }
 
     pub(crate) fn trie_items(&self) -> impl Iterator<Item = (Nibbles, ValOrHash)> {
@@ -516,6 +527,7 @@ fn insert_into_trie_rec<N: PartialTrie>(
 fn delete_intern<N: PartialTrie>(
     node: &Node<N>,
     mut curr_k: Nibbles,
+    collapse_strategy: CollapseStrategy,
 ) -> TrieOpResult<Option<(WrappedNode<N>, Vec<u8>)>> {
     match node {
         Node::Empty => {
@@ -532,7 +544,7 @@ fn delete_intern<N: PartialTrie>(
             let nibble = curr_k.pop_next_nibble_front();
             trace!("Delete traversed Branch nibble {:x}", nibble);
 
-            delete_intern(&children[nibble as usize], curr_k)?.map_or(Ok(None),
+            delete_intern(&children[nibble as usize], curr_k, collapse_strategy)?.map_or(Ok(None),
                 |(updated_child, value_deleted)| {
                     // If the child we recursively called is deleted, then we may need to reduce
                     // this branch to an extension/leaf.
@@ -544,7 +556,7 @@ fn delete_intern<N: PartialTrie>(
 
                             let mut updated_children = children.clone();
                             updated_children[nibble as usize] =
-                                try_collapse_if_extension(updated_child, &curr_k)?;
+                                try_collapse_if_extension(updated_child, &curr_k, collapse_strategy)?;
                             branch(updated_children, value.clone())
                         }
                         true => {
@@ -579,10 +591,14 @@ fn delete_intern<N: PartialTrie>(
                 .then(|| {
                     curr_k.truncate_n_nibbles_front_mut(ext_nibbles.count);
 
-                    delete_intern(child, curr_k).and_then(|res| {
+                    delete_intern(child, curr_k, collapse_strategy).and_then(|res| {
                         res.map_or(Ok(None), |(updated_child, value_deleted)| {
-                            let updated_node =
-                                collapse_ext_node_if_needed(ext_nibbles, &updated_child, &curr_k)?;
+                            let updated_node = collapse_ext_node_if_needed(
+                                ext_nibbles,
+                                &updated_child,
+                                &curr_k,
+                                collapse_strategy,
+                            )?;
                             Ok(Some((updated_node, value_deleted)))
                         })
                     })
@@ -602,9 +618,12 @@ fn delete_intern<N: PartialTrie>(
 fn try_collapse_if_extension<N: PartialTrie>(
     node: WrappedNode<N>,
     curr_key: &Nibbles,
+    collapse_strategy: CollapseStrategy,
 ) -> TrieOpResult<WrappedNode<N>> {
     match node.as_ref() {
-        Node::Extension { nibbles, child } => collapse_ext_node_if_needed(nibbles, child, curr_key),
+        Node::Extension { nibbles, child } => {
+            collapse_ext_node_if_needed(nibbles, child, curr_key, collapse_strategy)
+        }
         _ => Ok(node),
     }
 }
@@ -637,6 +656,7 @@ fn collapse_ext_node_if_needed<N: PartialTrie>(
     ext_nibbles: &Nibbles,
     child: &WrappedNode<N>,
     curr_key: &Nibbles,
+    collapse_strategy: CollapseStrategy,
 ) -> TrieOpResult<WrappedNode<N>> {
     trace!(
         "Collapsing extension node ({:x}) with child {}...",
@@ -657,10 +677,13 @@ fn collapse_ext_node_if_needed<N: PartialTrie>(
             nibbles: leaf_nibbles,
             value,
         } => Ok(leaf(ext_nibbles.merge_nibbles(leaf_nibbles), value.clone())),
-        Node::Hash(h) => Err(TrieOpError::ExtensionCollapsedIntoHashError(
-            curr_key.merge_nibbles(ext_nibbles),
-            *h,
-        )),
+        Node::Hash(h) => match collapse_strategy {
+            CollapseStrategy::Pass => Ok(extension(*ext_nibbles, child.clone())),
+            CollapseStrategy::Error => Err(TrieOpError::ExtensionCollapsedIntoHashError(
+                curr_key.merge_nibbles(ext_nibbles),
+                *h,
+            )),
+        },
         // Can never do this safely, so return an error.
         _ => Err(TrieOpError::HashNodeExtError(TrieNodeType::from(child))),
     }

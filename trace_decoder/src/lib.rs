@@ -103,7 +103,7 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
-use mpt_trie::partial_trie::HashedPartialTrie;
+use mpt_trie::partial_trie::{CollapseStrategy, HashedPartialTrie};
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
 use typed_mpt::{StateTrie, StorageTrie, TrieKey};
@@ -320,7 +320,7 @@ pub fn entrypoint(
         }) => ProcessedBlockTracePreImages {
             tries: PartialTriePreImages {
                 state: state.items().try_fold(
-                    StateTrie::default(),
+                    StateTrie::new(CollapseStrategy::Error),
                     |mut acc, (nibbles, hash_or_val)| {
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
@@ -342,18 +342,21 @@ pub fn entrypoint(
                     .into_iter()
                     .map(|(k, SeparateTriePreImage::Direct(v))| {
                         v.items()
-                            .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
-                                let path = TrieKey::from_nibbles(nibbles);
-                                match hash_or_val {
-                                    mpt_trie::trie_ops::ValOrHash::Val(value) => {
-                                        acc.insert(path, value)?;
-                                    }
-                                    mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                        acc.insert_hash(path, h)?;
-                                    }
-                                };
-                                anyhow::Ok(acc)
-                            })
+                            .try_fold(
+                                StorageTrie::new(CollapseStrategy::Error),
+                                |mut acc, (nibbles, hash_or_val)| {
+                                    let path = TrieKey::from_nibbles(nibbles);
+                                    match hash_or_val {
+                                        mpt_trie::trie_ops::ValOrHash::Val(value) => {
+                                            acc.insert(path, value)?;
+                                        }
+                                        mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                            acc.insert_hash(path, h)?;
+                                        }
+                                    };
+                                    anyhow::Ok(acc)
+                                },
+                            )
                             .map(|v| (k, v))
                     })
                     .collect::<Result<_, _>>()?,

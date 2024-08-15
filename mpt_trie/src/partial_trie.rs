@@ -49,6 +49,10 @@ pub trait PartialTrie:
     /// Creates a new partial trie from a node.
     fn new(n: Node<Self>) -> Self;
 
+    /// Creates a new partial trie from a node with a provided collapse
+    /// strategy.
+    fn new_with_strategy(n: Node<Self>, collapse_strategy: CollapseStrategy) -> Self;
+
     /// Inserts a node into the trie.
     fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where
@@ -211,6 +215,12 @@ impl PartialTrie for StandardTrie {
         Self(n)
     }
 
+    // TODO(Robin): Do we ever want to use `StandardTrie` within the other crates?
+    // In which case we may want to include the strategy as part of the struct.
+    fn new_with_strategy(n: Node<Self>, _collapse_strategy: CollapseStrategy) -> Self {
+        Self(n)
+    }
+
     fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where
         K: Into<Nibbles>,
@@ -240,7 +250,7 @@ impl PartialTrie for StandardTrie {
     where
         K: Into<Nibbles>,
     {
-        self.0.trie_delete(k)
+        self.0.trie_delete(k, CollapseStrategy::Error)
     }
 
     fn hash(&self) -> H256 {
@@ -304,6 +314,24 @@ where
 pub struct HashedPartialTrie {
     pub(crate) node: Node<HashedPartialTrie>,
     pub(crate) hash: Arc<RwLock<Option<H256>>>,
+
+    pub(crate) collapse_strategy: CollapseStrategy,
+}
+
+/// A strategy to adopt for collapsing a branch node containing only two
+/// children into an extension node after deletion of one of these two children,
+/// if the remaining child is a Hash node.
+///
+/// The default behaviour is to return an Error upon such scenario.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+pub enum CollapseStrategy {
+    /// Allow collapsing of single hash-node branch child into an extension
+    /// node.
+    Pass,
+    #[default]
+    /// Reject collapsing of single hash-node branch child into an extension
+    /// node.
+    Error,
 }
 
 impl_from_for_trie_type!(HashedPartialTrie);
@@ -329,6 +357,15 @@ impl PartialTrie for HashedPartialTrie {
         Self {
             node,
             hash: Arc::new(RwLock::new(None)),
+            collapse_strategy: CollapseStrategy::default(),
+        }
+    }
+
+    fn new_with_strategy(node: Node<Self>, collapse_strategy: CollapseStrategy) -> Self {
+        Self {
+            node,
+            hash: Arc::new(RwLock::new(None)),
+            collapse_strategy,
         }
     }
 
@@ -364,7 +401,7 @@ impl PartialTrie for HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        let res = self.node.trie_delete(k);
+        let res = self.node.trie_delete(k, self.collapse_strategy);
         self.set_hash(None);
 
         res

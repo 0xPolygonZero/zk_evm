@@ -7,19 +7,32 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
 use evm_arithmetization::generation::mpt::AccountRlp;
+use mpt_trie::partial_trie::CollapseStrategy;
 use nunny::NonEmpty;
 use u4::U4;
 
 use crate::typed_mpt::{StateTrie, StorageTrie, TrieKey};
 use crate::wire::{Instruction, SmtLeaf};
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Frontend {
     pub state: StateTrie,
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     /// The key here matches the [`TriePath`] inside [`Self::state`] for
     /// accounts which had inline storage.
     pub storage: BTreeMap<TrieKey, StorageTrie>,
+}
+
+impl Default for Frontend {
+    // This frontend is intended to be used with our custom `zeroTracer`,
+    // which covers branch-to-extencion collapse edge cases.
+    fn default() -> Self {
+        Self {
+            state: StateTrie::new(CollapseStrategy::Pass),
+            code: BTreeSet::new(),
+            storage: BTreeMap::new(),
+        }
+    }
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -157,7 +170,7 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
         Ok(())
     }
 
-    let mut mpt = StorageTrie::default();
+    let mut mpt = StorageTrie::new(CollapseStrategy::Pass);
     visit(&mut mpt, &stackstack::Stack::new(), node)?;
     Ok(mpt)
 }
