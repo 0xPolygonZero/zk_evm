@@ -10,7 +10,7 @@ use evm_arithmetization::generation::mpt::AccountRlp;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::typed_mpt::{StateTrie, StorageTrie, TriePath};
+use crate::typed_mpt::{StateTrie, StorageTrie, TrieKey};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Default, Clone)]
@@ -19,7 +19,7 @@ pub struct Frontend {
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     /// The key here matches the [`TriePath`] inside [`Self::state`] for
     /// accounts which had inline storage.
-    pub storage: BTreeMap<TriePath, StorageTrie>,
+    pub storage: BTreeMap<TrieKey, StorageTrie>,
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -54,10 +54,10 @@ fn visit(
         Node::Hash(Hash { raw_hash }) => {
             frontend
                 .state
-                .insert_hash_by_path(TriePath::new(path.iter().copied())?, raw_hash.into())?;
+                .insert_hash_by_key(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
         }
         Node::Leaf(Leaf { key, value }) => {
-            let path = TriePath::new(path.iter().copied().chain(key))?;
+            let path = TrieKey::new(path.iter().copied().chain(key))?;
             match value {
                 Either::Left(Value { .. }) => bail!("unsupported value node at top level"),
                 Either::Right(Account {
@@ -91,7 +91,7 @@ fn visit(
                             }
                         },
                     };
-                    let clobbered = frontend.state.insert_by_path(path, account)?;
+                    let clobbered = frontend.state.insert_by_key(path, account)?;
                     ensure!(clobbered.is_none(), "duplicate account");
                 }
             }
@@ -126,12 +126,12 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
     ) -> anyhow::Result<()> {
         match node {
             Node::Hash(Hash { raw_hash }) => {
-                mpt.insert_hash(TriePath::new(path.iter().copied())?, raw_hash.into())?;
+                mpt.insert_hash(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
             }
             Node::Leaf(Leaf { key, value }) => {
                 match value {
                     Either::Left(Value { raw_value }) => mpt.insert(
-                        TriePath::new(path.iter().copied().chain(key))?,
+                        TrieKey::new(path.iter().copied().chain(key))?,
                         rlp::encode(&raw_value.as_slice()).to_vec(),
                     )?,
                     Either::Right(_) => bail!("unexpected account node in storage trie"),
@@ -258,7 +258,8 @@ fn execute(
                 has_storage,
             } => {
                 // BUG: the spec sometimes writes Node::Account with 5 fields..
-                // TODO(0xaatif): should these fields even be optional?
+                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+                //                should these fields even be optional?
                 let nonce = nonce.unwrap_or_default();
                 let balance = balance.unwrap_or_default();
                 let account = match (has_code, has_storage) {

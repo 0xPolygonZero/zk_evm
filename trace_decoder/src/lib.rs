@@ -17,7 +17,8 @@
 //! - Performance - this won't be the bottleneck in any proving system.
 //! - Robustness - malicious or malformed input may crash this library.
 //!
-//! TODO(0xaatif): refactor all the docs below
+//! TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+//!                refactor all the docs below
 //!
 //! It might not be obvious why we need traces for each txn in order to generate
 //! proofs. While it's true that we could just run all the txns of a block in an
@@ -83,11 +84,12 @@ const _DEVELOPER_DOCS: () = ();
 
 /// Defines the main functions used to generate the IR.
 mod decoding;
-// TODO(0xaatif): add backend/prod support
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
 mod processed_block_trace;
 mod type1;
+// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+//                add backend/prod support for type 2
 #[cfg(test)]
 #[allow(dead_code)]
 mod type2;
@@ -104,7 +106,7 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
-use typed_mpt::{StateTrie, StorageTrie, TriePath};
+use typed_mpt::{StateTrie, StorageTrie, TrieKey};
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -320,17 +322,17 @@ pub fn entrypoint(
                 state: state.items().try_fold(
                     StateTrie::default(),
                     |mut acc, (nibbles, hash_or_val)| {
-                        let path = TriePath::from_nibbles(nibbles);
+                        let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                                acc.insert_by_path(
+                                acc.insert_by_key(
                                     path,
                                     rlp::decode(&bytes)
                                         .context("invalid AccountRlp in direct state trie")?,
                                 )?;
                             }
                             mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                acc.insert_hash_by_path(path, h)?;
+                                acc.insert_hash_by_key(path, h)?;
                             }
                         };
                         anyhow::Ok(acc)
@@ -341,7 +343,7 @@ pub fn entrypoint(
                     .map(|(k, SeparateTriePreImage::Direct(v))| {
                         v.items()
                             .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
-                                let path = TriePath::from_nibbles(nibbles);
+                                let path = TrieKey::from_nibbles(nibbles);
                                 match hash_or_val {
                                     mpt_trie::trie_ops::ValOrHash::Val(value) => {
                                         acc.insert(path, value)?;
