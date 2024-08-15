@@ -4,23 +4,12 @@ use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
+use zk_evm_common::{EMPTY_CODE_HASH, EMPTY_TRIE_HASH};
 
 use crate::hash;
 use crate::typed_mpt::TrieKey;
 use crate::PartialTriePreImages;
 use crate::{ContractCodeUsage, TxnInfo};
-
-// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-const EMPTY_CODE_HASH: H256 = H256([
-    197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
-    130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
-]);
-
-/// 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-pub const EMPTY_TRIE_HASH: H256 = H256([
-    86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
-    108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
-]);
 
 const FIRST_PRECOMPILE_ADDRESS: U256 = U256([1, 0, 0, 0]);
 const LAST_PRECOMPILE_ADDRESS: U256 = U256([10, 0, 0, 0]);
