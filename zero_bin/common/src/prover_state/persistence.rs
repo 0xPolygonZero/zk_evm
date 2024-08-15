@@ -33,8 +33,7 @@ const KERNEL_HASH_PREFIX: usize = 8;
 /// When we serialize/deserialize circuits, we rely on the hash of the plonky
 /// kernel to determine if the circuit is compatible with our current binary. If
 /// the kernel hash of the circuit that we are loading in from disk differs,
-/// then using these circuits could potentially lead to incorrect results (but
-/// most likely just a crash).
+/// then using these circuits would cause failures during proof generation
 pub static CIRCUIT_VERSION: Lazy<String> =
     Lazy::new(|| hex::encode(KERNEL.hash())[..KERNEL_HASH_PREFIX].to_string());
 
