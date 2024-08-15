@@ -85,16 +85,7 @@ where
 
     // Handle case when transaction failed and a contract creation was reverted
     if !tx_status && tx_receipt.contract_address.is_some() {
-        tx_traces.insert(
-            tx_receipt.contract_address.unwrap(),
-            TxnTrace {
-                balance: None,
-                nonce: None,
-                storage_read: None,
-                storage_written: None,
-                code_usage: None,
-            },
-        );
+        tx_traces.insert(tx_receipt.contract_address.unwrap(), TxnTrace::default());
     }
 
     Ok((
