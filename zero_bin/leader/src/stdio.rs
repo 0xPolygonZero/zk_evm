@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use anyhow::Result;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::{into_block_prover_input_future, BlockProverInput, FutureBlockProverInput};
+use prover::{into_block_prover_input_future, BlockProverInput, BlockProverInputFuture};
 use tracing::info;
 
 /// The main function for the stdio mode.
@@ -16,11 +16,10 @@ pub(crate) async fn stdio_main(
     std::io::stdin().read_to_string(&mut buffer)?;
 
     let des = &mut serde_json::Deserializer::from_str(&buffer);
-    let block_prover_inputs: Vec<BlockProverInput> = serde_path_to_error::deserialize(des)?;
-    let block_prover_inputs = block_prover_inputs
+    let block_prover_inputs = serde_path_to_error::deserialize::<_, Vec<BlockProverInput>>(des)?
         .into_iter()
         .map(into_block_prover_input_future)
-        .collect::<Vec<FutureBlockProverInput>>();
+        .collect::<Vec<BlockProverInputFuture>>();
 
     let proved_blocks = prover::prove(
         block_prover_inputs,

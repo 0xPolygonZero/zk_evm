@@ -5,7 +5,6 @@ use std::sync::Arc;
 use alloy::rpc::types::{BlockId, BlockNumberOrTag, BlockTransactionsKind};
 use alloy::transports::http::reqwest::Url;
 use anyhow::Result;
-use futures::StreamExt;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use rpc::{retry::build_http_retry_provider, RpcType};
@@ -37,7 +36,8 @@ pub(crate) async fn client_main(
     block_interval: BlockInterval,
     mut params: ProofParams,
 ) -> Result<()> {
-    use futures::FutureExt;
+    use futures::{FutureExt, StreamExt};
+
     let cached_provider = Arc::new(rpc::provider::CachedProvider::new(
         build_http_retry_provider(
             rpc_params.rpc_url.clone(),
@@ -57,10 +57,10 @@ pub(crate) async fn client_main(
         .state_root;
 
     let mut block_prover_inputs = Vec::new();
-    let mut block_interval = block_interval.clone().into_bounded_stream()?;
+    let mut block_interval = block_interval.into_bounded_stream()?;
     while let Some(block_num) = block_interval.next().await {
         let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
-        // Get future of prover input for particular block
+        // Get future of prover input for particular block.
         let block_prover_input = rpc::block_prover_input(
             cached_provider.clone(),
             block_id,

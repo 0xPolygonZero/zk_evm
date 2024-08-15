@@ -75,7 +75,7 @@ impl Cli {
                 let mut block_interval = block_interval.clone().into_bounded_stream()?;
                 while let Some(block_num) = block_interval.next().await {
                     let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
-                    // Get future of prover input for particular block
+                    // Get the prover input for particular block.
                     let result = rpc::block_prover_input(
                         cached_provider.clone(),
                         block_id,

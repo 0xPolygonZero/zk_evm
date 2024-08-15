@@ -18,11 +18,11 @@ use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
 
-pub type FutureBlockProverInput = std::pin::Pin<
+pub type BlockProverInputFuture = std::pin::Pin<
     Box<dyn Future<Output = std::result::Result<BlockProverInput, anyhow::Error>> + Send>,
 >;
 
-pub fn into_block_prover_input_future(value: BlockProverInput) -> FutureBlockProverInput {
+pub fn into_block_prover_input_future(value: BlockProverInput) -> BlockProverInputFuture {
     async fn into(value: BlockProverInput) -> Result<BlockProverInput, anyhow::Error> {
         Ok(value)
     }
@@ -128,7 +128,7 @@ impl BlockProverInput {
 /// Return the list of block numbers that are proved and if the proof data
 /// is not saved to disk, return the generated block proofs as well.
 pub async fn prove(
-    block_prover_inputs: Vec<FutureBlockProverInput>,
+    block_prover_inputs: Vec<BlockProverInputFuture>,
     runtime: &Runtime,
     previous_proof: Option<GeneratedBlockProof>,
     save_inputs_on_error: bool,
@@ -143,6 +143,7 @@ pub async fn prove(
         let proof_output_dir = proof_output_dir.clone();
         let previos_block_proof = prev.take();
         let fut = async move {
+            // Get the prover input data from the external source (e.g. Erigon node).
             let block = block_prover_input.await?;
             let block_number = block.get_block_number();
             info!("Proving block {block_number}");

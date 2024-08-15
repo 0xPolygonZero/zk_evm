@@ -87,16 +87,16 @@ where
         .chunks(2)
         .into_iter()
         .map(|mut chunk| {
-            // We convert to type of (current, Option previous block)
+            // We convert to tuple of (current, Option previous block)
             if let Some(first) = chunk.next() {
                 let second = chunk.next();
                 (first, second)
             } else {
-                panic!("Not be possible according to itertools::Iterator::chunks definition")
+                panic!("not possible according to itertools::Iterator::chunks definition")
             }
         })
         .collect::<Vec<_>>();
-    println!(">>>>>>>>> Ovde je kontrola: {:?}", previous_block_numbers);
+
     let concurrency = previous_block_numbers.len();
     let collected_hashes = futures::stream::iter(
         previous_block_numbers
