@@ -17,7 +17,8 @@
 //! - Performance - this won't be the bottleneck in any proving system.
 //! - Robustness - malicious or malformed input may crash this library.
 //!
-//! TODO(0xaatif): refactor all the docs below
+//! TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+//!                refactor all the docs below
 //!
 //! It might not be obvious why we need traces for each txn in order to generate
 //! proofs. While it's true that we could just run all the txns of a block in an
@@ -83,11 +84,12 @@ const _DEVELOPER_DOCS: () = ();
 
 /// Defines the main functions used to generate the IR.
 mod decoding;
-// TODO(0xaatif): add backend/prod support
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
 mod processed_block_trace;
 mod type1;
+// TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+//                add backend/prod support for type 2
 #[cfg(test)]
 #[allow(dead_code)]
 mod type2;
@@ -104,7 +106,7 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::HashedPartialTrie;
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
-use typed_mpt::{StateTrie, StorageTrie, TriePath};
+use typed_mpt::{StateTrie, StorageTrie, TrieKey};
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -191,15 +193,11 @@ pub struct TxnInfo {
 /// Structure holding metadata for one transaction.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TxnMeta {
-    /// Txn byte code.
+    /// Txn byte code. This is also the raw RLP bytestring inserted into the txn
+    /// trie by this txn. Note that the key is not included and this is only
+    /// the rlped value of the node!
     #[serde(with = "crate::hex")]
     pub byte_code: Vec<u8>,
-
-    /// Rlped bytes of the new txn value inserted into the txn trie by
-    /// this txn. Note that the key is not included and this is only the rlped
-    /// value of the node!
-    #[serde(with = "crate::hex")]
-    pub new_txn_trie_node_byte: Vec<u8>,
 
     /// Rlped bytes of the new receipt value inserted into the receipt trie by
     /// this txn. Note that the key is not included and this is only the rlped
@@ -215,7 +213,7 @@ pub struct TxnMeta {
 ///
 /// Specifically, since we can not execute the txn before proof generation, we
 /// rely on a separate EVM to run the txn and supply this data for us.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TxnTrace {
     /// If the balance changed, then the new balance will appear here. Will be
     /// `None` if no change.
@@ -320,17 +318,17 @@ pub fn entrypoint(
                 state: state.items().try_fold(
                     StateTrie::default(),
                     |mut acc, (nibbles, hash_or_val)| {
-                        let path = TriePath::from_nibbles(nibbles);
+                        let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                                acc.insert_by_path(
+                                acc.insert_by_key(
                                     path,
                                     rlp::decode(&bytes)
                                         .context("invalid AccountRlp in direct state trie")?,
                                 )?;
                             }
                             mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                acc.insert_hash_by_path(path, h)?;
+                                acc.insert_hash_by_key(path, h)?;
                             }
                         };
                         anyhow::Ok(acc)
@@ -341,7 +339,7 @@ pub fn entrypoint(
                     .map(|(k, SeparateTriePreImage::Direct(v))| {
                         v.items()
                             .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
-                                let path = TriePath::from_nibbles(nibbles);
+                                let path = TrieKey::from_nibbles(nibbles);
                                 match hash_or_val {
                                     mpt_trie::trie_ops::ValOrHash::Val(value) => {
                                         acc.insert(path, value)?;
@@ -426,6 +424,7 @@ pub fn entrypoint(
             };
 
             t.into_processed_txn_info(
+                &pre_images.tries,
                 &all_accounts_in_pre_images,
                 &extra_state_accesses,
                 &mut code_hash_resolver,
@@ -437,12 +436,14 @@ pub fn entrypoint(
         txn_info.insert(0, ProcessedTxnInfo::default());
     }
 
-    Ok(ProcessedBlockTrace {
-        tries: pre_images.tries,
-        txn_info,
-        withdrawals: other.b_data.withdrawals.clone(),
-    }
-    .into_txn_proof_gen_ir(other)?)
+    decoding::into_txn_proof_gen_ir(
+        ProcessedBlockTrace {
+            tries: pre_images.tries,
+            txn_info,
+            withdrawals: other.b_data.withdrawals.clone(),
+        },
+        other,
+    )
 }
 
 #[derive(Debug, Default)]

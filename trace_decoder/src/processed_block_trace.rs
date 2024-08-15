@@ -4,23 +4,15 @@ use std::iter::once;
 
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
-use mpt_trie::nibbles::Nibbles;
+use zk_evm_common::{EMPTY_CODE_HASH, EMPTY_TRIE_HASH};
 
 use crate::hash;
+use crate::typed_mpt::TrieKey;
 use crate::PartialTriePreImages;
 use crate::{ContractCodeUsage, TxnInfo};
 
-// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-const EMPTY_CODE_HASH: H256 = H256([
-    197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
-    130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
-]);
-
-/// 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-pub const EMPTY_TRIE_HASH: H256 = H256([
-    86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
-    108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
-]);
+const FIRST_PRECOMPILE_ADDRESS: U256 = U256([1, 0, 0, 0]);
+const LAST_PRECOMPILE_ADDRESS: U256 = U256([10, 0, 0, 0]);
 
 #[derive(Debug)]
 pub(crate) struct ProcessedBlockTrace {
@@ -70,6 +62,7 @@ impl<F: Fn(&H256) -> Vec<u8>> CodeHashResolving<F> {
 impl TxnInfo {
     pub(crate) fn into_processed_txn_info<F: Fn(&H256) -> Vec<u8>>(
         self,
+        tries: &PartialTriePreImages,
         all_accounts_in_pre_image: &[(H256, AccountRlp)],
         extra_state_accesses: &[H256],
         code_hash_resolver: &mut CodeHashResolving<F>,
@@ -93,7 +86,7 @@ impl TxnInfo {
             nodes_used_by_txn.storage_accesses.push((
                 hashed_addr,
                 storage_access_keys
-                    .map(|H256(bytes)| Nibbles::from_h256_be(hash(bytes)))
+                    .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
                     .collect(),
             ));
 
@@ -119,14 +112,28 @@ impl TxnInfo {
 
             let storage_writes_vec = storage_writes
                 .into_iter()
-                .map(|(k, v)| (Nibbles::from_h256_be(k), rlp::encode(&v).to_vec()))
+                .map(|(k, v)| (TrieKey::from_hash(k), rlp::encode(&v).to_vec()))
                 .collect();
 
             nodes_used_by_txn
                 .storage_writes
                 .push((hashed_addr, storage_writes_vec));
 
-            nodes_used_by_txn.state_accesses.push(hashed_addr);
+            let is_precompile = (FIRST_PRECOMPILE_ADDRESS..LAST_PRECOMPILE_ADDRESS)
+                .contains(&U256::from_big_endian(&addr.0));
+
+            // Trie witnesses will only include accessed precompile accounts as hash
+            // nodes if the transaction calling them reverted. If this is the case, we
+            // shouldn't include them in this transaction's `state_accesses` to allow the
+            // decoder to build a minimal state trie without hitting any hash node.
+            if !is_precompile
+                || tries
+                    .state
+                    .get_by_key(TrieKey::from_hash(hashed_addr))
+                    .is_some()
+            {
+                nodes_used_by_txn.state_accesses.push(hashed_addr);
+            }
 
             if let Some(c_usage) = trace.code_usage {
                 match c_usage {
@@ -205,32 +212,30 @@ fn create_empty_code_access_map() -> HashMap<H256, Vec<u8>> {
     HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
-pub(crate) type StorageAccess = Vec<Nibbles>;
-pub(crate) type StorageWrite = Vec<(Nibbles, Vec<u8>)>;
-
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    pub(crate) state_accesses: Vec<H256>,
-    pub(crate) state_writes: Vec<(H256, StateTrieWrites)>,
+    pub state_accesses: Vec<H256>,
+    pub state_writes: Vec<(H256, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(H256, StorageAccess)>,
-    pub(crate) storage_writes: Vec<(H256, StorageWrite)>,
-    pub(crate) state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
+    pub storage_accesses: Vec<(H256, Vec<TrieKey>)>,
+    #[allow(clippy::type_complexity)]
+    pub storage_writes: Vec<(H256, Vec<(TrieKey, Vec<u8>)>)>,
+    pub state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
 }
 
 #[derive(Debug)]
 pub(crate) struct StateTrieWrites {
-    pub(crate) balance: Option<U256>,
-    pub(crate) nonce: Option<U256>,
-    pub(crate) storage_trie_change: bool,
-    pub(crate) code_hash: Option<H256>,
+    pub balance: Option<U256>,
+    pub nonce: Option<U256>,
+    pub storage_trie_change: bool,
+    pub code_hash: Option<H256>,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct TxnMetaState {
-    pub(crate) txn_bytes: Option<Vec<u8>>,
-    pub(crate) receipt_node_bytes: Vec<u8>,
-    pub(crate) gas_used: u64,
+    pub txn_bytes: Option<Vec<u8>>,
+    pub receipt_node_bytes: Vec<u8>,
+    pub gas_used: u64,
 }

@@ -246,6 +246,14 @@ mod tests {
     #[test]
     fn test_feature() {
         let code = r#"
+        %macro bar_foo
+            #[cfg(feature = feature_1)]
+            {
+                %bar
+                PUSH 3
+                ADD
+            }
+        %endmacro
         #[cfg(feature = feature_1)]
         {
             %macro bar
@@ -260,7 +268,7 @@ mod tests {
 
             #[cfg(feature = feature_1)]
             {
-                %bar
+                %bar_foo
                 PUSH 1
             }
             PUSH 3
@@ -291,6 +299,8 @@ mod tests {
         %macro bar
             PUSH 2
             MUL
+            PUSH 3
+            ADD
         %endmacro
 
         global foo_1:
@@ -353,6 +363,8 @@ mod tests {
         %macro bar
             PUSH 2
             MUL
+            PUSH 3
+            ADD
         %endmacro
 
         global foo_1:
