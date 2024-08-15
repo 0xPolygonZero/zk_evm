@@ -22,11 +22,13 @@ pub type BlockProverInputFuture = std::pin::Pin<
     Box<dyn Future<Output = std::result::Result<BlockProverInput, anyhow::Error>> + Send>,
 >;
 
-pub fn into_block_prover_input_future(value: BlockProverInput) -> BlockProverInputFuture {
-    async fn into(value: BlockProverInput) -> Result<BlockProverInput, anyhow::Error> {
-        Ok(value)
+impl From<BlockProverInput> for BlockProverInputFuture {
+    fn from(item: BlockProverInput) -> Self {
+        async fn into(value: BlockProverInput) -> Result<BlockProverInput, anyhow::Error> {
+            Ok(value)
+        }
+        Box::pin(into(item))
     }
-    Box::pin(into(value))
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
