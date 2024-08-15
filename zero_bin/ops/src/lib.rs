@@ -4,12 +4,14 @@ use std::time::Instant;
 #[cfg(not(feature = "test_only"))]
 use evm_arithmetization::generation::TrimmedGenerationInputs;
 use evm_arithmetization::proof::PublicValues;
-#[cfg(not(feature = "test_only"))]
-use paladin::operation::FatalStrategy;
+#[cfg(feature = "test_only")]
+use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
 use paladin::{
-    operation::{FatalError, Monoid, Operation, Result},
+    operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
+#[cfg(feature = "test_only")]
+use proof_gen::types::Field;
 use proof_gen::{
     proof_gen::{generate_block_proof, generate_segment_agg_proof, generate_transaction_agg_proof},
     proof_types::{
@@ -24,6 +26,25 @@ use tracing::{event, info_span, Level};
 use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
+
+#[cfg(feature = "test_only")]
+#[derive(Deserialize, Serialize, RemoteExecute)]
+pub struct BatchTestOnly {
+    pub save_inputs_on_error: bool,
+}
+
+#[cfg(feature = "test_only")]
+impl Operation for BatchTestOnly {
+    type Input = (GenerationInputs, usize);
+    type Output = ();
+
+    fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
+        simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
+            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
+
+        Ok(())
+    }
+}
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct SegmentProof {
@@ -73,8 +94,8 @@ impl Operation for SegmentProof {
     type Input = AllData;
     type Output = ();
 
-    fn execute(&self, _input: Self::Input) -> Result<Self::Output> {
-        todo!() // currently unused, change or remove
+    fn execute(&self, _all_data: Self::Input) -> Result<Self::Output> {
+        Ok(())
     }
 }
 

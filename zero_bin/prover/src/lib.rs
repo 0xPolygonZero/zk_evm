@@ -135,12 +135,20 @@ impl BlockProverInput {
     #[cfg(feature = "test_only")]
     pub async fn prove(
         self,
-        _runtime: &Runtime,
+        runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
-        use evm_arithmetization::prover::testing::simulate_execution_all_segments;
-        use plonky2::field::goldilocks_field::GoldilocksField;
+        use std::iter::repeat;
+
+        use futures::StreamExt;
+        use paladin::directive::{Directive, IndexedStream};
+
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            save_inputs_on_error,
+        } = prover_config;
 
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
@@ -149,13 +157,21 @@ impl BlockProverInput {
         let txs = self.block_trace.into_txn_proof_gen_ir(
             &ProcessingMeta::new(resolve_code_hash_fn),
             other_data.clone(),
-            prover_config.batch_size,
+            batch_size,
         )?;
 
-        type F = GoldilocksField;
-        for txn in txs.into_iter() {
-            simulate_execution_all_segments::<F>(txn, prover_config.max_cpu_len_log)?;
-        }
+        let batch_ops = ops::BatchTestOnly {
+            save_inputs_on_error,
+        };
+
+        let simulation = Directive::map(
+            IndexedStream::from(txs.into_iter().zip(repeat(max_cpu_len_log))),
+            &batch_ops,
+        );
+
+        let result = simulation.run(runtime).await?;
+
+        result.collect::<Vec<_>>().await;
 
         // Wait for previous block proof
         let _prev = match previous {
