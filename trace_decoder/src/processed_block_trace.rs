@@ -150,6 +150,10 @@ impl TxnInfo {
                     }
                 }
             }
+
+            if trace.self_destructed.unwrap_or_default() {
+                nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
+            }
         }
 
         for &hashed_addr in extra_state_accesses {
@@ -223,6 +227,7 @@ pub(crate) struct NodesUsedByTxn {
     #[allow(clippy::type_complexity)]
     pub storage_writes: Vec<(H256, Vec<(TrieKey, Vec<u8>)>)>,
     pub state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
+    pub self_destructed_accounts: Vec<H256>,
 }
 
 #[derive(Debug)]
