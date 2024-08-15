@@ -25,7 +25,7 @@ pub struct Frontend {
 
 impl Default for Frontend {
     // This frontend is intended to be used with our custom `zeroTracer`,
-    // which covers branch-to-extencion collapse edge cases.
+    // which covers branch-to-extension collapse edge cases.
     fn default() -> Self {
         Self {
             state: StateTrie::new(CollapseStrategy::Pass),
