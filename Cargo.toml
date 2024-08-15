@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "common",
   "compat",
   "evm_arithmetization",
   "mpt_trie",
@@ -114,6 +115,7 @@ mpt_trie = { path = "mpt_trie", version = "0.4.1" }
 proof_gen = { path = "proof_gen", version = "0.4.0" }
 smt_trie = { path = "smt_trie", version = "0.1.1" }
 trace_decoder = { path = "trace_decoder", version = "0.6.0" }
+zk_evm_common = { path = "common", version = "0.1.0" }
 zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 
 # zero-bin related dependencies
