@@ -28,6 +28,7 @@ impl-rlp = { workspace = true }
 impl-codec = { workspace = true }
 impl-serde = { workspace = true }
 impl-num-traits = { workspace = true }
+zk_evm_common = {workspace = true}
 
 [dev-dependencies]
 eth_trie = { workspace = true }

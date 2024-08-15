@@ -64,6 +64,7 @@ where
     TransportT: Transport + Clone,
 {
     let (tx_receipt, pre_trace, diff_trace) = fetch_tx_data(provider, &tx.hash).await?;
+    let tx_status = tx_receipt.status();
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
 
@@ -74,13 +75,18 @@ where
         gas_used: tx_receipt.gas_used as u64,
     };
 
-    let (code_db, tx_traces) = match (pre_trace, diff_trace) {
+    let (code_db, mut tx_traces) = match (pre_trace, diff_trace) {
         (
             GethTrace::PreStateTracer(PreStateFrame::Default(read)),
             GethTrace::PreStateTracer(PreStateFrame::Diff(diff)),
         ) => process_tx_traces(access_list, read, diff).await?,
         _ => unreachable!(),
     };
+
+    // Handle case when transaction failed and a contract creation was reverted
+    if !tx_status && tx_receipt.contract_address.is_some() {
+        tx_traces.insert(tx_receipt.contract_address.unwrap(), TxnTrace::default());
+    }
 
     Ok((
         code_db,
