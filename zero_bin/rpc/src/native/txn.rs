@@ -212,6 +212,8 @@ fn process_nonce(
 }
 
 /// Processes the self destruct for the given account state.
+/// This wraps the actual boolean indicator into an `Option` so that we can skip
+/// serialization of `None` values, which represent most cases.
 fn process_self_destruct(
     post_state: Option<&AccountState>,
     pre_state: Option<&AccountState>,

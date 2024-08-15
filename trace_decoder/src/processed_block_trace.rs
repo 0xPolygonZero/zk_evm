@@ -151,10 +151,7 @@ impl TxnInfo {
                 }
             }
 
-            if trace
-                .self_destructed
-                .map_or(false, |self_destructed| self_destructed)
-            {
+            if trace.self_destructed.unwrap_or_default() {
                 nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
             }
         }
