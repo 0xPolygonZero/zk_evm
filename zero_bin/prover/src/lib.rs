@@ -24,10 +24,10 @@ pub type BlockProverInputFuture = std::pin::Pin<
 
 impl From<BlockProverInput> for BlockProverInputFuture {
     fn from(item: BlockProverInput) -> Self {
-        async fn into(value: BlockProverInput) -> Result<BlockProverInput, anyhow::Error> {
-            Ok(value)
+        async fn _from(item: BlockProverInput) -> Result<BlockProverInput, anyhow::Error> {
+            Ok(item)
         }
-        Box::pin(into(item))
+        Box::pin(_from(item))
     }
 }
 
