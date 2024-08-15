@@ -215,7 +215,7 @@ pub struct TxnMeta {
 ///
 /// Specifically, since we can not execute the txn before proof generation, we
 /// rely on a separate EVM to run the txn and supply this data for us.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TxnTrace {
     /// If the balance changed, then the new balance will appear here. Will be
     /// `None` if no change.
