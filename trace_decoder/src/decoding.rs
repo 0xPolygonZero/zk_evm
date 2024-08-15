@@ -365,7 +365,7 @@ fn apply_deltas_to_trie_state(
 
         if let Some(remaining_account_key) =
             delete_node_and_report_remaining_key_if_branch_collapsed(
-                trie_state.state.as_mut_hashed_partial_trie_unchecked(),
+                trie_state.state.as_mut_hashed_partial_trie(),
                 &val_k,
             )?
         {
