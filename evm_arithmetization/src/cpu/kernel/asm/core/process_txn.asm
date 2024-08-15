@@ -329,56 +329,49 @@ process_message_txn_fail:
     %transfer_eth %jumpi(panic)
     %jump(process_message_txn_after_call_contd)
 
-global pay_coinbase_and_refund_sender:
-    // stack: leftover_gas, retdest
+%macro pay_coinbase_and_refund_sender
+    // stack: leftover_gas
     DUP1
-    // stack: leftover_gas, leftover_gas, retdest
+    // stack: leftover_gas, leftover_gas
     %mload_txn_field(@TXN_FIELD_GAS_LIMIT)
     SUB
-    // stack: used_gas, leftover_gas, retdest
+    // stack: used_gas, leftover_gas
     %mload_global_metadata(@GLOBAL_METADATA_REFUND_COUNTER)
-    // stack: refund, used_gas, leftover_gas, retdest
+    // stack: refund, used_gas, leftover_gas
     DUP2 %div_const(@MAX_REFUND_QUOTIENT) // max_refund = used_gas/5
-    // stack: max_refund, refund, used_gas, leftover_gas, retdest
+    // stack: max_refund, refund, used_gas, leftover_gas
     %min
     %stack (refund, used_gas, leftover_gas) -> (leftover_gas, refund, refund, used_gas)
     ADD
-    // stack: leftover_gas', refund, used_gas, retdest
+    // stack: leftover_gas', refund, used_gas
     SWAP2
-    // stack: used_gas, refund, leftover_gas', retdest
+    // stack: used_gas, refund, leftover_gas'
     SUB
-    // stack: used_gas', leftover_gas', retdest
+    // stack: used_gas', leftover_gas'
 
     // Pay the coinbase.
     %mload_txn_field(@TXN_FIELD_COMPUTED_PRIORITY_FEE_PER_GAS)
     MUL
     // stack: used_gas_tip, leftover_gas'
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_BENEFICIARY)
-    // stack: coinbase, used_gas_tip, leftover_gas', retdest
+    // stack: coinbase, used_gas_tip, leftover_gas'
     %add_eth
-    // stack: leftover_gas', retdest
+    // stack: leftover_gas'
     DUP1
 
     // Refund gas to the origin.
     %mload_txn_field(@TXN_FIELD_COMPUTED_FEE_PER_GAS)
     MUL
-    // stack: leftover_gas_cost, leftover_gas', retdest
+    // stack: leftover_gas_cost, leftover_gas'
     %mload_txn_field(@TXN_FIELD_ORIGIN)
-    // stack: origin, leftover_gas_cost, leftover_gas', retdest
+    // stack: origin, leftover_gas_cost, leftover_gas'
     %add_eth
-    // stack: leftover_gas', retdest
+    // stack: leftover_gas'
 
     #[cfg(feature = cdk_erigon)]
     {
         %deduct_extra_burn_fees
     }
-    SWAP1 JUMP
-
-%macro pay_coinbase_and_refund_sender
-    // stack: leftover_gas
-    %stack (leftover_gas) -> (leftover_gas, %%after)
-    %jump(pay_coinbase_and_refund_sender)
-%%after:
 %endmacro
 
 #[cfg(feature = cdk_erigon)]
