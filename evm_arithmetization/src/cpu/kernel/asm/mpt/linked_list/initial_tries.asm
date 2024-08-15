@@ -85,11 +85,11 @@ set_payload_branch:
     %rep 16
         %stack
         (i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles) -> 
-        (num_nibbles, packed_nibbles, 1, i, i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, child_ptr_ptr)
+        (num_nibbles, packed_nibbles, 1, i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, i, num_nibbles, packed_nibbles, child_ptr_ptr)
         // We do not check the stored nibbles here, as the current value is not written yet.
         %merge_nibbles
-        // stack: num_merged_nibbles, merged_nibbles, i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, child_ptr_ptr
-        %stack (num_merged_nibbles, merged_nibbles, i, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, child_ptr_ptr) -> (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_merged_nibbles, merged_nibbles, i, num_nibbles, packed_nibbles, child_ptr_ptr)
+        // stack: num_merged_nibbles, merged_nibbles, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, i, num_nibbles, packed_nibbles, child_ptr_ptr
+        %stack (num_merged_nibbles, merged_nibbles, child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr) -> (child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_merged_nibbles, merged_nibbles)
         // stack: child_ptr_ptr, account_ptr_ptr, storage_ptr_ptr, num_merged_nibbles, merged_nibbles, i, num_nibbles, packed_nibbles, child_ptr_ptr, retdest
         %mload_trie_data
         // stack: child_ptr, account_ptr_ptr, storage_ptr_ptr, num_merged_nibbles, merged_nibbles, i, num_nibbles, packed_nibbles, child_ptr_ptr, retdest
