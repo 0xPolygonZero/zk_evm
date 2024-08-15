@@ -1,6 +1,6 @@
 use ethereum_types::H256;
 
-/// Hash value of an account empty EVM code.
+/// The hash value of an account empty EVM code.
 /// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 pub const EMPTY_CODE_HASH: H256 = H256([
     197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
@@ -15,7 +15,7 @@ pub const EMPTY_TRIE_HASH: H256 = H256([
 ]);
 
 #[test]
-fn test_code_hash() {
+fn test_empty_code_hash() {
     assert_eq!(EMPTY_CODE_HASH, keccak_hash::keccak([]));
 }
 
