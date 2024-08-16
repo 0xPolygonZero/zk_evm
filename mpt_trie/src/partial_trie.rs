@@ -215,8 +215,6 @@ impl PartialTrie for StandardTrie {
         Self(n)
     }
 
-    // TODO(Robin): Do we ever want to use `StandardTrie` within the other crates?
-    // In which case we may want to include the strategy as part of the struct.
     fn new_with_strategy(n: Node<Self>, _strategy: OnOrphanedHashNode) -> Self {
         Self(n)
     }
