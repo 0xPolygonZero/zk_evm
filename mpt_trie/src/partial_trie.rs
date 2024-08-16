@@ -51,7 +51,7 @@ pub trait PartialTrie:
 
     /// Creates a new partial trie from a node with a provided collapse
     /// strategy.
-    fn new_with_strategy(n: Node<Self>, collapse_strategy: CollapseStrategy) -> Self;
+    fn new_with_strategy(n: Node<Self>, orphaned_hash_node_strategy: OnOrphanedHashNode) -> Self;
 
     /// Inserts a node into the trie.
     fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
@@ -217,7 +217,7 @@ impl PartialTrie for StandardTrie {
 
     // TODO(Robin): Do we ever want to use `StandardTrie` within the other crates?
     // In which case we may want to include the strategy as part of the struct.
-    fn new_with_strategy(n: Node<Self>, _collapse_strategy: CollapseStrategy) -> Self {
+    fn new_with_strategy(n: Node<Self>, _collapse_strategy: OnOrphanedHashNode) -> Self {
         Self(n)
     }
 
@@ -250,7 +250,7 @@ impl PartialTrie for StandardTrie {
     where
         K: Into<Nibbles>,
     {
-        self.0.trie_delete(k, CollapseStrategy::Error)
+        self.0.trie_delete(k, OnOrphanedHashNode::Reject)
     }
 
     fn hash(&self) -> H256 {
@@ -315,23 +315,22 @@ pub struct HashedPartialTrie {
     pub(crate) node: Node<HashedPartialTrie>,
     pub(crate) hash: Arc<RwLock<Option<H256>>>,
 
-    pub(crate) collapse_strategy: CollapseStrategy,
+    pub(crate) orphaned_hash_node_strategy: OnOrphanedHashNode,
 }
 
-/// A strategy to adopt for collapsing a branch node containing only two
-/// children into an extension node after deletion of one of these two children,
-/// if the remaining child is a Hash node.
-///
-/// The default behaviour is to return an Error upon such scenario.
+/// How to handle the following subtree on deletion of the indicated node.
+/// ```text
+///      BranchNode
+///        /    \
+/// DeleteMe    OrphanedHashNode
+/// ```
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
-pub enum CollapseStrategy {
-    /// Allow collapsing of single hash-node branch child into an extension
-    /// node.
-    Pass,
+pub enum OnOrphanedHashNode {
+    /// Replace `BranchNode` with an appropriate `ExtensionNode`
+    CollapseToExtension,
+    /// Return an error.
     #[default]
-    /// Reject collapsing of single hash-node branch child into an extension
-    /// node.
-    Error,
+    Reject,
 }
 
 impl_from_for_trie_type!(HashedPartialTrie);
@@ -357,15 +356,18 @@ impl PartialTrie for HashedPartialTrie {
         Self {
             node,
             hash: Arc::new(RwLock::new(None)),
-            collapse_strategy: CollapseStrategy::default(),
+            orphaned_hash_node_strategy: OnOrphanedHashNode::default(),
         }
     }
 
-    fn new_with_strategy(node: Node<Self>, collapse_strategy: CollapseStrategy) -> Self {
+    fn new_with_strategy(
+        node: Node<Self>,
+        orphaned_hash_node_strategy: OnOrphanedHashNode,
+    ) -> Self {
         Self {
             node,
             hash: Arc::new(RwLock::new(None)),
-            collapse_strategy,
+            orphaned_hash_node_strategy,
         }
     }
 
@@ -401,7 +403,7 @@ impl PartialTrie for HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        let res = self.node.trie_delete(k, self.collapse_strategy);
+        let res = self.node.trie_delete(k, self.orphaned_hash_node_strategy);
         self.set_hash(None);
 
         res

@@ -103,7 +103,7 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
-use mpt_trie::partial_trie::{CollapseStrategy, HashedPartialTrie};
+use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
 use typed_mpt::{StateTrie, StorageTrie, TrieKey};
@@ -320,7 +320,7 @@ pub fn entrypoint(
         }) => ProcessedBlockTracePreImages {
             tries: PartialTriePreImages {
                 state: state.items().try_fold(
-                    StateTrie::new(CollapseStrategy::Error),
+                    StateTrie::new(OnOrphanedHashNode::Reject),
                     |mut acc, (nibbles, hash_or_val)| {
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
@@ -343,7 +343,7 @@ pub fn entrypoint(
                     .map(|(k, SeparateTriePreImage::Direct(v))| {
                         v.items()
                             .try_fold(
-                                StorageTrie::new(CollapseStrategy::Error),
+                                StorageTrie::new(OnOrphanedHashNode::Reject),
                                 |mut acc, (nibbles, hash_or_val)| {
                                     let path = TrieKey::from_nibbles(nibbles);
                                     match hash_or_val {

@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
 use evm_arithmetization::generation::mpt::AccountRlp;
-use mpt_trie::partial_trie::CollapseStrategy;
+use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
@@ -28,7 +28,7 @@ impl Default for Frontend {
     // which covers branch-to-extension collapse edge cases.
     fn default() -> Self {
         Self {
-            state: StateTrie::new(CollapseStrategy::Pass),
+            state: StateTrie::new(OnOrphanedHashNode::CollapseToExtension),
             code: BTreeSet::new(),
             storage: BTreeMap::new(),
         }
@@ -170,7 +170,7 @@ fn node2storagetrie(node: Node) -> anyhow::Result<StorageTrie> {
         Ok(())
     }
 
-    let mut mpt = StorageTrie::new(CollapseStrategy::Pass);
+    let mut mpt = StorageTrie::new(OnOrphanedHashNode::CollapseToExtension);
     visit(&mut mpt, &stackstack::Stack::new(), node)?;
     Ok(mpt)
 }
