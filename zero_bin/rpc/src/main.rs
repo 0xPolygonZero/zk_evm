@@ -48,7 +48,7 @@ pub(crate) struct Params {
 #[derive(Subcommand)]
 pub(crate) enum Command {
     Fetch {},
-    ExtractTx {
+    Extract {
         /// Transaction hash
         #[arg(long, short)]
         tx: String,
@@ -132,7 +132,7 @@ impl Cli {
                         .await?;
                 serde_json::to_writer_pretty(std::io::stdout(), &block_prover_inputs)?;
             }
-            Command::ExtractTx { tx } => {
+            Command::Extract { tx } => {
                 let tx_hash: B256 = tx.parse()?;
                 let block_prover_inputs = retrieve_block_prover_inputs(
                     cached_provider.clone(),
