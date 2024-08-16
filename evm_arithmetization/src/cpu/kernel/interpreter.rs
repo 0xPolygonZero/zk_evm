@@ -5,11 +5,10 @@
 //! the future execution and generate nondeterministically the corresponding
 //! jumpdest table, before the actual CPU carries on with contract execution.
 
-use core::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
 
 use anyhow::anyhow;
-use ethereum_types::{BigEndianHash, H160, H256, U256};
+use ethereum_types::{BigEndianHash, U256};
 use log::Level;
 use mpt_trie::partial_trie::PartialTrie;
 use plonky2::field::types::Field;
@@ -19,20 +18,17 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::columns::CpuColumnsView;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
+use crate::generation::debug_inputs;
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
-    all_withdrawals_prover_inputs_reversed, GenerationState, GenerationStateCheckpoint,
-};
-use crate::generation::{
-    debug_inputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER, NUM_EXTRA_CYCLES_BEFORE,
+    all_ger_prover_inputs_reversed, all_withdrawals_prover_inputs_reversed, GenerationState,
+    GenerationStateCheckpoint,
 };
 use crate::generation::{state::State, GenerationInputs};
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
-use crate::prover::GenerationSegmentData;
 use crate::util::h2u;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::{
@@ -58,6 +54,7 @@ pub(crate) struct Interpreter<F: Field> {
     /// halt_context
     pub(crate) halt_context: Option<usize>,
     /// Counts the number of appearances of each opcode. For debugging purposes.
+    #[allow(unused)]
     pub(crate) opcode_count: [usize; 0x100],
     jumpdest_table: HashMap<usize, BTreeSet<usize>>,
     /// `true` if the we are currently carrying out a jumpdest analysis.
@@ -115,6 +112,7 @@ pub(crate) struct ExtraSegmentData {
     pub(crate) bignum_modmul_result_limbs: Vec<U256>,
     pub(crate) rlp_prover_inputs: Vec<U256>,
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
+    pub(crate) ger_prover_inputs: Vec<U256>,
     pub(crate) trie_root_ptrs: TrieRootPtrs,
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
     pub(crate) next_txn_index: usize,
@@ -258,8 +256,10 @@ impl<F: Field> Interpreter<F> {
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
+        let ger_prover_inputs = all_ger_prover_inputs_reversed(&inputs.global_exit_roots);
         self.generation_state.rlp_prover_inputs = rlp_prover_inputs;
         self.generation_state.withdrawal_prover_inputs = withdrawal_prover_inputs;
+        self.generation_state.ger_prover_inputs = ger_prover_inputs;
 
         // Set `GlobalMetadata` values.
         let metadata = &inputs.block_metadata;
@@ -283,6 +283,18 @@ impl<F: Field> Interpreter<F> {
                 h2u(inputs.block_hashes.cur_hash),
             ),
             (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+            (
+                GlobalMetadata::BlockBlobGasUsed,
+                metadata.block_blob_gas_used,
+            ),
+            (
+                GlobalMetadata::BlockExcessBlobGas,
+                metadata.block_excess_blob_gas,
+            ),
+            (
+                GlobalMetadata::ParentBeaconBlockRoot,
+                h2u(metadata.parent_beacon_block_root),
+            ),
             (GlobalMetadata::BlockGasUsedBefore, inputs.gas_used_before),
             (GlobalMetadata::BlockGasUsedAfter, inputs.gas_used_after),
             (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
@@ -460,18 +472,6 @@ impl<F: Field> Interpreter<F> {
                 self.generation_state.registers.context,
                 BTreeSet::from([offset]),
             );
-        }
-    }
-
-    pub(crate) const fn stack_len(&self) -> usize {
-        self.generation_state.registers.stack_len
-    }
-
-    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
-        if self.stack_len() > 0 {
-            Ok(self.generation_state.registers.stack_top)
-        } else {
-            Err(ProgramError::StackUnderflow)
         }
     }
 
@@ -740,6 +740,7 @@ impl<F: Field> Transition<F> for Interpreter<F> {
     }
 }
 
+#[cfg(debug_assertions)]
 fn get_mnemonic(opcode: u8) -> &'static str {
     match opcode {
         0x00 => "STOP",
@@ -798,7 +799,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x45 => "GASLIMIT",
         0x46 => "CHAINID",
         0x48 => "BASEFEE",
-        0x49 => "PROVER_INPUT",
+        0x4a => "BLOBBASEFEE",
         0x50 => "POP",
         0x51 => "MLOAD",
         0x52 => "MSTORE",
@@ -811,6 +812,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0x59 => "MSIZE",
         0x5a => "GAS",
         0x5b => "JUMPDEST",
+        0x5e => "MCOPY",
         0x5f => "PUSH0",
         0x60 => "PUSH1",
         0x61 => "PUSH2",
@@ -914,6 +916,7 @@ fn get_mnemonic(opcode: u8) -> &'static str {
         0xdd => "MSTORE_32BYTES_30",
         0xde => "MSTORE_32BYTES_31",
         0xdf => "MSTORE_32BYTES_32",
+        0xee => "PROVER_INPUT",
         0xf0 => "CREATE",
         0xf1 => "CALL",
         0xf2 => "CALLCODE",

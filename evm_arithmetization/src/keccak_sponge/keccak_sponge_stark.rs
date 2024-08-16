@@ -507,17 +507,18 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
         debug_assert!(cols.iter().all(|col| col.len() == n_rows));
 
         for i in 0..BYTE_RANGE_MAX {
-            cols[RANGE_COUNTER][i] = F::from_canonical_usize(i);
+            cols[KECCAK_SPONGE_COL_MAP.range_counter][i] = F::from_canonical_usize(i);
         }
         for i in BYTE_RANGE_MAX..n_rows {
-            cols[RANGE_COUNTER][i] = F::from_canonical_usize(BYTE_RANGE_MAX - 1);
+            cols[KECCAK_SPONGE_COL_MAP.range_counter][i] =
+                F::from_canonical_usize(BYTE_RANGE_MAX - 1);
         }
 
         // For each column c in cols, generate the range-check
         // permutations and put them in the corresponding range-check
         // columns rc_c and rc_c+1.
         for col in 0..KECCAK_RATE_BYTES {
-            let c = get_single_block_bytes_value(col);
+            let c = KECCAK_SPONGE_COL_MAP.block_bytes[col];
             for i in 0..n_rows {
                 let x = cols[c][i].to_canonical_u64() as usize;
                 assert!(
@@ -526,7 +527,7 @@ impl<F: RichField + Extendable<D>, const D: usize> KeccakSpongeStark<F, D> {
                     x,
                     BYTE_RANGE_MAX
                 );
-                cols[RC_FREQUENCIES][x] += F::ONE;
+                cols[KECCAK_SPONGE_COL_MAP.rc_frequencies][x] += F::ONE;
             }
         }
     }
@@ -943,9 +944,9 @@ impl<F: RichField + Extendable<D>, const D: usize> Stark<F, D> for KeccakSpongeS
 
     fn lookups(&self) -> Vec<Lookup<F>> {
         vec![Lookup {
-            columns: Column::singles(get_block_bytes_range()).collect(),
-            table_column: Column::single(RANGE_COUNTER),
-            frequencies_column: Column::single(RC_FREQUENCIES),
+            columns: Column::singles(KECCAK_SPONGE_COL_MAP.block_bytes).collect(),
+            table_column: Column::single(KECCAK_SPONGE_COL_MAP.range_counter),
+            frequencies_column: Column::single(KECCAK_SPONGE_COL_MAP.rc_frequencies),
             filter_columns: vec![Default::default(); KECCAK_RATE_BYTES],
         }]
     }

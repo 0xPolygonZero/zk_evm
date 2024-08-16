@@ -43,9 +43,6 @@ fi
 # Force the working directory to always be the `tools/` directory. 
 TOOLS_DIR=$(dirname $(realpath "$0"))
 
-# Set the environment variable to let the binary know that we're running in the project workspace.
-export CARGO_WORKSPACE_DIR="${TOOLS_DIR}/../"
-
 PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
 OUT_LOG_PATH="${PROOF_OUTPUT_DIR}/b$1_$2.log"
 ALWAYS_WRITE_LOGS=0 # Change this to `1` if you always want logs to be written.
@@ -63,6 +60,9 @@ RETRIES=${7:-0}
 OUTPUT_TO_TERMINAL="${OUTPUT_TO_TERMINAL:-false}"
 # Only generate proof by default
 RUN_VERIFICATION="${RUN_VERIFICATION:-false}"
+
+# Recommended soft file handle limit. Will warn if it is set lower.
+RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p $PROOF_OUTPUT_DIR
 
@@ -92,6 +92,19 @@ else
     BLOCK_INTERVAL=$START_BLOCK..=$END_BLOCK
 fi
 
+# Print out a warning if the we're using `native` and our file descriptor limit is too low. Don't bother if we can't find `ulimit`.
+if [ $(command -v ulimit) ] && [ $NODE_RPC_TYPE == "native" ]
+then
+    file_desc_limit=$(ulimit -n)
+
+    if [[ $file_desc_limit -lt $RECOMMENDED_FILE_HANDLE_LIMIT ]]
+    then
+        echo "WARNING: Maximum file descriptor limit may be too low to run native mode (current: $file_desc_limit, Recommended: ${RECOMMENDED_FILE_HANDLE_LIMIT}).
+        Consider increasing it with:
+
+        ulimit -n ${RECOMMENDED_FILE_HANDLE_LIMIT}"
+    fi
+fi
 
 # If we set test_only flag, we'll generate a dummy
 # proof. This is useful for quickly testing decoding and all of the

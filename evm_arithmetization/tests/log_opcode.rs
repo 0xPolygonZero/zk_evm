@@ -3,9 +3,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use bytes::Bytes;
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, BigEndianHash, H256, U256};
-use evm_arithmetization::fixed_recursive_verifier::ProverOutputData;
+use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::transaction_testing::{
     AddressOption, LegacyTransactionRlp,
 };
@@ -13,8 +11,13 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp, LogRlp}
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
-use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
+use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
@@ -29,7 +32,6 @@ type C = PoseidonGoldilocksConfig;
 
 /// Variation of `add11_yml` testing LOG opcodes.
 #[test]
-#[ignore] // Too slow to run on CI.
 fn test_log_opcodes() -> anyhow::Result<()> {
     init_logger();
 
@@ -58,7 +60,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         0x60, 99, 0x60, 98, 0x60, 5, 0x60, 27, 0xA2, // LOG2(27, 5, 98, 99)
         0x00,
     ];
-    println!("contract: {:02x?}", code);
+
     let code_gas = 3 + 3 + 3 // PUSHs and MSTORE
                  + 3 + 3 + 375 // PUSHs and LOG0
                  + 3 + 3 + 3 + 3 + 375 + 375*2 + 8*5 + 3// PUSHs, LOG2 and memory expansion
@@ -85,13 +87,16 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     };
 
     // Initialize the state trie with three accounts.
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(
         beneficiary_nibbles,
         rlp::encode(&beneficiary_account_before).to_vec(),
     )?;
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
+
+    storage_tries.push((to_hashed, Node::Empty.into()));
 
     // We now add two receipts with logs and data. This updates the receipt trie as
     // well.
@@ -126,7 +131,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         state_trie: state_trie_before,
         transactions_trie: Node::Empty.into(),
         receipts_trie: receipts_trie.clone(),
-        storage_tries: vec![(to_hashed, Node::Empty.into())],
+        storage_tries,
     };
 
     // Prove a transaction which carries out two LOG opcodes.
@@ -142,8 +147,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         block_gaslimit: 0xffffffffu32.into(),
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
-        block_gas_used: 0.into(),
-        block_bloom: [0.into(); 8],
+        ..Default::default()
     };
 
     let mut contract_code = HashMap::new();
@@ -168,6 +172,13 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         code_hash,
         ..AccountRlp::default()
     };
+
+    update_beacon_roots_account_storage(
+        &mut beacon_roots_account_storage,
+        block_metadata.block_timestamp,
+        block_metadata.parent_beacon_block_root,
+    )?;
+    let beacon_roots_account = beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
     // Update the receipt trie.
     let first_log = LogRlp {
@@ -205,6 +216,14 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     expected_state_trie_after
         .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
     expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
+    expected_state_trie_after.insert(
+        beacon_roots_account_nibbles(),
+        rlp::encode(&beacon_roots_account).to_vec(),
+    )?;
+    expected_state_trie_after.insert(
+        ger_account_nibbles(),
+        rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+    )?;
 
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
@@ -221,6 +240,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
@@ -251,488 +271,6 @@ fn test_log_opcodes() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_all_proofs(&all_stark, &proofs, &config)
-}
-
-// Tests proving two transactions, one of which with logs, and aggregating them.
-#[test]
-#[ignore] // Too slow to run on CI.
-fn test_log_with_aggreg() -> anyhow::Result<()> {
-    init_logger();
-
-    let code = [
-        0x64, 0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0x60, 0x0, 0x52, // MSTORE(0x0, 0xA1B2C3D4E5)
-        0x60, 0x0, 0x60, 0x0, 0xA0, // LOG0(0x0, 0x0)
-        0x60, 99, 0x60, 98, 0x60, 5, 0x60, 27, 0xA2, // LOG2(27, 5, 98, 99)
-        0x00,
-    ];
-
-    let code_gas = 3 + 3 + 3 // PUSHs and MSTORE
-                 + 3 + 3 + 375 // PUSHs and LOG0
-                 + 3 + 3 + 3 + 3 + 375 + 375*2 + 8*5 // PUSHs and LOG2
-                 + 3 // Memory expansion
-    ;
-
-    let gas_used = 21_000 + code_gas;
-
-    let code_hash = keccak(code);
-
-    // First transaction.
-    let all_stark = AllStark::<F, D>::default();
-    let config = StarkConfig::standard_fast_config();
-
-    let beneficiary = hex!("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba");
-    let sender_first = hex!("af1276cbb260bb13deddb4209ae99ae6e497f446");
-    let to_first = hex!("095e7baea6a6c7c4c2dfeb977efac326af552d87");
-    let to = hex!("095e7baea6a6c7c4c2dfeb977efac326af552e89");
-
-    let beneficiary_state_key = keccak(beneficiary);
-    let sender_state_key = keccak(sender_first);
-    let to_hashed = keccak(to_first);
-    let to_hashed_2 = keccak(to);
-
-    let beneficiary_nibbles = Nibbles::from_bytes_be(beneficiary_state_key.as_bytes()).unwrap();
-    let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
-    let to_nibbles = Nibbles::from_bytes_be(to_hashed.as_bytes()).unwrap();
-    let to_second_nibbles = Nibbles::from_bytes_be(to_hashed_2.as_bytes()).unwrap();
-
-    let beneficiary_account_before = AccountRlp {
-        nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-    let sender_balance_before = 1000000000000000000u64.into();
-    let sender_account_before = AccountRlp {
-        balance: sender_balance_before,
-        ..AccountRlp::default()
-    };
-    let to_account_before = AccountRlp {
-        ..AccountRlp::default()
-    };
-    let to_account_second_before = AccountRlp {
-        code_hash,
-        ..AccountRlp::default()
-    };
-
-    // In the first transaction, the sender account sends `txn_value` to
-    // `to_account`.
-    let gas_price = 10;
-    let txn_value = 0xau64;
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    )?;
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
-    state_trie_before.insert(
-        to_second_nibbles,
-        rlp::encode(&to_account_second_before).to_vec(),
-    )?;
-    let checkpoint_state_trie_root = state_trie_before.hash();
-
-    let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: Node::Empty.into(),
-        receipts_trie: Node::Empty.into(),
-        storage_tries: vec![],
-    };
-
-    let txn = hex!("f85f800a82520894095e7baea6a6c7c4c2dfeb977efac326af552d870a8026a0122f370ed4023a6c253350c6bfb87d7d7eb2cd86447befee99e0a26b70baec20a07100ab1b3977f2b4571202b9f4b68850858caf5469222794600b5ce1cfb348ad");
-
-    let block_1_metadata = BlockMetadata {
-        block_beneficiary: Address::from(beneficiary),
-        block_timestamp: 0x03e8.into(),
-        block_number: 1.into(),
-        block_difficulty: 0x020000.into(),
-        block_gaslimit: 0x445566u32.into(),
-        block_chain_id: 1.into(),
-        block_base_fee: 0xa.into(),
-        block_gas_used: (22570 + 21000).into(),
-        block_bloom: [
-            0.into(),
-            0.into(),
-            U256::from_dec_str(
-                "55213970774324510299479508399853534522527075462195808724319849722937344",
-            )
-            .unwrap(),
-            U256::from_dec_str("1361129467683753853853498429727072845824").unwrap(),
-            33554432.into(),
-            U256::from_dec_str("9223372036854775808").unwrap(),
-            U256::from_dec_str(
-                "3618502788666131106986593281521497120414687020801267626233049500247285563392",
-            )
-            .unwrap(),
-            U256::from_dec_str("2722259584404615024560450425766186844160").unwrap(),
-        ],
-        block_random: Default::default(),
-    };
-
-    let beneficiary_account_after = AccountRlp {
-        nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-
-    let sender_balance_after = sender_balance_before - gas_price * 21000 - txn_value;
-    let sender_account_after = AccountRlp {
-        balance: sender_balance_after,
-        nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-    let to_account_after = AccountRlp {
-        balance: txn_value.into(),
-        ..AccountRlp::default()
-    };
-
-    let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
-    contract_code.insert(code_hash, code.to_vec());
-
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_after).to_vec(),
-    )?;
-    expected_state_trie_after
-        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
-    expected_state_trie_after.insert(
-        to_second_nibbles,
-        rlp::encode(&to_account_second_before).to_vec(),
-    )?;
-
-    // Compute new receipt trie.
-    let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    let receipt_0 = LegacyReceiptRlp {
-        status: true,
-        cum_gas_used: 21000u64.into(),
-        bloom: [0x00; 256].to_vec().into(),
-        logs: vec![],
-    };
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    )?;
-
-    let mut transactions_trie: HashedPartialTrie = Node::Leaf {
-        nibbles: Nibbles::from_str("0x80").unwrap(),
-        value: txn.to_vec(),
-    }
-    .into();
-
-    let tries_after = TrieRoots {
-        state_root: expected_state_trie_after.hash(),
-        transactions_root: transactions_trie.hash(),
-        receipts_root: receipts_trie.clone().hash(),
-    };
-
-    let block_1_hash =
-        H256::from_str("0x0101010101010101010101010101010101010101010101010101010101010101")?;
-    let mut block_hashes = vec![H256::default(); 256];
-
-    let inputs_first = GenerationInputs {
-        signed_txns: vec![txn.to_vec()],
-        withdrawals: vec![],
-        tries: tries_before,
-        trie_roots_after: tries_after,
-        contract_code,
-        checkpoint_state_trie_root,
-        block_metadata: block_1_metadata.clone(),
-        txn_number_before: 0.into(),
-        gas_used_before: 0.into(),
-        gas_used_after: 21000u64.into(),
-        block_hashes: BlockHashes {
-            prev_hashes: block_hashes.clone(),
-            cur_hash: block_1_hash,
-        },
-    };
-
-    // Preprocess all circuits.
-    let all_circuits = AllRecursiveCircuits::<F, C, D>::new(
-        &all_stark,
-        &[
-            16..17,
-            8..10,
-            12..17,
-            8..11,
-            8..9,
-            6..12,
-            17..20,
-            16..18,
-            7..18,
-        ],
-        &config,
-    );
-
-    let mut timing = TimingTree::new("prove root first", log::Level::Info);
-    let max_cpu_len_log = 15;
-
-    let segment_proofs_data_first = &all_circuits.prove_all_segments(
-        &all_stark,
-        &config,
-        inputs_first,
-        // We want only one segment.
-        20,
-        &mut timing,
-        None,
-    )?;
-
-    assert_eq!(segment_proofs_data_first.len(), 2); // second one is a dummy segment
-
-    let segment_agg_prover_output_data_first = all_circuits.prove_segment_aggregation(
-        false,
-        &segment_proofs_data_first[0],
-        false,
-        &segment_proofs_data_first[1],
-    )?;
-    all_circuits
-        .verify_segment_aggregation(&segment_agg_prover_output_data_first.proof_with_pis)?;
-
-    // The gas used and transaction number are fed to the next transaction, so the
-    // two proofs can be correctly aggregated.
-    let gas_used_second = segment_proofs_data_first[0]
-        .public_values
-        .extra_block_data
-        .gas_used_after;
-
-    // Prove second transaction. In this second transaction, the code with logs is
-    // executed.
-
-    let state_trie_before = expected_state_trie_after;
-
-    let tries_before = TrieInputs {
-        state_trie: state_trie_before,
-        transactions_trie: transactions_trie.clone(),
-        receipts_trie: receipts_trie.clone(),
-        storage_tries: vec![],
-    };
-
-    // Prove a transaction which carries out two LOG opcodes.
-    let txn_gas_price = 10;
-    let txn_2 = hex!("f860010a830186a094095e7baea6a6c7c4c2dfeb977efac326af552e89808025a04a223955b0bd3827e3740a9a427d0ea43beb5bafa44a0204bf0a3306c8219f7ba0502c32d78f233e9e7ce9f5df3b576556d5d49731e0678fd5a068cdf359557b5b");
-
-    let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
-    contract_code.insert(code_hash, code.to_vec());
-
-    // Update the state and receipt tries after the transaction, so that we have the
-    // correct expected tries: Update accounts.
-    let beneficiary_account_after = AccountRlp {
-        nonce: 1.into(),
-        ..AccountRlp::default()
-    };
-
-    let sender_balance_after = sender_balance_after - gas_used * txn_gas_price;
-    let sender_account_after = AccountRlp {
-        balance: sender_balance_after,
-        nonce: 2.into(),
-        ..AccountRlp::default()
-    };
-    let balance_after = to_account_after.balance;
-    let to_account_after = AccountRlp {
-        balance: balance_after,
-        ..AccountRlp::default()
-    };
-    let to_account_second_after = AccountRlp {
-        balance: to_account_second_before.balance,
-        code_hash,
-        ..AccountRlp::default()
-    };
-
-    // Update the receipt trie.
-    let first_log = LogRlp {
-        address: to.into(),
-        topics: vec![],
-        data: Bytes::new(),
-    };
-
-    let second_log = LogRlp {
-        address: to.into(),
-        topics: vec![
-            hex!("0000000000000000000000000000000000000000000000000000000000000062").into(), /* dec: 98 */
-            hex!("0000000000000000000000000000000000000000000000000000000000000063").into(), /* dec: 99 */
-        ],
-        data: hex!("a1b2c3d4e5").to_vec().into(),
-    };
-
-    let receipt = LegacyReceiptRlp {
-        status: true,
-        cum_gas_used: (22570 + 21000).into(),
-        bloom: hex!("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000001000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000800000000000000008000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000800002000000000000000000000000000").to_vec().into(),
-        logs: vec![first_log, second_log],
-    };
-
-    let receipt_nibbles = Nibbles::from_str("0x01").unwrap(); // RLP(1) = 0x1
-
-    receipts_trie.insert(receipt_nibbles, rlp::encode(&receipt).to_vec())?;
-
-    // Update the state trie.
-    let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_after).to_vec(),
-    )?;
-    expected_state_trie_after
-        .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
-    expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec())?;
-    expected_state_trie_after.insert(
-        to_second_nibbles,
-        rlp::encode(&to_account_second_after).to_vec(),
-    )?;
-
-    transactions_trie.insert(Nibbles::from_str("0x01").unwrap(), txn_2.to_vec())?;
-
-    let block_1_state_root = expected_state_trie_after.hash();
-
-    let trie_roots_after = TrieRoots {
-        state_root: block_1_state_root,
-        transactions_root: transactions_trie.hash(),
-        receipts_root: receipts_trie.hash(),
-    };
-
-    let inputs = GenerationInputs {
-        signed_txns: vec![txn_2.to_vec()],
-        withdrawals: vec![],
-        tries: tries_before,
-        trie_roots_after: trie_roots_after.clone(),
-        contract_code,
-        checkpoint_state_trie_root,
-        block_metadata: block_1_metadata,
-        txn_number_before: 1.into(),
-        gas_used_before: gas_used_second,
-        gas_used_after: receipt.cum_gas_used,
-        block_hashes: BlockHashes {
-            prev_hashes: block_hashes.clone(),
-            cur_hash: block_1_hash,
-        },
-    };
-
-    let mut timing = TimingTree::new("prove root second", log::Level::Info);
-    let segment_proofs_data_second = &all_circuits.prove_all_segments(
-        &all_stark,
-        &config,
-        inputs,
-        max_cpu_len_log,
-        &mut timing,
-        None,
-    )?;
-
-    assert_eq!(segment_proofs_data_second.len(), 2);
-    for proof_data in segment_proofs_data_second {
-        let ProverOutputData {
-            proof_with_pis: proof,
-            ..
-        } = proof_data;
-        all_circuits.verify_root(proof.clone())?;
-    }
-
-    let segment_agg_prover_output_data_second = all_circuits.prove_segment_aggregation(
-        false,
-        &segment_proofs_data_second[0],
-        false,
-        &segment_proofs_data_second[1],
-    )?;
-    all_circuits
-        .verify_segment_aggregation(&segment_agg_prover_output_data_second.proof_with_pis)?;
-
-    let (txn_proof, txn_pv) = all_circuits.prove_transaction_aggregation(
-        false,
-        &segment_agg_prover_output_data_first.proof_with_pis,
-        segment_agg_prover_output_data_first.public_values,
-        false,
-        &segment_agg_prover_output_data_second.proof_with_pis,
-        segment_agg_prover_output_data_second.public_values,
-    )?;
-
-    let (first_block_proof, _block_public_values) =
-        all_circuits.prove_block(None, &txn_proof, txn_pv)?;
-    all_circuits.verify_block(&first_block_proof)?;
-
-    // Prove the next, empty block.
-
-    let block_2_hash =
-        H256::from_str("0x0123456789101112131415161718192021222324252627282930313233343536")?;
-    block_hashes[255] = block_1_hash;
-
-    let block_2_metadata = BlockMetadata {
-        block_beneficiary: Address::from(beneficiary),
-        block_timestamp: 0x03e8.into(),
-        block_number: 2.into(),
-        block_difficulty: 0x020000.into(),
-        block_gaslimit: 0x445566u32.into(),
-        block_chain_id: 1.into(),
-        block_base_fee: 0xa.into(),
-        ..Default::default()
-    };
-
-    let mut contract_code = HashMap::new();
-    contract_code.insert(keccak(vec![]), vec![]);
-
-    let max_cpu_len_log = 13;
-    let inputs = GenerationInputs {
-        signed_txns: vec![],
-        withdrawals: vec![],
-        tries: TrieInputs {
-            state_trie: expected_state_trie_after,
-            transactions_trie: Node::Empty.into(),
-            receipts_trie: Node::Empty.into(),
-            storage_tries: vec![],
-        },
-        trie_roots_after: TrieRoots {
-            state_root: trie_roots_after.state_root,
-            transactions_root: HashedPartialTrie::from(Node::Empty).hash(),
-            receipts_root: HashedPartialTrie::from(Node::Empty).hash(),
-        },
-        contract_code,
-        checkpoint_state_trie_root: block_1_state_root, // We use block 1 as new checkpoint.
-        block_metadata: block_2_metadata,
-        txn_number_before: 0.into(),
-        gas_used_before: 0.into(),
-        gas_used_after: 0.into(),
-        block_hashes: BlockHashes {
-            prev_hashes: block_hashes,
-            cur_hash: block_2_hash,
-        },
-    };
-
-    let segment_proofs_data = &all_circuits.prove_all_segments(
-        &all_stark,
-        &config,
-        inputs,
-        max_cpu_len_log,
-        &mut timing,
-        None,
-    )?;
-
-    assert_eq!(segment_proofs_data.len(), 2);
-    for proof_data in segment_proofs_data {
-        let ProverOutputData {
-            proof_with_pis: proof,
-            ..
-        } = proof_data;
-        all_circuits.verify_root(proof.clone())?;
-    }
-
-    let segment_agg_prover_output_data = all_circuits.prove_segment_aggregation(
-        false,
-        &segment_proofs_data[0],
-        false,
-        &segment_proofs_data[1],
-    )?;
-    all_circuits.verify_segment_aggregation(&segment_agg_prover_output_data.proof_with_pis)?;
-
-    let (second_txn_proof, second_txn_pvs) = all_circuits.prove_transaction_aggregation(
-        false,
-        &segment_agg_prover_output_data.proof_with_pis,
-        segment_agg_prover_output_data.public_values.clone(),
-        false,
-        &segment_agg_prover_output_data.proof_with_pis,
-        segment_agg_prover_output_data.public_values,
-    )?;
-    let (second_block_proof, _block_public_values) = all_circuits.prove_block(
-        None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
-        &second_txn_proof,
-        second_txn_pvs,
-    )?;
-    all_circuits.verify_block(&second_block_proof)
 }
 
 /// Values taken from the block 1000000 of Goerli: https://goerli.etherscan.io/txs?block=1000000
@@ -848,8 +386,4 @@ fn test_txn_and_receipt_trie_hash() -> anyhow::Result<()> {
     );
 
     Ok(())
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }

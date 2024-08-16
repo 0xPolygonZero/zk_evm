@@ -27,7 +27,7 @@ use crate::cpu::kernel::interpreter::{set_registers_and_run, ExtraSegmentData, I
 use crate::generation::state::State;
 use crate::generation::{debug_inputs, generate_traces, GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values;
-use crate::proof::{AllProof, MemCap, PublicValues};
+use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
 use crate::witness::memory::MemoryState;
 use crate::witness::state::RegistersState;
 
@@ -69,6 +69,9 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
+    // Sanity check on the provided config
+    assert_eq!(DEFAULT_CAP_LEN, 1 << config.fri_config.cap_height);
+
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
 
     let (traces, mut public_values) = timed!(
@@ -510,6 +513,7 @@ fn build_segment_data<F: RichField>(
                 .generation_state
                 .withdrawal_prover_inputs
                 .clone(),
+            ger_prover_inputs: interpreter.generation_state.ger_prover_inputs.clone(),
             trie_root_ptrs: interpreter.generation_state.trie_root_ptrs.clone(),
             jumpdest_table: interpreter.generation_state.jumpdest_table.clone(),
             next_txn_index: interpreter.generation_state.next_txn_index,

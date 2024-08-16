@@ -165,7 +165,7 @@ global encode_receipt:
     // stack: first_value, rlp_addr, value_ptr, cur_len, retdest
     // The first value is either the transaction type or the payload length.
     // Since the receipt contains at least the 256-bytes long bloom filter, payload_len > 3.
-    DUP1 %lt_const(3) %jumpi(encode_nonzero_receipt_type)
+    DUP1 %lt_const(4) %jumpi(encode_nonzero_receipt_type)
     // If we are here, then the first byte is the payload length.
     %rlp_list_len
     // stack: rlp_receipt_len, rlp_addr, value_ptr, cur_len, retdest
@@ -348,4 +348,3 @@ global encode_storage_value:
     // stack: rlp_addr', cur_len, retdest
     %stack (rlp_addr, cur_len, retdest) -> (retdest, rlp_addr, cur_len)
     JUMP
-

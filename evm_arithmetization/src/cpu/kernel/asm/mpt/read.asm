@@ -6,9 +6,8 @@ global mpt_read_state_trie:
     %read_accounts_linked_list
     // stack: account_ptr, retdest
     SWAP1
+    // stack: retdest, account_ptr
     JUMP
-
-    
 
 // Convenience macro to call mpt_read_state_trie and return where we left off.
 %macro mpt_read_state_trie
@@ -121,7 +120,7 @@ global mpt_read_extension_found:
     // stack: child_ptr, future_nibbles, key, retdest
     %jump(mpt_read) // recurse
 
-mpt_read_leaf:
+global mpt_read_leaf:
     // stack: node_type, node_payload_ptr, num_nibbles, key, retdest
     POP
     // stack: node_payload_ptr, num_nibbles, key, retdest

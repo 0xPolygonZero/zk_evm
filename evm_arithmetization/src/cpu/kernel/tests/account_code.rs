@@ -21,7 +21,7 @@ use crate::generation::mpt::{
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
-use crate::witness::memory::{MemoryAddress, MemorySegmentState};
+use crate::witness::memory::MemoryAddress;
 use crate::witness::operation::CONTEXT_SCALING_FACTOR;
 
 pub(crate) fn initialize_mpts<F: Field>(
@@ -108,8 +108,6 @@ pub(crate) fn initialize_mpts<F: Field>(
         MemoryAddress::new_bundle((GlobalMetadata::TransactionTrieRoot as usize).into()).unwrap();
     let receipts_addr =
         MemoryAddress::new_bundle((GlobalMetadata::ReceiptTrieRoot as usize).into()).unwrap();
-    let len_addr =
-        MemoryAddress::new_bundle((GlobalMetadata::TrieDataSize as usize).into()).unwrap();
 
     let mut to_set = vec![];
     if let Some(state_root_ptr) = trie_root_ptrs.state_root_ptr {
@@ -201,7 +199,9 @@ pub(crate) fn prepare_interpreter<F: Field>(
     interpreter
         .push((Segment::AccountsLinkedList as usize + 6).into())
         .expect("The stack should not overflow");
-    interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
+    interpreter
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .expect("The stack should not overflow");
 
     // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
@@ -215,7 +215,7 @@ pub(crate) fn prepare_interpreter<F: Field>(
     interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
 
     // Now, execute `mpt_hash_state_trie`.
-    state_trie.insert(k, rlp::encode(account).to_vec());
+    state_trie.insert(k, rlp::encode(account).to_vec())?;
     let expected_state_trie_hash = state_trie.hash();
     interpreter.set_global_metadata_field(
         GlobalMetadata::StateTrieRootDigestAfter,
@@ -313,7 +313,9 @@ fn test_extcodecopy() -> Result<()> {
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
-    interpreter.push(0xdeadbeefu32.into());
+    interpreter
+        .push(0xdeadbeefu32.into())
+        .expect("The stack should not overflow");
     interpreter.run()?;
 
     let extcodecopy = KERNEL.global_labels["sys_extcodecopy"];
@@ -411,7 +413,9 @@ fn prepare_interpreter_all_accounts<F: Field>(
     interpreter
         .push((Segment::AccountsLinkedList as usize + 6).into())
         .expect("The stack should not overflow");
-    interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
+    interpreter
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .expect("The stack should not overflow");
 
     // Now, set the payloads in the state trie leaves.
     interpreter.generation_state.registers.program_counter =
@@ -477,7 +481,7 @@ fn sstore() -> Result<()> {
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
-    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec());
+    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
 
     let trie_inputs = TrieInputs {
         state_trie: state_trie_before.clone(),
@@ -492,7 +496,9 @@ fn sstore() -> Result<()> {
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
-    interpreter.push(0xdeadbeefu32.into());
+    interpreter
+        .push(0xdeadbeefu32.into())
+        .expect("The stack should not overflow");
     interpreter.run()?;
 
     // Prepare the interpreter by inserting the account in the state trie.
@@ -519,7 +525,7 @@ fn sstore() -> Result<()> {
     };
 
     let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-    expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec());
+    expected_state_trie_after.insert(addr_nibbles, rlp::encode(&account_after).to_vec())?;
 
     let expected_state_trie_hash = expected_state_trie_after.hash();
 
@@ -569,7 +575,7 @@ fn sload() -> Result<()> {
 
     let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
 
-    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec());
+    state_trie_before.insert(addr_nibbles, rlp::encode(&account_before).to_vec())?;
 
     let trie_inputs = TrieInputs {
         state_trie: state_trie_before.clone(),
@@ -584,7 +590,9 @@ fn sload() -> Result<()> {
     // Pre-initialize the accessed addresses list.
     let init_accessed_addresses = KERNEL.global_labels["init_access_lists"];
     interpreter.generation_state.registers.program_counter = init_accessed_addresses;
-    interpreter.push(0xdeadbeefu32.into());
+    interpreter
+        .push(0xdeadbeefu32.into())
+        .expect("The stack should not overflow");
     interpreter.run()?;
 
     // Prepare the interpreter by inserting the account in the state trie.
@@ -630,8 +638,6 @@ fn sload() -> Result<()> {
         "Expected 2 items on stack after hashing, found {:?}",
         interpreter.stack()
     );
-
-    let trie_data_segment_len = interpreter.stack()[0];
 
     let hash = H256::from_uint(&interpreter.stack()[1]);
 

@@ -11,7 +11,6 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{nibbles_64, test_account_1_rlp, test_account_2};
 use crate::generation::mpt::AccountRlp;
-use crate::generation::state::State;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
 use crate::util::h2u;
@@ -113,7 +112,7 @@ fn test_state_trie(
         .halt_offsets
         .push(KERNEL.global_labels["after_store_initial"]);
     interpreter.generation_state.registers.program_counter = KERNEL.global_labels["store_initial"];
-    interpreter.run();
+    interpreter.run().unwrap();
 
     assert_eq!(interpreter.stack(), vec![]);
     // Set initial tries.
@@ -126,7 +125,9 @@ fn test_state_trie(
     interpreter
         .push((Segment::AccountsLinkedList as usize + 6).into())
         .expect("The stack should not overflow");
-    interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
+    interpreter
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .unwrap();
 
     // Now, set the payload.
     interpreter.generation_state.registers.program_counter =

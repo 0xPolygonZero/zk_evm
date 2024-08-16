@@ -27,3 +27,8 @@
 'specs':
 - changed-files:
   - any-glob-to-any-file: docs/**
+
+# Add 'crate: common' label to any changes within 'common' folder.
+'crate: common':
+  - changed-files:
+      - any-glob-to-any-file: common/**

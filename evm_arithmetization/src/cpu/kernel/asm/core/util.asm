@@ -14,6 +14,17 @@
     %add_const(0x10000000000000000) // scale each context by 2^64
     // stack: new_ctx
     DUP1
+
+    // Memory addresses are represented as `ctx.2^64 + segment.2^32 + offset`,
+    // each address component expected to fit in a 32-bit limb.
+    // We enforce here that the new context id won't overflow.
+    PUSH 0xffffffffffffffffffffffff // 2^96 - 1
+    // stack: max, new_ctx, new_ctx
+    LT
+    %jumpi(fault_exception)
+
+    // stack: new_ctx
+    DUP1
     %mstore_global_metadata(@GLOBAL_METADATA_LARGEST_CONTEXT)
     // stack: new_ctx
 %endmacro
@@ -26,8 +37,8 @@
 
 %macro is_precompile
     // stack: addr
-    DUP1 %ge_const(@ECREC) SWAP1 %le_const(@BLAKE2_F)
-    // stack: addr>=1, addr<=9
+    DUP1 %ge_const(@ECREC) SWAP1 %le_const(@KZG_PEVAL)
+    // stack: addr>=1, addr<=10
     MUL // Cheaper than AND
 %endmacro
 

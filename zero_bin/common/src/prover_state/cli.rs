@@ -33,7 +33,10 @@ pub enum CircuitPersistence {
 }
 
 impl CircuitPersistence {
-    pub fn with_load_strategy(self, load_strategy: TableLoadStrategy) -> super::CircuitPersistence {
+    pub const fn with_load_strategy(
+        self,
+        load_strategy: TableLoadStrategy,
+    ) -> super::CircuitPersistence {
         match self {
             CircuitPersistence::None => super::CircuitPersistence::None,
             CircuitPersistence::Disk => super::CircuitPersistence::Disk(load_strategy),

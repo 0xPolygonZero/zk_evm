@@ -1,4 +1,0 @@
-[env]
-# read/write to/from files relative to the workspace even when running in this
-# directory
-CARGO_WORKSPACE_DIR = { value = "", relative = true }

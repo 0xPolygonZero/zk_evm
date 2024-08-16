@@ -208,12 +208,11 @@ pub(crate) fn eval_packed_generic<P: PackedField>(
 
     // Manually check PUSH and PROVER_INPUT.
     // PROVER_INPUT is a kernel-only instruction, but not PUSH.
-    let push_prover_input_constr = (opcode - P::Scalar::from_canonical_usize(0x49_usize))
+    let push_prover_input_constr = (opcode - P::Scalar::from_canonical_usize(0xee_usize))
         * (opcode_high_three - P::Scalar::from_canonical_usize(0x60_usize))
         * lv.op.push_prover_input;
     yield_constr.constraint(push_prover_input_constr);
-    let prover_input_constr =
-        lv.op.push_prover_input * (lv.opcode_bits[5] - P::ONES) * (kernel_mode - P::ONES);
+    let prover_input_constr = lv.op.push_prover_input * lv.opcode_bits[7] * (kernel_mode - P::ONES);
     yield_constr.constraint(prover_input_constr);
 }
 
@@ -409,8 +408,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     // Manually check PUSH and PROVER_INPUT.
     // PROVER_INPUT is a kernel-only instruction, but not PUSH.
     let prover_input_opcode =
-        builder.constant_extension(F::Extension::from_canonical_usize(0x49usize));
-    let push_opcodes = builder.constant_extension(F::Extension::from_canonical_usize(0x60usize));
+        builder.constant_extension(F::Extension::from_canonical_usize(0xee_usize));
+    let push_opcodes = builder.constant_extension(F::Extension::from_canonical_usize(0x60_usize));
 
     let push_constr = builder.sub_extension(opcode_high_three, push_opcodes);
     let prover_input_constr = builder.sub_extension(opcode, prover_input_opcode);
@@ -418,11 +417,8 @@ pub(crate) fn eval_ext_circuit<F: RichField + Extendable<D>, const D: usize>(
     let push_prover_input_constr =
         builder.mul_many_extension([lv.op.push_prover_input, prover_input_constr, push_constr]);
     yield_constr.constraint(builder, push_prover_input_constr);
-    let prover_input_filter = builder.mul_sub_extension(
-        lv.op.push_prover_input,
-        lv.opcode_bits[5],
-        lv.op.push_prover_input,
-    );
+
+    let prover_input_filter = builder.mul_extension(lv.op.push_prover_input, lv.opcode_bits[7]);
     let constr = builder.mul_sub_extension(kernel_mode, prover_input_filter, prover_input_filter);
     yield_constr.constraint(builder, constr);
 }

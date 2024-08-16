@@ -1,24 +1,26 @@
 use core::mem::transmute;
+use core::ops::Neg;
 use std::collections::{BTreeSet, HashMap};
 use std::str::FromStr;
 
-use anyhow::{bail, Error};
+use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
-use log::{Level, Log};
-use mpt_trie::partial_trie::HashedPartialTrie;
 use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::LinkedList;
 use super::mpt::load_state_mpt;
-use super::state::State;
-use super::trie_extractor::get_state_trie;
+use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
+use crate::cpu::kernel::constants::cancun_constants::{
+    BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BASE_FEE_PER_BLOB_GAS,
+    POINT_EVALUATION_PRECOMPILE_RETURN_VALUE,
+};
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::simulate_cpu_and_get_user_jumps;
-use crate::extension_tower::{FieldExt, Fp12, BLS381, BN254};
+use crate::curve_pairings::{bls381, CurveAff, CyclicGroup};
+use crate::extension_tower::{FieldExt, Fp12, Fp2, BLS381, BLS_BASE, BLS_SCALAR, BN254, BN_BASE};
 use crate::generation::prover_input::EvmField::{
     Bls381Base, Bls381Scalar, Bn254Base, Bn254Scalar, Secp256k1Base, Secp256k1Scalar,
 };
@@ -26,7 +28,7 @@ use crate::generation::prover_input::FieldOp::{Inverse, Sqrt};
 use crate::generation::state::GenerationState;
 use crate::memory::segments::Segment;
 use crate::memory::segments::Segment::BnPairing;
-use crate::util::{biguint_to_mem_vec, mem_vec_to_biguint, u256_to_u8, u256_to_usize};
+use crate::util::{biguint_to_mem_vec, mem_vec_to_biguint, sha2, u256_to_u8, u256_to_usize};
 use crate::witness::errors::ProverInputError::*;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::witness::memory::MemoryAddress;
@@ -59,6 +61,7 @@ impl<F: Field> GenerationState<F> {
             "sf" => self.run_sf(input_fn),
             "ffe" => self.run_ffe(input_fn),
             "rlp" => self.run_rlp(),
+            "blobbasefee" => self.run_blobbasefee(),
             "current_hash" => self.run_current_hash(),
             "account_code" => self.run_account_code(),
             "bignum_modmul" => self.run_bignum_modmul(),
@@ -67,6 +70,9 @@ impl<F: Field> GenerationState<F> {
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
             "linked_list" => self.run_linked_list(input_fn),
+            "ger" => self.run_global_exit_roots(),
+            "kzg_point_eval" => self.run_kzg_point_eval(),
+            "kzg_point_eval_2" => self.run_kzg_point_eval_2(),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
         }
     }
@@ -86,27 +92,23 @@ impl<F: Field> GenerationState<F> {
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let trie = input_fn.0[1].as_str();
         match trie {
-            "state" => self
-                .trie_root_ptrs
-                .state_root_ptr
-                .map_or_else(
-                    || {
-                        self.set_preinit = true;
-                        let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
+            "state" => match self.trie_root_ptrs.state_root_ptr {
+                Some(state_root_ptr) => Ok(state_root_ptr),
+                None => {
+                    let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
 
-                        let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
+                    let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
 
-                        self.memory.insert_preinitialized_segment(
-                            Segment::TrieData,
-                            crate::witness::memory::MemorySegmentState {
-                                content: new_content,
-                            },
-                        );
-                        Ok(n)
-                    },
-                    Ok,
-                )
-                .map(U256::from),
+                    self.memory.insert_preinitialized_segment(
+                        Segment::TrieData,
+                        crate::witness::memory::MemorySegmentState {
+                            content: new_content,
+                        },
+                    );
+                    Ok(n)
+                }
+            }
+            .map(U256::from),
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             "trie_data_size" => Ok(self
@@ -187,6 +189,15 @@ impl<F: Field> GenerationState<F> {
         self.rlp_prover_inputs
             .pop()
             .ok_or(ProgramError::ProverInputError(OutOfRlpData))
+    }
+
+    fn run_blobbasefee(&mut self) -> Result<U256, ProgramError> {
+        let excess_blob_gas = self.inputs.block_metadata.block_excess_blob_gas;
+        Ok(fake_exponential(
+            MIN_BASE_FEE_PER_BLOB_GAS,
+            excess_blob_gas,
+            BLOB_BASE_FEE_UPDATE_FRACTION,
+        ))
     }
 
     fn run_current_hash(&mut self) -> Result<U256, ProgramError> {
@@ -361,6 +372,12 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
+    fn run_global_exit_roots(&mut self) -> Result<U256, ProgramError> {
+        self.ger_prover_inputs
+            .pop()
+            .ok_or(ProgramError::ProverInputError(OutOfGerData))
+    }
+
     /// Returns the next used jump address.
     fn run_next_jumpdest_table_address(&mut self) -> Result<U256, ProgramError> {
         let context = u256_to_usize(stack_peek(self, 0)? >> CONTEXT_SCALING_FACTOR)?;
@@ -374,8 +391,6 @@ impl<F: Field> GenerationState<F> {
                 ProverInputError::InvalidJumpdestSimulation,
             ));
         };
-
-        let jd_len = jumpdest_table.len();
 
         if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
             && let Some(next_jumpdest_address) = ctx_jumpdest_table.pop()
@@ -395,8 +410,6 @@ impl<F: Field> GenerationState<F> {
                 ProverInputError::InvalidJumpdestSimulation,
             ));
         };
-
-        let jd_len = jumpdest_table.len();
 
         if let Some(ctx_jumpdest_table) = jumpdest_table.get_mut(&context)
             && let Some(next_jumpdest_proof) = ctx_jumpdest_table.pop()
@@ -509,11 +522,12 @@ impl<F: Field> GenerationState<F> {
                 Segment::AccountsLinkedList,
             )?;
 
-        if let Some(([.., pred_ptr], [node_addr, ..], _)) = accounts_linked_list
-            .tuple_windows()
-            .find(|&(_, [prev_addr, ..], [next_addr, ..])| {
-                (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
-            })
+        if let Some(([.., pred_ptr], [_, ..], _)) =
+            accounts_linked_list
+                .tuple_windows()
+                .find(|&(_, [prev_addr, ..], [next_addr, ..])| {
+                    (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
+                })
         {
             Ok(pred_ptr / U256::from(ACCOUNTS_LINKED_LIST_NODE_SIZE))
         } else {
@@ -614,8 +628,8 @@ impl<F: Field> GenerationState<F> {
             )?;
 
         if let Some(([.., pred_ptr], _, _)) = storage_linked_list.tuple_windows().find(
-            |&(_, [prev_addr, prev_key, ..], [next_addr, next_key, ..])| {
-                let prev_is_less = (prev_addr < addr || prev_addr == U256::MAX);
+            |&(_, [prev_addr, _, ..], [next_addr, _, ..])| {
+                let prev_is_less = prev_addr < addr || prev_addr == U256::MAX;
                 let next_is_larger_or_equal = next_addr >= addr;
                 prev_is_less && next_is_larger_or_equal
             },
@@ -624,6 +638,155 @@ impl<F: Field> GenerationState<F> {
                 / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {
             Ok((Segment::StorageLinkedList as usize).into())
+        }
+    }
+
+    /// Returns the first part of the KZG precompile output.
+    fn run_kzg_point_eval(&mut self) -> Result<U256, ProgramError> {
+        let versioned_hash = stack_peek(self, 0)?;
+        let z = stack_peek(self, 1)?;
+        let y = stack_peek(self, 2)?;
+        let comm_hi = stack_peek(self, 3)?;
+        let comm_lo = stack_peek(self, 4)?;
+        let proof_hi = stack_peek(self, 5)?;
+        let proof_lo = stack_peek(self, 6)?;
+
+        // Validate scalars
+        if z > BLS_SCALAR || y > BLS_SCALAR {
+            return Ok(U256::zero());
+        }
+
+        let mut comm_bytes = [0u8; 48];
+        comm_lo.to_big_endian(&mut comm_bytes[16..48]); // only actually 16 bytes
+        if comm_bytes[16..32] != [0; 16] {
+            // Commitments must fit in 48 bytes.
+            return Ok(U256::zero());
+        }
+        comm_hi.to_big_endian(&mut comm_bytes[0..32]);
+
+        let mut proof_bytes = [0u8; 48];
+        proof_lo.to_big_endian(&mut proof_bytes[16..48]); // only actually 16 bytes
+        if proof_bytes[16..32] != [0; 16] {
+            // Proofs must fit in 48 bytes.
+            return Ok(U256::zero());
+        }
+        proof_hi.to_big_endian(&mut proof_bytes[0..32]);
+
+        let mut expected_versioned_hash = sha2(comm_bytes.to_vec());
+
+        const KZG_HASH_MASK: U256 = U256([
+            0xffffffffffffffff,
+            0xffffffffffffffff,
+            0xffffffffffffffff,
+            0x00ffffffffffffff,
+        ]);
+        expected_versioned_hash &= KZG_HASH_MASK; // erase most significant byte
+        expected_versioned_hash |= U256::from(KZG_VERSIONED_HASH) << 248; // append 1
+
+        if versioned_hash != expected_versioned_hash {
+            return Ok(U256::zero());
+        }
+
+        self.verify_kzg_proof(&comm_bytes, z, y, &proof_bytes)
+    }
+
+    /// Returns the second part of the KZG precompile output.
+    ///
+    /// The POINT_EVALUATION_PRECOMPILE returns a 64-byte value.
+    /// Because EVM words only fit in 32 bytes, we need to push
+    /// the following word separately.
+    fn run_kzg_point_eval_2(&mut self) -> Result<U256, ProgramError> {
+        let prev_value = stack_peek(self, 0)?;
+
+        // `run_kzg_point_eval_1` should return 0 upon failure, which should be caught
+        // in the Kernel. Ending up here should hence not happen.
+        if prev_value != U256::from_big_endian(&POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1]) {
+            return Err(ProgramError::ProverInputError(
+                ProverInputError::KzgEvalFailure(
+                    "run_kzg_point_eval_1 should have output the expected return value at this point"
+                        .to_string(),
+                ),
+            ));
+        }
+
+        Ok(U256::from_big_endian(
+            &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[0],
+        ))
+    }
+
+    /// Verifies a KZG proof, i.e. that the commitment opens to y at z.
+    ///
+    /// Returns `0` upon failure of one of the checks, or `BLS_MODULUS` upon
+    /// success.
+    fn verify_kzg_proof(
+        &self,
+        comm_bytes: &[u8; 48],
+        z: U256,
+        y: U256,
+        proof_bytes: &[u8; 48],
+    ) -> Result<U256, ProgramError> {
+        let comm = if let Ok(c) = bls381::g1_from_bytes(comm_bytes) {
+            c
+        } else {
+            return Ok(U256::zero());
+        };
+
+        let proof = if let Ok(p) = bls381::g1_from_bytes(proof_bytes) {
+            p
+        } else {
+            return Ok(U256::zero());
+        };
+
+        // TODO: use some WNAF method if performance becomes critical
+        let mut z_bytes = [0u8; 32];
+        z.to_big_endian(&mut z_bytes);
+        let mut acc = CurveAff::<Fp2<BLS381>>::unit();
+        for byte in z_bytes.into_iter() {
+            acc = acc * 256_i32;
+            acc = acc + (CurveAff::<Fp2<BLS381>>::GENERATOR * byte as i32);
+        }
+        let minus_z_g2 = -acc;
+
+        let mut y_bytes = [0u8; 32];
+        y.to_big_endian(&mut y_bytes);
+        let mut acc = CurveAff::<BLS381>::unit();
+        for byte in y_bytes {
+            acc = acc * 256_i32;
+            acc = acc + (CurveAff::<BLS381>::GENERATOR * byte as i32);
+        }
+        let comm_minus_y = comm + (acc.neg());
+
+        let x = CurveAff::<Fp2<BLS381>> {
+            x: Fp2::<BLS381> {
+                re: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[0]),
+                },
+                im: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[1]),
+                },
+            },
+            y: Fp2::<BLS381> {
+                re: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[2]),
+                },
+                im: BLS381 {
+                    val: U512::from_big_endian(&G2_TRUSTED_SETUP_POINT[3]),
+                },
+            },
+        };
+        let x_minus_z = x + minus_z_g2;
+
+        // TODO: If this ends up being implemented in the Kernel directly, we should
+        // really not have to go through the final exponentiation twice.
+        if bls381::ate_optim(comm_minus_y, -CurveAff::<Fp2<BLS381>>::GENERATOR)
+            * bls381::ate_optim(proof, x_minus_z)
+            != Fp12::<BLS381>::UNIT
+        {
+            Ok(U256::zero())
+        } else {
+            Ok(U256::from_big_endian(
+                &POINT_EVALUATION_PRECOMPILE_RETURN_VALUE[1],
+            ))
         }
     }
 }
@@ -676,17 +839,6 @@ impl<F: Field> GenerationState<F> {
         Ok(code)
     }
 
-    fn set_code_len(&mut self, len: usize) {
-        self.memory.set(
-            MemoryAddress::new(
-                self.registers.context,
-                Segment::ContextMetadata,
-                ContextMetadata::CodeSize.unscale(),
-            ),
-            len.into(),
-        )
-    }
-
     fn get_code_len(&self, context: usize) -> Result<usize, ProgramError> {
         let code_len = u256_to_usize(self.memory.get_with_init(MemoryAddress::new(
             context,
@@ -714,21 +866,10 @@ impl<F: Field> GenerationState<F> {
         // `GlobalMetadata::AccessedAddressesLen` stores the value of the next available
         // virtual address in the segment. In order to get the length we need
         // to substract `Segment::AccessedAddresses` as usize.
-        let mem_len = self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()]
-            .content
-            .len();
         LinkedList::from_mem_and_segment(
             &self.memory.contexts[0].segments[Segment::AccessedAddresses.unscale()].content,
             Segment::AccessedAddresses,
         )
-    }
-
-    fn get_global_metadata(&self, data: GlobalMetadata) -> U256 {
-        self.memory.get_with_init(MemoryAddress::new(
-            0,
-            Segment::GlobalMetadata,
-            data.unscale(),
-        ))
     }
 
     pub(crate) fn get_storage_keys_access_list(
@@ -879,22 +1020,21 @@ impl FromStr for FieldOp {
 }
 
 impl EvmField {
-    fn order(&self) -> U256 {
+    fn order(&self) -> U512 {
         match self {
-            EvmField::Bls381Base => todo!(),
-            EvmField::Bls381Scalar => todo!(),
-            EvmField::Bn254Base => {
-                U256::from_str("0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47")
-                    .unwrap()
-            }
+            EvmField::Bls381Base => BLS_BASE,
+            EvmField::Bls381Scalar => BLS_SCALAR.into(),
+            EvmField::Bn254Base => BN_BASE.into(),
             EvmField::Bn254Scalar => todo!(),
             EvmField::Secp256k1Base => {
                 U256::from_str("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f")
                     .unwrap()
+                    .into()
             }
             EvmField::Secp256k1Scalar => {
                 U256::from_str("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")
                     .unwrap()
+                    .into()
             }
         }
     }
@@ -907,7 +1047,8 @@ impl EvmField {
     }
 
     fn inverse(&self, x: U256) -> Result<U256, ProgramError> {
-        let n = self.order();
+        let n = U256::try_from(self.order())
+            .map_err(|_| ProgramError::ProverInputError(Unimplemented))?;
         if x >= n {
             return Err(ProgramError::ProverInputError(InvalidInput));
         };
@@ -915,7 +1056,8 @@ impl EvmField {
     }
 
     fn sqrt(&self, x: U256) -> Result<U256, ProgramError> {
-        let n = self.order();
+        let n = U256::try_from(self.order())
+            .map_err(|_| ProgramError::ProverInputError(Unimplemented))?;
         if x >= n {
             return Err(ProgramError::ProverInputError(InvalidInput));
         };
@@ -998,4 +1140,22 @@ fn modexp(x: U256, e: U256, n: U256) -> Result<U256, ProgramError> {
     }
 
     Ok(product)
+}
+
+/// See EIP-4844: <https://eips.ethereum.org/EIPS/eip-4844#helpers>.
+fn fake_exponential(factor: U256, numerator: U256, denominator: U256) -> U256 {
+    if factor.is_zero() || numerator.is_zero() {
+        return factor;
+    }
+
+    let mut i = 1;
+    let mut output = U256::zero();
+    let mut numerator_accum = factor * denominator;
+    while !numerator_accum.is_zero() {
+        output += numerator_accum;
+        numerator_accum = (numerator_accum * numerator) / (denominator * i);
+        i += 1;
+    }
+
+    output / denominator
 }

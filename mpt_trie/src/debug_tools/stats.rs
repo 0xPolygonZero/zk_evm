@@ -9,7 +9,7 @@ use num_traits::ToPrimitive;
 
 use crate::partial_trie::{Node, PartialTrie};
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 /// Statistics for a given trie, consisting of node count aggregated
 /// by time, lowest depth and average depth of leaf and hash nodes.
 pub struct TrieStats {
@@ -43,7 +43,7 @@ impl TrieStats {
 }
 
 /// Total node counts for a trie.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Hash)]
 struct NodeCounts {
     empty: usize,
     hash: usize,
@@ -106,7 +106,7 @@ impl NodeCounts {
 }
 
 /// Information on the comparison between two tries.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TrieComparison {
     node_comp: NodeComparison,
     depth_comp: DepthComparison,
@@ -120,7 +120,7 @@ impl Display for TrieComparison {
 }
 
 // TODO: Consider computing these values lazily?
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash)]
 struct NodeComparison {
     tot_node_rat: RatioStat<usize>,
     non_empty_rat: RatioStat<usize>,
@@ -145,7 +145,7 @@ impl Display for NodeComparison {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct DepthComparison {
     lowest_depth_rat: RatioStat<usize>,
     avg_leaf_depth_rat: RatioStat<f32>,
@@ -160,8 +160,8 @@ impl Display for DepthComparison {
     }
 }
 
-/// Type to hold (and compare) a given variable from two different tries.s
-#[derive(Debug)]
+/// Type to hold (and compare) a given variable from two different tries.
+#[derive(Clone, Debug, Hash)]
 struct RatioStat<T> {
     a: T,
     b: T,

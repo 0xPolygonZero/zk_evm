@@ -181,7 +181,6 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::field_reassign_with_default)]
-#![allow(unused)]
 #![feature(let_chains)]
 
 // Individual STARK processing units
@@ -210,8 +209,10 @@ pub mod witness;
 // Utility modules
 pub mod curve_pairings;
 pub mod extension_tower;
+pub mod testing_utils;
 pub mod util;
 
+use generation::TrimmedGenerationInputs;
 use mpt_trie::partial_trie::HashedPartialTrie;
 
 // Public definitions and re-exports
@@ -223,4 +224,8 @@ pub type BlockHeight = u64;
 pub use all_stark::AllStark;
 pub use fixed_recursive_verifier::AllRecursiveCircuits;
 pub use generation::GenerationInputs;
+use prover::GenerationSegmentData;
 pub use starky::config::StarkConfig;
+
+/// All data needed to prove all transaction segments.
+pub type AllData = (TrimmedGenerationInputs, GenerationSegmentData);

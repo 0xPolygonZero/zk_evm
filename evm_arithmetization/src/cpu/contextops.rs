@@ -9,7 +9,6 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 
 use super::columns::ops::OpsColumnsView;
 use super::cpu_stark::{disable_unused_channels, disable_unused_channels_circuit};
-use super::kernel::aggregator::KERNEL;
 use crate::cpu::columns::CpuColumnsView;
 use crate::memory::segments::Segment;
 

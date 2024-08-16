@@ -1,17 +1,18 @@
 use std::collections::{HashMap, HashSet};
 
 use alloy::{
-    primitives::{keccak256, Address, StorageKey, B256},
+    primitives::{keccak256, Address, StorageKey, B256, U256},
     providers::Provider,
     rpc::types::eth::{Block, BlockTransactionsKind, EIP1186AccountProofResponse},
     transports::Transport,
 };
 use anyhow::Context as _;
+use evm_arithmetization::testing_utils::{BEACON_ROOTS_CONTRACT_STATE_KEY, HISTORY_BUFFER_LENGTH};
 use futures::future::{try_join, try_join_all};
 use mpt_trie::{builder::PartialTrieBuilder, partial_trie::HashedPartialTrie};
-use trace_decoder::trace_protocol::{
+use trace_decoder::{
     BlockTraceTriePreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
-    SeparateTriePreImages, TrieDirect, TxnInfo,
+    SeparateTriePreImages, TxnInfo,
 };
 
 use crate::provider::CachedProvider;
@@ -44,23 +45,19 @@ where
             .await?;
 
     Ok(BlockTraceTriePreImages::Separate(SeparateTriePreImages {
-        state: SeparateTriePreImage::Direct(TrieDirect(state.build())),
+        state: SeparateTriePreImage::Direct(state.build()),
         storage: SeparateStorageTriesPreImage::MultipleTries(
             storage_proofs
                 .into_iter()
-                .map(|(a, m)| {
-                    (
-                        a.compat(),
-                        SeparateTriePreImage::Direct(TrieDirect(m.build())),
-                    )
-                })
+                .map(|(a, m)| (a.compat(), SeparateTriePreImage::Direct(m.build())))
                 .collect(),
         ),
     }))
 }
 
 /// Iterate over the tx_infos and process the state access for each address.
-/// Also includes the state access for withdrawals and the block author.
+/// Also includes the state access for the beacon roots contract, withdrawals
+/// and the block author.
 ///
 /// Returns a map from address to the set of storage keys accessed by that
 /// address.
@@ -69,6 +66,8 @@ pub fn process_states_access(
     block: &Block,
 ) -> anyhow::Result<HashMap<Address, HashSet<StorageKey>>> {
     let mut state_access = HashMap::<Address, HashSet<StorageKey>>::new();
+
+    insert_beacon_roots_update(&mut state_access, block)?;
 
     if let Some(w) = block.withdrawals.as_ref() {
         w.iter().for_each(|w| {
@@ -92,6 +91,24 @@ pub fn process_states_access(
     }
 
     Ok(state_access)
+}
+
+/// Cancun HF specific, see <https://eips.ethereum.org/EIPS/eip-4788>.
+fn insert_beacon_roots_update(
+    state_access: &mut HashMap<Address, HashSet<StorageKey>>,
+    block: &Block,
+) -> anyhow::Result<()> {
+    let timestamp = block.header.timestamp;
+
+    const MODULUS: u64 = HISTORY_BUFFER_LENGTH.1;
+
+    let keys = HashSet::from_iter([
+        U256::from(timestamp % MODULUS).into(), // timestamp_idx
+        U256::from((timestamp % MODULUS) + MODULUS).into(), // root_idx
+    ]);
+    state_access.insert(BEACON_ROOTS_CONTRACT_STATE_KEY.1.into(), keys);
+
+    Ok(())
 }
 
 /// Generates the state witness for the given block.

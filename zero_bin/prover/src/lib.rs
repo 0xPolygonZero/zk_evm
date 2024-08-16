@@ -12,11 +12,7 @@ use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::oneshot;
-use trace_decoder::{
-    processed_block_trace::ProcessingMeta,
-    trace_protocol::BlockTrace,
-    types::{CodeHash, OtherBlockData},
-};
+use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
 
@@ -31,9 +27,6 @@ pub struct ProverConfig {
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
-}
-fn resolve_code_hash_fn(_: &CodeHash) -> Vec<u8> {
-    todo!()
 }
 
 impl BlockProverInput {
@@ -52,7 +45,6 @@ impl BlockProverInput {
         use evm_arithmetization::prover::SegmentDataIterator;
         use futures::{stream::FuturesUnordered, FutureExt};
         use paladin::directive::{Directive, IndexedStream};
-        use proof_gen::types::Field;
 
         let ProverConfig {
             max_cpu_len_log,
@@ -61,11 +53,12 @@ impl BlockProverInput {
         } = prover_config;
 
         let block_number = self.get_block_number();
-        let other_data = self.other_data;
-        let block_generation_inputs = self.block_trace.into_txn_proof_gen_ir(
-            &ProcessingMeta::new(resolve_code_hash_fn),
-            other_data.clone(),
+
+        let block_generation_inputs = trace_decoder::entrypoint(
+            self.block_trace,
+            self.other_data,
             batch_size,
+            |_| unimplemented!(),
         )?;
 
         // Create segment proof.
@@ -89,8 +82,10 @@ impl BlockProverInput {
             .iter()
             .enumerate()
             .map(|(idx, txn_batch)| {
-                let segment_data_iterator =
-                    SegmentDataIterator::<Field>::new(txn_batch, Some(max_cpu_len_log));
+                let segment_data_iterator = SegmentDataIterator::<proof_gen::types::Field>::new(
+                    txn_batch,
+                    Some(max_cpu_len_log),
+                );
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
@@ -153,11 +148,11 @@ impl BlockProverInput {
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
-        let other_data = self.other_data;
-        let txs = self.block_trace.into_txn_proof_gen_ir(
-            &ProcessingMeta::new(resolve_code_hash_fn),
-            other_data.clone(),
+        let block_generation_inputs = trace_decoder::entrypoint(
+            self.block_trace,
+            self.other_data,
             batch_size,
+            |_| unimplemented!(),
         )?;
 
         let batch_ops = ops::BatchTestOnly {
@@ -165,7 +160,11 @@ impl BlockProverInput {
         };
 
         let simulation = Directive::map(
-            IndexedStream::from(txs.into_iter().zip(repeat(max_cpu_len_log))),
+            IndexedStream::from(
+                block_generation_inputs
+                    .into_iter()
+                    .zip(repeat(max_cpu_len_log)),
+            ),
             &batch_ops,
         );
 
@@ -173,13 +172,13 @@ impl BlockProverInput {
 
         result.collect::<Vec<_>>().await;
 
+        info!("Successfully generated witness for block {block_number}.");
+
         // Wait for previous block proof
         let _prev = match previous {
             Some(it) => Some(it.await?),
             None => None,
         };
-
-        info!("Successfully generated witness for block {block_number}.");
 
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {

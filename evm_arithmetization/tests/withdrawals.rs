@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{H160, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    init_logger, preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use keccak_hash::keccak;
@@ -29,12 +33,15 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let all_stark = AllStark::<F, D>::default();
     let config = StarkConfig::standard_fast_config();
 
-    let block_metadata = BlockMetadata::default();
+    let block_metadata = BlockMetadata {
+        block_timestamp: 1.into(),
+        ..BlockMetadata::default()
+    };
 
-    let state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
-    let storage_tries = vec![];
 
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
@@ -44,6 +51,14 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
     let state_trie_after = {
         let mut trie = HashedPartialTrie::from(Node::Empty);
+        update_beacon_roots_account_storage(
+            &mut beacon_roots_account_storage,
+            block_metadata.block_timestamp,
+            block_metadata.parent_beacon_block_root,
+        )?;
+        let beacon_roots_account =
+            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
         let addr_state_key = keccak(withdrawals[0].0);
         let addr_nibbles = Nibbles::from_bytes_be(addr_state_key.as_bytes()).unwrap();
         let account = AccountRlp {
@@ -51,6 +66,15 @@ fn test_withdrawals() -> anyhow::Result<()> {
             ..AccountRlp::default()
         };
         trie.insert(addr_nibbles, rlp::encode(&account).to_vec())?;
+        trie.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&beacon_roots_account).to_vec(),
+        )?;
+        trie.insert(
+            ger_account_nibbles(),
+            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+        )?;
+
         trie
     };
 
@@ -63,6 +87,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txns: vec![],
         withdrawals,
+        global_exit_roots: vec![],
         tries: TrieInputs {
             state_trie: state_trie_before,
             transactions_trie,
@@ -97,8 +122,4 @@ fn test_withdrawals() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_all_proofs(&all_stark, &proofs, &config)
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }

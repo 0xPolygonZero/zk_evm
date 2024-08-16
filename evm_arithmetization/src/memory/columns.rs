@@ -1,85 +1,102 @@
 //! Memory registers.
 
-use crate::memory::VALUE_LIMBS;
+use std::mem::transmute;
 
-// Columns for memory operations, ordered by (addr, timestamp).
-/// 1 if this is an actual memory operation, or 0 if it's a padding row.
-pub(crate) const FILTER: usize = 0;
-/// Each memory operation is associated to a unique timestamp.
-/// For a given memory operation `op_i`, its timestamp is computed as `C * N +
-/// i` where `C` is the CPU clock at that time, `N` is the number of general
-/// memory channels, and `i` is the index of the memory channel at which the
-/// memory operation is performed.
-pub(crate) const TIMESTAMP: usize = FILTER + 1;
-/// Contains the inverse of `TIMESTAMP`. Used to check if `TIMESTAMP = 0`.
-pub(crate) const TIMESTAMP_INV: usize = TIMESTAMP + 1;
-/// 1 if this is a read operation, 0 if it is a write one.
-pub(crate) const IS_READ: usize = TIMESTAMP_INV + 1;
-/// The execution context of this address.
-pub(crate) const ADDR_CONTEXT: usize = IS_READ + 1;
-/// The segment section of this address.
-pub(crate) const ADDR_SEGMENT: usize = ADDR_CONTEXT + 1;
-/// The virtual address within the given context and segment.
-pub(crate) const ADDR_VIRTUAL: usize = ADDR_SEGMENT + 1;
+use zk_evm_proc_macro::{Columns, DerefColumns};
 
-// Eight 32-bit limbs hold a total of 256 bits.
-// If a value represents an integer, it is little-endian encoded.
-const VALUE_START: usize = ADDR_VIRTUAL + 1;
-pub(crate) const fn value_limb(i: usize) -> usize {
-    debug_assert!(i < VALUE_LIMBS);
-    VALUE_START + i
+use crate::{memory::VALUE_LIMBS, util::indices_arr};
+
+/// Columns for the `MemoryStark`. Memory operations are ordered by
+/// (addr, timestamp).
+#[repr(C)]
+#[derive(Columns, DerefColumns, Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct MemoryColumnsView<T> {
+    /// 1 if this is an actual memory operation, or 0 if it's a padding row.
+    pub filter: T,
+    /// Each memory operation is associated to a unique timestamp.
+    /// For a given memory operation `op_i`, its timestamp is computed as
+    /// `C * N + i` where `C` is the CPU clock at that time, `N` is the number
+    /// of general memory channels, and `i` is the index of the memory
+    /// channel at which the memory operation is performed.
+    pub timestamp: T,
+    /// Contains the inverse of `timestamp`. Used to check if `timestamp = 0`.
+    pub timestamp_inv: T,
+    /// 1 if this is a read operation, 0 if it is a write one.
+    pub is_read: T,
+    /// The execution context of this address.
+    pub addr_context: T,
+    /// The segment section of this address.
+    pub addr_segment: T,
+    /// The virtual address within the given context and segment.
+    pub addr_virtual: T,
+
+    // Eight 32-bit limbs hold a total of 256 bits.
+    // If a value represents an integer, it is little-endian encoded.
+    pub value_limbs: [T; VALUE_LIMBS],
+
+    // Flags to indicate whether this part of the address differs from the next row,
+    // and the previous parts do not differ.
+    // That is, e.g., `SEGMENT_FIRST_CHANGE` is `F::ONE` iff `ADDR_CONTEXT` is the
+    // same in this row and the next, but `ADDR_SEGMENT` is not.
+    pub context_first_change: T,
+    pub segment_first_change: T,
+    pub virtual_first_change: T,
+
+    /// Used to lower the degree of the zero-initializing constraints.
+    /// Contains `preinitialized_segments * addr_changed * next_is_read`.
+    pub initialize_aux: T,
+
+    /// Used to allow pre-initialization of some segments.
+    /// Contains `(next_segment - Segment::Code) * (next_segment -
+    /// Segment::TrieData)
+    /// * preinitialized_segments_aux`.
+    pub preinitialized_segments: T,
+
+    /// Used to allow pre-initialization of more segments.
+    /// Contains `(next_segment - Segment::AccountsLinkedList) * (next_segment -
+    /// Segment::StorageLinkedList)`.
+    pub preinitialized_segments_aux: T,
+
+    /// Contains `row_index` + 1 if and only if context `row_index` is stale,
+    /// and zero if not.
+    pub stale_contexts: T,
+
+    /// Flag indicating whether the current context needs to be pruned. It is
+    /// set to 1 when the value in `state_contexts` is non-zero.
+    pub is_pruned: T,
+
+    /// Used for the context pruning lookup.
+    pub stale_context_frequencies: T,
+
+    /// Flag indicating whether the row should be pruned, i.e. whether its
+    /// `addr_context` + 1 is in `state_contexts`.
+    pub is_stale: T,
+
+    /// Flag indicating that a value can potentially be propagated.
+    /// Contains `filter * address_changed * is_not_stale`.
+    pub maybe_in_mem_after: T,
+
+    /// Filter for the `MemAfter` CTL. Is equal to `MAYBE_IN_MEM_AFTER` if
+    /// segment is preinitialized or the value is non-zero, is 0 otherwise.
+    pub mem_after_filter: T,
+
+    /// We use a range check to enforce the ordering.
+    pub range_check: T,
+    /// The counter column (used for the range check) starts from 0 and
+    /// increments.
+    pub counter: T,
+    /// The frequencies column used in logUp.
+    pub frequencies: T,
 }
 
-// Flags to indicate whether this part of the address differs from the next row,
-// and the previous parts do not differ.
-// That is, e.g., `SEGMENT_FIRST_CHANGE` is `F::ONE` iff `ADDR_CONTEXT` is the
-// same in this row and the next, but `ADDR_SEGMENT` is not.
-pub(crate) const CONTEXT_FIRST_CHANGE: usize = VALUE_START + VALUE_LIMBS;
-pub(crate) const SEGMENT_FIRST_CHANGE: usize = CONTEXT_FIRST_CHANGE + 1;
-pub(crate) const VIRTUAL_FIRST_CHANGE: usize = SEGMENT_FIRST_CHANGE + 1;
+/// Total number of columns in `MemoryStark`.
+/// `u8` is guaranteed to have a `size_of` of 1.
+pub(crate) const NUM_COLUMNS: usize = core::mem::size_of::<MemoryColumnsView<u8>>();
 
-// Used to lower the degree of the zero-initializing constraints.
-// Contains `preinitialized_segments * addr_changed * next_is_read`.
-pub(crate) const INITIALIZE_AUX: usize = VIRTUAL_FIRST_CHANGE + 1;
+/// Mapping between [0..NUM_COLUMNS-1] and the memory columns.
+pub(crate) const MEMORY_COL_MAP: MemoryColumnsView<usize> = make_col_map();
 
-// Used to allow pre-initialization of some segments.
-// Contains `(next_segment - Segment::Code) * (next_segment - Segment::TrieData)
-// * preinitialized_segments_aux`.
-pub(crate) const PREINITIALIZED_SEGMENTS: usize = INITIALIZE_AUX + 1;
-
-// Used to allow pre-initialization of more segments.
-// Contains `(next_segment - Segment::AccountsLinkedList) * (next_segment -
-// Segment::StorageLinkedList)`.
-pub(crate) const PREINITIALIZED_SEGMENTS_AUX: usize = PREINITIALIZED_SEGMENTS + 1;
-
-// Contains `row_index` + 1 if and only if context `row_index` is stale,
-// and zero if not.
-pub(crate) const STALE_CONTEXTS: usize = PREINITIALIZED_SEGMENTS_AUX + 1;
-
-// Flag indicating whether the current context needs to be pruned. It is set to
-// 1 when the value in `STALE_CONTEXTS` is non-zero.
-pub(crate) const IS_PRUNED: usize = STALE_CONTEXTS + 1;
-
-// Used for the context pruning lookup.
-pub(crate) const STALE_CONTEXTS_FREQUENCIES: usize = IS_PRUNED + 1;
-
-// Flag indicating whether the row should be pruned, i.e. whether its
-// `ADDR_CONTEXT` + 1 is in `STALE_CONTEXTS`.
-pub(crate) const IS_STALE: usize = STALE_CONTEXTS_FREQUENCIES + 1;
-
-// Flag indicating that a value can potentially be propagated.
-// Contains `filter * address_changed * is_not_stale`.
-pub(crate) const MAYBE_IN_MEM_AFTER: usize = IS_STALE + 1;
-
-// Filter for the `MemAfter` CTL. Is equal to `MAYBE_IN_MEM_AFTER` if segment is
-// preinitialized or the value is non-zero, is 0 otherwise.
-pub(crate) const MEM_AFTER_FILTER: usize = MAYBE_IN_MEM_AFTER + 1;
-
-// We use a range check to enforce the ordering.
-pub(crate) const RANGE_CHECK: usize = MEM_AFTER_FILTER + 1;
-/// The counter column (used for the range check) starts from 0 and increments.
-pub(crate) const COUNTER: usize = RANGE_CHECK + 1;
-/// The frequencies column used in logUp.
-pub(crate) const FREQUENCIES: usize = COUNTER + 1;
-
-pub(crate) const NUM_COLUMNS: usize = FREQUENCIES + 1;
+const fn make_col_map() -> MemoryColumnsView<usize> {
+    let indices_arr = indices_arr::<NUM_COLUMNS>();
+    unsafe { transmute::<[usize; NUM_COLUMNS], MemoryColumnsView<usize>>(indices_arr) }
+}

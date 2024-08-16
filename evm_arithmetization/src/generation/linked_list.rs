@@ -1,26 +1,12 @@
-use std::collections::HashSet;
 use std::fmt;
 
 use anyhow::Result;
-use env_logger::try_init_from_env;
-use env_logger::Env;
-use env_logger::DEFAULT_FILTER_ENV;
-use ethereum_types::{Address, H160, U256};
-use itertools::Itertools;
-use num::traits::ToBytes;
-use plonky2::field::goldilocks_field::GoldilocksField as F;
-use plonky2_maybe_rayon::rayon::iter;
-use rand::{thread_rng, Rng};
+use ethereum_types::U256;
 
-use crate::cpu::kernel::aggregator::KERNEL;
-use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
-use crate::cpu::kernel::interpreter::Interpreter;
 use crate::memory::segments::Segment;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
-use crate::witness::errors::ProverInputError;
 use crate::witness::errors::ProverInputError::InvalidInput;
-use crate::witness::memory::MemoryAddress;
 
 // A linked list implemented using a vector `access_list_mem`.
 // In this representation, the values of nodes are stored in the range
@@ -29,7 +15,6 @@ use crate::witness::memory::MemoryAddress;
 #[derive(Clone)]
 pub(crate) struct LinkedList<'a, const N: usize> {
     mem: &'a [Option<U256>],
-    mem_len: usize,
     offset: usize,
     pos: usize,
 }
@@ -63,7 +48,6 @@ impl<'a, const N: usize> LinkedList<'a, N> {
         }
         Ok(Self {
             mem,
-            mem_len: mem.len(),
             offset: segment as usize,
             pos: 0,
         })
@@ -72,14 +56,14 @@ impl<'a, const N: usize> LinkedList<'a, N> {
 
 impl<'a, const N: usize> fmt::Debug for LinkedList<'a, N> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Linked List {{");
+        writeln!(f, "Linked List {{")?;
         let cloned_list = self.clone();
         for node in cloned_list {
             if node[0] == U256::MAX {
-                writeln!(f, "{:?}", node);
+                writeln!(f, "{:?}", node)?;
                 break;
             }
-            writeln!(f, "{:?} ->", node);
+            writeln!(f, "{:?} ->", node)?;
         }
         write!(f, "}}")
     }

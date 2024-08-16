@@ -18,7 +18,7 @@ use MemoryChannel::{Code, GeneralPurpose, PartialChannel};
 use super::operation::CONTEXT_SCALING_FACTOR;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES, SEGMENT_SCALING_FACTOR};
-use crate::witness::errors::MemoryError::{ContextTooLarge, SegmentTooLarge, VirtTooLarge};
+use crate::witness::errors::MemoryError::SegmentTooLarge;
 use crate::witness::errors::ProgramError;
 use crate::witness::errors::ProgramError::MemoryError;
 
@@ -50,29 +50,6 @@ impl MemoryAddress {
             segment: segment.unscale(),
             virt,
         }
-    }
-
-    pub(crate) fn new_u256s(
-        context: U256,
-        segment: U256,
-        virt: U256,
-    ) -> Result<Self, ProgramError> {
-        if context.bits() > 32 {
-            return Err(MemoryError(ContextTooLarge { context }));
-        }
-        if segment >= Segment::COUNT.into() {
-            return Err(MemoryError(SegmentTooLarge { segment }));
-        }
-        if virt.bits() > 32 {
-            return Err(MemoryError(VirtTooLarge { virt }));
-        }
-
-        // Calling `as_usize` here is safe as those have been checked above.
-        Ok(Self {
-            context: context.as_usize(),
-            segment: segment.as_usize(),
-            virt: virt.as_usize(),
-        })
     }
 
     /// Creates a new `MemoryAddress` from a bundled address fitting a `U256`.

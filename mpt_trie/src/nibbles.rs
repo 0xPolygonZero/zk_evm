@@ -72,7 +72,7 @@ pub trait ToNibbles {
     }
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq, Hash)]
 /// Errors encountered when converting from `Bytes` to `Nibbles`.
 pub enum BytesToNibblesError {
     #[error("Tried constructing `Nibbles` from a zero byte slice")]
@@ -84,7 +84,7 @@ pub enum BytesToNibblesError {
     TooManyBytes(usize),
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq, Hash)]
 /// Errors encountered when converting to hex prefix encoding to nibbles.
 pub enum FromHexPrefixError {
     #[error("Tried to convert a hex prefix byte string into `Nibbles` with invalid flags at the start: {0:#04b}")]
@@ -97,7 +97,7 @@ pub enum FromHexPrefixError {
 }
 
 /// Error type for conversion.
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq, Hash)]
 pub enum NibblesToTypeError {
     #[error("Overflow encountered when converting to U256: {0}")]
     /// Overflow encountered.
@@ -254,7 +254,7 @@ impl From<U256> for NibblesIntern {
     }
 }
 
-#[derive(Copy, Clone, Deserialize, Default, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Copy, Clone, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 /// A sequence of nibbles which is used as the key type into
 /// [`PartialTrie`][`crate::partial_trie::PartialTrie`].
 ///
@@ -323,6 +323,14 @@ impl Debug for Nibbles {
     }
 }
 
+/// While we could just derive `Default` and it would be correct, it's a bit
+/// cleaner to instead call [`Nibbles::new`] explicitly.
+impl Default for Nibbles {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FromStr for Nibbles {
     type Err = StrToNibblesError;
 
@@ -355,6 +363,17 @@ impl UpperHex for Nibbles {
 }
 
 impl Nibbles {
+    /// Create `Nibbles` that is empty.
+    ///
+    /// Note that mean that the key size is `0` and does not mean that the key
+    /// contains the `0` [`Nibble`].
+    pub fn new() -> Self {
+        Self {
+            count: 0,
+            packed: NibblesIntern::default(),
+        }
+    }
+
     /// Creates `Nibbles` from big endian bytes.
     ///
     /// Returns an error if the byte slice is empty or is longer than `32`
@@ -912,7 +931,7 @@ impl Nibbles {
 
     /// Returns a slice of the internal bytes of packed nibbles.
     /// Only the relevant bytes (up to `count` nibbles) are considered valid.
-    pub fn as_byte_slice(&self) -> &[u8] {
+    pub const fn as_byte_slice(&self) -> &[u8] {
         // Calculate the number of full bytes needed to cover 'count' nibbles
         let bytes_needed = (self.count + 1) / 2; // each nibble is half a byte
 

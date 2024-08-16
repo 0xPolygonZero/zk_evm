@@ -9,6 +9,8 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
+directories = "5.0.1"
+
 thiserror = { workspace = true }
 trace_decoder = { workspace = true }
 tracing = { workspace = true }
@@ -23,3 +25,11 @@ futures = { workspace = true }
 tokio = { workspace = true }
 alloy = { workspace = true }
 async-stream = { workspace = true }
+cargo_metadata = { workspace = true }
+vergen = { workspace = true }
+once_cell = { workspace = true }
+
+[build-dependencies]
+cargo_metadata = { workspace = true }
+vergen = { workspace = true }
+anyhow = { workspace = true }

@@ -19,14 +19,13 @@ use evm_arithmetization::{
     generation::TrimmedGenerationInputs,
     proof::AllProof,
     prover::{prove, GenerationSegmentData},
-    AllStark, StarkConfig,
+    AllData, AllStark, StarkConfig,
 };
 use plonky2::{
     field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
     util::timing::TimingTree,
 };
 use proof_gen::{proof_types::GeneratedSegmentProof, prover_state::ProverState, VerifierState};
-use trace_decoder::types::AllData;
 use tracing::info;
 
 use self::circuit::{CircuitConfig, NUM_TABLES};
@@ -130,7 +129,7 @@ pub struct ProverStateManager {
 }
 
 impl ProverStateManager {
-    pub fn with_load_strategy(self, load_strategy: TableLoadStrategy) -> Self {
+    pub const fn with_load_strategy(self, load_strategy: TableLoadStrategy) -> Self {
         match self.persistence {
             CircuitPersistence::None => self,
             CircuitPersistence::Disk(_) => Self {

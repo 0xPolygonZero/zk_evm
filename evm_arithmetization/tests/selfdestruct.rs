@@ -1,12 +1,16 @@
 use std::str::FromStr;
 use std::time::Duration;
 
-use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, BigEndianHash, H256, U256};
+use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::prover::testing::prove_all_segments;
+use evm_arithmetization::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, eth_to_wei,
+    ger_account_nibbles, init_logger, preinitialized_state_and_storage_tries,
+    update_beacon_roots_account_storage, GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
 use hex_literal::hex;
@@ -56,7 +60,8 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         code_hash: keccak(&code),
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
+    let (mut state_trie_before, storage_tries) = preinitialized_state_and_storage_tries()?;
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())?;
     state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
 
@@ -64,7 +69,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         state_trie: state_trie_before,
         transactions_trie: HashedPartialTrie::from(Node::Empty),
         receipts_trie: HashedPartialTrie::from(Node::Empty),
-        storage_tries: vec![],
+        storage_tries,
     };
 
     // Generated using a little py-evm script.
@@ -80,13 +85,22 @@ fn test_selfdestruct() -> anyhow::Result<()> {
         block_chain_id: 1.into(),
         block_base_fee: 0xa.into(),
         block_gas_used: 26002.into(),
-        block_bloom: [0.into(); 8],
+        ..Default::default()
     };
 
-    let contract_code = [(keccak(&code), code), (keccak([]), vec![])].into();
+    let contract_code = [(keccak(&code), code.clone()), (keccak([]), vec![])].into();
 
     let expected_state_trie_after: HashedPartialTrie = {
         let mut state_trie_after = HashedPartialTrie::from(Node::Empty);
+
+        update_beacon_roots_account_storage(
+            &mut beacon_roots_account_storage,
+            block_metadata.block_timestamp,
+            block_metadata.parent_beacon_block_root,
+        )?;
+        let beacon_roots_account =
+            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
         let sender_account_after = AccountRlp {
             nonce: 6.into(),
             balance: eth_to_wei(110_000.into()) - 26_002 * 0xa,
@@ -94,6 +108,25 @@ fn test_selfdestruct() -> anyhow::Result<()> {
             code_hash: keccak([]),
         };
         state_trie_after.insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())?;
+
+        // EIP-6780: The account won't be deleted because it wasn't created during this
+        // transaction.
+        let to_account_before = AccountRlp {
+            nonce: 12.into(),
+            balance: 0.into(),
+            storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+            code_hash: keccak(&code),
+        };
+        state_trie_after.insert(to_nibbles, rlp::encode(&to_account_before).to_vec())?;
+        state_trie_after.insert(
+            beacon_roots_account_nibbles(),
+            rlp::encode(&beacon_roots_account).to_vec(),
+        )?;
+        state_trie_after.insert(
+            ger_account_nibbles(),
+            rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+        )?;
+
         state_trie_after
     };
 
@@ -123,6 +156,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     let inputs = GenerationInputs {
         signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code,
@@ -152,13 +186,4 @@ fn test_selfdestruct() -> anyhow::Result<()> {
     timing.filter(Duration::from_millis(100)).print();
 
     verify_all_proofs(&all_stark, &proofs, &config)
-}
-
-fn eth_to_wei(eth: U256) -> U256 {
-    // 1 ether = 10^18 wei.
-    eth * U256::from(10).pow(18.into())
-}
-
-fn init_logger() {
-    let _ = try_init_from_env(Env::default().filter_or(DEFAULT_FILTER_ENV, "info"));
 }
