@@ -255,7 +255,7 @@ fn create_minimal_partial_tries_needed_by_txn(
     .as_hashed_partial_trie()
     .clone();
 
-    let txn_keys = txn_range.map(|txn_idx| TrieKey::from_txn_ix(txn_idx));
+    let txn_keys = txn_range.map(TrieKey::from_txn_ix);
 
     let transactions_trie = create_trie_subset_wrapped(
         curr_block_tries.txn.as_hashed_partial_trie(),
@@ -355,7 +355,7 @@ fn apply_deltas_to_trie_state(
                 .expect("We should have found a matching transaction")
                 .receipt_node_bytes;
 
-            let (_, _, receipt) = decode_receipt(&last_creation_receipt)
+            let (_, _, receipt) = decode_receipt(last_creation_receipt)
                 .map_err(|_| anyhow!("couldn't RLP-decode receipt node bytes"))?;
 
             if !receipt.status {
@@ -536,11 +536,7 @@ fn process_txn_info(
 
     init_any_needed_empty_storage_tries(
         &mut curr_block_tries.storage,
-        txn_info
-            .nodes_used_by_txn
-            .storage_accesses
-            .iter()
-            .map(|(k, _)| k),
+        txn_info.nodes_used_by_txn.storage_accesses.keys(),
         &txn_info
             .nodes_used_by_txn
             .state_accounts_with_no_accesses_but_storage_tries,
@@ -680,11 +676,11 @@ fn create_minimal_storage_partial_tries<'a>(
         .map(|(h_addr, mem_accesses)| {
             // Guaranteed to exist due to calling `init_any_needed_empty_storage_tries`
             // earlier on.
-            let base_storage_trie = &storage_tries[&h_addr];
+            let base_storage_trie = &storage_tries[h_addr];
 
             let storage_slots_to_not_hash = mem_accesses.iter().cloned().chain(
                 additional_storage_trie_paths_to_not_hash
-                    .get(&h_addr)
+                    .get(h_addr)
                     .into_iter()
                     .flat_map(|slots| slots.iter().cloned()),
             );
