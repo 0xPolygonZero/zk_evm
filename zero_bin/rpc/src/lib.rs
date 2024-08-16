@@ -88,12 +88,11 @@ where
         .into_iter()
         .map(|mut chunk| {
             // We convert to tuple of (current, Option previous block)
-            if let Some(first) = chunk.next() {
-                let second = chunk.next();
-                (first, second)
-            } else {
-                panic!("not possible according to itertools::Iterator::chunks definition")
-            }
+            let first = chunk
+                .next()
+                .expect("must be valid according to itertools::Iterator::chunks definition");
+            let second = chunk.next();
+            (first, second)
         })
         .collect::<Vec<_>>();
 
