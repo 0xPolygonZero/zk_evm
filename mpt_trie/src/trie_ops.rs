@@ -381,7 +381,7 @@ impl<T: PartialTrie> Node<T> {
     pub(crate) fn trie_delete<K>(
         &mut self,
         k: K,
-        orphaned_hash_node_strategy: OnOrphanedHashNode,
+        strategy: OnOrphanedHashNode,
     ) -> TrieOpResult<Option<Vec<u8>>>
     where
         K: Into<Nibbles>,
@@ -389,17 +389,14 @@ impl<T: PartialTrie> Node<T> {
         let k: Nibbles = k.into();
         trace!("Deleting a leaf node with key {} if it exists", k);
 
-        delete_intern(&self.clone(), k, orphaned_hash_node_strategy)?.map_or(
+        delete_intern(&self.clone(), k, strategy)?.map_or(
             Ok(None),
             |(updated_root, deleted_val)| {
                 // Final check at the root if we have an extension node. While this check also
                 // exists as we recursively traverse down the trie, it can not perform this
                 // check on the root node.
-                let wrapped_node = try_collapse_if_extension(
-                    updated_root,
-                    &Nibbles::default(),
-                    orphaned_hash_node_strategy,
-                )?;
+                let wrapped_node =
+                    try_collapse_if_extension(updated_root, &Nibbles::default(), strategy)?;
                 let node_ref: &Node<T> = &wrapped_node;
                 *self = node_ref.clone();
 
@@ -527,7 +524,7 @@ fn insert_into_trie_rec<N: PartialTrie>(
 fn delete_intern<N: PartialTrie>(
     node: &Node<N>,
     mut curr_k: Nibbles,
-    orphaned_hash_node_strategy: OnOrphanedHashNode,
+    strategy: OnOrphanedHashNode,
 ) -> TrieOpResult<Option<(WrappedNode<N>, Vec<u8>)>> {
     match node {
         Node::Empty => {
@@ -544,7 +541,7 @@ fn delete_intern<N: PartialTrie>(
             let nibble = curr_k.pop_next_nibble_front();
             trace!("Delete traversed Branch nibble {:x}", nibble);
 
-            delete_intern(&children[nibble as usize], curr_k, orphaned_hash_node_strategy)?.map_or(Ok(None),
+            delete_intern(&children[nibble as usize], curr_k, strategy)?.map_or(Ok(None),
                 |(updated_child, value_deleted)| {
                     // If the child we recursively called is deleted, then we may need to reduce
                     // this branch to an extension/leaf.
@@ -556,7 +553,7 @@ fn delete_intern<N: PartialTrie>(
 
                             let mut updated_children = children.clone();
                             updated_children[nibble as usize] =
-                                try_collapse_if_extension(updated_child, &curr_k, orphaned_hash_node_strategy)?;
+                                try_collapse_if_extension(updated_child, &curr_k, strategy)?;
                             branch(updated_children, value.clone())
                         }
                         true => {
@@ -591,13 +588,13 @@ fn delete_intern<N: PartialTrie>(
                 .then(|| {
                     curr_k.truncate_n_nibbles_front_mut(ext_nibbles.count);
 
-                    delete_intern(child, curr_k, orphaned_hash_node_strategy).and_then(|res| {
+                    delete_intern(child, curr_k, strategy).and_then(|res| {
                         res.map_or(Ok(None), |(updated_child, value_deleted)| {
                             let updated_node = collapse_ext_node_if_needed(
                                 ext_nibbles,
                                 &updated_child,
                                 &curr_k,
-                                orphaned_hash_node_strategy,
+                                strategy,
                             )?;
                             Ok(Some((updated_node, value_deleted)))
                         })
@@ -618,11 +615,11 @@ fn delete_intern<N: PartialTrie>(
 fn try_collapse_if_extension<N: PartialTrie>(
     node: WrappedNode<N>,
     curr_key: &Nibbles,
-    orphaned_hash_node_strategy: OnOrphanedHashNode,
+    strategy: OnOrphanedHashNode,
 ) -> TrieOpResult<WrappedNode<N>> {
     match node.as_ref() {
         Node::Extension { nibbles, child } => {
-            collapse_ext_node_if_needed(nibbles, child, curr_key, orphaned_hash_node_strategy)
+            collapse_ext_node_if_needed(nibbles, child, curr_key, strategy)
         }
         _ => Ok(node),
     }
@@ -656,7 +653,7 @@ fn collapse_ext_node_if_needed<N: PartialTrie>(
     ext_nibbles: &Nibbles,
     child: &WrappedNode<N>,
     curr_key: &Nibbles,
-    orphaned_hash_node_strategy: OnOrphanedHashNode,
+    strategy: OnOrphanedHashNode,
 ) -> TrieOpResult<WrappedNode<N>> {
     trace!(
         "Collapsing extension node ({:x}) with child {}...",
@@ -677,7 +674,7 @@ fn collapse_ext_node_if_needed<N: PartialTrie>(
             nibbles: leaf_nibbles,
             value,
         } => Ok(leaf(ext_nibbles.merge_nibbles(leaf_nibbles), value.clone())),
-        Node::Hash(h) => match orphaned_hash_node_strategy {
+        Node::Hash(h) => match strategy {
             OnOrphanedHashNode::CollapseToExtension => Ok(extension(*ext_nibbles, child.clone())),
             OnOrphanedHashNode::Reject => Err(TrieOpError::ExtensionCollapsedIntoHashError(
                 curr_key.merge_nibbles(ext_nibbles),

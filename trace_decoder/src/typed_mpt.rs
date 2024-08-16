@@ -7,7 +7,7 @@ use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::{
-    partial_trie::{OnOrphanedHashNode, HashedPartialTrie, Node, PartialTrie as _},
+    partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
     trie_ops::TrieOpError,
 };
 use u4::{AsNibbles, U4};

@@ -51,7 +51,7 @@ pub trait PartialTrie:
 
     /// Creates a new partial trie from a node with a provided collapse
     /// strategy.
-    fn new_with_strategy(n: Node<Self>, orphaned_hash_node_strategy: OnOrphanedHashNode) -> Self;
+    fn new_with_strategy(n: Node<Self>, strategy: OnOrphanedHashNode) -> Self;
 
     /// Inserts a node into the trie.
     fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
@@ -217,7 +217,7 @@ impl PartialTrie for StandardTrie {
 
     // TODO(Robin): Do we ever want to use `StandardTrie` within the other crates?
     // In which case we may want to include the strategy as part of the struct.
-    fn new_with_strategy(n: Node<Self>, _collapse_strategy: OnOrphanedHashNode) -> Self {
+    fn new_with_strategy(n: Node<Self>, _strategy: OnOrphanedHashNode) -> Self {
         Self(n)
     }
 
@@ -315,7 +315,7 @@ pub struct HashedPartialTrie {
     pub(crate) node: Node<HashedPartialTrie>,
     pub(crate) hash: Arc<RwLock<Option<H256>>>,
 
-    pub(crate) orphaned_hash_node_strategy: OnOrphanedHashNode,
+    pub(crate) strategy: OnOrphanedHashNode,
 }
 
 /// How to handle the following subtree on deletion of the indicated node.
@@ -356,18 +356,15 @@ impl PartialTrie for HashedPartialTrie {
         Self {
             node,
             hash: Arc::new(RwLock::new(None)),
-            orphaned_hash_node_strategy: OnOrphanedHashNode::default(),
+            strategy: OnOrphanedHashNode::default(),
         }
     }
 
-    fn new_with_strategy(
-        node: Node<Self>,
-        orphaned_hash_node_strategy: OnOrphanedHashNode,
-    ) -> Self {
+    fn new_with_strategy(node: Node<Self>, strategy: OnOrphanedHashNode) -> Self {
         Self {
             node,
             hash: Arc::new(RwLock::new(None)),
-            orphaned_hash_node_strategy,
+            strategy,
         }
     }
 
@@ -403,7 +400,7 @@ impl PartialTrie for HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        let res = self.node.trie_delete(k, self.orphaned_hash_node_strategy);
+        let res = self.node.trie_delete(k, self.strategy);
         self.set_hash(None);
 
         res
