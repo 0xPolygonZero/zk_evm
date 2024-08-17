@@ -1998,7 +1998,6 @@ dependencies = [
 name = "evm_arithmetization"
 version = "0.4.0"
 dependencies = [
- "alloy-primitives",
  "anyhow",
  "bytes",
  "criterion",

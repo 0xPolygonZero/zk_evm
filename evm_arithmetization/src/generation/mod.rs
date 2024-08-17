@@ -1,14 +1,9 @@
 use std::collections::HashMap;
 
 use keccak_hash::keccak;
-use ::rlp as rlp_crate;
-use anyhow::{anyhow, bail, Context as _, Error};
+use anyhow::{anyhow, Context as _,};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use log::log_enabled;
-use mpt::transaction_testing::{
-    AccessListTransactionRlp, BlobTransactionRlp, FeeMarketTransactionRlp,
-};
-use mpt::LegacyReceiptRlp;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
@@ -18,7 +13,6 @@ use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
-use tiny_keccak::Hasher as _;
 use GlobalMetadata::{
     ReceiptTrieRootDigestAfter, ReceiptTrieRootDigestBefore, StateTrieRootDigestAfter,
     StateTrieRootDigestBefore, TransactionTrieRootDigestAfter, TransactionTrieRootDigestBefore,
@@ -33,7 +27,6 @@ use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_tx
 use crate::memory::segments::Segment;
 use crate::proof::{BlockHashes, BlockMetadata, ExtraBlockData, PublicValues, TrieRoots};
 use crate::util::{h2u, u256_to_usize};
-use crate::witness::errors::ProgramError;
 use crate::witness::memory::{MemoryAddress, MemoryChannel};
 
 pub mod mpt;
@@ -410,8 +403,6 @@ mod test {
 
     #[test]
     fn four_tx_hash() -> anyhow::Result<()> {
-        // Bytes from `curl`` with `eth_getRawTransactionByHash`.
-
         // type 0
         let legacy_txn: Vec<u8> = hex::decode("f902ed82019f850169b62d9a8305833c9477edae6a5f332605720688c7fda7476476e8f83f80b902840938b20b0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000b8cf3bc88f84a2723c12182e87b5c769a1b6f607000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000001ce4f7a715a979f9bbdb2336af0d6204f7c53380000000000000000000000000bcba53e786f120fe39a71051f6bf5b4c2c5104fa0000000000000000000000000000000000000000007ac2f089d0029563794f1b000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000050000000000000000000000000799e39644f207baf37185479e0c23d0e5ed11dcc0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001a0000000000000000000000000000000000000000000000000000000000000024000000000000000000000000000000000000000000000000000000000000000010000000000000000000000001ce4f7a715a979f9bbdb2336af0d6204f7c53380000000000000000000000000b8cf3bc88f84a2723c12182e87b5c769a1b6f607000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000007a250d5630b4cf539739df2c5dacb4c659f2488d000000000000000000000000000000000000000000000000000000000000000026a036b15a66a40fffb09d63dba6214d67a50ec5d04232aa14bb4c110e62303c130da02af7397b8bef4fb36fadcedaeb0874ecd53d26a06ad760e2f179bea0851c5d59").context("Decoding failed.")?;
         let legacy_txn_hash_expected: H256 =
