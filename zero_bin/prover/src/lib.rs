@@ -131,12 +131,12 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
+        _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use std::iter::repeat;
 
-        use futures::StreamExt;
+        use futures::future;
         use paladin::directive::{Directive, IndexedStream};
 
         let ProverConfig {
@@ -155,7 +155,7 @@ impl BlockProverInput {
             |_| unimplemented!(),
         )?;
 
-        let batch_ops = ops::BatchTestOnly {
+        let batch_ops = ops::SegmentProof {
             save_inputs_on_error,
         };
 
@@ -168,17 +168,13 @@ impl BlockProverInput {
             &batch_ops,
         );
 
-        let result = simulation.run(runtime).await?;
-
-        result.collect::<Vec<_>>().await;
+        simulation
+            .run(runtime)
+            .await?
+            .try_for_each(|_| future::ok(()))
+            .await?;
 
         info!("Successfully generated witness for block {block_number}.");
-
-        // Wait for previous block proof
-        let _prev = match previous {
-            Some(it) => Some(it.await?),
-            None => None,
-        };
 
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {

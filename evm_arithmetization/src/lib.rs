@@ -227,5 +227,6 @@ pub use generation::GenerationInputs;
 use prover::GenerationSegmentData;
 pub use starky::config::StarkConfig;
 
-/// All data needed to prove all transaction segments.
-pub type AllData = (TrimmedGenerationInputs, GenerationSegmentData);
+/// Returned type from a `SegmentDataIterator`, needed to prove all segments in
+/// a transaction batch.
+pub type AllData = Result<(TrimmedGenerationInputs, GenerationSegmentData), String>;

@@ -30,6 +30,7 @@ use crate::get_challenges::observe_public_values;
 use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
 use crate::witness::memory::MemoryState;
 use crate::witness::state::RegistersState;
+use crate::AllData;
 
 /// Structure holding the data needed to initialize a segment.
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -526,6 +527,11 @@ pub struct SegmentDataIterator<F: RichField> {
     partial_next_data: Option<GenerationSegmentData>,
 }
 
+pub enum SegmentRunResult {
+    Success(Box<(GenerationSegmentData, Option<GenerationSegmentData>)>),
+    Failure(String),
+}
+
 impl<F: RichField> SegmentDataIterator<F> {
     pub fn new(inputs: &GenerationInputs, max_cpu_len_log: Option<usize>) -> Self {
         debug_inputs(inputs);
@@ -548,7 +554,7 @@ impl<F: RichField> SegmentDataIterator<F> {
     fn generate_next_segment(
         &mut self,
         partial_segment_data: Option<GenerationSegmentData>,
-    ) -> Option<(GenerationSegmentData, Option<GenerationSegmentData>)> {
+    ) -> Option<SegmentRunResult> {
         // Get the (partial) current segment data, if it is provided. Otherwise,
         // initialize it.
         let mut segment_data = if let Some(partial) = partial_segment_data {
@@ -579,7 +585,10 @@ impl<F: RichField> SegmentDataIterator<F> {
             ));
 
             segment_data.registers_after = updated_registers;
-            Some((segment_data, partial_segment_data))
+            Some(SegmentRunResult::Success(Box::new((
+                segment_data,
+                partial_segment_data,
+            ))))
         } else {
             let inputs = &self.interpreter.get_generation_state().inputs;
             let block = inputs.block_metadata.block_number;
@@ -592,25 +601,32 @@ impl<F: RichField> SegmentDataIterator<F> {
                     inputs.txn_number_before + inputs.txn_hashes.len()
                 ),
             };
-            panic!(
+            let s = format!(
                 "Segment generation {:?} for block {:?} ({}) failed with error {:?}",
                 segment_index,
                 block,
                 txn_range,
                 run.unwrap_err()
             );
+            Some(SegmentRunResult::Failure(s))
         }
     }
 }
 
 impl<F: RichField> Iterator for SegmentDataIterator<F> {
-    type Item = (TrimmedGenerationInputs, GenerationSegmentData);
+    type Item = AllData;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((data, next_data)) = self.generate_next_segment(self.partial_next_data.clone())
+        if let Some(segment_run_result) = self.generate_next_segment(self.partial_next_data.clone())
         {
-            self.partial_next_data = next_data;
-            Some((self.interpreter.generation_state.inputs.clone(), data))
+            match segment_run_result {
+                SegmentRunResult::Success(boxed) => {
+                    let (data, next_data) = *boxed;
+                    self.partial_next_data = next_data;
+                    Some(Ok((self.interpreter.generation_state.inputs.clone(), data)))
+                }
+                SegmentRunResult::Failure(error) => Some(Err(error)),
+            }
         } else {
             None
         }
@@ -654,11 +670,12 @@ pub mod testing {
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F>,
     {
-        let data_iterator = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log));
+        let segment_data_iterator = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log));
         let inputs = inputs.trim();
         let mut proofs = vec![];
 
-        for (_, mut next_data) in data_iterator {
+        for segment_run in segment_data_iterator {
+            let (_, mut next_data) = segment_run.map_err(|e| anyhow::format_err!(e))?;
             let proof = prove(
                 all_stark,
                 config,
@@ -676,11 +693,15 @@ pub mod testing {
     pub fn simulate_execution_all_segments<F>(
         inputs: GenerationInputs,
         max_cpu_len_log: usize,
-    ) -> anyhow::Result<()>
+    ) -> Result<()>
     where
         F: RichField,
     {
-        let _ = SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)).collect::<Vec<_>>();
+        for segment in SegmentDataIterator::<F>::new(&inputs, Some(max_cpu_len_log)) {
+            if let Err(e) = segment {
+                return Err(anyhow::format_err!(e));
+            }
+        }
 
         Ok(())
     }
