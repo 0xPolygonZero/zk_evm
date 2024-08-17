@@ -131,7 +131,7 @@ impl BlockProverInput {
     pub async fn prove(
         self,
         runtime: &Runtime,
-        _previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
+        previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use std::iter::repeat;
@@ -175,6 +175,12 @@ impl BlockProverInput {
             .await?;
 
         info!("Successfully generated witness for block {block_number}.");
+
+        // Wait for previous block proof
+        let _prev = match previous {
+            Some(it) => Some(it.await?),
+            None => None,
+        };
 
         // Dummy proof to match expected output type.
         Ok(GeneratedBlockProof {
