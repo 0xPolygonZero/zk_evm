@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use evm_arithmetization::{proof::PublicValues, GenerationInputs};
-use keccak_hash::keccak;
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
@@ -114,10 +113,9 @@ impl TxProofSpan {
     /// Either the hex-encoded hash of the transaction or "Dummy" if the
     /// transaction is not present.
     fn get_descriptor(ir: &GenerationInputs) -> String {
-        ir.signed_txn
-            .as_ref()
-            .map(|txn| format!("{:x}", keccak(txn)))
-            .unwrap_or_else(|| "Dummy".to_string())
+        ir.tx_hash()
+            .map(|hash| format!("{}", hash))
+            .unwrap_or_else(|_| "Dummy".to_string())
     }
 
     /// Create a new transaction proof span.
