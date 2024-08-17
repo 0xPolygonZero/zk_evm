@@ -63,7 +63,7 @@ eth_trie = "0.4.0"
 ethereum-types = "0.14.1"
 futures = "0.3.30"
 hashbrown = "0.14.5"
-hex = "0.4.3"
+hex = { version = "0.4.3", features = ["serde"] }
 hex-literal = "0.4.1"
 impl-codec = "0.6.0"
 impl-num-traits = "0.1.2"
