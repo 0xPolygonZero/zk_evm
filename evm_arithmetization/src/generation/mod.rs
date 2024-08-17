@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use keccak_hash::keccak;
 use ::rlp as rlp_crate;
 use anyhow::{anyhow, bail, Context as _, Error};
 use ethereum_types::{Address, BigEndianHash, H256, U256};
@@ -88,19 +89,7 @@ pub struct GenerationInputs {
 }
 
 pub fn tx_hash(signed_txn: &[u8]) -> anyhow::Result<H256> {
-    let mut hasher = tiny_keccak::Keccak::v256();
-
-    let txn_type = signed_txn.first().context("No transaction type")?;
-    const LEGACY_TXN_TYPE: u8 = 0;
-    if *txn_type != LEGACY_TXN_TYPE {
-        hasher.update(&[*txn_type]);
-    };
-
-    hasher.update(signed_txn);
-    let mut output = [0u8; 32];
-    hasher.finalize(&mut output);
-    let hash = H256::from_slice(output.as_slice());
-
+    let hash = keccak(signed_txn);
     Ok(hash)
 }
 
@@ -415,13 +404,9 @@ pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> an
 #[cfg(test)]
 mod test {
     use std::str::FromStr as _;
-
     use anyhow::Context;
     use keccak_hash::H256;
-
     use crate::generation::tx_hash;
-    // this is just temporary to check that we use the right hash function and parameters (used in reth)
-    use alloy_primitives::keccak256;
 
     #[test]
     fn four_tx_hash() -> anyhow::Result<()> {
@@ -432,11 +417,7 @@ mod test {
         let legacy_txn_hash_expected: H256 =
             H256::from_str("0x081ed7d1da9faaecb12993dea3759c9ad23a5fd5c5600022683611283ac6c0be")?;
         let legacy_txn_hash_actual: H256 = tx_hash(legacy_txn.as_slice())?;
-
-        //assert_eq!(keccak256(legacy_txn.as_slice()), tx_hash(legacy_txn.as_slice().into()));
-
-        // assert_eq!(legacy_txn_hash_expected, legacy_txn_hash_actual);
-
+        assert_eq!(legacy_txn_hash_expected, legacy_txn_hash_actual);
 
         // type 1
         // let accesslist_txn: Vec<u8> = todo!();
@@ -449,8 +430,7 @@ mod test {
         let feemarket_txn_hash_expected: H256 =
             H256::from_str("0x864ae98fa9584d40e02419b74e89ddd16f8d4de155fe3d75b184ef6a4e529ad2")?;
         let feemarket_txn_hash_actual: H256 = tx_hash(feemarket_txn.as_slice())?;
-        // assert_eq!(feemarket_txn_hash_expected, feemarket_txn_hash_actual);
-        assert_eq!(keccak256(feemarket_txn), feemarket_txn_hash_expected.as_bytes());
+        assert_eq!(feemarket_txn_hash_expected, feemarket_txn_hash_actual);
 
         // type 3
         // let blob_txn: Vec<u8> = todo!();
