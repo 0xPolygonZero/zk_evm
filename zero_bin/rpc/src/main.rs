@@ -151,7 +151,7 @@ impl Cli {
                         };
 
                         let block_prover_inputs =
-                            retrieve_block_prover_inputs(cached_provider.clone(), params).await?;
+                            retrieve_block_prover_inputs(cached_provider, params).await?;
 
                         let block_prover_input =
                             block_prover_inputs.into_iter().next().ok_or(anyhow!(
