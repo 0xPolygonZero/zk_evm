@@ -96,7 +96,6 @@ encode_or_hash_concrete_node:
         (node_type, node_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, maybe_hash_node)
     %jump(encode_node)
 maybe_hash_node:
-global debug_habra_cracido:
     // stack: result_addr, result_len, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     DUP2 %lt_const(32)
     %jumpi(pack_small_rlp)
@@ -160,14 +159,10 @@ global encode_node_branch_new:
     // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
 
     // Call encode_or_hash_node on each child 
-    %encode_child_new(0) 
-global debug_esta_complicado:
-    %encode_child_new(1)  %encode_child_new(2)  %encode_child_new(3)
+    %encode_child_new(0)  %encode_child_new(1)  %encode_child_new(2)  %encode_child_new(3)
     %encode_child_new(4)  %encode_child_new(5)  %encode_child_new(6)  %encode_child_new(7)
     %encode_child_new(8)  %encode_child_new(9)  %encode_child_new(10) %encode_child_new(11)
     %encode_child_new(12) %encode_child_new(13) %encode_child_new(14) %encode_child_new(15)
-
-global debug_habra_cambiado_la_mardita:
 
     // stack: rlp_pos', rlp_start, node_payload_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
 
@@ -298,19 +293,16 @@ global encode_node_leaf_new:
     // stack: rlp_start, num_nibbles, packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     %jump(hex_prefix_rlp)
 encode_node_leaf_after_hex_prefix:
-global debug_i_want_to_see_the_stack:
     // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     SWAP5
     // stack: next_addr_ptr, rlp_start, node_payload_ptr, encode_value, cur_len, rlp_pos, next_slot_ptr, next_hash_node_ptr, retdest
     DUP1
-    %next_account
-global debug_next_account:
+    %next_initial_account
     // stakc: next_next_addr_ptr, next_addr_ptr, rlp_start, node_payload_ptr, encode_value, cur_len, rlp_pos, next_slot_ptr, next_hash_node_ptr, retdest
     SWAP6
     SWAP1
     // stack: next_addr_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     %add_const(2) // The initial value pointer starts at index 3.
-global debug_value_ptr_ptr:
     // stack: value_ptr_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     MLOAD_GENERAL
     // stack: value_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
@@ -323,17 +315,14 @@ global debug_value_ptr_ptr:
     // stack: storage_ptr, rlp_pos, rlp_start, value_ptr, encode_value, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     DUP4
     %add_const(2)
-global debug_writting_the_storage_root:
     %mstore_trie_data
 
     %stack (rlp_pos, rlp_start, value_ptr, encode_value, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr)
         -> (encode_value, rlp_pos, value_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, encode_node_leaf_after_encode_value, rlp_start, next_next_addr_ptr)
-global debug_que_pasa_con_la_addres:
     JUMP
 
 //// Up to here
 encode_node_leaf_after_encode_value:
-global debug_que_paso_con_la_esta:
     // stack: rlp_end_pos, cur_len, next_slot_ptr, next_hash_node_ptr, rlp_start, next_next_addr_ptr, retdest
     // `TrieData` holds the node type, the number of nibbles, the nibbles,
     // the pointer to the value and the value.
@@ -346,6 +335,5 @@ global debug_que_paso_con_la_esta:
     %prepend_rlp_list_prefix
     %stack (rlp_prefix_start_pos, rlp_len, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest)
         -> (retdest, rlp_prefix_start_pos, rlp_len, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr)
-global debug_maldita_address_que_crece:
     JUMP
 

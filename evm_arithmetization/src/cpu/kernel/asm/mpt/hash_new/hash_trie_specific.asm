@@ -8,7 +8,6 @@ global mpt_hash_state_trie_new:
     SWAP1
     %first_initial_account
     SWAP1
-global debug_the_ll_ptrs:
     PUSH encode_account_new
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     // stack: node_ptr, encode_account, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
@@ -20,6 +19,11 @@ global debug_the_ll_ptrs:
     SWAP1
     %jump(mpt_hash_state_trie_new)
 %%after:
+    %stack
+        (hash, new_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr) ->
+        (next_addr_ptr, next_slot_ptr, hash, new_len)
+    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
+    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)  
 %endmacro
 
 global mpt_hash_storage_trie_new:
@@ -48,11 +52,9 @@ global encode_account_new:
     // Now, we start the encoding.
     // stack: rlp_addr, value_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
     DUP2 %mload_trie_data // nonce = value[0]
-global debug_nonce:
     %rlp_scalar_len
     // stack: nonce_rlp_len, rlp_addr, value_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
     DUP3 %increment %mload_trie_data // balance = value[1]
-global debug_balance:
     %rlp_scalar_len
     // stack: balance_rlp_len, nonce_rlp_len, rlp_addr, value_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
     PUSH 66 // storage_root and code_hash fields each take 1 + 32 bytes

@@ -295,19 +295,16 @@ global encode_node_leaf_storage:
 encode_node_leaf_after_hex_prefix:
     // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
     SWAP5
-global debug_aqui_esta_el_next_slot:
     // stack: next_slot_ptr, rlp_start, node_payload_ptr, encode_value, cur_len, rlp_pos, next_hash_node_ptr, retdest
     DUP1
-    %next_slot
+    %next_initial_slot
     // stack: next_next_slot_ptr, next_slot_ptr, rlp_start, node_payload_ptr, encode_value, cur_len, rlp_pos, next_hash_node_ptr, retdest
     SWAP6
     SWAP1
     // stack: next_slot_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_slot_ptr, next_hash_node_ptr, retdest
     %add_const(3) // The initial value pointer starts at index 3.
     // stack: value_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_slot_ptr, next_hash_node_ptr, retdest
-global debug_slot_ptr_ptr:
     MLOAD_GENERAL
-global debug_slot_ptr:
     // stack: value, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_next_slot_ptr, next_hash_node_ptr, retdest
     %stack (value, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len)
         -> (encode_value, rlp_pos, value, cur_len, encode_node_leaf_after_encode_value, rlp_start)

@@ -320,6 +320,16 @@ impl<F: Field> GenerationState<F> {
     /// Generates either the next used jump address or the proof for the last
     /// jump address.
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
+        let mem = self
+                .get_generation_state()
+                .memory
+                .get_preinit_memory(Segment::StorageLinkedList);
+        log::debug!("storage = {:?}", {
+            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                &mem,
+                Segment::StorageLinkedList,
+            )
+        });
         match input_fn.0[1].as_str() {
             "insert_account" => self.run_next_insert_account(),
             "remove_account" => self.run_next_remove_account(),

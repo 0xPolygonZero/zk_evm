@@ -174,13 +174,14 @@ global check_state_trie:
 
     // %set_initial_tries
     %get_trie_data_size
+global debug_before_hash_init_trie:
     %mpt_hash_state_trie_new
+global debug_adter_hash_init_trie:
 
     SWAP1 %set_trie_data_size
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
 global debug_check_inital_state_trie:
     %assert_eq
-    %jump(halt)
 
 global check_final_state_trie:
     %set_final_tries
