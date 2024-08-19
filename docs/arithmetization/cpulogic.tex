@@ -11,24 +11,24 @@ In this section, we will detail some of these choices.
 \subsection{Kernel}
 The kernel is in charge of the proving logic. This section aims at providing a high level overview of this logic. For details about any specific part of the logic, one can consult the various ``asm'' files in the \href{https://github.com/0xPolygonZero/plonky2/tree/main/evm/src/cpu/kernel}{``kernel'' folder}.
 
-We prove a batch of transactions, split in segments. These proofs can later be aggregated recursively to prove a block. Proof aggregation is however not in the scope of this section. Here, we assume that we have an initial state of the EVM, and we wish to prove that a batch of (successive) transactions was correctly executed, leading to a correct update of the state.
+We prove a batch of transactions, split into segments. These proofs can later be aggregated recursively to prove a block. Proof aggregation is however not in the scope of this section. Here, we assume that we have an initial state of the EVM, and we wish to prove that a batch of contiguous transactions was correctly executed, leading to a correct update of the state.
 
-Since we process transactions and not full blocks, a few intermediary values need to be provided by the prover. Indeed, to prove that the registers in the EVM state are correctly updated, we need to have access to their initial values. When aggregating proofs, we can also constrain those values to match from one batch to the next. Let us consider the example of the transaction number. Let $n$ be the number of transactions executed so far in the current block. If the current proof is not a dummy one (we are indeed executing a transaction), then the transaction number should be updated: $n := n+k$ with $k$ the number of transactions in the batch. Otherwise, the number remains unchanged. We can easily constrain this update. When aggregating the previous transaction batch proof ($lhs$) with the current one ($rhs$), we also need to check that the output transaction number of $lhs$ is the same as the input transaction number of $rhs$. 
+Since we process transactions and not entire blocks, a few intermediary values need to be provided by the prover. Indeed, to prove that the registers in the EVM state are correctly updated, we need to have access to their initial values. When aggregating proofs, we can also constrain those values to match from one batch to the next. Let us consider the example of the transaction number. Let $n$ be the number of transactions executed so far in the current block. If the current proof is not a dummy one (we are indeed executing a batch of transactions), then the transaction number should be updated: $n := n+k$ with $k$ the number of transactions in the batch. Otherwise, the number remains unchanged. We can easily constrain this update. When aggregating the previous transaction batch proof ($lhs$) with the current one ($rhs$), we also need to check that the output transaction number of $lhs$ is the same as the input transaction number of $rhs$. 
 
 Those prover provided values are stored in memory prior to entering the kernel, and are used in the kernel to assert correct updates. The list of prover provided values necessary to the kernel is the following:
 \begin{enumerate}
-    \item the previous transaction number: $t_n$,
+    \item the number of the last transaction executed: $t_n$,
     \item the gas used before executing the current transactions: $g\_u_0$,
     \item the gas used after executing the current transactions: $g\_u_1$,
     \item the state, transaction and receipts MPTs before executing the current transactions: $\texttt{tries}_0$,
     \item the hash of all MPTs before executing the current transactions: $\texttt{digests}_0$,
     \item the hash of all MPTs after executing the current transactions: $\texttt{digests}_1$,
-    \item the RLP encoding of the transaction.
+    \item the RLP encoding of the transactions.
 \end{enumerate}
 
 \paragraph*{Segment handling:}
-An execution run is split in one or more segments. To ensure continuity, the first cycles of a segment are used to "load" segment data from the previous segment, and the last cycles
-"save" segment data for the next segment. The number of CPU cycles of a segment is bound by \texttt{MAX\_CPU\_CYCLES}, which can be tweaked for bext performance. The segment data values are:
+An execution run is split into one or more segments. To ensure continuity, the first cycles of a segment are used to "load" segment data from the previous segment, and the last cycles to
+"save" segment data for the next segment. The number of CPU cycles of a segment is bounded by \texttt{MAX\_CPU\_CYCLES}, which can be tweaked for best performance. The segment data values are:
 \begin{itemize}
   \item the stack length,
   \item the stack top,
@@ -48,13 +48,12 @@ The initial memory of the first segment is fixed and contains:
 
 \paragraph*{Initialization:} The first step of a run consists in initializing:
 \begin{itemize}
-    \item The initial MPTs: the initial state, transaction and receipt tries $\texttt{tries}_0$ are loaded from memory. The transaction and the receipt tries are hashed and the hashes are then compared to $\texttt{digests}\_0$.
+    \item The initial transaction and receipt tries $\texttt{tries}_0$ are loaded from memory. The transaction and the receipt tries are hashed and the hashes are then compared to $\texttt{digests}\_0$.
 For efficiency, the initial state trie will be hashed for verification at the end of the run.
     \item We load the transaction number $t\_n$ and the current gas used $g\_u_0$ from memory.
 \end{itemize}
 
-We start processing the transactions (if any) sequentially. A transaction is provided as its RLP encoding. We can deduce the various transaction fields (such as its type or the transfer value) from its encoding. Based on this, the kernel updates the state trie by executing the transaction.
-Note that processing the transaction also includes updating the transaction MPT with the transaction at hand.
+We start processing the transactions (if any) sequentially, provided in RLP encoded format.
 
 The processing of the transaction returns a boolean ``success'' that indicates whether the transaction was executed successfully, along with the leftover gas. 
 
@@ -335,9 +334,9 @@ We create a new node, and make it $p$'s successor; then we make $s$ the new node
 \paragraph*{Deletion}
 To delete a node given its index, we provide via \texttt{PROVER\_INPUT} a pointer to its predecessor $p$. We check that $p$'s successor is equal to the node index; if not
 either $p$ is invalid or the node doesn't exist. Then we set $p$'s successor to the node's successor. To indicate that the node is now deleted and to make sure that it's 
-never accessed again, we set its next pointer to MAX. Since it's not a valid address, this value cannot be obtained otherwise.
+never accessed again, we set its next pointer to MAX.
 
-We maintain two linked lists: one for the state accounts and one for the storage cells.
+We maintain two linked lists: one for the state accounts and one for the storage slots.
 
 \subsubsection*{Account linked list}
 

@@ -68,7 +68,7 @@ Since a memory channel can only hold at most one memory operation, every CPU mem
 Note that it doesn't mean that all memory operations have unique timestamps. There are two exceptions:
 
 \begin{itemize}
-  \item Before the CPU cycles, we initialize the memory with the MemBefore values and we write some global metadata. These operations are done at timestamp $\tau = 0$.
+  \item Before the CPU cycles, we preinitialize the memory with the flashed state stored in the MemBefore table and we write some global metadata. These operations are done at timestamp $\tau = 0$.
   \item Some tables other than CPU can generate memory operations, like KeccakSponge. When this happens, these operations all have the timestamp of the CPU row of the instruction which invoked the table (for KeccakSponge, KECCAK\_GENERAL).
 \end{itemize}
 

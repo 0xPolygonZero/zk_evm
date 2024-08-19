@@ -21,10 +21,10 @@ handles initialization (input processing, transaction parsing, transaction trie 
 executing user code (transaction or contract code). In a non-zero user context, syscalls may be executed, which are specific instructions written in the kernel. They don't change the context
 but change the code context, which is where the instructions are read from.
 
-\paragraph*{Continuation}
+\paragraph*{Continuations}
 
 A full run of the zkEVM consists in initializing the zkEVM with the input state, executing a certain number of transactions, and then validating the output state.
-However, for performance reasons, a run is split in multiple segments of at most \texttt{MAX\_CPU\_CYCLES} cycles, which can be proven individually. Continuation ensures that the segments are part of the
+However, for performance reasons, a run is split in multiple segments of at most \texttt{MAX\_CPU\_CYCLES} cycles, which can be proven individually. Continuations ensure that the segments are part of the
 same run and guarantees that the state at the end of a segment is equal to the state at the beginning of the next.
 
 The state to propagate from one segment to another contains some of the zkEVM registers plus the current memory. These registers
