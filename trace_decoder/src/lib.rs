@@ -293,13 +293,12 @@ pub struct BlockLevelData {
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
-    resolve: impl Fn(H256) -> Vec<u8>,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     use anyhow::Context as _;
     use mpt_trie::partial_trie::PartialTrie as _;
 
     use crate::processed_block_trace::{
-        CodeHashResolving, ProcessedBlockTrace, ProcessedBlockTracePreImages,
+        Hash2Code, ProcessedBlockTrace, ProcessedBlockTracePreImages,
     };
     use crate::PartialTriePreImages;
     use crate::{
@@ -406,10 +405,7 @@ pub fn entrypoint(
         code_db
     };
 
-    let mut code_hash_resolver = CodeHashResolving {
-        client_code_hash_resolve_f: |it: &ethereum_types::H256| resolve(*it),
-        extra_code_hash_mappings: code_db,
-    };
+    let mut code_hash_resolver = Hash2Code::new(code_db);
 
     let last_tx_idx = txn_info.len().saturating_sub(1);
 
@@ -437,7 +433,7 @@ pub fn entrypoint(
                 &mut code_hash_resolver,
             )
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
 
     while txn_info.len() < 2 {
         txn_info.insert(0, ProcessedTxnInfo::default());
