@@ -6,12 +6,12 @@ use alloy::providers::Provider;
 use alloy::rpc::types::eth::BlockId;
 use alloy::rpc::types::{BlockNumberOrTag, BlockTransactionsKind};
 use alloy::transports::Transport;
+use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand, ValueHint};
-use evm_arithmetization::GenerationInputs;
 use futures::StreamExt;
 use prover::BlockProverInput;
 use rpc::provider::CachedProvider;
-use rpc::{retry::build_http_retry_provider, RpcType};
+use rpc::{retry::build_http_retry_provider, RpcParams, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
@@ -19,23 +19,13 @@ use zero_bin_common::version;
 use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
 
 #[derive(Args, Clone, Debug)]
-pub(crate) struct Params {
-    // Starting block of interval to fetch
-    #[arg(short, long)]
-    start_block: u64,
-    // End block of interval to fetch
-    #[arg(short, long)]
-    end_block: u64,
+pub(crate) struct RpcConfig {
     /// The RPC URL.
     #[arg(short = 'u', long, value_hint = ValueHint::Url)]
     rpc_url: Url,
     /// The RPC Tracer Type
     #[arg(short = 't', long, default_value = "jerigon")]
     rpc_type: RpcType,
-    /// The checkpoint block number. If not provided,
-    /// block before the `start_block` is the checkpoint
-    #[arg(short, long)]
-    checkpoint_block_number: Option<BlockId>,
     /// Backoff in milliseconds for request retries
     #[arg(long, default_value_t = 0)]
     backoff: u64,
@@ -46,7 +36,18 @@ pub(crate) struct Params {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
-    Fetch {},
+    Fetch {
+        /// Starting block of interval to fetch
+        #[arg(short, long)]
+        start_block: u64,
+        /// End block of interval to fetch
+        #[arg(short, long)]
+        end_block: u64,
+        /// The checkpoint block number. If not provided,
+        /// the block before the `start_block` is the checkpoint
+        #[arg(short, long)]
+        checkpoint_block_number: Option<BlockId>,
+    },
     Extract {
         /// Transaction hash
         #[arg(long, short)]
@@ -57,7 +58,7 @@ pub(crate) enum Command {
 #[derive(Parser)]
 pub(crate) struct Cli {
     #[clap(flatten)]
-    pub(crate) params: Params,
+    pub(crate) config: RpcConfig,
 
     /// Fetch and generate prover input from the RPC endpoint
     #[command(subcommand)]
@@ -66,8 +67,7 @@ pub(crate) struct Cli {
 
 pub(crate) async fn retrieve_block_prover_inputs<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
-    block_interval: BlockInterval,
-    params: &Params,
+    params: RpcParams,
 ) -> Result<Vec<BlockProverInput>, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
@@ -75,7 +75,7 @@ where
 {
     let checkpoint_block_number = params
         .checkpoint_block_number
-        .unwrap_or((params.start_block - 1).into());
+        .unwrap_or_else(|| (params.start_block - 1).into());
 
     // Grab interval checkpoint block state trie
     let checkpoint_state_trie_root = cached_provider
@@ -84,6 +84,7 @@ where
         .header
         .state_root;
 
+    let block_interval = BlockInterval::Range(params.start_block..params.end_block + 1);
     let mut block_prover_inputs = Vec::new();
     let mut block_interval = block_interval.clone().into_bounded_stream()?;
     while let Some(block_num) = block_interval.next().await {
@@ -105,63 +106,75 @@ where
 impl Cli {
     /// Execute the cli command.
     pub async fn execute(self) -> anyhow::Result<()> {
-        let block_interval =
-            BlockInterval::Range(self.params.start_block..self.params.end_block + 1);
-
         let cached_provider = Arc::new(CachedProvider::new(build_http_retry_provider(
-            self.params.rpc_url.clone(),
-            self.params.backoff,
-            self.params.max_retries,
+            self.config.rpc_url.clone(),
+            self.config.backoff,
+            self.config.max_retries,
         )));
 
         match self.command {
-            Command::Fetch {} => {
+            Command::Fetch {
+                start_block,
+                end_block,
+                checkpoint_block_number,
+            } => {
+                let params = RpcParams {
+                    start_block,
+                    end_block,
+                    checkpoint_block_number,
+                    rpc_type: self.config.rpc_type,
+                };
+
                 let block_prover_inputs =
-                    retrieve_block_prover_inputs(cached_provider, block_interval, &self.params)
-                        .await?;
+                    retrieve_block_prover_inputs(cached_provider, params).await?;
                 serde_json::to_writer_pretty(std::io::stdout(), &block_prover_inputs)?;
             }
             Command::Extract { tx } => {
                 let tx_hash: B256 = tx.parse()?;
-                let block_prover_inputs = retrieve_block_prover_inputs(
-                    cached_provider.clone(),
-                    block_interval.clone(),
-                    &self.params,
-                )
-                .await?;
-                let mut extracted_generation_input: Option<GenerationInputs> = None;
+                // Get transaction info
+                match cached_provider
+                    .clone()
+                    .as_provider()
+                    .get_transaction_by_hash(tx_hash)
+                    .await?
+                {
+                    Some(tx_info) => {
+                        let block_number = tx_info
+                            .block_number
+                            .ok_or(anyhow!("Unable to find transaction {}", tx_hash))?;
+                        let params = RpcParams {
+                            start_block: block_number,
+                            end_block: block_number,
+                            checkpoint_block_number: None,
+                            rpc_type: self.config.rpc_type,
+                        };
 
-                // Filter transactions
-                for block_prover_input in block_prover_inputs {
-                    let block_number: u64 = block_prover_input.get_block_number().try_into()?;
-                    let block = cached_provider
-                        .get_block(
-                            BlockId::Number(BlockNumberOrTag::Number(block_number)),
-                            BlockTransactionsKind::Hashes,
-                        )
-                        .await?;
-                    let generation_inputs = trace_decoder::entrypoint(
-                        block_prover_input.block_trace,
-                        block_prover_input.other_data,
-                        |_| unimplemented!(),
-                    )?;
+                        let block_prover_inputs =
+                            retrieve_block_prover_inputs(cached_provider.clone(), params).await?;
 
-                    if let Some((index, _)) = block
-                        .transactions
-                        .hashes()
-                        .enumerate()
-                        .find(|it| *it.1 == tx_hash)
-                    {
-                        extracted_generation_input = generation_inputs.get(index).cloned();
+                        let block_prover_input =
+                            block_prover_inputs.into_iter().next().ok_or(anyhow!(
+                                "Could not retrieve block prover input for block {}",
+                                block_number
+                            ))?;
+
+                        let generation_inputs = trace_decoder::entrypoint(
+                            block_prover_input.block_trace,
+                            block_prover_input.other_data,
+                            |_| unimplemented!(),
+                        )?;
+
+                        if let Some(index) = tx_info.transaction_index {
+                            let extracted_generation_input =
+                                generation_inputs.get(index as usize).cloned();
+                            serde_json::to_writer(std::io::stdout(), &extracted_generation_input)?;
+                        } else {
+                            anyhow::bail!("Invalid transaction index for transaction {}", tx_hash);
+                        }
                     }
-                }
-                if extracted_generation_input.is_some() {
-                    serde_json::to_writer(std::io::stdout(), &extracted_generation_input)?;
-                } else {
-                    println!(
-                        "Transaction {} not found in block interval {}",
-                        tx, block_interval
-                    )
+                    None => {
+                        anyhow::bail!("Unable to find transaction {}", tx_hash);
+                    }
                 }
             }
         }

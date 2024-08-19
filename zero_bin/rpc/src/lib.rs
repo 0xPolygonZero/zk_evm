@@ -34,6 +34,14 @@ pub enum RpcType {
     Native,
 }
 
+#[derive(Clone, Debug, Copy)]
+pub struct RpcParams {
+    pub start_block: u64,
+    pub end_block: u64,
+    pub checkpoint_block_number: Option<BlockId>,
+    pub rpc_type: RpcType,
+}
+
 /// Obtain the prover input for one block
 pub async fn block_prover_input<ProviderT, TransportT>(
     cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
