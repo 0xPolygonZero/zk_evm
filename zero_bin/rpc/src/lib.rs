@@ -17,6 +17,7 @@ pub mod jerigon;
 pub mod native;
 pub mod provider;
 pub mod retry;
+pub mod zeth;
 
 use crate::provider::CachedProvider;
 
@@ -27,6 +28,7 @@ const PREVIOUS_HASHES_COUNT: usize = 256;
 pub enum RpcType {
     Jerigon,
     Native,
+    Zeth,
 }
 
 /// Obtain the prover input for a given block interval
@@ -59,6 +61,10 @@ where
             }
             RpcType::Native => {
                 native::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root)
+                    .await?
+            }
+            RpcType::Zeth => {
+                zeth::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root)
                     .await?
             }
         };
