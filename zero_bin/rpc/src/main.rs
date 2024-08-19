@@ -12,7 +12,6 @@ use futures::StreamExt;
 use prover::BlockProverInput;
 use rpc::provider::CachedProvider;
 use rpc::{retry::build_http_retry_provider, RpcType};
-use serde::{Deserialize, Serialize};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
@@ -103,16 +102,6 @@ where
     Ok(block_prover_inputs)
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-enum ExtractedInfo {
-    Transaction {
-        block_number: u64,
-        txn_index: usize,
-        txn_hash: B256,
-        data: GenerationInputs,
-    }, //TODO Add Batch variant here when feat/continuations are merged
-}
-
 impl Cli {
     /// Execute the cli command.
     pub async fn execute(self) -> anyhow::Result<()> {
@@ -140,7 +129,7 @@ impl Cli {
                     &self.params,
                 )
                 .await?;
-                let mut extracted_transactions: Vec<ExtractedInfo> = Vec::new();
+                let mut extracted_generation_input: Option<GenerationInputs> = None;
 
                 // Filter transactions
                 for block_prover_input in block_prover_inputs {
@@ -157,25 +146,17 @@ impl Cli {
                         |_| unimplemented!(),
                     )?;
 
-                    if let Some((index, hash)) = block
+                    if let Some((index, _)) = block
                         .transactions
                         .hashes()
                         .enumerate()
                         .find(|it| *it.1 == tx_hash)
                     {
-                        extracted_transactions.push(ExtractedInfo::Transaction {
-                            block_number,
-                            txn_index: index,
-                            txn_hash: *hash,
-                            data: generation_inputs
-                                .get(index)
-                                .cloned()
-                                .expect("Existing transaction"),
-                        })
+                        extracted_generation_input = generation_inputs.get(index).cloned();
                     }
                 }
-                if !extracted_transactions.is_empty() {
-                    serde_json::to_writer(std::io::stdout(), &extracted_transactions)?;
+                if extracted_generation_input.is_some() {
+                    serde_json::to_writer(std::io::stdout(), &extracted_generation_input)?;
                 } else {
                     println!(
                         "Transaction {} not found in block interval {}",
