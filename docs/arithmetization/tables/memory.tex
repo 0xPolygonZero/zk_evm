@@ -85,6 +85,7 @@ the post-PUSH PC value).
 \end{itemize}
 
 \subsubsection{Final memory}
+\label{final-memory}
 
 The final value of each cell of the memory must be propagated to the MemAfter table. Since memory operations are ordered by address and by timestamps, this is
 easy to do: the last value of an address is the value of the last row touching this address. In other words, we propagate values of rows before the address changes.
