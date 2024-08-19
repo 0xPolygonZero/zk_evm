@@ -158,7 +158,10 @@ fn observe_burn_addr_target<
 ) where
     C::Hasher: AlgebraicHasher<F>,
 {
-    challenger.observe_elements(&burn_addr.burn_addr);
+    match burn_addr {
+        BurnAddrTarget::BurnAddr(addr) => challenger.observe_elements(&addr),
+        BurnAddrTarget::Burnt() => panic!("There should be an address set in cdk_erigon."),
+    }
 }
 
 fn observe_block_hashes<
@@ -206,7 +209,13 @@ pub(crate) fn observe_public_values<
     #[cfg(feature = "cdk_erigon")]
     {
         observe_extra_block_data::<F, C, D>(challenger, &public_values.extra_block_data)?;
-        observe_burn_addr::<F, C, D>(challenger, public_values.burn_addr)
+
+        observe_burn_addr::<F, C, D>(
+            challenger,
+            public_values
+                .burn_addr
+                .expect("There should be an address set in cdk_erigon."),
+        )
     }
 }
 
@@ -226,7 +235,7 @@ pub(crate) fn observe_public_values_target<
     observe_block_hashes_target::<F, C, D>(challenger, &public_values.block_hashes);
     observe_extra_block_data_target::<F, C, D>(challenger, &public_values.extra_block_data);
     #[cfg(feature = "cdk_erigon")]
-    observe_burn_addr_target::<F, C, D>(challenger, public_values.burn_addr);
+    observe_burn_addr_target::<F, C, D>(challenger, public_values.burn_addr.clone());
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {

@@ -38,11 +38,9 @@ use starky::stark::Stark;
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::generation::GenerationInputs;
 use crate::get_challenges::observe_public_values_target;
-#[cfg(feature = "cdk_erigon")]
-use crate::proof::BurnAddrTarget;
 use crate::proof::{
-    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
-    PublicValues, PublicValuesTarget, TrieRoots, TrieRootsTarget,
+    AllProof, BlockHashesTarget, BlockMetadataTarget, BurnAddrTarget, ExtraBlockData,
+    ExtraBlockDataTarget, PublicValues, PublicValuesTarget, TrieRoots, TrieRootsTarget,
 };
 use crate::prover::{check_abort_signal, prove};
 use crate::recursive_verifier::{
@@ -794,11 +792,11 @@ where
             BurnAddrTarget::connect(
                 &mut builder,
                 lhs_public_values.burn_addr,
-                rhs_public_values.burn_addr,
+                rhs_public_values.burn_addr.clone(),
             );
             BurnAddrTarget::connect(
                 &mut builder,
-                public_values.burn_addr,
+                public_values.burn_addr.clone(),
                 rhs_public_values.burn_addr,
             );
         }
@@ -951,8 +949,16 @@ where
         #[cfg(feature = "cdk_erigon")]
         // Connect the burn address targets.
         {
-            BurnAddrTarget::connect(&mut builder, parent_pv.burn_addr, agg_pv.burn_addr);
-            BurnAddrTarget::connect(&mut builder, public_values.burn_addr, agg_pv.burn_addr);
+            BurnAddrTarget::connect(
+                &mut builder,
+                parent_pv.burn_addr.clone(),
+                agg_pv.burn_addr.clone(),
+            );
+            BurnAddrTarget::connect(
+                &mut builder,
+                public_values.burn_addr.clone(),
+                agg_pv.burn_addr.clone(),
+            );
         }
 
         // Make connections between block proofs, and check initial and final block
@@ -1428,7 +1434,6 @@ where
         let agg_public_values = PublicValues {
             trie_roots_before: lhs_public_values.trie_roots_before,
             trie_roots_after: rhs_public_values.trie_roots_after,
-            #[cfg(feature = "cdk_erigon")]
             burn_addr: lhs_public_values.burn_addr,
             extra_block_data: ExtraBlockData {
                 checkpoint_state_trie_root: lhs_public_values
@@ -1551,16 +1556,20 @@ where
                 nonzero_pis.insert(key, value);
             }
 
-            #[cfg(not(feature = "cdk_erigon"))]
-            let burn_addr_offset = 0;
-            #[cfg(feature = "cdk_erigon")]
-            let burn_addr_offset = BurnAddrTarget::SIZE;
+            let burn_addr_offset = match cfg!(feature = "cdk_erigon") {
+                true => BurnAddrTarget::get_size(),
+                false => 0,
+            };
 
             #[cfg(feature = "cdk_erigon")]
             {
-                let burn_addr_keys =
-                    TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + BurnAddrTarget::SIZE;
-                for (key, &value) in burn_addr_keys.zip_eq(&u256_limbs(public_values.burn_addr)) {
+                let burn_addr_keys = TrieRootsTarget::SIZE * 2
+                    ..TrieRootsTarget::SIZE * 2 + BurnAddrTarget::get_size();
+                for (key, &value) in burn_addr_keys.zip_eq(&u256_limbs(
+                    public_values
+                        .burn_addr
+                        .expect("We should have a burn addr when cdk_erigon is activated"),
+                )) {
                     nonzero_pis.insert(key, value);
                 }
             }

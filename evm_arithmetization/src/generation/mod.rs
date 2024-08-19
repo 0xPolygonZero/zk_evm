@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::anyhow;
-#[cfg(feature = "cdk_erigon")]
 use ethereum_types::H160;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use log::log_enabled;
@@ -55,9 +54,9 @@ pub struct GenerationInputs {
     /// A None would yield an empty proof, otherwise this contains the encoding
     /// of a transaction.
     pub signed_txn: Option<Vec<u8>>,
-    #[cfg(feature = "cdk_erigon")]
     /// Target address for the base fee to be 'burnt', if there is one. If
-    /// `None`, then the base fee is directly burnt.
+    /// `None`, then the base fee is directly burnt. Note: this is only used
+    /// when feature `cdk_erigon` is activated.
     pub burn_addr: Option<H160>,
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
@@ -289,15 +288,20 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         gas_used_after,
     };
 
+    let burn_addr = match cfg!(feature = "cdk_erigon") {
+        true => {
+            if let Some(burn_addr) = inputs.burn_addr {
+                Some(U256::from_big_endian(&burn_addr.0))
+            } else {
+                Some(U256::MAX)
+            }
+        }
+        false => None,
+    };
     let public_values = PublicValues {
         trie_roots_before,
         trie_roots_after,
-        #[cfg(feature = "cdk_erigon")]
-        burn_addr: if let Some(burn_addr) = inputs.burn_addr {
-            U256::from_big_endian(&burn_addr.0)
-        } else {
-            U256::MAX
-        },
+        burn_addr,
         block_metadata: inputs.block_metadata,
         block_hashes: inputs.block_hashes,
         extra_block_data,

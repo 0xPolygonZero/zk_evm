@@ -179,10 +179,14 @@ fn add11_yml() -> anyhow::Result<()> {
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
+
+    let burn_addr = match cfg!(feature = "cdk_erigon") {
+        true => Some(Address::from(beneficiary)),
+        false => None,
+    };
     let inputs = GenerationInputs {
         signed_txn: Some(txn.to_vec()),
-        #[cfg(feature = "cdk_erigon")]
-        burn_addr: Some(Address::from(beneficiary)),
+        burn_addr,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,

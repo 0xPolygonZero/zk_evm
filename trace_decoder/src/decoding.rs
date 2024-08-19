@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Context as _};
-#[cfg(feature = "cdk_erigon")]
 use ethereum_types::H160;
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
 use evm_arithmetization::{
@@ -547,11 +546,14 @@ fn process_txn_info(
         delta_out,
     )?;
 
+    let burn_addr = match cfg!(feature = "cdk_erigon") {
+        // TODO: retrieve the actual burn address from cdk-erigon.
+        true => Some(H160::zero()),
+        false => None,
+    };
     let gen_inputs = GenerationInputs {
         txn_number_before: extra_data.txn_number_before,
-        // TODO: retrieve the actual burn address from cdk-erigon.
-        #[cfg(feature = "cdk_erigon")]
-        burn_addr: Some(H160::zero()),
+        burn_addr,
         gas_used_before: extra_data.gas_used_before,
         gas_used_after: extra_data.gas_used_after,
         signed_txn: txn_info.meta.txn_bytes,

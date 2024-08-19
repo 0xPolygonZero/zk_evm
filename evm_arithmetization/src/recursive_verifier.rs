@@ -34,11 +34,10 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
-#[cfg(feature = "cdk_erigon")]
-use crate::proof::BurnAddrTarget;
 use crate::proof::{
-    BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, ExtraBlockData,
-    ExtraBlockDataTarget, PublicValues, PublicValuesTarget, TrieRoots, TrieRootsTarget,
+    BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, BurnAddrTarget,
+    ExtraBlockData, ExtraBlockDataTarget, PublicValues, PublicValuesTarget, TrieRoots,
+    TrieRootsTarget,
 };
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
@@ -427,13 +426,18 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
     });
 
     #[cfg(feature = "cdk_erigon")]
+    let burn_addr = match public_values.burn_addr {
+        BurnAddrTarget::BurnAddr(addr) => addr,
+        BurnAddrTarget::Burnt() => panic!("There should be an address set in cdk_erigon."),
+    };
+    #[cfg(feature = "cdk_erigon")]
     let mut sum = add_data_write(
         builder,
         challenge,
         sum,
         metadata_segment,
         GlobalMetadata::BurnAddr.unscale(),
-        &public_values.burn_addr.burn_addr,
+        &burn_addr,
     );
 
     block_fields_arrays.map(|(field, targets)| {
@@ -583,7 +587,6 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
 ) -> PublicValuesTarget {
     let trie_roots_before = add_virtual_trie_roots(builder);
     let trie_roots_after = add_virtual_trie_roots(builder);
-    #[cfg(feature = "cdk_erigon")]
     let burn_addr = add_virtual_burn_addr(builder);
     let block_metadata = add_virtual_block_metadata(builder);
     let block_hashes = add_virtual_block_hashes(builder);
@@ -591,7 +594,6 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
     PublicValuesTarget {
         trie_roots_before,
         trie_roots_after,
-        #[cfg(feature = "cdk_erigon")]
         burn_addr,
         block_metadata,
         block_hashes,
@@ -599,12 +601,13 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
     }
 }
 
-#[cfg(feature = "cdk_erigon")]
 pub(crate) fn add_virtual_burn_addr<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> BurnAddrTarget {
-    let burn_addr = builder.add_virtual_public_input_arr();
-    BurnAddrTarget { burn_addr }
+    match cfg!(feature = "cdk_erigon") {
+        true => BurnAddrTarget::BurnAddr(builder.add_virtual_public_input_arr()),
+        false => BurnAddrTarget::Burnt(),
+    }
 }
 
 pub(crate) fn add_virtual_trie_roots<F: RichField + Extendable<D>, const D: usize>(
@@ -732,7 +735,9 @@ where
     set_burn_addr_target(
         witness,
         &public_values_target.burn_addr,
-        public_values.burn_addr,
+        public_values
+            .burn_addr
+            .expect("There should be an address set in cdk_erigon."),
     )?;
 
     Ok(())
@@ -802,8 +807,13 @@ where
     F: RichField + Extendable<D>,
     W: Witness<F>,
 {
-    let burn_addr_limbs: [F; 8] = u256_limbs::<F>(burn_addr);
-    witness.set_target_arr(&burn_addr_target.burn_addr, &burn_addr_limbs);
+    match burn_addr_target {
+        BurnAddrTarget::BurnAddr(addr_target) => {
+            let burn_addr_limbs: [F; 8] = u256_limbs::<F>(burn_addr);
+            witness.set_target_arr(addr_target, &burn_addr_limbs);
+        }
+        BurnAddrTarget::Burnt() => panic!("There should be an address set in cdk_erigon."),
+    }
 
     Ok(())
 }
