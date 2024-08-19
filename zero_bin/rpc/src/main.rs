@@ -139,9 +139,10 @@ impl Cli {
                     .await?
                 {
                     Some(tx_info) => {
-                        let block_number = tx_info
-                            .block_number
-                            .ok_or(anyhow!("Unable to find transaction {}", tx_hash))?;
+                        let block_number = tx_info.block_number.ok_or(anyhow!(
+                            "transaction {} does not have block number",
+                            tx_hash
+                        ))?;
                         let params = RpcParams {
                             start_block: block_number,
                             end_block: block_number,
@@ -154,7 +155,7 @@ impl Cli {
 
                         let block_prover_input =
                             block_prover_inputs.into_iter().next().ok_or(anyhow!(
-                                "Could not retrieve block prover input for block {}",
+                                "error, block prover input for block {} not retrieved",
                                 block_number
                             ))?;
 
@@ -169,11 +170,11 @@ impl Cli {
                                 generation_inputs.get(index as usize).cloned();
                             serde_json::to_writer(std::io::stdout(), &extracted_generation_input)?;
                         } else {
-                            anyhow::bail!("Invalid transaction index for transaction {}", tx_hash);
+                            anyhow::bail!("invalid transaction index for transaction {}", tx_hash);
                         }
                     }
                     None => {
-                        anyhow::bail!("Unable to find transaction {}", tx_hash);
+                        anyhow::bail!("unable to find transaction {}", tx_hash);
                     }
                 }
             }
