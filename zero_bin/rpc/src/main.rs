@@ -26,7 +26,7 @@ pub(crate) struct RpcConfig {
     /// The RPC Tracer Type
     #[arg(short = 't', long, default_value = "jerigon")]
     rpc_type: RpcType,
-    /// Backoff in milliseconds for request retries
+    /// Backoff in milliseconds for retry requests
     #[arg(long, default_value_t = 0)]
     backoff: u64,
     /// The maximum number of retries
