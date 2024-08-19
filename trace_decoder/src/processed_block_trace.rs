@@ -35,11 +35,6 @@ pub(crate) struct ProcessedTxnInfo {
 }
 
 pub(crate) struct CodeHashResolving<F> {
-    /// If we have not seen this code hash before, use the resolve function that
-    /// the client passes down to us. This will likely be an rpc call/cache
-    /// check.
-    pub client_code_hash_resolve_f: F,
-
     /// Code hash mappings that we have constructed from parsing the block
     /// trace. If there are any txns that create contracts, then they will also
     /// get added here as we process the deltas.

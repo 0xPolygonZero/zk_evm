@@ -293,7 +293,6 @@ pub struct BlockLevelData {
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
-    resolve: impl Fn(H256) -> Vec<u8>,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     use anyhow::Context as _;
     use mpt_trie::partial_trie::PartialTrie as _;
