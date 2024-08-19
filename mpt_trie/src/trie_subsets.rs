@@ -12,6 +12,7 @@ use log::trace;
 use thiserror::Error;
 
 use crate::{
+    debug_tools::query::{get_path_from_query, DebugQueryOutput, DebugQueryParamsBuilder},
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
     trie_hashing::EncodedNode,
@@ -21,13 +22,15 @@ use crate::{
 /// The output type of trie_subset operations.
 pub type SubsetTrieResult<T> = Result<T, SubsetTrieError>;
 
-/// Errors that may occur when creating a subset [`PartialTrie`].
+/// We can't construct the error until we unwind the stack from the error
+/// creation site. Once we unwind enough, we convert it to the actual error
+/// type.
+type SubTrieResultIntern<T> = Result<T, ()>;
+
+/// We encountered a `hash` node when marking nodes during sub-trie creation.
 #[derive(Clone, Debug, Error, Hash)]
-pub enum SubsetTrieError {
-    #[error("Tried to mark nodes in a tracked trie for a key that does not exist! (Key: {0}, trie: {1})")]
-    /// The key does not exist in the trie.
-    UnexpectedKey(Nibbles, String),
-}
+#[error("Encountered a hash node when marking nodes to not hash when traversing a key to not hash!\nPath: {0}")]
+pub struct SubsetTrieError(DebugQueryOutput);
 
 #[derive(Debug)]
 enum TrackedNodeIntern<N: PartialTrie> {
@@ -256,8 +259,17 @@ where
     N: PartialTrie,
     K: Into<Nibbles>,
 {
-    for k in keys_involved {
-        mark_nodes_that_are_needed(tracked_trie, &mut k.into())?;
+    for mut k in keys_involved.map(|k| k.into()) {
+        mark_nodes_that_are_needed(tracked_trie, &mut k).map_err(|_| {
+            // We need to unwind back to this callsite in order to produce the actual error.
+            let query = DebugQueryParamsBuilder::default()
+                .print_node_specific_values(true)
+                .build(k);
+
+            let res = get_path_from_query(&tracked_trie.info.underlying_node, query);
+
+            SubsetTrieError(res)
+        })?;
     }
 
     Ok(create_partial_trie_subset_from_tracked_trie(tracked_trie))
@@ -273,7 +285,7 @@ where
 fn mark_nodes_that_are_needed<N: PartialTrie>(
     trie: &mut TrackedNode<N>,
     curr_nibbles: &mut Nibbles,
-) -> SubsetTrieResult<()> {
+) -> SubTrieResultIntern<()> {
     trace!(
         "Sub-trie marking at {:x}, (type: {})",
         curr_nibbles,
@@ -286,10 +298,7 @@ fn mark_nodes_that_are_needed<N: PartialTrie>(
         }
         TrackedNodeIntern::Hash => match curr_nibbles.is_empty() {
             false => {
-                return Err(SubsetTrieError::UnexpectedKey(
-                    *curr_nibbles,
-                    format!("{:?}", trie),
-                ));
+                return Err(());
             }
             true => {
                 trie.info.touched = true;
