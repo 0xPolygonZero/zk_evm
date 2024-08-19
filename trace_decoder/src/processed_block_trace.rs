@@ -1,7 +1,9 @@
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::iter::once;
 
+use anyhow::bail;
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use zk_evm_common::{EMPTY_CODE_HASH, EMPTY_TRIE_HASH};
@@ -34,34 +36,38 @@ pub(crate) struct ProcessedTxnInfo {
     pub meta: TxnMetaState,
 }
 
-pub(crate) struct CodeHashResolving<F> {
-    /// Code hash mappings that we have constructed from parsing the block
-    /// trace. If there are any txns that create contracts, then they will also
-    /// get added here as we process the deltas.
-    pub extra_code_hash_mappings: HashMap<H256, Vec<u8>>,
+/// Code hash mappings that we have constructed from parsing the block
+/// trace.
+/// If there are any txns that create contracts, then they will also
+/// get added here as we process the deltas.
+pub(crate) struct Hash2Code {
+    inner: HashMap<H256, Vec<u8>>,
 }
 
-impl<F: Fn(&H256) -> Vec<u8>> CodeHashResolving<F> {
-    fn resolve(&mut self, c_hash: &H256) -> Vec<u8> {
-        match self.extra_code_hash_mappings.get(c_hash) {
-            Some(code) => code.clone(),
-            None => (self.client_code_hash_resolve_f)(c_hash),
+impl Hash2Code {
+    pub fn new(inner: HashMap<H256, Vec<u8>>) -> Self {
+        Self { inner }
+    }
+    fn resolve(&mut self, c_hash: &H256) -> anyhow::Result<Vec<u8>> {
+        match self.inner.get(c_hash) {
+            Some(code) => Ok(code.clone()),
+            None => bail!("no code for hash {}", c_hash),
         }
     }
 
     fn insert_code(&mut self, c_hash: H256, code: Vec<u8>) {
-        self.extra_code_hash_mappings.insert(c_hash, code);
+        self.inner.insert(c_hash, code);
     }
 }
 
 impl TxnInfo {
-    pub(crate) fn into_processed_txn_info<F: Fn(&H256) -> Vec<u8>>(
+    pub(crate) fn into_processed_txn_info(
         self,
         tries: &PartialTriePreImages,
         all_accounts_in_pre_image: &[(H256, AccountRlp)],
         extra_state_accesses: &[H256],
-        code_hash_resolver: &mut CodeHashResolving<F>,
-    ) -> ProcessedTxnInfo {
+        hash2code: &mut Hash2Code,
+    ) -> anyhow::Result<ProcessedTxnInfo> {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
 
@@ -133,15 +139,15 @@ impl TxnInfo {
             if let Some(c_usage) = trace.code_usage {
                 match c_usage {
                     ContractCodeUsage::Read(c_hash) => {
-                        contract_code_accessed
-                            .entry(c_hash)
-                            .or_insert_with(|| code_hash_resolver.resolve(&c_hash));
+                        if let Entry::Vacant(vacant) = contract_code_accessed.entry(c_hash) {
+                            vacant.insert(hash2code.resolve(&c_hash)?);
+                        }
                     }
                     ContractCodeUsage::Write(c_bytes) => {
                         let c_hash = hash(&c_bytes);
 
                         contract_code_accessed.insert(c_hash, c_bytes.clone());
-                        code_hash_resolver.insert_code(c_hash, c_bytes);
+                        hash2code.insert_code(c_hash, c_bytes);
                     }
                 }
             }
@@ -189,11 +195,11 @@ impl TxnInfo {
             gas_used: self.meta.gas_used,
         };
 
-        ProcessedTxnInfo {
+        Ok(ProcessedTxnInfo {
             nodes_used_by_txn,
             contract_code_accessed,
             meta: new_meta_state,
-        }
+        })
     }
 }
 
