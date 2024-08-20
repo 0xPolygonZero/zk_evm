@@ -115,19 +115,13 @@ impl PublicValues {
     }
 }
 
-/// Memory values which are public.
+/// Memory values which are public once a final block proof is generated.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct FinalPublicValues {
-    /// Trie hashes before the execution of the local state transition
-    pub trie_roots_before: TrieRoots,
-    /// Trie hashes after the execution of the local state transition.
-    pub trie_roots_after: TrieRoots,
-    /// Block metadata: it remains unchanged within a block.
-    pub block_metadata: BlockMetadata,
-    /// 256 previous block hashes and current block's hash.
-    pub block_hashes: BlockHashes,
-    /// Extra block data that is specific to the current proof.
-    pub extra_block_data: ExtraBlockData,
+    /// State trie root before the execution of this global state transition.
+    pub state_trie_root_before: H256,
+    /// State trie root after the execution of this global state transition.
+    pub state_trie_root_after: H256,
 }
 
 impl FinalPublicValues {
@@ -135,33 +129,16 @@ impl FinalPublicValues {
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
-        assert!(
-            PublicValuesTarget::SIZE - 2 * RegistersDataTarget::SIZE - 2 * MemCapTarget::SIZE
-                <= pis.len()
-        );
+        assert!(PublicValuesTarget::SIZE <= pis.len());
 
         let mut offset = 0;
-        let trie_roots_before =
-            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
-        offset += TrieRootsTarget::SIZE;
-        let trie_roots_after =
-            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
-        offset += TrieRootsTarget::SIZE;
-        let block_metadata =
-            BlockMetadata::from_public_inputs(&pis[offset..offset + BlockMetadataTarget::SIZE]);
-        offset += BlockMetadataTarget::SIZE;
-        let block_hashes =
-            BlockHashes::from_public_inputs(&pis[offset..offset + BlockHashesTarget::SIZE]);
-        offset += BlockHashesTarget::SIZE;
-        let extra_block_data =
-            ExtraBlockData::from_public_inputs(&pis[offset..offset + ExtraBlockDataTarget::SIZE]);
+        let state_trie_root_before = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        offset += TrieRootsTarget::SIZE; // skip over txn and receipt tries
+        let state_trie_root_after = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
 
         Self {
-            trie_roots_before,
-            trie_roots_after,
-            block_metadata,
-            block_hashes,
-            extra_block_data,
+            state_trie_root_before,
+            state_trie_root_after,
         }
     }
 }
@@ -169,11 +146,83 @@ impl FinalPublicValues {
 impl From<PublicValues> for FinalPublicValues {
     fn from(value: PublicValues) -> Self {
         Self {
-            trie_roots_before: value.trie_roots_before,
-            trie_roots_after: value.trie_roots_after,
-            block_metadata: value.block_metadata,
-            block_hashes: value.block_hashes,
-            extra_block_data: value.extra_block_data,
+            state_trie_root_before: value.trie_roots_before.state_root,
+            state_trie_root_after: value.trie_roots_after.state_root,
+        }
+    }
+}
+
+/// Memory values which are public once a final block proof is generated.
+/// Note: All the larger integers are encoded with 32-bit limbs in little-endian
+/// order.
+#[derive(Eq, PartialEq, Debug)]
+pub struct FinalPublicValuesTarget {
+    /// State trie root before the execution of this global state transition.
+    pub state_trie_root_before: [Target; TARGET_HASH_SIZE],
+    /// State trie root after the execution of this global state transition.
+    pub state_trie_root_after: [Target; TARGET_HASH_SIZE],
+}
+
+impl FinalPublicValuesTarget {
+    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 2;
+
+    /// Serializes public value targets.
+    pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        buffer.write_target_array(&self.state_trie_root_before)?;
+        buffer.write_target_array(&self.state_trie_root_after)?;
+
+        Ok(())
+    }
+
+    /// Deserializes public value targets.
+    pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let state_trie_root_before = buffer.read_target_array()?;
+        let state_trie_root_after = buffer.read_target_array()?;
+
+        Ok(Self {
+            state_trie_root_before,
+            state_trie_root_after,
+        })
+    }
+
+    /// Extracts public value `Target`s from the given public input `Target`s.
+    /// Public values are always the first public inputs added to the circuit,
+    /// so we can start extracting at index 0.
+    pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
+        assert!(pis.len() >= Self::SIZE);
+
+        let mut offset = 0;
+        let state_trie_root_before = pis[offset..offset + TARGET_HASH_SIZE].try_into().unwrap();
+        offset += TARGET_HASH_SIZE;
+        let state_trie_root_after = pis[offset..offset + TARGET_HASH_SIZE].try_into().unwrap();
+        Self {
+            state_trie_root_before,
+            state_trie_root_after,
+        }
+    }
+
+    /// Returns the public values in `pv0` or `pv1` depending on `condition`.
+    pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        pv0: Self,
+        pv1: Self,
+    ) -> Self {
+        Self {
+            state_trie_root_before: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    pv0.state_trie_root_before[i],
+                    pv1.state_trie_root_before[i],
+                )
+            }),
+            state_trie_root_after: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    pv0.state_trie_root_after[i],
+                    pv1.state_trie_root_after[i],
+                )
+            }),
         }
     }
 }
@@ -419,6 +468,7 @@ pub struct MemCap {
     /// STARK cap.
     pub mem_cap: Vec<[U256; NUM_HASH_OUT_ELTS]>,
 }
+
 impl MemCap {
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         let mem_cap = (0..DEFAULT_CAP_LEN)
