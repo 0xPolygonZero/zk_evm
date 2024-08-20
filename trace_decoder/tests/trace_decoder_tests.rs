@@ -83,7 +83,6 @@ fn decode_generation_inputs(
         block_prover_input.block_trace,
         block_prover_input.other_data.clone(),
         3,
-        |_| unimplemented!(),
     )
     .context(format!(
         "Failed to execute trace decoder on block {}",

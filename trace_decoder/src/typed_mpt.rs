@@ -7,7 +7,7 @@ use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::{
-    partial_trie::{HashedPartialTrie, Node, PartialTrie as _},
+    partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
     trie_ops::TrieOpError,
 };
 use u4::{AsNibbles, U4};
@@ -243,6 +243,14 @@ pub struct StateTrie {
 }
 
 impl StateTrie {
+    pub fn new(strategy: OnOrphanedHashNode) -> Self {
+        Self {
+            typed: TypedMpt {
+                inner: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
+                _ty: PhantomData,
+            },
+        }
+    }
     pub fn insert_by_address(
         &mut self,
         address: Address,
@@ -319,6 +327,11 @@ pub struct StorageTrie {
     untyped: HashedPartialTrie,
 }
 impl StorageTrie {
+    pub fn new(strategy: OnOrphanedHashNode) -> Self {
+        Self {
+            untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
+        }
+    }
     pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
         let prev = self.untyped.get(key.into_nibbles()).map(Vec::from);
         self.untyped
