@@ -165,7 +165,7 @@ global check_receipt_trie:
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_AFTER)   %assert_eq
 global check_state_trie:
     // First, check initial trie.
-    PROVER_INPUT(trie_ptr::state)
+    PROVER_INPUT(trie_ptr::inital_state)
 
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
 
@@ -184,8 +184,9 @@ global debug_check_inital_state_trie:
     %assert_eq
 
 global check_final_state_trie:
-    %set_final_tries
-    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
+    %mpt_hash_state_trie_final  
+    
+    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
     // We don't need the trie data length here.
     POP
 

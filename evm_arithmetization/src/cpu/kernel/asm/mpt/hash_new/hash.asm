@@ -79,7 +79,7 @@ global encode_or_hash_node_new:
     SWAP1
     // stack: next_hash_node_ptr, cur_len, next_addr_ptr, next_slot_ptr, next_next_hash_node_ptr, ret_dest
     // TODO: Check the nibbles of hash nodes
-    %increment // Skip over the hash nodes nibbles
+    %add_const(2) // Skip over the hash nodes nibbles and is_account flag
     // stack: hash_ptr, cur_len, next_addr_ptr, next_slot_ptr, next_next_hash_node_ptr, ret_dest
     MLOAD_GENERAL
     // stack: hash, cur_len, next_addr_ptr, next_slot_ptr, next_next_hash_node_ptr, ret_dest

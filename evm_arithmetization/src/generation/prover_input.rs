@@ -12,7 +12,7 @@ use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::LinkedList;
-use super::mpt::load_state_mpt;
+use super::mpt::{load_final_state_mpt, load_state_mpt};
 use super::state::State;
 use super::trie_extractor::get_state_trie;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
@@ -87,7 +87,7 @@ impl<F: Field> GenerationState<F> {
     fn run_trie_ptr(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let trie = input_fn.0[1].as_str();
         match trie {
-            "state" => self
+            "initial_state" => self
                 .trie_root_ptrs
                 .state_root_ptr
                 .map_or_else(
@@ -108,6 +108,36 @@ impl<F: Field> GenerationState<F> {
                     Ok,
                 )
                 .map(U256::from),
+            "final_state" => {
+                let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
+                let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
+                let accounts_linked_list =
+                    LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                        &storage_mem,
+                        Segment::StorageLinkedList,
+                    )?;
+                let mut storage_linked_list =
+                    LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
+                        &storage_mem,
+                        Segment::StorageLinkedList,
+                    )?;
+                let hashed_nodes = self.memory.get_preinit_memory(Segment::HashedNodes);
+
+                let n = load_final_state_mpt(
+                    accounts_linked_list,
+                    &mut storage_linked_list,
+                    hashed_nodes,
+                    &mut new_content,
+                );
+
+                self.memory.insert_preinitialized_segment(
+                    Segment::TrieData,
+                    crate::witness::memory::MemorySegmentState {
+                        content: new_content,
+                    },
+                );
+                n.map(U256::from)
+            }
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             "trie_data_size" => Ok(self
@@ -321,9 +351,9 @@ impl<F: Field> GenerationState<F> {
     /// jump address.
     fn run_linked_list(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         let mem = self
-                .get_generation_state()
-                .memory
-                .get_preinit_memory(Segment::StorageLinkedList);
+            .get_generation_state()
+            .memory
+            .get_preinit_memory(Segment::StorageLinkedList);
         log::debug!("storage = {:?}", {
             LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
                 &mem,
@@ -372,8 +402,8 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    /// Append either all the state or storage hashed nodes to, respectively, the AccountsLinkedList or
-    /// StorageLinkedList segments.
+    /// Append either all the state or storage hashed nodes to, respectively,
+    /// the AccountsLinkedList or StorageLinkedList segments.
     fn run_hash_nodes(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[1].as_str() {
             "accounts" => self.run_accounts_hashed_nodes(),
@@ -382,12 +412,14 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    /// Append all the state hashed nodes to the AccountsLinkedList segment and returns its length.
+    /// Append all the state hashed nodes to the AccountsLinkedList segment and
+    /// returns its length.
     fn run_accounts_hashed_nodes(&mut self) -> Result<U256, ProgramError> {
         unimplemented!()
     }
 
-    /// Append all the storage hashed nodes to the StorageLinkedList segment and returns its length.
+    /// Append all the storage hashed nodes to the StorageLinkedList segment and
+    /// returns its length.
     fn run_storage_hashed_nodes(&mut self) -> Result<U256, ProgramError> {
         unimplemented!()
     }

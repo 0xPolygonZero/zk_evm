@@ -925,6 +925,6 @@ remove_all_slots_end:
 
 %macro next_hash_node
     // stack: hash_node_ptr
-    %add_const(2)
+    %add_const(3)
     // stack: next_hash_node_ptr
 %endmacro
