@@ -527,10 +527,11 @@ pub struct SegmentDataIterator<F: RichField> {
     partial_next_data: Option<GenerationSegmentData>,
 }
 
-pub enum SegmentRunResult {
-    Success(Box<(GenerationSegmentData, Option<GenerationSegmentData>)>),
-    Failure(String),
-}
+pub type SegmentRunResult = Option<Box<(GenerationSegmentData, Option<GenerationSegmentData>)>>;
+
+#[derive(thiserror::Error, Debug, Serialize, Deserialize)]
+#[error("{}", .0)]
+pub struct SegmentError(pub String);
 
 impl<F: RichField> SegmentDataIterator<F> {
     pub fn new(inputs: &GenerationInputs, max_cpu_len_log: Option<usize>) -> Self {
@@ -554,12 +555,12 @@ impl<F: RichField> SegmentDataIterator<F> {
     fn generate_next_segment(
         &mut self,
         partial_segment_data: Option<GenerationSegmentData>,
-    ) -> Option<SegmentRunResult> {
+    ) -> Result<SegmentRunResult, SegmentError> {
         // Get the (partial) current segment data, if it is provided. Otherwise,
         // initialize it.
         let mut segment_data = if let Some(partial) = partial_segment_data {
             if partial.registers_after.program_counter == KERNEL.global_labels["halt"] {
-                return None;
+                return Ok(None);
             }
             self.interpreter
                 .get_mut_generation_state()
@@ -585,10 +586,7 @@ impl<F: RichField> SegmentDataIterator<F> {
             ));
 
             segment_data.registers_after = updated_registers;
-            Some(SegmentRunResult::Success(Box::new((
-                segment_data,
-                partial_segment_data,
-            ))))
+            Ok(Some(Box::new((segment_data, partial_segment_data))))
         } else {
             let inputs = &self.interpreter.get_generation_state().inputs;
             let block = inputs.block_metadata.block_number;
@@ -608,7 +606,7 @@ impl<F: RichField> SegmentDataIterator<F> {
                 txn_range,
                 run.unwrap_err()
             );
-            Some(SegmentRunResult::Failure(s))
+            Err(SegmentError(s))
         }
     }
 }
@@ -617,18 +615,22 @@ impl<F: RichField> Iterator for SegmentDataIterator<F> {
     type Item = AllData;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(segment_run_result) = self.generate_next_segment(self.partial_next_data.clone())
-        {
-            match segment_run_result {
-                SegmentRunResult::Success(boxed) => {
+        let run = self.generate_next_segment(self.partial_next_data.clone());
+
+        if let Ok(segment_run) = run {
+            match segment_run {
+                // The run was valid, but didn't not consume the payload fully.
+                Some(boxed) => {
                     let (data, next_data) = *boxed;
                     self.partial_next_data = next_data;
                     Some(Ok((self.interpreter.generation_state.inputs.clone(), data)))
                 }
-                SegmentRunResult::Failure(error) => Some(Err(error)),
+                // The payload was fully consumed.
+                None => None,
             }
         } else {
-            None
+            // The run encountered some error.
+            Some(Err(run.unwrap_err()))
         }
     }
 }

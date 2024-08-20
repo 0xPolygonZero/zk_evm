@@ -224,9 +224,9 @@ pub type BlockHeight = u64;
 pub use all_stark::AllStark;
 pub use fixed_recursive_verifier::AllRecursiveCircuits;
 pub use generation::GenerationInputs;
-use prover::GenerationSegmentData;
+use prover::{GenerationSegmentData, SegmentError};
 pub use starky::config::StarkConfig;
 
 /// Returned type from a `SegmentDataIterator`, needed to prove all segments in
 /// a transaction batch.
-pub type AllData = Result<(TrimmedGenerationInputs, GenerationSegmentData), String>;
+pub type AllData = Result<(TrimmedGenerationInputs, GenerationSegmentData), SegmentError>;

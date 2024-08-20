@@ -38,7 +38,7 @@ impl Operation for SegmentProof {
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
         let all_data =
-            all_data.map_err(|err| FatalError::from_str(&err, FatalStrategy::Terminate))?;
+            all_data.map_err(|err| FatalError::from_str(&err.0, FatalStrategy::Terminate))?;
 
         let input = all_data.0.clone();
         let segment_index = all_data.1.segment_index();
