@@ -68,7 +68,7 @@ Since a memory channel can only hold at most one memory operation, every CPU mem
 Note that it doesn't mean that all memory operations have unique timestamps. There are two exceptions:
 
 \begin{itemize}
-  \item Before the CPU cycles, we write some global metadata in memory. These extra operations are done at timestamp $\tau = 0$.
+  \item Before the CPU cycles, we preinitialize the memory with the flashed state stored in the MemBefore table and we write some global metadata. These operations are done at timestamp $\tau = 0$.
   \item Some tables other than CPU can generate memory operations, like KeccakSponge. When this happens, these operations all have the timestamp of the CPU row of the instruction which invoked the table (for KeccakSponge, KECCAK\_GENERAL).
 \end{itemize}
 
@@ -77,11 +77,22 @@ Note that it doesn't mean that all memory operations have unique timestamps. The
 By default, all memory is zero-initialized. However, to save numerous writes, we allow some specific segments to be initialized with arbitrary values.
 
 \begin{itemize}
-  \item The read-only kernel code (in segment 0, context 0) is initialized with its correct values. It's checked by hashing the segment and verifying
-that the hash value matches a verifier-provided one.
-  \item The code segment (segment 0) in other contexts is initialized with externally-provided account code, then checked against the account code hash.
-If the code is meant to be executed, there is a soundness concern: if the code is malformed and ends with an incomplete PUSH, then the missing bytes must
+  \item The code segment (segment 0) is either part of the initial memory for the kernel (context 0), or is initialized with externally-provided account code, then checked against the account code hash.
+In non-zero contexts, if the code is meant to be executed, there is a soundness concern: if the code is malformed and ends with an incomplete PUSH, then the missing bytes must
 be 0 accordingly to the Ethereum specs. To prevent the issue, we manually write 33 zeros (at most 32 bytes for the PUSH argument, and an extra one for
 the post-PUSH PC value).
   \item The ``TrieData'' segment is initialized with the input tries. The stored tries are hashed and checked against the provided initial hash. Note that the length of the segment and the pointers -- within the ``TrieData'' segment -- for the three tries are provided as prover inputs. The length is then checked against a value computed when hashing the tries.
 \end{itemize}
+
+\subsubsection{Final memory}
+\label{final-memory}
+
+The final value of each cell of the memory must be propagated to the MemAfter table. Since memory operations are ordered by address and by timestamps, this is
+easy to do: the last value of an address is the value of the last row touching this address. In other words, we propagate values of rows before the address changes.
+
+\paragraph*{Context pruning}
+\label{context-pruning}
+
+We can observe that whenever we return from a context (e.g. with a RETURN opcode, from an exception...), we will never access it again and all its memory is now stale.
+We make use of this fact to prune stale contexts and exclude them from MemAfter.
+
