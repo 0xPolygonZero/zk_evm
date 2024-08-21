@@ -256,8 +256,10 @@ impl StateTrie {
         address: Address,
         account: AccountRlp,
     ) -> Result<Option<AccountRlp>, Error> {
+        #[allow(deprecated)]
         self.insert_by_key(TrieKey::from_address(address), account)
     }
+    #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
     pub fn insert_by_key(
         &mut self,
         key: TrieKey,
@@ -268,11 +270,9 @@ impl StateTrie {
     pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
         self.typed.insert_hash(key, hash)
     }
-    pub fn get_by_key(&self, key: TrieKey) -> Option<AccountRlp> {
-        self.typed.get(key)
-    }
     pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.get_by_key(TrieKey::from_hash(keccak_hash::keccak(address)))
+        self.typed
+            .get(TrieKey::from_hash(keccak_hash::keccak(address)))
     }
     pub fn root(&self) -> H256 {
         self.typed.root()
@@ -286,13 +286,13 @@ impl StateTrie {
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         self.typed.as_mut_hashed_partial_trie_unchecked()
     }
-    pub fn remove(&mut self, key: TrieKey) -> Result<Option<AccountRlp>, Error> {
-        self.typed.remove(key)
+    pub fn remove_address(&mut self, address: Address) -> Result<Option<AccountRlp>, Error> {
+        self.typed.remove(TrieKey::from_address(address))
     }
-    pub fn contains(&self, key: TrieKey) -> bool {
+    pub fn contains_address(&self, address: Address) -> bool {
         self.typed
             .as_hashed_partial_trie()
-            .contains(key.into_nibbles())
+            .contains(TrieKey::from_address(address).into_nibbles())
     }
     /// This allows users to break the [`TypedMpt`] invariant.
     /// If data that isn't a [`rlp::encode`]-ed [`AccountRlp`] is inserted,
