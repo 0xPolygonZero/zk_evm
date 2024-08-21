@@ -315,6 +315,8 @@ pub fn entrypoint(
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
+                                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+                                #[allow(deprecated)]
                                 acc.insert_by_key(
                                     path,
                                     rlp::decode(&bytes)
@@ -413,7 +415,7 @@ pub fn entrypoint(
                     .b_data
                     .withdrawals
                     .iter()
-                    .map(|(addr, _)| crate::hash(addr.as_bytes()))
+                    .map(|(addr, _)| *addr)
                     .collect::<Vec<_>>()
             } else {
                 Vec::new()

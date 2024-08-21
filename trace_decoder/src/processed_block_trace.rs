@@ -74,7 +74,7 @@ impl TxnInfo {
         self,
         tries: &PartialTriePreImages,
         all_accounts_in_pre_image: &[(H256, AccountRlp)],
-        extra_state_accesses: &[H256],
+        extra_state_accesses: &[Address],
         hash2code: &mut Hash2Code,
     ) -> anyhow::Result<ProcessedTxnInfo> {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
@@ -126,9 +126,7 @@ impl TxnInfo {
 
             if state_write != StateWrite::default() {
                 // a write occurred
-                nodes_used_by_txn
-                    .state_writes
-                    .push((hashed_addr, state_write))
+                nodes_used_by_txn.state_writes.push((addr, state_write))
             }
 
             let is_precompile = (FIRST_PRECOMPILE_ADDRESS..LAST_PRECOMPILE_ADDRESS)
@@ -138,13 +136,8 @@ impl TxnInfo {
             // nodes if the transaction calling them reverted. If this is the case, we
             // shouldn't include them in this transaction's `state_accesses` to allow the
             // decoder to build a minimal state trie without hitting any hash node.
-            if !is_precompile
-                || tries
-                    .state
-                    .get_by_key(TrieKey::from_hash(hashed_addr))
-                    .is_some()
-            {
-                nodes_used_by_txn.state_accesses.push(hashed_addr);
+            if !is_precompile || tries.state.get_by_address(addr).is_some() {
+                nodes_used_by_txn.state_accesses.push(addr);
             }
 
             match code_usage {
@@ -211,8 +204,8 @@ fn check_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    pub state_accesses: Vec<H256>,
-    pub state_writes: Vec<(H256, StateWrite)>,
+    pub state_accesses: Vec<Address>,
+    pub state_writes: Vec<(Address, StateWrite)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
     pub storage_accesses: Vec<(H256, Vec<TrieKey>)>,

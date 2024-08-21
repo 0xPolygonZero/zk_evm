@@ -252,7 +252,7 @@ fn create_minimal_partial_tries_needed_by_txn(
 ) -> anyhow::Result<TrieInputs> {
     let state_trie = create_minimal_state_partial_trie(
         &curr_block_tries.state,
-        nodes_used_by_txn.state_accesses.iter().cloned(),
+        nodes_used_by_txn.state_accesses.iter().map(hash),
         delta_application_out
             .additional_state_trie_paths_to_not_hash
             .into_iter(),
@@ -332,18 +332,12 @@ fn apply_deltas_to_trie_state(
         }
     }
 
-    for (hashed_acc_addr, s_trie_writes) in &deltas.state_writes {
-        let val_k = TrieKey::from_hash(*hashed_acc_addr);
-
+    for (addr, s_trie_writes) in &deltas.state_writes {
         // If the account was created, then it will not exist in the trie yet.
-        let is_created = !trie_state.state.contains(val_k);
-        let mut account = trie_state.state.get_by_key(val_k).unwrap_or_default();
+        let is_created = !trie_state.state.contains_address(*addr);
+        let mut account = trie_state.state.get_by_address(*addr).unwrap_or_default();
 
-        s_trie_writes.apply_writes_to_state_node(
-            &mut account,
-            hashed_acc_addr,
-            &trie_state.storage,
-        )?;
+        s_trie_writes.apply_writes_to_state_node(&mut account, &hash(addr), &trie_state.storage)?;
 
         if is_created {
             // If the account did not exist prior this transaction, we
@@ -355,12 +349,12 @@ fn apply_deltas_to_trie_state(
 
             if !receipt.status {
                 // The transaction failed, hence any created account should be removed.
-                trie_state.state.remove(val_k)?;
-                trie_state.storage.remove(hashed_acc_addr);
+                trie_state.state.remove_address(*addr)?;
+                trie_state.storage.remove(&hash(addr));
                 continue;
             }
         }
-        trie_state.state.insert_by_key(val_k, account)?;
+        trie_state.state.insert_by_address(*addr, account)?;
     }
 
     // Remove any accounts that self-destructed.
