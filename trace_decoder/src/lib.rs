@@ -388,15 +388,6 @@ pub fn entrypoint(
         .map(|(addr, data)| (addr.into_hash_left_padded(), data))
         .collect::<Vec<_>>();
 
-    for (hash, code) in code_db.clone().unwrap_or_default().into_iter().chain(
-        pre_images
-            .extra_code_hash_mappings
-            .clone()
-            .unwrap_or_default(),
-    ) {
-        assert_eq!(self::hash(code), hash);
-    }
-
     // Note we discard any user-provided hashes.
     let mut hash2code = code_db
         .unwrap_or_default()
