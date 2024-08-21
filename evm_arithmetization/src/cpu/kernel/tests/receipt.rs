@@ -523,6 +523,7 @@ fn test_mpt_insert_receipt() -> Result<()> {
 
     // Finally, check that the hashes correspond.
     let mpt_hash_receipt = KERNEL.global_labels["mpt_hash_receipt_trie"];
+    let initial_rlp_addr = Segment::RlpRaw as usize + 1;
     interpreter.generation_state.registers.program_counter = mpt_hash_receipt;
     interpreter
         .push(retdest)
@@ -531,6 +532,9 @@ fn test_mpt_insert_receipt() -> Result<()> {
         .push(1.into()) // Initial length of the trie data segment, unused.; // Initial length of the trie data
         // segment, unused.
         .expect("The stack should not overflow");
+    interpreter
+        .push(initial_rlp_addr.into()) // rlp_start
+        .expect("The stack should not overflow.");
     interpreter.run()?;
     assert_eq!(
         interpreter.stack()[1],

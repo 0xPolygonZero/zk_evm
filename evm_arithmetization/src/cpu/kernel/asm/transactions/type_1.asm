@@ -8,6 +8,11 @@
 
 global process_type_1_txn:
     // stack: rlp_addr, retdest
+    // Store txn type.
+    PUSH 1
+    %mstore_txn_field(@TXN_FIELD_TYPE)
+
+    // stack: rlp_addr, retdest
     // Initial rlp address offset of 1 (skipping over the 0x01 byte)
     %add_const(1)
     // stack: rlp_addr, retdest

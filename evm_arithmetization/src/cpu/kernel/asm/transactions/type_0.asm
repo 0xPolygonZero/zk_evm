@@ -13,6 +13,11 @@
 
 global process_type_0_txn:
     // stack: rlp_addr, retdest
+    // Store txn type.
+    PUSH 0
+    %mstore_txn_field(@TXN_FIELD_TYPE)
+
+    // stack: rlp_addr, retdest
     %decode_rlp_list_len
     // We don't actually need the length.
     %stack (rlp_addr, len) -> (rlp_addr)

@@ -225,6 +225,9 @@ fn test_state_trie(
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");
+    interpreter
+        .push(0.into()) // rlp_start
+        .expect("The stack should not overflow.");
     interpreter.run()?;
 
     assert_eq!(

@@ -126,16 +126,16 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 6] = [
         "ENCODED_EMPTY_NODE_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000b00000000"),
     ),
-    // 0x10000 = 2^16 bytes, much larger than any RLP blob the EVM could possibly create.
+    // 9 bytes, largest possible RLP prefix in our MPTs.
     (
-        "MAX_RLP_BLOB_SIZE",
-        hex!("0000000000000000000000000000000000000000000000000000000000010000"),
+        "MAX_RLP_PREFIX_SIZE",
+        hex!("0000000000000000000000000000000000000000000000000000000000001001"),
     ),
-    // Address where the txn RLP encoding starts.
+    // Address where RLP encoding generally starts.
     // It is the offset 1 within SEGMENT_RLP_RAW.
     // *Note*: Changing this will break some tests.
     (
-        "INITIAL_TXN_RLP_ADDR",
+        "INITIAL_RLP_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000b00000001"),
     ),
     // Address where the final registers start. It is the offset 6 within the

@@ -15,17 +15,15 @@ pub(crate) fn prepare_interpreter_for_txn_parsing<F: Field>(
     txn: Vec<u8>,
 ) -> Result<()> {
     let retaddr = 0xDEADBEEFu32.into();
-    const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
+    const INITIAL_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
 
     interpreter.generation_state.registers.program_counter = entry_point;
     interpreter.push(retaddr).or(Err(anyhow!(
         "Error in `prepare_interpreter_for_txn_parsing`."
     )))?;
-    interpreter
-        .push(INITIAL_TXN_RLP_ADDR.into())
-        .or(Err(anyhow!(
-            "Error in `prepare_interpreter_for_txn_parsing`."
-        )))?;
+    interpreter.push(INITIAL_RLP_ADDR.into()).or(Err(anyhow!(
+        "Error in `prepare_interpreter_for_txn_parsing`."
+    )))?;
 
     // When we reach process_normalized_txn, we're done with parsing and
     // normalizing. Processing normalized transactions is outside the scope of

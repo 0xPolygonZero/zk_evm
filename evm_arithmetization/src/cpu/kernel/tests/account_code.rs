@@ -642,6 +642,9 @@ fn sload() -> Result<()> {
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow.");
+    interpreter
+        .push(0.into()) // rlp_start
+        .expect("The stack should not overflow.");
     interpreter.run()?;
 
     assert_eq!(
