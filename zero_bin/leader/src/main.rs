@@ -62,6 +62,7 @@ async fn main() -> Result<()> {
     }
 
     match args.command {
+        Command::Clean => zero_bin_common::prover_state::persistence::delete_all()?,
         Command::Stdio {
             previous_proof,
             save_inputs_on_error,

@@ -270,6 +270,21 @@ pub fn persist_all_to_disk(
     Ok(())
 }
 
+/// Flushes all existing prover state configurations and associated circuits
+/// that have been written to disk.
+pub fn delete_all() -> anyhow::Result<()> {
+    let circuit_dir = circuit_dir();
+    let path = Path::new(&circuit_dir);
+
+    if path.is_dir() {
+        // We will delete the entire directory and recreate it after.
+        fs::remove_dir_all(path)?;
+        fs::create_dir(path)?;
+    }
+
+    Ok(())
+}
+
 /// Writes the provided [`AllRecursiveCircuits`] to disk.
 ///
 /// In particular, we cover both the monolothic and base prover states, as well
