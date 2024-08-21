@@ -46,9 +46,12 @@ set -eux
 # .cargo/config.toml
 cd /src
 
-# use the cache mount
-# (we will not be able to to write to e.g `/src/target` because it is bind-mounted)
-CARGO_TARGET_DIR=/artifacts cargo build --locked "--profile=${PROFILE}" --all
+# statically-link the C runtime for runtime performance
+RUSTFLAGS="-C target-feature=+crt-static" \
+    # use the cache mount
+    # (we will not be able to to write to e.g `/src/target` because it is bind-mounted)
+    CARGO_TARGET_DIR=/artifacts \
+    cargo build --locked "--profile=${PROFILE}" --target=x86_64-unknown-linux-gnu --all
 
 # narrow the find call to SUBDIR because if we just copy out all executables
 # we will break the cache invariant
