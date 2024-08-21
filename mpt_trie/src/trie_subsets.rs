@@ -22,11 +22,6 @@ use crate::{
 /// The output type of trie_subset operations.
 pub type SubsetTrieResult<T> = Result<T, SubsetTrieError>;
 
-/// We can't construct the error until we unwind the stack from the error
-/// creation site. Once we unwind enough, we convert it to the actual error
-/// type.
-type SubTrieResultIntern<T> = Result<T, ()>;
-
 /// We encountered a `hash` node when marking nodes during sub-trie creation.
 #[derive(Clone, Debug, Error, Hash)]
 #[error("Encountered a hash node when marking nodes to not hash when traversing a key to not hash!\nPath: {0}")]
@@ -263,7 +258,7 @@ where
         mark_nodes_that_are_needed(tracked_trie, &mut k).map_err(|_| {
             // We need to unwind back to this callsite in order to produce the actual error.
             let query = DebugQueryParamsBuilder::default()
-                .print_node_specific_values(true)
+                .include_node_specific_values(true)
                 .build(k);
 
             let res = get_path_from_query(&tracked_trie.info.underlying_node, query);
@@ -282,10 +277,14 @@ where
 /// - For the key `0x1`, the marked nodes would be [B(0x), B(0x1)].
 /// - For the key `0x12`, the marked nodes still would be [B(0x), B(0x1)].
 /// - For the key `0x123`, the marked nodes would be [B(0x), B(0x1), L(0x123)].
+///
+/// Also note that we can't construct the error until we back out of this
+/// recursive function. We need to know the full key that hit the hash
+/// node, and that's only available at the initial call site.
 fn mark_nodes_that_are_needed<N: PartialTrie>(
     trie: &mut TrackedNode<N>,
     curr_nibbles: &mut Nibbles,
-) -> SubTrieResultIntern<()> {
+) -> Result<(), ()> {
     trace!(
         "Sub-trie marking at {:x}, (type: {})",
         curr_nibbles,
