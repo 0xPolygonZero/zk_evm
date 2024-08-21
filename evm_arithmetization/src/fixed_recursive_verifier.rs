@@ -438,8 +438,8 @@ where
     }
 }
 
-/// Data for the block wrapper circuit, which is used to generate a wrap final
-/// block proof and obfuscate the remaining private elements of a chain.
+/// Data for the block wrapper circuit, which is used to generate a wrapped
+/// final block proof and obfuscate the remaining private elements of a chain.
 #[derive(Eq, PartialEq, Debug)]
 pub struct BlockWrapperCircuitData<F, C, const D: usize>
 where
@@ -1506,7 +1506,7 @@ where
             &block.circuit.common,
         );
 
-        // Pad to match the block circuit's degree.
+        // Pad to match the (non-existing yet!) 2-to-1 circuit's degree.
         while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
             builder.add_gate(NoopGate, vec![]);
         }

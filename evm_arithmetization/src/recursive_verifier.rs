@@ -661,57 +661,12 @@ pub(crate) fn add_virtual_public_values_public_input<
     }
 }
 
-pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-) -> PublicValuesTarget {
-    let trie_roots_before = add_virtual_trie_roots(builder);
-    let trie_roots_after = add_virtual_trie_roots(builder);
-    let block_metadata = add_virtual_block_metadata(builder);
-    let block_hashes = add_virtual_block_hashes(builder);
-    let extra_block_data = add_virtual_extra_block_data(builder);
-    let registers_before = add_virtual_registers_data(builder);
-    let registers_after = add_virtual_registers_data(builder);
-
-    let mem_before = MemCapTarget {
-        mem_cap: MerkleCapTarget(builder.add_virtual_hashes_public_input(DEFAULT_CAP_LEN)),
-    };
-    let mem_after = MemCapTarget {
-        mem_cap: MerkleCapTarget(builder.add_virtual_hashes_public_input(DEFAULT_CAP_LEN)),
-    };
-
-    PublicValuesTarget {
-        trie_roots_before,
-        trie_roots_after,
-        block_metadata,
-        block_hashes,
-        extra_block_data,
-        registers_before,
-        registers_after,
-        mem_before,
-        mem_after,
-    }
-}
-
 pub(crate) fn add_virtual_trie_roots_public_input<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> TrieRootsTarget {
     let state_root = builder.add_virtual_public_input_arr();
     let transactions_root = builder.add_virtual_public_input_arr();
     let receipts_root = builder.add_virtual_public_input_arr();
-
-    TrieRootsTarget {
-        state_root,
-        transactions_root,
-        receipts_root,
-    }
-}
-
-pub(crate) fn add_virtual_trie_roots<F: RichField + Extendable<D>, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-) -> TrieRootsTarget {
-    let state_root = builder.add_virtual_target_arr();
-    let transactions_root = builder.add_virtual_target_arr();
-    let receipts_root = builder.add_virtual_target_arr();
 
     TrieRootsTarget {
         state_root,
@@ -757,40 +712,6 @@ pub(crate) fn add_virtual_block_metadata_public_input<
     }
 }
 
-pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-) -> BlockMetadataTarget {
-    let block_beneficiary = builder.add_virtual_target_arr();
-    let block_timestamp = builder.add_virtual_target();
-    let block_number = builder.add_virtual_target();
-    let block_difficulty = builder.add_virtual_target();
-    let block_random = builder.add_virtual_target_arr();
-    let block_gaslimit = builder.add_virtual_target();
-    let block_chain_id = builder.add_virtual_target();
-    let block_base_fee = builder.add_virtual_target_arr();
-    let block_gas_used = builder.add_virtual_target();
-    let block_blob_gas_used = builder.add_virtual_target_arr();
-    let block_excess_blob_gas = builder.add_virtual_target_arr();
-    let parent_beacon_block_root = builder.add_virtual_target_arr();
-    let block_bloom = builder.add_virtual_target_arr();
-
-    BlockMetadataTarget {
-        block_beneficiary,
-        block_timestamp,
-        block_number,
-        block_difficulty,
-        block_random,
-        block_gaslimit,
-        block_chain_id,
-        block_base_fee,
-        block_gas_used,
-        block_blob_gas_used,
-        block_excess_blob_gas,
-        parent_beacon_block_root,
-        block_bloom,
-    }
-}
-
 pub(crate) fn add_virtual_block_hashes_public_input<
     F: RichField + Extendable<D>,
     const D: usize,
@@ -799,18 +720,6 @@ pub(crate) fn add_virtual_block_hashes_public_input<
 ) -> BlockHashesTarget {
     let prev_hashes = builder.add_virtual_public_input_arr();
     let cur_hash = builder.add_virtual_public_input_arr();
-
-    BlockHashesTarget {
-        prev_hashes,
-        cur_hash,
-    }
-}
-
-pub(crate) fn add_virtual_block_hashes<F: RichField + Extendable<D>, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-) -> BlockHashesTarget {
-    let prev_hashes = builder.add_virtual_target_arr();
-    let cur_hash = builder.add_virtual_target_arr();
 
     BlockHashesTarget {
         prev_hashes,
@@ -839,24 +748,6 @@ pub(crate) fn add_virtual_extra_block_data_public_input<
     }
 }
 
-pub(crate) fn add_virtual_extra_block_data<F: RichField + Extendable<D>, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-) -> ExtraBlockDataTarget {
-    let checkpoint_state_trie_root = builder.add_virtual_target_arr();
-    let txn_number_before = builder.add_virtual_target();
-    let txn_number_after = builder.add_virtual_target();
-    let gas_used_before = builder.add_virtual_target();
-    let gas_used_after = builder.add_virtual_target();
-
-    ExtraBlockDataTarget {
-        checkpoint_state_trie_root,
-        txn_number_before,
-        txn_number_after,
-        gas_used_before,
-        gas_used_after,
-    }
-}
-
 pub(crate) fn add_virtual_registers_data_public_input<
     F: RichField + Extendable<D>,
     const D: usize,
@@ -869,26 +760,6 @@ pub(crate) fn add_virtual_registers_data_public_input<
     let stack_top = builder.add_virtual_public_input_arr();
     let context = builder.add_virtual_public_input();
     let gas_used = builder.add_virtual_public_input();
-
-    RegistersDataTarget {
-        program_counter,
-        is_kernel,
-        stack_len,
-        stack_top,
-        context,
-        gas_used,
-    }
-}
-
-pub(crate) fn add_virtual_registers_data<F: RichField + Extendable<D>, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-) -> RegistersDataTarget {
-    let program_counter = builder.add_virtual_target();
-    let is_kernel = builder.add_virtual_target();
-    let stack_len = builder.add_virtual_target();
-    let stack_top = builder.add_virtual_target_arr();
-    let context = builder.add_virtual_target();
-    let gas_used = builder.add_virtual_target();
 
     RegistersDataTarget {
         program_counter,
