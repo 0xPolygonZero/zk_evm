@@ -80,20 +80,6 @@ impl Operation for SegmentProof {
     }
 }
 
-#[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct SegmentProofTestOnly {
-    pub save_inputs_on_error: bool,
-}
-
-impl Operation for SegmentProofTestOnly {
-    type Input = AllData;
-    type Output = ();
-
-    fn execute(&self, _all_data: Self::Input) -> Result<Self::Output> {
-        Ok(())
-    }
-}
-
 /// RAII struct to measure the time taken by a transaction proof.
 ///
 /// - When created, it starts a span with the transaction proof id.
