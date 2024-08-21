@@ -64,8 +64,8 @@ fi
 # maxdepth because binaries are in the root
 # - other folders contain build scripts etc.
 mkdir /output
-find "/artifacts/$SUBDIR" \
-    -maxdepth 1 \
+find "/artifacts/x86_64-unknown-linux-gnu" \
+    -maxdepth 2 \
     -type f \
     -executable \
     -not -name '*.so' \
