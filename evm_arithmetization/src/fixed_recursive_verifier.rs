@@ -1730,12 +1730,13 @@ where
 
         let mut proofs = vec![];
 
-        for mut next_data in segment_iterator {
+        for segment_run in segment_iterator {
+            let (_, mut next_data) = segment_run.map_err(|e| anyhow::format_err!(e))?;
             let proof = self.prove_segment(
                 all_stark,
                 config,
                 generation_inputs.trim(),
-                &mut next_data.1,
+                &mut next_data,
                 timing,
                 abort_signal.clone(),
             )?;

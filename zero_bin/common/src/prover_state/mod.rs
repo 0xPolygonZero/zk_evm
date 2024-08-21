@@ -19,7 +19,7 @@ use evm_arithmetization::{
     generation::TrimmedGenerationInputs,
     proof::AllProof,
     prover::{prove, GenerationSegmentData},
-    AllData, AllStark, StarkConfig,
+    AllStark, StarkConfig,
 };
 use plonky2::{
     field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
@@ -255,7 +255,10 @@ impl ProverStateManager {
     /// - If the persistence strategy is [`CircuitPersistence::Disk`] with
     ///   [`TableLoadStrategy::OnDemand`], the table circuits are loaded as
     ///   needed.
-    pub fn generate_segment_proof(&self, input: AllData) -> anyhow::Result<GeneratedSegmentProof> {
+    pub fn generate_segment_proof(
+        &self,
+        input: (TrimmedGenerationInputs, GenerationSegmentData),
+    ) -> anyhow::Result<GeneratedSegmentProof> {
         let (generation_inputs, mut segment_data) = input;
 
         match self.persistence {

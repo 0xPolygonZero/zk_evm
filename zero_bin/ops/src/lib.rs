@@ -3,7 +3,7 @@ use std::time::Instant;
 
 #[cfg(not(feature = "test_only"))]
 use evm_arithmetization::generation::TrimmedGenerationInputs;
-use evm_arithmetization::{proof::PublicValues, AllData};
+use evm_arithmetization::proof::PublicValues;
 #[cfg(feature = "test_only")]
 use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
 use paladin::{
@@ -26,25 +26,6 @@ use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
 
-#[cfg(feature = "test_only")]
-#[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct BatchTestOnly {
-    pub save_inputs_on_error: bool,
-}
-
-#[cfg(feature = "test_only")]
-impl Operation for BatchTestOnly {
-    type Input = (GenerationInputs, usize);
-    type Output = ();
-
-    fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
-        simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
-            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
-
-        Ok(())
-    }
-}
-
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct SegmentProof {
     pub save_inputs_on_error: bool,
@@ -52,10 +33,13 @@ pub struct SegmentProof {
 
 #[cfg(not(feature = "test_only"))]
 impl Operation for SegmentProof {
-    type Input = AllData;
+    type Input = evm_arithmetization::AllData;
     type Output = proof_gen::proof_types::SegmentAggregatableProof;
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
+        let all_data =
+            all_data.map_err(|err| FatalError::from_str(&err.0, FatalStrategy::Terminate))?;
+
         let input = all_data.0.clone();
         let segment_index = all_data.1.segment_index();
         let _span = SegmentProofSpan::new(&input, all_data.1.segment_index());
@@ -65,7 +49,7 @@ impl Operation for SegmentProof {
                 .map_err(|err| {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
-                            "b{}_txns_{}-{}-({})_input.json",
+                            "b{}_txns_{}..{}-({})_input.json",
                             input.block_metadata.block_number,
                             input.txn_number_before,
                             input.txn_number_before + input.txn_hashes.len(),
@@ -90,10 +74,31 @@ impl Operation for SegmentProof {
 
 #[cfg(feature = "test_only")]
 impl Operation for SegmentProof {
-    type Input = AllData;
+    type Input = (GenerationInputs, usize);
     type Output = ();
 
-    fn execute(&self, _all_data: Self::Input) -> Result<Self::Output> {
+    fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
+        if self.save_inputs_on_error {
+            simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1).map_err(|err| {
+                if let Err(write_err) = save_inputs_to_disk(
+                    format!(
+                        "b{}_txns_{}..{}_input.json",
+                        inputs.0.block_metadata.block_number,
+                        inputs.0.txn_number_before,
+                        inputs.0.txn_number_before + inputs.0.signed_txns.len(),
+                    ),
+                    inputs.0,
+                ) {
+                    error!("Failed to save txn proof input to disk: {:?}", write_err);
+                }
+
+                FatalError::from_anyhow(err, FatalStrategy::Terminate)
+            })?
+        } else {
+            simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
+                .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
+        }
+
         Ok(())
     }
 }
