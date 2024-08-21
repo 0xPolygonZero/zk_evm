@@ -129,11 +129,11 @@ impl FinalPublicValues {
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
-        assert!(PublicValuesTarget::SIZE <= pis.len());
+        assert!(FinalPublicValuesTarget::SIZE <= pis.len());
 
         let mut offset = 0;
         let state_trie_root_before = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
-        offset += TrieRootsTarget::SIZE; // skip over txn and receipt tries
+        offset += TARGET_HASH_SIZE;
         let state_trie_root_after = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
 
         Self {
@@ -185,44 +185,22 @@ impl FinalPublicValuesTarget {
         })
     }
 
-    /// Extracts public value `Target`s from the given public input `Target`s.
-    /// Public values are always the first public inputs added to the circuit,
-    /// so we can start extracting at index 0.
-    pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
-        assert!(pis.len() >= Self::SIZE);
-
-        let mut offset = 0;
-        let state_trie_root_before = pis[offset..offset + TARGET_HASH_SIZE].try_into().unwrap();
-        offset += TARGET_HASH_SIZE;
-        let state_trie_root_after = pis[offset..offset + TARGET_HASH_SIZE].try_into().unwrap();
-        Self {
-            state_trie_root_before,
-            state_trie_root_after,
-        }
-    }
-
-    /// Returns the public values in `pv0` or `pv1` depending on `condition`.
-    pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
+    /// Connects these `FinalPublicValuesTarget` with their corresponding
+    /// counterpart in a full parent `PublicValuesTarget`.
+    pub(crate) fn connect_parent<F: RichField + Extendable<D>, const D: usize>(
+        &self,
         builder: &mut CircuitBuilder<F, D>,
-        condition: BoolTarget,
-        pv0: Self,
-        pv1: Self,
-    ) -> Self {
-        Self {
-            state_trie_root_before: core::array::from_fn(|i| {
-                builder.select(
-                    condition,
-                    pv0.state_trie_root_before[i],
-                    pv1.state_trie_root_before[i],
-                )
-            }),
-            state_trie_root_after: core::array::from_fn(|i| {
-                builder.select(
-                    condition,
-                    pv0.state_trie_root_after[i],
-                    pv1.state_trie_root_after[i],
-                )
-            }),
+        pv1: &PublicValuesTarget,
+    ) {
+        for i in 0..8 {
+            builder.connect(
+                self.state_trie_root_before[i],
+                pv1.trie_roots_before.state_root[i],
+            );
+            builder.connect(
+                self.state_trie_root_after[i],
+                pv1.trie_roots_after.state_root[i],
+            );
         }
     }
 }
