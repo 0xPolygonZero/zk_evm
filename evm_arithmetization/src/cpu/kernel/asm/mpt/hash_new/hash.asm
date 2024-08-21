@@ -302,7 +302,7 @@ encode_node_leaf_after_hex_prefix:
     SWAP6
     SWAP1
     // stack: next_addr_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
-    %add_const(2) // The initial value pointer starts at index 3.
+    %add_const(2) // The initial value pointer starts at index 2.
     // stack: value_ptr_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     MLOAD_GENERAL
     // stack: value_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest

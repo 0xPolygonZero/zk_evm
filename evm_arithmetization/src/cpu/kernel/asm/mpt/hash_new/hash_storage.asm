@@ -81,7 +81,7 @@ global encode_or_hash_node_storage:
     SWAP3
     SWAP1
     // stack: next_hash_node_ptr, cur_len, next_slot_ptr, next_next_hash_node_ptr, retdest
-    %increment // Skip over the hash node nibbles
+    %add_const(2) // Skip over the is_account flag and hash node nibbles
     // stack: hash_ptr, cur_len, next_slot_ptr, next_next_hash_node_ptr, retdest
     MLOAD_GENERAL
     // stack: hash, cur_len, next_slot_ptr, next_next_hash_node_ptr, retdest
@@ -219,11 +219,11 @@ encode_node_branch_prepend_prefix:
     PUSH 32 DUP2 SUB
     %jumpi(%%unpack)
     // Otherwise, result is a hash, and we need to add the prefix 0x80 + 32 = 160.
-    // stack: result_len, result, cur_len, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len, next_slot_ptr, next_hash_node_ptr, retdest
-    DUP4 // rlp_pos
+    // stack: result_len, result, cur_len, next_slot_ptr, next_hash_node_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len, retdest
+    DUP6 // rlp_pos
     PUSH 160
     MSTORE_GENERAL
-    SWAP3 %increment SWAP3 // rlp_pos += 1
+    SWAP5 %increment SWAP5 // rlp_pos += 1
 %%unpack:
     %stack (result_len, result, cur_len, next_slot_ptr, next_hash_node_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len)
         -> (rlp_pos, result, result_len, %%after_unpacking,

@@ -39,6 +39,9 @@ pub(crate) fn initialize_mpts<F: Field>(
     interpreter.generation_state.memory.contexts[0].segments
         [Segment::StorageLinkedList.unscale()]
     .content = storage_leaves;
+    interpreter.generation_state.memory.contexts[0].segments
+        [Segment::HashedNodes.unscale()]
+    .content = hash_nodes;
     interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
         trie_data.clone();
     interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();

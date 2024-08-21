@@ -110,15 +110,16 @@ impl<F: Field> GenerationState<F> {
                 .map(U256::from),
             "final_state" => {
                 let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
-                let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
+                let mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
                 let accounts_linked_list =
                     LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                        &storage_mem,
-                        Segment::StorageLinkedList,
+                        &mem,
+                        Segment::AccountsLinkedList,
                     )?;
+                let mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
                 let mut storage_linked_list =
                     LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                        &storage_mem,
+                        &mem,
                         Segment::StorageLinkedList,
                     )?;
                 let hashed_nodes = self.memory.get_preinit_memory(Segment::HashedNodes);
@@ -128,7 +129,7 @@ impl<F: Field> GenerationState<F> {
                     &mut storage_linked_list,
                     hashed_nodes,
                     &mut new_content,
-                );
+                )?;
 
                 self.memory.insert_preinitialized_segment(
                     Segment::TrieData,
@@ -136,7 +137,14 @@ impl<F: Field> GenerationState<F> {
                         content: new_content,
                     },
                 );
-                n.map(U256::from)
+
+                log::debug!(
+                    "root_ptr = {n} Trie in memory = {:?}",
+                    get_state_trie::<HashedPartialTrie>(&self.memory, n)
+                );
+
+
+                Ok(U256::from(n))
             }
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),

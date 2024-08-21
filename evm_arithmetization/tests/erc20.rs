@@ -152,6 +152,8 @@ fn test_erc20() -> anyhow::Result<()> {
     }
     .into();
 
+    log::debug!("expected_state_trie_after = {:?}", expected_state_trie_after);
+
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),
         transactions_root: transactions_trie.hash(),
