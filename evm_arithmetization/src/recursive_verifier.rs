@@ -620,10 +620,12 @@ pub(crate) fn add_virtual_final_public_values_public_input<
 ) -> FinalPublicValuesTarget {
     let state_trie_root_before = builder.add_virtual_public_input_arr();
     let state_trie_root_after = builder.add_virtual_public_input_arr();
+    let checkpoint_state_trie_root = builder.add_virtual_public_input_arr();
 
     FinalPublicValuesTarget {
         state_trie_root_before,
         state_trie_root_after,
+        checkpoint_state_trie_root,
     }
 }
 
