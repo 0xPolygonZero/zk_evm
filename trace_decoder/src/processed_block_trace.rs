@@ -82,7 +82,7 @@ impl TxnInfo {
         hash2code: &mut Hash2Code,
     ) -> anyhow::Result<ProcessedTxnInfo> {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
-        let mut contract_code_accessed = HashSet::new();
+        let mut contract_code_accessed = HashSet::from([vec![]]); // we always "access" empty code
 
         for (
             addr,
