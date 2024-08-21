@@ -39,14 +39,18 @@ pub(crate) struct ProcessedTxnInfo {
 /// get added here as we process the deltas.
 pub(crate) struct Hash2Code {
     /// Key must always be [`hash`] of value.
+    ///
+    /// Always includes an empty [`Vec`].
     inner: HashMap<H256, Vec<u8>>,
 }
 
 impl Hash2Code {
     pub fn new() -> Self {
-        Self {
+        let mut this = Self {
             inner: HashMap::new(),
-        }
+        };
+        this.insert(vec![]);
+        this
     }
     fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
         match self.inner.get(&hash) {

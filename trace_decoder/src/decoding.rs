@@ -578,7 +578,6 @@ fn process_txn_info(
         contract_code: txn_info
             .contract_code_accessed
             .into_iter()
-            .chain([Vec::new()]) // include the empty code
             .map(|code| (hash(&code), code))
             .collect(),
         block_metadata: other_data.b_data.b_meta.clone(),
