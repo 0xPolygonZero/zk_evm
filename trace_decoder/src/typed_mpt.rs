@@ -1,7 +1,7 @@
 //! Principled MPT types used in this library.
 
 use core::fmt;
-use std::marker::PhantomData;
+use std::{collections::HashMap, iter, marker::PhantomData};
 
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
@@ -10,7 +10,8 @@ use mpt_trie::{
     partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
     trie_ops::TrieOpError,
 };
-use u4::{AsNibbles, U4};
+use plonky2::field::goldilocks_field::GoldilocksField;
+use u4::{u4, AsNibbles, U4x2, U4};
 
 /// Map where keys are [up to 64 nibbles](TrieKey),
 /// and values are [`rlp::Encodable`]/[`rlp::Decodable`].
@@ -353,5 +354,90 @@ impl StorageTrie {
 
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
+    }
+}
+
+pub struct StateSmt {
+    address2state: HashMap<Address, AccountRlp>,
+    deferred: HashMap<TrieKey, H256>,
+    smt: smt_trie::smt::Smt<smt_trie::db::MemoryDb>,
+}
+
+impl StateSmt {
+    pub fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> Result<Option<AccountRlp>, Error> {
+        Ok(self.address2state.insert(address, account))
+    }
+    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
+        self.deferred.insert(key, hash);
+        Ok(())
+    }
+}
+
+fn key2key(TrieKey(ours): TrieKey) -> smt_trie::smt::Key {
+    const FIELD_PER_KEY: usize = 4;
+    const BYTE_PER_FIELD: usize = 8;
+
+    let mut bytes = [0u8; BYTE_PER_FIELD * FIELD_PER_KEY];
+    for (ix, U4x2 { packed }) in Pack::new(ours).enumerate() {
+        bytes[ix] = packed
+    }
+
+    let mut chunks = bytes.chunks_exact(BYTE_PER_FIELD);
+
+    // no unsafe, no unstable
+    let theirs = smt_trie::smt::Key(core::array::from_fn(|_ix| {
+        GoldilocksField(u64::from_ne_bytes(
+            <[u8; BYTE_PER_FIELD]>::try_from(chunks.next().unwrap()).unwrap(),
+        ))
+    }));
+    assert_eq!(chunks.len(), 0);
+    theirs
+}
+
+/// [`Iterator`] which turns [`U4`]s into [`U4x2`]s, `0`-padding if required.
+struct Pack<I> {
+    inner: iter::Fuse<I>,
+}
+
+impl<I> Pack<I> {
+    fn new<II: IntoIterator<IntoIter = I>>(inner: II) -> Self
+    where
+        I: Iterator,
+    {
+        Self {
+            inner: inner.into_iter().fuse(),
+        }
+    }
+}
+
+impl<I> Iterator for Pack<I>
+where
+    I: Iterator<Item = U4>,
+{
+    type Item = U4x2;
+    fn next(&mut self) -> Option<Self::Item> {
+        match (self.inner.next(), self.inner.next()) {
+            (None, None) => None,
+            (Some(pad), None) => Some(U4x2::new(pad, u4!(0))),
+            (None, Some(_)) => unreachable!("iterator is fused, so Some cannot follow None"),
+            (Some(left), Some(right)) => Some(U4x2::new(left, right)),
+        }
+    }
+}
+
+#[test]
+fn test_key2key() {
+    let nibbles = &iter::successors(Some(u4!(0)), |it| it.checked_add(u4!(1))).cycle();
+    for len in 0.. {
+        match TrieKey::new(nibbles.clone().take(len)) {
+            Ok(key) => {
+                let _did_not_panic = key2key(key);
+            }
+            Err(_) => break, // too long
+        }
     }
 }
