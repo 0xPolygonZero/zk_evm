@@ -5,9 +5,9 @@ use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use zk_evm_common::EMPTY_TRIE_HASH;
 
-use crate::hash;
 use crate::typed_mpt::TrieKey;
 use crate::PartialTriePreImages;
+use crate::{hash, TxnTrace};
 use crate::{ContractCodeUsage, TxnInfo};
 
 const FIRST_PRECOMPILE_ADDRESS: U256 = U256([1, 0, 0, 0]);
@@ -84,53 +84,56 @@ impl TxnInfo {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = HashSet::new();
 
-        for (addr, trace) in self.traces {
+        for (
+            addr,
+            TxnTrace {
+                balance,
+                nonce,
+                storage_read,
+                storage_written,
+                code_usage,
+                self_destructed,
+            },
+        ) in self.traces
+        {
             let hashed_addr = hash(addr.as_bytes());
 
-            let storage_writes = trace.storage_written.unwrap_or_default();
-            let storage_read_keys = trace.storage_read.into_iter().flatten();
-
-            let storage_write_keys = storage_writes.keys();
-            let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
-
+            // record storage changes
+            let storage_written = storage_written.unwrap_or_default();
             nodes_used_by_txn.storage_accesses.push((
                 hashed_addr,
-                storage_access_keys
+                storage_read
+                    .into_iter()
+                    .flatten()
+                    .chain(storage_written.keys().copied())
                     .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
                     .collect(),
             ));
+            nodes_used_by_txn.storage_writes.push((
+                hashed_addr,
+                storage_written
+                    .iter()
+                    .map(|(k, v)| (TrieKey::from_hash(*k), rlp::encode(v).to_vec()))
+                    .collect(),
+            ));
 
-            let storage_trie_change = !storage_writes.is_empty();
-            let code_change = trace.code_usage.is_some();
-            let state_write_occurred = trace.balance.is_some()
-                || trace.nonce.is_some()
-                || storage_trie_change
-                || code_change;
+            // record state changes
+            let state_write = StateWrite {
+                balance,
+                nonce,
+                storage_trie_change: !storage_written.is_empty(),
+                code_hash: code_usage.as_ref().map(|it| match it {
+                    ContractCodeUsage::Read(hash) => *hash,
+                    ContractCodeUsage::Write(bytes) => hash(bytes),
+                }),
+            };
 
-            if state_write_occurred {
-                let state_trie_writes = StateWrite {
-                    balance: trace.balance,
-                    nonce: trace.nonce,
-                    storage_trie_change,
-                    code_hash: trace.code_usage.as_ref().map(|it| match it {
-                        ContractCodeUsage::Read(hash) => *hash,
-                        ContractCodeUsage::Write(bytes) => hash(bytes),
-                    }),
-                };
-
+            if state_write != StateWrite::default() {
+                // a write occurred
                 nodes_used_by_txn
                     .state_writes
-                    .push((hashed_addr, state_trie_writes))
+                    .push((hashed_addr, state_write))
             }
-
-            let storage_writes_vec = storage_writes
-                .into_iter()
-                .map(|(k, v)| (TrieKey::from_hash(k), rlp::encode(&v).to_vec()))
-                .collect();
-
-            nodes_used_by_txn
-                .storage_writes
-                .push((hashed_addr, storage_writes_vec));
 
             let is_precompile = (FIRST_PRECOMPILE_ADDRESS..LAST_PRECOMPILE_ADDRESS)
                 .contains(&U256::from_big_endian(&addr.0));
@@ -148,7 +151,7 @@ impl TxnInfo {
                 nodes_used_by_txn.state_accesses.push(hashed_addr);
             }
 
-            match trace.code_usage {
+            match code_usage {
                 Some(ContractCodeUsage::Read(hash)) => {
                     contract_code_accessed.insert(hash2code.get(hash)?);
                 }
@@ -159,7 +162,7 @@ impl TxnInfo {
                 None => {}
             }
 
-            if trace.self_destructed.unwrap_or_default() {
+            if self_destructed.unwrap_or_default() {
                 nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
             }
         }
@@ -224,7 +227,7 @@ pub(crate) struct NodesUsedByTxn {
     pub self_destructed_accounts: Vec<H256>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default, PartialEq)]
 pub(crate) struct StateWrite {
     pub balance: Option<U256>,
     pub nonce: Option<U256>,
