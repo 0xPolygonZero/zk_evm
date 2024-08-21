@@ -219,6 +219,10 @@ impl ProverInput {
                             let proof = proof?;
                             let block_number = proof.b_height;
 
+                            if tx.send(proof).is_err() {
+                                anyhow::bail!("Failed to send proof");
+                            }
+
                             // We ignore the returned dummy proof in test-only mode.
                             Ok((block_number, None))
                         })
