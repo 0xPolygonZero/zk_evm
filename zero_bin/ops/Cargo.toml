@@ -21,4 +21,3 @@ zero_bin_common = { path = "../common" }
 
 [features]
 default = []
-test_only = []

@@ -30,4 +30,3 @@ clap = {workspace = true}
 
 [features]
 default = []
-test_only = ["ops/test_only"]

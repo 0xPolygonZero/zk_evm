@@ -44,18 +44,8 @@ if [[ $INPUT_FILE == "" ]]; then
     exit 1
 fi
 
-if [[ $TEST_ONLY == "test_only" ]]; then
-    # Circuit sizes don't matter in test_only mode, so we keep them minimal.
-    export ARITHMETIC_CIRCUIT_SIZE="16..17"
-    export BYTE_PACKING_CIRCUIT_SIZE="9..10"
-    export CPU_CIRCUIT_SIZE="12..13"
-    export KECCAK_CIRCUIT_SIZE="4..5"
-    export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
-    export LOGIC_CIRCUIT_SIZE="12..13"
-    export MEMORY_CIRCUIT_SIZE="17..18"
-    export MEMORY_BEFORE_CIRCUIT_SIZE="7..8"
-    export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
-else
+# Circuit sizes only matter in non test_only mode.
+if ! [[ $TEST_ONLY == "test_only" ]]; then
     if [[ $INPUT_FILE == *"witness_b19807080"* ]]; then
       # These sizes are configured specifically for block 19807080. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b19807080.json"
@@ -98,7 +88,7 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE &> $TEST_OUT_PATH
+    cargo run --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE &> $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         rm $TEST_OUT_PATH

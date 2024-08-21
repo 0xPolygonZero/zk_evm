@@ -26,7 +26,7 @@ pub(crate) async fn stdio_main(
     runtime.close().await?;
     let proved_blocks = proved_blocks?;
 
-    if cfg!(feature = "test_only") {
+    if prover_config.test_only {
         info!("All proof witnesses have been generated successfully.");
     } else {
         info!("All proofs have been generated successfully.");
