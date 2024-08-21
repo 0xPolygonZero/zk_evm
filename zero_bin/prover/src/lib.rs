@@ -132,7 +132,7 @@ impl BlockProverInput {
     ) -> Result<GeneratedBlockProof> {
         use std::iter::repeat;
 
-        use futures::StreamExt;
+        use futures::future;
         use paladin::directive::{Directive, IndexedStream};
 
         let ProverConfig {
@@ -148,7 +148,7 @@ impl BlockProverInput {
         let block_generation_inputs =
             trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
 
-        let batch_ops = ops::BatchTestOnly {
+        let seg_ops = ops::SegmentProofTestOnly {
             save_inputs_on_error,
         };
 
@@ -158,12 +158,14 @@ impl BlockProverInput {
                     .into_iter()
                     .zip(repeat(max_cpu_len_log)),
             ),
-            &batch_ops,
+            &seg_ops,
         );
 
-        let result = simulation.run(runtime).await?;
-
-        result.collect::<Vec<_>>().await;
+        simulation
+            .run(runtime)
+            .await?
+            .try_for_each(|_| future::ok(()))
+            .await?;
 
         info!("Successfully generated witness for block {block_number}.");
 

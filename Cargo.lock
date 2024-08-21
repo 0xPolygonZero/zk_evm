@@ -2029,6 +2029,7 @@ dependencies = [
  "sha2",
  "starky",
  "static_assertions",
+ "thiserror",
  "tiny-keccak",
  "zk_evm_proc_macro",
 ]
