@@ -201,15 +201,12 @@ fn update_txn_and_receipt_tries(
     meta: &TxnMetaState,
     txn_idx: usize,
 ) -> anyhow::Result<()> {
-    match &meta.txn_bytes {
-        Some(bytes) => {
-            trie_state.txn.insert(txn_idx, bytes.clone())?;
-            trie_state
-                .receipt
-                .insert(txn_idx, meta.receipt_node_bytes.clone())?;
-        }
-        None => {} // dummy txn, ignore
-    }
+    if let Some(bytes) = &meta.txn_bytes {
+        trie_state.txn.insert(txn_idx, bytes.clone())?;
+        trie_state
+            .receipt
+            .insert(txn_idx, meta.receipt_node_bytes.clone())?;
+    } // else it's just a dummy
     Ok(())
 }
 
