@@ -34,7 +34,6 @@ zero_bin_common = { workspace = true }
 
 [features]
 default = []
-test_only = ["ops/test_only", "prover/test_only"]
 
 [build-dependencies]
 cargo_metadata = { workspace = true }

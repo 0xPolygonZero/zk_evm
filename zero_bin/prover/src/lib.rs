@@ -21,6 +21,7 @@ pub struct ProverConfig {
     pub batch_size: usize,
     pub max_cpu_len_log: usize,
     pub save_inputs_on_error: bool,
+    pub test_only: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -34,7 +35,6 @@ impl BlockProverInput {
         self.other_data.b_data.b_meta.block_number.into()
     }
 
-    #[cfg(not(feature = "test_only"))]
     pub async fn prove(
         self,
         runtime: &Runtime,
@@ -50,6 +50,7 @@ impl BlockProverInput {
             max_cpu_len_log,
             batch_size,
             save_inputs_on_error,
+            test_only: _,
         } = prover_config;
 
         let block_number = self.get_block_number();
@@ -123,8 +124,7 @@ impl BlockProverInput {
         }
     }
 
-    #[cfg(feature = "test_only")]
-    pub async fn prove(
+    pub async fn prove_test(
         self,
         runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
@@ -139,6 +139,7 @@ impl BlockProverInput {
             max_cpu_len_log,
             batch_size,
             save_inputs_on_error,
+            test_only: _,
         } = prover_config;
 
         let block_number = self.get_block_number();
@@ -209,28 +210,45 @@ impl ProverInput {
 
                 // Prove the block
                 let proof_output_dir = proof_output_dir.clone();
-                let fut = block
-                    .prove(runtime, prev.take(), prover_config)
-                    .then(move |proof| async move {
-                        let proof = proof?;
-                        let block_number = proof.b_height;
+                let fut = if prover_config.test_only {
+                    block
+                        .prove_test(runtime, prev.take(), prover_config)
+                        .then(move |proof| async move {
+                            let proof = proof?;
+                            let block_number = proof.b_height;
 
-                        // Write latest generated proof to disk if proof_output_dir is provided
-                        let return_proof: Option<GeneratedBlockProof> =
-                            if proof_output_dir.is_some() {
-                                ProverInput::write_proof(proof_output_dir, &proof).await?;
-                                None
-                            } else {
-                                Some(proof.clone())
-                            };
+                            if tx.send(proof).is_err() {
+                                anyhow::bail!("Bad dummy proof?");
+                            }
 
-                        if tx.send(proof).is_err() {
-                            anyhow::bail!("Failed to send proof");
-                        }
+                            // We ignore the returned dummy proof in test-only mode.
+                            Ok((block_number, None))
+                        })
+                        .boxed()
+                } else {
+                    block
+                        .prove(runtime, prev.take(), prover_config)
+                        .then(move |proof| async move {
+                            let proof = proof?;
+                            let block_number = proof.b_height;
 
-                        Ok((block_number, return_proof))
-                    })
-                    .boxed();
+                            // Write latest generated proof to disk if proof_output_dir is provided.
+                            let return_proof: Option<GeneratedBlockProof> =
+                                if proof_output_dir.is_some() {
+                                    ProverInput::write_proof(proof_output_dir, &proof).await?;
+                                    None
+                                } else {
+                                    Some(proof.clone())
+                                };
+
+                            if tx.send(proof).is_err() {
+                                anyhow::bail!("Failed to send proof");
+                            }
+
+                            Ok((block_number, return_proof))
+                        })
+                        .boxed()
+                };
 
                 prev = Some(Box::pin(rx.map_err(anyhow::Error::new)));
 

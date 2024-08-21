@@ -71,15 +71,27 @@ async fn prove(
 
     let block_number = payload.prover_input.get_block_number();
 
-    match payload
-        .prover_input
-        .prove(
-            &runtime,
-            payload.previous.map(futures::future::ok),
-            prover_config,
-        )
-        .await
-    {
+    let proof_res = if prover_config.test_only {
+        payload
+            .prover_input
+            .prove_test(
+                &runtime,
+                payload.previous.map(futures::future::ok),
+                prover_config,
+            )
+            .await
+    } else {
+        payload
+            .prover_input
+            .prove(
+                &runtime,
+                payload.previous.map(futures::future::ok),
+                prover_config,
+            )
+            .await
+    };
+
+    match proof_res {
         Ok(b_proof) => match write_to_file(output_dir, block_number, &b_proof) {
             Ok(file) => {
                 info!("Successfully wrote proof to {}", file.display());

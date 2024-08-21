@@ -1,16 +1,12 @@
-#[cfg(not(feature = "test_only"))]
 use std::time::Instant;
 
-#[cfg(not(feature = "test_only"))]
 use evm_arithmetization::generation::TrimmedGenerationInputs;
 use evm_arithmetization::{proof::PublicValues, AllData};
-#[cfg(feature = "test_only")]
 use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
 use paladin::{
     operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
-#[cfg(feature = "test_only")]
 use proof_gen::types::Field;
 use proof_gen::{
     proof_gen::{generate_block_proof, generate_segment_agg_proof, generate_transaction_agg_proof},
@@ -20,19 +16,16 @@ use proof_gen::{
 };
 use serde::{Deserialize, Serialize};
 use tracing::error;
-#[cfg(not(feature = "test_only"))]
 use tracing::{event, info_span, Level};
 use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
 registry!();
 
-#[cfg(feature = "test_only")]
 #[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct BatchTestOnly {
     pub save_inputs_on_error: bool,
 }
 
-#[cfg(feature = "test_only")]
 impl Operation for BatchTestOnly {
     type Input = (GenerationInputs, usize);
     type Output = ();
@@ -50,7 +43,6 @@ pub struct SegmentProof {
     pub save_inputs_on_error: bool,
 }
 
-#[cfg(not(feature = "test_only"))]
 impl Operation for SegmentProof {
     type Input = AllData;
     type Output = proof_gen::proof_types::SegmentAggregatableProof;
@@ -88,8 +80,12 @@ impl Operation for SegmentProof {
     }
 }
 
-#[cfg(feature = "test_only")]
-impl Operation for SegmentProof {
+#[derive(Deserialize, Serialize, RemoteExecute)]
+pub struct SegmentProofTestOnly {
+    pub save_inputs_on_error: bool,
+}
+
+impl Operation for SegmentProofTestOnly {
     type Input = AllData;
     type Output = ();
 
@@ -102,14 +98,12 @@ impl Operation for SegmentProof {
 ///
 /// - When created, it starts a span with the transaction proof id.
 /// - When dropped, it logs the time taken by the transaction proof.
-#[cfg(not(feature = "test_only"))]
 struct SegmentProofSpan {
     _span: tracing::span::EnteredSpan,
     start: Instant,
     descriptor: String,
 }
 
-#[cfg(not(feature = "test_only"))]
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
     fn get_id(ir: &TrimmedGenerationInputs, segment_index: usize) -> String {
@@ -169,7 +163,6 @@ impl SegmentProofSpan {
     }
 }
 
-#[cfg(not(feature = "test_only"))]
 impl Drop for SegmentProofSpan {
     fn drop(&mut self) {
         event!(

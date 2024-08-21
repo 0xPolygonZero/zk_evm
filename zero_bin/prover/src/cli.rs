@@ -14,6 +14,10 @@ pub struct CliProverConfig {
     /// If true, save the public inputs to disk on error.
     #[arg(short='i', long, help_heading = HELP_HEADING, default_value_t = false)]
     save_inputs_on_error: bool,
+    /// If true, only test the trace decoder and witness generation without
+    /// generating a proof.
+    #[arg(long, help_heading = HELP_HEADING, default_value_t = false)]
+    test_only: bool,
 }
 
 impl From<CliProverConfig> for crate::ProverConfig {
@@ -22,6 +26,7 @@ impl From<CliProverConfig> for crate::ProverConfig {
             batch_size: cli.batch_size,
             max_cpu_len_log: cli.max_cpu_len_log,
             save_inputs_on_error: cli.save_inputs_on_error,
+            test_only: cli.test_only,
         }
     }
 }
