@@ -812,7 +812,7 @@ where
             let burn_addr_limbs: [F; 8] = u256_limbs::<F>(burn_addr);
             witness.set_target_arr(addr_target, &burn_addr_limbs);
         }
-        BurnAddrTarget::Burnt() => panic!("There should be an address set in cdk_erigon."),
+        BurnAddrTarget::Burnt() => panic!("There should be an address target set in cdk_erigon."),
     }
 
     Ok(())

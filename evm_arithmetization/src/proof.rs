@@ -650,13 +650,15 @@ impl BurnAddrTarget {
         ba1: Self,
     ) -> Self {
         match cfg!(feature = "cdk_erigon") {
+            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of type
+            // `BurnAddr`.
             true => match (ba0, ba1) {
                 (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
                     BurnAddrTarget::BurnAddr(core::array::from_fn(|i| {
                         builder.select(condition, a0[i], a1[i])
                     }))
                 }
-                _ => panic!("We should have set an address before already"),
+                _ => panic!("We should have already set an address (or U256::MAX) before."),
             },
             false => BurnAddrTarget::Burnt(),
         }
@@ -669,58 +671,20 @@ impl BurnAddrTarget {
         ba1: Self,
     ) {
         match cfg!(feature = "cdk_erigon") {
+            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of type
+            // `BurnAddr`.
             true => match (ba0, ba1) {
                 (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
                     for i in 0..5 {
                         builder.connect(a0[i], a1[i]);
                     }
                 }
-                _ => panic!("We should have set an address before already"),
+                _ => panic!("We should have already set an address (or U256::MAX) before."),
             },
             false => (),
         }
     }
 }
-
-// #[cfg(feature = "cdk_erigon")]
-// impl BurnAddrTarget {
-//     /// Number of `Target`s required for the burn address.
-//     pub(crate) const SIZE: usize = 8;
-
-//     /// Extracts the burn address from the provided public input
-//     /// `Target`s. The provided `pis` should start with the burn address.
-//     pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
-//         let burn_addr = pis[0..8].try_into().unwrap();
-
-//         Self { burn_addr }
-//     }
-
-//     /// If `condition`, returns the burn address in `ba0`,
-//     /// otherwise returns the burn address in `ba1`.
-//     pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
-//         builder: &mut CircuitBuilder<F, D>,
-//         condition: BoolTarget,
-//         ba0: Self,
-//         ba1: Self,
-//     ) -> Self {
-//         Self {
-//             burn_addr: core::array::from_fn(|i| {
-//                 builder.select(condition, ba0.burn_addr[i], ba1.burn_addr[i])
-//             }),
-//         }
-//     }
-
-//     /// Connects the burn address in `ba0` to the burn address in `ba1`.
-//     pub(crate) fn connect<F: RichField + Extendable<D>, const D: usize>(
-//         builder: &mut CircuitBuilder<F, D>,
-//         ba0: Self,
-//         ba1: Self,
-//     ) {
-//         for i in 0..5 {
-//             builder.connect(ba0.burn_addr[i], ba1.burn_addr[i]);
-//         }
-//     }
-// }
 
 /// Circuit version of `BlockMetadata`.
 /// Metadata contained in a block header. Those are identical between
