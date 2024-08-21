@@ -96,10 +96,7 @@ pub fn preinitialized_state_and_storage_tries(
     )?;
 
     let storage_tries = vec![
-        (
-            H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED),
-            Node::Empty.into(),
-        ),
+        (BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, Node::Empty.into()),
         (H256(GLOBAL_EXIT_ROOT_ADDRESS_HASHED), Node::Empty.into()),
     ];
 
@@ -108,7 +105,7 @@ pub fn preinitialized_state_and_storage_tries(
 
 /// Returns the `Nibbles` corresponding to the beacon roots contract account.
 pub fn beacon_roots_account_nibbles() -> Nibbles {
-    Nibbles::from_bytes_be(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED).unwrap()
+    Nibbles::from_bytes_be(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED.0).unwrap()
 }
 
 /// Returns the `Nibbles` corresponding to the beacon roots contract account.

@@ -8,7 +8,9 @@ use evm_arithmetization::{
         GenerationInputs, TrieInputs,
     },
     proof::{BlockMetadata, ExtraBlockData, TrieRoots},
-    testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH},
+    testing_utils::{
+        BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
+    },
 };
 use mpt_trie::{
     nibbles::Nibbles,
@@ -114,7 +116,6 @@ fn update_beacon_block_root_contract_storage(
     block_data: &BlockMetadata,
 ) -> anyhow::Result<()> {
     const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
-    const ADDRESS: H256 = H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED);
 
     let timestamp_idx = block_data.block_timestamp % HISTORY_BUFFER_LENGTH_MOD;
     let timestamp = rlp::encode(&block_data.block_timestamp).to_vec();
@@ -127,8 +128,11 @@ fn update_beacon_block_root_contract_storage(
 
     let storage_trie = trie_state
         .storage
-        .get_mut(&ADDRESS)
-        .context(format!("missing account storage trie {:x}", ADDRESS))?;
+        .get_mut(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
+        .context(format!(
+            "missing account storage trie for address {:x}",
+            BEACON_ROOTS_CONTRACT_ADDRESS
+        ))?;
 
     let mut slots_nibbles = vec![];
 
@@ -152,7 +156,7 @@ fn update_beacon_block_root_contract_storage(
 
                 delta_out
                     .additional_storage_trie_paths_to_not_hash
-                    .entry(ADDRESS)
+                    .entry(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
                     .or_default()
                     .push(slot);
             }
@@ -165,7 +169,7 @@ fn update_beacon_block_root_contract_storage(
                 {
                     delta_out
                         .additional_storage_trie_paths_to_not_hash
-                        .entry(ADDRESS)
+                        .entry(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
                         .or_default()
                         .push(remaining_slot_key);
                 }
@@ -173,22 +177,27 @@ fn update_beacon_block_root_contract_storage(
         }
     }
 
-    nodes_used.storage_accesses.push((ADDRESS, slots_nibbles));
+    nodes_used
+        .storage_accesses
+        .push((BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, slots_nibbles));
 
-    let addr_nibbles = TrieKey::from_hash(ADDRESS);
+    let addr_nibbles = TrieKey::from_hash(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED);
     delta_out
         .additional_state_trie_paths_to_not_hash
         .push(addr_nibbles);
     let mut account = trie_state
         .state
-        .get_by_key(addr_nibbles)
-        .context(format!("missing account storage trie {:x}", ADDRESS))?;
+        .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
+        .context(format!(
+            "missing account storage trie for address {:x}",
+            BEACON_ROOTS_CONTRACT_ADDRESS
+        ))?;
 
     account.storage_root = storage_trie.root();
 
     trie_state
         .state
-        .insert_by_key(addr_nibbles, account)
+        .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, account)
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
         //                Add an entry API
         .expect("insert must succeed with the same key as a successful `get`");
@@ -448,9 +457,7 @@ fn add_withdrawals_to_txns(
         let additional_paths = if last_inputs.txn_number_before == 0.into() {
             // We need to include the beacon roots contract as this payload is at the
             // start of the block execution.
-            vec![TrieKey::from_hash(H256(
-                BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
-            ))]
+            vec![TrieKey::from_hash(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)]
         } else {
             vec![]
         };
