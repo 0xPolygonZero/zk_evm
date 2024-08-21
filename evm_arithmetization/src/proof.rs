@@ -670,18 +670,17 @@ impl BurnAddrTarget {
         ba0: Self,
         ba1: Self,
     ) {
-        match cfg!(feature = "cdk_erigon") {
-            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of type
-            // `BurnAddr`.
-            true => match (ba0, ba1) {
+        if cfg!(feature = "cdk_erigon") == true {
+            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of
+            // type `BurnAddr`.
+            match (ba0, ba1) {
                 (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
                     for i in 0..5 {
                         builder.connect(a0[i], a1[i]);
                     }
                 }
                 _ => panic!("We should have already set an address (or U256::MAX) before."),
-            },
-            false => (),
+            }
         }
     }
 }
