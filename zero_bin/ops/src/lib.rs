@@ -22,23 +22,6 @@ use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 registry!();
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct BatchTestOnly {
-    pub save_inputs_on_error: bool,
-}
-
-impl Operation for BatchTestOnly {
-    type Input = (GenerationInputs, usize);
-    type Output = ();
-
-    fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
-        simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
-            .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
-
-        Ok(())
-    }
-}
-
-#[derive(Deserialize, Serialize, RemoteExecute)]
 pub struct SegmentProof {
     pub save_inputs_on_error: bool,
 }
