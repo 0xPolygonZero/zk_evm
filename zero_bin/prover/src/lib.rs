@@ -42,7 +42,7 @@ impl BlockProverInput {
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
-        use evm_arithmetization::prover::SegmentDataIterator;
+        use evm_arithmetization::SegmentDataIterator;
         use futures::{stream::FuturesUnordered, FutureExt};
         use paladin::directive::{Directive, IndexedStream};
 

@@ -37,6 +37,7 @@ use starky::stark::Stark;
 
 use crate::all_stark::{all_cross_table_lookups, AllStark, Table, NUM_TABLES};
 use crate::cpu::kernel::aggregator::KERNEL;
+use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, SegmentError};
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values_target;
 use crate::proof::{
@@ -44,7 +45,7 @@ use crate::proof::{
     FinalPublicValues, MemCapTarget, PublicValues, PublicValuesTarget, RegistersDataTarget,
     TrieRoots, TrieRootsTarget, DEFAULT_CAP_LEN, TARGET_HASH_SIZE,
 };
-use crate::prover::{check_abort_signal, prove, GenerationSegmentData, SegmentDataIterator};
+use crate::prover::{check_abort_signal, prove};
 use crate::recursive_verifier::{
     add_common_recursion_gates, add_virtual_public_values, get_memory_extra_looking_sum_circuit,
     recursive_stark_circuit, set_public_value_targets, PlonkWrapperCircuit, PublicInputs,
@@ -1731,7 +1732,8 @@ where
         let mut proofs = vec![];
 
         for segment_run in segment_iterator {
-            let (_, mut next_data) = segment_run.map_err(|e| anyhow::format_err!(e))?;
+            let (_, mut next_data) =
+                segment_run.map_err(|e: SegmentError| anyhow::format_err!(e))?;
             let proof = self.prove_segment(
                 all_stark,
                 config,
