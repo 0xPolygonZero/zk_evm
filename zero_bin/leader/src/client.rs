@@ -1,6 +1,8 @@
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use alloy::rpc::types::{BlockId, BlockNumberOrTag, BlockTransactionsKind};
 use alloy::transports::http::reqwest::Url;
 use anyhow::Result;
 use paladin::runtime::Runtime;
@@ -35,31 +37,52 @@ pub(crate) async fn client_main(
     block_interval: BlockInterval,
     mut params: ProofParams,
 ) -> Result<()> {
-    let cached_provider = rpc::provider::CachedProvider::new(build_http_retry_provider(
-        rpc_params.rpc_url.clone(),
-        rpc_params.backoff,
-        rpc_params.max_retries,
+    use futures::{FutureExt, StreamExt};
+
+    let cached_provider = Arc::new(rpc::provider::CachedProvider::new(
+        build_http_retry_provider(
+            rpc_params.rpc_url.clone(),
+            rpc_params.backoff,
+            rpc_params.max_retries,
+        ),
     ));
 
-    let prover_input = rpc::prover_input(
-        &cached_provider,
-        block_interval,
-        params.checkpoint_block_number.into(),
-        rpc_params.rpc_type,
-    )
-    .await?;
+    // Grab interval checkpoint block state trie
+    let checkpoint_state_trie_root = cached_provider
+        .get_block(
+            params.checkpoint_block_number.into(),
+            BlockTransactionsKind::Hashes,
+        )
+        .await?
+        .header
+        .state_root;
+
+    let mut block_prover_inputs = Vec::new();
+    let mut block_interval = block_interval.into_bounded_stream()?;
+    while let Some(block_num) = block_interval.next().await {
+        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
+        // Get future of prover input for particular block.
+        let block_prover_input = rpc::block_prover_input(
+            cached_provider.clone(),
+            block_id,
+            checkpoint_state_trie_root,
+            rpc_params.rpc_type,
+        )
+        .boxed();
+        block_prover_inputs.push(block_prover_input);
+    }
 
     // If `keep_intermediate_proofs` is not set we only keep the last block
     // proof from the interval. It contains all the necessary information to
     // verify the whole sequence.
-    let proved_blocks = prover_input
-        .prove(
-            &runtime,
-            params.previous_proof.take(),
-            params.prover_config,
-            params.proof_output_dir.clone(),
-        )
-        .await;
+    let proved_blocks = prover::prove(
+        block_prover_inputs,
+        &runtime,
+        params.previous_proof.take(),
+        params.prover_config,
+        params.proof_output_dir.clone(),
+    )
+    .await;
     runtime.close().await?;
     let proved_blocks = proved_blocks?;
 

@@ -19,7 +19,7 @@ pub struct ZeroTxResult {
 }
 
 pub async fn block_prover_input<ProviderT, TransportT>(
-    cached_provider: &CachedProvider<ProviderT, TransportT>,
+    cached_provider: std::sync::Arc<CachedProvider<ProviderT, TransportT>>,
     target_block_id: BlockId,
     checkpoint_state_trie_root: B256,
 ) -> anyhow::Result<BlockProverInput>

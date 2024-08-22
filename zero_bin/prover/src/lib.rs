@@ -24,7 +24,20 @@ pub struct ProverConfig {
     pub test_only: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+pub type BlockProverInputFuture = std::pin::Pin<
+    Box<dyn Future<Output = std::result::Result<BlockProverInput, anyhow::Error>> + Send>,
+>;
+
+impl From<BlockProverInput> for BlockProverInputFuture {
+    fn from(item: BlockProverInput) -> Self {
+        async fn _from(item: BlockProverInput) -> Result<BlockProverInput, anyhow::Error> {
+            Ok(item)
+        }
+        Box::pin(_from(item))
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
     pub other_data: OtherBlockData,
@@ -185,105 +198,104 @@ impl BlockProverInput {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ProverInput {
-    pub blocks: Vec<BlockProverInput>,
+/// Prove all the blocks in the input, or simulate their execution depending on
+/// the selected prover configuration. Return the list of block numbers that are
+/// proved and if the proof data is not saved to disk, return the generated
+/// block proofs as well.
+pub async fn prove(
+    block_prover_inputs: Vec<BlockProverInputFuture>,
+    runtime: &Runtime,
+    previous_proof: Option<GeneratedBlockProof>,
+    prover_config: ProverConfig,
+    proof_output_dir: Option<PathBuf>,
+) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
+    let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
+        previous_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
+
+    let mut results = FuturesOrdered::new();
+    for block_prover_input in block_prover_inputs {
+        let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
+        let proof_output_dir = proof_output_dir.clone();
+        let previous_block_proof = prev.take();
+        let fut = async move {
+            // Get the prover input data from the external source (e.g. Erigon node).
+            let block = block_prover_input.await?;
+            let block_number = block.get_block_number();
+            info!("Proving block {block_number}");
+
+            // Prove the block
+            let block_proof = if prover_config.test_only {
+                block
+                    .prove_test(runtime, previous_block_proof, prover_config)
+                    .then(move |proof| async move {
+                        let proof = proof?;
+                        let block_number = proof.b_height;
+
+                        // Write latest generated proof to disk if proof_output_dir is provided
+                        // or alternatively return proof as function result.
+                        let return_proof: Option<GeneratedBlockProof> =
+                            if let Some(output_dir) = proof_output_dir {
+                                write_proof_to_dir(output_dir, &proof).await?;
+                                None
+                            } else {
+                                Some(proof.clone())
+                            };
+
+                        if tx.send(proof).is_err() {
+                            anyhow::bail!("Failed to send proof");
+                        }
+
+                        Ok((block_number, return_proof))
+                    })
+                    .await?
+            } else {
+                block
+                    .prove(runtime, previous_block_proof, prover_config)
+                    .then(move |proof| async move {
+                        let proof = proof?;
+                        let block_number = proof.b_height;
+
+                        // Write latest generated proof to disk if proof_output_dir is provided
+                        // or alternatively return proof as function result.
+                        let return_proof: Option<GeneratedBlockProof> =
+                            if let Some(output_dir) = proof_output_dir {
+                                write_proof_to_dir(output_dir, &proof).await?;
+                                None
+                            } else {
+                                Some(proof.clone())
+                            };
+
+                        if tx.send(proof).is_err() {
+                            anyhow::bail!("Failed to send proof");
+                        }
+
+                        Ok((block_number, return_proof))
+                    })
+                    .await?
+            };
+
+            Ok(block_proof)
+        }
+        .boxed();
+        prev = Some(Box::pin(rx.map_err(anyhow::Error::new)));
+        results.push_back(fut);
+    }
+
+    results.try_collect().await
 }
 
-impl ProverInput {
-    /// Prove all the blocks in the input.
-    /// Return the list of block numbers that are proved and if the proof data
-    /// is not saved to disk, return the generated block proofs as well.
-    pub async fn prove(
-        self,
-        runtime: &Runtime,
-        previous_proof: Option<GeneratedBlockProof>,
-        prover_config: ProverConfig,
-        proof_output_dir: Option<PathBuf>,
-    ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
-        let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
-            previous_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
+/// Write the proof to the `output_dir` directory.
+async fn write_proof_to_dir(output_dir: PathBuf, proof: &GeneratedBlockProof) -> Result<()> {
+    let proof_serialized = serde_json::to_vec(proof)?;
+    let block_proof_file_path =
+        generate_block_proof_file_name(&output_dir.to_str(), proof.b_height);
 
-        let results: FuturesOrdered<_> = self
-            .blocks
-            .into_iter()
-            .map(|block| {
-                let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
-
-                // Prove the block
-                let proof_output_dir = proof_output_dir.clone();
-                let fut = if prover_config.test_only {
-                    block
-                        .prove_test(runtime, prev.take(), prover_config)
-                        .then(move |proof| async move {
-                            let proof = proof?;
-                            let block_number = proof.b_height;
-
-                            if tx.send(proof).is_err() {
-                                anyhow::bail!("Failed to send proof");
-                            }
-
-                            // We ignore the returned dummy proof in test-only mode.
-                            Ok((block_number, None))
-                        })
-                        .boxed()
-                } else {
-                    block
-                        .prove(runtime, prev.take(), prover_config)
-                        .then(move |proof| async move {
-                            let proof = proof?;
-                            let block_number = proof.b_height;
-
-                            // Write latest generated proof to disk if proof_output_dir is provided.
-                            let return_proof: Option<GeneratedBlockProof> =
-                                if proof_output_dir.is_some() {
-                                    ProverInput::write_proof(proof_output_dir, &proof).await?;
-                                    None
-                                } else {
-                                    Some(proof.clone())
-                                };
-
-                            if tx.send(proof).is_err() {
-                                anyhow::bail!("Failed to send proof");
-                            }
-
-                            Ok((block_number, return_proof))
-                        })
-                        .boxed()
-                };
-
-                prev = Some(Box::pin(rx.map_err(anyhow::Error::new)));
-
-                fut
-            })
-            .collect();
-
-        results.try_collect().await
+    if let Some(parent) = block_proof_file_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
     }
 
-    /// Write the proof to the disk (if `output_dir` is provided) or stdout.
-    pub(crate) async fn write_proof(
-        output_dir: Option<PathBuf>,
-        proof: &GeneratedBlockProof,
-    ) -> Result<()> {
-        let proof_serialized = serde_json::to_vec(proof)?;
-        let block_proof_file_path =
-            output_dir.map(|path| generate_block_proof_file_name(&path.to_str(), proof.b_height));
-        match block_proof_file_path {
-            Some(p) => {
-                if let Some(parent) = p.parent() {
-                    tokio::fs::create_dir_all(parent).await?;
-                }
-
-                let mut f = tokio::fs::File::create(p).await?;
-                f.write_all(&proof_serialized)
-                    .await
-                    .context("Failed to write proof to disk")
-            }
-            None => tokio::io::stdout()
-                .write_all(&proof_serialized)
-                .await
-                .context("Failed to write proof to stdout"),
-        }
-    }
+    let mut f = tokio::fs::File::create(block_proof_file_path).await?;
+    f.write_all(&proof_serialized)
+        .await
+        .context("Failed to write proof to disk")
 }

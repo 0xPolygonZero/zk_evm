@@ -1,17 +1,14 @@
-use std::collections::hash_map::Entry;
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::fmt::Debug;
-use std::iter::once;
 
-use anyhow::bail;
+use anyhow::{bail, Context as _};
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use itertools::Itertools;
-use zk_evm_common::{EMPTY_CODE_HASH, EMPTY_TRIE_HASH};
+use zk_evm_common::EMPTY_TRIE_HASH;
 
-use crate::hash;
 use crate::typed_mpt::TrieKey;
 use crate::PartialTriePreImages;
+use crate::{hash, TxnTrace};
 use crate::{ContractCodeUsage, TxnInfo};
 
 const FIRST_PRECOMPILE_ADDRESS: U256 = U256([1, 0, 0, 0]);
@@ -33,7 +30,7 @@ pub(crate) struct ProcessedBlockTracePreImages {
 #[derive(Debug, Default)]
 pub(crate) struct ProcessedTxnInfo {
     pub nodes_used_by_txn: NodesUsedByTxn,
-    pub contract_code_accessed: HashMap<H256, Vec<u8>>,
+    pub contract_code_accessed: HashSet<Vec<u8>>,
     pub meta: Vec<TxnMetaState>,
 }
 
@@ -42,22 +39,34 @@ pub(crate) struct ProcessedTxnInfo {
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
 pub(crate) struct Hash2Code {
+    /// Key must always be [`hash`] of value.
     inner: HashMap<H256, Vec<u8>>,
 }
 
 impl Hash2Code {
-    pub fn new(inner: HashMap<H256, Vec<u8>>) -> Self {
-        Self { inner }
-    }
-    fn resolve(&mut self, c_hash: &H256) -> anyhow::Result<Vec<u8>> {
-        match self.inner.get(c_hash) {
-            Some(code) => Ok(code.clone()),
-            None => bail!("no code for hash {}", c_hash),
+    pub fn new() -> Self {
+        Self {
+            inner: HashMap::new(),
         }
     }
+    fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
+        match self.inner.get(&hash) {
+            Some(code) => Ok(code.clone()),
+            None => bail!("no code for hash {}", hash),
+        }
+    }
+    fn insert(&mut self, code: Vec<u8>) {
+        self.inner.insert(hash(&code), code);
+    }
+}
 
-    fn insert_code(&mut self, c_hash: H256, code: Vec<u8>) {
-        self.inner.insert(c_hash, code);
+impl FromIterator<Vec<u8>> for Hash2Code {
+    fn from_iter<II: IntoIterator<Item = Vec<u8>>>(iter: II) -> Self {
+        let mut this = Self::new();
+        for code in iter {
+            this.insert(code)
+        }
+        this
     }
 }
 
@@ -70,7 +79,7 @@ impl TxnInfo {
         hash2code: &mut Hash2Code,
     ) -> anyhow::Result<ProcessedTxnInfo> {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
-        let mut contract_code_accessed = create_empty_code_access_map();
+        let mut contract_code_accessed = HashSet::from([vec![]]); // we always "access" empty code
         let mut meta = Vec::with_capacity(tx_infos.len());
 
         let all_accounts: BTreeSet<H256> =
@@ -79,19 +88,30 @@ impl TxnInfo {
         for txn in tx_infos.iter() {
             let mut created_accounts = BTreeSet::new();
 
-            for (addr, trace) in txn.traces.iter() {
+            for (
+                addr,
+                TxnTrace {
+                    balance,
+                    nonce,
+                    storage_read,
+                    storage_written,
+                    code_usage,
+                    self_destructed,
+                },
+            ) in txn.traces.iter()
+            {
                 let hashed_addr = hash(addr.as_bytes());
 
-                let storage_writes = trace.storage_written.clone().unwrap_or_default();
+                // record storage changes
+                let storage_written = storage_written.clone().unwrap_or_default();
 
-                let storage_read_keys = trace
-                    .storage_read
+                let storage_read_keys = storage_read
                     .clone()
                     .into_iter()
                     .flat_map(|reads| reads.into_iter());
 
-                let storage_write_keys = storage_writes.keys();
-                let storage_access_keys = storage_read_keys.chain(storage_write_keys.copied());
+                let storage_written_keys = storage_written.keys();
+                let storage_access_keys = storage_read_keys.chain(storage_written_keys.copied());
 
                 if let Some(storage) = nodes_used_by_txn.storage_accesses.get_mut(&hashed_addr) {
                     storage.extend(
@@ -108,14 +128,20 @@ impl TxnInfo {
                     );
                 };
 
-                let storage_trie_change = !storage_writes.is_empty();
-                let code_change = trace.code_usage.is_some();
-                let state_write_occurred = trace.balance.is_some()
-                    || trace.nonce.is_some()
-                    || storage_trie_change
-                    || code_change;
+                // record state changes
+                let state_write = StateWrite {
+                    balance: *balance,
+                    nonce: *nonce,
+                    storage_trie_change: !storage_written.is_empty(),
+                    code_hash: code_usage.as_ref().map(|it| match it {
+                        ContractCodeUsage::Read(hash) => *hash,
+                        ContractCodeUsage::Write(bytes) => hash(bytes),
+                    }),
+                };
 
-                if state_write_occurred {
+                if state_write != StateWrite::default() {
+                    // a write occurred
+
                     // Account creations are flagged to handle reverts.
                     if !all_accounts.contains(&hashed_addr) {
                         created_accounts.insert(hashed_addr);
@@ -129,38 +155,31 @@ impl TxnInfo {
                         .self_destructed_accounts
                         .remove(&hashed_addr);
 
-                    if let Some(state_trie_writes) =
+                    if let Some(existing_state_write) =
                         nodes_used_by_txn.state_writes.get_mut(&hashed_addr)
                     {
                         // The entry already exists, so we update only the relevant fields.
-                        if trace.balance.is_some() {
-                            state_trie_writes.balance = trace.balance;
+                        if state_write.balance.is_some() {
+                            existing_state_write.balance = state_write.balance;
                         }
-                        if trace.nonce.is_some() {
-                            state_trie_writes.nonce = trace.nonce;
+                        if state_write.nonce.is_some() {
+                            existing_state_write.nonce = state_write.nonce;
                         }
-                        if storage_trie_change {
-                            state_trie_writes.storage_trie_change = storage_trie_change;
+                        if state_write.storage_trie_change {
+                            existing_state_write.storage_trie_change =
+                                state_write.storage_trie_change;
                         }
-                        if code_change {
-                            state_trie_writes.code_hash =
-                                trace.code_usage.as_ref().map(|usage| usage.get_code_hash());
+                        if state_write.code_hash.is_some() {
+                            existing_state_write.code_hash = state_write.code_hash;
                         }
                     } else {
-                        let state_trie_writes = StateTrieWrites {
-                            balance: trace.balance,
-                            nonce: trace.nonce,
-                            storage_trie_change,
-                            code_hash: trace.code_usage.as_ref().map(|usage| usage.get_code_hash()),
-                        };
-
                         nodes_used_by_txn
                             .state_writes
-                            .insert(hashed_addr, state_trie_writes);
+                            .insert(hashed_addr, state_write);
                     }
                 }
 
-                for (k, v) in storage_writes.into_iter() {
+                for (k, v) in storage_written.into_iter() {
                     if let Some(storage) = nodes_used_by_txn.storage_writes.get_mut(&hashed_addr) {
                         storage.insert(TrieKey::from_hash(k), rlp::encode(&v).to_vec());
                     } else {
@@ -187,23 +206,18 @@ impl TxnInfo {
                     nodes_used_by_txn.state_accesses.insert(hashed_addr);
                 }
 
-                if let Some(c_usage) = &trace.code_usage {
-                    match c_usage {
-                        ContractCodeUsage::Read(c_hash) => {
-                            if let Entry::Vacant(vacant) = contract_code_accessed.entry(*c_hash) {
-                                vacant.insert(hash2code.resolve(c_hash)?);
-                            }
-                        }
-                        ContractCodeUsage::Write(c_bytes) => {
-                            let c_hash = hash(c_bytes);
-
-                            contract_code_accessed.insert(c_hash, c_bytes.clone());
-                            hash2code.insert_code(c_hash, c_bytes.clone());
-                        }
+                match code_usage {
+                    Some(ContractCodeUsage::Read(hash)) => {
+                        contract_code_accessed.insert(hash2code.get(*hash)?);
                     }
+                    Some(ContractCodeUsage::Write(code)) => {
+                        contract_code_accessed.insert(code.clone());
+                        hash2code.insert(code.to_vec());
+                    }
+                    None => {}
                 }
 
-                if trace.self_destructed.unwrap_or_default() {
+                if self_destructed.unwrap_or_default() {
                     nodes_used_by_txn
                         .self_destructed_accounts
                         .insert(hashed_addr);
@@ -214,13 +228,12 @@ impl TxnInfo {
                 nodes_used_by_txn.state_accesses.insert(hashed_addr);
             }
 
-            let accounts_with_storage_accesses: HashSet<_> = HashSet::from_iter(
-                nodes_used_by_txn
-                    .storage_accesses
-                    .iter()
-                    .filter(|(_, slots)| !slots.is_empty())
-                    .map(|(addr, _)| *addr),
-            );
+            let accounts_with_storage_accesses = nodes_used_by_txn
+                .storage_accesses
+                .iter()
+                .filter(|(_, slots)| !slots.is_empty())
+                .map(|(addr, _)| *addr)
+                .collect::<HashSet<_>>();
 
             let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
                 .iter()
@@ -231,20 +244,17 @@ impl TxnInfo {
                 .map(|(addr, data)| (*addr, data.storage_root));
 
             nodes_used_by_txn
-                .state_accounts_with_no_accesses_but_storage_tries
+                .accts_with_unaccessed_storage
                 .extend(accounts_with_storage_but_no_storage_accesses);
 
-            let txn_bytes = match txn.meta.byte_code.is_empty() {
-                false => Some(txn.meta.byte_code.clone()),
-                true => None,
-            };
-
-            let receipt_node_bytes =
-                process_rlped_receipt_node_bytes(txn.meta.new_receipt_trie_node_byte.clone());
-
             meta.push(TxnMetaState {
-                txn_bytes,
-                receipt_node_bytes,
+                txn_bytes: match txn.meta.byte_code.is_empty() {
+                    false => Some(txn.meta.byte_code.clone()),
+                    true => None,
+                },
+                receipt_node_bytes: check_receipt_bytes(
+                    txn.meta.new_receipt_trie_node_byte.clone(),
+                )?,
                 gas_used: txn.meta.gas_used,
                 created_accounts,
             });
@@ -258,35 +268,31 @@ impl TxnInfo {
     }
 }
 
-fn process_rlped_receipt_node_bytes(raw_bytes: Vec<u8>) -> Vec<u8> {
-    match rlp::decode::<LegacyReceiptRlp>(&raw_bytes) {
-        Ok(_) => raw_bytes,
+fn check_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+    match rlp::decode::<LegacyReceiptRlp>(&bytes) {
+        Ok(_) => Ok(bytes),
         Err(_) => {
-            // Must be non-legacy.
-            rlp::decode::<Vec<u8>>(&raw_bytes).unwrap()
+            rlp::decode(&bytes).context("couldn't decode receipt as a legacy receipt or raw bytes")
         }
     }
-}
-
-fn create_empty_code_access_map() -> HashMap<H256, Vec<u8>> {
-    HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
     pub state_accesses: HashSet<H256>,
-    pub state_writes: HashMap<H256, StateTrieWrites>,
+    pub state_writes: HashMap<H256, StateWrite>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
     pub storage_accesses: HashMap<H256, Vec<TrieKey>>,
     pub storage_writes: HashMap<H256, HashMap<TrieKey, Vec<u8>>>,
-    pub state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
+    /// Hashed address -> storage root.
+    pub accts_with_unaccessed_storage: HashMap<H256, H256>,
     pub self_destructed_accounts: HashSet<H256>,
 }
 
-#[derive(Debug)]
-pub(crate) struct StateTrieWrites {
+#[derive(Debug, Default, PartialEq)]
+pub(crate) struct StateWrite {
     pub balance: Option<U256>,
     pub nonce: Option<U256>,
     pub storage_trie_change: bool,
@@ -295,6 +301,7 @@ pub(crate) struct StateTrieWrites {
 
 #[derive(Debug, Default)]
 pub(crate) struct TxnMetaState {
+    /// [`None`] if this is a dummy transaction inserted for padding.
     pub txn_bytes: Option<Vec<u8>>,
     pub receipt_node_bytes: Vec<u8>,
     pub gas_used: u64,

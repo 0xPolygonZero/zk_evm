@@ -4180,6 +4180,7 @@ dependencies = [
  "evm_arithmetization",
  "futures",
  "hex",
+ "itertools 0.13.0",
  "lru",
  "mpt_trie",
  "primitive-types 0.12.2",
