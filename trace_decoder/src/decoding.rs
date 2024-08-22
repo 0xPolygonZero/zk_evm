@@ -358,15 +358,13 @@ fn apply_deltas_to_trie_state(
     }
 
     // Remove any accounts that self-destructed.
-    for hashed_acc_addr in deltas.self_destructed_accounts.iter() {
-        let val_k = TrieKey::from_hash(*hashed_acc_addr);
-
-        trie_state.storage.remove(hashed_acc_addr);
+    for addr in &deltas.self_destructed_accounts {
+        trie_state.storage.remove(&hash(addr));
 
         if let Some(remaining_account_key) =
             delete_node_and_report_remaining_key_if_branch_collapsed(
                 trie_state.state.as_mut_hashed_partial_trie_unchecked(),
-                &val_k,
+                &TrieKey::from_hash(hash(addr)),
             )?
         {
             out.additional_state_trie_paths_to_not_hash

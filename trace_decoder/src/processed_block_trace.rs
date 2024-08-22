@@ -92,12 +92,10 @@ impl TxnInfo {
             },
         ) in self.traces
         {
-            let hashed_addr = hash(addr.as_bytes());
-
             // record storage changes
             let storage_written = storage_written.unwrap_or_default();
             nodes_used_by_txn.storage_accesses.push((
-                hashed_addr,
+                hash(addr),
                 storage_read
                     .into_iter()
                     .flatten()
@@ -106,7 +104,7 @@ impl TxnInfo {
                     .collect(),
             ));
             nodes_used_by_txn.storage_writes.push((
-                hashed_addr,
+                hash(addr),
                 storage_written
                     .iter()
                     .map(|(k, v)| (TrieKey::from_hash(*k), rlp::encode(v).to_vec()))
@@ -152,12 +150,12 @@ impl TxnInfo {
             }
 
             if self_destructed.unwrap_or_default() {
-                nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
+                nodes_used_by_txn.self_destructed_accounts.push(addr);
             }
         }
 
-        for &hashed_addr in extra_state_accesses {
-            nodes_used_by_txn.state_accesses.push(hashed_addr);
+        for &addr in extra_state_accesses {
+            nodes_used_by_txn.state_accesses.push(addr);
         }
 
         let accounts_with_storage_accesses = nodes_used_by_txn
@@ -169,7 +167,7 @@ impl TxnInfo {
 
         for (addr, state) in all_accounts_in_pre_image {
             if state.storage_root != EMPTY_TRIE_HASH
-                && !accounts_with_storage_accesses.contains(addr)
+                && !accounts_with_storage_accesses.contains(&hash(addr))
             {
                 nodes_used_by_txn
                     .accts_with_unaccessed_storage
@@ -207,13 +205,13 @@ pub(crate) struct NodesUsedByTxn {
     pub state_accesses: Vec<Address>,
     pub state_writes: Vec<(Address, StateWrite)>,
 
-    // Note: All entries in `storage_writes` also appear in `storage_accesses`.
     pub storage_accesses: Vec<(H256, Vec<TrieKey>)>,
     #[allow(clippy::type_complexity)]
     pub storage_writes: Vec<(H256, Vec<(TrieKey, Vec<u8>)>)>,
+
     /// Hashed address -> storage root.
     pub accts_with_unaccessed_storage: HashMap<H256, H256>,
-    pub self_destructed_accounts: Vec<H256>,
+    pub self_destructed_accounts: Vec<Address>,
 }
 
 #[derive(Debug, Default, PartialEq)]
