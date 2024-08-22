@@ -130,8 +130,8 @@ impl BlockInterval {
                     })?;
 
                     if current < last_block_number {
-                        current += 1;
                         yield current;
+                        current += 1;
                     } else {
                        info!("Waiting for the new blocks to be mined, requested block number: {current}, \
                        latest block number: {last_block_number}");
