@@ -4,13 +4,14 @@ use core::fmt;
 use std::{collections::HashMap, iter, marker::PhantomData};
 
 use copyvec::CopyVec;
-use ethereum_types::{Address, H256};
+use ethereum_types::{Address, BigEndianHash as _, H256, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
+use itertools::Itertools;
 use mpt_trie::{
     partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
     trie_ops::TrieOpError,
 };
-use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::{field::goldilocks_field::GoldilocksField, hash::hash_types::HashOut};
 use u4::{u4, AsNibbles, U4x2, U4};
 
 /// Map where keys are [up to 64 nibbles](TrieKey),
@@ -310,16 +311,6 @@ impl StateTrie {
     }
 }
 
-impl<'a> IntoIterator for &'a StateTrie {
-    type Item = (TrieKey, AccountRlp);
-
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.typed.into_iter()
-    }
-}
-
 /// Global, per-account.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#storage-trie>
@@ -360,7 +351,6 @@ impl StorageTrie {
 pub struct StateSmt {
     address2state: HashMap<Address, AccountRlp>,
     deferred: HashMap<TrieKey, H256>,
-    smt: smt_trie::smt::Smt<smt_trie::db::MemoryDb>,
 }
 
 impl StateSmt {
@@ -375,6 +365,54 @@ impl StateSmt {
         self.deferred.insert(key, hash);
         Ok(())
     }
+    pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+        self.address2state.get(&address).copied()
+    }
+    pub fn root(&self) -> H256 {
+        let mut smt = smt_trie::smt::Smt::<smt_trie::db::MemoryDb>::default();
+
+        for (key, hash) in &self.deferred {
+            // "needs to be called before `set` to avoid any issues"
+            smt.set_hash(key2key(*key).split(), hash2hash(*hash));
+        }
+
+        for (
+            addr,
+            AccountRlp {
+                nonce,
+                balance,
+                storage_root,
+                code_hash,
+            },
+        ) in &self.address2state
+        {
+            smt.set(smt_trie::keys::key_nonce(*addr), *nonce);
+            smt.set(smt_trie::keys::key_balance(*addr), *balance);
+            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+            //                is this the correct storage slot?
+            smt.set(
+                smt_trie::keys::key_storage(*addr, U256::zero()),
+                storage_root.into_uint(),
+            );
+            smt.set(smt_trie::keys::key_code(*addr), code_hash.into_uint())
+        }
+
+        let HashOut { elements } = smt.root;
+        let mut bytes = [0; 32];
+        for (dst, src) in bytes.iter_mut().zip_eq(
+            elements
+                .into_iter()
+                .flat_map(|GoldilocksField(u)| u.to_ne_bytes()),
+        ) {
+            *dst = src
+        }
+
+        H256(bytes)
+    }
+}
+
+fn hash2hash(H256(ours): H256) -> HashOut<GoldilocksField> {
+    todo!()
 }
 
 fn key2key(TrieKey(ours): TrieKey) -> smt_trie::smt::Key {
