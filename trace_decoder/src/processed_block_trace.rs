@@ -1,27 +1,17 @@
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::iter::once;
 
+use anyhow::bail;
 use ethereum_types::{Address, H256, U256};
 use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
-use mpt_trie::nibbles::Nibbles;
-use mpt_trie::partial_trie::PartialTrie;
+use zk_evm_common::{EMPTY_CODE_HASH, EMPTY_TRIE_HASH};
 
 use crate::hash;
+use crate::typed_mpt::TrieKey;
 use crate::PartialTriePreImages;
 use crate::{ContractCodeUsage, TxnInfo};
-
-// 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
-const EMPTY_CODE_HASH: H256 = H256([
-    197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202,
-    130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112,
-]);
-
-/// 0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421
-pub const EMPTY_TRIE_HASH: H256 = H256([
-    86, 232, 31, 23, 27, 204, 85, 166, 255, 131, 69, 230, 146, 192, 248, 110, 91, 72, 224, 27, 153,
-    108, 173, 192, 1, 98, 47, 181, 227, 99, 180, 33,
-]);
 
 const FIRST_PRECOMPILE_ADDRESS: U256 = U256([1, 0, 0, 0]);
 const LAST_PRECOMPILE_ADDRESS: U256 = U256([10, 0, 0, 0]);
@@ -46,39 +36,38 @@ pub(crate) struct ProcessedTxnInfo {
     pub meta: TxnMetaState,
 }
 
-pub(crate) struct CodeHashResolving<F> {
-    /// If we have not seen this code hash before, use the resolve function that
-    /// the client passes down to us. This will likely be an rpc call/cache
-    /// check.
-    pub client_code_hash_resolve_f: F,
-
-    /// Code hash mappings that we have constructed from parsing the block
-    /// trace. If there are any txns that create contracts, then they will also
-    /// get added here as we process the deltas.
-    pub extra_code_hash_mappings: HashMap<H256, Vec<u8>>,
+/// Code hash mappings that we have constructed from parsing the block
+/// trace.
+/// If there are any txns that create contracts, then they will also
+/// get added here as we process the deltas.
+pub(crate) struct Hash2Code {
+    inner: HashMap<H256, Vec<u8>>,
 }
 
-impl<F: Fn(&H256) -> Vec<u8>> CodeHashResolving<F> {
-    fn resolve(&mut self, c_hash: &H256) -> Vec<u8> {
-        match self.extra_code_hash_mappings.get(c_hash) {
-            Some(code) => code.clone(),
-            None => (self.client_code_hash_resolve_f)(c_hash),
+impl Hash2Code {
+    pub fn new(inner: HashMap<H256, Vec<u8>>) -> Self {
+        Self { inner }
+    }
+    fn resolve(&mut self, c_hash: &H256) -> anyhow::Result<Vec<u8>> {
+        match self.inner.get(c_hash) {
+            Some(code) => Ok(code.clone()),
+            None => bail!("no code for hash {}", c_hash),
         }
     }
 
     fn insert_code(&mut self, c_hash: H256, code: Vec<u8>) {
-        self.extra_code_hash_mappings.insert(c_hash, code);
+        self.inner.insert(c_hash, code);
     }
 }
 
 impl TxnInfo {
-    pub(crate) fn into_processed_txn_info<F: Fn(&H256) -> Vec<u8>>(
+    pub(crate) fn into_processed_txn_info(
         self,
         tries: &PartialTriePreImages,
         all_accounts_in_pre_image: &[(H256, AccountRlp)],
         extra_state_accesses: &[H256],
-        code_hash_resolver: &mut CodeHashResolving<F>,
-    ) -> ProcessedTxnInfo {
+        hash2code: &mut Hash2Code,
+    ) -> anyhow::Result<ProcessedTxnInfo> {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
         let mut contract_code_accessed = create_empty_code_access_map();
 
@@ -98,7 +87,7 @@ impl TxnInfo {
             nodes_used_by_txn.storage_accesses.push((
                 hashed_addr,
                 storage_access_keys
-                    .map(|H256(bytes)| Nibbles::from_h256_be(hash(bytes)))
+                    .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
                     .collect(),
             ));
 
@@ -124,7 +113,7 @@ impl TxnInfo {
 
             let storage_writes_vec = storage_writes
                 .into_iter()
-                .map(|(k, v)| (Nibbles::from_h256_be(k), rlp::encode(&v).to_vec()))
+                .map(|(k, v)| (TrieKey::from_hash(k), rlp::encode(&v).to_vec()))
                 .collect();
 
             nodes_used_by_txn
@@ -141,8 +130,7 @@ impl TxnInfo {
             if !is_precompile
                 || tries
                     .state
-                    .as_hashed_partial_trie()
-                    .get(Nibbles::from_h256_be(hashed_addr))
+                    .get_by_key(TrieKey::from_hash(hashed_addr))
                     .is_some()
             {
                 nodes_used_by_txn.state_accesses.push(hashed_addr);
@@ -151,17 +139,21 @@ impl TxnInfo {
             if let Some(c_usage) = trace.code_usage {
                 match c_usage {
                     ContractCodeUsage::Read(c_hash) => {
-                        contract_code_accessed
-                            .entry(c_hash)
-                            .or_insert_with(|| code_hash_resolver.resolve(&c_hash));
+                        if let Entry::Vacant(vacant) = contract_code_accessed.entry(c_hash) {
+                            vacant.insert(hash2code.resolve(&c_hash)?);
+                        }
                     }
                     ContractCodeUsage::Write(c_bytes) => {
                         let c_hash = hash(&c_bytes);
 
                         contract_code_accessed.insert(c_hash, c_bytes.clone());
-                        code_hash_resolver.insert_code(c_hash, c_bytes);
+                        hash2code.insert_code(c_hash, c_bytes);
                     }
                 }
+            }
+
+            if trace.self_destructed.unwrap_or_default() {
+                nodes_used_by_txn.self_destructed_accounts.push(hashed_addr);
             }
         }
 
@@ -203,11 +195,11 @@ impl TxnInfo {
             gas_used: self.meta.gas_used,
         };
 
-        ProcessedTxnInfo {
+        Ok(ProcessedTxnInfo {
             nodes_used_by_txn,
             contract_code_accessed,
             meta: new_meta_state,
-        }
+        })
     }
 }
 
@@ -225,32 +217,31 @@ fn create_empty_code_access_map() -> HashMap<H256, Vec<u8>> {
     HashMap::from_iter(once((EMPTY_CODE_HASH, Vec::new())))
 }
 
-pub(crate) type StorageAccess = Vec<Nibbles>;
-pub(crate) type StorageWrite = Vec<(Nibbles, Vec<u8>)>;
-
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    pub(crate) state_accesses: Vec<H256>,
-    pub(crate) state_writes: Vec<(H256, StateTrieWrites)>,
+    pub state_accesses: Vec<H256>,
+    pub state_writes: Vec<(H256, StateTrieWrites)>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
-    pub(crate) storage_accesses: Vec<(H256, StorageAccess)>,
-    pub(crate) storage_writes: Vec<(H256, StorageWrite)>,
-    pub(crate) state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
+    pub storage_accesses: Vec<(H256, Vec<TrieKey>)>,
+    #[allow(clippy::type_complexity)]
+    pub storage_writes: Vec<(H256, Vec<(TrieKey, Vec<u8>)>)>,
+    pub state_accounts_with_no_accesses_but_storage_tries: HashMap<H256, H256>,
+    pub self_destructed_accounts: Vec<H256>,
 }
 
 #[derive(Debug)]
 pub(crate) struct StateTrieWrites {
-    pub(crate) balance: Option<U256>,
-    pub(crate) nonce: Option<U256>,
-    pub(crate) storage_trie_change: bool,
-    pub(crate) code_hash: Option<H256>,
+    pub balance: Option<U256>,
+    pub nonce: Option<U256>,
+    pub storage_trie_change: bool,
+    pub code_hash: Option<H256>,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct TxnMetaState {
-    pub(crate) txn_bytes: Option<Vec<u8>>,
-    pub(crate) receipt_node_bytes: Vec<u8>,
-    pub(crate) gas_used: u64,
+    pub txn_bytes: Option<Vec<u8>>,
+    pub receipt_node_bytes: Vec<u8>,
+    pub gas_used: u64,
 }

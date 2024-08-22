@@ -64,23 +64,28 @@ where
     TransportT: Transport + Clone,
 {
     let (tx_receipt, pre_trace, diff_trace) = fetch_tx_data(provider, &tx.hash).await?;
+    let tx_status = tx_receipt.status();
     let tx_receipt = tx_receipt.map_inner(rlp::map_receipt_envelope);
     let access_list = parse_access_list(tx.access_list.as_ref());
 
     let tx_meta = TxnMeta {
         byte_code: <Ethereum as Network>::TxEnvelope::try_from(tx.clone())?.encoded_2718(),
-        new_txn_trie_node_byte: vec![],
         new_receipt_trie_node_byte: alloy::rlp::encode(tx_receipt.inner),
         gas_used: tx_receipt.gas_used as u64,
     };
 
-    let (code_db, tx_traces) = match (pre_trace, diff_trace) {
+    let (code_db, mut tx_traces) = match (pre_trace, diff_trace) {
         (
             GethTrace::PreStateTracer(PreStateFrame::Default(read)),
             GethTrace::PreStateTracer(PreStateFrame::Diff(diff)),
         ) => process_tx_traces(access_list, read, diff).await?,
         _ => unreachable!(),
     };
+
+    // Handle case when transaction failed and a contract creation was reverted
+    if !tx_status && tx_receipt.contract_address.is_some() {
+        tx_traces.insert(tx_receipt.contract_address.unwrap(), TxnTrace::default());
+    }
 
     Ok((
         code_db,
@@ -170,6 +175,7 @@ async fn process_tx_traces(
         );
         let code = process_code(post_state, read_state, &mut code_db).await;
         let nonce = process_nonce(post_state, &code);
+        let self_destructed = process_self_destruct(post_state, pre_state);
 
         let result = TxnTrace {
             balance,
@@ -177,6 +183,7 @@ async fn process_tx_traces(
             storage_read,
             storage_written,
             code_usage: code,
+            self_destructed,
         };
 
         traces.insert(address, result);
@@ -201,6 +208,30 @@ fn process_nonce(
                 None
             }
         })
+}
+
+/// Processes the self destruct for the given account state.
+/// This wraps the actual boolean indicator into an `Option` so that we can skip
+/// serialization of `None` values, which represent most cases.
+fn process_self_destruct(
+    post_state: Option<&AccountState>,
+    pre_state: Option<&AccountState>,
+) -> Option<bool> {
+    if post_state.is_none() {
+        // EIP-6780:
+        // A contract is considered created at the beginning of a create
+        // transaction or when a CREATE series operation begins execution (CREATE,
+        // CREATE2, and other operations that deploy contracts in the future). If a
+        // balance exists at the contract’s new address it is still considered to be a
+        // contract creation.
+        if let Some(acc) = pre_state {
+            if acc.code.is_none() && acc.storage.keys().collect::<Vec<_>>().is_empty() {
+                return Some(true);
+            }
+        }
+    }
+
+    None
 }
 
 /// Processes the storage for the given account state.

@@ -219,6 +219,9 @@ fn expand_macros(
                     expanded.extend(expand_macros(body.clone(), macros, macro_counter));
                 }
             }
+            Item::ConditionalBlock(_, items) => {
+                expanded.extend(expand_macros(items.clone(), macros, macro_counter));
+            }
             item => {
                 expanded.push(item);
             }

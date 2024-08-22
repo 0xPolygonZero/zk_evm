@@ -3050,6 +3050,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "uint",
+ "zk_evm_common",
 ]
 
 [[package]]
@@ -4166,6 +4167,7 @@ dependencies = [
  "evm_arithmetization",
  "futures",
  "hex",
+ "itertools 0.13.0",
  "lru",
  "mpt_trie",
  "primitive-types 0.12.2",
@@ -5180,6 +5182,7 @@ dependencies = [
  "thiserror",
  "u4",
  "winnow 0.6.13",
+ "zk_evm_common",
 ]
 
 [[package]]
@@ -5881,6 +5884,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.70",
+]
+
+[[package]]
+name = "zk_evm_common"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "ethereum-types",
+ "keccak-hash 0.10.0",
+ "rlp",
 ]
 
 [[package]]
