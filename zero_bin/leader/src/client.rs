@@ -66,12 +66,9 @@ pub(crate) async fn client_main(
                 start_block: _,
                 block_time: _,
             } => Box::pin(
-                async {
-                    block_interval
-                        .into_unbounded_stream(cached_provider.as_provider())
-                        .await
-                }
-                .await?,
+                block_interval
+                    .into_unbounded_stream(cached_provider.as_provider())
+                    .await?,
             ),
             _ => Box::pin(block_interval.into_bounded_stream()?),
         };
