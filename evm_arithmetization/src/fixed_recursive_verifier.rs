@@ -786,20 +786,19 @@ where
             lhs_public_values.trie_roots_after,
             rhs_public_values.trie_roots_before,
         );
-        #[cfg(feature = "cdk_erigon")]
-        {
-            // Connect the burn address targets.
-            BurnAddrTarget::connect(
-                &mut builder,
-                lhs_public_values.burn_addr,
-                rhs_public_values.burn_addr.clone(),
-            );
-            BurnAddrTarget::connect(
-                &mut builder,
-                public_values.burn_addr.clone(),
-                rhs_public_values.burn_addr,
-            );
-        }
+
+        // Connect the burn address targets.
+        BurnAddrTarget::connect(
+            &mut builder,
+            lhs_public_values.burn_addr,
+            rhs_public_values.burn_addr.clone(),
+        );
+        BurnAddrTarget::connect(
+            &mut builder,
+            public_values.burn_addr.clone(),
+            rhs_public_values.burn_addr,
+        );
+
         Self::connect_extra_public_values(
             &mut builder,
             &public_values.extra_block_data,
@@ -946,20 +945,18 @@ where
             public_values.extra_block_data,
             agg_pv.extra_block_data,
         );
-        #[cfg(feature = "cdk_erigon")]
+
         // Connect the burn address targets.
-        {
-            BurnAddrTarget::connect(
-                &mut builder,
-                parent_pv.burn_addr.clone(),
-                agg_pv.burn_addr.clone(),
-            );
-            BurnAddrTarget::connect(
-                &mut builder,
-                public_values.burn_addr.clone(),
-                agg_pv.burn_addr.clone(),
-            );
-        }
+        BurnAddrTarget::connect(
+            &mut builder,
+            parent_pv.burn_addr.clone(),
+            agg_pv.burn_addr.clone(),
+        );
+        BurnAddrTarget::connect(
+            &mut builder,
+            public_values.burn_addr.clone(),
+            agg_pv.burn_addr.clone(),
+        );
 
         // Make connections between block proofs, and check initial and final block
         // values.
@@ -1222,6 +1219,9 @@ where
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues)> {
+        if generation_inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
+            log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
+        }
         let all_proof = prove::<F, C, D>(
             all_stark,
             config,

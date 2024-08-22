@@ -40,8 +40,13 @@ impl BlockProverInput {
 
         let block_number = self.get_block_number();
 
-        let txs =
-            trace_decoder::entrypoint(self.block_trace, self.other_data, |_| unimplemented!())?;
+        let use_burn_addr = cfg!(feature = "cdk_erigon");
+        let txs = trace_decoder::entrypoint(
+            self.block_trace,
+            self.other_data,
+            |_| unimplemented!(),
+            use_burn_addr,
+        )?;
 
         let agg_proof = IndexedStream::from(txs)
             .map(&TxProof {
@@ -87,8 +92,13 @@ impl BlockProverInput {
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
-        let txs =
-            trace_decoder::entrypoint(self.block_trace, self.other_data, |_| unimplemented!())?;
+        let use_burn_addr = cfg!(feature = "cdk_erigon");
+        let txs = trace_decoder::entrypoint(
+            self.block_trace,
+            self.other_data,
+            |_| unimplemented!(),
+            use_burn_addr,
+        )?;
 
         IndexedStream::from(txs)
             .map(&TxProof {

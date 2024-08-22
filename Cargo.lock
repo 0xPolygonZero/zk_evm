@@ -2859,6 +2859,7 @@ dependencies = [
  "cargo_metadata",
  "clap",
  "dotenvy",
+ "evm_arithmetization",
  "futures",
  "ops",
  "paladin-core",

@@ -26,7 +26,8 @@ fn criterion_benchmark(c: &mut Criterion) {
                  block_trace,
                  other_data,
              }| {
-                trace_decoder::entrypoint(block_trace, other_data, |_| unimplemented!()).unwrap()
+                trace_decoder::entrypoint(block_trace, other_data, |_| unimplemented!(), false)
+                    .unwrap()
             },
             BatchSize::LargeInput,
         )

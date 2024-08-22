@@ -670,12 +670,14 @@ impl BurnAddrTarget {
         ba0: Self,
         ba1: Self,
     ) {
+        // There only are targets to connect if there is a burn address, i.e. when the
+        // `cdk_erigon` feature is active.
         if cfg!(feature = "cdk_erigon") == true {
             // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of
             // type `BurnAddr`.
             match (ba0, ba1) {
                 (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
-                    for i in 0..5 {
+                    for i in 0..BurnAddrTarget::get_size() {
                         builder.connect(a0[i], a1[i]);
                     }
                 }

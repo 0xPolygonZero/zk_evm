@@ -37,6 +37,9 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
+    if inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
+        log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
+    }
     timed!(timing, "build kernel", Lazy::force(&KERNEL));
     let (traces, public_values) = timed!(
         timing,
@@ -377,6 +380,9 @@ pub mod testing {
     /// Simulates the zkEVM CPU execution.
     /// It does not generate any trace or proof of correct state transition.
     pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
+        if inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
+            log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
+        }
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["main"];
         let mut interpreter: Interpreter<F> =

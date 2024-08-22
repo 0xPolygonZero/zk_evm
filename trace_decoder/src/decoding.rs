@@ -53,6 +53,7 @@ pub fn into_txn_proof_gen_ir(
         withdrawals,
     }: ProcessedBlockTrace,
     other_data: OtherBlockData,
+    use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     let mut curr_block_tries = PartialTrieState {
         state: state.clone(),
@@ -89,6 +90,7 @@ pub fn into_txn_proof_gen_ir(
                 &mut curr_block_tries,
                 &mut extra_data,
                 &other_data,
+                use_burn_addr,
             )
             .context(format!("at transaction index {}", current_idx))
         })
@@ -493,6 +495,7 @@ fn process_txn_info(
     curr_block_tries: &mut PartialTrieState,
     extra_data: &mut ExtraBlockData,
     other_data: &OtherBlockData,
+    use_burn_target: bool,
 ) -> anyhow::Result<GenerationInputs> {
     log::trace!("Generating proof IR for txn {}...", txn_idx);
 
@@ -546,7 +549,7 @@ fn process_txn_info(
         delta_out,
     )?;
 
-    let burn_addr = match cfg!(feature = "cdk_erigon") {
+    let burn_addr = match use_burn_target {
         // TODO: retrieve the actual burn address from cdk-erigon.
         true => Some(H160::zero()),
         false => None,
