@@ -102,6 +102,19 @@ pub(crate) enum GlobalMetadata {
     KernelHash,
     KernelLen,
 
+    /// The address of the next available address in
+    /// Segment::AccountsLinkedList
+    AccountsLinkedListNextAvailable,
+    /// The address of the next available address in
+    /// Segment::StorageLinkedList
+    StorageLinkedListNextAvailable,
+    /// Length of the `AccountsLinkedList` segment after insertion of the
+    /// initial accounts.
+    InitialAccountsLinkedListLen,
+    /// Length of the `StorageLinkedList` segment after insertion of the
+    /// initial storage slots.
+    InitialStorageLinkedListLen,
+
     /// The length of the transient storage segment.
     TransientStorageLen,
 
@@ -114,7 +127,7 @@ pub(crate) enum GlobalMetadata {
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 55;
+    pub(crate) const COUNT: usize = 59;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -174,6 +187,10 @@ impl GlobalMetadata {
             Self::CreatedContractsLen,
             Self::KernelHash,
             Self::KernelLen,
+            Self::AccountsLinkedListNextAvailable,
+            Self::StorageLinkedListNextAvailable,
+            Self::InitialAccountsLinkedListLen,
+            Self::InitialStorageLinkedListLen,
             Self::TransientStorageLen,
             Self::BlobVersionedHashesRlpStart,
             Self::BlobVersionedHashesRlpLen,
@@ -235,6 +252,16 @@ impl GlobalMetadata {
             Self::CreatedContractsLen => "GLOBAL_METADATA_CREATED_CONTRACTS_LEN",
             Self::KernelHash => "GLOBAL_METADATA_KERNEL_HASH",
             Self::KernelLen => "GLOBAL_METADATA_KERNEL_LEN",
+            Self::AccountsLinkedListNextAvailable => {
+                "GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE"
+            }
+            Self::StorageLinkedListNextAvailable => {
+                "GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE"
+            }
+            Self::InitialAccountsLinkedListLen => {
+                "GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN"
+            }
+            Self::InitialStorageLinkedListLen => "GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN",
             Self::TransientStorageLen => "GLOBAL_METADATA_TRANSIENT_STORAGE_LEN",
             Self::BlobVersionedHashesRlpStart => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START",
             Self::BlobVersionedHashesRlpLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN",

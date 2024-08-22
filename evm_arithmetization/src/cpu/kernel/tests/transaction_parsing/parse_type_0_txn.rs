@@ -19,6 +19,7 @@ fn process_type_0_txn() -> Result<()> {
     let mut interpreter: Interpreter<F> = Interpreter::new(
         process_type_0_txn,
         vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
+        None,
     );
 
     // When we reach process_normalized_txn, we're done with parsing and
@@ -82,6 +83,7 @@ fn process_type_0_txn_invalid_sig() -> Result<()> {
     let mut interpreter: Interpreter<F> = Interpreter::new(
         process_type_0_txn,
         vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
+        None,
     );
 
     // Same transaction as `process_type_0_txn()`, with the exception that the `s`

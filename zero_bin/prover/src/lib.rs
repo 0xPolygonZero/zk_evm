@@ -1,3 +1,5 @@
+pub mod cli;
+
 use std::future::Future;
 use std::path::PathBuf;
 
@@ -5,11 +7,7 @@ use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
-use ops::TxProof;
-use paladin::{
-    directive::{Directive, IndexedStream},
-    runtime::Runtime,
-};
+use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -17,6 +15,14 @@ use tokio::sync::oneshot;
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::info;
 use zero_bin_common::fs::generate_block_proof_file_name;
+
+#[derive(Debug, Clone, Copy)]
+pub struct ProverConfig {
+    pub batch_size: usize,
+    pub max_cpu_len_log: usize,
+    pub save_inputs_on_error: bool,
+    pub test_only: bool,
+}
 
 pub type BlockProverInputFuture = std::pin::Pin<
     Box<dyn Future<Output = std::result::Result<BlockProverInput, anyhow::Error>> + Send>,
@@ -42,30 +48,71 @@ impl BlockProverInput {
         self.other_data.b_data.b_meta.block_number.into()
     }
 
-    #[cfg(not(feature = "test_only"))]
     pub async fn prove(
         self,
         runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
         use anyhow::Context as _;
+        use evm_arithmetization::prover::SegmentDataIterator;
+        use futures::{stream::FuturesUnordered, FutureExt};
+        use paladin::directive::{Directive, IndexedStream};
+
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            save_inputs_on_error,
+            test_only: _,
+        } = prover_config;
 
         let block_number = self.get_block_number();
 
-        let txs = trace_decoder::entrypoint(self.block_trace, self.other_data)?;
+        let block_generation_inputs =
+            trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
 
-        let agg_proof = IndexedStream::from(txs)
-            .map(&TxProof {
-                save_inputs_on_error,
-            })
-            .fold(&ops::AggProof {
-                save_inputs_on_error,
-            })
-            .run(runtime)
-            .await?;
+        // Create segment proof.
+        let seg_prove_ops = ops::SegmentProof {
+            save_inputs_on_error,
+        };
 
-        if let proof_gen::proof_types::AggregatableProof::Agg(proof) = agg_proof {
+        // Aggregate multiple segment proofs to resulting segment proof.
+        let seg_agg_ops = ops::SegmentAggProof {
+            save_inputs_on_error,
+        };
+
+        // Aggregate batch proofs to a single proof.
+        let batch_agg_ops = ops::BatchAggProof {
+            save_inputs_on_error,
+        };
+
+        // Segment the batches, prove segments and aggregate them to resulting batch
+        // proofs.
+        let batch_proof_futs: FuturesUnordered<_> = block_generation_inputs
+            .iter()
+            .enumerate()
+            .map(|(idx, txn_batch)| {
+                let segment_data_iterator = SegmentDataIterator::<proof_gen::types::Field>::new(
+                    txn_batch,
+                    Some(max_cpu_len_log),
+                );
+
+                Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
+                    .fold(&seg_agg_ops)
+                    .run(runtime)
+                    .map(move |e| {
+                        e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
+                    })
+            })
+            .collect();
+
+        // Fold the batch aggregated proof stream into a single proof.
+        let final_batch_proof =
+            Directive::fold(IndexedStream::new(batch_proof_futs), &batch_agg_ops)
+                .run(runtime)
+                .await?;
+
+        if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
             let block_number = block_number
                 .to_u64()
                 .context("block number overflows u64")?;
@@ -83,32 +130,57 @@ impl BlockProverInput {
                 .await?;
 
             info!("Successfully proved block {block_number}");
+
             Ok(block_proof.0)
         } else {
             anyhow::bail!("AggProof is is not GeneratedAggProof")
         }
     }
 
-    #[cfg(feature = "test_only")]
-    pub async fn prove(
+    pub async fn prove_test(
         self,
         runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
-        save_inputs_on_error: bool,
+        prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
+        use std::iter::repeat;
+
+        use futures::future;
+        use paladin::directive::{Directive, IndexedStream};
+
+        let ProverConfig {
+            max_cpu_len_log,
+            batch_size,
+            save_inputs_on_error,
+            test_only: _,
+        } = prover_config;
+
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
-        let txs = trace_decoder::entrypoint(self.block_trace, self.other_data)?;
+        let block_generation_inputs =
+            trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
 
-        IndexedStream::from(txs)
-            .map(&TxProof {
-                save_inputs_on_error,
-            })
+        let seg_ops = ops::SegmentProofTestOnly {
+            save_inputs_on_error,
+        };
+
+        let simulation = Directive::map(
+            IndexedStream::from(
+                block_generation_inputs
+                    .into_iter()
+                    .zip(repeat(max_cpu_len_log)),
+            ),
+            &seg_ops,
+        );
+
+        simulation
             .run(runtime)
             .await?
-            .try_collect::<Vec<_>>()
+            .try_for_each(|_| future::ok(()))
             .await?;
+
+        info!("Successfully generated witness for block {block_number}.");
 
         // Wait for previous block proof
         let _prev = match previous {
@@ -126,14 +198,15 @@ impl BlockProverInput {
     }
 }
 
-/// Prove all the blocks in the input.
-/// Return the list of block numbers that are proved and if the proof data
-/// is not saved to disk, return the generated block proofs as well.
+/// Prove all the blocks in the input, or simulate their execution depending on
+/// the selected prover configuration. Return the list of block numbers that are
+/// proved and if the proof data is not saved to disk, return the generated
+/// block proofs as well.
 pub async fn prove(
     block_prover_inputs: Vec<BlockProverInputFuture>,
     runtime: &Runtime,
     previous_proof: Option<GeneratedBlockProof>,
-    save_inputs_on_error: bool,
+    prover_config: ProverConfig,
     proof_output_dir: Option<PathBuf>,
 ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
     let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
@@ -151,29 +224,55 @@ pub async fn prove(
             info!("Proving block {block_number}");
 
             // Prove the block
-            let block_proof = block
-                .prove(runtime, previous_block_proof, save_inputs_on_error)
-                .then(move |proof| async move {
-                    let proof = proof?;
-                    let block_number = proof.b_height;
+            let block_proof = if prover_config.test_only {
+                block
+                    .prove_test(runtime, previous_block_proof, prover_config)
+                    .then(move |proof| async move {
+                        let proof = proof?;
+                        let block_number = proof.b_height;
 
-                    // Write latest generated proof to disk if proof_output_dir is provided
-                    // or alternatively return proof as function result.
-                    let return_proof: Option<GeneratedBlockProof> =
-                        if let Some(output_dir) = proof_output_dir {
-                            write_proof_to_dir(output_dir, &proof).await?;
-                            None
-                        } else {
-                            Some(proof.clone())
-                        };
+                        // Write latest generated proof to disk if proof_output_dir is provided
+                        // or alternatively return proof as function result.
+                        let return_proof: Option<GeneratedBlockProof> =
+                            if let Some(output_dir) = proof_output_dir {
+                                write_proof_to_dir(output_dir, &proof).await?;
+                                None
+                            } else {
+                                Some(proof.clone())
+                            };
 
-                    if tx.send(proof).is_err() {
-                        anyhow::bail!("Failed to send proof");
-                    }
+                        if tx.send(proof).is_err() {
+                            anyhow::bail!("Failed to send proof");
+                        }
 
-                    Ok((block_number, return_proof))
-                })
-                .await?;
+                        Ok((block_number, return_proof))
+                    })
+                    .await?
+            } else {
+                block
+                    .prove(runtime, previous_block_proof, prover_config)
+                    .then(move |proof| async move {
+                        let proof = proof?;
+                        let block_number = proof.b_height;
+
+                        // Write latest generated proof to disk if proof_output_dir is provided
+                        // or alternatively return proof as function result.
+                        let return_proof: Option<GeneratedBlockProof> =
+                            if let Some(output_dir) = proof_output_dir {
+                                write_proof_to_dir(output_dir, &proof).await?;
+                                None
+                            } else {
+                                Some(proof.clone())
+                            };
+
+                        if tx.send(proof).is_err() {
+                            anyhow::bail!("Failed to send proof");
+                        }
+
+                        Ok((block_number, return_proof))
+                    })
+                    .await?
+            };
 
             Ok(block_proof)
         }

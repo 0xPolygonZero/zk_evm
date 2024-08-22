@@ -8,7 +8,7 @@ pub fn check_previous_proof_and_checkpoint(
     if let Some(proof) = previous_proof {
         if proof.b_height + 1 != start {
             return Err(anyhow::Error::msg(format!(
-                "Found previous b_height {} whereas range start is {}",
+                "Previous proof block height {} does not match current starting block height {}",
                 proof.b_height, start,
             )));
         }

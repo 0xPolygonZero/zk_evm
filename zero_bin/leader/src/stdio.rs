@@ -3,14 +3,14 @@ use std::io::{Read, Write};
 use anyhow::Result;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::{BlockProverInput, BlockProverInputFuture};
+use prover::{BlockProverInput, BlockProverInputFuture, ProverConfig};
 use tracing::info;
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(
     runtime: Runtime,
     previous: Option<GeneratedBlockProof>,
-    save_inputs_on_error: bool,
+    prover_config: ProverConfig,
 ) -> Result<()> {
     let mut buffer = String::new();
     std::io::stdin().read_to_string(&mut buffer)?;
@@ -21,18 +21,12 @@ pub(crate) async fn stdio_main(
         .map(Into::into)
         .collect::<Vec<BlockProverInputFuture>>();
 
-    let proved_blocks = prover::prove(
-        block_prover_inputs,
-        &runtime,
-        previous,
-        save_inputs_on_error,
-        None,
-    )
-    .await;
+    let proved_blocks =
+        prover::prove(block_prover_inputs, &runtime, previous, prover_config, None).await;
     runtime.close().await?;
     let proved_blocks = proved_blocks?;
 
-    if cfg!(feature = "test_only") {
+    if prover_config.test_only {
         info!("All proof witnesses have been generated successfully.");
     } else {
         info!("All proofs have been generated successfully.");

@@ -19,16 +19,28 @@ fn criterion_benchmark(c: &mut Criterion) {
         serde_json::from_slice::<ProverInput>(include_bytes!("block_input.json").as_slice())
             .unwrap();
 
-    c.bench_function("Block 19778575 processing", |b| {
-        b.iter_batched(
-            || prover_input.clone(),
-            |ProverInput {
-                 block_trace,
-                 other_data,
-             }| { trace_decoder::entrypoint(block_trace, other_data).unwrap() },
-            BatchSize::LargeInput,
-        )
-    });
+    let batch_sizes = vec![1, 2, 4, 8];
+
+    let mut group = c.benchmark_group("Benchmark group");
+
+    for batch_size in batch_sizes {
+        let batch_size_string =
+            format!("Block 19240650 processing, with batch_size = {batch_size}");
+        group.bench_function(batch_size_string, |b| {
+            b.iter_batched(
+                || prover_input.clone(),
+                |ProverInput {
+                     block_trace,
+                     other_data,
+                 }| {
+                    trace_decoder::entrypoint(block_trace, other_data, batch_size).unwrap()
+                },
+                BatchSize::LargeInput,
+            )
+        });
+    }
+
+    group.finish()
 }
 
 criterion_group!(

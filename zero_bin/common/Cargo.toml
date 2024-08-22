@@ -12,6 +12,7 @@ categories.workspace = true
 directories = "5.0.1"
 
 thiserror = { workspace = true }
+trace_decoder = { workspace = true }
 tracing = { workspace = true }
 proof_gen = { workspace = true }
 plonky2 = { workspace = true }

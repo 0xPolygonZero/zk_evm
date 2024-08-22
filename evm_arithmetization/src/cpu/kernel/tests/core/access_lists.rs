@@ -19,7 +19,7 @@ fn test_init_access_lists() -> Result<()> {
 
     // Check the initial state of the access list in the kernel.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     assert!(interpreter.stack().is_empty());
@@ -64,7 +64,7 @@ fn test_list_iterator() -> Result<()> {
     let init_label = KERNEL.global_labels["init_access_lists"];
 
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     // test the list iterator
@@ -73,15 +73,14 @@ fn test_list_iterator() -> Result<()> {
         .get_addresses_access_list()
         .expect("Since we called init_access_lists there must be a list");
 
-    let Some((pos_0, next_val_0, _)) = list.next() else {
+    let Some([next_val_0, _]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(pos_0, 0);
     assert_eq!(next_val_0, U256::MAX);
-    let Some((pos_0, _, _)) = list.next() else {
+    let Some([_, pos_0]) = list.next() else {
         return Err(anyhow::Error::msg("Couldn't get value"));
     };
-    assert_eq!(pos_0, 0);
+    assert_eq!(pos_0, U256::from(Segment::AccessedAddresses as usize));
     Ok(())
 }
 
@@ -91,7 +90,7 @@ fn test_insert_address() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_label, initial_stack, None);
     interpreter.run()?;
 
     let insert_accessed_addresses = KERNEL.global_labels["insert_accessed_addresses"];
@@ -128,7 +127,7 @@ fn test_insert_accessed_addresses() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack, None);
     interpreter.run()?;
 
     let insert_accessed_addresses = KERNEL.global_labels["insert_accessed_addresses"];
@@ -215,7 +214,7 @@ fn test_insert_accessed_storage_keys() -> Result<()> {
 
     // Test for address already in list.
     let initial_stack = vec![0xdeadbeefu32.into()];
-    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack);
+    let mut interpreter = Interpreter::<F>::new(init_access_lists, initial_stack, None);
     interpreter.run()?;
 
     let insert_accessed_storage_keys = KERNEL.global_labels["insert_accessed_storage_keys"];

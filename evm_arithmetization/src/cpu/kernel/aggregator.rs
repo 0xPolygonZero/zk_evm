@@ -9,7 +9,7 @@ use super::assembler::{assemble, Kernel};
 use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
-pub const NUMBER_KERNEL_FILES: usize = 156;
+pub const NUMBER_KERNEL_FILES: usize = 159;
 
 pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     "global jumped_to_0: PANIC",
@@ -129,6 +129,9 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/mpt/insert/insert_extension.asm"),
     include_str!("asm/mpt/insert/insert_leaf.asm"),
     include_str!("asm/mpt/insert/insert_trie_specific.asm"),
+    include_str!("asm/mpt/linked_list/linked_list.asm"),
+    include_str!("asm/mpt/linked_list/initial_tries.asm"),
+    include_str!("asm/mpt/linked_list/final_tries.asm"),
     include_str!("asm/mpt/read.asm"),
     include_str!("asm/mpt/storage/storage_read.asm"),
     include_str!("asm/mpt/storage/storage_write.asm"),
