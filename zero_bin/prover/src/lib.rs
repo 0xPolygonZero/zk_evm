@@ -158,12 +158,14 @@ pub async fn prove(
                     let block_number = proof.b_height;
 
                     // Write latest generated proof to disk if proof_output_dir is provided
-                    let return_proof: Option<GeneratedBlockProof> = if proof_output_dir.is_some() {
-                        write_proof(proof_output_dir, &proof).await?;
-                        None
-                    } else {
-                        Some(proof.clone())
-                    };
+                    // or alternatively return proof as function result.
+                    let return_proof: Option<GeneratedBlockProof> =
+                        if let Some(output_dir) = proof_output_dir {
+                            write_proof_to_dir(output_dir, &proof).await?;
+                            None
+                        } else {
+                            Some(proof.clone())
+                        };
 
                     if tx.send(proof).is_err() {
                         anyhow::bail!("Failed to send proof");
@@ -183,28 +185,18 @@ pub async fn prove(
     results.try_collect().await
 }
 
-/// Write the proof to the disk (if `output_dir` is provided) or stdout.
-pub(crate) async fn write_proof(
-    output_dir: Option<PathBuf>,
-    proof: &GeneratedBlockProof,
-) -> Result<()> {
+/// Write the proof to the `output_dir` directory.
+async fn write_proof_to_dir(output_dir: PathBuf, proof: &GeneratedBlockProof) -> Result<()> {
     let proof_serialized = serde_json::to_vec(proof)?;
     let block_proof_file_path =
-        output_dir.map(|path| generate_block_proof_file_name(&path.to_str(), proof.b_height));
-    match block_proof_file_path {
-        Some(p) => {
-            if let Some(parent) = p.parent() {
-                tokio::fs::create_dir_all(parent).await?;
-            }
+        generate_block_proof_file_name(&output_dir.to_str(), proof.b_height);
 
-            let mut f = tokio::fs::File::create(p).await?;
-            f.write_all(&proof_serialized)
-                .await
-                .context("Failed to write proof to disk")
-        }
-        None => tokio::io::stdout()
-            .write_all(&proof_serialized)
-            .await
-            .context("Failed to write proof to stdout"),
+    if let Some(parent) = block_proof_file_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
     }
+
+    let mut f = tokio::fs::File::create(block_proof_file_path).await?;
+    f.write_all(&proof_serialized)
+        .await
+        .context("Failed to write proof to disk")
 }
