@@ -129,7 +129,7 @@ impl BlockInterval {
                         anyhow!("could not retrieve latest block number from the provider: {e}")
                     })?;
 
-                    if current < last_block_number {
+                    if current <= last_block_number {
                         yield current;
                         current += 1;
                     } else {
