@@ -375,8 +375,15 @@ mcopy_empty:
     // stack: new_dest_offset, copy_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
 
     GET_CONTEXT
-    %stack (context, new_dest_offset, copy_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size) ->
-        (src_ctx, segment, offset, @SEGMENT_MAIN_MEMORY, dest_offset, context, copy_size, codecopy_large_offset, copy_size, src_ctx, kexit_info, new_dest_offset, offset, extra_size)
+
+    // The following 4-lines block is the inlined version of
+    // %stack (context, new_dest_offset, copy_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size) ->
+    //        (src_ctx, segment, offset, @SEGMENT_MAIN_MEMORY, dest_offset, context, copy_size, codecopy_large_offset, copy_size, src_ctx, kexit_info, new_dest_offset, offset, extra_size)
+    PUSH codecopy_large_offset
+    SWAP4 SWAP10 POP SWAP1 SWAP7
+    PUSH @SEGMENT_MAIN_MEMORY
+    DUP10 DUP5 SWAP7 DUP9
+
     %build_address
     SWAP3 %build_address
     // stack: DST, SRC, copy_size, codecopy_large_offset, copy_size, src_ctx, kexit_info, new_dest_offset, offset, extra_size
