@@ -122,8 +122,6 @@ pub struct FinalPublicValues {
     pub state_trie_root_before: H256,
     /// State trie root after the execution of this global state transition.
     pub state_trie_root_after: H256,
-    /// The state trie digest of the checkpoint block.
-    pub checkpoint_state_trie_root: H256,
 }
 
 impl FinalPublicValues {
@@ -137,13 +135,10 @@ impl FinalPublicValues {
         let state_trie_root_before = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
         offset += TARGET_HASH_SIZE;
         let state_trie_root_after = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
-        offset += TARGET_HASH_SIZE;
-        let checkpoint_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
 
         Self {
             state_trie_root_before,
             state_trie_root_after,
-            checkpoint_state_trie_root,
         }
     }
 }
@@ -153,7 +148,6 @@ impl From<PublicValues> for FinalPublicValues {
         Self {
             state_trie_root_before: value.trie_roots_before.state_root,
             state_trie_root_after: value.trie_roots_after.state_root,
-            checkpoint_state_trie_root: value.extra_block_data.checkpoint_state_trie_root,
         }
     }
 }
@@ -167,18 +161,15 @@ pub struct FinalPublicValuesTarget {
     pub state_trie_root_before: [Target; TARGET_HASH_SIZE],
     /// State trie root after the execution of this global state transition.
     pub state_trie_root_after: [Target; TARGET_HASH_SIZE],
-    /// The state trie digest of the checkpoint block.
-    pub checkpoint_state_trie_root: [Target; TARGET_HASH_SIZE],
 }
 
 impl FinalPublicValuesTarget {
-    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 3;
+    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 2;
 
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         buffer.write_target_array(&self.state_trie_root_before)?;
         buffer.write_target_array(&self.state_trie_root_after)?;
-        buffer.write_target_array(&self.checkpoint_state_trie_root)?;
 
         Ok(())
     }
@@ -187,12 +178,10 @@ impl FinalPublicValuesTarget {
     pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
         let state_trie_root_before = buffer.read_target_array()?;
         let state_trie_root_after = buffer.read_target_array()?;
-        let checkpoint_state_trie_root = buffer.read_target_array()?;
 
         Ok(Self {
             state_trie_root_before,
             state_trie_root_after,
-            checkpoint_state_trie_root,
         })
     }
 
@@ -212,8 +201,10 @@ impl FinalPublicValuesTarget {
                 self.state_trie_root_after[i],
                 pv1.trie_roots_after.state_root[i],
             );
+            // We only use `FinalPublicValues` at the final block proof wrapping stage,
+            // where we should enforce consistency with the known checkpoint.
             builder.connect(
-                self.checkpoint_state_trie_root[i],
+                self.state_trie_root_before[i],
                 pv1.extra_block_data.checkpoint_state_trie_root[i],
             );
         }

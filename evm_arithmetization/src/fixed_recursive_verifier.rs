@@ -1491,6 +1491,10 @@ where
         let parent_pv = PublicValuesTarget::from_public_inputs(&parent_block_proof.public_inputs);
 
         let final_pv = add_virtual_final_public_values_public_input(&mut builder);
+
+        // This also enforces that the initial state trie root that will be stored in
+        // these `FinalPublicValues` actually matches the known checkpoint state trie
+        // root.
         final_pv.connect_parent(&mut builder, &parent_pv);
 
         let block_verifier_data = builder.constant_verifier_data(&block.circuit.verifier_only);
