@@ -7,7 +7,7 @@ use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use mpt_trie::{
-    partial_trie::{HashedPartialTrie, Node, PartialTrie as _},
+    partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
     trie_ops::TrieOpError,
 };
 use u4::{AsNibbles, U4};
@@ -75,6 +75,9 @@ impl<T> TypedMpt<T> {
     }
     fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
+    }
+    fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
+        &mut self.inner
     }
     fn root(&self) -> H256 {
         self.inner.hash()
@@ -240,6 +243,14 @@ pub struct StateTrie {
 }
 
 impl StateTrie {
+    pub fn new(strategy: OnOrphanedHashNode) -> Self {
+        Self {
+            typed: TypedMpt {
+                inner: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
+                _ty: PhantomData,
+            },
+        }
+    }
     pub fn insert_by_address(
         &mut self,
         address: Address,
@@ -271,6 +282,9 @@ impl StateTrie {
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
+    }
+    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
+        self.typed.as_mut_hashed_partial_trie_unchecked()
     }
     pub fn remove(&mut self, key: TrieKey) -> Result<Option<AccountRlp>, Error> {
         self.typed.remove(key)
@@ -313,6 +327,11 @@ pub struct StorageTrie {
     untyped: HashedPartialTrie,
 }
 impl StorageTrie {
+    pub fn new(strategy: OnOrphanedHashNode) -> Self {
+        Self {
+            untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
+        }
+    }
     pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
         let prev = self.untyped.get(key.into_nibbles()).map(Vec::from);
         self.untyped
@@ -328,7 +347,7 @@ impl StorageTrie {
     pub fn root(&self) -> H256 {
         self.untyped.hash()
     }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
+    pub fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.untyped
     }
 

@@ -55,6 +55,10 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
         c.insert(name.into(), U256::from(value));
     }
 
+    for (name, value) in LINKED_LISTS_CONSTANTS {
+        c.insert(name.into(), U256::from(value));
+    }
+
     c.insert(MAX_NONCE.0.into(), U256::from(MAX_NONCE.1));
     c.insert(CALL_STACK_LIMIT.0.into(), U256::from(CALL_STACK_LIMIT.1));
     c.insert(
@@ -109,7 +113,7 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c
 }
 
-const MISC_CONSTANTS: [(&str, [u8; 32]); 5] = [
+const MISC_CONSTANTS: [(&str, [u8; 32]); 6] = [
     // Base for limbs used in bignum arithmetic.
     (
         "BIGNUM_LIMB_BASE",
@@ -133,6 +137,13 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 5] = [
     (
         "INITIAL_TXN_RLP_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000b00000001"),
+    ),
+    // Address where the final registers start. It is the offset 6 within the
+    // SEGMENT_REGISTERS_STATES.
+    // *Note*: Changing this will break some tests.
+    (
+        "FINAL_REGISTERS_ADDR",
+        hex!("0000000000000000000000000000000000000000000000000000002100000006"),
     ),
     // Scaled boolean value indicating that we are in kernel mode, to be used within `kexit_info`.
     // It is equal to 2^32.
@@ -347,6 +358,14 @@ const CODE_SIZE_LIMIT: [(&str, u64); 3] = [
 
 const MAX_NONCE: (&str, u64) = ("MAX_NONCE", 0xffffffffffffffff);
 const CALL_STACK_LIMIT: (&str, u64) = ("CALL_STACK_LIMIT", 1024);
+
+const LINKED_LISTS_CONSTANTS: [(&str, u16); 5] = [
+    ("ACCOUNTS_LINKED_LISTS_NODE_SIZE", 4),
+    ("STORAGE_LINKED_LISTS_NODE_SIZE", 5),
+    ("ACCOUNTS_NEXT_NODE_PTR", 3),
+    ("STORAGE_NEXT_NODE_PTR", 4),
+    ("STORAGE_COPY_PAYLOAD_PTR", 3),
+];
 
 /// Cancun-related constants
 /// See <https://eips.ethereum.org/EIPS/eip-4788> and

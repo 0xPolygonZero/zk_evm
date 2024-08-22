@@ -9,7 +9,7 @@ use std::{
 
 use alloy::rpc::types::eth::Header;
 use anyhow::Context as _;
-use evm_arithmetization::prover::testing::simulate_execution;
+use evm_arithmetization::prover::testing::simulate_execution_all_segments;
 use evm_arithmetization::GenerationInputs;
 use itertools::Itertools;
 use log::info;
@@ -83,7 +83,7 @@ fn decode_generation_inputs(
     let trace_decoder_output = trace_decoder::entrypoint(
         block_prover_input.block_trace,
         block_prover_input.other_data.clone(),
-        |_| unimplemented!(),
+        3,
         use_burn_addr,
     )
     .context(format!(
@@ -196,13 +196,15 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                         // with setting env variable RAYON_NUM_THREADS=<number>.
                         let timing = TimingTree::new(
                             &format!(
-                                "Simulating zkEVM CPU for block {} txn {:?}",
+                                "simulate zkEVM CPU for block {}, txns {:?}..{:?}.",
                                 generation_inputs.block_metadata.block_number,
+                                generation_inputs.txn_number_before,
                                 generation_inputs.txn_number_before
+                                    + generation_inputs.signed_txns.len()
                             ),
                             log::Level::Info,
                         );
-                        simulate_execution::<F>(generation_inputs)?;
+                        simulate_execution_all_segments::<F>(generation_inputs, 19)?;
                         timing.filter(Duration::from_millis(100)).print();
                         Ok::<(), anyhow::Error>(())
                     })

@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 pub(crate) const SEGMENT_SCALING_FACTOR: usize = 32;
 
 /// This contains all the existing memory segments. The values in the enum are
 /// shifted by 32 bits to allow for convenient address components (context /
 /// segment / virtual) bundling in the kernel.
 #[allow(clippy::enum_clike_unportable_variant)]
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub(crate) enum Segment {
     /// Contains EVM bytecode.
     // The Kernel has optimizations relying on the Code segment being 0.
@@ -70,17 +72,32 @@ pub(crate) enum Segment {
     ContextCheckpoints = 31 << SEGMENT_SCALING_FACTOR,
     /// List of 256 previous block hashes.
     BlockHashes = 32 << SEGMENT_SCALING_FACTOR,
+    /// Segment storing the registers before/after the current execution,
+    /// as well as `exit_kernel` for the `registers_before`, in that order.
+    RegistersStates = 33 << SEGMENT_SCALING_FACTOR,
+    /// List of accounts in the state trie,
+    AccountsLinkedList = 34 << SEGMENT_SCALING_FACTOR,
+    /// List of storage slots of all the accounts in state trie,
+    StorageLinkedList = 35 << SEGMENT_SCALING_FACTOR,
     // The transient storage of the current transaction.
-    TransientStorage = 33 << SEGMENT_SCALING_FACTOR,
+    TransientStorage = 36 << SEGMENT_SCALING_FACTOR,
     /// List of contracts which have been created during the current
     /// transaction.
-    CreatedContracts = 34 << SEGMENT_SCALING_FACTOR,
+    CreatedContracts = 37 << SEGMENT_SCALING_FACTOR,
     /// Blob versioned hashes specified in a type-3 transaction.
-    TxnBlobVersionedHashes = 35 << SEGMENT_SCALING_FACTOR,
+    TxnBlobVersionedHashes = 38 << SEGMENT_SCALING_FACTOR,
 }
 
+// These segments are not zero-initialized.
+pub(crate) const PREINITIALIZED_SEGMENTS_INDICES: [usize; 4] = [
+    Segment::Code.unscale(),
+    Segment::TrieData.unscale(),
+    Segment::AccountsLinkedList.unscale(),
+    Segment::StorageLinkedList.unscale(),
+];
+
 impl Segment {
-    pub(crate) const COUNT: usize = 36;
+    pub(crate) const COUNT: usize = 39;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
     pub(crate) const fn unscale(&self) -> usize {
@@ -122,6 +139,9 @@ impl Segment {
             Self::TouchedAddresses,
             Self::ContextCheckpoints,
             Self::BlockHashes,
+            Self::RegistersStates,
+            Self::AccountsLinkedList,
+            Self::StorageLinkedList,
             Self::TransientStorage,
             Self::CreatedContracts,
             Self::TxnBlobVersionedHashes,
@@ -164,6 +184,9 @@ impl Segment {
             Segment::TouchedAddresses => "SEGMENT_TOUCHED_ADDRESSES",
             Segment::ContextCheckpoints => "SEGMENT_CONTEXT_CHECKPOINTS",
             Segment::BlockHashes => "SEGMENT_BLOCK_HASHES",
+            Segment::RegistersStates => "SEGMENT_REGISTERS_STATES",
+            Segment::AccountsLinkedList => "SEGMENT_ACCOUNTS_LINKED_LIST",
+            Segment::StorageLinkedList => "SEGMENT_STORAGE_LINKED_LIST",
             Segment::TransientStorage => "SEGMENT_TRANSIENT_STORAGE",
             Segment::CreatedContracts => "SEGMENT_CREATED_CONTRACTS",
             Segment::TxnBlobVersionedHashes => "SEGMENT_TXN_BLOB_VERSIONED_HASHES",
@@ -205,6 +228,9 @@ impl Segment {
             Segment::TouchedAddresses => 256,
             Segment::ContextCheckpoints => 256,
             Segment::BlockHashes => 256,
+            Segment::RegistersStates => 256,
+            Segment::AccountsLinkedList => 256,
+            Segment::StorageLinkedList => 256,
             Segment::TransientStorage => 256,
             Segment::CreatedContracts => 256,
             Segment::TxnBlobVersionedHashes => 256,

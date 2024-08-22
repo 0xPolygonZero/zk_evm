@@ -26,6 +26,7 @@ tower = { workspace = true, features = ["retry"] }
 trace_decoder = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
+itertools = {workspace = true}
 
 # Local dependencies
 compat = { workspace = true }

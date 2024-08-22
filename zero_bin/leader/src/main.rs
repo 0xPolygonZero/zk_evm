@@ -9,11 +9,12 @@ use dotenvy::dotenv;
 use ops::register;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
+use prover::ProverConfig;
 use tracing::{info, warn};
-use zero_bin_common::version;
 use zero_bin_common::{
     block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
+use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
 
 use crate::client::{client_main, ProofParams};
 
@@ -22,8 +23,6 @@ mod client;
 mod http;
 mod init;
 mod stdio;
-
-const EVM_ARITHMETIZATION_PKG_VER: &str = "EVM_ARITHMETIZATION_PKG_VER";
 
 fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProof>> {
     if path.is_none() {
@@ -43,22 +42,11 @@ async fn main() -> Result<()> {
     set_circuit_cache_dir_env_if_not_set()?;
     init::tracing();
 
-    if env::var_os(EVM_ARITHMETIZATION_PKG_VER).is_none() {
-        // Safety:
-        // - we're early enough in main that nothing else should race
-        unsafe {
-            env::set_var(
-                EVM_ARITHMETIZATION_PKG_VER,
-                env!("EVM_ARITHMETIZATION_PKG_VER"),
-            );
-        }
-    }
-
     let args: Vec<String> = env::args().collect();
 
     if args.contains(&"--version".to_string()) {
         version::print_version(
-            env!("EVM_ARITHMETIZATION_PKG_VER"),
+            CIRCUIT_VERSION.as_str(),
             env!("VERGEN_RUSTC_COMMIT_HASH"),
             env!("VERGEN_BUILD_TIMESTAMP"),
         );
@@ -66,29 +54,27 @@ async fn main() -> Result<()> {
     }
 
     let args = cli::Cli::parse();
-    if let paladin::config::Runtime::InMemory = args.paladin.runtime {
-        // If running in emulation mode, we'll need to initialize the prover
-        // state here.
-        args.prover_state_config
-            .into_prover_state_manager()
-            .initialize()?;
+
+    let runtime = Runtime::from_config(&args.paladin, register()).await?;
+
+    let prover_config: ProverConfig = args.prover_config.into();
+
+    // If not in test_only mode and running in emulation mode, we'll need to
+    // initialize the prover state here.
+    if !prover_config.test_only {
+        if let paladin::config::Runtime::InMemory = args.paladin.runtime {
+            args.prover_state_config
+                .into_prover_state_manager()
+                .initialize()?;
+        }
     }
 
     match args.command {
-        Command::Stdio {
-            previous_proof,
-            save_inputs_on_error,
-        } => {
-            let runtime = Runtime::from_config(&args.paladin, register()).await?;
+        Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(runtime, previous_proof, save_inputs_on_error).await?;
+            stdio::stdio_main(runtime, previous_proof, prover_config).await?;
         }
-        Command::Http {
-            port,
-            output_dir,
-            save_inputs_on_error,
-        } => {
-            let runtime = Runtime::from_config(&args.paladin, register()).await?;
+        Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
             let output_dir_metadata = std::fs::metadata(&output_dir);
             if output_dir_metadata.is_err() {
@@ -98,7 +84,7 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(runtime, port, output_dir, save_inputs_on_error).await?;
+            http::http_main(runtime, port, output_dir, prover_config).await?;
         }
         Command::Rpc {
             rpc_url,
@@ -107,7 +93,6 @@ async fn main() -> Result<()> {
             checkpoint_block_number,
             previous_proof,
             proof_output_dir,
-            save_inputs_on_error,
             block_time,
             keep_intermediate_proofs,
             backoff,
@@ -139,7 +124,7 @@ async fn main() -> Result<()> {
                     checkpoint_block_number,
                     previous_proof,
                     proof_output_dir,
-                    save_inputs_on_error,
+                    prover_config,
                     keep_intermediate_proofs,
                 },
             )

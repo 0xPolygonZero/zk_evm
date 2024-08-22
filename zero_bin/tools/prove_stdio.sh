@@ -25,9 +25,6 @@ PROOFS_JSON_PATH="${TOOLS_DIR}/proofs.json"
 VERIFY_OUT_PATH="${TOOLS_DIR}/verify.out"
 TEST_OUT_PATH="${TOOLS_DIR}/test.out"
 
-# Set the environment variable to let the binary know that we're running in the project workspace.
-export CARGO_WORKSPACE_DIR="${TOOLS_DIR}/../"
-
 # Configured Rayon and Tokio with rough defaults
 export RAYON_NUM_THREADS=$num_procs
 export TOKIO_WORKER_THREADS=$num_procs
@@ -47,44 +44,42 @@ if [[ $INPUT_FILE == "" ]]; then
     exit 1
 fi
 
-if [[ $TEST_ONLY == "test_only" ]]; then
-    # Circuit sizes don't matter in test_only mode, so we keep them minimal.
-    export ARITHMETIC_CIRCUIT_SIZE="16..17"
-    export BYTE_PACKING_CIRCUIT_SIZE="9..10"
-    export CPU_CIRCUIT_SIZE="12..13"
-    export KECCAK_CIRCUIT_SIZE="14..15"
-    export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
-    export LOGIC_CIRCUIT_SIZE="12..13"
-    export MEMORY_CIRCUIT_SIZE="17..18"
-else
+# Circuit sizes only matter in non test_only mode.
+if ! [[ $TEST_ONLY == "test_only" ]]; then
     if [[ $INPUT_FILE == *"witness_b19807080"* ]]; then
       # These sizes are configured specifically for block 19807080. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b19807080.json"
         export ARITHMETIC_CIRCUIT_SIZE="16..18"
-        export BYTE_PACKING_CIRCUIT_SIZE="11..15"
-        export CPU_CIRCUIT_SIZE="17..21"
-        export KECCAK_CIRCUIT_SIZE="14..17"
-        export KECCAK_SPONGE_CIRCUIT_SIZE="10..13"
-        export LOGIC_CIRCUIT_SIZE="13..16"
-        export MEMORY_CIRCUIT_SIZE="19..23"
+        export BYTE_PACKING_CIRCUIT_SIZE="10..15"
+        export CPU_CIRCUIT_SIZE="16..20"
+        export KECCAK_CIRCUIT_SIZE="12..18"
+        export KECCAK_SPONGE_CIRCUIT_SIZE="8..14"
+        export LOGIC_CIRCUIT_SIZE="8..17"
+        export MEMORY_CIRCUIT_SIZE="18..22"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="16..20"
+        export MEMORY_AFTER_CIRCUIT_SIZE="7..20"
     elif [[ $INPUT_FILE == *"witness_b3_b6"* ]]; then
       # These sizes are configured specifically for custom blocks 3 to 6. Don't use this in other scenarios
         echo "Using specific circuit sizes for witness_b3_b6.json"
-        export ARITHMETIC_CIRCUIT_SIZE="16..17"
-        export BYTE_PACKING_CIRCUIT_SIZE="8..14"
-        export CPU_CIRCUIT_SIZE="14..19"
-        export KECCAK_CIRCUIT_SIZE="14..15"
-        export KECCAK_SPONGE_CIRCUIT_SIZE="10..11"
-        export LOGIC_CIRCUIT_SIZE="12..13"
-        export MEMORY_CIRCUIT_SIZE="17..21"
+        export ARITHMETIC_CIRCUIT_SIZE="16..18"
+        export BYTE_PACKING_CIRCUIT_SIZE="8..15"
+        export CPU_CIRCUIT_SIZE="10..20"
+        export KECCAK_CIRCUIT_SIZE="4..13"
+        export KECCAK_SPONGE_CIRCUIT_SIZE="8..9"
+        export LOGIC_CIRCUIT_SIZE="4..14"
+        export MEMORY_CIRCUIT_SIZE="17..22"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="17..18"
+        export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
     else
-        export ARITHMETIC_CIRCUIT_SIZE="16..23"
+        export ARITHMETIC_CIRCUIT_SIZE="16..21"
         export BYTE_PACKING_CIRCUIT_SIZE="8..21"
-        export CPU_CIRCUIT_SIZE="12..25"
-        export KECCAK_CIRCUIT_SIZE="14..20"
-        export KECCAK_SPONGE_CIRCUIT_SIZE="9..15"
-        export LOGIC_CIRCUIT_SIZE="12..18"
-        export MEMORY_CIRCUIT_SIZE="17..28"
+        export CPU_CIRCUIT_SIZE="8..21"
+        export KECCAK_CIRCUIT_SIZE="4..20"
+        export KECCAK_SPONGE_CIRCUIT_SIZE="8..17"
+        export LOGIC_CIRCUIT_SIZE="4..21"
+        export MEMORY_CIRCUIT_SIZE="17..24"
+        export MEMORY_BEFORE_CIRCUIT_SIZE="16..23"
+        export MEMORY_AFTER_CIRCUIT_SIZE="7..23"
     fi
 fi
 
@@ -93,7 +88,7 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE &> $TEST_OUT_PATH
+    cargo run --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE &> $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         rm $TEST_OUT_PATH

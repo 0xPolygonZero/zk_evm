@@ -41,8 +41,10 @@ serde = { workspace = true, features = ["derive"] }
 sha2 = { workspace = true }
 static_assertions = { workspace = true }
 hashbrown = { workspace = true }
+thiserror = { workspace = true }
 tiny-keccak = { workspace = true }
 serde_json = { workspace = true }
+serde-big-array = { workspace = true }
 
 # Local dependencies
 mpt_trie = { workspace = true }

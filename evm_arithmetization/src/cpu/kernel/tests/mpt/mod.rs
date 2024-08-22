@@ -1,6 +1,7 @@
 use ethereum_types::{BigEndianHash, H256, U256};
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::HashedPartialTrie;
+use mpt_trie::partial_trie::PartialTrie;
 
 use crate::generation::mpt::AccountRlp;
 use crate::Node;
@@ -9,6 +10,7 @@ mod delete;
 mod hash;
 mod hex_prefix;
 mod insert;
+mod linked_list;
 mod load;
 mod read;
 
@@ -37,8 +39,21 @@ pub(crate) fn test_account_1() -> AccountRlp {
     }
 }
 
+pub(crate) fn test_account_1_empty_storage() -> AccountRlp {
+    AccountRlp {
+        nonce: U256::from(1111),
+        balance: U256::from(2222),
+        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
+        code_hash: H256::from_uint(&U256::from(4444)),
+    }
+}
+
 pub(crate) fn test_account_1_rlp() -> Vec<u8> {
     rlp::encode(&test_account_1()).to_vec()
+}
+
+pub(crate) fn test_account_1_empty_storage_rlp() -> Vec<u8> {
+    rlp::encode(&test_account_1_empty_storage()).to_vec()
 }
 
 pub(crate) fn test_account_2() -> AccountRlp {
