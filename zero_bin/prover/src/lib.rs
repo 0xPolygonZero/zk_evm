@@ -131,8 +131,20 @@ impl ProverInput {
         save_inputs_on_error: bool,
         proof_output_dir: Option<PathBuf>,
     ) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
-        let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
-            previous_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
+        let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> = previous_proof
+            .clone()
+            .map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
+
+        if previous_proof.is_some()
+            && previous_proof.clone().unwrap().b_height + 1
+                != self.blocks[0].get_block_number().as_limbs()[0]
+        {
+            anyhow::bail!(
+                "Found previous b_height {} whereas range start is {}",
+                previous_proof.unwrap().b_height,
+                self.blocks[0].get_block_number()
+            );
+        }
 
         let results: FuturesOrdered<_> = self
             .blocks

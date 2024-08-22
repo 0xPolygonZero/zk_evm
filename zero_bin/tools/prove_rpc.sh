@@ -36,7 +36,7 @@ else
   export MEMORY_CIRCUIT_SIZE="17..28"
 fi
 
-# Force the working directory to always be the `tools/` directory. 
+# Force the working directory to always be the `tools/` directory.
 TOOLS_DIR=$(dirname $(realpath "$0"))
 
 # Set the environment variable to let the binary know that we're running in the project workspace.
@@ -65,12 +65,12 @@ RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p $PROOF_OUTPUT_DIR
 
-if [ $IGNORE_PREVIOUS_PROOFS ]; then
+if $IGNORE_PREVIOUS_PROOFS ; then
     # Set checkpoint height to previous block number for the first block in range
     prev_proof_num=$(($1-1))
     PREV_PROOF_EXTRA_ARG="--checkpoint-block-number ${prev_proof_num}"
 else
-    if [ $1 -gt 1 ]; then
+    if [[ $1 -gt 1 ]]; then
         prev_proof_num=$(($1-1))
         PREV_PROOF_EXTRA_ARG="-f ${PROOF_OUTPUT_DIR}/b${prev_proof_num}.zkproof"
     fi

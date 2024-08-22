@@ -53,14 +53,6 @@ impl Cli {
             } => {
                 let checkpoint_block_number =
                     checkpoint_block_number.unwrap_or((start_block - 1).into());
-                // Ensure checkpoint_block_number is less than start_block
-                if let BlockId::Number(checkpoint_block_number) = checkpoint_block_number {
-                    if checkpoint_block_number.as_number().unwrap() >= start_block {
-                        anyhow::bail!(
-                            "Checkpoint block number must be less than the start block number"
-                        );
-                    }
-                }
                 let block_interval = BlockInterval::Range(start_block..end_block + 1);
 
                 let cached_provider = CachedProvider::new(build_http_retry_provider(

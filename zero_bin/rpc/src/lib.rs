@@ -40,6 +40,30 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
+    if let BlockInterval::FollowFrom { start_block, .. } = block_interval.clone() {
+        // Ensure checkpoint_block_number is less than start_block
+        if let BlockId::Number(checkpoint_block_number) = checkpoint_block_id {
+            if checkpoint_block_number.as_number().unwrap() >= start_block {
+                anyhow::bail!(
+                    "Found checkpoint block number {} whereas range start is {}",
+                    checkpoint_block_number,
+                    start_block
+                );
+            }
+        }
+    } else if let BlockInterval::Range(range) = block_interval.clone() {
+        // Ensure checkpoint_block_number is less than start_block
+        if let BlockId::Number(checkpoint_block_number) = checkpoint_block_id {
+            if checkpoint_block_number.as_number().unwrap() >= range.start {
+                anyhow::bail!(
+                    "Found checkpoint block number {} whereas range start is {}",
+                    checkpoint_block_number,
+                    range.start
+                );
+            }
+        }
+    }
+
     // Grab interval checkpoint block state trie
     let checkpoint_state_trie_root = cached_provider
         .get_block(checkpoint_block_id, BlockTransactionsKind::Hashes)
