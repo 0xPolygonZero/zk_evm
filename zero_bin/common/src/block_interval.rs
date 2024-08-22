@@ -3,7 +3,7 @@ use alloy::rpc::types::eth::BlockId;
 use alloy::{hex, providers::Provider, transports::Transport};
 use anyhow::{anyhow, Result};
 use async_stream::try_stream;
-use futures::Stream;
+use futures::{Stream, StreamExt};
 use tracing::info;
 
 use crate::parsing;
@@ -93,15 +93,15 @@ impl BlockInterval {
     }
 
     /// Convert the block interval into an async stream of block numbers.
-    pub fn into_bounded_stream(self) -> anyhow::Result<impl Stream<Item = u64>> {
+    pub fn into_bounded_stream(self) -> anyhow::Result<impl Stream<Item = Result<u64>>> {
         match self {
             BlockInterval::SingleBlockId(BlockId::Number(num)) => {
                 let num = num
                     .as_number()
                     .ok_or(anyhow!("invalid block number '{num}'"))?;
-                Ok(futures::stream::iter(num..num + 1))
+                Ok(futures::stream::iter(num..num + 1).map(Ok))
             }
-            BlockInterval::Range(range) => Ok(futures::stream::iter(range)),
+            BlockInterval::Range(range) => Ok(futures::stream::iter(range).map(Ok)),
             _ => Err(anyhow!(
                 "could not create bounded stream from unbounded follow-from interval",
             )),
@@ -256,7 +256,7 @@ mod test {
             .into_bounded_stream()
             .unwrap();
         while let Some(val) = stream.next().await {
-            result.push(val);
+            result.push(val.unwrap());
         }
         assert_eq!(result, Vec::from_iter(1u64..10u64));
     }

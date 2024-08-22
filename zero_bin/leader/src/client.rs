@@ -1,10 +1,12 @@
 use std::io::Write;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use alloy::rpc::types::{BlockId, BlockNumberOrTag, BlockTransactionsKind};
 use alloy::transports::http::reqwest::Url;
 use anyhow::Result;
+use futures::Stream;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use prover::ProverConfig;
@@ -58,9 +60,23 @@ pub(crate) async fn client_main(
         .state_root;
 
     let mut block_prover_inputs = Vec::new();
-    let mut block_interval = block_interval.into_bounded_stream()?;
+    let mut block_interval: Pin<Box<dyn Stream<Item = Result<u64, anyhow::Error>>>> =
+        match block_interval {
+            BlockInterval::FollowFrom {
+                start_block: _,
+                block_time: _,
+            } => Box::pin(
+                async {
+                    block_interval
+                        .into_unbounded_stream(cached_provider.as_provider())
+                        .await
+                }
+                .await?,
+            ),
+            _ => Box::pin(block_interval.into_bounded_stream()?),
+        };
     while let Some(block_num) = block_interval.next().await {
-        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
+        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num?));
         // Get future of prover input for particular block.
         let block_prover_input = rpc::block_prover_input(
             cached_provider.clone(),
