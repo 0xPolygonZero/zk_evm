@@ -343,9 +343,9 @@ pub fn set_circuit_cache_dir_env_if_not_set() -> anyhow::Result<()> {
 
     // Sanity check on naming convention for the circuit cache directory.
     let path = Path::new(&circuit_cache_dir);
-    if !path.ends_with("_circuit") {
+    if !path.ends_with("_circuit_cache") {
         return Err(anyhow!(
-            "zkEVM circuit cache directory {:?} does not follow convention of ending with \"_cache\".", path
+            "zkEVM circuit cache directory {:?} does not follow convention of ending with \"_circuit_cache\".", path
         ));
     }
 
