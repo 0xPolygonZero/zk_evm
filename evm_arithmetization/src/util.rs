@@ -236,6 +236,18 @@ pub(crate) fn get_h256<F: RichField>(slice: &[F]) -> H256 {
     )
 }
 
+pub(crate) fn get_u256<F: RichField>(slice: &[F; 8]) -> U256 {
+    U256(
+        (0..4)
+            .map(|i| {
+                slice[2 * i].to_canonical_u64() + (slice[2 * i + 1].to_noncanonical_u64() << 32)
+            })
+            .collect::<Vec<u64>>()
+            .try_into()
+            .unwrap(),
+    )
+}
+
 /// Standard Sha2 implementation.
 pub(crate) fn sha2(input: Vec<u8>) -> U256 {
     let mut hasher = Sha256::new();

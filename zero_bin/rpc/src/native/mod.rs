@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use alloy::{
     primitives::B256,
@@ -19,7 +20,7 @@ type CodeDb = HashMap<__compat_primitive_types::H256, Vec<u8>>;
 
 /// Fetches the prover input for the given BlockId.
 pub async fn block_prover_input<ProviderT, TransportT>(
-    provider: &CachedProvider<ProviderT, TransportT>,
+    provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: BlockId,
     checkpoint_state_trie_root: B256,
 ) -> anyhow::Result<BlockProverInput>
@@ -28,8 +29,8 @@ where
     TransportT: Transport + Clone,
 {
     let (block_trace, other_data) = try_join!(
-        process_block_trace(provider, block_number),
-        crate::fetch_other_block_data(provider, block_number, checkpoint_state_trie_root,)
+        process_block_trace(provider.clone(), block_number),
+        crate::fetch_other_block_data(provider.clone(), block_number, checkpoint_state_trie_root,)
     )?;
 
     Ok(BlockProverInput {
@@ -40,7 +41,7 @@ where
 
 /// Processes the block with the given block number and returns the block trace.
 async fn process_block_trace<ProviderT, TransportT>(
-    cached_provider: &CachedProvider<ProviderT, TransportT>,
+    cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     block_number: BlockId,
 ) -> anyhow::Result<BlockTrace>
 where

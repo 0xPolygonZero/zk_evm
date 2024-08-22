@@ -191,6 +191,7 @@ pub mod keccak;
 pub mod keccak_sponge;
 pub mod logic;
 pub mod memory;
+pub mod memory_continuation;
 
 // Proving system components
 pub mod all_stark;
@@ -211,6 +212,7 @@ pub mod extension_tower;
 pub mod testing_utils;
 pub mod util;
 
+use generation::TrimmedGenerationInputs;
 use mpt_trie::partial_trie::HashedPartialTrie;
 
 // Public definitions and re-exports
@@ -222,4 +224,9 @@ pub type BlockHeight = u64;
 pub use all_stark::AllStark;
 pub use fixed_recursive_verifier::AllRecursiveCircuits;
 pub use generation::GenerationInputs;
+use prover::{GenerationSegmentData, SegmentError};
 pub use starky::config::StarkConfig;
+
+/// Returned type from a `SegmentDataIterator`, needed to prove all segments in
+/// a transaction batch.
+pub type AllData = Result<(TrimmedGenerationInputs, GenerationSegmentData), SegmentError>;

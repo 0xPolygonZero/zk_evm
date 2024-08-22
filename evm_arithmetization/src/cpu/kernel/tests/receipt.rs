@@ -48,7 +48,7 @@ fn test_process_receipt() -> Result<()> {
         leftover_gas,
         success,
     ];
-    let mut interpreter: Interpreter<F> = Interpreter::new(process_receipt, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(process_receipt, initial_stack, None);
     interpreter.set_memory_segment(
         Segment::LogsData,
         vec![
@@ -59,6 +59,8 @@ fn test_process_receipt() -> Result<()> {
             0.into(),                                         // data_len
         ],
     );
+    interpreter.set_memory_segment(Segment::TrieData, vec![0.into()]);
+    interpreter.set_global_metadata_field(GlobalMetadata::TrieDataSize, 1.into());
     interpreter.set_txn_field(NormalizedTxnField::GasLimit, U256::from(5000));
     interpreter.set_memory_segment(Segment::TxnBloom, vec![0.into(); 256]);
     interpreter.set_memory_segment(Segment::Logs, vec![0.into()]);
@@ -69,9 +71,11 @@ fn test_process_receipt() -> Result<()> {
 
     let segment_read = interpreter.get_memory_segment(Segment::TrieData);
 
-    // The expected TrieData has the form [payload_len, status, cum_gas_used,
-    // bloom_filter, logs_payload_len, num_logs, [logs]]
-    let mut expected_trie_data: Vec<U256> = vec![323.into(), success, 2000.into()];
+    // The expected TrieData has the form [0, payload_len, status, cum_gas_used,
+    // bloom_filter, logs_payload_len, num_logs, [logs]].
+    // The 0 is always the first element of `TrieSegmentData`, as it corresponds to
+    // the null pointer.
+    let mut expected_trie_data: Vec<U256> = vec![0.into(), 323.into(), success, 2000.into()];
     expected_trie_data.extend(
         expected_bloom
             .into_iter()
@@ -132,7 +136,7 @@ fn test_receipt_encoding() -> Result<()> {
     // Address at which the encoding is written.
     let rlp_addr = U256::from(Segment::RlpRaw as usize);
     let initial_stack: Vec<U256> = vec![retdest, 0.into(), 0.into(), rlp_addr];
-    let mut interpreter: Interpreter<F> = Interpreter::new(encode_receipt, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(encode_receipt, initial_stack, None);
 
     // Write data to memory.
     let expected_bloom_bytes = vec![
@@ -252,7 +256,7 @@ fn test_receipt_bloom_filter() -> Result<()> {
     // Set logs memory and initialize TxnBloom and BlockBloom segments.
     let initial_stack: Vec<U256> = vec![retdest];
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_bloom, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_bloom, initial_stack, None);
     let mut logs = vec![
         0.into(), // unused
         addr,
@@ -414,7 +418,7 @@ fn test_mpt_insert_receipt() -> Result<()> {
     receipt.push(num_logs.into()); // num_logs
     receipt.extend(logs_0.clone());
 
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![]);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
     initialize_mpts(&mut interpreter, &trie_inputs);
 
     // If TrieData is empty, we need to push 0 because the first value is always 0.
@@ -570,7 +574,7 @@ fn test_bloom_two_logs() -> Result<()> {
         ]
         .into(),
     ];
-    let mut interpreter: Interpreter<F> = Interpreter::new(logs_bloom, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(logs_bloom, initial_stack, None);
     interpreter.set_memory_segment(Segment::TxnBloom, vec![0.into(); 256]); // Initialize transaction Bloom filter.
     interpreter.set_memory_segment(Segment::LogsData, logs);
     interpreter.set_memory_segment(Segment::Logs, vec![0.into(), 4.into()]);
