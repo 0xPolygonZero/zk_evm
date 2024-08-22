@@ -11,6 +11,7 @@ use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing::{error, info, warn};
 use zero_bin_common::block_interval::BlockInterval;
 use zero_bin_common::fs::generate_block_proof_file_name;
+use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 
 #[derive(Debug)]
 pub struct RpcParams {
@@ -45,21 +46,11 @@ pub(crate) async fn client_main(
             rpc_params.max_retries,
         ),
     ));
-
-    if let BlockInterval::FollowFrom { start_block, .. } = block_interval.clone() {
-        _ = check_previous_proof(
-            params.checkpoint_block_number,
-            params.previous_proof.clone(),
-            start_block,
-        )
-    } else if let BlockInterval::Range(range) = block_interval.clone() {
-        _ = check_previous_proof(
-            params.checkpoint_block_number,
-            params.previous_proof.clone(),
-            range.start,
-        )
-    }
-
+    check_previous_proof_and_checkpoint(
+        params.checkpoint_block_number,
+        &params.previous_proof,
+        block_interval.get_start_block()?,
+    )?;
     // Grab interval checkpoint block state trie
     let checkpoint_state_trie_root = cached_provider
         .get_block(
@@ -143,31 +134,5 @@ pub(crate) async fn client_main(
         }
     }
 
-    Ok(())
-}
-
-fn check_previous_proof(
-    checkpoint_block_number: u64,
-    previous_proof: Option<GeneratedBlockProof>,
-    start: u64,
-) -> Result<()> {
-    if previous_proof.is_some() {
-        if previous_proof.clone().unwrap().b_height + 1 != start {
-            anyhow::bail!(
-                "Found previous b_height {} whereas range start is {}",
-                previous_proof.unwrap().b_height,
-                start
-            );
-        } else {
-            return Ok(());
-        }
-    }
-    if checkpoint_block_number != start + 1 {
-        anyhow::bail!(
-            "Found checkpoint block number {} whereas range start is {}",
-            checkpoint_block_number,
-            start
-        );
-    }
     Ok(())
 }

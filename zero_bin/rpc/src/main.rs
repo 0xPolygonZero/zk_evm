@@ -9,6 +9,7 @@ use rpc::provider::CachedProvider;
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
+use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 use zero_bin_common::version;
 use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
 
@@ -56,12 +57,14 @@ impl Cli {
             } => {
                 let checkpoint_block_number =
                     checkpoint_block_number.unwrap_or((start_block - 1).into());
-                if checkpoint_block_number != (start_block - 1).into() {
-                    anyhow::bail!(
-                        "Found checkpoint block number {:#?} whereas range start is {}",
-                        checkpoint_block_number,
-                        start_block
-                    );
+                if let BlockId::Number(checkpoint_block_number) = checkpoint_block_number {
+                    if let Some(checkpoint_block_number) = checkpoint_block_number.as_number() {
+                        check_previous_proof_and_checkpoint(
+                            checkpoint_block_number,
+                            &None,
+                            start_block,
+                        )?;
+                    }
                 }
                 let block_interval = BlockInterval::Range(start_block..end_block + 1);
 
