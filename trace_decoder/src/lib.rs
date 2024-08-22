@@ -284,6 +284,7 @@ pub struct BlockLevelData {
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
+    batch_size: usize,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     use anyhow::Context as _;
     use mpt_trie::partial_trie::PartialTrie as _;
@@ -400,10 +401,10 @@ pub fn entrypoint(
         )
         .collect::<Hash2Code>();
 
-    let last_tx_idx = txn_info.len().saturating_sub(1);
+    let last_tx_idx = txn_info.len().saturating_sub(1) / batch_size;
 
     let mut txn_info = txn_info
-        .into_iter()
+        .chunks(batch_size)
         .enumerate()
         .map(|(i, t)| {
             let extra_state_accesses = if last_tx_idx == i {
@@ -419,7 +420,8 @@ pub fn entrypoint(
                 Vec::new()
             };
 
-            t.into_processed_txn_info(
+            TxnInfo::into_processed_txn_info(
+                t,
                 &pre_images.tries,
                 &all_accounts_in_pre_images,
                 &extra_state_accesses,
@@ -429,7 +431,7 @@ pub fn entrypoint(
         .collect::<Result<Vec<_>, _>>()?;
 
     while txn_info.len() < 2 {
-        txn_info.insert(0, ProcessedTxnInfo::default());
+        txn_info.push(ProcessedTxnInfo::default());
     }
 
     decoding::into_txn_proof_gen_ir(
@@ -439,6 +441,7 @@ pub fn entrypoint(
             withdrawals: other.b_data.withdrawals.clone(),
         },
         other,
+        batch_size,
     )
 }
 

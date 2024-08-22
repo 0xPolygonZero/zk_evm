@@ -11,6 +11,7 @@ mod core;
 mod ecc;
 mod exp;
 mod hash;
+mod init_exc_stop;
 mod kernel_consistency;
 mod log;
 mod mcopy;
@@ -59,7 +60,7 @@ pub(crate) fn run_interpreter<F: Field>(
     initial_offset: usize,
     initial_stack: Vec<U256>,
 ) -> anyhow::Result<Interpreter<F>> {
-    let mut interpreter = Interpreter::new(initial_offset, initial_stack);
+    let mut interpreter = Interpreter::new(initial_offset, initial_stack, None);
     interpreter.run()?;
     Ok(interpreter)
 }
@@ -78,7 +79,7 @@ pub(crate) fn run_interpreter_with_memory<F: Field>(
     let label = KERNEL.global_labels[&memory_init.label];
     let mut stack = memory_init.stack;
     stack.reverse();
-    let mut interpreter = Interpreter::new(label, stack);
+    let mut interpreter = Interpreter::new(label, stack, None);
     for (pointer, data) in memory_init.memory {
         for (i, term) in data.iter().enumerate() {
             interpreter.generation_state.memory.set(

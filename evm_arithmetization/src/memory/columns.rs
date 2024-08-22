@@ -19,6 +19,8 @@ pub(crate) struct MemoryColumnsView<T> {
     /// of general memory channels, and `i` is the index of the memory
     /// channel at which the memory operation is performed.
     pub timestamp: T,
+    /// Contains the inverse of `timestamp`. Used to check if `timestamp = 0`.
+    pub timestamp_inv: T,
     /// 1 if this is a read operation, 0 if it is a write one.
     pub is_read: T,
     /// The execution context of this address.
@@ -40,11 +42,45 @@ pub(crate) struct MemoryColumnsView<T> {
     pub segment_first_change: T,
     pub virtual_first_change: T,
 
-    // Used to lower the degree of the zero-initializing constraints.
-    // Contains `next_segment * addr_changed * next_is_read`.
+    /// Used to lower the degree of the zero-initializing constraints.
+    /// Contains `preinitialized_segments * addr_changed * next_is_read`.
     pub initialize_aux: T,
 
-    // We use a range check to enforce the ordering.
+    /// Used to allow pre-initialization of some segments.
+    /// Contains `(next_segment - Segment::Code) * (next_segment -
+    /// Segment::TrieData)
+    /// * preinitialized_segments_aux`.
+    pub preinitialized_segments: T,
+
+    /// Used to allow pre-initialization of more segments.
+    /// Contains `(next_segment - Segment::AccountsLinkedList) * (next_segment -
+    /// Segment::StorageLinkedList)`.
+    pub preinitialized_segments_aux: T,
+
+    /// Contains `row_index` + 1 if and only if context `row_index` is stale,
+    /// and zero if not.
+    pub stale_contexts: T,
+
+    /// Flag indicating whether the current context needs to be pruned. It is
+    /// set to 1 when the value in `state_contexts` is non-zero.
+    pub is_pruned: T,
+
+    /// Used for the context pruning lookup.
+    pub stale_context_frequencies: T,
+
+    /// Flag indicating whether the row should be pruned, i.e. whether its
+    /// `addr_context` + 1 is in `state_contexts`.
+    pub is_stale: T,
+
+    /// Flag indicating that a value can potentially be propagated.
+    /// Contains `filter * address_changed * is_not_stale`.
+    pub maybe_in_mem_after: T,
+
+    /// Filter for the `MemAfter` CTL. Is equal to `MAYBE_IN_MEM_AFTER` if
+    /// segment is preinitialized or the value is non-zero, is 0 otherwise.
+    pub mem_after_filter: T,
+
+    /// We use a range check to enforce the ordering.
     pub range_check: T,
     /// The counter column (used for the range check) starts from 0 and
     /// increments.

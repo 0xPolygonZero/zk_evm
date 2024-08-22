@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod bn {
-
     use anyhow::Result;
     use ethereum_types::U256;
     use plonky2::field::goldilocks_field::GoldilocksField as F;
@@ -186,7 +185,7 @@ mod bn {
 
             let mut initial_stack = u256ify(["0xdeadbeef"])?;
             initial_stack.push(k);
-            let mut int: Interpreter<F> = Interpreter::new(glv, initial_stack);
+            let mut int: Interpreter<F> = Interpreter::new(glv, initial_stack, None);
             int.run()?;
 
             assert_eq!(line, int.stack());
@@ -204,7 +203,7 @@ mod bn {
             "0x10d7cf0621b6e42c1dbb421f5ef5e1936ca6a87b38198d1935be31e28821d171",
             "0x11b7d55f16aaac07de9a0ed8ac2e8023570dbaa78571fc95e553c4b3ba627689",
         ])?;
-        let mut int: Interpreter<F> = Interpreter::new(precompute, initial_stack);
+        let mut int: Interpreter<F> = Interpreter::new(precompute, initial_stack, None);
         int.run()?;
 
         let mut computed_table = Vec::new();
@@ -357,7 +356,7 @@ mod secp {
 
             let mut initial_stack = u256ify(["0xdeadbeef"])?;
             initial_stack.push(k);
-            let mut int: Interpreter<F> = Interpreter::new(glv, initial_stack);
+            let mut int: Interpreter<F> = Interpreter::new(glv, initial_stack, None);
             int.run()?;
 
             assert_eq!(line, int.stack());

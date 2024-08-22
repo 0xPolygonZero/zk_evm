@@ -1,27 +1,18 @@
 // Given an address, return a pointer to the associated account data, which
 // consists of four words (nonce, balance, storage_root, code_hash), in the
-// state trie. Returns null if the address is not found.
+// trie_data segment. Return null if the address is not found.
 global mpt_read_state_trie:
     // stack: addr, retdest
-    %addr_to_state_key
-global mpt_read_state_trie_from_key:
-    // stack: key, retdest
-    PUSH 64 // num_nibbles
-    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT) // node_ptr
-    // stack: node_ptr, num_nibbles, key, retdest
-    %jump(mpt_read)
+    %read_accounts_linked_list
+    // stack: account_ptr, retdest
+    SWAP1
+    // stack: retdest, account_ptr
+    JUMP
 
 // Convenience macro to call mpt_read_state_trie and return where we left off.
 %macro mpt_read_state_trie
     %stack (addr) -> (addr, %%after)
     %jump(mpt_read_state_trie)
-%%after:
-%endmacro
-
-// Convenience macro to call mpt_read_state_trie_from_key and return where we left off.
-%macro mpt_read_state_trie_from_key
-    %stack (key) -> (key, %%after)
-    %jump(mpt_read_state_trie_from_key)
 %%after:
 %endmacro
 

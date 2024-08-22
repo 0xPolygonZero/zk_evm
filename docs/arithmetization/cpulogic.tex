@@ -2,7 +2,7 @@
 \label{cpulogic}
 
 The CPU is in charge of coordinating the different STARKs, proving the correct execution of the instructions it reads and guaranteeing
-that the final state of the EVM corresponds to the starting state after executing the input transaction. All design choices were made 
+that the final state of the EVM corresponds to the starting state after executing the input transactions. All design choices were made 
 to make sure these properties can be adequately translated into constraints of degree at most 3 while minimizing the size of the different
 table traces (number of columns and number of rows).
 
@@ -11,29 +11,49 @@ In this section, we will detail some of these choices.
 \subsection{Kernel}
 The kernel is in charge of the proving logic. This section aims at providing a high level overview of this logic. For details about any specific part of the logic, one can consult the various ``asm'' files in the \href{https://github.com/0xPolygonZero/plonky2/tree/main/evm/src/cpu/kernel}{``kernel'' folder}.
 
-We prove one transaction at a time. These proofs can later be aggregated recursively to prove a block. Proof aggregation is however not in the scope of this section. Here, we assume that we have an initial state of the EVM, and we wish to prove that a single transaction was correctly executed, leading to a correct update of the state.
+We prove a batch of transactions, split into segments. These proofs can later be aggregated recursively to prove a block. Proof aggregation is however not in the scope of this section. Here, we assume that we have an initial state of the EVM, and we wish to prove that a batch of contiguous transactions was correctly executed, leading to a correct update of the state.
 
-Since we process one transaction at a time, a few intermediary values need to be provided by the prover. Indeed, to prove that the registers in the EVM state are correctly updated, we need to have access to their initial values. When aggregating proofs, we can also constrain those values to match from one transaction to the next. Let us consider the example of the transaction number. Let $n$ be the number of transactions executed so far in the current block. If the current proof is not a dummy one (we are indeed executing a transaction), then the transaction number should be updated: $n := n+1$. Otherwise, the number remains unchanged. We can easily constrain this update. When aggregating the previous transaction proof ($lhs$) with the current one ($rhs$), we also need to check that the output transaction number of $lhs$ is the same as the input transaction number of $rhs$. 
+Since we process transactions and not entire blocks, a few intermediary values need to be provided by the prover. Indeed, to prove that the registers in the EVM state are correctly updated, we need to have access to their initial values. When aggregating proofs, we can also constrain those values to match from one batch to the next. Let us consider the example of the transaction number. Let $n$ be the number of transactions executed so far in the current block. If the current proof is not a dummy one (we are indeed executing a batch of transactions), then the transaction number should be updated: $n := n+k$ with $k$ the number of transactions in the batch. Otherwise, the number remains unchanged. We can easily constrain this update. When aggregating the previous transaction batch proof ($lhs$) with the current one ($rhs$), we also need to check that the output transaction number of $lhs$ is the same as the input transaction number of $rhs$. 
 
 Those prover provided values are stored in memory prior to entering the kernel, and are used in the kernel to assert correct updates. The list of prover provided values necessary to the kernel is the following:
 \begin{enumerate}
-    \item the previous transaction number: $t_n$,
-    \item the gas used before executing the current transaction: $g\_u_0$,
-    \item the gas used after executing the current transaction: $g\_u_1$,
-    \item the state, transaction and receipts MPTs before executing the current transaction: $\texttt{tries}_0$,
-    \item the hash of all MPTs before executing the current transaction: $\texttt{digests}_0$,
-    \item the hash of all MPTs after executing the current transaction: $\texttt{digests}_1$,
-    \item the RLP encoding of the transaction.
+    \item the number of the last transaction executed: $t_n$,
+    \item the gas used before executing the current transactions: $g\_u_0$,
+    \item the gas used after executing the current transactions: $g\_u_1$,
+    \item the state, transaction and receipts MPTs before executing the current transactions: $\texttt{tries}_0$,
+    \item the hash of all MPTs before executing the current transactions: $\texttt{digests}_0$,
+    \item the hash of all MPTs after executing the current transactions: $\texttt{digests}_1$,
+    \item the RLP encoding of the transactions.
 \end{enumerate}
 
-\paragraph*{Initialization:} The first step consists in initializing:
+\paragraph*{Segment handling:}
+An execution run is split into one or more segments. To ensure continuity, the first cycles of a segment are used to "load" segment data from the previous segment, and the last cycles to
+"save" segment data for the next segment. The number of CPU cycles of a segment is bounded by \texttt{MAX\_CPU\_CYCLES}, which can be tweaked for best performance. The segment data values are:
 \begin{itemize}
-    \item The shift table: it maps the number of bit shifts $s$ with its shifted value $1 << s$. Note that $0 \leq s \leq 255$.
-    \item The initial MPTs: the initial state, transaction and receipt tries $\texttt{tries}_0$ are loaded from memory and hashed. The hashes are then compared to $\texttt{digests}\_0$.
+  \item the stack length,
+  \item the stack top,
+  \item the context,
+  \item the \texttt{is\_kernel} flag,
+  \item the gas used,
+  \item the program counter.
+\end{itemize}
+These values are stored as global metadata, and are loaded from (resp. written to) memory at the beginning (resp. at the end) of a segment. They are propagated
+between proofs as public values.
+
+The initial memory of the first segment is fixed and contains:
+\begin{itemize}
+  \item the kernel code,
+  \item the shift table.
+\end{itemize}
+
+\paragraph*{Initialization:} The first step of a run consists in initializing:
+\begin{itemize}
+    \item The initial transaction and receipt tries $\texttt{tries}_0$ are loaded from memory. The transaction and the receipt tries are hashed and the hashes are then compared to $\texttt{digests}\_0$.
+For efficiency, the initial state trie will be hashed for verification at the end of the run.
     \item We load the transaction number $t\_n$ and the current gas used $g\_u_0$ from memory.
 \end{itemize}
 
-If no transaction is provided, we can halt after this initialization. Otherwise, we start processing the transaction. The transaction is provided as its RLP encoding. We can deduce the various transaction fields (such as its type or the transfer value) from its encoding. Based on this, the kernel updates the state trie by executing the transaction. Processing the transaction also includes updating the transactions MPT with the transaction at hand.
+We start processing the transactions (if any) sequentially, provided in RLP encoded format.
 
 The processing of the transaction returns a boolean ``success'' that indicates whether the transaction was executed successfully, along with the leftover gas. 
 
@@ -44,8 +64,9 @@ If there are any withdrawals, they are performed at this stage.
 Finally, once the three MPTs have been updated, we need to carry out final checks:
 \begin{itemize}
     \item the gas used after the execution is equal to $g\_u_1$,
-    \item the new transaction number is $n+1$ if there was a transaction,
-    \item the three MPTs are hashed and checked against $\texttt{digests}_1$.
+    \item the new transaction number is $n + k$ with $k$ the number of processed transactions,
+    \item the initial state MPT is hashed and checked against $\texttt{digests}_0$.
+    \item the initial state MPT is updated to reflect the processed transactions, then the three final MPTs are hashed and checked against $\texttt{digests}_1$.
 \end{itemize}
 Once those final checks are performed, the program halts.
 
@@ -283,3 +304,57 @@ to \texttt{exc\_stack\_overflow}. The kernel then checks that the current stack 
 push once at most), and that the faulty instruction is pushing.
 If the exception is not raised, stack constraints ensure that a stack length of 1025 in user mode will fail the proof.
 \end{enumerate}
+
+\subsection{Linked lists}
+
+Individual account information are contained in the state and the storage MPTs. However, accessing and modifying MPT data requires heavy trie
+traversal, insertion and deletion functions. To alleviate these costs, during an execution run, we store all account information in linked list structures
+and only modify the state trie at the end of the run.
+
+Our linked list construction guarantees these properties:
+\begin{itemize}
+  \item A linked list is cyclic. The last element's successor is the first element.
+  \item A linked list is always sorted by a certain index, which can be one or more fields of an element.
+  \item The last element of a linked list is MAX, whose index is always higher than any possible index value.
+  \item An index cannot appear twice in the linked list.
+\end{itemize}
+
+These properties allows us to efficiently modify the list.
+
+\paragraph*{Search}
+To search a node given its index, we provide via \texttt{PROVER\_INPUT} a pointer to its predecessor $p$. We first check that $p$'s index is strictly lower than
+the node index, if not, the provided pointer is invalid. Then, we check $s$, $p$'s successor. If $s$'s index is equal to the node index, we found the node.
+If $s$'s index is lower than the node index, then the provided $p$ was invalid. If $s$'s index is greater than the node index, then the node doesn't exist.
+
+\paragraph*{Insertion}
+To insert a node given its index, we provide via \texttt{PROVER\_INPUT} a pointer to its predecessor $p$. We first check that $p$'s index is strictly lower than
+the node index, if not, the provided pointer is invalid. Then, we check $s$, $p$'s successor, and make sure that $s$ is strictly greater than the node index.
+We create a new node, and make it $p$'s successor; then we make $s$ the new node's successor.
+
+\paragraph*{Deletion}
+To delete a node given its index, we provide via \texttt{PROVER\_INPUT} a pointer to its predecessor $p$. We check that $p$'s successor is equal to the node index; if not
+either $p$ is invalid or the node doesn't exist. Then we set $p$'s successor to the node's successor. To indicate that the node is now deleted and to make sure that it's 
+never accessed again, we set its next pointer to MAX.
+
+We maintain two linked lists: one for the state accounts and one for the storage slots.
+
+\subsubsection*{Account linked list}
+
+An account node is made of four memory cells:
+\begin{itemize}
+  \item The account key (the hash of the account address). This is the index of the node.
+  \item A pointer to the account payload, in segment \texttt{@TrieData}.
+  \item A pointer to the initial account payload, in segment \texttt{@TrieData}. This is the value of the account at the beginning of the execution, before processing any transaction. This payload never changes.
+  \item A pointer to the next node (which points to the next node's account key).
+\end{itemize} 
+
+\subsubsection*{Storage linked list}
+
+A storage node is made of five memory cells:
+\begin{itemize}
+  \item The account key (the hash of the account address). 
+  \item The slot key (the hash of the slot). Nodes are indexed by \texttt{(account\_key, slot\_key)}.
+  \item The slot value.
+  \item The initial slot value. This is the value of the account at the beginning of the execution, before processing any transaction. It never changes.
+  \item A pointer to the next node (which points to the next node's account key).
+\end{itemize} 

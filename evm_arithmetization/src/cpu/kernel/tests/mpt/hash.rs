@@ -112,12 +112,12 @@ fn test_state_trie(trie_inputs: TrieInputs) -> Result<()> {
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
 
     let initial_stack = vec![];
-    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, initial_stack, None);
 
     initialize_mpts(&mut interpreter, &trie_inputs);
     assert_eq!(interpreter.stack(), vec![]);
 
-    // Now, execute mpt_hash_state_trie.
+    // Now, execute `mpt_hash_state_trie`.
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
     interpreter
         .push(0xDEADBEEFu32.into())

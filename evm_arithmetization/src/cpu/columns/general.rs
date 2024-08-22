@@ -15,6 +15,7 @@ pub(crate) union CpuGeneralColumnsView<T: Copy> {
     shift: CpuShiftView<T>,
     stack: CpuStackView<T>,
     push: CpuPushView<T>,
+    context_pruning: CpuContextPruningView<T>,
 }
 
 impl<T: Copy> CpuGeneralColumnsView<T> {
@@ -90,6 +91,18 @@ impl<T: Copy> CpuGeneralColumnsView<T> {
     /// SAFETY: Each view is a valid interpretation of the underlying array.
     pub(crate) fn push_mut(&mut self) -> &mut CpuPushView<T> {
         unsafe { &mut self.push }
+    }
+
+    /// View of the column for context pruning.
+    /// SAFETY: Each view is a valid interpretation of the underlying array.
+    pub(crate) fn context_pruning(&self) -> &CpuContextPruningView<T> {
+        unsafe { &self.context_pruning }
+    }
+
+    /// Mutable view of the column for context pruning.
+    /// SAFETY: Each view is a valid interpretation of the underlying array.
+    pub(crate) fn context_pruning_mut(&mut self) -> &mut CpuContextPruningView<T> {
+        unsafe { &mut self.context_pruning }
     }
 }
 
@@ -203,6 +216,17 @@ pub(crate) struct CpuPushView<T: Copy> {
     /// Reserve the unused columns.
     _padding_columns: [T; NUM_SHARED_COLUMNS - 1],
 }
+
+/// View of the first `CpuGeneralColumn` storing a flag for context pruning.
+#[derive(Copy, Clone)]
+pub(crate) struct CpuContextPruningView<T: Copy> {
+    /// The flag is 1 if the OP flag `context_op` is set, the operation is
+    /// `SET_CONTEXT` and `new_ctx < old_ctx`, and 0 otherwise.
+    pub(crate) pruning_flag: T,
+    /// Reserve the unused columns.
+    _padding_columns: [T; NUM_SHARED_COLUMNS - 1],
+}
+
 /// The number of columns shared by all views of [`CpuGeneralColumnsView`].
 /// This is defined in terms of the largest view in order to determine the
 /// number of padding columns to add to each field without creating a cycle
@@ -219,3 +243,4 @@ const_assert!(size_of::<CpuJumpsView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuShiftView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuStackView<u8>>() == NUM_SHARED_COLUMNS);
 const_assert!(size_of::<CpuPushView<u8>>() == NUM_SHARED_COLUMNS);
+const_assert!(size_of::<CpuContextPruningView<u8>>() == NUM_SHARED_COLUMNS);

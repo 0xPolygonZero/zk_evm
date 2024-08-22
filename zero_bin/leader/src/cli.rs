@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use alloy::transports::http::reqwest::Url;
 use clap::{Parser, Subcommand, ValueHint};
+use prover::cli::CliProverConfig;
 use rpc::RpcType;
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
 
@@ -13,6 +14,9 @@ pub(crate) struct Cli {
 
     #[clap(flatten)]
     pub(crate) paladin: paladin::config::Config,
+
+    #[clap(flatten)]
+    pub(crate) prover_config: CliProverConfig,
 
     // Note this is only relevant for the leader when running in in-memory
     // mode.
@@ -27,9 +31,6 @@ pub(crate) enum Command {
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,
-        /// If true, save the public inputs to disk on error.
-        #[arg(short, long, default_value_t = false)]
-        save_inputs_on_error: bool,
     },
     /// Reads input from a node rpc and writes output to stdout.
     Rpc {
@@ -52,9 +53,6 @@ pub(crate) enum Command {
         /// stdout.
         #[arg(long, short = 'o', value_hint = ValueHint::FilePath)]
         proof_output_dir: Option<PathBuf>,
-        /// If true, save the public inputs to disk on error.
-        #[arg(short, long, default_value_t = false)]
-        save_inputs_on_error: bool,
         /// Network block time in milliseconds. This value is used
         /// to determine the blockchain node polling interval.
         #[arg(short, long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
@@ -83,8 +81,5 @@ pub(crate) enum Command {
         /// The directory to which output should be written.
         #[arg(short, long, value_hint = ValueHint::DirPath)]
         output_dir: PathBuf,
-        /// If true, save the public inputs to disk on error.
-        #[arg(short, long, default_value_t = false)]
-        save_inputs_on_error: bool,
     },
 }

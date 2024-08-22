@@ -9,7 +9,9 @@ global revert_code_change:
     POP
     %journal_load_2
     // stack: address, prev_codehash, retdest
-    %mpt_read_state_trie
+    %read_accounts_linked_list
+    // stack: account_ptr, prev_codehash, retdest
+    DUP1 %assert_nonzero
     // stack: account_ptr, prev_codehash, retdest
     %add_const(3)
     // stack: codehash_ptr, prev_codehash, retdest

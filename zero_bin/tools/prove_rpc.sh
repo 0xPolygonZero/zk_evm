@@ -17,23 +17,17 @@ export RUST_LOG=info
 # See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
-if [[ $8 == "test_only" ]]; then
-  # Circuit sizes don't matter in test_only mode, so we keep them minimal.
-  export ARITHMETIC_CIRCUIT_SIZE="16..17"
-  export BYTE_PACKING_CIRCUIT_SIZE="9..10"
-  export CPU_CIRCUIT_SIZE="12..13"
-  export KECCAK_CIRCUIT_SIZE="14..15"
-  export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
-  export LOGIC_CIRCUIT_SIZE="12..13"
-  export MEMORY_CIRCUIT_SIZE="17..18"
-else
-  export ARITHMETIC_CIRCUIT_SIZE="16..23"
-  export BYTE_PACKING_CIRCUIT_SIZE="8..21"
-  export CPU_CIRCUIT_SIZE="12..25"
-  export KECCAK_CIRCUIT_SIZE="14..20"
-  export KECCAK_SPONGE_CIRCUIT_SIZE="9..15"
-  export LOGIC_CIRCUIT_SIZE="12..18"
-  export MEMORY_CIRCUIT_SIZE="17..28"
+# Circuit sizes only matter in non test_only mode.
+if ! [[ $8 == "test_only" ]]; then
+    export ARITHMETIC_CIRCUIT_SIZE="16..21"
+    export BYTE_PACKING_CIRCUIT_SIZE="8..21"
+    export CPU_CIRCUIT_SIZE="8..21"
+    export KECCAK_CIRCUIT_SIZE="4..20"
+    export KECCAK_SPONGE_CIRCUIT_SIZE="8..17"
+    export LOGIC_CIRCUIT_SIZE="4..21"
+    export MEMORY_CIRCUIT_SIZE="17..24"
+    export MEMORY_BEFORE_CIRCUIT_SIZE="16..23"
+    export MEMORY_AFTER_CIRCUIT_SIZE="7..23"
 fi
 
 # Force the working directory to always be the `tools/` directory. 
@@ -108,7 +102,7 @@ fi
 if [[ $8 == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    command='cargo r --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
         retVal=$?

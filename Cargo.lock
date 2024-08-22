@@ -2016,7 +2016,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "plonky2",
- "plonky2_maybe_rayon",
+ "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "plonky2_util",
  "rand",
  "rand_chacha",
@@ -2024,10 +2024,12 @@ dependencies = [
  "rlp",
  "rlp-derive",
  "serde",
+ "serde-big-array",
  "serde_json",
  "sha2",
  "starky",
  "static_assertions",
+ "thiserror",
  "tiny-keccak",
  "zk_evm_proc_macro",
 ]
@@ -3303,6 +3305,7 @@ dependencies = [
  "paladin-core",
  "proof_gen",
  "serde",
+ "trace_decoder",
  "tracing",
  "zero_bin_common",
 ]
@@ -3619,8 +3622,7 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 [[package]]
 name = "plonky2"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f26b090b989aebdeaf6a4eed748c1fbcabf67e7273a22e4e0c877b63846d0f"
+source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=dc77c77f2b06500e16ad4d7f1c2b057903602eed#dc77c77f2b06500e16ad4d7f1c2b057903602eed"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3631,7 +3633,7 @@ dependencies = [
  "log",
  "num",
  "plonky2_field",
- "plonky2_maybe_rayon",
+ "plonky2_maybe_rayon 0.2.0 (git+https://github.com/0xPolygonZero/plonky2.git?rev=dc77c77f2b06500e16ad4d7f1c2b057903602eed)",
  "plonky2_util",
  "rand",
  "rand_chacha",
@@ -3644,8 +3646,7 @@ dependencies = [
 [[package]]
 name = "plonky2_field"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1dca60ad900d81b1fe2df3d0b88d43345988e2935e6709176e96573f4bcf5d"
+source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=dc77c77f2b06500e16ad4d7f1c2b057903602eed#dc77c77f2b06500e16ad4d7f1c2b057903602eed"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
@@ -3667,10 +3668,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "plonky2_maybe_rayon"
+version = "0.2.0"
+source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=dc77c77f2b06500e16ad4d7f1c2b057903602eed#dc77c77f2b06500e16ad4d7f1c2b057903602eed"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "plonky2_util"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b16136f5f3019c1e83035af76cccddd56d789a5e2933306270185c3f99f12259"
+source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=dc77c77f2b06500e16ad4d7f1c2b057903602eed#dc77c77f2b06500e16ad4d7f1c2b057903602eed"
 
 [[package]]
 name = "plotters"
@@ -3845,6 +3853,7 @@ name = "proof_gen"
 version = "0.4.0"
 dependencies = [
  "evm_arithmetization",
+ "hashbrown",
  "log",
  "paste",
  "plonky2",
@@ -3877,10 +3886,14 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anyhow",
+ "clap",
+ "evm_arithmetization",
  "futures",
  "num-traits",
  "ops",
  "paladin-core",
+ "plonky2",
+ "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "proof_gen",
  "ruint",
  "serde",
@@ -4526,6 +4539,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.204"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4724,8 +4746,7 @@ checksum = "8acdd7dbfcfb5dd6e46c63512508bf71c2043f70b8f143813ad75cb5e8a589f2"
 [[package]]
 name = "starky"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a8480ca5b8eedf83ad070a780783b4e21a56c6ef66b4c0d1b7520b72bdfda1b"
+source = "git+https://github.com/0xPolygonZero/plonky2.git?rev=dc77c77f2b06500e16ad4d7f1c2b057903602eed#dc77c77f2b06500e16ad4d7f1c2b057903602eed"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4734,7 +4755,7 @@ dependencies = [
  "log",
  "num-bigint",
  "plonky2",
- "plonky2_maybe_rayon",
+ "plonky2_maybe_rayon 0.2.0 (git+https://github.com/0xPolygonZero/plonky2.git?rev=dc77c77f2b06500e16ad4d7f1c2b057903602eed)",
  "plonky2_util",
 ]
 
@@ -5168,7 +5189,7 @@ dependencies = [
  "mpt_trie",
  "nunny",
  "plonky2",
- "plonky2_maybe_rayon",
+ "plonky2_maybe_rayon 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_env_logger",
  "prover",
  "rlp",
@@ -5842,6 +5863,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+ "trace_decoder",
  "tracing",
  "vergen",
 ]
