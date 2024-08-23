@@ -104,6 +104,7 @@ fn visit(
                             }
                         },
                     };
+                    #[expect(deprecated)] // this is MPT-specific code
                     let clobbered = frontend.state.insert_by_key(path, account)?;
                     ensure!(clobbered.is_none(), "duplicate account");
                 }

@@ -328,7 +328,7 @@ fn apply_deltas_to_trie_state(
         let val_k = TrieKey::from_hash(*hashed_acc_addr);
 
         // If the account was created, then it will not exist in the trie yet.
-        let is_created = !trie_state.state.contains(val_k);
+        let is_created = !trie_state.state.contains_address(val_k);
         let mut account = trie_state.state.get_by_key(val_k).unwrap_or_default();
 
         s_trie_writes.apply_writes_to_state_node(
