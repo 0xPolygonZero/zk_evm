@@ -1,7 +1,10 @@
 //! Principled MPT types used in this library.
-
-use core::fmt;
-use std::{collections::HashMap, iter, marker::PhantomData};
+use core::{array, fmt};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    iter,
+    marker::PhantomData,
+};
 
 use copyvec::CopyVec;
 use ethereum_types::{Address, BigEndianHash as _, H256, U256};
@@ -13,6 +16,8 @@ use mpt_trie::{
 };
 use plonky2::{field::goldilocks_field::GoldilocksField, hash::hash_types::HashOut};
 use u4::{u4, AsNibbles, U4x2, U4};
+
+use crate::hash;
 
 /// Map where keys are [up to 64 nibbles](TrieKey),
 /// and values are [`rlp::Encodable`]/[`rlp::Decodable`].
@@ -162,6 +167,13 @@ impl TrieKey {
             9 < 32",
         )
     }
+    pub fn into_hash(self) -> Option<H256> {
+        let Self(nibbles) = self;
+        let nibbles = nibbles.into_array()?;
+        let mut packed = [0u8; 32];
+        AsNibbles(&mut packed).pack_from_slice(&nibbles);
+        Some(H256(packed))
+    }
     pub fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
         let mut theirs = mpt_trie::nibbles::Nibbles::default();
         for component in self.0 {
@@ -236,15 +248,110 @@ impl ReceiptTrie {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct StateTrieParts {
+    pub full: FullStateTrie,
+    pub deferred: DeferredTrie,
+}
+
+impl StateTrieParts {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// Missing addresses are not an error.
+    pub fn trim_to(&mut self, addresses: impl IntoIterator<Item = Address>) {
+        let want = addresses.into_iter().map(hash).collect::<BTreeSet<_>>();
+        let have = self.full.hash2rlp.keys().copied().collect::<BTreeSet<_>>();
+        for it in have.difference(&want) {
+            self.deferred.trimmed.push(
+                self.full
+                    .hash2rlp
+                    .remove_entry(it)
+                    .expect("we know this key to be present"),
+            )
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct DeferredTrie {
+    /// This is a vec because duplicates are a case we want to catch at trie
+    /// construction.
+    out_of_band: Vec<(TrieKey, H256)>,
+    /// Moved here by a [`StateTrieParts::trim_to`] call.
+    trimmed: Vec<(H256, AccountRlp)>,
+}
+impl DeferredTrie {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn insert(&mut self, path: TrieKey, hash: H256) {
+        self.out_of_band.push((path, hash));
+    }
+}
+
+impl Extend<(TrieKey, H256)> for DeferredTrie {
+    fn extend<II: IntoIterator<Item = (TrieKey, H256)>>(&mut self, iter: II) {
+        for (path, hash) in iter {
+            self.insert(path, hash)
+        }
+    }
+}
+
+impl FromIterator<(TrieKey, H256)> for DeferredTrie {
+    fn from_iter<II: IntoIterator<Item = (TrieKey, H256)>>(iter: II) -> Self {
+        let mut this = Self::default();
+        this.extend(iter);
+        this
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FullStateTrie {
+    hash2rlp: BTreeMap<H256, AccountRlp>,
+    // for diagnostics
+    address2hash: BTreeMap<Address, H256>,
+}
+
+impl FullStateTrie {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> Option<AccountRlp> {
+        let hash = hash(address);
+        self.address2hash.insert(address, hash);
+        self.hash2rlp.insert(hash, account)
+    }
+    pub fn insert_by_hash(&mut self, hash: H256, account: AccountRlp) -> Option<AccountRlp> {
+        self.hash2rlp.insert(hash, account)
+    }
+    pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+        self.hash2rlp.get(&hash(address)).copied()
+    }
+    pub fn remove_address(&mut self, address: Address) -> Option<AccountRlp> {
+        self.hash2rlp.remove(&hash(address))
+    }
+    pub fn contains_address(&self, address: Address) -> bool {
+        self.hash2rlp.contains_key(&hash(address))
+    }
+    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.hash2rlp.iter().map(|(k, v)| (*k, *v))
+    }
+}
+
 /// Global, [`Address`] `->` [`AccountRlp`].
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
-pub struct StateTrie {
+pub struct _StateTrie {
     typed: TypedMpt<AccountRlp>,
 }
 
-impl StateTrie {
+impl _StateTrie {
     pub fn new(strategy: OnOrphanedHashNode) -> Self {
         Self {
             typed: TypedMpt {
@@ -409,10 +516,25 @@ impl StateSmt {
 
         H256(bytes)
     }
+    pub fn iter(&self) -> impl Iterator<Item = (TrieKey, AccountRlp)> + '_ {
+        self.address2state
+            .iter()
+            .map(|(k, v)| (TrieKey::from_hash(crate::hash(k)), *v))
+    }
 }
 
 fn hash2hash(H256(ours): H256) -> HashOut<GoldilocksField> {
-    todo!()
+    const BYTE_PER_FIELD: usize = 8;
+
+    // no unsafe, no unstable
+    let mut chunks = ours.chunks(BYTE_PER_FIELD);
+    let elements = array::from_fn(|_ix| {
+        GoldilocksField(u64::from_ne_bytes(
+            <[u8; BYTE_PER_FIELD]>::try_from(chunks.next().unwrap()).unwrap(),
+        ))
+    });
+    assert_eq!(chunks.len(), 0);
+    HashOut { elements }
 }
 
 fn key2key(TrieKey(ours): TrieKey) -> smt_trie::smt::Key {
@@ -427,7 +549,7 @@ fn key2key(TrieKey(ours): TrieKey) -> smt_trie::smt::Key {
     let mut chunks = bytes.chunks_exact(BYTE_PER_FIELD);
 
     // no unsafe, no unstable
-    let theirs = smt_trie::smt::Key(core::array::from_fn(|_ix| {
+    let theirs = smt_trie::smt::Key(array::from_fn(|_ix| {
         GoldilocksField(u64::from_ne_bytes(
             <[u8; BYTE_PER_FIELD]>::try_from(chunks.next().unwrap()).unwrap(),
         ))
@@ -478,4 +600,9 @@ fn test_key2key() {
             Err(_) => break, // too long
         }
     }
+}
+
+#[test]
+fn test_hash2hash() {
+    let _did_not_panic = hash2hash(H256(array::from_fn(|ix| ix as _)));
 }

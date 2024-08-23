@@ -134,7 +134,7 @@ impl TxnInfo {
             // nodes if the transaction calling them reverted. If this is the case, we
             // shouldn't include them in this transaction's `state_accesses` to allow the
             // decoder to build a minimal state trie without hitting any hash node.
-            if !is_precompile || tries.state.get_by_address(addr).is_some() {
+            if !is_precompile || tries.state.full.get_by_address(addr).is_some() {
                 nodes_used_by_txn.state_accesses.push(addr);
             }
 

@@ -24,7 +24,7 @@ use crate::{
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
     },
-    typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
+    typed_mpt::{ReceiptTrie, StateTrieParts, StorageTrie, TransactionTrie, TrieKey},
     OtherBlockData, PartialTriePreImages,
 };
 
@@ -32,7 +32,7 @@ use crate::{
 /// after every txn we process in the trace.
 #[derive(Clone, Debug, Default)]
 struct PartialTrieState {
-    state: StateTrie,
+    state: StateTrieParts,
     storage: HashMap<H256, StorageTrie>,
     txn: TransactionTrie,
     receipt: ReceiptTrie,
@@ -43,7 +43,7 @@ struct PartialTrieState {
 struct TrieDeltaApplicationOutput {
     // During delta application, if a delete occurs, we may have to make sure additional nodes
     // that are not accessed by the txn remain unhashed.
-    additional_state_trie_paths_to_not_hash: Vec<TrieKey>,
+    additional_state_trie_paths_to_not_hash: Vec<Address>,
     additional_storage_trie_paths_to_not_hash: HashMap<H256, Vec<TrieKey>>,
 }
 
@@ -181,12 +181,12 @@ fn update_beacon_block_root_contract_storage(
         .storage_accesses
         .push((BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, slots_nibbles));
 
-    let addr_nibbles = TrieKey::from_hash(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED);
     delta_out
         .additional_state_trie_paths_to_not_hash
-        .push(addr_nibbles);
+        .push(BEACON_ROOTS_CONTRACT_ADDRESS);
     let mut account = trie_state
         .state
+        .full
         .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
         .context(format!(
             "missing account storage trie for address {:x}",
@@ -197,10 +197,8 @@ fn update_beacon_block_root_contract_storage(
 
     trie_state
         .state
-        .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, account)
-        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-        //                Add an entry API
-        .expect("insert must succeed with the same key as a successful `get`");
+        .full
+        .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, account);
 
     Ok(())
 }
@@ -250,16 +248,14 @@ fn create_minimal_partial_tries_needed_by_txn(
     txn_idx: usize,
     delta_application_out: TrieDeltaApplicationOutput,
 ) -> anyhow::Result<TrieInputs> {
-    let state_trie = create_minimal_state_partial_trie(
-        &curr_block_tries.state,
-        nodes_used_by_txn.state_accesses.iter().map(hash),
-        delta_application_out
-            .additional_state_trie_paths_to_not_hash
-            .into_iter(),
-    )?
-    .as_hashed_partial_trie()
-    .clone();
-
+    let mut state_trie = curr_block_tries.state.clone();
+    state_trie.trim_to(
+        nodes_used_by_txn
+            .state_accesses
+            .iter()
+            .chain(&delta_application_out.additional_state_trie_paths_to_not_hash)
+            .copied(),
+    );
     let txn_k = TrieKey::from_txn_ix(txn_idx);
 
     let transactions_trie = create_trie_subset_wrapped(
@@ -281,11 +277,15 @@ fn create_minimal_partial_tries_needed_by_txn(
     )?;
 
     Ok(TrieInputs {
-        state_trie,
+        state_trie: state2state(state_trie),
         transactions_trie,
         receipts_trie,
         storage_tries,
     })
+}
+
+fn state2state(_ours: StateTrieParts) -> HashedPartialTrie {
+    todo!()
 }
 
 fn apply_deltas_to_trie_state(
@@ -334,8 +334,12 @@ fn apply_deltas_to_trie_state(
 
     for (addr, s_trie_writes) in &deltas.state_writes {
         // If the account was created, then it will not exist in the trie yet.
-        let is_created = !trie_state.state.contains_address(*addr);
-        let mut account = trie_state.state.get_by_address(*addr).unwrap_or_default();
+        let is_created = !trie_state.state.full.contains_address(*addr);
+        let mut account = trie_state
+            .state
+            .full
+            .get_by_address(*addr)
+            .unwrap_or_default();
 
         s_trie_writes.apply_writes_to_state_node(&mut account, &hash(addr), &trie_state.storage)?;
 
@@ -349,27 +353,17 @@ fn apply_deltas_to_trie_state(
 
             if !receipt.status {
                 // The transaction failed, hence any created account should be removed.
-                trie_state.state.remove_address(*addr)?;
+                trie_state.state.full.remove_address(*addr);
                 trie_state.storage.remove(&hash(addr));
                 continue;
             }
         }
-        trie_state.state.insert_by_address(*addr, account)?;
+        trie_state.state.full.insert_by_address(*addr, account);
     }
 
     // Remove any accounts that self-destructed.
     for addr in &deltas.self_destructed_accounts {
         trie_state.storage.remove(&hash(addr));
-
-        if let Some(remaining_account_key) =
-            delete_node_and_report_remaining_key_if_branch_collapsed(
-                trie_state.state.as_mut_hashed_partial_trie_unchecked(),
-                &TrieKey::from_hash(hash(addr)),
-            )?
-        {
-            out.additional_state_trie_paths_to_not_hash
-                .push(remaining_account_key);
-        }
     }
 
     Ok(out)
@@ -442,25 +436,14 @@ fn add_withdrawals_to_txns(
         .expect("We cannot have an empty list of payloads.");
 
     if last_inputs.signed_txn.is_none() {
-        // This is a dummy payload, hence it does not contain yet
-        // state accesses to the withdrawal addresses.
-        let withdrawal_addrs = withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
-
-        let additional_paths = if last_inputs.txn_number_before == 0.into() {
-            // We need to include the beacon roots contract as this payload is at the
-            // start of the block execution.
-            vec![TrieKey::from_hash(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)]
-        } else {
-            vec![]
-        };
-
-        last_inputs.tries.state_trie = create_minimal_state_partial_trie(
-            &final_trie_state.state,
-            withdrawal_addrs,
-            additional_paths,
-        )?
-        .as_hashed_partial_trie()
-        .clone();
+        let mut state_trie = final_trie_state.state.clone();
+        state_trie.trim_to(
+            withdrawals
+                .iter()
+                .map(|(addr, _v)| *addr)
+                .chain([BEACON_ROOTS_CONTRACT_ADDRESS]),
+        );
+        last_inputs.tries.state_trie = state2state(state_trie);
     }
 
     update_trie_state_from_withdrawals(
@@ -469,7 +452,7 @@ fn add_withdrawals_to_txns(
     )?;
 
     last_inputs.withdrawals = withdrawals;
-    last_inputs.trie_roots_after.state_root = final_trie_state.state.root();
+    last_inputs.trie_roots_after.state_root = state2state(final_trie_state.state.clone()).hash();
 
     Ok(())
 }
@@ -478,20 +461,16 @@ fn add_withdrawals_to_txns(
 /// our local trie state.
 fn update_trie_state_from_withdrawals<'a>(
     withdrawals: impl IntoIterator<Item = (Address, H256, U256)> + 'a,
-    state: &mut StateTrie,
+    state: &mut StateTrieParts,
 ) -> anyhow::Result<()> {
     for (addr, h_addr, amt) in withdrawals {
-        let mut acc_data = state.get_by_address(addr).context(format!(
+        let mut acc_data = state.full.get_by_address(addr).context(format!(
             "No account present at {addr:x} (hashed: {h_addr:x}) to withdraw {amt} Gwei from!"
         ))?;
 
         acc_data.balance += amt;
 
-        state
-            .insert_by_address(addr, acc_data)
-            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-            //                Add an entry API
-            .expect("insert must succeed with the same key as a successful `get`");
+        state.full.insert_by_address(addr, acc_data);
     }
 
     Ok(())
@@ -566,7 +545,7 @@ fn process_txn_info(
                                       * for more info). */
         tries,
         trie_roots_after: TrieRoots {
-            state_root: curr_block_tries.state.root(),
+            state_root: state2state(curr_block_tries.state.clone()).hash(),
             transactions_root: curr_block_tries.txn.root(),
             receipts_root: curr_block_tries.receipt.root(),
         },
@@ -614,22 +593,6 @@ impl StateWrite {
 
         Ok(())
     }
-}
-
-fn create_minimal_state_partial_trie(
-    state_trie: &StateTrie,
-    state_accesses: impl IntoIterator<Item = H256>,
-    additional_state_trie_paths_to_not_hash: impl IntoIterator<Item = TrieKey>,
-) -> anyhow::Result<StateTrie> {
-    create_trie_subset_wrapped(
-        state_trie.as_hashed_partial_trie(),
-        state_accesses
-            .into_iter()
-            .map(TrieKey::from_hash)
-            .chain(additional_state_trie_paths_to_not_hash),
-        TrieType::State,
-    )
-    .map(StateTrie::from_hashed_partial_trie_unchecked)
 }
 
 // TODO!!!: We really need to be appending the empty storage tries to the base
@@ -685,11 +648,9 @@ fn eth_to_gwei(eth: U256) -> U256 {
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
 /// Aid for error context.
-/// Covers all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
 #[derive(Debug, strum::Display)]
 #[allow(missing_docs)]
 enum TrieType {
-    State,
     Storage,
     Receipt,
     Txn,

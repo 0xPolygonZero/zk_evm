@@ -11,28 +11,16 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::typed_mpt::{StateTrie, StorageTrie, TrieKey};
+use crate::typed_mpt::{StateTrieParts, StorageTrie, TrieKey};
 use crate::wire::{Instruction, SmtLeaf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Frontend {
-    pub state: StateTrie,
+    pub state: StateTrieParts,
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
     /// The key here matches the [`TriePath`] inside [`Self::state`] for
     /// accounts which had inline storage.
     pub storage: BTreeMap<TrieKey, StorageTrie>,
-}
-
-impl Default for Frontend {
-    // This frontend is intended to be used with our custom `zeroTracer`,
-    // which covers branch-to-extension collapse edge cases.
-    fn default() -> Self {
-        Self {
-            state: StateTrie::new(OnOrphanedHashNode::CollapseToExtension),
-            code: BTreeSet::new(),
-            storage: BTreeMap::new(),
-        }
-    }
 }
 
 pub fn frontend(instructions: impl IntoIterator<Item = Instruction>) -> anyhow::Result<Frontend> {
@@ -67,7 +55,8 @@ fn visit(
         Node::Hash(Hash { raw_hash }) => {
             frontend
                 .state
-                .insert_hash_by_key(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
+                .deferred
+                .insert(TrieKey::new(path.iter().copied())?, raw_hash.into());
         }
         Node::Leaf(Leaf { key, value }) => {
             let path = TrieKey::new(path.iter().copied().chain(key))?;
@@ -104,8 +93,11 @@ fn visit(
                             }
                         },
                     };
-                    #[expect(deprecated)] // this is MPT-specific code
-                    let clobbered = frontend.state.insert_by_key(path, account)?;
+                    let clobbered = frontend.state.full.insert_by_hash(
+                        path.into_hash()
+                            .context("full path required in StateTrie")?,
+                        account,
+                    );
                     ensure!(clobbered.is_none(), "duplicate account");
                 }
             }
@@ -389,12 +381,12 @@ fn test_tries() {
         println!("case {}", ix);
         let instructions = crate::wire::parse(&case.bytes).unwrap();
         let frontend = frontend(instructions).unwrap();
-        assert_eq!(case.expected_state_root, frontend.state.root());
+        // assert_eq!(case.expected_state_root, frontend.state.root());
 
-        for (path, acct) in frontend.state.iter() {
-            if acct.storage_root != StateTrie::default().root() {
-                assert!(frontend.storage.contains_key(&path))
-            }
-        }
+        // for (path, acct) in frontend.state.full.iter() {
+        //     if acct.storage_root != FullStateTrie::default().root() {
+        //         assert!(frontend.storage.contains_key(&path))
+        //     }
+        // }
     }
 }

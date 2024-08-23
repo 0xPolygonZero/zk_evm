@@ -106,7 +106,7 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
-use typed_mpt::{StateTrie, StorageTrie, TrieKey};
+use typed_mpt::{StateTrieParts, StorageTrie, TrieKey};
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -310,21 +310,19 @@ pub fn entrypoint(
         }) => ProcessedBlockTracePreImages {
             tries: PartialTriePreImages {
                 state: state.items().try_fold(
-                    StateTrie::new(OnOrphanedHashNode::Reject),
+                    StateTrieParts::new(),
                     |mut acc, (nibbles, hash_or_val)| {
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-                                #[allow(deprecated)]
-                                acc.insert_by_key(
-                                    path,
+                                acc.full.insert_by_hash(
+                                    path.into_hash().context("invalid path in state trie")?,
                                     rlp::decode(&bytes)
                                         .context("invalid AccountRlp in direct state trie")?,
-                                )?;
+                                );
                             }
                             mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                acc.insert_hash_by_key(path, h)?;
+                                acc.deferred.insert(path, h);
                             }
                         };
                         anyhow::Ok(acc)
@@ -383,12 +381,7 @@ pub fn entrypoint(
         }
     };
 
-    let all_accounts_in_pre_images = pre_images
-        .tries
-        .state
-        .iter()
-        .map(|(addr, data)| (addr.into_hash_left_padded(), data))
-        .collect::<Vec<_>>();
+    let all_accounts_in_pre_images = pre_images.tries.state.full.iter().collect::<Vec<_>>();
 
     // Note we discard any user-provided hashes.
     let mut hash2code = code_db
@@ -446,7 +439,7 @@ pub fn entrypoint(
 
 #[derive(Debug, Default)]
 struct PartialTriePreImages {
-    pub state: StateTrie,
+    pub state: StateTrieParts,
     pub storage: HashMap<H256, StorageTrie>,
 }
 
