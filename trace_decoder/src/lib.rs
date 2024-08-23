@@ -367,10 +367,7 @@ pub fn entrypoint(
             ProcessedBlockTracePreImages {
                 tries: PartialTriePreImages {
                     state,
-                    storage: storage
-                        .into_iter()
-                        .map(|(path, trie)| (path.into_hash_left_padded(), trie))
-                        .collect(),
+                    storage: storage.into_iter().collect(),
                 },
                 extra_code_hash_mappings: match code.is_empty() {
                     true => None,
@@ -384,12 +381,7 @@ pub fn entrypoint(
         }
     };
 
-    let all_accounts_in_pre_images = pre_images
-        .tries
-        .state
-        .iter()
-        .map(|(addr, data)| (addr.into_hash_left_padded(), data))
-        .collect::<Vec<_>>();
+    let all_accounts_in_pre_images = pre_images.tries.state.iter().collect::<Vec<_>>();
 
     // Note we discard any user-provided hashes.
     let mut hash2code = code_db
