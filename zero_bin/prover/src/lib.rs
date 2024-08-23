@@ -235,7 +235,7 @@ pub async fn prove(
                         // or alternatively return proof as function result.
                         let return_proof: Option<GeneratedBlockProof> =
                             if let Some(output_dir) = proof_output_dir {
-                                write_proof_to_dir(output_dir, &proof).await?;
+                                write_proof_to_dir(output_dir, proof.clone()).await?;
                                 None
                             } else {
                                 Some(proof.clone())
@@ -259,7 +259,7 @@ pub async fn prove(
                         // or alternatively return proof as function result.
                         let return_proof: Option<GeneratedBlockProof> =
                             if let Some(output_dir) = proof_output_dir {
-                                write_proof_to_dir(output_dir, &proof).await?;
+                                write_proof_to_dir(output_dir, proof.clone()).await?;
                                 None
                             } else {
                                 Some(proof.clone())
@@ -285,10 +285,12 @@ pub async fn prove(
 }
 
 /// Write the proof to the `output_dir` directory.
-async fn write_proof_to_dir(output_dir: PathBuf, proof: &GeneratedBlockProof) -> Result<()> {
-    let proof_serialized = serde_json::to_vec(proof)?;
+async fn write_proof_to_dir(output_dir: PathBuf, proof: GeneratedBlockProof) -> Result<()> {
     let block_proof_file_path =
         generate_block_proof_file_name(&output_dir.to_str(), proof.b_height);
+
+    // Serialize as a single element array to match the expected format.
+    let proof_serialized = serde_json::to_vec(&vec![proof])?;
 
     if let Some(parent) = block_proof_file_path.parent() {
         tokio::fs::create_dir_all(parent).await?;
