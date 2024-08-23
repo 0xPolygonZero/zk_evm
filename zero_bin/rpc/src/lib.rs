@@ -140,6 +140,11 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
+    // Here, we perform the `eth_call` to the node to get the previous
+    // block hashes (read-only execution). We set the target address to be
+    // empty, hence the node executes this call as a contract creation function.
+    // We use that execution not to produce a new contract bytecode - instead, we
+    // return hashes. To look at the code use `cast disassemble <bytecode>`.
     let bytes = cached_provider
         .as_provider()
         .raw_request::<_, Bytes>(
@@ -156,7 +161,7 @@ where
         .collect::<Result<Vec<_>, _>>()?;
 
     PreviousBlockHashes::try_from(prev_hashes)
-        .map_err(|_| anyhow!("Invalid number of block hashes"))
+        .map_err(|_| anyhow!("invalid conversion to 256 previous block hashes"))
 }
 
 async fn fetch_previous_block_hashes<ProviderT, TransportT>(
@@ -174,6 +179,8 @@ where
             if !prev_block_hahes.into_iter().all(|it| it.0 == [0u8; 32]) {
                 // Previous hashes valid, return result
                 return Ok(prev_block_hahes);
+            } else {
+                warn!("all retrieved block hashes empty, falling back to `eth_getBlockByNumber` for block {}", target_block_number);
             }
         }
         Err(e) => {
@@ -181,10 +188,6 @@ where
         }
     }
 
-    warn!(
-        "retrieving previous block hashes with `eth_getBlockByNumber` for block {}",
-        target_block_number
-    );
     fetch_previous_block_hashes_from_block(cached_provider, target_block_number).await
 }
 
