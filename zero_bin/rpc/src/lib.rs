@@ -38,7 +38,7 @@ pub enum RpcType {
 pub struct RpcParams {
     pub start_block: u64,
     pub end_block: u64,
-    pub checkpoint_block_number: Option<BlockId>,
+    pub checkpoint_block_number: Option<u64>,
     pub rpc_type: RpcType,
 }
 

@@ -46,12 +46,15 @@ pub(crate) enum Command {
         /// The checkpoint block number. If not provided,
         /// the block before the `start_block` is the checkpoint
         #[arg(short, long)]
-        checkpoint_block_number: Option<BlockId>,
+        checkpoint_block_number: Option<u64>,
     },
     Extract {
         /// Transaction hash
         #[arg(long, short)]
         tx: String,
+        /// Number of transactions in a batch to process at once.
+        #[arg(short, long, default_value_t = 1)]
+        batch_size: usize,
     },
 }
 
@@ -75,11 +78,15 @@ where
 {
     let checkpoint_block_number = params
         .checkpoint_block_number
-        .unwrap_or_else(|| (params.start_block - 1).into());
+        .unwrap_or(params.start_block - 1);
+    check_previous_proof_and_checkpoint(checkpoint_block_number, &None, params.start_block)?;
 
     // Grab interval checkpoint block state trie
     let checkpoint_state_trie_root = cached_provider
-        .get_block(checkpoint_block_number, BlockTransactionsKind::Hashes)
+        .get_block(
+            BlockId::Number(checkpoint_block_number.into()),
+            BlockTransactionsKind::Hashes,
+        )
         .await?
         .header
         .state_root;
@@ -129,7 +136,7 @@ impl Cli {
                     retrieve_block_prover_inputs(cached_provider, params).await?;
                 serde_json::to_writer_pretty(std::io::stdout(), &block_prover_inputs)?;
             }
-            Command::Extract { tx } => {
+            Command::Extract { tx, batch_size } => {
                 let tx_hash: B256 = tx.parse()?;
                 // Get transaction info
                 match cached_provider
@@ -162,12 +169,23 @@ impl Cli {
                         let generation_inputs = trace_decoder::entrypoint(
                             block_prover_input.block_trace,
                             block_prover_input.other_data,
-                            |_| unimplemented!(),
+                            batch_size,
                         )?;
 
                         if let Some(index) = tx_info.transaction_index {
+                            let generation_input_index = if batch_size == 1 {
+                                // If batch size is 1, it means one transaction per
+                                // GenerationInputs. Take element
+                                // with txn index from the GenerationInput array.
+                                index as usize
+                            } else {
+                                // Batch size bigger than one, meaning multiple transactions in one
+                                // GenerationInput. Find GenerationInput
+                                // where the transaction is placed.
+                                index as usize / batch_size
+                            };
                             let extracted_generation_input =
-                                generation_inputs.get(index as usize).cloned();
+                                generation_inputs.get(generation_input_index).cloned();
                             serde_json::to_writer(std::io::stdout(), &extracted_generation_input)?;
                         } else {
                             anyhow::bail!("invalid transaction index for transaction {}", tx_hash);
