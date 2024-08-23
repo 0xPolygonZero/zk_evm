@@ -316,6 +316,7 @@ pub fn entrypoint(
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
+                                #[expect(deprecated)] // this is MPT specific
                                 acc.insert_by_key(
                                     path,
                                     rlp::decode(&bytes)
@@ -414,7 +415,7 @@ pub fn entrypoint(
                     .b_data
                     .withdrawals
                     .iter()
-                    .map(|(addr, _)| crate::hash(addr.as_bytes()))
+                    .map(|(addr, _)| *addr)
                     .collect::<Vec<_>>()
             } else {
                 Vec::new()

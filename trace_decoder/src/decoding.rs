@@ -8,7 +8,9 @@ use evm_arithmetization::{
         GenerationInputs, TrieInputs,
     },
     proof::{BlockMetadata, ExtraBlockData, TrieRoots},
-    testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH},
+    testing_utils::{
+        BEACON_ROOTS_CONTRACT_ADDRESS, BEACON_ROOTS_CONTRACT_ADDRESS_HASHED, HISTORY_BUFFER_LENGTH,
+    },
 };
 use mpt_trie::{
     nibbles::Nibbles,
@@ -117,7 +119,6 @@ fn update_beacon_block_root_contract_storage(
     block_data: &BlockMetadata,
 ) -> anyhow::Result<()> {
     const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
-    const ADDRESS: H256 = BEACON_ROOTS_CONTRACT_ADDRESS_HASHED;
 
     let timestamp_idx = block_data.block_timestamp % HISTORY_BUFFER_LENGTH_MOD;
     let timestamp = rlp::encode(&block_data.block_timestamp).to_vec();
@@ -130,10 +131,16 @@ fn update_beacon_block_root_contract_storage(
 
     let storage_trie = trie_state
         .storage
-        .get_mut(&ADDRESS)
-        .context(format!("missing account storage trie {:x}", ADDRESS))?;
+        .get_mut(&BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
+        .context(format!(
+            "missing account storage trie for address {:x}",
+            BEACON_ROOTS_CONTRACT_ADDRESS
+        ))?;
 
-    let slots_nibbles = nodes_used.storage_accesses.entry(ADDRESS).or_default();
+    let slots_nibbles = nodes_used
+        .storage_accesses
+        .entry(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
+        .or_default();
 
     for (ix, val) in [(timestamp_idx, timestamp), (root_idx, calldata)] {
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
@@ -155,7 +162,7 @@ fn update_beacon_block_root_contract_storage(
 
                 delta_out
                     .additional_storage_trie_paths_to_not_hash
-                    .entry(ADDRESS)
+                    .entry(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
                     .or_default()
                     .push(slot);
             }
@@ -168,7 +175,7 @@ fn update_beacon_block_root_contract_storage(
                 {
                     delta_out
                         .additional_storage_trie_paths_to_not_hash
-                        .entry(ADDRESS)
+                        .entry(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)
                         .or_default()
                         .push(remaining_slot_key);
                 }
@@ -176,20 +183,22 @@ fn update_beacon_block_root_contract_storage(
         }
     }
 
-    let addr_nibbles = TrieKey::from_hash(ADDRESS);
     delta_out
         .additional_state_trie_paths_to_not_hash
-        .push(addr_nibbles);
+        .push(TrieKey::from_hash(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED));
     let mut account = trie_state
         .state
-        .get_by_key(addr_nibbles)
-        .context(format!("missing account storage trie {:x}", ADDRESS))?;
+        .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
+        .context(format!(
+            "missing account storage trie for address {:x}",
+            BEACON_ROOTS_CONTRACT_ADDRESS
+        ))?;
 
     account.storage_root = storage_trie.root();
 
     trie_state
         .state
-        .insert_by_key(addr_nibbles, account)
+        .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, account)
         // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
         //                Add an entry API
         .expect("insert must succeed with the same key as a successful `get`");
@@ -244,7 +253,7 @@ fn create_minimal_partial_tries_needed_by_txn(
 ) -> anyhow::Result<TrieInputs> {
     let state_trie = create_minimal_state_partial_trie(
         &curr_block_tries.state,
-        nodes_used_by_txn.state_accesses.iter().cloned(),
+        nodes_used_by_txn.state_accesses.iter().map(hash),
         delta_application_out
             .additional_state_trie_paths_to_not_hash
             .into_iter(),
@@ -324,20 +333,14 @@ fn apply_deltas_to_trie_state(
         }
     }
 
-    for (hashed_acc_addr, s_trie_writes) in &deltas.state_writes {
-        let val_k = TrieKey::from_hash(*hashed_acc_addr);
-
+    for (addr, state_write) in &deltas.state_writes {
         // If the account was created, then it will not exist in the trie yet.
-        let is_created = !trie_state.state.contains_address(val_k);
-        let mut account = trie_state.state.get_by_key(val_k).unwrap_or_default();
+        let is_created = !trie_state.state.contains_address(*addr);
+        let mut account = trie_state.state.get_by_address(*addr).unwrap_or_default();
 
-        s_trie_writes.apply_writes_to_state_node(
-            &mut account,
-            hashed_acc_addr,
-            &trie_state.storage,
-        )?;
+        state_write.apply_writes_to_state_node(&mut account, &hash(addr), &trie_state.storage)?;
 
-        trie_state.state.insert_by_key(val_k, account)?;
+        trie_state.state.insert_by_address(*addr, account)?;
 
         if is_created {
             // If the account did not exist prior this transaction, we
@@ -348,7 +351,7 @@ fn apply_deltas_to_trie_state(
             let last_creation_receipt = &meta
                 .iter()
                 .rev()
-                .find(|tx| tx.created_accounts.contains(hashed_acc_addr))
+                .find(|tx| tx.created_accounts.contains(addr))
                 .expect("We should have found a matching transaction")
                 .receipt_node_bytes;
 
@@ -360,12 +363,12 @@ fn apply_deltas_to_trie_state(
                 if let Some(remaining_account_key) =
                     delete_node_and_report_remaining_key_if_branch_collapsed(
                         trie_state.state.as_mut_hashed_partial_trie_unchecked(),
-                        &val_k,
+                        &TrieKey::from_hash(hash(addr)),
                     )?
                 {
                     out.additional_state_trie_paths_to_not_hash
                         .push(remaining_account_key);
-                    trie_state.storage.remove(hashed_acc_addr);
+                    trie_state.storage.remove(&hash(addr));
                     continue;
                 }
             }
@@ -373,15 +376,13 @@ fn apply_deltas_to_trie_state(
     }
 
     // Remove any accounts that self-destructed.
-    for hashed_acc_addr in deltas.self_destructed_accounts.iter() {
-        let val_k = TrieKey::from_hash(*hashed_acc_addr);
-
-        trie_state.storage.remove(hashed_acc_addr);
+    for addr in deltas.self_destructed_accounts.iter() {
+        trie_state.storage.remove(&hash(addr));
 
         if let Some(remaining_account_key) =
             delete_node_and_report_remaining_key_if_branch_collapsed(
                 trie_state.state.as_mut_hashed_partial_trie_unchecked(),
-                &val_k,
+                &TrieKey::from_hash(hash(addr)),
             )?
         {
             out.additional_state_trie_paths_to_not_hash
