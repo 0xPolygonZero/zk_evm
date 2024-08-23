@@ -395,7 +395,7 @@ fn test_tries() {
         let frontend = frontend(instructions).unwrap();
         assert_eq!(case.expected_state_root, frontend.state.root());
 
-        for (path, acct) in &frontend.state {
+        for (path, acct) in frontend.state.iter() {
             if acct.storage_root != StateTrie::default().root() {
                 assert!(frontend.storage.contains_key(&path))
             }
