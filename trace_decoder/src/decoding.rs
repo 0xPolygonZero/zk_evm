@@ -252,15 +252,14 @@ fn create_minimal_partial_tries_needed_by_txn(
     txn_range: Range<usize>,
     delta_application_out: TrieDeltaApplicationOutput,
 ) -> anyhow::Result<TrieInputs> {
-    let state_trie = create_minimal_state_partial_trie(
-        &curr_block_tries.state,
-        nodes_used_by_txn.state_accesses.iter().map(hash),
-        delta_application_out
-            .additional_state_trie_paths_to_not_hash
-            .into_iter(),
-    )?
-    .as_hashed_partial_trie()
-    .clone();
+    let mut state_trie = curr_block_tries.state.clone();
+    state_trie.trim_to(
+        nodes_used_by_txn
+            .state_accesses
+            .iter()
+            .map(|it| TrieKey::from_address(*it))
+            .chain(delta_application_out.additional_state_trie_paths_to_not_hash),
+    )?;
 
     let txn_keys = txn_range.map(TrieKey::from_txn_ix);
 
@@ -283,7 +282,7 @@ fn create_minimal_partial_tries_needed_by_txn(
     )?;
 
     Ok(TrieInputs {
-        state_trie,
+        state_trie: state_trie.as_hashed_partial_trie().clone(),
         transactions_trie,
         receipts_trie,
         storage_tries,
@@ -452,25 +451,22 @@ fn add_withdrawals_to_txns(
         .expect("We cannot have an empty list of payloads.");
 
     if last_inputs.signed_txns.is_empty() {
-        // This is a dummy payload, hence it does not contain yet
-        // state accesses to the withdrawal addresses.
-        let withdrawal_addrs = withdrawals_with_hashed_addrs_iter().map(|(_, h_addr, _)| h_addr);
-
-        let additional_paths = if last_inputs.txn_number_before == 0.into() {
-            // We need to include the beacon roots contract as this payload is at the
-            // start of the block execution.
-            vec![TrieKey::from_hash(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)]
-        } else {
-            vec![]
-        };
-
-        last_inputs.tries.state_trie = create_minimal_state_partial_trie(
-            &final_trie_state.state,
-            withdrawal_addrs,
-            additional_paths,
-        )?
-        .as_hashed_partial_trie()
-        .clone();
+        let mut state_trie = final_trie_state.state.clone();
+        state_trie.trim_to(
+            // This is a dummy payload, hence it does not contain yet
+            // state accesses to the withdrawal addresses.
+            withdrawals
+                .iter()
+                .map(|(addr, _)| *addr)
+                .chain(match last_inputs.txn_number_before == 0.into() {
+                    // We need to include the beacon roots contract as this payload is at the
+                    // start of the block execution.
+                    true => Some(BEACON_ROOTS_CONTRACT_ADDRESS),
+                    false => None,
+                })
+                .map(TrieKey::from_address),
+        )?;
+        last_inputs.tries.state_trie = state_trie.as_hashed_partial_trie().clone();
     }
 
     update_trie_state_from_withdrawals(
@@ -637,22 +633,6 @@ impl StateWrite {
     }
 }
 
-fn create_minimal_state_partial_trie(
-    state_trie: &StateTrie,
-    state_accesses: impl IntoIterator<Item = H256>,
-    additional_state_trie_paths_to_not_hash: impl IntoIterator<Item = TrieKey>,
-) -> anyhow::Result<StateTrie> {
-    create_trie_subset_wrapped(
-        state_trie.as_hashed_partial_trie(),
-        state_accesses
-            .into_iter()
-            .map(TrieKey::from_hash)
-            .chain(additional_state_trie_paths_to_not_hash),
-        TrieType::State,
-    )
-    .map(StateTrie::from_hashed_partial_trie_unchecked)
-}
-
 // TODO!!!: We really need to be appending the empty storage tries to the base
 // trie somewhere else! This is a big hack!
 fn create_minimal_storage_partial_tries<'a>(
@@ -706,11 +686,9 @@ fn eth_to_gwei(eth: U256) -> U256 {
 const ZERO_STORAGE_SLOT_VAL_RLPED: [u8; 1] = [128];
 
 /// Aid for error context.
-/// Covers all Ethereum trie types (see <https://ethereum.github.io/yellowpaper/paper.pdf> for details).
 #[derive(Debug, strum::Display)]
 #[allow(missing_docs)]
 enum TrieType {
-    State,
     Storage,
     Receipt,
     Txn,
