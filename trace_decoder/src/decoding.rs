@@ -24,6 +24,7 @@ use crate::{
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
     },
+    state2trie,
     typed_mpt::{ReceiptTrie, StateTrieParts, StorageTrie, TransactionTrie, TrieKey},
     OtherBlockData, PartialTriePreImages,
 };
@@ -277,15 +278,11 @@ fn create_minimal_partial_tries_needed_by_txn(
     )?;
 
     Ok(TrieInputs {
-        state_trie: state2state(state_trie),
+        state_trie: state2trie(state_trie)?,
         transactions_trie,
         receipts_trie,
         storage_tries,
     })
-}
-
-fn state2state(_ours: StateTrieParts) -> HashedPartialTrie {
-    todo!()
 }
 
 fn apply_deltas_to_trie_state(
@@ -443,7 +440,7 @@ fn add_withdrawals_to_txns(
                 .map(|(addr, _v)| *addr)
                 .chain([BEACON_ROOTS_CONTRACT_ADDRESS]),
         );
-        last_inputs.tries.state_trie = state2state(state_trie);
+        last_inputs.tries.state_trie = state2trie(state_trie)?;
     }
 
     update_trie_state_from_withdrawals(
@@ -452,7 +449,7 @@ fn add_withdrawals_to_txns(
     )?;
 
     last_inputs.withdrawals = withdrawals;
-    last_inputs.trie_roots_after.state_root = state2state(final_trie_state.state.clone()).hash();
+    last_inputs.trie_roots_after.state_root = state2trie(final_trie_state.state.clone())?.hash();
 
     Ok(())
 }
@@ -545,7 +542,7 @@ fn process_txn_info(
                                       * for more info). */
         tries,
         trie_roots_after: TrieRoots {
-            state_root: state2state(curr_block_tries.state.clone()).hash(),
+            state_root: state2trie(curr_block_tries.state.clone())?.hash(),
             transactions_root: curr_block_tries.txn.root(),
             receipts_root: curr_block_tries.receipt.root(),
         },

@@ -271,6 +271,38 @@ impl StateTrieParts {
             )
         }
     }
+
+    pub fn to_mpt(&self) -> anyhow::Result<HashedPartialTrie> {
+        let Self {
+            full:
+                FullStateTrie {
+                    hash2rlp,
+                    address2hash: _,
+                },
+            deferred:
+                DeferredTrie {
+                    out_of_band,
+                    trimmed,
+                },
+        } = self;
+        let mut theirs = HashedPartialTrie::default();
+        for (key, hash) in out_of_band {
+            theirs.insert(key.into_nibbles(), *hash)?;
+        }
+        for (key, rlp) in trimmed.iter().map(|(k, v)| (k, v)).chain(hash2rlp) {
+            theirs.insert(
+                TrieKey::from_hash(*key).into_nibbles(),
+                rlp::encode(rlp).to_vec(),
+            )?;
+        }
+
+        Ok(mpt_trie::trie_subsets::create_trie_subset(
+            &theirs,
+            hash2rlp
+                .keys()
+                .map(|it| TrieKey::from_hash(*it).into_nibbles()),
+        )?)
+    }
 }
 
 #[derive(Clone, Debug, Default)]

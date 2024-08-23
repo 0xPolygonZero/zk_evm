@@ -469,6 +469,10 @@ mod hex {
     }
 }
 
+fn state2trie(ours: StateTrieParts) -> anyhow::Result<HashedPartialTrie> {
+    ours.to_mpt()
+}
+
 #[cfg(test)]
 #[derive(serde::Deserialize)]
 struct Case {
