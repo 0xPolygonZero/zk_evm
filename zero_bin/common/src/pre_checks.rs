@@ -12,10 +12,15 @@ pub fn check_previous_proof_and_checkpoint(
                 proof.b_height, start,
             )));
         }
-    }
-    if checkpoint_block_number >= start {
+        if checkpoint_block_number >= start {
+            return Err(anyhow::Error::msg(format!(
+                "Previous proof present. Found checkpoint block number {} whereas range start is {}",
+                checkpoint_block_number, start
+            )));
+        }
+    } else if checkpoint_block_number != start - 1 {
         return Err(anyhow::Error::msg(format!(
-            "Found checkpoint block number {} whereas range start is {}",
+            "Previous proof not found. Found checkpoint block number {} whereas range start is {}",
             checkpoint_block_number, start
         )));
     }
