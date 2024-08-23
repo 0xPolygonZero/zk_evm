@@ -12,6 +12,7 @@ use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing::{error, info, warn};
 use zero_bin_common::block_interval::BlockInterval;
 use zero_bin_common::fs::generate_block_proof_file_name;
+use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 
 #[derive(Debug)]
 pub struct RpcParams {
@@ -46,7 +47,11 @@ pub(crate) async fn client_main(
             rpc_params.max_retries,
         ),
     ));
-
+    check_previous_proof_and_checkpoint(
+        params.checkpoint_block_number,
+        &params.previous_proof,
+        block_interval.get_start_block()?,
+    )?;
     // Grab interval checkpoint block state trie
     let checkpoint_state_trie_root = cached_provider
         .get_block(

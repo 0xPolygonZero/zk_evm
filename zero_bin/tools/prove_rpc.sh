@@ -30,7 +30,7 @@ if ! [[ $8 == "test_only" ]]; then
     export MEMORY_AFTER_CIRCUIT_SIZE="7..23"
 fi
 
-# Force the working directory to always be the `tools/` directory. 
+# Force the working directory to always be the `tools/` directory.
 TOOLS_DIR=$(dirname $(realpath "$0"))
 
 PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
@@ -56,12 +56,12 @@ RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p $PROOF_OUTPUT_DIR
 
-if [ $IGNORE_PREVIOUS_PROOFS ]; then
+if $IGNORE_PREVIOUS_PROOFS ; then
     # Set checkpoint height to previous block number for the first block in range
     prev_proof_num=$(($1-1))
     PREV_PROOF_EXTRA_ARG="--checkpoint-block-number ${prev_proof_num}"
 else
-    if [ $1 -gt 1 ]; then
+    if [[ $1 -gt 1 ]]; then
         prev_proof_num=$(($1-1))
         PREV_PROOF_EXTRA_ARG="-f ${PROOF_OUTPUT_DIR}/b${prev_proof_num}.zkproof"
     fi

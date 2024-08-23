@@ -9,6 +9,7 @@ use rpc::provider::CachedProvider;
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
+use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 use zero_bin_common::version;
 use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
 
@@ -31,7 +32,7 @@ pub enum Cli {
         /// The checkpoint block number. If not provided,
         /// block before the `start_block` is the checkpoint
         #[arg(short, long)]
-        checkpoint_block_number: Option<BlockId>,
+        checkpoint_block_number: Option<u64>,
         /// Backoff in milliseconds for request retries
         #[arg(long, default_value_t = 0)]
         backoff: u64,
@@ -54,8 +55,8 @@ impl Cli {
                 backoff,
                 max_retries,
             } => {
-                let checkpoint_block_number =
-                    checkpoint_block_number.unwrap_or((start_block - 1).into());
+                let checkpoint_block_number = checkpoint_block_number.unwrap_or(start_block - 1);
+                check_previous_proof_and_checkpoint(checkpoint_block_number, &None, start_block)?;
                 let block_interval = BlockInterval::Range(start_block..end_block + 1);
 
                 let cached_provider = Arc::new(CachedProvider::new(build_http_retry_provider(
@@ -66,7 +67,10 @@ impl Cli {
 
                 // Grab interval checkpoint block state trie
                 let checkpoint_state_trie_root = cached_provider
-                    .get_block(checkpoint_block_number, BlockTransactionsKind::Hashes)
+                    .get_block(
+                        BlockId::Number(checkpoint_block_number.into()),
+                        BlockTransactionsKind::Hashes,
+                    )
                     .await?
                     .header
                     .state_root;
