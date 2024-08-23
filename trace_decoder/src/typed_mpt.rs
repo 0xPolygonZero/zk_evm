@@ -6,10 +6,7 @@ use std::marker::PhantomData;
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
 use evm_arithmetization::generation::mpt::AccountRlp;
-use mpt_trie::{
-    partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
-    trie_ops::TrieOpError,
-};
+use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
 
 /// Map where keys are [up to 64 nibbles](TrieKey),
@@ -34,22 +31,20 @@ impl<T> TypedMpt<T> {
         }
     }
     /// Insert a node which represents an out-of-band sub-trie.
-    fn insert_hash(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
-        self.inner
-            .insert(key.into_nibbles(), hash)
-            .map_err(|source| Error { source })
+    fn insert_hash(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.inner.insert(key.into_nibbles(), hash)?;
+        Ok(())
     }
     /// Returns an [`Error`] if the `key` crosses into a part of the trie that
     /// isn't hydrated.
-    fn insert(&mut self, key: TrieKey, value: T) -> Result<Option<T>, Error>
+    fn insert(&mut self, key: TrieKey, value: T) -> anyhow::Result<Option<T>>
     where
         T: rlp::Encodable + rlp::Decodable,
     {
         let prev = self.get(key);
         self.inner
-            .insert(key.into_nibbles(), rlp::encode(&value).to_vec())
-            .map_err(|source| Error { source })
-            .map(|_| prev)
+            .insert(key.into_nibbles(), rlp::encode(&value).to_vec())?;
+        Ok(prev)
     }
     /// Note that this returns [`None`] if `key` crosses into a part of the
     /// trie that isn't hydrated.
@@ -99,12 +94,6 @@ where
     fn into_iter(self) -> Self::IntoIter {
         Box::new(self.iter())
     }
-}
-
-#[derive(thiserror::Error, Debug)]
-#[error(transparent)]
-pub struct Error {
-    source: TrieOpError,
 }
 
 /// Bounded sequence of [`U4`],
@@ -197,14 +186,13 @@ pub struct TransactionTrie {
 }
 
 impl TransactionTrie {
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
             .get(TrieKey::from_txn_ix(txn_ix).into_nibbles())
             .map(Vec::from);
         self.untyped
-            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)
-            .map_err(|source| Error { source })?;
+            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)?;
         Ok(prev)
     }
     pub fn root(&self) -> H256 {
@@ -224,14 +212,13 @@ pub struct ReceiptTrie {
 }
 
 impl ReceiptTrie {
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
             .get(TrieKey::from_txn_ix(txn_ix).into_nibbles())
             .map(Vec::from);
         self.untyped
-            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)
-            .map_err(|source| Error { source })?;
+            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)?;
         Ok(prev)
     }
     pub fn root(&self) -> H256 {
@@ -263,7 +250,7 @@ impl StateTrie {
         &mut self,
         address: Address,
         account: AccountRlp,
-    ) -> Result<Option<AccountRlp>, Error> {
+    ) -> anyhow::Result<Option<AccountRlp>> {
         #[expect(deprecated)]
         self.insert_by_hashed_address(crate::hash(address), account)
     }
@@ -272,11 +259,11 @@ impl StateTrie {
         &mut self,
         key: H256,
         account: AccountRlp,
-    ) -> Result<Option<AccountRlp>, Error> {
+    ) -> anyhow::Result<Option<AccountRlp>> {
         self.typed.insert(TrieKey::from_hash(key), account)
     }
     /// Insert a deferred part of the trie
-    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
+    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
         self.typed.insert_hash(key, hash)
     }
     pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
@@ -294,12 +281,13 @@ impl StateTrie {
     }
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
-    pub fn reporting_remove(&mut self, address: Address) -> Result<Option<TrieKey>, Error> {
-        crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
-            self.typed.as_mut_hashed_partial_trie_unchecked(),
-            &TrieKey::from_address(address),
+    pub fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
+        Ok(
+            crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
+                self.typed.as_mut_hashed_partial_trie_unchecked(),
+                &TrieKey::from_address(address),
+            )?,
         )
-        .map_err(|source| Error { source })
     }
     pub fn contains_address(&self, address: Address) -> bool {
         self.typed
@@ -332,17 +320,14 @@ impl StorageTrie {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
     }
-    pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+    pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self.untyped.get(key.into_nibbles()).map(Vec::from);
-        self.untyped
-            .insert(key.into_nibbles(), value)
-            .map_err(|source| Error { source })?;
+        self.untyped.insert(key.into_nibbles(), value)?;
         Ok(prev)
     }
-    pub fn insert_hash(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
-        self.untyped
-            .insert(key.into_nibbles(), hash)
-            .map_err(|source| Error { source })
+    pub fn insert_hash(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.untyped.insert(key.into_nibbles(), hash)?;
+        Ok(())
     }
     pub fn root(&self) -> H256 {
         self.untyped.hash()
