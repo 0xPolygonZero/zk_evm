@@ -371,6 +371,8 @@ const LINKED_LISTS_CONSTANTS: [(&str, u16); 5] = [
 /// See <https://eips.ethereum.org/EIPS/eip-4788> and
 /// <https://eips.ethereum.org/EIPS/eip-4844>.
 pub mod cancun_constants {
+    use ethereum_types::{Address, H160};
+
     use super::*;
 
     pub const BLOB_BASE_FEE_UPDATE_FRACTION: U256 = U256([0x32f0ed, 0, 0, 0]);
@@ -394,19 +396,25 @@ pub mod cancun_constants {
         hex!("000000000000000000000000000000001666c54b0a32529503432fcae0181b4bef79de09fc63671fda5ed1ba9bfa07899495346f3d7ac9cd23048ef30d0a154f"), // y_im
     ];
 
-    pub const BEACON_ROOTS_CONTRACT_STATE_KEY: (&str, [u8; 20]) = (
-        "BEACON_ROOTS_CONTRACT_STATE_KEY",
-        hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"),
-    );
-
     pub const HISTORY_BUFFER_LENGTH: (&str, u64) = ("HISTORY_BUFFER_LENGTH", 8191);
 
+    // Beacon constants
+    ///////////////////
+
+    pub const BEACON_ROOTS_CONTRACT_ADDRESS: Address =
+        H160(hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"));
+
+    pub const BEACON_ROOTS_CONTRACT_ADDRESS_HASHED: H256 = H256(hex!(
+        "37d65eaa92c6bc4c13a5ec45527f0c18ea8932588728769ec7aecfe6d9f32e42"
+    ));
+
+    pub const BEACON_ROOTS_CONTRACT_STATE_KEY: (&str, [u8; 20]) = (
+        "BEACON_ROOTS_CONTRACT_STATE_KEY",
+        *BEACON_ROOTS_CONTRACT_ADDRESS.as_fixed_bytes(),
+    );
     pub const BEACON_ROOTS_CONTRACT_CODE: [u8; 97] = hex!("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500");
     pub const BEACON_ROOTS_CONTRACT_CODE_HASH: [u8; 32] =
         hex!("f57acd40259872606d76197ef052f3d35588dadf919ee1f0e3cb9b62d3f4b02c");
-
-    pub const BEACON_ROOTS_CONTRACT_ADDRESS_HASHED: [u8; 32] =
-        hex!("37d65eaa92c6bc4c13a5ec45527f0c18ea8932588728769ec7aecfe6d9f32e42");
 
     pub const BEACON_ROOTS_ACCOUNT: AccountRlp = AccountRlp {
         nonce: U256::zero(),
@@ -417,6 +425,14 @@ pub mod cancun_constants {
         )),
         code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
     };
+
+    #[test]
+    fn hashed() {
+        assert_eq!(
+            keccak_hash::keccak(BEACON_ROOTS_CONTRACT_ADDRESS),
+            BEACON_ROOTS_CONTRACT_ADDRESS_HASHED
+        );
+    }
 }
 
 pub mod global_exit_root {

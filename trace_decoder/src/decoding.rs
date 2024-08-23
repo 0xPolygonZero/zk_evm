@@ -117,7 +117,7 @@ fn update_beacon_block_root_contract_storage(
     block_data: &BlockMetadata,
 ) -> anyhow::Result<()> {
     const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
-    const ADDRESS: H256 = H256(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED);
+    const ADDRESS: H256 = BEACON_ROOTS_CONTRACT_ADDRESS_HASHED;
 
     let timestamp_idx = block_data.block_timestamp % HISTORY_BUFFER_LENGTH_MOD;
     let timestamp = rlp::encode(&block_data.block_timestamp).to_vec();
@@ -466,9 +466,7 @@ fn add_withdrawals_to_txns(
         let additional_paths = if last_inputs.txn_number_before == 0.into() {
             // We need to include the beacon roots contract as this payload is at the
             // start of the block execution.
-            vec![TrieKey::from_hash(H256(
-                BEACON_ROOTS_CONTRACT_ADDRESS_HASHED,
-            ))]
+            vec![TrieKey::from_hash(BEACON_ROOTS_CONTRACT_ADDRESS_HASHED)]
         } else {
             vec![]
         };
