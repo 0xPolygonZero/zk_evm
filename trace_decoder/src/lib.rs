@@ -317,8 +317,9 @@ pub fn entrypoint(
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
                                 #[expect(deprecated)] // this is MPT specific
-                                acc.insert_by_key(
-                                    path,
+                                acc.insert_by_hashed_address(
+                                    path.into_hash()
+                                        .context("invalid path length in direct state trie")?,
                                     rlp::decode(&bytes)
                                         .context("invalid AccountRlp in direct state trie")?,
                                 )?;

@@ -105,7 +105,11 @@ fn visit(
                         },
                     };
                     #[expect(deprecated)] // this is MPT-specific code
-                    let clobbered = frontend.state.insert_by_key(path, account)?;
+                    let clobbered = frontend.state.insert_by_hashed_address(
+                        path.into_hash()
+                            .context("invalid path length for leaf of StateTrie")?,
+                        account,
+                    )?;
                     ensure!(clobbered.is_none(), "duplicate account");
                 }
             }
