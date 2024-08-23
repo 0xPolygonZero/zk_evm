@@ -135,7 +135,7 @@ impl TrieKey {
         AsNibbles(&mut packed).pack_from_slice(&self.0);
         H256::from_slice(&packed)
     }
-    fn from_address(address: Address) -> Self {
+    pub fn from_address(address: Address) -> Self {
         Self::from_hash(keccak_hash::keccak(address))
     }
     pub fn from_hash(H256(bytes): H256) -> Self {
@@ -306,18 +306,16 @@ impl StateTrie {
             .as_hashed_partial_trie()
             .contains(TrieKey::from_address(address).into_nibbles())
     }
-    /// This allows users to break the [`TypedMpt`] invariant.
-    /// If data that isn't a [`rlp::encode`]-ed [`AccountRlp`] is inserted,
-    /// subsequent API calls may panic.
-    pub fn from_hashed_partial_trie_unchecked(
-        src: mpt_trie::partial_trie::HashedPartialTrie,
-    ) -> Self {
-        Self {
-            typed: TypedMpt {
-                inner: src,
-                _ty: PhantomData,
-            },
-        }
+    pub fn trim_to(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+        let inner = mpt_trie::trie_subsets::create_trie_subset(
+            self.typed.as_hashed_partial_trie(),
+            addresses.into_iter().map(TrieKey::into_nibbles),
+        )?;
+        self.typed = TypedMpt {
+            inner,
+            _ty: PhantomData,
+        };
+        Ok(())
     }
 }
 
