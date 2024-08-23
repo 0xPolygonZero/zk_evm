@@ -410,6 +410,8 @@ fn get_state_and_storage_leaves(
             trie_data.push(Some(balance));
             // The Storage pointer is only written in the trie.
             trie_data.push(Some(0.into()));
+            
+            log::debug!("new storage trie = {:?}", storage_trie);
             trie_data.push(Some(code_hash.into_uint()));
             get_storage_leaves(
                 addr_key,
@@ -512,6 +514,7 @@ where
             Ok(())
         }
         Node::Hash(hash) => {
+            log::debug!("adding hash node");
             hash_nodes.push(Some(U256::zero())); // Set flag is_account to 0
             hash_nodes.push(Some(
                 key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
@@ -708,7 +711,7 @@ pub(crate) fn get_final_state_mpt(
                 last_hash_node = hash_nodes.next();
             }
             if let Some(slot) = last_slot
-                && slot[0] == account[0]
+                && slot[0] == account[0] && !hashed_storage_trie
             {
                 log::debug!("inserting storage leaf {:?}", slot[2]);
                 log::debug!("rlp = {:?}", rlp::encode(&slot[2]).freeze().to_vec());
