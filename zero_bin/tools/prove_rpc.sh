@@ -153,8 +153,7 @@ if [ "$RUN_VERIFICATION" = true ]; then
 
   proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
   echo "Verifying the proof of the latest block in the interval:" $proof_file_name
-  echo [ > $PROOF_OUTPUT_DIR/proofs.json && cat $proof_file_name >> $PROOF_OUTPUT_DIR/proofs.json && echo ] >> $PROOF_OUTPUT_DIR/proofs.json
-  cargo r --release --bin verifier -- -f $PROOF_OUTPUT_DIR/proofs.json > $PROOF_OUTPUT_DIR/verify.out 2>&1
+  cargo r --release --bin verifier -- -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
 
   if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
       echo "All proofs verified successfully!";
