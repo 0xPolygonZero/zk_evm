@@ -254,8 +254,10 @@ impl StateMpt {
     ) -> anyhow::Result<Option<AccountRlp>> {
         self.typed.insert(TrieKey::from_hash(key), account)
     }
-    pub fn iter(&self) -> impl Iterator<Item = (TrieKey, AccountRlp)> + '_ {
-        self.typed.iter()
+    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.typed
+            .iter()
+            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
