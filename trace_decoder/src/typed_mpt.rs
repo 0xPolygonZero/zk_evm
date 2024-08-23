@@ -1,7 +1,7 @@
 //! Principled MPT types used in this library.
 
 use core::fmt;
-use std::marker::PhantomData;
+use std::{collections::BTreeMap, marker::PhantomData};
 
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
@@ -246,14 +246,6 @@ impl StateMpt {
             },
         }
     }
-    pub fn insert_by_address(
-        &mut self,
-        address: Address,
-        account: AccountRlp,
-    ) -> anyhow::Result<Option<AccountRlp>> {
-        #[expect(deprecated)]
-        self.insert_by_hashed_address(crate::hash(address), account)
-    }
     #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
     pub fn insert_by_hashed_address(
         &mut self,
@@ -262,26 +254,37 @@ impl StateMpt {
     ) -> anyhow::Result<Option<AccountRlp>> {
         self.typed.insert(TrieKey::from_hash(key), account)
     }
-    /// Insert a deferred part of the trie
-    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
-        self.typed.insert_hash(key, hash)
-    }
-    pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.typed
-            .get(TrieKey::from_hash(keccak_hash::keccak(address)))
-    }
-    pub fn root(&self) -> H256 {
-        self.typed.root()
-    }
     pub fn iter(&self) -> impl Iterator<Item = (TrieKey, AccountRlp)> + '_ {
         self.typed.iter()
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
+    pub fn root(&self) -> H256 {
+        self.typed.root()
+    }
+}
+
+impl StateTrie for StateMpt {
+    fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> anyhow::Result<Option<AccountRlp>> {
+        #[expect(deprecated)]
+        self.insert_by_hashed_address(crate::hash(address), account)
+    }
+    /// Insert a deferred part of the trie
+    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.typed.insert_hash(key, hash)
+    }
+    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+        self.typed
+            .get(TrieKey::from_hash(keccak_hash::keccak(address)))
+    }
     /// Delete the account at `address`, returning any remaining branch on
     /// collapse
-    pub fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
         Ok(
             crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
                 self.typed.as_mut_hashed_partial_trie_unchecked(),
@@ -289,12 +292,12 @@ impl StateMpt {
             )?,
         )
     }
-    pub fn contains_address(&self, address: Address) -> bool {
+    fn contains_address(&self, address: Address) -> bool {
         self.typed
             .as_hashed_partial_trie()
             .contains(TrieKey::from_address(address).into_nibbles())
     }
-    pub fn trim_to(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    fn trim_to(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         let inner = mpt_trie::trie_subsets::create_trie_subset(
             self.typed.as_hashed_partial_trie(),
             addresses.into_iter().map(TrieKey::into_nibbles),
@@ -303,6 +306,52 @@ impl StateMpt {
             inner,
             _ty: PhantomData,
         };
+        Ok(())
+    }
+}
+
+pub struct StateSmt {
+    address2state: BTreeMap<Address, AccountRlp>,
+    deferred: BTreeMap<TrieKey, H256>,
+}
+
+pub trait StateTrie {
+    fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> anyhow::Result<Option<AccountRlp>>;
+    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
+    fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
+    fn contains_address(&self, address: Address) -> bool;
+    fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+}
+
+impl StateTrie for StateSmt {
+    fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> anyhow::Result<Option<AccountRlp>> {
+        Ok(self.address2state.insert(address, account))
+    }
+    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.deferred.insert(key, hash);
+        Ok(())
+    }
+    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+        self.address2state.get(&address).copied()
+    }
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
+        self.address2state.remove(&address);
+        Ok(None)
+    }
+    fn contains_address(&self, address: Address) -> bool {
+        self.address2state.contains_key(&address)
+    }
+    fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+        let _ = address;
         Ok(())
     }
 }

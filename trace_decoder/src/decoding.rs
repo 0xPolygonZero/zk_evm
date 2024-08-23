@@ -25,7 +25,7 @@ use crate::{
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
     },
-    typed_mpt::{ReceiptTrie, StateMpt, StorageTrie, TransactionTrie, TrieKey},
+    typed_mpt::{ReceiptTrie, StateMpt, StateTrie as _, StorageTrie, TransactionTrie, TrieKey},
     OtherBlockData, PartialTriePreImages,
 };
 
