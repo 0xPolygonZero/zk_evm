@@ -63,16 +63,6 @@ impl<T> TypedMpt<T> {
         let bytes = self.inner.get(key.into_nibbles())?;
         Some(rlp::decode(bytes).expect(Self::PANIC_MSG))
     }
-    fn remove(&mut self, key: TrieKey) -> Result<Option<T>, Error>
-    where
-        T: rlp::Decodable,
-    {
-        match self.inner.delete(key.into_nibbles()) {
-            Ok(Some(it)) => Ok(Some(rlp::decode(&it).expect(Self::PANIC_MSG))),
-            Ok(None) => Ok(None),
-            Err(source) => Err(Error { source }),
-        }
-    }
     fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
     }
@@ -305,9 +295,6 @@ impl StateTrie {
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         self.typed.as_mut_hashed_partial_trie_unchecked()
     }
-    pub fn remove_address(&mut self, address: Address) -> Result<Option<AccountRlp>, Error> {
-        self.typed.remove(TrieKey::from_address(address))
-    }
     pub fn contains_address(&self, address: Address) -> bool {
         self.typed
             .as_hashed_partial_trie()
@@ -325,16 +312,6 @@ impl StateTrie {
                 _ty: PhantomData,
             },
         }
-    }
-}
-
-impl<'a> IntoIterator for &'a StateTrie {
-    type Item = (TrieKey, AccountRlp);
-
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.typed.into_iter()
     }
 }
 
