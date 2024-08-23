@@ -106,7 +106,7 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
-use typed_mpt::{StateTrie, StorageTrie, TrieKey};
+use typed_mpt::{StateMpt, StorageTrie, TrieKey};
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -311,7 +311,7 @@ pub fn entrypoint(
         }) => ProcessedBlockTracePreImages {
             tries: PartialTriePreImages {
                 state: state.items().try_fold(
-                    StateTrie::new(OnOrphanedHashNode::Reject),
+                    StateMpt::new(OnOrphanedHashNode::Reject),
                     |mut acc, (nibbles, hash_or_val)| {
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
@@ -449,7 +449,7 @@ pub fn entrypoint(
 
 #[derive(Debug, Default)]
 struct PartialTriePreImages {
-    pub state: StateTrie,
+    pub state: StateMpt,
     pub storage: HashMap<H256, StorageTrie>,
 }
 
