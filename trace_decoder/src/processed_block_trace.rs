@@ -6,7 +6,7 @@ use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use itertools::Itertools;
 use zk_evm_common::EMPTY_TRIE_HASH;
 
-use crate::typed_mpt::TrieKey;
+use crate::typed_mpt::{StateTrie as _, TrieKey};
 use crate::PartialTriePreImages;
 use crate::{hash, TxnTrace};
 use crate::{ContractCodeUsage, TxnInfo};

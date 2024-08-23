@@ -11,7 +11,7 @@ use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::typed_mpt::{StateMpt, StorageTrie, TrieKey};
+use crate::typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Clone)]
