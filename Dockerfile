@@ -27,6 +27,9 @@ RUN apt-get update && apt-get install -y \
     # clean the image
     && rm -rf /var/lib/apt/lists/*
 
+# statically linking the C runtime requires explicitly setting the Rust target triple
+ARG RUST_TARGET=x86_64-unknown-linux-gnu
+
 ARG PROFILE=release
 # forward the docker argument so that the script below can read it
 ENV PROFILE=${PROFILE}
@@ -51,7 +54,7 @@ RUSTFLAGS="-C target-feature=+crt-static" \
     # use the cache mount
     # (we will not be able to to write to e.g `/src/target` because it is bind-mounted)
     CARGO_TARGET_DIR=/artifacts \
-    cargo build --locked "--profile=${PROFILE}" --target=x86_64-unknown-linux-gnu --all
+    cargo build --locked "--profile=${PROFILE}" "--target=${RUST_TARGET}" --all
 
 # narrow the find call to SUBDIR because if we just copy out all executables
 # we will break the cache invariant
