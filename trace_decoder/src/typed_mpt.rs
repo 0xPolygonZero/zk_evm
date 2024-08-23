@@ -292,8 +292,14 @@ impl StateTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
-    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
-        self.typed.as_mut_hashed_partial_trie_unchecked()
+    /// Delete the account at `address`, returning any remaining branch on
+    /// collapse
+    pub fn reporting_remove(&mut self, address: Address) -> Result<Option<TrieKey>, Error> {
+        crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
+            self.typed.as_mut_hashed_partial_trie_unchecked(),
+            &TrieKey::from_address(address),
+        )
+        .map_err(|source| Error { source })
     }
     pub fn contains_address(&self, address: Address) -> bool {
         self.typed

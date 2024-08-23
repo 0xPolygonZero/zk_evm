@@ -16,6 +16,7 @@ use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie as _},
     special_query::path_for_query,
+    trie_ops::TrieOpError,
     utils::{IntoTrieKey as _, TriePath},
 };
 
@@ -360,12 +361,7 @@ fn apply_deltas_to_trie_state(
 
             if !receipt.status {
                 // The transaction failed, hence any created account should be removed.
-                if let Some(remaining_account_key) =
-                    delete_node_and_report_remaining_key_if_branch_collapsed(
-                        trie_state.state.as_mut_hashed_partial_trie_unchecked(),
-                        &TrieKey::from_hash(hash(addr)),
-                    )?
-                {
+                if let Some(remaining_account_key) = trie_state.state.reporting_remove(*addr)? {
                     out.additional_state_trie_paths_to_not_hash
                         .push(remaining_account_key);
                     trie_state.storage.remove(&hash(addr));
@@ -379,12 +375,7 @@ fn apply_deltas_to_trie_state(
     for addr in deltas.self_destructed_accounts.iter() {
         trie_state.storage.remove(&hash(addr));
 
-        if let Some(remaining_account_key) =
-            delete_node_and_report_remaining_key_if_branch_collapsed(
-                trie_state.state.as_mut_hashed_partial_trie_unchecked(),
-                &TrieKey::from_hash(hash(addr)),
-            )?
-        {
+        if let Some(remaining_account_key) = trie_state.state.reporting_remove(*addr)? {
             out.additional_state_trie_paths_to_not_hash
                 .push(remaining_account_key);
         }
@@ -400,13 +391,14 @@ fn get_trie_trace(trie: &HashedPartialTrie, k: &Nibbles) -> TriePath {
 /// If a branch collapse occurred after a delete, then we must ensure that
 /// the other single child that remains also is not hashed when passed into
 /// plonky2. Returns the key to the remaining child if a collapse occurred.
-fn delete_node_and_report_remaining_key_if_branch_collapsed(
+pub fn delete_node_and_report_remaining_key_if_branch_collapsed(
     trie: &mut HashedPartialTrie,
-    delete_k: &TrieKey,
-) -> anyhow::Result<Option<TrieKey>> {
-    let old_trace = get_trie_trace(trie, &delete_k.into_nibbles());
-    trie.delete(delete_k.into_nibbles())?;
-    let new_trace = get_trie_trace(trie, &delete_k.into_nibbles());
+    key: &TrieKey,
+) -> Result<Option<TrieKey>, TrieOpError> {
+    let key = key.into_nibbles();
+    let old_trace = get_trie_trace(trie, &key);
+    trie.delete(key)?;
+    let new_trace = get_trie_trace(trie, &key);
     Ok(
         node_deletion_resulted_in_a_branch_collapse(&old_trace, &new_trace)
             .map(TrieKey::from_nibbles),
