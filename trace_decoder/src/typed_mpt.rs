@@ -233,11 +233,11 @@ impl ReceiptTrie {
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
-pub struct StateTrie {
+pub struct StateMpt {
     typed: TypedMpt<AccountRlp>,
 }
 
-impl StateTrie {
+impl StateMpt {
     pub fn new(strategy: OnOrphanedHashNode) -> Self {
         Self {
             typed: TypedMpt {

@@ -25,7 +25,7 @@ use crate::{
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
     },
-    typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
+    typed_mpt::{ReceiptTrie, StateMpt, StorageTrie, TransactionTrie, TrieKey},
     OtherBlockData, PartialTriePreImages,
 };
 
@@ -33,7 +33,7 @@ use crate::{
 /// after every txn we process in the trace.
 #[derive(Clone, Debug, Default)]
 struct PartialTrieState {
-    state: StateTrie,
+    state: StateMpt,
     storage: HashMap<H256, StorageTrie>,
     txn: TransactionTrie,
     receipt: ReceiptTrie,
@@ -484,7 +484,7 @@ fn add_withdrawals_to_txns(
 /// our local trie state.
 fn update_trie_state_from_withdrawals<'a>(
     withdrawals: impl IntoIterator<Item = (Address, H256, U256)> + 'a,
-    state: &mut StateTrie,
+    state: &mut StateMpt,
 ) -> anyhow::Result<()> {
     for (addr, h_addr, amt) in withdrawals {
         let mut acc_data = state.get_by_address(addr).context(format!(
