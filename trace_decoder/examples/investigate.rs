@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     collections::{BTreeMap, HashSet},
     fs::File,
@@ -10,25 +11,45 @@ use anyhow::{ensure, Context as _};
 use camino::Utf8Path;
 use copyvec::CopyVec;
 use either::Either;
-use ethereum_types::Address;
+use ethereum_types::{Address, BigEndianHash as _};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use glob::glob;
 use keccak_hash::{keccak, H256};
-use mpt_trie::partial_trie::PartialTrie as _;
-use mpt_trie::partial_trie::{HashedPartialTrie, Node};
+use mpt_trie::{
+    nibbles::Nibbles,
+    partial_trie::{HashedPartialTrie, Node},
+};
+use mpt_trie::{partial_trie::PartialTrie as _, trie_ops::ValOrHash};
 use prover::BlockProverInput;
 use serde::de::DeserializeOwned;
 use trace_decoder::{
     BlockTraceTriePreImages, CombinedPreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
     SeparateTriePreImages,
 };
-use u4::U4;
+use u4::{AsNibbles, U4};
+
+fn nibbles2hash(mut nibbles: Nibbles) -> Option<H256> {
+    let mut bytes = [0; 32];
+
+    let mut nibbles = iter::from_fn(|| match nibbles.count {
+        0 => None,
+        _ => Some(nibbles.pop_next_nibble_front()),
+    });
+    for (ix, nibble) in nibbles.by_ref().enumerate() {
+        AsNibbles(&mut bytes).set(ix, U4::new(nibble)?)
+    }
+    match nibbles.next() {
+        Some(_) => None, // too many
+        None => Some(H256(bytes)),
+    }
+}
 
 /// This is the dream StateTrie representation
+#[derive(Debug, Default)]
 struct StateTrie {
     /// items actually in the trie
     full: BTreeMap<H256, AccountRlp>,
-    deferred_subtries: BTreeMap<CopyVec<U4, 64>, H256>,
+    deferred_subtries: BTreeMap<Nibbles, H256>,
     deferred_accounts: BTreeMap<H256, AccountRlp>,
 }
 
@@ -43,10 +64,13 @@ impl StateTrie {
             self.deferred_accounts.insert(k, v);
         }
     }
-    fn insert_by_address(&mut self, address: Address, account: AccountRlp) {
-        self.full.insert(keccak(address), account);
+    fn insert_by_hashed_address(&mut self, hashed_address: H256, account: AccountRlp) {
+        self.full.insert(hashed_address, account);
     }
-    fn insert_hash_by_key(&mut self, key: CopyVec<U4, 64>, hash: H256) {
+    fn insert_by_address(&mut self, address: Address, account: AccountRlp) {
+        self.insert_by_hashed_address(keccak(address), account)
+    }
+    fn insert_hash_by_key(&mut self, key: Nibbles, hash: H256) {
         self.deferred_subtries.insert(key, hash);
     }
     fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
@@ -54,11 +78,37 @@ impl StateTrie {
     }
 }
 impl StateTrie {
-    fn from_mpt(_: HashedPartialTrie) -> anyhow::Result<Self> {
-        todo!()
+    fn from_mpt(src: &HashedPartialTrie) -> anyhow::Result<Self> {
+        let mut this = Self::default();
+        for (path, voh) in src.items() {
+            match voh {
+                ValOrHash::Val(it) => this.insert_by_hashed_address(
+                    nibbles2hash(path).context("invalid depth")?,
+                    rlp::decode(&it)?,
+                ),
+                ValOrHash::Hash(hash) => this.insert_hash_by_key(path, hash),
+            };
+        }
+        Ok(this)
     }
     fn to_mpt(&self) -> anyhow::Result<HashedPartialTrie> {
-        todo!()
+        let Self {
+            full,
+            deferred_subtries,
+            deferred_accounts,
+        } = self;
+
+        let mut theirs = HashedPartialTrie::default();
+        for (path, hash) in deferred_subtries {
+            theirs.insert(*path, *hash)?
+        }
+        for (haddr, acct) in full.iter().chain(deferred_accounts) {
+            theirs.insert(Nibbles::from_h256_be(*haddr), rlp::encode(acct).to_vec())?;
+        }
+        Ok(mpt_trie::trie_subsets::create_trie_subset(
+            &theirs,
+            self.full.keys().map(|it| Nibbles::from_h256_be(*it)),
+        )?)
     }
     fn to_smt(&self) -> smt_trie::smt::Smt<smt_trie::db::MemoryDb> {
         todo!()
@@ -67,7 +117,7 @@ impl StateTrie {
 
 fn _discuss(src: HashedPartialTrie) -> anyhow::Result<()> {
     // the goal is, of course, for the following to hold
-    assert_eq!(src.hash(), StateTrie::from_mpt(src)?.to_mpt()?.hash());
+    assert_eq!(src.hash(), StateTrie::from_mpt(&src)?.to_mpt()?.hash());
 
     Ok(())
 }
@@ -127,19 +177,37 @@ fn main() -> anyhow::Result<()> {
     eprintln!("done.");
 
     let mut total = 0;
+    let mut n_state = 0;
 
     for FilePair { name, cases } in file_pairs {
         for (case_ix, (_header, bpi)) in cases.into_iter().enumerate() {
             for (hpt_ix, hpt) in mpts(bpi)?.enumerate() {
                 total += 1;
+
                 let count = count_non_minimal(&hpt);
                 if count != 0 {
                     println!("{name}/{case_ix}/{hpt_ix}\t{}", count)
                 }
+                if hpt_ix == 0 {
+                    n_state += 1;
+                    match StateTrie::from_mpt(&hpt)
+                        .context("failed to load")
+                        .and_then(|it| it.to_mpt().context("failed to dump"))
+                    {
+                        Ok(ours) => match ours.hash() == hpt.hash() {
+                            true => {}
+                            false => println!("{name}/{case_ix}/{hpt_ix}\thash mismatch"),
+                        },
+                        Err(e) => {
+                            println!("{name}/{case_ix}/{hpt_ix}\tfailed conversion");
+                            eprintln!("{e:?}")
+                        }
+                    }
+                }
             }
         }
     }
-    eprintln!("tested {total} tries");
+    eprintln!("tested {total} tries ({n_state} state tries)");
     Ok(())
 }
 
@@ -230,7 +298,7 @@ fn test_badhash() {
     });
     let ext = HashedPartialTrie::new(Node::Extension {
         nibbles: {
-            let mut nibbles = mpt_trie::nibbles::Nibbles::new();
+            let mut nibbles = Nibbles::new();
             nibbles.push_nibble_back(0);
             nibbles.push_nibble_back(0);
             nibbles
