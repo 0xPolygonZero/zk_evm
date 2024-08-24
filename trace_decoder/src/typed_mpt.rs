@@ -1,98 +1,116 @@
 //! Principled MPT types used in this library.
 
 use core::fmt;
-use std::marker::PhantomData;
+use std::{
+    collections::{BTreeMap, HashSet},
+    iter,
+};
 
+use anyhow::Context as _;
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
 use evm_arithmetization::generation::mpt::AccountRlp;
-use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
+use keccak_hash::keccak;
+use mpt_trie::{
+    nibbles::Nibbles,
+    partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
+    trie_ops::ValOrHash,
+};
 use u4::{AsNibbles, U4};
 
-/// Map where keys are [up to 64 nibbles](TrieKey),
-/// and values are [`rlp::Encodable`]/[`rlp::Decodable`].
+/// Global, <code>[hash](keccak)([Address]) -> [AccountRlp]</code>.
 ///
-/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie>.
-///
-/// Portions of the trie may be deferred: see [`Self::insert_hash`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct TypedMpt<T> {
-    inner: HashedPartialTrie,
-    _ty: PhantomData<fn() -> T>,
+/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
+#[derive(Debug, Clone, Default)]
+pub struct StateTrie {
+    /// items actually in the trie
+    full: BTreeMap<H256, AccountRlp>,
+    deferred_subtries: BTreeMap<Nibbles, H256>,
+    deferred_accounts: BTreeMap<H256, AccountRlp>,
 }
 
-impl<T> TypedMpt<T> {
-    const PANIC_MSG: &str = "T encoding/decoding should round-trip,\
-    and only encoded `T`s are ever inserted";
-    fn new() -> Self {
-        Self {
-            inner: HashedPartialTrie::new(Node::Empty),
-            _ty: PhantomData,
+impl StateTrie {
+    /// Defer accounts in `locations`.
+    /// Absent values are not an error.
+    pub fn trim_to(&mut self, locations: impl IntoIterator<Item = H256>) {
+        let want = locations.into_iter().collect::<HashSet<_>>();
+        let have = self.full.keys().copied().collect();
+        for hash in HashSet::difference(&have, &want) {
+            let (k, v) = self.full.remove_entry(hash).expect("key is in `have`");
+            self.deferred_accounts.insert(k, v);
         }
     }
-    /// Insert a node which represents an out-of-band sub-trie.
-    fn insert_hash(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
-        self.inner.insert(key.into_nibbles(), hash)?;
-        Ok(())
+    pub fn contains_address(&self, address: Address) -> bool {
+        self.full.contains_key(&keccak(address))
     }
-    /// Returns an [`Error`] if the `key` crosses into a part of the trie that
-    /// isn't hydrated.
-    fn insert(&mut self, key: TrieKey, value: T) -> anyhow::Result<Option<T>>
-    where
-        T: rlp::Encodable + rlp::Decodable,
-    {
-        let prev = self.get(key);
-        self.inner
-            .insert(key.into_nibbles(), rlp::encode(&value).to_vec())?;
-        Ok(prev)
+    pub fn insert_by_hashed_address(&mut self, hashed_address: H256, account: AccountRlp) {
+        self.full.insert(hashed_address, account);
     }
-    /// Note that this returns [`None`] if `key` crosses into a part of the
-    /// trie that isn't hydrated.
-    ///
-    /// # Panics
-    /// - If [`rlp::decode`]-ing for `T` doesn't round-trip.
-    fn get(&self, key: TrieKey) -> Option<T>
-    where
-        T: rlp::Decodable,
-    {
-        let bytes = self.inner.get(key.into_nibbles())?;
-        Some(rlp::decode(bytes).expect(Self::PANIC_MSG))
+    pub fn insert_by_address(&mut self, address: Address, account: AccountRlp) {
+        self.insert_by_hashed_address(keccak(address), account)
     }
-    fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
-        &self.inner
+    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) {
+        self.deferred_subtries.insert(key.into_nibbles(), hash);
     }
-    fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
-        &mut self.inner
+    pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+        self.full.get(&keccak(address)).copied()
     }
-    fn root(&self) -> H256 {
-        self.inner.hash()
+    pub fn remove_by_address(&mut self, address: Address) {
+        self.full.remove(&keccak(address));
     }
-    /// Note that this returns owned paths and items.
-    fn iter(&self) -> impl Iterator<Item = (TrieKey, T)> + '_
-    where
-        T: rlp::Decodable,
-    {
-        self.inner.keys().filter_map(|nib| {
-            let path = TrieKey::from_nibbles(nib);
-            Some((path, self.get(path)?))
-        })
+
+    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.full.iter().map(|(h, rlp)| (*h, *rlp))
+    }
+}
+impl StateTrie {
+    pub fn from_mpt(src: &HashedPartialTrie) -> anyhow::Result<Self> {
+        let mut this = Self::default();
+        for (path, voh) in src.items() {
+            match voh {
+                ValOrHash::Val(it) => this.insert_by_hashed_address(
+                    nibbles2hash(path).context("invalid depth")?,
+                    rlp::decode(&it)?,
+                ),
+                ValOrHash::Hash(hash) => this.insert_hash_by_key(TrieKey::from_nibbles(path), hash),
+            };
+        }
+        Ok(this)
+    }
+    pub fn to_mpt(&self) -> anyhow::Result<HashedPartialTrie> {
+        let Self {
+            full,
+            deferred_subtries,
+            deferred_accounts,
+        } = self;
+
+        let mut theirs = HashedPartialTrie::default();
+        for (path, hash) in deferred_subtries {
+            theirs.insert(*path, *hash)?
+        }
+        for (haddr, acct) in full.iter().chain(deferred_accounts) {
+            theirs.insert(Nibbles::from_h256_be(*haddr), rlp::encode(acct).to_vec())?;
+        }
+        Ok(mpt_trie::trie_subsets::create_trie_subset(
+            &theirs,
+            self.full.keys().map(|it| Nibbles::from_h256_be(*it)),
+        )?)
     }
 }
 
-impl<T> Default for TypedMpt<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+fn nibbles2hash(mut nibbles: Nibbles) -> Option<H256> {
+    let mut bytes = [0; 32];
 
-impl<'a, T> IntoIterator for &'a TypedMpt<T>
-where
-    T: rlp::Decodable,
-{
-    type Item = (TrieKey, T);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
-    fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.iter())
+    let mut nibbles = iter::from_fn(|| match nibbles.count {
+        0 => None,
+        _ => Some(nibbles.pop_next_nibble_front()),
+    });
+    for (ix, nibble) in nibbles.by_ref().enumerate() {
+        AsNibbles(&mut bytes).set(ix, U4::new(nibble)?)
+    }
+    match nibbles.next() {
+        Some(_) => None, // too many
+        None => Some(H256(bytes)),
     }
 }
 
@@ -123,9 +141,6 @@ impl TrieKey {
         let mut packed = [0u8; 32];
         AsNibbles(&mut packed).pack_from_slice(&self.0);
         H256::from_slice(&packed)
-    }
-    pub fn from_address(address: Address) -> Self {
-        Self::from_hash(keccak_hash::keccak(address))
     }
     pub fn from_hash(H256(bytes): H256) -> Self {
         Self::new(AsNibbles(bytes)).expect("32 bytes is 64 nibbles, which fits")
@@ -226,84 +241,6 @@ impl ReceiptTrie {
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
-    }
-}
-
-/// Global, [`Address`] `->` [`AccountRlp`].
-///
-/// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
-#[derive(Debug, Clone, Default)]
-pub struct StateTrie {
-    typed: TypedMpt<AccountRlp>,
-}
-
-impl StateTrie {
-    pub fn new(strategy: OnOrphanedHashNode) -> Self {
-        Self {
-            typed: TypedMpt {
-                inner: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
-                _ty: PhantomData,
-            },
-        }
-    }
-    pub fn insert_by_address(
-        &mut self,
-        address: Address,
-        account: AccountRlp,
-    ) -> anyhow::Result<Option<AccountRlp>> {
-        #[expect(deprecated)]
-        self.insert_by_hashed_address(crate::hash(address), account)
-    }
-    #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
-    pub fn insert_by_hashed_address(
-        &mut self,
-        key: H256,
-        account: AccountRlp,
-    ) -> anyhow::Result<Option<AccountRlp>> {
-        self.typed.insert(TrieKey::from_hash(key), account)
-    }
-    /// Insert a deferred part of the trie
-    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
-        self.typed.insert_hash(key, hash)
-    }
-    pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
-        self.typed
-            .get(TrieKey::from_hash(keccak_hash::keccak(address)))
-    }
-    pub fn root(&self) -> H256 {
-        self.typed.root()
-    }
-    pub fn iter(&self) -> impl Iterator<Item = (TrieKey, AccountRlp)> + '_ {
-        self.typed.iter()
-    }
-    pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
-        self.typed.as_hashed_partial_trie()
-    }
-    /// Delete the account at `address`, returning any remaining branch on
-    /// collapse
-    pub fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
-        Ok(
-            crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
-                self.typed.as_mut_hashed_partial_trie_unchecked(),
-                &TrieKey::from_address(address),
-            )?,
-        )
-    }
-    pub fn contains_address(&self, address: Address) -> bool {
-        self.typed
-            .as_hashed_partial_trie()
-            .contains(TrieKey::from_address(address).into_nibbles())
-    }
-    pub fn trim_to(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
-        let inner = mpt_trie::trie_subsets::create_trie_subset(
-            self.typed.as_hashed_partial_trie(),
-            addresses.into_iter().map(TrieKey::into_nibbles),
-        )?;
-        self.typed = TypedMpt {
-            inner,
-            _ty: PhantomData,
-        };
-        Ok(())
     }
 }
 

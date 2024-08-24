@@ -199,10 +199,7 @@ fn update_beacon_block_root_contract_storage(
 
     trie_state
         .state
-        .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, account)
-        // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-        //                Add an entry API
-        .expect("insert must succeed with the same key as a successful `get`");
+        .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, account);
 
     Ok(())
 }
@@ -253,13 +250,7 @@ fn create_minimal_partial_tries_needed_by_txn(
     delta_application_out: TrieDeltaApplicationOutput,
 ) -> anyhow::Result<TrieInputs> {
     let mut state_trie = curr_block_tries.state.clone();
-    state_trie.trim_to(
-        nodes_used_by_txn
-            .state_accesses
-            .iter()
-            .map(|it| TrieKey::from_address(*it))
-            .chain(delta_application_out.additional_state_trie_paths_to_not_hash),
-    )?;
+    state_trie.trim_to(nodes_used_by_txn.state_accesses.iter().map(hash));
 
     let txn_keys = txn_range.map(TrieKey::from_txn_ix);
 
@@ -282,7 +273,7 @@ fn create_minimal_partial_tries_needed_by_txn(
     )?;
 
     Ok(TrieInputs {
-        state_trie: state_trie.as_hashed_partial_trie().clone(),
+        state_trie: state_trie.to_mpt()?.clone(),
         transactions_trie,
         receipts_trie,
         storage_tries,
@@ -340,7 +331,7 @@ fn apply_deltas_to_trie_state(
 
         state_write.apply_writes_to_state_node(&mut account, &hash(addr), &trie_state.storage)?;
 
-        trie_state.state.insert_by_address(*addr, account)?;
+        trie_state.state.insert_by_address(*addr, account);
 
         if is_created {
             // If the account did not exist prior this transaction, we
@@ -360,24 +351,15 @@ fn apply_deltas_to_trie_state(
 
             if !receipt.status {
                 // The transaction failed, hence any created account should be removed.
-                if let Some(remaining_account_key) = trie_state.state.reporting_remove(*addr)? {
-                    out.additional_state_trie_paths_to_not_hash
-                        .push(remaining_account_key);
-                    trie_state.storage.remove(&hash(addr));
-                    continue;
-                }
+                trie_state.state.remove_by_address(*addr);
+                trie_state.storage.remove(&hash(addr));
             }
         }
     }
 
     // Remove any accounts that self-destructed.
-    for addr in deltas.self_destructed_accounts.iter() {
+    for addr in &deltas.self_destructed_accounts {
         trie_state.storage.remove(&hash(addr));
-
-        if let Some(remaining_account_key) = trie_state.state.reporting_remove(*addr)? {
-            out.additional_state_trie_paths_to_not_hash
-                .push(remaining_account_key);
-        }
     }
 
     Ok(out)
@@ -464,9 +446,9 @@ fn add_withdrawals_to_txns(
                     true => Some(BEACON_ROOTS_CONTRACT_ADDRESS),
                     false => None,
                 })
-                .map(TrieKey::from_address),
-        )?;
-        last_inputs.tries.state_trie = state_trie.as_hashed_partial_trie().clone();
+                .map(hash),
+        );
+        last_inputs.tries.state_trie = state_trie.to_mpt()?;
     }
 
     update_trie_state_from_withdrawals(
@@ -475,7 +457,7 @@ fn add_withdrawals_to_txns(
     )?;
 
     last_inputs.withdrawals = withdrawals;
-    last_inputs.trie_roots_after.state_root = final_trie_state.state.root();
+    last_inputs.trie_roots_after.state_root = final_trie_state.state.to_mpt()?.hash();
 
     Ok(())
 }
@@ -493,11 +475,7 @@ fn update_trie_state_from_withdrawals<'a>(
 
         acc_data.balance += amt;
 
-        state
-            .insert_by_address(addr, acc_data)
-            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-            //                Add an entry API
-            .expect("insert must succeed with the same key as a successful `get`");
+        state.insert_by_address(addr, acc_data);
     }
 
     Ok(())
@@ -583,7 +561,7 @@ fn process_txn_info(
                                       * for more info). */
         tries,
         trie_roots_after: TrieRoots {
-            state_root: curr_block_tries.state.root(),
+            state_root: curr_block_tries.state.to_mpt()?.hash(),
             transactions_root: curr_block_tries.txn.root(),
             receipts_root: curr_block_tries.receipt.root(),
         },

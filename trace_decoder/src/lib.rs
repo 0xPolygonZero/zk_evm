@@ -310,27 +310,8 @@ pub fn entrypoint(
             storage: SeparateStorageTriesPreImage::MultipleTries(storage),
         }) => ProcessedBlockTracePreImages {
             tries: PartialTriePreImages {
-                state: state.items().try_fold(
-                    StateTrie::new(OnOrphanedHashNode::Reject),
-                    |mut acc, (nibbles, hash_or_val)| {
-                        let path = TrieKey::from_nibbles(nibbles);
-                        match hash_or_val {
-                            mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                                #[expect(deprecated)] // this is MPT specific
-                                acc.insert_by_hashed_address(
-                                    path.into_hash()
-                                        .context("invalid path length in direct state trie")?,
-                                    rlp::decode(&bytes)
-                                        .context("invalid AccountRlp in direct state trie")?,
-                                )?;
-                            }
-                            mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                acc.insert_hash_by_key(path, h)?;
-                            }
-                        };
-                        anyhow::Ok(acc)
-                    },
-                )?,
+                state: StateTrie::from_mpt(&state)
+                    .context("error converting state trie to internal representation")?,
                 storage: storage
                     .into_iter()
                     .map(|(k, SeparateTriePreImage::Direct(v))| {
@@ -384,12 +365,7 @@ pub fn entrypoint(
         }
     };
 
-    let all_accounts_in_pre_images = pre_images
-        .tries
-        .state
-        .iter()
-        .map(|(addr, data)| (addr.into_hash_left_padded(), data))
-        .collect::<Vec<_>>();
+    let all_accounts_in_pre_images = pre_images.tries.state.iter().collect::<Vec<_>>();
 
     // Note we discard any user-provided hashes.
     let mut hash2code = code_db
