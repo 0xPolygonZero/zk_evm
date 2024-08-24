@@ -18,6 +18,9 @@ global process_type_2_txn:
 
     // stack: rlp_addr, retdest
     %store_chain_id_present_true
+    // stack: rlp_addr, retdest
+    DUP1
+    // stack: rlp_addr, chain_id_addr, retdest
     %decode_and_store_chain_id
     %decode_and_store_nonce
     %decode_and_store_max_priority_fee
@@ -27,84 +30,25 @@ global process_type_2_txn:
     %decode_and_store_value
     %decode_and_store_data
     %decode_and_store_access_list
+    // stack: rlp_addr, chain_id_addr, retdest
+    DUP1
+    // stack: rlp_addr, after_access_list_addr, chain_id_addr, retdest
     %decode_and_store_y_parity
     %decode_and_store_r
     %decode_and_store_s
 
-    // stack: rlp_addr, retdest
+    // stack: rlp_addr, after_access_list_addr, chain_id_addr, retdest
     POP
-    // stack: retdest
+    // stack: after_access_list_addr, chain_id_addr, retdest
 
 // From EIP-1559:
 // The signature_y_parity, signature_r, signature_s elements of this transaction represent a secp256k1 signature over
-// keccak256(0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, destination, amount, data, access_list]))
+// keccak256(0x02 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, destination, amount, data, access_list])).
+// We know that [chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, destination, amount, data, access_list] is already encoded
+// at `chain_id_addr`; we just need to overwrite the existing RLP prefix. This is fine since we don't
+// need the original encoding anymore.
 type_2_compute_signed_data:
-    %alloc_rlp_block
-    // stack: rlp_addr_start, retdest
-    %mload_txn_field(@TXN_FIELD_CHAIN_ID)
-    // stack: chain_id, rlp_start, retdest
-    DUP2
-    // stack: rlp_addr, chain_id, rlp_start, retdest
-    %encode_rlp_scalar
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_NONCE)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_MAX_PRIORITY_FEE_PER_GAS)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_MAX_FEE_PER_GAS)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_GAS_LIMIT)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_TO)
-    %mload_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION) %jumpi(zero_to)
-    // stack: to, rlp_addr, rlp_start, retdest
-    SWAP1 %encode_rlp_160
-    %jump(after_to)
-zero_to:
-    // stack: to, rlp_addr, rlp_start, retdest
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-after_to:
-    %mload_txn_field(@TXN_FIELD_VALUE)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    // Encode txn data.
-    %mload_txn_field(@TXN_FIELD_DATA_LEN)
-    PUSH @SEGMENT_TXN_DATA // ctx == virt == 0
-    // stack: ADDR, len, rlp_addr, rlp_start, retdest
-    PUSH after_serializing_txn_data
-    // stack: after_serializing_txn_data, ADDR, len, rlp_addr, rlp_start, retdest
-    SWAP3
-    // stack: rlp_addr, ADDR, len, after_serializing_txn_data, rlp_start, retdest
-    %jump(encode_rlp_string)
-
-after_serializing_txn_data:
-    // Instead of manually encoding the access list, we just copy the raw RLP from the transaction.
-    %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_START)
-    %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN)
-    %stack (al_len, al_start, rlp_addr, rlp_start, retdest) ->
-        (
-            rlp_addr,
-            al_start,
-            al_len,
-            after_serializing_access_list,
-            rlp_addr, rlp_start, retdest)
-    %jump(memcpy_bytes)
-after_serializing_access_list:
-    // stack: rlp_addr, rlp_start, retdest
-    %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN) ADD
-    // stack: rlp_addr, rlp_start, retdest
+    // stack: after_access_list_addr, chain_id_addr, retdest
     %prepend_rlp_list_prefix
     // stack: prefix_start_pos, rlp_len, retdest
 
