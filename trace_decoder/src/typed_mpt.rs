@@ -312,6 +312,15 @@ impl StateTrie for StateMpt {
     }
 }
 
+impl From<StateMpt> for HashedPartialTrie {
+    fn from(value: StateMpt) -> Self {
+        let StateMpt {
+            typed: TypedMpt { inner, _ty },
+        } = value;
+        inner
+    }
+}
+
 pub struct StateSmt {
     address2state: BTreeMap<Address, AccountRlp>,
     deferred: BTreeMap<TrieKey, H256>,
