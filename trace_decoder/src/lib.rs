@@ -97,15 +97,17 @@ mod typed_mpt;
 mod wire;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::ops::Range;
 
 use anyhow::ensure;
 use ethereum_types::{Address, U256};
+use evm_arithmetization::generation::mpt::AccountRlp;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
-use processed_block_trace::{BatchInfo, BatchTouch, Hash2Code};
+use processed_block_trace::{BatchInfo, BatchTouch, Hash2Code, StateWrite};
 use serde::{Deserialize, Serialize};
 use typed_mpt::{ReceiptTrie, StateMpt, StateTrie as _, StorageTrie, TransactionTrie, TrieKey};
 
@@ -415,7 +417,7 @@ pub fn start(
     state0: StateMpt,
     // storage at the beginning of the block
     mut storage: BTreeMap<H256, StorageTrie>,
-    code: Hash2Code,
+    code: &mut Hash2Code,
     batches: Vec<Vec<TxnInfo>>,
     withdrawals: Vec<(Address, U256)>,
 ) -> anyhow::Result<()> {
@@ -443,7 +445,7 @@ pub fn start(
         .sum::<usize>()
         .saturating_sub(1);
     for (batch) in batches {
-        let touched_in_batch = BatchTouch::default();
+        let mut per_batch = PerBatch::default();
 
         for TxnInfo {
             traces,
@@ -455,16 +457,7 @@ pub fn start(
                 },
         } in batch
         {
-            let accessed = traces
-                .values()
-                .flat_map(|trace| {
-                    trace
-                        .storage_read
-                        .iter()
-                        .chain(trace.storage_written.keys())
-                })
-                .copied();
-
+            let mut created_in_txn = BTreeSet::new();
             for (
                 addr,
                 TxnTrace {
@@ -477,7 +470,95 @@ pub fn start(
                 },
             ) in traces
             {
-                //
+                per_batch
+                    .storage_accesses
+                    .entry(hash(addr))
+                    .or_default()
+                    .extend(
+                        storage_written
+                            .keys()
+                            .chain(&storage_read)
+                            .map(|hash| TrieKey::from_hash(crate::hash(hash))),
+                    );
+
+                let storage_trie_change = !storage_written.is_empty();
+
+                for (k, v) in storage_written {
+                    per_batch
+                        .storage_writes
+                        .entry(hash(addr))
+                        .or_default()
+                        .insert(TrieKey::from_hash(k), rlp::encode(&v).to_vec());
+                }
+
+                let state_write = StateWrite {
+                    balance,
+                    nonce,
+                    storage_trie_change,
+                    code_hash: code_usage
+                        .map(|it| match it {
+                            ContractCodeUsage::Read(hash) => {
+                                per_batch.accessed_code.insert(code.get(hash)?);
+                                anyhow::Ok(hash)
+                            }
+                            ContractCodeUsage::Write(bytes) => {
+                                code.insert(bytes.clone());
+                                let hash = hash(&bytes);
+                                per_batch.accessed_code.insert(bytes);
+                                anyhow::Ok(hash)
+                            }
+                        })
+                        .transpose()?,
+                };
+                if state_write != StateWrite::default() {
+                    // a write occurred
+
+                    // Account creations are flagged to handle reverts.
+                    if !state0.contains_address(addr) {
+                        created_in_txn.insert(addr);
+                    }
+
+                    // Some edge case may see a contract creation followed by a `SELFDESTRUCT`, with
+                    // then a follow-up transaction within the same batch updating the state of the
+                    // account. If that happens, we should not delete the account after processing
+                    // this batch.
+                    per_batch.self_destructed.remove(&addr);
+
+                    per_batch
+                        .state_writes
+                        .entry(addr)
+                        .and_modify(
+                            |StateWrite {
+                                 balance,
+                                 nonce,
+                                 storage_trie_change,
+                                 code_hash,
+                             }| {
+                                *balance = state_write.balance.or(*balance);
+                                *nonce = state_write.nonce.or(*nonce);
+                                *code_hash = state_write.code_hash.or(*code_hash);
+                                *storage_trie_change =
+                                    state_write.storage_trie_change || *storage_trie_change;
+                            },
+                        )
+                        .or_insert(state_write);
+                }
+
+                let is_precompile =
+                    PRECOMPILE_ADDRESS_RANGE.contains(&U256::from_big_endian(addr.as_bytes()));
+
+                // Trie witnesses will only include accessed precompile accounts as hash
+                // nodes if the transaction calling them reverted. If this is the case, we
+                // shouldn't include them in this transaction's `state_accesses` to allow the
+                // decoder to build a minimal state trie without hitting any hash node.
+
+                if !is_precompile || state0.get_by_address(addr).is_some() {
+                    per_batch.state_accesses.insert(addr);
+                }
+
+                if self_destructed {
+                    per_batch.self_destructed.insert(addr);
+                }
             }
 
             // TODO(0xaatif): in the reference, this is not done
@@ -492,6 +573,25 @@ pub fn start(
     }
     Ok(())
 }
+
+/// Note that "*_accesses" includes writes.
+#[derive(Default)]
+struct PerBatch {
+    state_writes: BTreeMap<Address, StateWrite>,
+    state_accesses: BTreeSet<Address>,
+
+    storage_writes: BTreeMap<H256, BTreeMap<TrieKey, Vec<u8>>>,
+    storage_accesses: BTreeMap<H256, Vec<TrieKey>>,
+
+    /// <code>[hash](hash)([Address]) -> [AccountRlp::storage_root]</code>
+    accts_with_ignored_storage: BTreeMap<H256, H256>,
+
+    self_destructed: BTreeSet<Address>,
+    accessed_code: BTreeSet<Vec<u8>>,
+}
+
+// TODO(0xaatif): is this _meant_ to exclude the final member?
+const PRECOMPILE_ADDRESS_RANGE: Range<U256> = U256([1, 0, 0, 0])..U256([10, 0, 0, 0]);
 
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
 mod hex {

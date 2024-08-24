@@ -35,13 +35,13 @@ impl Hash2Code {
             inner: HashMap::new(),
         }
     }
-    fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
+    pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
         match self.inner.get(&hash) {
             Some(code) => Ok(code.clone()),
             None => bail!("no code for hash {}", hash),
         }
     }
-    fn insert(&mut self, code: Vec<u8>) {
+    pub fn insert(&mut self, code: Vec<u8>) {
         self.inner.insert(hash(&code), code);
     }
 }
@@ -69,7 +69,7 @@ impl TxnInfo {
         extra_state_accesses: &[Address],
         hash2code: &mut Hash2Code,
     ) -> anyhow::Result<BatchInfo> {
-        let mut touch = BatchTouch::default();
+        let mut touched_in_batch = BatchTouch::default();
         let mut contract_code_accessed = HashSet::from([vec![]]); // we always "access" empty code
         let mut meta = Vec::with_capacity(batch.len());
 
@@ -91,14 +91,14 @@ impl TxnInfo {
                 // record storage changes
                 let storage_access_keys = storage_read.iter().chain(storage_written.keys());
 
-                if let Some(storage) = touch.storage_accesses.get_mut(&hash(addr)) {
+                if let Some(storage) = touched_in_batch.storage_accesses.get_mut(&hash(addr)) {
                     storage.extend(
                         storage_access_keys
                             .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
                             .collect_vec(),
                     )
                 } else {
-                    touch.storage_accesses.insert(
+                    touched_in_batch.storage_accesses.insert(
                         hash(addr),
                         storage_access_keys
                             .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
@@ -129,9 +129,10 @@ impl TxnInfo {
                     // then a follow-up transaction within the same batch updating the state of the
                     // account. If that happens, we should not delete the account after processing
                     // this batch.
-                    touch.self_destructed_accounts.remove(addr);
+                    touched_in_batch.self_destructed_accounts.remove(addr);
 
-                    if let Some(existing_state_write) = touch.state_writes.get_mut(addr) {
+                    if let Some(existing_state_write) = touched_in_batch.state_writes.get_mut(addr)
+                    {
                         // The entry already exists, so we update only the relevant fields.
                         if state_write.balance.is_some() {
                             existing_state_write.balance = state_write.balance;
@@ -147,15 +148,15 @@ impl TxnInfo {
                             existing_state_write.code_hash = state_write.code_hash;
                         }
                     } else {
-                        touch.state_writes.insert(*addr, state_write);
+                        touched_in_batch.state_writes.insert(*addr, state_write);
                     }
                 }
 
                 for (k, v) in storage_written {
-                    if let Some(storage) = touch.storage_writes.get_mut(&hash(addr)) {
+                    if let Some(storage) = touched_in_batch.storage_writes.get_mut(&hash(addr)) {
                         storage.insert(TrieKey::from_hash(*k), rlp::encode(v).to_vec());
                     } else {
-                        touch.storage_writes.insert(
+                        touched_in_batch.storage_writes.insert(
                             hash(addr),
                             HashMap::from_iter([(TrieKey::from_hash(*k), rlp::encode(v).to_vec())]),
                         );
@@ -170,7 +171,7 @@ impl TxnInfo {
                 // shouldn't include them in this transaction's `state_accesses` to allow the
                 // decoder to build a minimal state trie without hitting any hash node.
                 if !is_precompile || state.get_by_address(*addr).is_some() {
-                    touch.state_accesses.insert(*addr);
+                    touched_in_batch.state_accesses.insert(*addr);
                 }
 
                 match code_usage {
@@ -185,15 +186,15 @@ impl TxnInfo {
                 }
 
                 if *self_destructed {
-                    touch.self_destructed_accounts.insert(*addr);
+                    touched_in_batch.self_destructed_accounts.insert(*addr);
                 }
             }
 
             for &addr in extra_state_accesses {
-                touch.state_accesses.insert(addr);
+                touched_in_batch.state_accesses.insert(addr);
             }
 
-            let accounts_with_storage_accesses = touch
+            let accounts_with_storage_accesses = touched_in_batch
                 .storage_accesses
                 .iter()
                 .filter(|(_, slots)| !slots.is_empty())
@@ -206,7 +207,7 @@ impl TxnInfo {
                 .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(&hash(addr)))
                 .map(|(addr, data)| (addr, data.storage_root));
 
-            touch
+            touched_in_batch
                 .accts_with_unaccessed_storage
                 .extend(accounts_with_storage_but_no_storage_accesses);
 
@@ -224,7 +225,7 @@ impl TxnInfo {
         }
 
         Ok(BatchInfo {
-            touch,
+            touch: touched_in_batch,
             contract_code_accessed,
             meta,
         })
