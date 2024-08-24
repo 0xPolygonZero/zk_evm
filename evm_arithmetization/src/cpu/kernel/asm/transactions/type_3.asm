@@ -154,8 +154,8 @@ store_origin:
     %eq_const(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
     %jumpi(panic)
 
+global deduct_blob_fee:
     // stack: address, retdest
-
     // EIP-4844: Deduct blob_gas_fee from the sender and burn it
     %compute_blob_gas_fee
     DUP2

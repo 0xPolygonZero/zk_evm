@@ -51,7 +51,6 @@ fn process_type_0_txn() -> Result<()> {
     assert_eq!(interpreter.get_txn_field(ChainId), 0.into());
     assert_eq!(interpreter.get_txn_field(Nonce), 5.into());
     assert_eq!(interpreter.get_txn_field(MaxPriorityFeePerGas), 10.into());
-    assert_eq!(interpreter.get_txn_field(MaxPriorityFeePerGas), 10.into());
     assert_eq!(interpreter.get_txn_field(MaxFeePerGas), 10.into());
     assert_eq!(interpreter.get_txn_field(To), 0.into());
     assert_eq!(interpreter.get_txn_field(Value), 100.into());
@@ -77,6 +76,7 @@ fn process_type_0_txn() -> Result<()> {
 #[test]
 fn process_type_0_txn_invalid_sig() -> Result<()> {
     let process_type_0_txn = KERNEL.global_labels["process_type_0_txn"];
+    let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
 
     let retaddr = 0xDEADBEEFu32.into();
     const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
@@ -85,6 +85,10 @@ fn process_type_0_txn_invalid_sig() -> Result<()> {
         vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
         None,
     );
+
+    // If we reach process_normalized_txn, the test fails (we should have had a
+    // kernel panic beforehand).
+    interpreter.halt_offsets.push(process_normalized_txn);
 
     // Same transaction as `process_type_0_txn()`, with the exception that the `s`
     // component in the signature is flipped (i.e. `s' = N - s`, where `N` is the
