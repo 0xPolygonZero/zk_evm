@@ -87,14 +87,14 @@ mod decoding;
 /// Defines functions that processes a [BlockTrace] so that it is easier to turn
 /// the block transactions into IRs.
 mod processed_block_trace;
-mod type1;
+pub mod type1;
 // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
 //                add backend/prod support for type 2
 #[cfg(test)]
 #[allow(dead_code)]
 mod type2;
 mod typed_mpt;
-mod wire;
+pub mod wire;
 
 use std::collections::HashMap;
 
