@@ -471,6 +471,23 @@ mod hex {
     }
 }
 
+trait TryIntoExt<T> {
+    type Error: std::error::Error + Send + Sync + 'static;
+    fn try_into(self) -> Result<T, Self::Error>;
+}
+
+impl<ThisT, T, E> TryIntoExt<T> for ThisT
+where
+    ThisT: TryInto<T, Error = E>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    type Error = ThisT::Error;
+
+    fn try_into(self) -> Result<T, Self::Error> {
+        TryInto::try_into(self)
+    }
+}
+
 #[cfg(test)]
 #[derive(serde::Deserialize)]
 struct Case {

@@ -25,15 +25,15 @@ use crate::{
     processed_block_trace::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
     },
-    typed_mpt::{ReceiptTrie, StateMpt, StateTrie as _, StorageTrie, TransactionTrie, TrieKey},
-    OtherBlockData, PartialTriePreImages,
+    typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
+    OtherBlockData, PartialTriePreImages, TryIntoExt as TryIntoBounds,
 };
 
 /// The current state of all tries as we process txn deltas. These are mutated
 /// after every txn we process in the trace.
 #[derive(Clone, Debug, Default)]
-struct PartialTrieState {
-    state: StateMpt,
+struct PartialTrieState<StateTrieT> {
+    state: StateTrieT,
     storage: HashMap<H256, StorageTrie>,
     txn: TransactionTrie,
     receipt: ReceiptTrie,
@@ -114,7 +114,7 @@ pub fn into_txn_proof_gen_ir(
 /// need to update the storage of the beacon block root contract.
 // See <https://eips.ethereum.org/EIPS/eip-4788>.
 fn update_beacon_block_root_contract_storage(
-    trie_state: &mut PartialTrieState,
+    trie_state: &mut PartialTrieState<impl StateTrie>,
     delta_out: &mut TrieDeltaApplicationOutput,
     nodes_used: &mut NodesUsedByTxn,
     block_data: &BlockMetadata,
@@ -208,7 +208,7 @@ fn update_beacon_block_root_contract_storage(
 }
 
 fn update_txn_and_receipt_tries(
-    trie_state: &mut PartialTrieState,
+    trie_state: &mut PartialTrieState<impl StateTrie>,
     meta: &TxnMetaState,
     txn_idx: usize,
 ) -> anyhow::Result<()> {
@@ -247,7 +247,7 @@ fn init_any_needed_empty_storage_tries<'a>(
 }
 
 fn create_minimal_partial_tries_needed_by_txn(
-    curr_block_tries: &PartialTrieState,
+    curr_block_tries: &PartialTrieState<impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>>,
     nodes_used_by_txn: &NodesUsedByTxn,
     txn_range: Range<usize>,
     delta_application_out: TrieDeltaApplicationOutput,
@@ -282,7 +282,7 @@ fn create_minimal_partial_tries_needed_by_txn(
     )?;
 
     Ok(TrieInputs {
-        state_trie: state_trie.as_hashed_partial_trie().clone(),
+        state_trie: state_trie.try_into()?,
         transactions_trie,
         receipts_trie,
         storage_tries,
@@ -290,7 +290,7 @@ fn create_minimal_partial_tries_needed_by_txn(
 }
 
 fn apply_deltas_to_trie_state(
-    trie_state: &mut PartialTrieState,
+    trie_state: &mut PartialTrieState<impl StateTrie>,
     deltas: &NodesUsedByTxn,
     meta: &[TxnMetaState],
 ) -> anyhow::Result<TrieDeltaApplicationOutput> {
@@ -432,7 +432,9 @@ fn node_deletion_resulted_in_a_branch_collapse(
 /// The withdrawals are always in the final ir payload.
 fn add_withdrawals_to_txns(
     txn_ir: &mut [GenerationInputs],
-    final_trie_state: &mut PartialTrieState,
+    final_trie_state: &mut PartialTrieState<
+        impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>,
+    >,
     mut withdrawals: Vec<(Address, U256)>,
 ) -> anyhow::Result<()> {
     // Scale withdrawals amounts.
@@ -466,7 +468,7 @@ fn add_withdrawals_to_txns(
                 })
                 .map(TrieKey::from_address),
         )?;
-        last_inputs.tries.state_trie = state_trie.as_hashed_partial_trie().clone();
+        last_inputs.tries.state_trie = state_trie.try_into()?;
     }
 
     update_trie_state_from_withdrawals(
@@ -475,7 +477,7 @@ fn add_withdrawals_to_txns(
     )?;
 
     last_inputs.withdrawals = withdrawals;
-    last_inputs.trie_roots_after.state_root = final_trie_state.state.root();
+    last_inputs.trie_roots_after.state_root = final_trie_state.state.clone().try_into()?.hash();
 
     Ok(())
 }
@@ -484,7 +486,7 @@ fn add_withdrawals_to_txns(
 /// our local trie state.
 fn update_trie_state_from_withdrawals<'a>(
     withdrawals: impl IntoIterator<Item = (Address, H256, U256)> + 'a,
-    state: &mut StateMpt,
+    state: &mut impl StateTrie,
 ) -> anyhow::Result<()> {
     for (addr, h_addr, amt) in withdrawals {
         let mut acc_data = state.get_by_address(addr).context(format!(
@@ -508,7 +510,9 @@ fn process_txn_info(
     txn_range: Range<usize>,
     is_initial_payload: bool,
     txn_info: ProcessedTxnInfo,
-    curr_block_tries: &mut PartialTrieState,
+    curr_block_tries: &mut PartialTrieState<
+        impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>,
+    >,
     extra_data: &mut ExtraBlockData,
     other_data: &OtherBlockData,
 ) -> anyhow::Result<GenerationInputs> {
@@ -583,7 +587,7 @@ fn process_txn_info(
                                       * for more info). */
         tries,
         trie_roots_after: TrieRoots {
-            state_root: curr_block_tries.state.root(),
+            state_root: curr_block_tries.state.clone().try_into()?.hash(),
             transactions_root: curr_block_tries.txn.root(),
             receipts_root: curr_block_tries.receipt.root(),
         },
