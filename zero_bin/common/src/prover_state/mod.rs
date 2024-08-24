@@ -15,11 +15,8 @@ use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData,
-    generation::TrimmedGenerationInputs,
-    proof::AllProof,
-    prover::{prove, GenerationSegmentData},
-    AllStark, StarkConfig,
+    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs,
+    proof::AllProof, prover::prove, AllStark, GenerationSegmentData, StarkConfig,
 };
 use plonky2::{
     field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
