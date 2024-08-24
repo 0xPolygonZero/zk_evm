@@ -96,7 +96,7 @@ mod type2;
 mod typed_mpt;
 mod wire;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use ethereum_types::{Address, U256};
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
@@ -184,7 +184,7 @@ pub struct TxnInfo {
     ///   state for the start of each txn.
     /// - Create minimal partial tries needed for proof gen based on what state
     ///   the txn accesses. (eg. What trie nodes are accessed).
-    pub traces: HashMap<Address, TxnTrace>,
+    pub traces: BTreeMap<Address, TxnTrace>,
 
     /// Data that is specific to the txn as a whole.
     pub meta: TxnMeta,
@@ -215,35 +215,35 @@ pub struct TxnMeta {
 /// rely on a separate EVM to run the txn and supply this data for us.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TxnTrace {
-    /// If the balance changed, then the new balance will appear here. Will be
-    /// `None` if no change.
+    /// [`Some`] if the [Account::balance] changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub balance: Option<U256>,
 
-    /// If the nonce changed, then the new nonce will appear here. Will be
-    /// `None` if no change.
+    /// [`Some`] if the [Account::nonce] changed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nonce: Option<U256>,
 
-    /// Account addresses that were only read by the txn.
-    ///
-    /// Note that if storage is written to, then it does not need to appear in
-    /// this list (but is also fine if it does).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub storage_read: Option<Vec<H256>>,
+    /// <code>[hash](hash)([Address])</code> of storages read by the
+    /// transaction.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub storage_read: BTreeSet<H256>,
 
-    /// Account storage locations that were mutated by the txn along with their
-    /// new value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub storage_written: Option<HashMap<H256, U256>>,
+    /// <code>[hash](hash)([Address])</code> of storages written by the
+    /// transaction, with their new value.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub storage_written: BTreeMap<H256, U256>,
 
     /// Contract code that this account has accessed or created
     #[serde(skip_serializing_if = "Option::is_none")]
     pub code_usage: Option<ContractCodeUsage>,
 
-    /// True if the account got self-destructed at the end of this txn.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub self_destructed: Option<bool>,
+    /// `true` if this account got self-destructed at the end of this txn.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub self_destructed: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 /// Contract code access type. Used by txn traces.

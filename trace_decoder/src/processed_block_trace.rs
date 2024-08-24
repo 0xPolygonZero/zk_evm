@@ -101,15 +101,7 @@ impl TxnInfo {
             ) in &txn.traces
             {
                 // record storage changes
-                let storage_written = storage_written.clone().unwrap_or_default();
-
-                let storage_read_keys = storage_read
-                    .clone()
-                    .into_iter()
-                    .flat_map(|reads| reads.into_iter());
-
-                let storage_written_keys = storage_written.keys();
-                let storage_access_keys = storage_read_keys.chain(storage_written_keys.copied());
+                let storage_access_keys = storage_read.iter().chain(storage_written.keys());
 
                 if let Some(storage) = nodes_used_by_txn.storage_accesses.get_mut(&hash(addr)) {
                     storage.extend(
@@ -172,13 +164,13 @@ impl TxnInfo {
                     }
                 }
 
-                for (k, v) in storage_written.into_iter() {
+                for (k, v) in storage_written {
                     if let Some(storage) = nodes_used_by_txn.storage_writes.get_mut(&hash(addr)) {
-                        storage.insert(TrieKey::from_hash(k), rlp::encode(&v).to_vec());
+                        storage.insert(TrieKey::from_hash(*k), rlp::encode(v).to_vec());
                     } else {
                         nodes_used_by_txn.storage_writes.insert(
                             hash(addr),
-                            HashMap::from_iter([(TrieKey::from_hash(k), rlp::encode(&v).to_vec())]),
+                            HashMap::from_iter([(TrieKey::from_hash(*k), rlp::encode(v).to_vec())]),
                         );
                     }
                 }
@@ -205,7 +197,7 @@ impl TxnInfo {
                     None => {}
                 }
 
-                if self_destructed.unwrap_or_default() {
+                if *self_destructed {
                     nodes_used_by_txn.self_destructed_accounts.insert(*addr);
                 }
             }

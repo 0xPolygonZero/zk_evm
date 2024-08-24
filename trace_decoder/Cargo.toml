@@ -37,7 +37,7 @@ strum = { version = "0.26.3", features = ["derive"] }
 thiserror = { workspace = true }
 u4 = { workspace = true }
 winnow = { workspace = true }
-zk_evm_common = {workspace = true}
+zk_evm_common = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

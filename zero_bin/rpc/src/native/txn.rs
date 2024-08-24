@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use __compat_primitive_types::{H256, U256};
 use alloy::{
@@ -216,7 +216,7 @@ fn process_nonce(
 fn process_self_destruct(
     post_state: Option<&AccountState>,
     pre_state: Option<&AccountState>,
-) -> Option<bool> {
+) -> bool {
     if post_state.is_none() {
         // EIP-6780:
         // A contract is considered created at the beginning of a create
@@ -225,13 +225,12 @@ fn process_self_destruct(
         // balance exists at the contract’s new address it is still considered to be a
         // contract creation.
         if let Some(acc) = pre_state {
-            if acc.code.is_none() && acc.storage.keys().collect::<Vec<_>>().is_empty() {
-                return Some(true);
+            if acc.code.is_none() && acc.storage.is_empty() {
+                return true;
             }
         }
     }
-
-    None
+    false
 }
 
 /// Processes the storage for the given account state.
@@ -243,8 +242,8 @@ fn process_storage(
     acct_state: Option<&AccountState>,
     post_acct: Option<&AccountState>,
     pre_acct: Option<&AccountState>,
-) -> (Option<Vec<H256>>, Option<HashMap<H256, U256>>) {
-    let mut storage_read = access_list;
+) -> (BTreeSet<H256>, BTreeMap<H256, U256>) {
+    let mut storage_read = BTreeSet::from_iter(access_list);
     storage_read.extend(
         acct_state
             .map(|acct| {
@@ -257,7 +256,7 @@ fn process_storage(
             .unwrap_or_default(),
     );
 
-    let mut storage_written: HashMap<H256, U256> = post_acct
+    let mut storage_written: BTreeMap<H256, U256> = post_acct
         .map(|x| {
             x.storage
                 .iter()
@@ -269,16 +268,11 @@ fn process_storage(
     // Add the deleted keys to the storage written
     if let Some(pre_acct) = pre_acct {
         for key in pre_acct.storage.keys() {
-            storage_written
-                .entry((*key).compat())
-                .or_insert(U256::zero());
+            storage_written.entry((*key).compat()).or_default();
         }
     };
 
-    (
-        Option::from(storage_read.into_iter().collect::<Vec<H256>>()).filter(|v| !v.is_empty()),
-        Option::from(storage_written).filter(|v| !v.is_empty()),
-    )
+    (storage_read, storage_written)
 }
 
 /// Processes the code usage for the given account state.
