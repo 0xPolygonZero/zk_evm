@@ -1,4 +1,8 @@
-use std::{cmp::min, collections::HashMap, ops::Range};
+use std::{
+    cmp::min,
+    collections::{BTreeMap, HashMap},
+    ops::Range,
+};
 
 use anyhow::{anyhow, Context as _};
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
@@ -22,11 +26,9 @@ use mpt_trie::{
 
 use crate::{
     hash,
-    processed_block_trace::{
-        NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
-    },
-    typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
-    OtherBlockData, PartialTriePreImages, TryIntoExt as TryIntoBounds,
+    processed_block_trace::{BatchInfo, BatchTouch, StateWrite, TxnMetaState},
+    typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey},
+    OtherBlockData, TryIntoBounds,
 };
 
 /// The current state of all tries as we process txn deltas. These are mutated
@@ -48,12 +50,11 @@ struct TrieDeltaApplicationOutput {
     additional_storage_trie_paths_to_not_hash: HashMap<H256, Vec<TrieKey>>,
 }
 
-pub fn into_txn_proof_gen_ir(
-    ProcessedBlockTrace {
-        tries: PartialTriePreImages { state, storage },
-        txn_info,
-        withdrawals,
-    }: ProcessedBlockTrace,
+pub fn batches2gis(
+    state: StateMpt,
+    storage: BTreeMap<H256, StorageTrie>,
+    batch_infos: Vec<BatchInfo>,
+    withdrawals: Vec<(Address, U256)>,
     other_data: OtherBlockData,
     batch_size: usize,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
@@ -71,12 +72,12 @@ pub fn into_txn_proof_gen_ir(
         gas_used_after: U256::zero(),
     };
 
-    let num_txs = txn_info
+    let num_txs = batch_infos
         .iter()
         .map(|tx_info| tx_info.meta.len())
         .sum::<usize>();
 
-    let mut txn_gen_inputs = txn_info
+    let mut gis = batch_infos
         .into_iter()
         .enumerate()
         .map(|(txn_idx, txn_info)| {
@@ -84,7 +85,7 @@ pub fn into_txn_proof_gen_ir(
                 min(txn_idx * batch_size, num_txs)..min(txn_idx * batch_size + batch_size, num_txs);
             let is_initial_payload = txn_range.start == 0;
 
-            process_txn_info(
+            batch2gi(
                 txn_range.clone(),
                 is_initial_payload,
                 txn_info,
@@ -104,10 +105,10 @@ pub fn into_txn_proof_gen_ir(
         ))?;
 
     if !withdrawals.is_empty() {
-        add_withdrawals_to_txns(&mut txn_gen_inputs, &mut curr_block_tries, withdrawals)?;
+        add_withdrawals_to_txns(&mut gis, &mut curr_block_tries, withdrawals)?;
     }
 
-    Ok(txn_gen_inputs)
+    Ok(gis)
 }
 
 /// Cancun HF specific: At the start of a block, prior txn execution, we
@@ -116,7 +117,7 @@ pub fn into_txn_proof_gen_ir(
 fn update_beacon_block_root_contract_storage(
     trie_state: &mut PartialTrieState<impl StateTrie>,
     delta_out: &mut TrieDeltaApplicationOutput,
-    nodes_used: &mut NodesUsedByTxn,
+    nodes_used: &mut BatchTouch,
     block_data: &BlockMetadata,
 ) -> anyhow::Result<()> {
     const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
@@ -248,7 +249,7 @@ fn init_any_needed_empty_storage_tries<'a>(
 
 fn create_minimal_partial_tries_needed_by_txn(
     curr_block_tries: &PartialTrieState<impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>>,
-    nodes_used_by_txn: &NodesUsedByTxn,
+    nodes_used_by_txn: &BatchTouch,
     txn_range: Range<usize>,
     delta_application_out: TrieDeltaApplicationOutput,
 ) -> anyhow::Result<TrieInputs> {
@@ -291,7 +292,7 @@ fn create_minimal_partial_tries_needed_by_txn(
 
 fn apply_deltas_to_trie_state(
     trie_state: &mut PartialTrieState<impl StateTrie>,
-    deltas: &NodesUsedByTxn,
+    deltas: &BatchTouch,
     meta: &[TxnMetaState],
 ) -> anyhow::Result<TrieDeltaApplicationOutput> {
     let mut out = TrieDeltaApplicationOutput::default();
@@ -506,10 +507,10 @@ fn update_trie_state_from_withdrawals<'a>(
 }
 
 /// Processes a single transaction in the trace.
-fn process_txn_info(
+fn batch2gi(
     txn_range: Range<usize>,
     is_initial_payload: bool,
-    txn_info: ProcessedTxnInfo,
+    batch_info: BatchInfo,
     curr_block_tries: &mut PartialTrieState<
         impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>,
     >,
@@ -524,21 +525,26 @@ fn process_txn_info(
 
     init_any_needed_empty_storage_tries(
         &mut curr_block_tries.storage,
-        txn_info.nodes_used_by_txn.storage_accesses.keys(),
-        &txn_info.nodes_used_by_txn.accts_with_unaccessed_storage,
+        batch_info.touch.storage_accesses.keys(),
+        &batch_info.touch.accts_with_unaccessed_storage,
     );
 
     // For each non-dummy txn, we increment `txn_number_after` and
     // update `gas_used_after` accordingly.
-    extra_data.txn_number_after += txn_info.meta.len().into();
-    extra_data.gas_used_after += txn_info.meta.iter().map(|i| i.gas_used).sum::<u64>().into();
+    extra_data.txn_number_after += batch_info.meta.len().into();
+    extra_data.gas_used_after += batch_info
+        .meta
+        .iter()
+        .map(|i| i.gas_used)
+        .sum::<u64>()
+        .into();
 
     // Because we need to run delta application before creating the minimal
     // sub-tries (we need to detect if deletes collapsed any branches), we need to
     // do this clone every iteration.
     let tries_at_start_of_txn = curr_block_tries.clone();
 
-    for (i, meta) in txn_info.meta.iter().enumerate() {
+    for (i, meta) in batch_info.meta.iter().enumerate() {
         update_txn_and_receipt_tries(
             curr_block_tries,
             meta,
@@ -546,14 +552,11 @@ fn process_txn_info(
         )?;
     }
 
-    let mut delta_out = apply_deltas_to_trie_state(
-        curr_block_tries,
-        &txn_info.nodes_used_by_txn,
-        &txn_info.meta,
-    )?;
+    let mut delta_out =
+        apply_deltas_to_trie_state(curr_block_tries, &batch_info.touch, &batch_info.meta)?;
 
     let nodes_used_by_txn = if is_initial_payload {
-        let mut nodes_used = txn_info.nodes_used_by_txn;
+        let mut nodes_used = batch_info.touch;
         update_beacon_block_root_contract_storage(
             curr_block_tries,
             &mut delta_out,
@@ -563,7 +566,7 @@ fn process_txn_info(
 
         nodes_used
     } else {
-        txn_info.nodes_used_by_txn
+        batch_info.touch
     };
 
     let tries = create_minimal_partial_tries_needed_by_txn(
@@ -577,7 +580,7 @@ fn process_txn_info(
         txn_number_before: extra_data.txn_number_before,
         gas_used_before: extra_data.gas_used_before,
         gas_used_after: extra_data.gas_used_after,
-        signed_txns: txn_info
+        signed_txns: batch_info
             .meta
             .iter()
             .filter_map(|t| t.txn_bytes.clone())
@@ -592,7 +595,7 @@ fn process_txn_info(
             receipts_root: curr_block_tries.receipt.root(),
         },
         checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
-        contract_code: txn_info
+        contract_code: batch_info
             .contract_code_accessed
             .into_iter()
             .map(|code| (hash(&code), code))

@@ -2,34 +2,20 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use anyhow::{bail, Context as _};
 use ethereum_types::{Address, H256, U256};
-use evm_arithmetization::generation::mpt::{AccountRlp, LegacyReceiptRlp};
-use itertools::Itertools;
+use evm_arithmetization::generation::mpt::LegacyReceiptRlp;
+use itertools::Itertools as _;
 use zk_evm_common::EMPTY_TRIE_HASH;
 
-use crate::typed_mpt::{StateTrie as _, TrieKey};
-use crate::PartialTriePreImages;
+use crate::typed_mpt::{StateMpt, StateTrie as _, TrieKey};
 use crate::{hash, TxnTrace};
 use crate::{ContractCodeUsage, TxnInfo};
 
 const FIRST_PRECOMPILE_ADDRESS: U256 = U256([1, 0, 0, 0]);
 const LAST_PRECOMPILE_ADDRESS: U256 = U256([10, 0, 0, 0]);
 
-#[derive(Debug)]
-pub(crate) struct ProcessedBlockTrace {
-    pub tries: PartialTriePreImages,
-    pub txn_info: Vec<ProcessedTxnInfo>,
-    pub withdrawals: Vec<(Address, U256)>,
-}
-
-#[derive(Debug)]
-pub(crate) struct ProcessedBlockTracePreImages {
-    pub tries: PartialTriePreImages,
-    pub extra_code_hash_mappings: Option<HashMap<H256, Vec<u8>>>,
-}
-
 #[derive(Debug, Default)]
-pub(crate) struct ProcessedTxnInfo {
-    pub nodes_used_by_txn: NodesUsedByTxn,
+pub(crate) struct BatchInfo {
+    pub touch: BatchTouch,
     pub contract_code_accessed: HashSet<Vec<u8>>,
     pub meta: Vec<TxnMetaState>,
 }
@@ -63,29 +49,31 @@ impl Hash2Code {
 impl FromIterator<Vec<u8>> for Hash2Code {
     fn from_iter<II: IntoIterator<Item = Vec<u8>>>(iter: II) -> Self {
         let mut this = Self::new();
-        for code in iter {
-            this.insert(code)
-        }
+        this.extend(iter);
         this
     }
 }
 
+impl Extend<Vec<u8>> for Hash2Code {
+    fn extend<II: IntoIterator<Item = Vec<u8>>>(&mut self, iter: II) {
+        for it in iter {
+            self.insert(it)
+        }
+    }
+}
+
 impl TxnInfo {
-    pub(crate) fn into_processed_txn_info(
-        tx_infos: &[Self],
-        tries: &PartialTriePreImages,
-        all_accounts_in_pre_image: &[(H256, AccountRlp)],
+    pub(crate) fn batch(
+        batch: &[Self],
+        state: &StateMpt,
         extra_state_accesses: &[Address],
         hash2code: &mut Hash2Code,
-    ) -> anyhow::Result<ProcessedTxnInfo> {
-        let mut nodes_used_by_txn = NodesUsedByTxn::default();
+    ) -> anyhow::Result<BatchInfo> {
+        let mut touch = BatchTouch::default();
         let mut contract_code_accessed = HashSet::from([vec![]]); // we always "access" empty code
-        let mut meta = Vec::with_capacity(tx_infos.len());
+        let mut meta = Vec::with_capacity(batch.len());
 
-        let all_accounts: BTreeSet<H256> =
-            all_accounts_in_pre_image.iter().map(|(h, _)| *h).collect();
-
-        for txn in tx_infos {
+        for txn in batch {
             let mut created_accounts = BTreeSet::new();
 
             for (
@@ -103,14 +91,14 @@ impl TxnInfo {
                 // record storage changes
                 let storage_access_keys = storage_read.iter().chain(storage_written.keys());
 
-                if let Some(storage) = nodes_used_by_txn.storage_accesses.get_mut(&hash(addr)) {
+                if let Some(storage) = touch.storage_accesses.get_mut(&hash(addr)) {
                     storage.extend(
                         storage_access_keys
                             .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
                             .collect_vec(),
                     )
                 } else {
-                    nodes_used_by_txn.storage_accesses.insert(
+                    touch.storage_accesses.insert(
                         hash(addr),
                         storage_access_keys
                             .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
@@ -133,7 +121,7 @@ impl TxnInfo {
                     // a write occurred
 
                     // Account creations are flagged to handle reverts.
-                    if !all_accounts.contains(&hash(addr)) {
+                    if !state.contains_address(*addr) {
                         created_accounts.insert(*addr);
                     }
 
@@ -141,10 +129,9 @@ impl TxnInfo {
                     // then a follow-up transaction within the same batch updating the state of the
                     // account. If that happens, we should not delete the account after processing
                     // this batch.
-                    nodes_used_by_txn.self_destructed_accounts.remove(addr);
+                    touch.self_destructed_accounts.remove(addr);
 
-                    if let Some(existing_state_write) = nodes_used_by_txn.state_writes.get_mut(addr)
-                    {
+                    if let Some(existing_state_write) = touch.state_writes.get_mut(addr) {
                         // The entry already exists, so we update only the relevant fields.
                         if state_write.balance.is_some() {
                             existing_state_write.balance = state_write.balance;
@@ -160,15 +147,15 @@ impl TxnInfo {
                             existing_state_write.code_hash = state_write.code_hash;
                         }
                     } else {
-                        nodes_used_by_txn.state_writes.insert(*addr, state_write);
+                        touch.state_writes.insert(*addr, state_write);
                     }
                 }
 
                 for (k, v) in storage_written {
-                    if let Some(storage) = nodes_used_by_txn.storage_writes.get_mut(&hash(addr)) {
+                    if let Some(storage) = touch.storage_writes.get_mut(&hash(addr)) {
                         storage.insert(TrieKey::from_hash(*k), rlp::encode(v).to_vec());
                     } else {
-                        nodes_used_by_txn.storage_writes.insert(
+                        touch.storage_writes.insert(
                             hash(addr),
                             HashMap::from_iter([(TrieKey::from_hash(*k), rlp::encode(v).to_vec())]),
                         );
@@ -182,8 +169,8 @@ impl TxnInfo {
                 // nodes if the transaction calling them reverted. If this is the case, we
                 // shouldn't include them in this transaction's `state_accesses` to allow the
                 // decoder to build a minimal state trie without hitting any hash node.
-                if !is_precompile || tries.state.get_by_address(*addr).is_some() {
-                    nodes_used_by_txn.state_accesses.insert(*addr);
+                if !is_precompile || state.get_by_address(*addr).is_some() {
+                    touch.state_accesses.insert(*addr);
                 }
 
                 match code_usage {
@@ -198,30 +185,28 @@ impl TxnInfo {
                 }
 
                 if *self_destructed {
-                    nodes_used_by_txn.self_destructed_accounts.insert(*addr);
+                    touch.self_destructed_accounts.insert(*addr);
                 }
             }
 
             for &addr in extra_state_accesses {
-                nodes_used_by_txn.state_accesses.insert(addr);
+                touch.state_accesses.insert(addr);
             }
 
-            let accounts_with_storage_accesses = nodes_used_by_txn
+            let accounts_with_storage_accesses = touch
                 .storage_accesses
                 .iter()
                 .filter(|(_, slots)| !slots.is_empty())
                 .map(|(addr, _)| *addr)
                 .collect::<HashSet<_>>();
 
-            let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
+            let accounts_with_storage_but_no_storage_accesses = state
                 .iter()
-                .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
+                .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH)
+                .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(&hash(addr)))
+                .map(|(addr, data)| (addr, data.storage_root));
 
-            let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
-                .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(addr))
-                .map(|(addr, data)| (*addr, data.storage_root));
-
-            nodes_used_by_txn
+            touch
                 .accts_with_unaccessed_storage
                 .extend(accounts_with_storage_but_no_storage_accesses);
 
@@ -238,8 +223,8 @@ impl TxnInfo {
             });
         }
 
-        Ok(ProcessedTxnInfo {
-            nodes_used_by_txn,
+        Ok(BatchInfo {
+            touch,
             contract_code_accessed,
             meta,
         })
@@ -255,9 +240,11 @@ fn check_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
     }
 }
 
+/// Trie nodes that are touched in a particular batch.
+///
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
-pub(crate) struct NodesUsedByTxn {
+pub(crate) struct BatchTouch {
     pub state_accesses: HashSet<Address>,
     pub state_writes: HashMap<Address, StateWrite>,
 

@@ -186,6 +186,9 @@ pub struct TransactionTrie {
 }
 
 impl TransactionTrie {
+    pub fn new() -> Self {
+        Self::default()
+    }
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
@@ -212,6 +215,9 @@ pub struct ReceiptTrie {
 }
 
 impl ReceiptTrie {
+    pub fn new() -> Self {
+        Self::default()
+    }
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
