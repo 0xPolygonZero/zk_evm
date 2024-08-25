@@ -15,18 +15,14 @@ use std::{fmt::Display, sync::OnceLock};
 
 use clap::ValueEnum;
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData,
-    generation::TrimmedGenerationInputs,
-    proof::AllProof,
-    prover::{prove, GenerationSegmentData},
-    AllStark, StarkConfig,
+    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs,
+    proof::AllProof, prover::prove, AllStark, GenerationSegmentData, StarkConfig,
 };
 use plonky2::{
     field::goldilocks_field::GoldilocksField, plonk::config::PoseidonGoldilocksConfig,
     util::timing::TimingTree,
 };
 use proof_gen::{proof_types::GeneratedSegmentProof, prover_state::ProverState, VerifierState};
-use trace_decoder::types::AllData;
 use tracing::info;
 
 use self::circuit::{CircuitConfig, NUM_TABLES};
@@ -130,7 +126,7 @@ pub struct ProverStateManager {
 }
 
 impl ProverStateManager {
-    pub fn with_load_strategy(self, load_strategy: TableLoadStrategy) -> Self {
+    pub const fn with_load_strategy(self, load_strategy: TableLoadStrategy) -> Self {
         match self.persistence {
             CircuitPersistence::None => self,
             CircuitPersistence::Disk(_) => Self {
@@ -256,7 +252,10 @@ impl ProverStateManager {
     /// - If the persistence strategy is [`CircuitPersistence::Disk`] with
     ///   [`TableLoadStrategy::OnDemand`], the table circuits are loaded as
     ///   needed.
-    pub fn generate_segment_proof(&self, input: AllData) -> anyhow::Result<GeneratedSegmentProof> {
+    pub fn generate_segment_proof(
+        &self,
+        input: (TrimmedGenerationInputs, GenerationSegmentData),
+    ) -> anyhow::Result<GeneratedSegmentProof> {
         let (generation_inputs, mut segment_data) = input;
 
         match self.persistence {

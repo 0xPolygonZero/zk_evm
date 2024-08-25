@@ -4,8 +4,8 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs,
-    prover::GenerationSegmentData, AllStark, StarkConfig,
+    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs, AllStark,
+    GenerationSegmentData, StarkConfig,
 };
 use hashbrown::HashMap;
 use plonky2::{
@@ -16,8 +16,9 @@ use plonky2::{
 
 use crate::{
     proof_types::{
+        AggregatableBlockProof, BatchAggregatableProof, GeneratedAggBlockProof,
         GeneratedBlockProof, GeneratedSegmentAggProof, GeneratedSegmentProof, GeneratedTxnAggProof,
-        SegmentAggregatableProof, TxnAggregatableProof,
+        SegmentAggregatableProof,
     },
     prover_state::ProverState,
     types::{Field, PlonkyProofIntern, EXTENSION_DEGREE},
@@ -121,8 +122,8 @@ pub fn generate_segment_agg_proof(
 /// Note that the child proofs may be either transaction or aggregation proofs.
 pub fn generate_transaction_agg_proof(
     p_state: &ProverState,
-    lhs_child: &TxnAggregatableProof,
-    rhs_child: &TxnAggregatableProof,
+    lhs_child: &BatchAggregatableProof,
+    rhs_child: &BatchAggregatableProof,
 ) -> ProofGenResult<GeneratedTxnAggProof> {
     let (b_proof_intern, p_vals) = p_state
         .state
@@ -171,6 +172,27 @@ pub fn generate_block_proof(
         b_height,
         intern: b_proof_intern,
     })
+}
+
+/// Generates an aggregation block proof from two child proofs.
+///
+/// Note that the child proofs may be either block or aggregation proofs.
+pub fn generate_agg_block_proof(
+    p_state: &ProverState,
+    lhs_child: &AggregatableBlockProof,
+    rhs_child: &AggregatableBlockProof,
+) -> ProofGenResult<GeneratedAggBlockProof> {
+    let intern = p_state
+        .state
+        .prove_two_to_one_block(
+            lhs_child.intern(),
+            lhs_child.is_agg(),
+            rhs_child.intern(),
+            rhs_child.is_agg(),
+        )
+        .map_err(|err| err.to_string())?;
+
+    Ok(GeneratedAggBlockProof { intern })
 }
 
 /// Generates a dummy proof for a dummy circuit doing nothing.

@@ -32,7 +32,7 @@ impl Clone for RetryPolicy {
 }
 
 impl RetryPolicy {
-    pub fn new(backoff: tokio::time::Duration, max_retries: u32) -> Self {
+    pub const fn new(backoff: tokio::time::Duration, max_retries: u32) -> Self {
         Self {
             backoff,
             retries: 0,

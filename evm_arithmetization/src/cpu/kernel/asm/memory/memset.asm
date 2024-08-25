@@ -46,3 +46,10 @@ memset_bytes_empty:
     %pop2
     // stack: retdest
     JUMP
+
+
+%macro memset
+    %stack (dst, count) -> (dst, count, %%after)
+    %jump(memset)
+%%after:
+%endmacro

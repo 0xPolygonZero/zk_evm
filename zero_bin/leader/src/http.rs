@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::BlockProverInput;
+use prover::{BlockProverInput, ProverConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
@@ -15,9 +15,7 @@ pub(crate) async fn http_main(
     runtime: Runtime,
     port: u16,
     output_dir: PathBuf,
-    max_cpu_len_log: usize,
-    batch_size: usize,
-    save_inputs_on_error: bool,
+    prover_config: ProverConfig,
 ) -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     debug!("listening on {}", addr);
@@ -27,16 +25,7 @@ pub(crate) async fn http_main(
         "/prove",
         post({
             let runtime = runtime.clone();
-            move |body| {
-                prove(
-                    body,
-                    runtime,
-                    output_dir.clone(),
-                    max_cpu_len_log,
-                    batch_size,
-                    save_inputs_on_error,
-                )
-            }
+            move |body| prove(body, runtime, output_dir.clone(), prover_config)
         }),
     );
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -76,25 +65,33 @@ async fn prove(
     Json(payload): Json<HttpProverInput>,
     runtime: Arc<Runtime>,
     output_dir: PathBuf,
-    max_cpu_len_log: usize,
-    batch_size: usize,
-    save_inputs_on_error: bool,
+    prover_config: ProverConfig,
 ) -> StatusCode {
     debug!("Received payload: {:#?}", payload);
 
     let block_number = payload.prover_input.get_block_number();
 
-    match payload
-        .prover_input
-        .prove(
-            &runtime,
-            max_cpu_len_log,
-            payload.previous.map(futures::future::ok),
-            batch_size,
-            save_inputs_on_error,
-        )
-        .await
-    {
+    let proof_res = if prover_config.test_only {
+        payload
+            .prover_input
+            .prove_test(
+                &runtime,
+                payload.previous.map(futures::future::ok),
+                prover_config,
+            )
+            .await
+    } else {
+        payload
+            .prover_input
+            .prove(
+                &runtime,
+                payload.previous.map(futures::future::ok),
+                prover_config,
+            )
+            .await
+    };
+
+    match proof_res {
         Ok(b_proof) => match write_to_file(output_dir, block_number, &b_proof) {
             Ok(file) => {
                 info!("Successfully wrote proof to {}", file.display());

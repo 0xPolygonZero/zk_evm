@@ -8,7 +8,7 @@ use crate::{
 };
 
 /// An iterator for a trie query. Note that this iterator is lazy.
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct TriePathIter<N: PartialTrie> {
     /// The next node in the trie to query with the remaining key.
     curr_node: WrappedNode<N>,

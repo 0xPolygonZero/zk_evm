@@ -1,7 +1,7 @@
 [package]
 name = "compat"
 version = "0.1.0"
-publish = false # TODO(<owner>): https://github.com/0xPolygonZero/zk_evm/issues/314 find a better place for this
+publish = false             # TODO(<owner>): https://github.com/0xPolygonZero/zk_evm/issues/314 find a better place for this
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -10,5 +10,5 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-alloy = {workspace = true }
+alloy = { workspace = true }
 __compat_primitive_types = { workspace = true }

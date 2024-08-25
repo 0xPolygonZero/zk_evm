@@ -4,6 +4,7 @@
 %macro create_contract_account
     // stack: address
     DUP1 %insert_touched_addresses
+    DUP1 %append_created_contracts
     DUP1 %mpt_read_state_trie
     // stack: existing_account_ptr, address
     // If the account doesn't exist, there's no need to check its balance or nonce,
@@ -27,9 +28,11 @@
 
 %%add_account:
     // stack: existing_balance, address
-    DUP2 %journal_add_account_created
+    DUP2 PUSH 1
+    // stack: is_contract, address, existing_balance, address
+    %journal_add_account_created
 %%do_insert:
-    // stack: new_acct_value, address
+    // stack: new_acct_value=existing_balance, address
     // Write the new account's data to MPT data, and get a pointer to it.
     %get_trie_data_size
     // stack: account_ptr, new_acct_value, address
@@ -59,4 +62,16 @@
 
 %%end:
     // stack: status
+%endmacro
+
+%macro append_created_contracts
+    // stack: address
+    %mload_global_metadata(@GLOBAL_METADATA_CREATED_CONTRACTS_LEN)
+    // stack: nb_created_contracts, address
+    SWAP1 DUP2
+    // stack: nb_created_contracts, address, nb_created_contracts
+    %mstore_kernel(@SEGMENT_CREATED_CONTRACTS)
+    // stack: nb_created_contracts
+    %increment
+    %mstore_global_metadata(@GLOBAL_METADATA_CREATED_CONTRACTS_LEN)
 %endmacro

@@ -36,4 +36,3 @@ revert_account_destroyed_contd:
     // stack: account_balance_payload_ptr, prev_balance, retdest
     %mstore_trie_data
     JUMP
-

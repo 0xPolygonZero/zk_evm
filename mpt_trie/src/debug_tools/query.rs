@@ -34,7 +34,7 @@ fn get_key_piece_from_node_pulling_from_key_for_branches<T: PartialTrie>(
 /// By default, the node type along with its key piece is printed out per node
 /// (eg. "Leaf(0x1234)"). Additional node specific information can be printed
 /// out by enabling `include_node_specific_values`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct DebugQueryParams {
     /// Include (if applicable) the piece of the key that is contained by the
     /// node (eg. ("0x1234")).
@@ -58,7 +58,7 @@ impl Default for DebugQueryParams {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, Hash)]
 /// A wrapper for `DebugQueryParams`.
 pub struct DebugQueryParamsBuilder {
     params: DebugQueryParams,
@@ -66,19 +66,19 @@ pub struct DebugQueryParamsBuilder {
 
 impl DebugQueryParamsBuilder {
     /// Defaults to `true`.
-    pub const fn print_key_pieces(mut self, enabled: bool) -> Self {
+    pub const fn include_key_pieces(mut self, enabled: bool) -> Self {
         self.params.include_key_piece_per_node = enabled;
         self
     }
 
     /// Defaults to `true`.
-    pub const fn print_node_type(mut self, enabled: bool) -> Self {
+    pub const fn include_node_type(mut self, enabled: bool) -> Self {
         self.params.include_node_type = enabled;
         self
     }
 
     /// Defaults to `false`.
-    pub const fn print_node_specific_values(mut self, enabled: bool) -> Self {
+    pub const fn include_node_specific_values(mut self, enabled: bool) -> Self {
         self.params.include_node_specific_values = enabled;
         self
     }
@@ -93,7 +93,7 @@ impl DebugQueryParamsBuilder {
 }
 
 /// The payload to give to the query function. Construct this from the builder.
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct DebugQuery {
     k: Nibbles,
     params: DebugQueryParams,
@@ -110,7 +110,7 @@ impl From<Nibbles> for DebugQuery {
 
 /// Extra data that is associated with a node. Only used if
 /// `include_node_specific_values` is `true`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 enum ExtraNodeSegmentInfo {
     Hash(H256),
     Branch { child_mask: u16 },
@@ -169,7 +169,7 @@ fn count_non_empty_branch_children_from_mask(mask: u16) -> usize {
     num_children
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 /// The result of a debug query contains information
 /// of the path used for searching for a key in the trie.
 pub struct DebugQueryOutput {

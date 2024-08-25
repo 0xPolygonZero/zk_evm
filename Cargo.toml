@@ -1,19 +1,20 @@
 [workspace]
 members = [
-    "compat",
-    "evm_arithmetization",
-    "mpt_trie",
-    "proc_macro",
-    "proof_gen",
-    "smt_trie",
-    "trace_decoder",
-    "zero_bin/common",
-    "zero_bin/leader",
-    "zero_bin/ops",
-    "zero_bin/prover",
-    "zero_bin/rpc",
-    "zero_bin/verifier",
-    "zero_bin/worker",
+  "common",
+  "compat",
+  "evm_arithmetization",
+  "mpt_trie",
+  "proc_macro",
+  "proof_gen",
+  "smt_trie",
+  "trace_decoder",
+  "zero_bin/common",
+  "zero_bin/leader",
+  "zero_bin/ops",
+  "zero_bin/prover",
+  "zero_bin/rpc",
+  "zero_bin/verifier",
+  "zero_bin/worker",
 ]
 resolver = "2"
 
@@ -26,37 +27,40 @@ keywords = ["cryptography", "STARK", "plonky2", "ethereum", "zk"]
 categories = ["cryptography::cryptocurrencies"]
 
 [workspace.dependencies]
+__compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 alloy = { git = "https://github.com/alloy-rs/alloy", tag = 'v0.1.1', default-features = false, features = [
-    "consensus",
-    "reqwest",
-    "json-rpc",
-    "rlp",
-    "rpc",
-    "rpc-client",
-    "rpc-types-eth",
-    "rpc-types-trace",
-    "providers",
-    "transports",
-    "transport-http",
-    "rpc-types-debug",
+  "consensus",
+  "reqwest",
+  "json-rpc",
+  "rlp",
+  "rpc",
+  "rpc-client",
+  "rpc-types-eth",
+  "rpc-types-trace",
+  "providers",
+  "transports",
+  "transport-http",
+  "rpc-types-debug",
 ] }
 anyhow = "1.0.86"
 async-stream = "0.3.5"
 axum = "0.7.5"
+bitflags = "2.5.0"
+bitvec = "1.0.1"
 bytes = "1.6.0"
+cargo_metadata = "0.18.1"
 ciborium = "0.2.2"
 ciborium-io = "0.2.2"
 clap = { version = "4.5.7", features = ["derive", "env"] }
 compat = { path = "compat" }
-__compat_primitive_types = { version = "0.12.2", package = "primitive-types" }
 criterion = "0.5.1"
 dotenvy = "0.15.7"
+either = "1.12.0"
 enum-as-inner = "0.6.0"
 enumn = "0.1.13"
 env_logger = "0.11.3"
-ethereum-types = "0.14.1"
 eth_trie = "0.4.0"
-evm_arithmetization = { path = "evm_arithmetization", version = "0.2.0" }
+ethereum-types = "0.14.1"
 futures = "0.3.30"
 hashbrown = "0.14.5"
 hex = "0.4.3"
@@ -68,10 +72,11 @@ impl-serde = "0.4.0"
 itertools = "0.13.0"
 keccak-hash = "0.10.0"
 log = "0.4.21"
-mpt_trie = { path = "mpt_trie", version = "0.3.0" }
+lru = "0.12.3"
 num = "0.4.3"
 num-bigint = "0.4.5"
 num-traits = "0.2.19"
+nunny = "0.2.1"
 once_cell = "1.19.0"
 paladin-core = "0.4.2"
 parking_lot = "0.12.3"
@@ -79,7 +84,6 @@ paste = "1.0.15"
 pest = "2.7.10"
 pest_derive = "2.7.10"
 pretty_env_logger = "0.5.0"
-proof_gen = { path = "proof_gen", version = "0.2.0" }
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 ripemd = "0.1.3"
@@ -91,7 +95,6 @@ serde-big-array = "0.5.1"
 serde_json = "1.0.118"
 serde_path_to_error = "0.1.16"
 serde_with = "3.8.1"
-smt_trie = { path = "smt_trie", version = "0.1.0" }
 sha2 = "0.10.8"
 static_assertions = "1.1.0"
 thiserror = "1.0.61"
@@ -99,12 +102,22 @@ tiny-keccak = "2.0.2"
 tokio = { version = "1.38.0", features = ["full"] }
 toml = "0.8.14"
 tower = "0.4"
-trace_decoder = { path = "trace_decoder", version = "0.4.0" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+u4 = "0.1.0"
 uint = "0.9.5"
 url = "2.5.2"
-lru = "0.12.3"
+vergen = { version = "9.0.0", features = ["build", "rustc"] }
+winnow = "0.6.13"
+
+# local dependencies
+evm_arithmetization = { path = "evm_arithmetization", version = "0.4.0" }
+mpt_trie = { path = "mpt_trie", version = "0.4.1" }
+proof_gen = { path = "proof_gen", version = "0.4.0" }
+smt_trie = { path = "smt_trie", version = "0.1.1" }
+trace_decoder = { path = "trace_decoder", version = "0.6.0" }
+zk_evm_common = { path = "common", version = "0.1.0" }
+zk_evm_proc_macro = { path = "proc_macro", version = "0.1.0" }
 
 # zero-bin related dependencies
 ops = { path = "zero_bin/ops" }
@@ -123,4 +136,3 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
 trybuild = "1.0"
-zk_evm_proc_macro = { path = "proc_macro" }

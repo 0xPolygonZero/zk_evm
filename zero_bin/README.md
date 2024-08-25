@@ -1,6 +1,8 @@
 # Zero Bin
 
-A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`plonky-block-proof-gen`](https://github.com/0xPolygonZero/plonky-block-proof-gen). Given the [proof generation protocol](/prover/src/lib.rs) as input, generate a proof. The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/paladin), and as such can distribute proof generation across multiple worker machines.
+A composition of [`paladin`](https://github.com/0xPolygonZero/paladin) and [`proof_gen`](../proof_gen/README.md).
+Given the [proof generation protocol](./prover/src/lib.rs) as input, generate a proof.
+The project is instrumented with [`paladin`](https://github.com/0xPolygonZero/paladin), and as such can distribute proof generation across multiple worker machines.
 
 - [Zero Bin](#zero-bin)
   - [Project layout](#project-layout)
@@ -85,13 +87,15 @@ Usage: leader [OPTIONS] <COMMAND>
 Commands:
   stdio    Reads input from stdin and writes output to stdout
   jerigon  Reads input from a Jerigon node and writes output to stdout
-  native   Reads input from a native node and writes output to stdout 
+  native   Reads input from a native node and writes output to stdout
   http     Reads input from HTTP and writes output to a directory
   help     Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help
           Print help (see a summary with '-h')
+  --version
+          Fetch the `evm_arithmetization` package version, build commit hash and build timestamp
 
 Paladin options:
   -t, --task-bus-routing-key <TASK_BUS_ROUTING_KEY>
@@ -364,6 +368,7 @@ cargo r --bin verifier -- --help
 Usage: verifier --file-path <FILE_PATH>
 
 Options:
+  --version                      Fetch the `evm_arithmetization` package version, build commit hash and build timestamp
   -f, --file-path <FILE_PATH>  The file containing the proof to verify
   -h, --help                   Print help
 ```
@@ -384,11 +389,13 @@ cargo r --bin rpc -- --help
 Usage: rpc <COMMAND>
 
 Commands:
-  fetch  Fetch and generate prover input from the RPC endpoint
-  help   Print this message or the help of the given subcommand(s)
+  fetch   Fetch and generate prover input from the RPC endpoint
+  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
+  --version
+          Fetch the `evm_arithmetization` package version, build commit hash and build timestamp
 ```
 
 Example:
@@ -433,6 +440,7 @@ A few other notes:
 
 - Proving blocks is very resource intensive in terms of both CPU and memory. You can also only generate the witness for a block instead (see [Generating Witnesses Only](#generating-witnesses-only)) to significantly reduce the CPU and memory requirements.
 - Because incorporating the previous block proof requires a chain of proofs back to the last checkpoint height, you can also disable this requirement by passing `true` for `<IGNORE_PREVIOUS_PROOFS>` (which internally just sets the current checkpoint height to the previous block height).
+- When proving multiple blocks concurrently, one may need to increase the system resource usage limit because of the number of RPC connections opened simultaneously, in particular when running a native tracer. For Linux systems, it is recommended to set `ulimit` to 8192.
 
 ### Generating Witnesses Only
 
@@ -449,6 +457,26 @@ Filled in:
 ```
 
 Finally, note that both of these testing scripts force proof generation to be sequential by allowing only one worker. Because of this, this is not a realistic representation of performance but makes the debugging logs much easier to follow.
+
+### Trace decoder tests
+
+The trace decoder module has some basic regression tests, using the json witness data from the `trace_decoder/tests/data/witnesses` subdirectories.
+When needed (e.g. some block with corner-case discovered), additional input witness data should be generated using the following procedure:
+
+1. Run the `rpc` tool to fetch the block (or multiple blocks) witness:
+
+```sh
+cargo run --bin rpc fetch --rpc-url <node_rpc_endpoint> --start-block <start> --end-block <end> > ./b<number>_<network>.json
+```
+
+2. Download the header file for the block (or range of blocks), making the json array of headers:
+
+```sh
+file_name = "b<number>_<network>_header.json"
+echo "[" > $file_name && cast rpc eth_getBlockByNumber "0x<block_number>" 'false' --rpc-url <node_rpc_endpoint>  >> $file_name && echo "]" >> $file_name
+```
+
+Move the generated files to the appropriate subdirectory, and they will be automatically included in the test run.
 
 ## License
 

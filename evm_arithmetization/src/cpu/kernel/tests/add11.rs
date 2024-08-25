@@ -13,6 +13,11 @@ use crate::cpu::kernel::interpreter::Interpreter;
 use crate::generation::mpt::{AccountRlp, LegacyReceiptRlp};
 use crate::generation::TrieInputs;
 use crate::proof::{BlockHashes, BlockMetadata, TrieRoots};
+use crate::testing_utils::{
+    beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
+    preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
+    GLOBAL_EXIT_ROOT_ACCOUNT,
+};
 use crate::GenerationInputs;
 
 #[test]
@@ -50,24 +55,47 @@ fn test_add11_yml() {
         ..AccountRlp::default()
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    let (mut state_trie_before, mut storage_tries) =
+        preinitialized_state_and_storage_tries().unwrap();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    state_trie_before
+        .insert(
+            beneficiary_nibbles,
+            rlp::encode(&beneficiary_account_before).to_vec(),
+        )
+        .unwrap();
+    state_trie_before
+        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+        .unwrap();
+    state_trie_before
+        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+        .unwrap();
+
+    storage_tries.push((to_hashed, Node::Empty.into()));
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(to_hashed, Node::Empty.into())],
+        storage_tries,
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
 
     let gas_used = 0xa868u64.into();
+
+    let block_metadata = BlockMetadata {
+        block_beneficiary: Address::from(beneficiary),
+        block_timestamp: 0x03e8.into(),
+        block_number: 1.into(),
+        block_difficulty: 0x020000.into(),
+        block_random: H256::from_uint(&0x020000.into()),
+        block_gaslimit: 0xff112233u32.into(),
+        block_chain_id: 1.into(),
+        block_base_fee: 0xa.into(),
+        block_gas_used: gas_used,
+        ..Default::default()
+    };
 
     let expected_state_trie_after = {
         let beneficiary_account_after = AccountRlp {
@@ -90,15 +118,40 @@ fn test_add11_yml() {
             .hash(),
             ..AccountRlp::default()
         };
+        update_beacon_roots_account_storage(
+            &mut beacon_roots_account_storage,
+            block_metadata.block_timestamp,
+            block_metadata.parent_beacon_block_root,
+        )
+        .unwrap();
+        let beacon_roots_account =
+            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after.insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_after).to_vec(),
-        );
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+            .insert(
+                beneficiary_nibbles,
+                rlp::encode(&beneficiary_account_after).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                beacon_roots_account_nibbles(),
+                rlp::encode(&beacon_roots_account).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                ger_account_nibbles(),
+                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+            )
+            .unwrap();
         expected_state_trie_after
     };
     let receipt_0 = LegacyReceiptRlp {
@@ -108,10 +161,12 @@ fn test_add11_yml() {
         logs: vec![],
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    );
+    receipts_trie
+        .insert(
+            Nibbles::from_str("0x80").unwrap(),
+            rlp::encode(&receipt_0).to_vec(),
+        )
+        .unwrap();
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
@@ -124,22 +179,10 @@ fn test_add11_yml() {
         receipts_root: receipts_trie.hash(),
     };
 
-    let block_metadata = BlockMetadata {
-        block_beneficiary: Address::from(beneficiary),
-        block_timestamp: 0x03e8.into(),
-        block_number: 1.into(),
-        block_difficulty: 0x020000.into(),
-        block_random: H256::from_uint(&0x020000.into()),
-        block_gaslimit: 0xff112233u32.into(),
-        block_chain_id: 1.into(),
-        block_base_fee: 0xa.into(),
-        block_gas_used: gas_used,
-        block_bloom: [0.into(); 8],
-    };
-
     let inputs = GenerationInputs {
         signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code: contract_code.clone(),
@@ -200,27 +243,51 @@ fn test_add11_yml_with_exception() {
         ..AccountRlp::default()
     };
 
-    let mut state_trie_before = HashedPartialTrie::from(Node::Empty);
-    state_trie_before.insert(
-        beneficiary_nibbles,
-        rlp::encode(&beneficiary_account_before).to_vec(),
-    );
-    state_trie_before.insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec());
-    state_trie_before.insert(to_nibbles, rlp::encode(&to_account_before).to_vec());
+    let (mut state_trie_before, mut storage_tries) =
+        preinitialized_state_and_storage_tries().unwrap();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
+    state_trie_before
+        .insert(
+            beneficiary_nibbles,
+            rlp::encode(&beneficiary_account_before).to_vec(),
+        )
+        .unwrap();
+    state_trie_before
+        .insert(sender_nibbles, rlp::encode(&sender_account_before).to_vec())
+        .unwrap();
+    state_trie_before
+        .insert(to_nibbles, rlp::encode(&to_account_before).to_vec())
+        .unwrap();
+
+    storage_tries.push((to_hashed, Node::Empty.into()));
 
     let tries_before = TrieInputs {
         state_trie: state_trie_before,
         transactions_trie: Node::Empty.into(),
         receipts_trie: Node::Empty.into(),
-        storage_tries: vec![(to_hashed, Node::Empty.into())],
+        storage_tries,
     };
 
     let txn = hex!("f863800a83061a8094095e7baea6a6c7c4c2dfeb977efac326af552d87830186a0801ba0ffb600e63115a7362e7811894a91d8ba4330e526f22121c994c4692035dfdfd5a06198379fcac8de3dbfac48b165df4bf88e2088f294b61efb9a65fe2281c76e16");
     let txn_gas_limit = 400_000;
     let gas_price = 10;
 
+    let block_metadata = BlockMetadata {
+        block_beneficiary: Address::from(beneficiary),
+        block_timestamp: 0x03e8.into(),
+        block_number: 1.into(),
+        block_difficulty: 0x020000.into(),
+        block_random: H256::from_uint(&0x020000.into()),
+        block_gaslimit: 0xff112233u32.into(),
+        block_chain_id: 1.into(),
+        block_base_fee: 0xa.into(),
+        block_gas_used: txn_gas_limit.into(),
+        ..Default::default()
+    };
+
     // Here, since the transaction fails, it consumes its gas limit, and does
-    // nothing else.
+    // nothing else. The beacon roots contract is still updated prior transaction
+    // execution.
     let expected_state_trie_after = {
         let beneficiary_account_after = beneficiary_account_before;
         // This is the only account that changes: the nonce and the balance are updated.
@@ -231,14 +298,40 @@ fn test_add11_yml_with_exception() {
         };
         let to_account_after = to_account_before;
 
+        update_beacon_roots_account_storage(
+            &mut beacon_roots_account_storage,
+            block_metadata.block_timestamp,
+            block_metadata.parent_beacon_block_root,
+        )
+        .unwrap();
+        let beacon_roots_account =
+            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
         let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
-        expected_state_trie_after.insert(
-            beneficiary_nibbles,
-            rlp::encode(&beneficiary_account_after).to_vec(),
-        );
         expected_state_trie_after
-            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec());
-        expected_state_trie_after.insert(to_nibbles, rlp::encode(&to_account_after).to_vec());
+            .insert(
+                beneficiary_nibbles,
+                rlp::encode(&beneficiary_account_after).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(sender_nibbles, rlp::encode(&sender_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(to_nibbles, rlp::encode(&to_account_after).to_vec())
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                beacon_roots_account_nibbles(),
+                rlp::encode(&beacon_roots_account).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                ger_account_nibbles(),
+                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+            )
+            .unwrap();
         expected_state_trie_after
     };
 
@@ -249,10 +342,12 @@ fn test_add11_yml_with_exception() {
         logs: vec![],
     };
     let mut receipts_trie = HashedPartialTrie::from(Node::Empty);
-    receipts_trie.insert(
-        Nibbles::from_str("0x80").unwrap(),
-        rlp::encode(&receipt_0).to_vec(),
-    );
+    receipts_trie
+        .insert(
+            Nibbles::from_str("0x80").unwrap(),
+            rlp::encode(&receipt_0).to_vec(),
+        )
+        .unwrap();
     let transactions_trie: HashedPartialTrie = Node::Leaf {
         nibbles: Nibbles::from_str("0x80").unwrap(),
         value: txn.to_vec(),
@@ -265,22 +360,10 @@ fn test_add11_yml_with_exception() {
         receipts_root: receipts_trie.hash(),
     };
 
-    let block_metadata = BlockMetadata {
-        block_beneficiary: Address::from(beneficiary),
-        block_timestamp: 0x03e8.into(),
-        block_number: 1.into(),
-        block_difficulty: 0x020000.into(),
-        block_random: H256::from_uint(&0x020000.into()),
-        block_gaslimit: 0xff112233u32.into(),
-        block_chain_id: 1.into(),
-        block_base_fee: 0xa.into(),
-        block_gas_used: txn_gas_limit.into(),
-        block_bloom: [0.into(); 8],
-    };
-
     let inputs = GenerationInputs {
         signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
+        global_exit_roots: vec![],
         tries: tries_before,
         trie_roots_after,
         contract_code: contract_code.clone(),

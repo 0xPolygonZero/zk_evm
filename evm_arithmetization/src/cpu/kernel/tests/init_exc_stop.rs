@@ -15,32 +15,76 @@ use crate::generation::NUM_EXTRA_CYCLES_AFTER;
 use crate::generation::NUM_EXTRA_CYCLES_BEFORE;
 use crate::memory::segments::Segment;
 use crate::proof::BlockMetadata;
-use crate::proof::RegistersData;
-use crate::proof::RegistersIdx;
 use crate::proof::TrieRoots;
+use crate::testing_utils::beacon_roots_account_nibbles;
+use crate::testing_utils::beacon_roots_contract_from_storage;
+use crate::testing_utils::ger_account_nibbles;
+use crate::testing_utils::init_logger;
+use crate::testing_utils::preinitialized_state_and_storage_tries;
+use crate::testing_utils::update_beacon_roots_account_storage;
+use crate::testing_utils::GLOBAL_EXIT_ROOT_ACCOUNT;
 use crate::witness::memory::MemoryAddress;
 use crate::witness::state::RegistersState;
 use crate::{proof::BlockHashes, GenerationInputs, Node};
 
+enum RegistersIdx {
+    ProgramCounter = 0,
+    IsKernel = 1,
+    _StackLen = 2,
+    _StackTop = 3,
+    _Context = 4,
+    _GasUsed = 5,
+}
+
+const REGISTERS_LEN: usize = 6;
+
 // Test to check NUM_EXTRA_CYCLES_BEFORE and NUM_EXTRA_CYCLES_AFTER
 #[test]
 fn test_init_exc_stop() {
+    init_logger();
+
     let block_metadata = BlockMetadata {
         block_number: 1.into(),
+        block_timestamp: 0x1234.into(),
         ..Default::default()
     };
 
-    let state_trie = HashedPartialTrie::from(Node::Empty);
+    let (state_trie_before, storage_tries) = preinitialized_state_and_storage_tries().unwrap();
+    let mut beacon_roots_account_storage = storage_tries[0].1.clone();
     let transactions_trie = HashedPartialTrie::from(Node::Empty);
     let receipts_trie = HashedPartialTrie::from(Node::Empty);
-    let storage_tries = vec![];
+
+    let expected_state_trie_after = {
+        update_beacon_roots_account_storage(
+            &mut beacon_roots_account_storage,
+            block_metadata.block_timestamp,
+            block_metadata.parent_beacon_block_root,
+        )
+        .unwrap();
+        let beacon_roots_account =
+            beacon_roots_contract_from_storage(&beacon_roots_account_storage);
+
+        let mut expected_state_trie_after = HashedPartialTrie::from(Node::Empty);
+        expected_state_trie_after
+            .insert(
+                beacon_roots_account_nibbles(),
+                rlp::encode(&beacon_roots_account).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+            .insert(
+                ger_account_nibbles(),
+                rlp::encode(&GLOBAL_EXIT_ROOT_ACCOUNT).to_vec(),
+            )
+            .unwrap();
+        expected_state_trie_after
+    };
 
     let mut contract_code = HashMap::new();
     contract_code.insert(keccak(vec![]), vec![]);
 
-    // No transactions, so no trie roots change.
     let trie_roots_after = TrieRoots {
-        state_root: state_trie.hash(),
+        state_root: expected_state_trie_after.hash(),
         transactions_root: transactions_trie.hash(),
         receipts_root: receipts_trie.hash(),
     };
@@ -49,7 +93,7 @@ fn test_init_exc_stop() {
         signed_txns: vec![],
         withdrawals: vec![],
         tries: TrieInputs {
-            state_trie,
+            state_trie: state_trie_before,
             transactions_trie,
             receipts_trie,
             storage_tries,
@@ -65,6 +109,7 @@ fn test_init_exc_stop() {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
         },
+        global_exit_roots: vec![],
     };
     let initial_stack = vec![];
     let initial_offset = KERNEL.global_labels["init"];
@@ -112,7 +157,7 @@ fn test_init_exc_stop() {
             MemoryAddress {
                 context: 0,
                 segment: Segment::RegistersStates.unscale(),
-                virt: RegistersData::SIZE + RegistersIdx::ProgramCounter as usize,
+                virt: REGISTERS_LEN + RegistersIdx::ProgramCounter as usize,
             },
             pc_u256,
         ),
@@ -120,7 +165,7 @@ fn test_init_exc_stop() {
             MemoryAddress {
                 context: 0,
                 segment: Segment::RegistersStates.unscale(),
-                virt: RegistersData::SIZE + RegistersIdx::IsKernel as usize,
+                virt: REGISTERS_LEN + RegistersIdx::IsKernel as usize,
             },
             U256::one(),
         ),

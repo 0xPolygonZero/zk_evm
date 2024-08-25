@@ -64,6 +64,9 @@ global main:
     // Initialize accessed addresses and storage keys lists
     %init_access_lists
 
+    // Initialize transient storage length
+    %init_transient_storage_len
+
     // Initialize the RLP DATA pointer to its initial position, 
     // skipping over the preinitialized empty node.
     PUSH @INITIAL_TXN_RLP_ADDR
@@ -93,20 +96,31 @@ global hash_initial_tries:
     // We compute the length of the trie data segment in `mpt_hash` so that we
     // can check the value provided by the prover.
     // The trie data segment is already written by the linked lists
-    %get_trie_data_size
 
-    // stack: trie_data_len
+    // First, we compute the initial size of the trie data segment.
+    PUSH @ACCOUNTS_LINKED_LISTS_NODE_SIZE
+    PUSH @SEGMENT_ACCOUNTS_LINKED_LIST
+    %mload_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
+    SUB
+    // stack: accounts_ll_full_len, accounts_ll_node_size
+    DIV
+    %decrement
+    // stack: actual_nb_accounts
+    // The initial payloads are written twice, and each payload requires 4 elements.
+    PUSH 8 MUL
+    %increment
+    // stack: init_trie_data_len
+
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_BEFORE)      %assert_eq
     // stack: trie_data_len
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_BEFORE)  %assert_eq
     // stack: trie_data_full_len
-
-    %set_trie_data_size
+    // Check that the trie data length is correct.
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
+    %assert_eq
 
 global start_txns:
     // stack: (empty)
-    // The special case of an empty trie (i.e. for the first transaction)
-    // is handled outside of the kernel.
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
     // stack: txn_nb
     DUP1 %scalar_to_rlp
@@ -115,6 +129,12 @@ global start_txns:
     SWAP1
     // stack: txn_counter, num_nibbles, txn_nb
     %mload_global_metadata(@GLOBAL_METADATA_BLOCK_GAS_USED_BEFORE)
+    // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
+
+    // If txn_idx == 0, update the beacon_root and exit roots.
+    %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_BEFORE)
+    ISZERO
+    %jumpi(set_beacon_root)
 
     // stack: init_gas_used, txn_counter, num_nibbles, txn_nb
 global txn_loop:
@@ -157,7 +177,10 @@ global perform_final_checks:
     %mload_global_metadata(@GLOBAL_METADATA_TXN_NUMBER_AFTER) %assert_eq
     %pop3
 
-    PUSH 1 // initial trie data length
+    // We set a dummy value as an initial trie data length,
+    // since the final transaction and receipt tries have already been
+    // added to `GLOBAL_METADATA_TRIE_DATA_SIZE`.
+    PUSH 1
     
 global check_txn_trie:
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq
@@ -165,6 +188,13 @@ global check_receipt_trie:
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_AFTER)   %assert_eq
 global check_state_trie:
     // First, check initial trie.
+    // We pop the dummy trie data length that was computed.
+    POP 
+    // Now, we get the trie data size so we can add the values from the 
+    // initial trie data size and check that the value stored in 
+    // `GLOBAL_METADATA_TRIE_DATA_SIZE` is correct.
+    %get_trie_data_size
+    // stack: trie_data_len
     PROVER_INPUT(trie_ptr::initial_state)
 
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
@@ -172,17 +202,21 @@ global check_state_trie:
     PROVER_INPUT(trie_ptr::trie_data_size)
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
-    // %set_initial_tries
-    %get_trie_data_size
-global debug_before_hash_init_trie:
-    %mpt_hash_state_trie_new
-global debug_adter_hash_init_trie:
+    %set_initial_tries
+    %mpt_hash_state_trie
 
-    SWAP1 %set_trie_data_size
+    // stack: init_state_hash, trie_data_len
+    // Check that the initial trie is correct.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
 global debug_check_inital_state_trie:
     %assert_eq
+    // Check that the stored trie data length is correct.
+    %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
+    %assert_eq
 
+    // We set a dummy value as an initial trie data length,
+    // as we do not need to compute the actual trie data length here.
+    PUSH 1
 global check_final_state_trie:
 
     PROVER_INPUT(trie_ptr::final_state)
@@ -208,6 +242,9 @@ global debug_final_hash:
     // Reinitialize accessed addresses and storage keys lists
     %init_access_lists
 
+    // Reinitialize transient storage
+    %init_transient_storage_len
+
     // Reinitialize global metadata
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_IS_PRECOMPILE_FROM_EOA)
@@ -222,4 +259,6 @@ global debug_final_hash:
     // Reinitialize `chain_id` for legacy transactions and `to` transaction field
     PUSH 0 %mstore_txn_field(@TXN_FIELD_CHAIN_ID_PRESENT)
     PUSH 0 %mstore_txn_field(@TXN_FIELD_TO)
+
+    %reset_blob_versioned_hashes
 %endmacro

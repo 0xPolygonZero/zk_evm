@@ -49,6 +49,10 @@ pub trait PartialTrie:
     /// Creates a new partial trie from a node.
     fn new(n: Node<Self>) -> Self;
 
+    /// Creates a new partial trie from a node with a provided collapse
+    /// strategy.
+    fn new_with_strategy(n: Node<Self>, strategy: OnOrphanedHashNode) -> Self;
+
     /// Inserts a node into the trie.
     fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where
@@ -211,6 +215,10 @@ impl PartialTrie for StandardTrie {
         Self(n)
     }
 
+    fn new_with_strategy(n: Node<Self>, _strategy: OnOrphanedHashNode) -> Self {
+        Self(n)
+    }
+
     fn insert<K, V>(&mut self, k: K, v: V) -> TrieOpResult<()>
     where
         K: Into<Nibbles>,
@@ -240,7 +248,7 @@ impl PartialTrie for StandardTrie {
     where
         K: Into<Nibbles>,
     {
-        self.0.trie_delete(k)
+        self.0.trie_delete(k, OnOrphanedHashNode::Reject)
     }
 
     fn hash(&self) -> H256 {
@@ -304,6 +312,23 @@ where
 pub struct HashedPartialTrie {
     pub(crate) node: Node<HashedPartialTrie>,
     pub(crate) hash: Arc<RwLock<Option<H256>>>,
+
+    pub(crate) strategy: OnOrphanedHashNode,
+}
+
+/// How to handle the following subtree on deletion of the indicated node.
+/// ```text
+///      BranchNode
+///        /    \
+/// DeleteMe    OrphanedHashNode
+/// ```
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+pub enum OnOrphanedHashNode {
+    /// Replace `BranchNode` with an appropriate `ExtensionNode`
+    CollapseToExtension,
+    /// Return an error.
+    #[default]
+    Reject,
 }
 
 impl_from_for_trie_type!(HashedPartialTrie);
@@ -329,6 +354,15 @@ impl PartialTrie for HashedPartialTrie {
         Self {
             node,
             hash: Arc::new(RwLock::new(None)),
+            strategy: OnOrphanedHashNode::default(),
+        }
+    }
+
+    fn new_with_strategy(node: Node<Self>, strategy: OnOrphanedHashNode) -> Self {
+        Self {
+            node,
+            hash: Arc::new(RwLock::new(None)),
+            strategy,
         }
     }
 
@@ -364,7 +398,7 @@ impl PartialTrie for HashedPartialTrie {
     where
         K: Into<crate::nibbles::Nibbles>,
     {
-        let res = self.node.trie_delete(k);
+        let res = self.node.trie_delete(k, self.strategy);
         self.set_hash(None);
 
         res

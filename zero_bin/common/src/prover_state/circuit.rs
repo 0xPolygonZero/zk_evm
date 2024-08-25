@@ -214,7 +214,7 @@ impl CircuitConfig {
     }
 
     /// Get all circuits specified in the config.
-    pub fn as_degree_bits_ranges(&self) -> &[Range<usize>; NUM_TABLES] {
+    pub const fn as_degree_bits_ranges(&self) -> &[Range<usize>; NUM_TABLES] {
         &self.circuits
     }
 

@@ -1,10 +1,15 @@
 //! This module defines the various proof types used throughout the block proof
 //! generation process.
 
-use evm_arithmetization::{proof::PublicValues, BlockHeight};
+use evm_arithmetization::{
+    fixed_recursive_verifier::{extract_block_public_values, extract_two_to_one_block_hash},
+    proof::PublicValues,
+    BlockHeight,
+};
+use plonky2::plonk::config::Hasher as _;
 use serde::{Deserialize, Serialize};
 
-use crate::types::PlonkyProofIntern;
+use crate::types::{Hash, Hasher, PlonkyProofIntern};
 
 /// A transaction proof along with its public values, for proper connection with
 /// contiguous proofs.
@@ -52,6 +57,17 @@ pub struct GeneratedBlockProof {
     pub intern: PlonkyProofIntern,
 }
 
+/// An aggregation block proof along with its hashed public values, for proper
+/// connection with other proofs.
+///
+/// Aggregation block proofs can represent any aggregation of independent
+/// blocks.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GeneratedAggBlockProof {
+    /// Underlying plonky2 proof.
+    pub intern: PlonkyProofIntern,
+}
+
 /// Sometimes we don't care about the underlying proof type and instead only if
 /// we can combine it into an agg proof. For these cases, we want to abstract
 /// away whether or not the proof was a txn or agg proof.
@@ -67,7 +83,7 @@ pub enum SegmentAggregatableProof {
 /// we can combine it into an agg proof. For these cases, we want to abstract
 /// away whether or not the proof was a txn or agg proof.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum TxnAggregatableProof {
+pub enum BatchAggregatableProof {
     /// The underlying proof is a segment proof. It first needs to be aggregated
     /// with another segment proof, or a dummy one.
     Segment(GeneratedSegmentProof),
@@ -100,28 +116,28 @@ impl SegmentAggregatableProof {
     }
 }
 
-impl TxnAggregatableProof {
+impl BatchAggregatableProof {
     pub(crate) fn public_values(&self) -> PublicValues {
         match self {
-            TxnAggregatableProof::Segment(info) => info.p_vals.clone(),
-            TxnAggregatableProof::Txn(info) => info.p_vals.clone(),
-            TxnAggregatableProof::Agg(info) => info.p_vals.clone(),
+            BatchAggregatableProof::Segment(info) => info.p_vals.clone(),
+            BatchAggregatableProof::Txn(info) => info.p_vals.clone(),
+            BatchAggregatableProof::Agg(info) => info.p_vals.clone(),
         }
     }
 
     pub(crate) fn is_agg(&self) -> bool {
         match self {
-            TxnAggregatableProof::Segment(_) => false,
-            TxnAggregatableProof::Txn(_) => false,
-            TxnAggregatableProof::Agg(_) => true,
+            BatchAggregatableProof::Segment(_) => false,
+            BatchAggregatableProof::Txn(_) => false,
+            BatchAggregatableProof::Agg(_) => true,
         }
     }
 
     pub(crate) fn intern(&self) -> &PlonkyProofIntern {
         match self {
-            TxnAggregatableProof::Segment(info) => &info.intern,
-            TxnAggregatableProof::Txn(info) => &info.intern,
-            TxnAggregatableProof::Agg(info) => &info.intern,
+            BatchAggregatableProof::Segment(info) => &info.intern,
+            BatchAggregatableProof::Txn(info) => &info.intern,
+            BatchAggregatableProof::Agg(info) => &info.intern,
         }
     }
 }
@@ -138,23 +154,72 @@ impl From<GeneratedSegmentAggProof> for SegmentAggregatableProof {
     }
 }
 
-impl From<GeneratedSegmentAggProof> for TxnAggregatableProof {
+impl From<GeneratedSegmentAggProof> for BatchAggregatableProof {
     fn from(v: GeneratedSegmentAggProof) -> Self {
         Self::Txn(v)
     }
 }
 
-impl From<GeneratedTxnAggProof> for TxnAggregatableProof {
+impl From<GeneratedTxnAggProof> for BatchAggregatableProof {
     fn from(v: GeneratedTxnAggProof) -> Self {
         Self::Agg(v)
     }
 }
 
-impl From<SegmentAggregatableProof> for TxnAggregatableProof {
+impl From<SegmentAggregatableProof> for BatchAggregatableProof {
     fn from(v: SegmentAggregatableProof) -> Self {
         match v {
-            SegmentAggregatableProof::Agg(agg) => TxnAggregatableProof::Txn(agg),
-            SegmentAggregatableProof::Seg(seg) => TxnAggregatableProof::Segment(seg),
+            SegmentAggregatableProof::Agg(agg) => BatchAggregatableProof::Txn(agg),
+            SegmentAggregatableProof::Seg(seg) => BatchAggregatableProof::Segment(seg),
         }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum AggregatableBlockProof {
+    /// The underlying proof is a single block proof.
+    Block(GeneratedBlockProof),
+    /// The underlying proof is an aggregated proof.
+    Agg(GeneratedAggBlockProof),
+}
+
+impl AggregatableBlockProof {
+    pub fn pv_hash(&self) -> Hash {
+        match self {
+            AggregatableBlockProof::Block(info) => {
+                let pv = extract_block_public_values(&info.intern.public_inputs);
+                Hasher::hash_no_pad(pv)
+            }
+            AggregatableBlockProof::Agg(info) => {
+                let hash = extract_two_to_one_block_hash(&info.intern.public_inputs);
+                Hash::from_partial(hash)
+            }
+        }
+    }
+
+    pub(crate) const fn is_agg(&self) -> bool {
+        match self {
+            AggregatableBlockProof::Block(_) => false,
+            AggregatableBlockProof::Agg(_) => true,
+        }
+    }
+
+    pub(crate) const fn intern(&self) -> &PlonkyProofIntern {
+        match self {
+            AggregatableBlockProof::Block(info) => &info.intern,
+            AggregatableBlockProof::Agg(info) => &info.intern,
+        }
+    }
+}
+
+impl From<GeneratedBlockProof> for AggregatableBlockProof {
+    fn from(v: GeneratedBlockProof) -> Self {
+        Self::Block(v)
+    }
+}
+
+impl From<GeneratedAggBlockProof> for AggregatableBlockProof {
+    fn from(v: GeneratedAggBlockProof) -> Self {
+        Self::Agg(v)
     }
 }

@@ -6,15 +6,14 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use plonky2::field::types::Field;
 
 use super::mpt::TrieRootPtrs;
+use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
 use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
-use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
 use crate::generation::linked_list::LinkedList;
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
@@ -22,13 +21,11 @@ use crate::generation::prover_input::{
     ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
 };
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
-use crate::generation::trie_extractor::get_state_trie;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
-use crate::prover::GenerationSegmentData;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
@@ -243,7 +240,10 @@ pub(crate) trait State<F: Field> {
                     }
                     let final_mem = self.get_active_memory();
                     #[cfg(not(test))]
-                    self.log_info(format!("CPU halted after {} cycles", self.get_clock()));
+                    self.log(
+                        Level::Info,
+                        format!("CPU halted after {} cycles", self.get_clock()),
+                    );
                     return Ok((final_registers, final_mem));
                 }
             }
@@ -343,12 +343,6 @@ pub(crate) trait State<F: Field> {
         log::debug!("{}", msg);
     }
 
-    /// Logs `msg` in `info` mode.
-    #[inline]
-    fn log_info(&self, msg: String) {
-        log::info!("{}", msg);
-    }
-
     /// Logs `msg` at `level`.
     #[inline]
     fn log(&self, level: Level, msg: String) {
@@ -365,9 +359,6 @@ pub struct GenerationState<F: Field> {
 
     pub(crate) next_txn_index: usize,
 
-    /// Indicates whether we should set the preinitialized segments before
-    /// proving.
-    pub(crate) set_preinit: bool,
     /// Memory used by stale contexts can be pruned so proving segments can be
     /// smaller.
     pub(crate) stale_contexts: Vec<usize>,
@@ -377,6 +368,8 @@ pub struct GenerationState<F: Field> {
     pub(crate) rlp_prover_inputs: Vec<U256>,
 
     pub(crate) withdrawal_prover_inputs: Vec<U256>,
+
+    pub(crate) ger_prover_inputs: Vec<U256>,
 
     /// The state trie only stores state keys, which are hashes of addresses,
     /// but sometimes it is useful to see the actual addresses for
@@ -436,6 +429,7 @@ impl<F: Field> GenerationState<F> {
     pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
+        let ger_prover_inputs = all_ger_prover_inputs_reversed(&inputs.global_exit_roots);
         let bignum_modmul_result_limbs = Vec::new();
 
         let mut state = Self {
@@ -444,10 +438,10 @@ impl<F: Field> GenerationState<F> {
             memory: MemoryState::new(kernel_code),
             traces: Traces::default(),
             next_txn_index: 0,
-            set_preinit: false,
             stale_contexts: Vec::new(),
             rlp_prover_inputs,
             withdrawal_prover_inputs,
+            ger_prover_inputs,
             state_key_to_address: HashMap::new(),
             bignum_modmul_result_limbs,
             trie_root_ptrs: TrieRootPtrs {
@@ -484,6 +478,10 @@ impl<F: Field> GenerationState<F> {
     /// we're jumping to a special location.
     pub(crate) fn jump_to(&mut self, dst: usize) -> Result<(), ProgramError> {
         self.registers.program_counter = dst;
+        if self.stack().is_empty() {
+            // We cannot observe anything as the stack is empty.
+            return Ok(());
+        }
         if dst == KERNEL.global_labels["observe_new_address"] {
             let tip_u256 = stack_peek(self, 0)?;
             let tip_h256 = H256::from_uint(&tip_u256);
@@ -551,12 +549,12 @@ impl<F: Field> GenerationState<F> {
             memory: self.memory.clone(),
             traces: Traces::default(),
             next_txn_index: 0,
-            set_preinit: self.set_preinit,
             stale_contexts: Vec::new(),
             rlp_prover_inputs: self.rlp_prover_inputs.clone(),
             state_key_to_address: self.state_key_to_address.clone(),
             bignum_modmul_result_limbs: self.bignum_modmul_result_limbs.clone(),
             withdrawal_prover_inputs: self.withdrawal_prover_inputs.clone(),
+            ger_prover_inputs: self.ger_prover_inputs.clone(),
             trie_root_ptrs: TrieRootPtrs {
                 state_root_ptr: Some(0),
                 txn_root_ptr: 0,
@@ -573,6 +571,8 @@ impl<F: Field> GenerationState<F> {
             .clone_from(&segment_data.extra_data.rlp_prover_inputs);
         self.withdrawal_prover_inputs
             .clone_from(&segment_data.extra_data.withdrawal_prover_inputs);
+        self.ger_prover_inputs
+            .clone_from(&segment_data.extra_data.ger_prover_inputs);
         self.trie_root_ptrs
             .clone_from(&segment_data.extra_data.trie_root_ptrs);
         self.jumpdest_table
@@ -765,4 +765,17 @@ pub(crate) fn all_withdrawals_prover_inputs_reversed(withdrawals: &[(Address, U2
     withdrawal_prover_inputs.push(U256::MAX);
     withdrawal_prover_inputs.reverse();
     withdrawal_prover_inputs
+}
+
+/// Global exit roots prover input array is of the form `[N, timestamp1,
+/// root1,..., timestampN, rootN]`. Returns the reversed array.
+pub(crate) fn all_ger_prover_inputs_reversed(global_exit_roots: &[(U256, H256)]) -> Vec<U256> {
+    let mut ger_prover_inputs = vec![global_exit_roots.len().into()];
+    ger_prover_inputs.extend(
+        global_exit_roots
+            .iter()
+            .flat_map(|ger| [ger.0, ger.1.into_uint()]),
+    );
+    ger_prover_inputs.reverse();
+    ger_prover_inputs
 }

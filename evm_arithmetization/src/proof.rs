@@ -14,6 +14,11 @@ use crate::all_stark::NUM_TABLES;
 use crate::util::{get_h160, get_h256, get_u256, h2u};
 use crate::witness::state::RegistersState;
 
+/// The default cap height used for our zkEVM STARK proofs.
+pub(crate) const DEFAULT_CAP_HEIGHT: usize = 4;
+/// Number of elements contained in a Merkle cap with default height.
+pub(crate) const DEFAULT_CAP_LEN: usize = 1 << DEFAULT_CAP_HEIGHT;
+
 /// A STARK proof for each table, plus some metadata used to create recursive
 /// wrapper proofs.
 #[derive(Debug, Clone)]
@@ -67,16 +72,8 @@ impl PublicValues {
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
     /// `len_mem_cap` is the length of the `MemBefore` and `MemAfter` caps.
-    pub fn from_public_inputs<F: RichField>(pis: &[F], len_mem_cap: usize) -> Self {
-        assert!(
-            pis.len()
-                > TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    + RegistersDataTarget::SIZE * 2
-                    - 1
-        );
+    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+        assert!(pis.len() >= PublicValuesTarget::SIZE);
 
         let mut offset = 0;
         let trie_roots_before =
@@ -100,15 +97,9 @@ impl PublicValues {
         let registers_after =
             RegistersData::from_public_inputs(&pis[offset..offset + RegistersDataTarget::SIZE]);
         offset += RegistersDataTarget::SIZE;
-        let mem_before = MemCap::from_public_inputs(
-            &pis[offset..offset + len_mem_cap * NUM_HASH_OUT_ELTS],
-            len_mem_cap,
-        );
-        offset += len_mem_cap * NUM_HASH_OUT_ELTS;
-        let mem_after = MemCap::from_public_inputs(
-            &pis[offset..offset + len_mem_cap * NUM_HASH_OUT_ELTS],
-            len_mem_cap,
-        );
+        let mem_before = MemCap::from_public_inputs(&pis[offset..offset + MemCapTarget::SIZE]);
+        offset += MemCapTarget::SIZE;
+        let mem_after = MemCap::from_public_inputs(&pis[offset..offset + MemCapTarget::SIZE]);
 
         Self {
             trie_roots_before,
@@ -145,11 +136,8 @@ impl FinalPublicValues {
     /// so we can start extracting at index 0.
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(
-            pis.len()
-                > TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
+            PublicValuesTarget::SIZE - 2 * RegistersDataTarget::SIZE - 2 * MemCapTarget::SIZE
+                <= pis.len()
         );
 
         let mut offset = 0;
@@ -281,6 +269,12 @@ pub struct BlockMetadata {
     pub block_base_fee: U256,
     /// The total gas used in this block. It must fit in a `u32`.
     pub block_gas_used: U256,
+    /// The blob gas used. It must fit in a `u64`.
+    pub block_blob_gas_used: U256,
+    /// The excess blob base. It must fit in a `u64`.
+    pub block_excess_blob_gas: U256,
+    /// The hash tree root of the parent beacon block.
+    pub parent_beacon_block_root: H256,
     /// The block bloom of this block, represented as the consecutive
     /// 32-byte chunks of a block's final bloom filter string.
     pub block_bloom: [U256; 8],
@@ -300,11 +294,13 @@ impl BlockMetadata {
         let block_base_fee =
             (pis[18].to_canonical_u64() + (pis[19].to_canonical_u64() << 32)).into();
         let block_gas_used = pis[20].to_canonical_u64().into();
-        let block_bloom = core::array::from_fn(|i| {
-            h2u(get_h256(
-                &pis[21 + TARGET_HASH_SIZE * i..21 + TARGET_HASH_SIZE * (i + 1)],
-            ))
-        });
+        let block_blob_gas_used =
+            (pis[21].to_canonical_u64() + (pis[22].to_canonical_u64() << 32)).into();
+        let block_excess_blob_gas =
+            (pis[23].to_canonical_u64() + (pis[24].to_canonical_u64() << 32)).into();
+        let parent_beacon_block_root = get_h256(&pis[25..33]);
+        let block_bloom =
+            core::array::from_fn(|i| h2u(get_h256(&pis[33 + 8 * i..33 + 8 * (i + 1)])));
 
         Self {
             block_beneficiary,
@@ -316,6 +312,9 @@ impl BlockMetadata {
             block_chain_id,
             block_base_fee,
             block_gas_used,
+            block_blob_gas_used,
+            block_excess_blob_gas,
+            parent_beacon_block_root,
             block_bloom,
         }
     }
@@ -379,18 +378,7 @@ pub struct RegistersData {
     pub gas_used: U256,
 }
 
-pub(crate) enum RegistersIdx {
-    ProgramCounter = 0,
-    IsKernel = 1,
-    StackLen = 2,
-    StackTop = 3,
-    Context = 4,
-    GasUsed = 5,
-}
-
 impl RegistersData {
-    pub(crate) const SIZE: usize = 6;
-
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         assert!(pis.len() == RegistersDataTarget::SIZE);
 
@@ -432,11 +420,11 @@ pub struct MemCap {
     pub mem_cap: Vec<[U256; NUM_HASH_OUT_ELTS]>,
 }
 impl MemCap {
-    pub fn from_public_inputs<F: RichField>(pis: &[F], len: usize) -> Self {
-        let mem_cap = (0..len)
+    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+        let mem_cap = (0..DEFAULT_CAP_LEN)
             .map(|i| {
                 core::array::from_fn(|j| {
-                    U256::from(pis[pis.len() - 4 * (len - i) + j].to_canonical_u64())
+                    U256::from(pis[pis.len() - 4 * (DEFAULT_CAP_LEN - i) + j].to_canonical_u64())
                 })
             })
             .collect();
@@ -471,6 +459,11 @@ pub struct PublicValuesTarget {
 }
 
 impl PublicValuesTarget {
+    pub(crate) const SIZE: usize = TrieRootsTarget::SIZE * 2
+        + BlockMetadataTarget::SIZE
+        + BlockHashesTarget::SIZE
+        + ExtraBlockDataTarget::SIZE
+        + DEFAULT_CAP_HEIGHT * NUM_HASH_OUT_ELTS * 2;
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         let TrieRootsTarget {
@@ -503,6 +496,9 @@ impl PublicValuesTarget {
             block_chain_id,
             block_base_fee,
             block_gas_used,
+            block_blob_gas_used,
+            block_excess_blob_gas,
+            parent_beacon_block_root,
             block_bloom,
         } = self.block_metadata;
 
@@ -515,6 +511,9 @@ impl PublicValuesTarget {
         buffer.write_target(block_chain_id)?;
         buffer.write_target_array(&block_base_fee)?;
         buffer.write_target(block_gas_used)?;
+        buffer.write_target_array(&block_blob_gas_used)?;
+        buffer.write_target_array(&block_excess_blob_gas)?;
+        buffer.write_target_array(&parent_beacon_block_root)?;
         buffer.write_target_array(&block_bloom)?;
 
         let BlockHashesTarget {
@@ -595,6 +594,9 @@ impl PublicValuesTarget {
             block_chain_id: buffer.read_target()?,
             block_base_fee: buffer.read_target_array()?,
             block_gas_used: buffer.read_target()?,
+            block_blob_gas_used: buffer.read_target_array()?,
+            block_excess_blob_gas: buffer.read_target_array()?,
+            parent_beacon_block_root: buffer.read_target_array()?,
             block_bloom: buffer.read_target_array()?,
         };
 
@@ -651,91 +653,50 @@ impl PublicValuesTarget {
     /// Extracts public value `Target`s from the given public input `Target`s.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
-    pub(crate) fn from_public_inputs(pis: &[Target], len_mem_cap: usize) -> Self {
-        assert!(
-            pis.len()
-                > TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    - 1
+    pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
+        assert!(pis.len() >= Self::SIZE);
+
+        let mut offset = 0;
+        let trie_roots_before =
+            TrieRootsTarget::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
+        offset += TrieRootsTarget::SIZE;
+        let trie_roots_after =
+            TrieRootsTarget::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
+        offset += TrieRootsTarget::SIZE;
+        let block_metadata = BlockMetadataTarget::from_public_inputs(
+            &pis[offset..offset + BlockMetadataTarget::SIZE],
         );
+        offset += BlockMetadataTarget::SIZE;
+        let block_hashes =
+            BlockHashesTarget::from_public_inputs(&pis[offset..offset + BlockHashesTarget::SIZE]);
+        offset += BlockHashesTarget::SIZE;
+        let extra_block_data = ExtraBlockDataTarget::from_public_inputs(
+            &pis[offset..offset + ExtraBlockDataTarget::SIZE],
+        );
+        offset += ExtraBlockDataTarget::SIZE;
+        let registers_before = RegistersDataTarget::from_public_inputs(
+            &pis[offset..offset + RegistersDataTarget::SIZE],
+        );
+        offset += RegistersDataTarget::SIZE;
+        let registers_after = RegistersDataTarget::from_public_inputs(
+            &pis[offset..offset + RegistersDataTarget::SIZE],
+        );
+        offset += RegistersDataTarget::SIZE;
+        let mem_before =
+            MemCapTarget::from_public_inputs(&pis[offset..offset + MemCapTarget::SIZE]);
+        offset += MemCapTarget::SIZE;
+        let mem_after = MemCapTarget::from_public_inputs(&pis[offset..offset + MemCapTarget::SIZE]);
 
         Self {
-            trie_roots_before: TrieRootsTarget::from_public_inputs(&pis[0..TrieRootsTarget::SIZE]),
-            trie_roots_after: TrieRootsTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE..TrieRootsTarget::SIZE * 2],
-            ),
-            block_metadata: BlockMetadataTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2
-                    ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE],
-            ),
-            block_hashes: BlockHashesTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE],
-            ),
-            extra_block_data: ExtraBlockDataTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE],
-            ),
-            registers_before: RegistersDataTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE],
-            ),
-            registers_after: RegistersDataTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    + RegistersDataTarget::SIZE
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE * 2],
-            ),
-
-            mem_before: MemCapTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    + RegistersDataTarget::SIZE * 2
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE * 2
-                        + len_mem_cap * NUM_HASH_OUT_ELTS],
-                len_mem_cap,
-            ),
-            mem_after: MemCapTarget::from_public_inputs(
-                &pis[TrieRootsTarget::SIZE * 2
-                    + BlockMetadataTarget::SIZE
-                    + BlockHashesTarget::SIZE
-                    + ExtraBlockDataTarget::SIZE
-                    + RegistersDataTarget::SIZE * 2
-                    + len_mem_cap * NUM_HASH_OUT_ELTS
-                    ..TrieRootsTarget::SIZE * 2
-                        + BlockMetadataTarget::SIZE
-                        + BlockHashesTarget::SIZE
-                        + ExtraBlockDataTarget::SIZE
-                        + RegistersDataTarget::SIZE * 2
-                        + 2 * len_mem_cap * NUM_HASH_OUT_ELTS],
-                len_mem_cap,
-            ),
+            trie_roots_before,
+            trie_roots_after,
+            block_metadata,
+            block_hashes,
+            extra_block_data,
+            registers_before,
+            registers_after,
+            mem_before,
+            mem_after,
         }
     }
 
@@ -910,21 +871,27 @@ pub struct BlockMetadataTarget {
     pub(crate) block_difficulty: Target,
     /// `Target`s for the `mix_hash` value of this block.
     pub(crate) block_random: [Target; 8],
-    /// `Target`s for the gas limit of this block.
+    /// `Target` for the gas limit of this block.
     pub(crate) block_gaslimit: Target,
     /// `Target` for the chain id of this block.
     pub(crate) block_chain_id: Target,
     /// `Target`s for the base fee of this block.
     pub(crate) block_base_fee: [Target; 2],
-    /// `Target`s for the gas used of this block.
+    /// `Target` for the gas used of this block.
     pub(crate) block_gas_used: Target,
+    /// `Target`s for the total blob gas used of this block.
+    pub(crate) block_blob_gas_used: [Target; 2],
+    /// `Target`s for the excess blob gas of this block.
+    pub(crate) block_excess_blob_gas: [Target; 2],
     /// `Target`s for the block bloom of this block.
+    /// `Target`s for the parent beacon block root.
+    pub(crate) parent_beacon_block_root: [Target; 8],
     pub(crate) block_bloom: [Target; 64],
 }
 
 impl BlockMetadataTarget {
     /// Number of `Target`s required for the block metadata.
-    pub(crate) const SIZE: usize = 85;
+    pub(crate) const SIZE: usize = 97;
 
     /// Extracts block metadata `Target`s from the provided public input
     /// `Target`s. The provided `pis` should start with the block metadata.
@@ -938,7 +905,10 @@ impl BlockMetadataTarget {
         let block_chain_id = pis[17];
         let block_base_fee = pis[18..20].try_into().unwrap();
         let block_gas_used = pis[20];
-        let block_bloom = pis[21..85].try_into().unwrap();
+        let block_blob_gas_used = pis[21..23].try_into().unwrap();
+        let block_excess_blob_gas = pis[23..25].try_into().unwrap();
+        let parent_beacon_block_root = pis[25..33].try_into().unwrap();
+        let block_bloom = pis[33..97].try_into().unwrap();
 
         Self {
             block_beneficiary,
@@ -950,6 +920,9 @@ impl BlockMetadataTarget {
             block_chain_id,
             block_base_fee,
             block_gas_used,
+            block_blob_gas_used,
+            block_excess_blob_gas,
+            parent_beacon_block_root,
             block_bloom,
         }
     }
@@ -982,6 +955,27 @@ impl BlockMetadataTarget {
                 builder.select(condition, bm0.block_base_fee[i], bm1.block_base_fee[i])
             }),
             block_gas_used: builder.select(condition, bm0.block_gas_used, bm1.block_gas_used),
+            block_blob_gas_used: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    bm0.block_blob_gas_used[i],
+                    bm1.block_blob_gas_used[i],
+                )
+            }),
+            block_excess_blob_gas: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    bm0.block_excess_blob_gas[i],
+                    bm1.block_excess_blob_gas[i],
+                )
+            }),
+            parent_beacon_block_root: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    bm0.parent_beacon_block_root[i],
+                    bm1.parent_beacon_block_root[i],
+                )
+            }),
             block_bloom: core::array::from_fn(|i| {
                 builder.select(condition, bm0.block_bloom[i], bm1.block_bloom[i])
             }),
@@ -1009,6 +1003,18 @@ impl BlockMetadataTarget {
             builder.connect(bm0.block_base_fee[i], bm1.block_base_fee[i])
         }
         builder.connect(bm0.block_gas_used, bm1.block_gas_used);
+        for i in 0..2 {
+            builder.connect(bm0.block_blob_gas_used[i], bm1.block_blob_gas_used[i])
+        }
+        for i in 0..2 {
+            builder.connect(bm0.block_excess_blob_gas[i], bm1.block_excess_blob_gas[i])
+        }
+        for i in 0..8 {
+            builder.connect(
+                bm0.parent_beacon_block_root[i],
+                bm1.parent_beacon_block_root[i],
+            )
+        }
         for i in 0..64 {
             builder.connect(bm0.block_bloom[i], bm1.block_bloom[i])
         }
@@ -1158,7 +1164,7 @@ pub struct ExtraBlockDataTarget {
 
 impl ExtraBlockDataTarget {
     /// Number of `Target`s required for the extra block data.
-    pub const SIZE: usize = 12;
+    pub(crate) const SIZE: usize = 12;
 
     /// Extracts the extra block data `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.
@@ -1354,12 +1360,14 @@ pub struct MemCapTarget {
 }
 
 impl MemCapTarget {
+    pub(crate) const SIZE: usize = DEFAULT_CAP_LEN * NUM_HASH_OUT_ELTS;
+
     /// Extracts the exit kernel `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.
-    pub(crate) fn from_public_inputs(pis: &[Target], len: usize) -> Self {
-        let mem_values = &pis[0..len * NUM_HASH_OUT_ELTS];
+    pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
+        let mem_values = &pis[0..Self::SIZE];
         let mem_cap = MerkleCapTarget(
-            (0..len)
+            (0..DEFAULT_CAP_LEN)
                 .map(|i| HashOutTarget {
                     elements: mem_values[i * NUM_HASH_OUT_ELTS..(i + 1) * NUM_HASH_OUT_ELTS]
                         .try_into()

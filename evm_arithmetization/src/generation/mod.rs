@@ -11,6 +11,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use segments::GenerationSegmentData;
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use GlobalMetadata::{
@@ -24,11 +25,10 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::generation::state::{GenerationState, State};
 use crate::generation::trie_extractor::{get_receipt_trie, get_state_trie, get_txn_trie};
-use crate::memory::segments::Segment;
+use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES};
 use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
 };
-use crate::prover::GenerationSegmentData;
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
@@ -37,6 +37,7 @@ pub(crate) mod linked_list;
 pub mod mpt;
 pub(crate) mod prover_input;
 pub(crate) mod rlp;
+pub(crate) mod segments;
 pub(crate) mod state;
 pub(crate) mod trie_extractor;
 
@@ -70,6 +71,8 @@ pub struct GenerationInputs {
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
+    /// Global exit roots pairs `(timestamp, root)`.
+    pub global_exit_roots: Vec<(U256, H256)>,
     pub tries: TrieInputs,
     /// Expected trie roots after the transactions are executed.
     pub trie_roots_after: TrieRoots,
@@ -236,6 +239,18 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
             h2u(inputs.block_hashes.cur_hash),
         ),
         (GlobalMetadata::BlockGasUsed, metadata.block_gas_used),
+        (
+            GlobalMetadata::BlockBlobGasUsed,
+            metadata.block_blob_gas_used,
+        ),
+        (
+            GlobalMetadata::BlockExcessBlobGas,
+            metadata.block_excess_blob_gas,
+        ),
+        (
+            GlobalMetadata::ParentBeaconBlockRoot,
+            h2u(metadata.parent_beacon_block_root),
+        ),
         (GlobalMetadata::BlockGasUsedBefore, inputs.gas_used_before),
         (GlobalMetadata::BlockGasUsedAfter, inputs.gas_used_after),
         (GlobalMetadata::TxnNumberBefore, inputs.txn_number_before),
@@ -380,20 +395,24 @@ fn initialize_kernel_code_and_shift_table(memory: &mut MemoryState) {
 
 /// Returns the memory addresses and values that should comprise the state at
 /// the start of the segment's execution.
+/// Ignores zero values in non-preinitialized segments.
 fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(MemoryAddress, U256)> {
     let mut res = vec![];
     for (ctx_idx, ctx) in memory_before.contexts.iter().enumerate() {
         for (segment_idx, segment) in ctx.segments.iter().enumerate() {
             for (virt, value) in segment.content.iter().enumerate() {
                 if let &Some(val) = value {
-                    res.push((
-                        MemoryAddress {
-                            context: ctx_idx,
-                            segment: segment_idx,
-                            virt,
-                        },
-                        val,
-                    ));
+                    // We skip zero values in non-preinitialized segments.
+                    if !val.is_zero() || PREINITIALIZED_SEGMENTS_INDICES.contains(&segment_idx) {
+                        res.push((
+                            MemoryAddress {
+                                context: ctx_idx,
+                                segment: segment_idx,
+                                virt,
+                            },
+                            val,
+                        ));
+                    }
                 }
             }
         }

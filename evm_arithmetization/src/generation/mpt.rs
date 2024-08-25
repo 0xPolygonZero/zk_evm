@@ -20,7 +20,7 @@ use crate::util::{h2u, u256_to_usize};
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
-#[derive(RlpEncodable, RlpDecodable, Debug)]
+#[derive(RlpEncodable, RlpDecodable, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AccountRlp {
     pub nonce: U256,
     pub balance: U256,
@@ -72,10 +72,16 @@ impl LegacyReceiptRlp {
     }
 }
 
-pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
+/// Decodes a transaction receipt from an RLP string, outputting a tuple
+/// consisting of:
+///   - the receipt's [`PayloadInfo`],
+///   - the transaction type,
+///   - the decoded [`LegacyReceiptRlp`].
+pub fn decode_receipt(rlp: &[u8]) -> Result<(PayloadInfo, usize, LegacyReceiptRlp), ProgramError> {
     let txn_type = match rlp.first().ok_or(ProgramError::InvalidRlp)? {
         1 => 1,
         2 => 2,
+        3 => 3,
         _ => 0,
     };
 
@@ -86,6 +92,11 @@ pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     let decoded_receipt: LegacyReceiptRlp =
         rlp::decode(rlp).map_err(|_| ProgramError::InvalidRlp)?;
 
+    Ok((payload_info, txn_type, decoded_receipt))
+}
+
+pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
+    let (payload_info, txn_type, decoded_receipt) = decode_receipt(rlp)?;
     let mut parsed_receipt = if txn_type == 0 {
         Vec::new()
     } else {
@@ -120,6 +131,10 @@ pub(crate) fn parse_receipts(rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
 fn parse_storage_value(value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
     let value: U256 = rlp::decode(value_rlp).map_err(|_| ProgramError::InvalidRlp)?;
     Ok(vec![value])
+}
+
+fn parse_storage_value_no_return(_value_rlp: &[u8]) -> Result<Vec<U256>, ProgramError> {
+    Ok(vec![])
 }
 
 const fn empty_nibbles() -> Nibbles {
@@ -306,7 +321,9 @@ fn load_state_trie(
             log::debug!("storage trie ptr = {storage_ptr_ptr}");
             trie_data.push(Some((trie_data.len() + 2).into()));
             trie_data.push(Some(code_hash.into_uint()));
-            let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value)?;
+            // We don't need to store the slot values, as they will be overwritten in
+            // `mpt_set_payload`.
+            let storage_ptr = load_mpt(storage_trie, trie_data, &parse_storage_value_no_return)?;
             if storage_ptr == 0 {
                 trie_data[storage_ptr_ptr] = Some(0.into());
             }
@@ -448,7 +465,7 @@ where
     F: Fn(&[u8]) -> Result<Vec<U256>, ProgramError>,
 {
     match trie.deref() {
-        Node::Branch { children, value } => {
+        Node::Branch { children, value: _ } => {
             // Now, load all children and update their pointers.
             for (i, child) in children.iter().enumerate() {
                 let extended_key = key.merge_nibbles(&Nibbles {
@@ -580,7 +597,7 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         &mut hash_nodes,
         &mut trie_data,
         &storage_tries_by_state_key,
-    );
+    )?;
     log::debug!("hash nodes = {:?}", hash_nodes);
 
     Ok((
@@ -757,6 +774,8 @@ pub(crate) fn get_final_state_mpt(
 }
 
 pub mod transaction_testing {
+    use ethereum_types::H160;
+
     use super::*;
 
     #[derive(RlpEncodable, RlpDecodable, Debug, Clone, PartialEq, Eq)]
@@ -830,6 +849,25 @@ pub mod transaction_testing {
         pub value: U256,
         pub data: Bytes,
         pub access_list: Vec<AccessListItemRlp>,
+        pub y_parity: U256,
+        pub r: U256,
+        pub s: U256,
+    }
+
+    #[derive(RlpEncodable, RlpDecodable, Debug, Clone, PartialEq, Eq)]
+    pub struct BlobTransactionRlp {
+        pub chain_id: u64,
+        pub nonce: U256,
+        pub max_priority_fee_per_gas: U256,
+        pub max_fee_per_gas: U256,
+        pub gas: U256,
+        // As per EIP-4844, blob transactions cannot have the form of a create transaction.
+        pub to: H160,
+        pub value: U256,
+        pub data: Bytes,
+        pub access_list: Vec<AccessListItemRlp>,
+        pub max_fee_per_blob_gas: U256,
+        pub blob_versioned_hashes: Vec<H256>,
         pub y_parity: U256,
         pub r: U256,
         pub s: U256,

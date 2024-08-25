@@ -113,10 +113,7 @@ pub(crate) fn ctl_arithmetic_base_rows<F: Field>() -> TableWithColumns<F> {
     // (also `ops` is used as the operation filter). The list of
     // operations includes binary operations which will simply ignore
     // the third input.
-    let col_bit = Column::linear_combination_with_constant(
-        vec![(COL_MAP.opcode_bits[5], F::NEG_ONE)],
-        F::ONE,
-    );
+    let col_bit = Column::single(COL_MAP.opcode_bits[7]);
     TableWithColumns::new(
         *Table::Cpu,
         columns,

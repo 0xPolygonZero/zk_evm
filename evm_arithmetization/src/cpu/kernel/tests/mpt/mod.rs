@@ -65,15 +65,6 @@ pub(crate) fn test_account_2() -> AccountRlp {
     }
 }
 
-pub(crate) fn test_account_2_empty_storage() -> AccountRlp {
-    AccountRlp {
-        nonce: U256::from(5555),
-        balance: U256::from(6666),
-        storage_root: HashedPartialTrie::from(Node::Empty).hash(),
-        code_hash: H256::from_uint(&U256::from(8888)),
-    }
-}
-
 pub(crate) fn test_account_2_rlp() -> Vec<u8> {
     rlp::encode(&test_account_2()).to_vec()
 }

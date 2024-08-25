@@ -3,6 +3,7 @@ mod add11;
 mod balance;
 mod bignum;
 mod blake2_f;
+mod blobhash;
 mod block_hash;
 mod bls381;
 mod bn254;
@@ -13,12 +14,14 @@ mod hash;
 mod init_exc_stop;
 mod kernel_consistency;
 mod log;
+mod mcopy;
 mod mpt;
 mod packing;
 mod receipt;
 mod rlp;
 mod signed_syscalls;
 mod transaction_parsing;
+mod transient_storage;
 
 use std::{
     collections::{BTreeSet, HashMap},
@@ -258,6 +261,18 @@ impl<F: Field> Interpreter<F> {
         output
     }
 
+    pub(crate) const fn stack_len(&self) -> usize {
+        self.generation_state.registers.stack_len
+    }
+
+    pub(crate) const fn stack_top(&self) -> anyhow::Result<U256, ProgramError> {
+        if self.stack_len() > 0 {
+            Ok(self.generation_state.registers.stack_top)
+        } else {
+            Err(ProgramError::StackUnderflow)
+        }
+    }
+
     // Actually pushes in memory. Only used for tests.
     pub(crate) fn push(&mut self, x: U256) -> Result<(), ProgramError> {
         use crate::cpu::stack::MAX_USER_STACK_SIZE;
@@ -330,6 +345,14 @@ impl<F: Field> Interpreter<F> {
         if context == 0 {
             assert!(self.is_kernel());
         }
+
+        while self.generation_state.memory.contexts.len() <= context {
+            self.generation_state
+                .memory
+                .contexts
+                .push(MemoryContextState::default());
+        }
+
         self.generation_state.registers.context = context;
     }
 }

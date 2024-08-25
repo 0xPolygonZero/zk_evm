@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use alloy::{
     primitives::B256,
     providers::Provider,
-    rpc::types::eth::{BlockId, BlockNumberOrTag, BlockTransactionsKind, Withdrawal},
+    rpc::types::eth::{BlockId, BlockTransactionsKind, Withdrawal},
     transports::Transport,
 };
 use anyhow::Context as _;
@@ -9,9 +11,8 @@ use clap::ValueEnum;
 use compat::Compat;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use futures::{StreamExt as _, TryStreamExt as _};
-use prover::ProverInput;
-use trace_decoder::types::{BlockLevelData, OtherBlockData};
-use zero_bin_common::block_interval::BlockInterval;
+use prover::BlockProverInput;
+use trace_decoder::{BlockLevelData, OtherBlockData};
 
 pub mod jerigon;
 pub mod native;
@@ -23,56 +24,36 @@ use crate::provider::CachedProvider;
 const PREVIOUS_HASHES_COUNT: usize = 256;
 
 /// The RPC type.
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, Copy)]
 pub enum RpcType {
     Jerigon,
     Native,
 }
 
-/// Obtain the prover input for a given block interval
-pub async fn prover_input<ProviderT, TransportT>(
-    cached_provider: &CachedProvider<ProviderT, TransportT>,
-    block_interval: BlockInterval,
-    checkpoint_block_id: BlockId,
+/// Obtain the prover input for one block
+pub async fn block_prover_input<ProviderT, TransportT>(
+    cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
+    block_id: BlockId,
+    checkpoint_state_trie_root: B256,
     rpc_type: RpcType,
-) -> anyhow::Result<ProverInput>
+) -> Result<BlockProverInput, anyhow::Error>
 where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
-    // Grab interval checkpoint block state trie
-    let checkpoint_state_trie_root = cached_provider
-        .get_block(checkpoint_block_id, BlockTransactionsKind::Hashes)
-        .await?
-        .header
-        .state_root;
-
-    let mut block_proofs = Vec::new();
-    let mut block_interval = block_interval.into_bounded_stream()?;
-
-    while let Some(block_num) = block_interval.next().await {
-        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
-        let block_prover_input = match rpc_type {
-            RpcType::Jerigon => {
-                jerigon::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root)
-                    .await?
-            }
-            RpcType::Native => {
-                native::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root)
-                    .await?
-            }
-        };
-
-        block_proofs.push(block_prover_input);
+    match rpc_type {
+        RpcType::Jerigon => {
+            jerigon::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root).await
+        }
+        RpcType::Native => {
+            native::block_prover_input(cached_provider, block_id, checkpoint_state_trie_root).await
+        }
     }
-    Ok(ProverInput {
-        blocks: block_proofs,
-    })
 }
 
 /// Fetches other block data
 async fn fetch_other_block_data<ProviderT, TransportT>(
-    cached_provider: &CachedProvider<ProviderT, TransportT>,
+    cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
     target_block_id: BlockId,
     checkpoint_state_trie_root: B256,
 ) -> anyhow::Result<OtherBlockData>
@@ -80,6 +61,7 @@ where
     ProviderT: Provider<TransportT>,
     TransportT: Transport + Clone,
 {
+    use itertools::Itertools;
     let target_block = cached_provider
         .get_block(target_block_id, BlockTransactionsKind::Hashes)
         .await?;
@@ -102,28 +84,33 @@ where
         })
         .take(PREVIOUS_HASHES_COUNT + 1)
         .filter(|i| *i >= 0)
+        .chunks(2)
+        .into_iter()
+        .map(|mut chunk| {
+            // We convert to tuple of (current block, optional previous block)
+            let first = chunk
+                .next()
+                .expect("must be valid according to itertools::Iterator::chunks definition");
+            let second = chunk.next();
+            (first, second)
+        })
         .collect::<Vec<_>>();
+
     let concurrency = previous_block_numbers.len();
     let collected_hashes = futures::stream::iter(
         previous_block_numbers
-            .chunks(2) // we get hash for previous and current block with one request
-            .map(|block_numbers| {
+            .into_iter() // we get hash for previous and current block with one request
+            .map(|(current_block_number, previous_block_number)| {
                 let cached_provider = &cached_provider;
-                let block_num = &block_numbers[0];
-                let previos_block_num = if block_numbers.len() > 1 {
-                    Some(block_numbers[1])
-                } else {
-                    // For genesis block
-                    None
-                };
+                let block_num = current_block_number;
                 async move {
                     let block = cached_provider
-                        .get_block((*block_num as u64).into(), BlockTransactionsKind::Hashes)
+                        .get_block((block_num as u64).into(), BlockTransactionsKind::Hashes)
                         .await
                         .context("couldn't get block")?;
                     anyhow::Ok([
-                        (block.header.hash, Some(*block_num)),
-                        (Some(block.header.parent_hash), previos_block_num),
+                        (block.header.hash, Some(block_num)),
+                        (Some(block.header.parent_hash), previous_block_number),
                     ])
                 }
             }),
@@ -169,6 +156,21 @@ where
                     .into(),
                 block_gas_used: target_block.header.gas_used.into(),
                 block_bloom: target_block.header.logs_bloom.compat(),
+                parent_beacon_block_root: target_block
+                    .header
+                    .parent_beacon_block_root
+                    .context("target block is missing field `parent_beacon_block_root`")?
+                    .compat(),
+                block_blob_gas_used: target_block
+                    .header
+                    .blob_gas_used
+                    .context("target block is missing field `blob_gas_used`")?
+                    .into(),
+                block_excess_blob_gas: target_block
+                    .header
+                    .excess_blob_gas
+                    .context("target block is missing field `excess_blob_gas`")?
+                    .into(),
             },
             b_hashes: BlockHashes {
                 prev_hashes: prev_hashes.map(|it| it.compat()).into(),

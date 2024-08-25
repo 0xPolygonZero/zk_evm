@@ -20,7 +20,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
-use crate::proof::{AllProof, AllProofChallenges, MemCap, PublicValues};
+use crate::proof::{AllProof, AllProofChallenges, PublicValues};
 use crate::util::h2u;
 
 pub(crate) fn initial_memory_merkle_cap<
@@ -303,12 +303,24 @@ where
             public_values.block_metadata.block_base_fee,
         ),
         (
+            GlobalMetadata::ParentBeaconBlockRoot,
+            h2u(public_values.block_metadata.parent_beacon_block_root),
+        ),
+        (
             GlobalMetadata::BlockCurrentHash,
             h2u(public_values.block_hashes.cur_hash),
         ),
         (
             GlobalMetadata::BlockGasUsed,
             public_values.block_metadata.block_gas_used,
+        ),
+        (
+            GlobalMetadata::BlockBlobGasUsed,
+            public_values.block_metadata.block_blob_gas_used,
+        ),
+        (
+            GlobalMetadata::BlockExcessBlobGas,
+            public_values.block_metadata.block_excess_blob_gas,
         ),
         (
             GlobalMetadata::TxnNumberBefore,
@@ -457,6 +469,7 @@ pub mod testing {
     }
 }
 
+#[cfg(debug_assertions)]
 pub(crate) mod debug_utils {
     use super::*;
 
@@ -509,6 +522,18 @@ pub(crate) mod debug_utils {
             (
                 GlobalMetadata::BlockGasUsed,
                 public_values.block_metadata.block_gas_used,
+            ),
+            (
+                GlobalMetadata::BlockBlobGasUsed,
+                public_values.block_metadata.block_blob_gas_used,
+            ),
+            (
+                GlobalMetadata::BlockExcessBlobGas,
+                public_values.block_metadata.block_excess_blob_gas,
+            ),
+            (
+                GlobalMetadata::ParentBeaconBlockRoot,
+                h2u(public_values.block_metadata.parent_beacon_block_root),
             ),
             (
                 GlobalMetadata::TxnNumberBefore,

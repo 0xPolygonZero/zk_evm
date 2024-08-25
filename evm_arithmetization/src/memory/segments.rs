@@ -5,7 +5,6 @@ pub(crate) const SEGMENT_SCALING_FACTOR: usize = 32;
 /// This contains all the existing memory segments. The values in the enum are
 /// shifted by 32 bits to allow for convenient address components (context /
 /// segment / virtual) bundling in the kernel.
-#[allow(dead_code)]
 #[allow(clippy::enum_clike_unportable_variant)]
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug, Serialize, Deserialize)]
 pub(crate) enum Segment {
@@ -82,10 +81,26 @@ pub(crate) enum Segment {
     StorageLinkedList = 35 << SEGMENT_SCALING_FACTOR,
     /// Array of state and storage hashed nodes
     HashedNodes = 36 << SEGMENT_SCALING_FACTOR,
+    // The transient storage of the current transaction.
+    TransientStorage = 37 << SEGMENT_SCALING_FACTOR,
+    /// List of contracts which have been created during the current
+    /// transaction.
+    CreatedContracts = 38 << SEGMENT_SCALING_FACTOR,
+    /// Blob versioned hashes specified in a type-3 transaction.
+    TxnBlobVersionedHashes = 39 << SEGMENT_SCALING_FACTOR,
 }
 
+// These segments are not zero-initialized.
+pub(crate) const PREINITIALIZED_SEGMENTS_INDICES: [usize; 5] = [
+    Segment::Code.unscale(),
+    Segment::TrieData.unscale(),
+    Segment::AccountsLinkedList.unscale(),
+    Segment::StorageLinkedList.unscale(),
+    Segment::HashedNodes.unscale(),
+];
+
 impl Segment {
-    pub(crate) const COUNT: usize = 37;
+    pub(crate) const COUNT: usize = 40;
 
     /// Unscales this segment by `SEGMENT_SCALING_FACTOR`.
     pub(crate) const fn unscale(&self) -> usize {
@@ -131,6 +146,9 @@ impl Segment {
             Self::AccountsLinkedList,
             Self::StorageLinkedList,
             Self::HashedNodes,
+            Self::TransientStorage,
+            Self::CreatedContracts,
+            Self::TxnBlobVersionedHashes,
         ]
     }
 
@@ -174,6 +192,9 @@ impl Segment {
             Segment::AccountsLinkedList => "SEGMENT_ACCOUNTS_LINKED_LIST",
             Segment::StorageLinkedList => "SEGMENT_STORAGE_LINKED_LIST",
             Segment::HashedNodes => "SEGMENT_HASH_NODES",
+            Segment::TransientStorage => "SEGMENT_TRANSIENT_STORAGE",
+            Segment::CreatedContracts => "SEGMENT_CREATED_CONTRACTS",
+            Segment::TxnBlobVersionedHashes => "SEGMENT_TXN_BLOB_VERSIONED_HASHES",
         }
     }
 
@@ -216,6 +237,9 @@ impl Segment {
             Segment::AccountsLinkedList => 256,
             Segment::StorageLinkedList => 256,
             Segment::HashedNodes => 256,
+            Segment::TransientStorage => 256,
+            Segment::CreatedContracts => 256,
+            Segment::TxnBlobVersionedHashes => 256,
         }
     }
 }

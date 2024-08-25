@@ -12,8 +12,6 @@
 //     keccak256(rlp([nonce, gas_price, gas_limit, to, value, data]))
 
 global process_type_0_txn:
-    // stack: retdest
-    PUSH @INITIAL_TXN_RLP_ADDR
     // stack: rlp_addr, retdest
     %decode_rlp_list_len
     // We don't actually need the length.

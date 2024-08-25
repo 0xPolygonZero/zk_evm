@@ -6,19 +6,14 @@ use std::sync::Arc;
 use ethereum_types::H256;
 use keccak_hash::keccak;
 use rlp::{Prototype, Rlp};
+use zk_evm_common::EMPTY_TRIE_HASH;
 
 use super::{
     nibbles::Nibbles,
     partial_trie::{Node, PartialTrie, WrappedNode},
 };
 
-/// The hash of an empty trie.
-const EMPTY_TRIE_HASH: H256 = H256([
-    0x56, 0xe8, 0x1f, 0x17, 0x1b, 0xcc, 0x55, 0xa6, 0xff, 0x83, 0x45, 0xe6, 0x92, 0xc0, 0xf8, 0x6e,
-    0x5b, 0x48, 0xe0, 0x1b, 0x99, 0x6c, 0xad, 0xc0, 0x01, 0x62, 0x2f, 0xb5, 0xe3, 0x63, 0xb4, 0x21,
-]);
-
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// A builder for constructing a partial trie from a collection of nodes.
 pub struct PartialTrieBuilder<T> {
     root: H256,
@@ -28,7 +23,7 @@ pub struct PartialTrieBuilder<T> {
 
 impl<T: PartialTrie> PartialTrieBuilder<T> {
     /// Creates a new `PartialTrieBuilder` with the given root and nodes.
-    pub fn new(root: H256, nodes: HashMap<H256, Vec<u8>>) -> Self {
+    pub const fn new(root: H256, nodes: HashMap<H256, Vec<u8>>) -> Self {
         PartialTrieBuilder {
             root,
             nodes,

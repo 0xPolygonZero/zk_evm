@@ -79,7 +79,14 @@ calldataload_large_offset:
     // stack: kexit_info, dest_offset, offset, size
     %wcopy_charge_gas
 
-    %stack (kexit_info, dest_offset, offset, size) -> (dest_offset, size, kexit_info, dest_offset, offset, size)
+    // Ensure that `offset + size` won't overflow the reserved 32-bit limb
+    // of the `virtual` component of the source memory address.
+    DUP4 DUP4
+    // stack: offset, size, kexit_info, dest_offset, offset, size
+    %add_u32_or_fault
+
+    %stack (offset_plus_size, kexit_info, dest_offset, offset, size) ->
+        (dest_offset, size, kexit_info, dest_offset, offset, size)
     %add_or_fault
     // stack: expanded_num_bytes, kexit_info, dest_offset, offset, size, kexit_info
     DUP1 %ensure_reasonable_offset
@@ -122,6 +129,7 @@ codecopy_within_bounds:
     %jump(memcpy_bytes)
 
 wcopy_within_bounds:
+    // TODO: rework address creation to have less stack manipulation overhead
     // stack: segment, src_ctx, kexit_info, dest_offset, offset, size
     GET_CONTEXT
     %stack (context, segment, src_ctx, kexit_info, dest_offset, offset, size) ->
@@ -254,6 +262,91 @@ extcodecopy_contd:
     // stack: code_size, ctx, kexit_info, dest_offset, offset, size
     %codecopy_after_checks(@SEGMENT_CODE)
 
+// Same as %wcopy but with special handling in case of overlapping ranges.
+global sys_mcopy:
+    // stack: kexit_info, dest_offset, offset, size
+    %wcopy_charge_gas
+
+    %stack (kexit_info, dest_offset, offset, size) -> (dest_offset, size, kexit_info, dest_offset, offset, size)
+    %add_or_fault
+    // stack: expanded_num_bytes, kexit_info, dest_offset, offset, size, kexit_info
+    DUP1 %ensure_reasonable_offset
+    %update_mem_bytes
+
+    %stack (kexit_info, dest_offset, offset, size) -> (offset, size, kexit_info, dest_offset, offset, size)
+    %add_or_fault
+    DUP1 %ensure_reasonable_offset
+    %update_mem_bytes
+
+    // stack: kexit_info, dest_offset, offset, size
+    DUP3 DUP3 EQ
+    // stack: dest_offset = offset, kexit_info, dest_offset, offset, size
+    %jumpi(mcopy_empty) // If SRC == DST, just pop the stack and exit the kernel
+
+    // stack: kexit_info, dest_offset, offset, size
+    GET_CONTEXT
+    PUSH @SEGMENT_MAIN_MEMORY
+
+    DUP5 DUP5 LT
+    // stack: dest_offset < offset, kexit_info, dest_offset, offset, size
+    %jumpi(wcopy_within_bounds)
+
+    // stack: segment, context, kexit_info, dest_offset, offset, size
+    DUP6 PUSH 32 %min
+    // stack: shift=min(size, 32), segment, context, kexit_info, dest_offset, offset, size
+    DUP6 DUP8 ADD
+    // stack: offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP6 LT
+    // stack: dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP2
+    // stack: shift, dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP9 GT
+    // stack: size > shift, dest_offset < offset + size, shift, segment, context, kexit_info, dest_offset, offset, size
+    MUL // AND
+    // stack: (size > shift) && (dest_offset < offset + size), shift, segment, context, kexit_info, dest_offset, offset, size
+
+    // If the conditions `size > shift` and `dest_offset < offset + size` are satisfied, that means
+    // we will get an overlap that will overwrite some SRC data. In that case, we will proceed to the
+    // memcpy in the backwards direction to never overwrite the SRC section before it has been read.
+    %jumpi(mcopy_with_overlap)
+
+    // Otherwise, we either have `SRC` < `DST`, or a small enough `size` that a single loop of
+    // `memcpy_bytes` suffices and does not risk to overwrite `SRC` data before being read.
+    // stack: shift, segment, context, kexit_info, dest_offset, offset, size
+    POP
+    %jump(wcopy_within_bounds)
+
+mcopy_with_overlap:
+    // We do have an overlap between the SRC and DST ranges.
+    // We will proceed to `memcpy` in the backwards direction to prevent overwriting unread SRC data.
+    // For this, we need to update `offset` and `dest_offset` to their final position, corresponding
+    // to `x + size - min(32, size)`.
+
+    // stack: shift=min(size, 32), segment, context, kexit_info, dest_offset, offset, size
+    DUP1
+    // stack: shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    DUP8 DUP8 ADD
+    // stack: offset+size, shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    SUB
+    // stack: offset'=offset+size-shift, shift, segment, context, kexit_info, dest_offset, offset, size
+    SWAP5 DUP8 ADD
+    // stack: dest_offset+size, shift, segment, context, kexit_info, offset', offset, size
+    SUB
+    // stack: dest_offset'=dest_offset+size-shift, segment, context, kexit_info, offset', offset, size
+
+    %stack (next_dst_offset, segment, context, kexit_info, new_offset, offset, size) ->
+        (context, segment, new_offset, segment, next_dst_offset, context, size, wcopy_after, kexit_info)
+    %build_address // SRC
+    SWAP3
+    %build_address // DST
+    // stack: DST, SRC, size, wcopy_after, kexit_info
+    %jump(memcpy_bytes_backwards)
+
+mcopy_empty:
+    // kexit_info, dest_offset, offset, size
+    %stack (kexit_info, dest_offset, offset, size) -> (kexit_info)
+    EXIT_KERNEL
+
 
 // The internal logic is similar to wcopy, but handles range overflow differently.
 // It is used for both CODECOPY and EXTCODECOPY.
@@ -265,12 +358,12 @@ extcodecopy_contd:
 
     PUSH $segment SWAP1
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
-    DUP1 DUP8 DUP8 ADD
+    DUP1 DUP8 DUP8 %add_or_fault
     // stack: offset + size, total_size, total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     LT %jumpi(codecopy_within_bounds)
 
     // stack: total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
-    DUP7 DUP7 ADD
+    DUP7 DUP7 ADD // We already checked for overflow.
     // stack: offset + size, total_size, segment, src_ctx, kexit_info, dest_offset, offset, size
     SUB // extra_size = offset + size - total_size
     // stack: extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
@@ -278,7 +371,7 @@ extcodecopy_contd:
     // stack: copy_size = size - extra_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
 
     // Compute the new dest_offset after actual copies, at which we will start padding with zeroes.
-    DUP1 DUP7 ADD
+    DUP1 DUP7 ADD // We already checked for overflow.
     // stack: new_dest_offset, copy_size, extra_size, segment, src_ctx, kexit_info, dest_offset, offset, size
 
     GET_CONTEXT

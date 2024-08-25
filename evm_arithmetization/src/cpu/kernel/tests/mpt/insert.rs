@@ -4,7 +4,7 @@ use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 
-use super::{test_account_1, test_account_1_empty_storage_rlp};
+use super::test_account_1_empty_storage_rlp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::interpreter::Interpreter;
@@ -188,7 +188,7 @@ fn test_state_trie(
         .halt_offsets
         .push(KERNEL.global_labels["after_store_initial"]);
     interpreter.generation_state.registers.program_counter = KERNEL.global_labels["store_initial"];
-    interpreter.run();
+    interpreter.run()?;
 
     // Set initial tries.
     interpreter
@@ -200,7 +200,9 @@ fn test_state_trie(
     interpreter
         .push((Segment::AccountsLinkedList as usize + 6).into())
         .expect("The stack should not overflow");
-    interpreter.push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot));
+    interpreter
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .unwrap();
 
     // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
@@ -251,7 +253,7 @@ fn test_state_trie(
 
     // Now, execute `mpt_hash_state_trie` and check the hash value (both are done
     // under `check_state_trie`).
-    state_trie.insert(k, rlp::encode(&account).to_vec());
+    state_trie.insert(k, rlp::encode(&account).to_vec())?;
     let expected_state_trie_hash = state_trie.hash();
     interpreter.set_global_metadata_field(
         GlobalMetadata::StateTrieRootDigestAfter,

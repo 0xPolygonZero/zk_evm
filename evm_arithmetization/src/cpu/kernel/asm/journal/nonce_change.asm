@@ -16,4 +16,3 @@ global revert_nonce_change:
     %mstore_trie_data
     // stack: retdest
     JUMP
-

@@ -1,25 +1,21 @@
-#[cfg(not(feature = "test_only"))]
 use std::time::Instant;
 
-#[cfg(not(feature = "test_only"))]
 use evm_arithmetization::generation::TrimmedGenerationInputs;
 use evm_arithmetization::proof::PublicValues;
-#[cfg(not(feature = "test_only"))]
-use paladin::operation::FatalStrategy;
+use evm_arithmetization::{prover::testing::simulate_execution_all_segments, GenerationInputs};
 use paladin::{
-    operation::{FatalError, Monoid, Operation, Result},
+    operation::{FatalError, FatalStrategy, Monoid, Operation, Result},
     registry, RemoteExecute,
 };
+use proof_gen::types::Field;
 use proof_gen::{
     proof_gen::{generate_block_proof, generate_segment_agg_proof, generate_transaction_agg_proof},
     proof_types::{
-        GeneratedBlockProof, GeneratedTxnAggProof, SegmentAggregatableProof, TxnAggregatableProof,
+        BatchAggregatableProof, GeneratedBlockProof, GeneratedTxnAggProof, SegmentAggregatableProof,
     },
 };
 use serde::{Deserialize, Serialize};
-use trace_decoder::types::AllData;
 use tracing::error;
-#[cfg(not(feature = "test_only"))]
 use tracing::{event, info_span, Level};
 use zero_bin_common::{debug_utils::save_inputs_to_disk, prover_state::p_state};
 
@@ -30,12 +26,14 @@ pub struct SegmentProof {
     pub save_inputs_on_error: bool,
 }
 
-#[cfg(not(feature = "test_only"))]
 impl Operation for SegmentProof {
-    type Input = AllData;
+    type Input = evm_arithmetization::AllData;
     type Output = proof_gen::proof_types::SegmentAggregatableProof;
 
     fn execute(&self, all_data: Self::Input) -> Result<Self::Output> {
+        let all_data =
+            all_data.map_err(|err| FatalError::from_str(&err.0, FatalStrategy::Terminate))?;
+
         let input = all_data.0.clone();
         let segment_index = all_data.1.segment_index();
         let _span = SegmentProofSpan::new(&input, all_data.1.segment_index());
@@ -45,7 +43,7 @@ impl Operation for SegmentProof {
                 .map_err(|err| {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
-                            "b{}_txns_{}-{}-({})_input.log",
+                            "b{}_txns_{}..{}-({})_input.json",
                             input.block_metadata.block_number,
                             input.txn_number_before,
                             input.txn_number_before + input.txn_hashes.len(),
@@ -68,13 +66,38 @@ impl Operation for SegmentProof {
     }
 }
 
-#[cfg(feature = "test_only")]
-impl Operation for SegmentProof {
-    type Input = AllData;
+#[derive(Deserialize, Serialize, RemoteExecute)]
+pub struct SegmentProofTestOnly {
+    pub save_inputs_on_error: bool,
+}
+
+impl Operation for SegmentProofTestOnly {
+    type Input = (GenerationInputs, usize);
     type Output = ();
 
-    fn execute(&self, _input: Self::Input) -> Result<Self::Output> {
-        todo!() // currently unused, change or remove
+    fn execute(&self, inputs: Self::Input) -> Result<Self::Output> {
+        if self.save_inputs_on_error {
+            simulate_execution_all_segments::<Field>(inputs.0.clone(), inputs.1).map_err(|err| {
+                if let Err(write_err) = save_inputs_to_disk(
+                    format!(
+                        "b{}_txns_{}..{}_input.json",
+                        inputs.0.block_metadata.block_number,
+                        inputs.0.txn_number_before,
+                        inputs.0.txn_number_before + inputs.0.signed_txns.len(),
+                    ),
+                    inputs.0,
+                ) {
+                    error!("Failed to save txn proof input to disk: {:?}", write_err);
+                }
+
+                FatalError::from_anyhow(err, FatalStrategy::Terminate)
+            })?
+        } else {
+            simulate_execution_all_segments::<Field>(inputs.0, inputs.1)
+                .map_err(|err| FatalError::from_anyhow(err, FatalStrategy::Terminate))?;
+        }
+
+        Ok(())
     }
 }
 
@@ -82,14 +105,12 @@ impl Operation for SegmentProof {
 ///
 /// - When created, it starts a span with the transaction proof id.
 /// - When dropped, it logs the time taken by the transaction proof.
-#[cfg(not(feature = "test_only"))]
 struct SegmentProofSpan {
     _span: tracing::span::EnteredSpan,
     start: Instant,
     descriptor: String,
 }
 
-#[cfg(not(feature = "test_only"))]
 impl SegmentProofSpan {
     /// Get a unique id for the transaction proof.
     fn get_id(ir: &TrimmedGenerationInputs, segment_index: usize) -> String {
@@ -149,7 +170,6 @@ impl SegmentProofSpan {
     }
 }
 
-#[cfg(not(feature = "test_only"))]
 impl Drop for SegmentProofSpan {
     fn drop(&mut self) {
         event!(
@@ -207,23 +227,23 @@ impl Monoid for SegmentAggProof {
 }
 
 #[derive(Deserialize, Serialize, RemoteExecute)]
-pub struct TxnAggProof {
+pub struct BatchAggProof {
     pub save_inputs_on_error: bool,
 }
-fn get_agg_proof_public_values(elem: TxnAggregatableProof) -> PublicValues {
+fn get_agg_proof_public_values(elem: BatchAggregatableProof) -> PublicValues {
     match elem {
-        TxnAggregatableProof::Segment(info) => info.p_vals,
-        TxnAggregatableProof::Txn(info) => info.p_vals,
-        TxnAggregatableProof::Agg(info) => info.p_vals,
+        BatchAggregatableProof::Segment(info) => info.p_vals,
+        BatchAggregatableProof::Txn(info) => info.p_vals,
+        BatchAggregatableProof::Agg(info) => info.p_vals,
     }
 }
 
-impl Monoid for TxnAggProof {
-    type Elem = TxnAggregatableProof;
+impl Monoid for BatchAggProof {
+    type Elem = BatchAggregatableProof;
 
     fn combine(&self, a: Self::Elem, b: Self::Elem) -> Result<Self::Elem> {
         let lhs = match a {
-            TxnAggregatableProof::Segment(segment) => TxnAggregatableProof::from(
+            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::from(
                 generate_segment_agg_proof(
                     p_state(),
                     &SegmentAggregatableProof::from(segment.clone()),
@@ -236,7 +256,7 @@ impl Monoid for TxnAggProof {
         };
 
         let rhs = match b {
-            TxnAggregatableProof::Segment(segment) => TxnAggregatableProof::from(
+            BatchAggregatableProof::Segment(segment) => BatchAggregatableProof::from(
                 generate_segment_agg_proof(
                     p_state(),
                     &SegmentAggregatableProof::from(segment.clone()),
@@ -256,7 +276,7 @@ impl Monoid for TxnAggProof {
                 ];
                 if let Err(write_err) = save_inputs_to_disk(
                     format!(
-                        "b{}_agg_lhs_rhs_inputs.log",
+                        "b{}_agg_lhs_rhs_inputs.json",
                         pv[0].block_metadata.block_number
                     ),
                     pv,
@@ -293,7 +313,7 @@ impl Operation for BlockProof {
                 if self.save_inputs_on_error {
                     if let Err(write_err) = save_inputs_to_disk(
                         format!(
-                            "b{}_block_input.log",
+                            "b{}_block_input.json",
                             input.p_vals.block_metadata.block_number
                         ),
                         input.p_vals,
