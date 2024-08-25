@@ -425,10 +425,10 @@ fn get_state_and_storage_leaves(
             Ok(())
         }
         Node::Hash(hash) => {
-            hash_nodes.push(Some(U256::one())); // Set flag is_account to 1
             hash_nodes.push(Some(
                 key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
             ));
+            hash_nodes.push(Some(U256::one())); // Set flag is_account to 1
             hash_nodes.push(Some(h2u(*hash)));
             Ok(())
         }
@@ -515,7 +515,9 @@ where
         }
         Node::Hash(hash) => {
             log::debug!("adding hash node");
-            hash_nodes.push(Some(U256::zero())); // Set flag is_account to 0
+            hash_nodes.push(Some(
+                addr_key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
+            ));
             hash_nodes.push(Some(
                 key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
             ));
@@ -650,11 +652,10 @@ pub(crate) fn load_final_state_mpt(
         &ref_storage_tries_by_state_key,
     );
 
+
     log::debug!("trie_data len after = {:?}", trie_data.len());
-    log::debug!(
-        "trie_data after = {:?}",
-        trie_data.iter().enumerate().collect::<Vec<_>>()
-    );
+    log::debug!("final trie = {:?}", final_state_trie);
+    log::debug!("final trie hash = {:?}", final_state_trie.hash());
     res
 }
 
@@ -669,6 +670,7 @@ pub(crate) fn get_final_state_mpt(
     let mut last_slot = storage_linked_list.next();
     let mut hash_nodes = hashed_nodes.chunks(3);
     let mut last_hash_node = hash_nodes.next();
+    log::debug!("last hash node = {:?}", last_hash_node);
 
     for account in accounts_linked_list {
         if account[0] == U256::MAX {
@@ -678,6 +680,7 @@ pub(crate) fn get_final_state_mpt(
         let mut storage_trie = HashedPartialTrie::from(Node::Empty);
         let mut hashed_storage_trie = false;
         while let Some(hash_node) = last_hash_node
+            && Some(account[0]) == hash_node[0]
             && hash_node[1] == Some(U256::one())
         {
             log::debug!("inserting account hash node {:?}", hash_node[2]);
@@ -691,10 +694,11 @@ pub(crate) fn get_final_state_mpt(
         }
         loop {
             while let Some(hash_node) = last_hash_node
-                && hash_node[1] == Some(U256::zero())
+                && Some(account[0]) == hash_node[0]
             {
                 // If the node key is 0 the storage trie is a single hash node
-                if hash_node[0] == Some(U256::zero()) {
+                if hash_node[1] == Some(U256::zero()) {
+                    log::debug!("inserting hashed storage {:?}", hash_node[2]);
                     storage_trie = HashedPartialTrie::new(Node::Hash(H256::from_uint(
                         &hash_node[2].unwrap_or_default(),
                     )));
