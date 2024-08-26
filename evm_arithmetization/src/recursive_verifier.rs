@@ -38,7 +38,7 @@ use crate::proof::{
     BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, ExtraBlockData,
     ExtraBlockDataTarget, FinalPublicValues, FinalPublicValuesTarget, MemCap, MemCapTarget,
     PublicValues, PublicValuesTarget, RegistersData, RegistersDataTarget, TrieRoots,
-    TrieRootsTarget, DEFAULT_CAP_LEN,
+    TrieRootsTarget, DEFAULT_CAP_LEN, EMPTY_CONSOLIDATED_BLOCKHASH,
 };
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
@@ -620,10 +620,12 @@ pub(crate) fn add_virtual_final_public_values_public_input<
 ) -> FinalPublicValuesTarget {
     let state_trie_root_before = builder.add_virtual_public_input_arr();
     let state_trie_root_after = builder.add_virtual_public_input_arr();
+    let consolidated_hash = builder.add_virtual_public_input_arr();
 
     FinalPublicValuesTarget {
         state_trie_root_before,
         state_trie_root_after,
+        consolidated_hash,
     }
 }
 
@@ -720,10 +722,12 @@ pub(crate) fn add_virtual_block_hashes_public_input<
 ) -> BlockHashesTarget {
     let prev_hashes = builder.add_virtual_public_input_arr();
     let cur_hash = builder.add_virtual_public_input_arr();
+    let consolidated_hash = builder.add_virtual_public_input_arr();
 
     BlockHashesTarget {
         prev_hashes,
         cur_hash,
+        consolidated_hash,
     }
 }
 
@@ -771,7 +775,7 @@ pub(crate) fn add_virtual_registers_data_public_input<
     }
 }
 
-pub(crate) fn debug_public_values(public_values: &PublicValues) {
+pub(crate) fn debug_public_values<F: RichField>(public_values: &PublicValues<F>) {
     log::debug!("Public Values:");
     log::debug!(
         "  Trie Roots Before: {:?}",
@@ -786,7 +790,7 @@ pub(crate) fn debug_public_values(public_values: &PublicValues) {
 pub fn set_public_value_targets<F, W, const D: usize>(
     witness: &mut W,
     public_values_target: &PublicValuesTarget,
-    public_values: &PublicValues,
+    public_values: &PublicValues<F>,
 ) -> Result<(), ProgramError>
 where
     F: RichField + Extendable<D>,
@@ -847,7 +851,7 @@ where
 pub fn set_final_public_value_targets<F, W, const D: usize>(
     witness: &mut W,
     public_values_target: &FinalPublicValuesTarget,
-    public_values: &FinalPublicValues,
+    public_values: &FinalPublicValues<F>,
 ) -> Result<(), ProgramError>
 where
     F: RichField + Extendable<D>,
@@ -885,6 +889,10 @@ where
             public_values_target.state_trie_root_after[2 * i + 1],
             F::from_canonical_u32((limb >> 32) as u32),
         );
+    }
+
+    for (i, limb) in public_values.consolidated_hash.iter().enumerate() {
+        witness.set_target(public_values_target.consolidated_hash[i], *limb);
     }
 
     Ok(())
@@ -1028,7 +1036,7 @@ where
 pub(crate) fn set_block_hashes_target<F, W, const D: usize>(
     witness: &mut W,
     block_hashes_target: &BlockHashesTarget,
-    block_hashes: &BlockHashes,
+    block_hashes: &BlockHashes<F>,
 ) where
     F: RichField + Extendable<D>,
     W: Witness<F>,
@@ -1042,6 +1050,14 @@ pub(crate) fn set_block_hashes_target<F, W, const D: usize>(
     }
     let cur_block_hash_limbs: [F; 8] = h256_limbs::<F>(block_hashes.cur_hash);
     witness.set_target_arr(&block_hashes_target.cur_hash, &cur_block_hash_limbs);
+    witness.set_target_arr(
+        &block_hashes_target.consolidated_hash,
+        block_hashes.consolidated_hash.as_ref().unwrap_or(
+            &EMPTY_CONSOLIDATED_BLOCKHASH
+                .map(|u| F::from_canonical_u64(u))
+                .to_vec(),
+        ),
+    );
 }
 
 pub(crate) fn set_extra_public_values_target<F, W, const D: usize>(

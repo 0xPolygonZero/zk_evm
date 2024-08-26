@@ -144,7 +144,7 @@ fn observe_block_hashes<
     const D: usize,
 >(
     challenger: &mut Challenger<F, C::Hasher>,
-    block_hashes: &BlockHashes,
+    block_hashes: &BlockHashes<F>,
 ) {
     for i in 0..256 {
         challenger.observe_elements(&h256_limbs::<F>(block_hashes.prev_hashes[i]));
@@ -172,7 +172,7 @@ pub(crate) fn observe_public_values<
     const D: usize,
 >(
     challenger: &mut Challenger<F, C::Hasher>,
-    public_values: &PublicValues,
+    public_values: &PublicValues<F>,
 ) -> Result<(), ProgramError> {
     observe_trie_roots::<F, C, D>(challenger, &public_values.trie_roots_before);
     observe_trie_roots::<F, C, D>(challenger, &public_values.trie_roots_after);

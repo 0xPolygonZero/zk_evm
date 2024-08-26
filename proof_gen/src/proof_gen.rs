@@ -50,7 +50,7 @@ impl From<String> for ProofGenError {
 /// Generates a transaction proof from some IR data.
 pub fn generate_segment_proof(
     p_state: &ProverState,
-    gen_inputs: TrimmedGenerationInputs,
+    gen_inputs: TrimmedGenerationInputs<Field>,
     segment_data: &mut GenerationSegmentData,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> ProofGenResult<GeneratedSegmentProof> {

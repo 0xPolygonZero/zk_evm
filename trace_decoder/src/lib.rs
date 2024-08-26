@@ -104,9 +104,14 @@ use evm_arithmetization::GenerationInputs;
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
+use plonky2::field::goldilocks_field::GoldilocksField;
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
 use typed_mpt::{StateTrie, StorageTrie, TrieKey};
+
+/// The base field on which statements are being proven.
+// TODO(Robin): https://github.com/0xPolygonZero/zk_evm/issues/531
+pub type Field = GoldilocksField;
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -274,7 +279,7 @@ pub struct BlockLevelData {
     /// All block data excluding block hashes and withdrawals.
     pub b_meta: BlockMetadata,
     /// Block hashes: the previous 256 block hashes and the current block hash.
-    pub b_hashes: BlockHashes,
+    pub b_hashes: BlockHashes<Field>,
     /// Block withdrawal addresses and values.
     pub withdrawals: Vec<(Address, U256)>,
 }
@@ -285,7 +290,7 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size: usize,
-) -> anyhow::Result<Vec<GenerationInputs>> {
+) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
     use anyhow::Context as _;
     use mpt_trie::partial_trie::PartialTrie as _;
 

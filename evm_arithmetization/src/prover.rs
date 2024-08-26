@@ -31,7 +31,7 @@ use crate::proof::{AllProof, MemCap, PublicValues, DEFAULT_CAP_LEN};
 pub fn prove<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
-    inputs: TrimmedGenerationInputs,
+    inputs: TrimmedGenerationInputs<F>,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
@@ -70,7 +70,7 @@ pub(crate) fn prove_with_traces<F, C, const D: usize>(
     all_stark: &AllStark<F, D>,
     config: &StarkConfig,
     trace_poly_values: [Vec<PolynomialValues<F>>; NUM_TABLES],
-    public_values: &mut PublicValues,
+    public_values: &mut PublicValues<F>,
     timing: &mut TimingTree,
     abort_signal: Option<Arc<AtomicBool>>,
 ) -> Result<AllProof<F, C, D>>
@@ -466,7 +466,7 @@ pub mod testing {
 
     /// Simulates the zkEVM CPU execution.
     /// It does not generate any trace or proof of correct state transition.
-    pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
+    pub fn simulate_execution<F: RichField>(inputs: GenerationInputs<F>) -> Result<()> {
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["init"];
         let mut interpreter: Interpreter<F> =
@@ -484,7 +484,7 @@ pub mod testing {
     pub fn prove_all_segments<F, C, const D: usize>(
         all_stark: &AllStark<F, D>,
         config: &StarkConfig,
-        inputs: GenerationInputs,
+        inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
         timing: &mut TimingTree,
         abort_signal: Option<Arc<AtomicBool>>,
@@ -515,7 +515,7 @@ pub mod testing {
     }
 
     pub fn simulate_execution_all_segments<F>(
-        inputs: GenerationInputs,
+        inputs: GenerationInputs<F>,
         max_cpu_len_log: usize,
     ) -> Result<()>
     where

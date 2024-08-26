@@ -6,7 +6,7 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
@@ -39,7 +39,7 @@ use crate::{arithmetic, keccak, logic};
 
 /// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
 /// a `GenerationState`.
-pub(crate) trait State<F: Field> {
+pub(crate) trait State<F: RichField> {
     /// Returns a `State`'s latest `Checkpoint`.
     fn checkpoint(&mut self) -> GenerationStateCheckpoint;
 
@@ -326,8 +326,8 @@ pub(crate) trait State<F: Field> {
 }
 
 #[derive(Debug, Default)]
-pub struct GenerationState<F: Field> {
-    pub(crate) inputs: TrimmedGenerationInputs,
+pub struct GenerationState<F: RichField> {
+    pub(crate) inputs: TrimmedGenerationInputs<F>,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
     pub(crate) traces: Traces<F>,
@@ -368,7 +368,7 @@ pub struct GenerationState<F: Field> {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     fn preinitialize_linked_lists_and_txn_and_receipt_mpts(
         &mut self,
         trie_inputs: &TrieInputs,
@@ -397,7 +397,10 @@ impl<F: Field> GenerationState<F> {
         trie_roots_ptrs
     }
 
-    pub(crate) fn new(inputs: &GenerationInputs, kernel_code: &[u8]) -> Result<Self, ProgramError> {
+    pub(crate) fn new(
+        inputs: &GenerationInputs<F>,
+        kernel_code: &[u8],
+    ) -> Result<Self, ProgramError> {
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
         let ger_prover_inputs = all_ger_prover_inputs_reversed(&inputs.global_exit_roots);
@@ -430,7 +433,7 @@ impl<F: Field> GenerationState<F> {
     }
 
     pub(crate) fn new_with_segment_data(
-        trimmed_inputs: &TrimmedGenerationInputs,
+        trimmed_inputs: &TrimmedGenerationInputs<F>,
         segment_data: &GenerationSegmentData,
     ) -> Result<Self, ProgramError> {
         let mut state = Self {
@@ -559,7 +562,7 @@ impl<F: Field> GenerationState<F> {
     }
 }
 
-impl<F: Field> State<F> for GenerationState<F> {
+impl<F: RichField> State<F> for GenerationState<F> {
     fn checkpoint(&mut self) -> GenerationStateCheckpoint {
         GenerationStateCheckpoint {
             registers: self.registers,
@@ -665,7 +668,7 @@ impl<F: Field> State<F> for GenerationState<F> {
     }
 }
 
-impl<F: Field> Transition<F> for GenerationState<F> {
+impl<F: RichField> Transition<F> for GenerationState<F> {
     fn skip_if_necessary(&mut self, op: Operation) -> Result<Operation, ProgramError> {
         Ok(op)
     }

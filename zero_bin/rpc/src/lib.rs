@@ -179,6 +179,7 @@ where
                     .hash
                     .context("target block is missing field `hash`")?
                     .compat(),
+                consolidated_hash: None,
             },
             withdrawals: target_block
                 .withdrawals

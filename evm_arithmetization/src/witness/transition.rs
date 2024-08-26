@@ -1,6 +1,7 @@
 use ethereum_types::U256;
 use log::log_enabled;
 use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use super::util::{mem_read_gp_with_log_and_fill, stack_pop_with_log_and_fill};
 use crate::cpu::columns::CpuColumnsView;
@@ -22,7 +23,7 @@ use crate::{arithmetic, logic};
 
 pub(crate) const EXC_STOP_CODE: u8 = 6;
 
-pub(crate) fn read_code_memory<F: Field, T: Transition<F>>(
+pub(crate) fn read_code_memory<F: RichField, T: Transition<F>>(
     state: &mut T,
     row: &mut CpuColumnsView<F>,
 ) -> u8 {
@@ -267,7 +268,7 @@ pub(crate) const fn might_overflow_op(op: Operation) -> bool {
     }
 }
 
-pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: Operation) {
+pub(crate) fn log_kernel_instruction<F: RichField, S: State<F>>(state: &mut S, op: Operation) {
     // The logic below is a bit costly, so skip it if debug logs aren't enabled.
     if !log_enabled!(log::Level::Debug) {
         return;
@@ -298,7 +299,7 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
 
-pub(crate) trait Transition<F: Field>: State<F>
+pub(crate) trait Transition<F: RichField>: State<F>
 where
     Self: Sized,
 {

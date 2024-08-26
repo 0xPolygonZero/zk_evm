@@ -51,7 +51,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     simulate_execution::<F>(inputs).unwrap();
 }
 
-fn prepare_setup() -> anyhow::Result<GenerationInputs> {
+fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
     let sender = hex!("8943545177806ED17B9F23F0a21ee5948eCaa776");
     let to = hex!("159271B89fea49aF29DFaf8b4eCE7D042D5d6f07");
 
@@ -190,9 +190,10 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs> {
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: gas_used,
-        block_hashes: BlockHashes {
+        block_hashes: BlockHashes::<F> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
+            consolidated_hash: None,
         },
     })
 }

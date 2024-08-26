@@ -7,7 +7,6 @@ use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
@@ -54,7 +53,8 @@ pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
 
 /// Inputs needed for trace generation.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct GenerationInputs {
+#[serde(bound = "")]
+pub struct GenerationInputs<F: RichField> {
     /// The index of the transaction being proven within its block.
     pub txn_number_before: U256,
     /// The cumulative gas used through the execution of all transactions prior
@@ -92,13 +92,14 @@ pub struct GenerationInputs {
 
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
-    pub block_hashes: BlockHashes,
+    pub block_hashes: BlockHashes<F>,
 }
 
 /// A lighter version of [`GenerationInputs`], which have been trimmed
 /// post pre-initialization processing.
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct TrimmedGenerationInputs {
+#[serde(bound = "")]
+pub struct TrimmedGenerationInputs<F: RichField> {
     pub trimmed_tries: TrimmedTrieInputs,
     /// The index of the first transaction in this payload being proven within
     /// its block.
@@ -134,7 +135,7 @@ pub struct TrimmedGenerationInputs {
 
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
-    pub block_hashes: BlockHashes,
+    pub block_hashes: BlockHashes<F>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -180,11 +181,11 @@ impl TrieInputs {
         }
     }
 }
-impl GenerationInputs {
+impl<F: RichField> GenerationInputs<F> {
     /// Outputs a trimmed version of the `GenerationInputs`, that do not contain
     /// the fields that have already been processed during pre-initialization,
     /// namely: the input tries, the signed transaction, and the withdrawals.
-    pub(crate) fn trim(&self) -> TrimmedGenerationInputs {
+    pub(crate) fn trim(&self) -> TrimmedGenerationInputs<F> {
         let txn_hashes = self
             .signed_txns
             .iter()
@@ -213,7 +214,7 @@ impl GenerationInputs {
 
 fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>(
     state: &mut GenerationState<F>,
-    inputs: &TrimmedGenerationInputs,
+    inputs: &TrimmedGenerationInputs<F>,
     registers_before: &RegistersData,
     registers_after: &RegistersData,
 ) {
@@ -365,7 +366,7 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
     state.traces.memory_ops.extend(ops);
 }
 
-pub(crate) fn debug_inputs(inputs: &GenerationInputs) {
+pub(crate) fn debug_inputs<F: RichField>(inputs: &GenerationInputs<F>) {
     log::debug!("Input signed_txns: {:?}", &inputs.signed_txns);
     log::debug!("Input state_trie: {:?}", &inputs.tries.state_trie);
     log::debug!(
@@ -420,10 +421,11 @@ fn get_all_memory_address_and_values(memory_before: &MemoryState) -> Vec<(Memory
     res
 }
 
-type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues);
+type TablesWithPVsAndFinalMem<F> = ([Vec<PolynomialValues<F>>; NUM_TABLES], PublicValues<F>);
+
 pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     all_stark: &AllStark<F, D>,
-    inputs: &TrimmedGenerationInputs,
+    inputs: &TrimmedGenerationInputs<F>,
     config: &StarkConfig,
     segment_data: &mut GenerationSegmentData,
     timing: &mut TimingTree,
@@ -518,7 +520,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
     Ok((tables, public_values))
 }
 
-fn simulate_cpu<F: Field>(
+fn simulate_cpu<F: RichField>(
     state: &mut GenerationState<F>,
     max_cpu_len_log: Option<usize>,
 ) -> anyhow::Result<(RegistersState, Option<MemoryState>)> {

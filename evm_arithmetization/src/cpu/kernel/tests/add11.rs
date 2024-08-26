@@ -191,9 +191,10 @@ fn test_add11_yml() {
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: gas_used,
-        block_hashes: BlockHashes {
+        block_hashes: BlockHashes::<F> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
+            consolidated_hash: None,
         },
     };
 
@@ -372,9 +373,10 @@ fn test_add11_yml_with_exception() {
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: txn_gas_limit.into(),
-        block_hashes: BlockHashes {
+        block_hashes: BlockHashes::<F> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
+            consolidated_hash: None,
         },
     };
 

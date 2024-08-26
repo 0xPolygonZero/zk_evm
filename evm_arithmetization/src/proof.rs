@@ -1,9 +1,10 @@
 use ethereum_types::{Address, H256, U256};
+use itertools::Itertools;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::{HashOutTarget, MerkleCapTarget, RichField, NUM_HASH_OUT_ELTS};
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::GenericConfig;
+use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
@@ -11,7 +12,7 @@ use starky::lookup::GrandProductChallengeSet;
 use starky::proof::{MultiProof, StarkProofChallenges};
 
 use crate::all_stark::NUM_TABLES;
-use crate::util::{get_h160, get_h256, get_u256, h2u};
+use crate::util::{get_h160, get_h256, get_u256, h256_limbs, h2u};
 use crate::witness::state::RegistersState;
 
 /// The default cap height used for our zkEVM STARK proofs.
@@ -27,7 +28,7 @@ pub struct AllProof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, co
     /// their cross-table lookup challenges.
     pub multi_proof: MultiProof<F, C, D, NUM_TABLES>,
     /// Public memory values used for the recursive proofs.
-    pub public_values: PublicValues,
+    pub public_values: PublicValues<F>,
 }
 
 impl<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize> AllProof<F, C, D> {
@@ -47,7 +48,8 @@ pub(crate) struct AllProofChallenges<F: RichField + Extendable<D>, const D: usiz
 
 /// Memory values which are public.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PublicValues {
+#[serde(bound = "")]
+pub struct PublicValues<F: RichField> {
     /// Trie hashes before the execution of the local state transition
     pub trie_roots_before: TrieRoots,
     /// Trie hashes after the execution of the local state transition.
@@ -55,7 +57,7 @@ pub struct PublicValues {
     /// Block metadata: it remains unchanged within a block.
     pub block_metadata: BlockMetadata,
     /// 256 previous block hashes and current block's hash.
-    pub block_hashes: BlockHashes,
+    pub block_hashes: BlockHashes<F>,
     /// Extra block data that is specific to the current proof.
     pub extra_block_data: ExtraBlockData,
     /// Registers to initialize the current proof.
@@ -67,12 +69,12 @@ pub struct PublicValues {
     pub mem_after: MemCap,
 }
 
-impl PublicValues {
+impl<F: RichField> PublicValues<F> {
     /// Extracts public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
     /// `len_mem_cap` is the length of the `MemBefore` and `MemAfter` caps.
-    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+    pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(pis.len() >= PublicValuesTarget::SIZE);
 
         let mut offset = 0;
@@ -117,37 +119,48 @@ impl PublicValues {
 
 /// Memory values which are public once a final block proof is generated.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
-pub struct FinalPublicValues {
+#[serde(bound = "")]
+pub struct FinalPublicValues<F: RichField> {
     /// State trie root before the execution of this global state transition.
     pub state_trie_root_before: H256,
     /// State trie root after the execution of this global state transition.
     pub state_trie_root_after: H256,
+    /// A compact view of the previous block hashes, for connection past
+    /// checkpoints.
+    pub consolidated_hash: Vec<F>,
 }
 
-impl FinalPublicValues {
+impl<F: RichField> FinalPublicValues<F> {
     /// Extracts final public values from the given public inputs of a proof.
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
-    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+    pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(FinalPublicValuesTarget::SIZE <= pis.len());
 
         let mut offset = 0;
         let state_trie_root_before = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
         offset += TARGET_HASH_SIZE;
         let state_trie_root_after = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        offset += TARGET_HASH_SIZE;
+        let consolidated_hash = pis[offset..offset + NUM_HASH_OUT_ELTS].to_vec();
 
         Self {
             state_trie_root_before,
             state_trie_root_after,
+            consolidated_hash,
         }
     }
 }
 
-impl From<PublicValues> for FinalPublicValues {
-    fn from(value: PublicValues) -> Self {
+impl<F: RichField> From<PublicValues<F>> for FinalPublicValues<F> {
+    fn from(value: PublicValues<F>) -> Self {
         Self {
             state_trie_root_before: value.trie_roots_before.state_root,
             state_trie_root_after: value.trie_roots_after.state_root,
+            consolidated_hash: value
+                .block_hashes
+                .consolidated_hash
+                .expect("Consolidated hash should have been set."),
         }
     }
 }
@@ -161,15 +174,19 @@ pub struct FinalPublicValuesTarget {
     pub state_trie_root_before: [Target; TARGET_HASH_SIZE],
     /// State trie root after the execution of this global state transition.
     pub state_trie_root_after: [Target; TARGET_HASH_SIZE],
+    /// A compact view of the previous block hashes, for connection past
+    /// checkpoints.
+    pub consolidated_hash: [Target; NUM_HASH_OUT_ELTS],
 }
 
 impl FinalPublicValuesTarget {
-    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 2;
+    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 2 + NUM_HASH_OUT_ELTS;
 
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
         buffer.write_target_array(&self.state_trie_root_before)?;
         buffer.write_target_array(&self.state_trie_root_after)?;
+        buffer.write_target_array(&self.consolidated_hash)?;
 
         Ok(())
     }
@@ -178,10 +195,12 @@ impl FinalPublicValuesTarget {
     pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
         let state_trie_root_before = buffer.read_target_array()?;
         let state_trie_root_after = buffer.read_target_array()?;
+        let consolidated_hash = buffer.read_target_array()?;
 
         Ok(Self {
             state_trie_root_before,
             state_trie_root_after,
+            consolidated_hash,
         })
     }
 
@@ -190,22 +209,29 @@ impl FinalPublicValuesTarget {
     pub(crate) fn connect_parent<F: RichField + Extendable<D>, const D: usize>(
         &self,
         builder: &mut CircuitBuilder<F, D>,
-        pv1: &PublicValuesTarget,
+        pv: &PublicValuesTarget,
     ) {
-        for i in 0..8 {
+        for i in 0..TARGET_HASH_SIZE {
             builder.connect(
                 self.state_trie_root_before[i],
-                pv1.trie_roots_before.state_root[i],
+                pv.trie_roots_before.state_root[i],
             );
             builder.connect(
                 self.state_trie_root_after[i],
-                pv1.trie_roots_after.state_root[i],
+                pv.trie_roots_after.state_root[i],
             );
             // We only use `FinalPublicValues` at the final block proof wrapping stage,
             // where we should enforce consistency with the known checkpoint.
             builder.connect(
                 self.state_trie_root_before[i],
-                pv1.extra_block_data.checkpoint_state_trie_root[i],
+                pv.extra_block_data.checkpoint_state_trie_root[i],
+            );
+        }
+
+        for i in 0..NUM_HASH_OUT_ELTS {
+            builder.connect(
+                self.consolidated_hash[i],
+                pv.block_hashes.consolidated_hash[i],
             );
         }
     }
@@ -240,14 +266,22 @@ impl TrieRoots {
 
 // There should be 256 previous hashes stored, so the default should also
 // contain 256 values.
-impl Default for BlockHashes {
+impl<F: RichField> Default for BlockHashes<F> {
     fn default() -> Self {
         Self {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
+            consolidated_hash: None,
         }
     }
 }
+
+pub(crate) const EMPTY_CONSOLIDATED_BLOCKHASH: [u64; NUM_HASH_OUT_ELTS] = [
+    5498946765822202150,
+    10724662260254836878,
+    9161393967331872654,
+    5704373722058976135,
+];
 
 /// User-provided helper values to compute the `BLOCKHASH` opcode.
 /// The proofs across consecutive blocks ensure that these values
@@ -256,17 +290,22 @@ impl Default for BlockHashes {
 /// When the block number is less than 256, dummy values, i.e.
 /// `H256::default()`, should be used for the additional block hashes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BlockHashes {
+#[serde(bound = "")]
+pub struct BlockHashes<F: RichField> {
     /// The previous 256 hashes to the current block. The leftmost hash, i.e.
     /// `prev_hashes[0]`, is the oldest, and the rightmost, i.e.
     /// `prev_hashes[255]` is the hash of the parent block.
     pub prev_hashes: Vec<H256>,
     // The hash of the current block.
     pub cur_hash: H256,
+
+    /// A compact view of the previous block hashes, for connection past
+    /// checkpoints.
+    pub consolidated_hash: Option<Vec<F>>,
 }
 
-impl BlockHashes {
-    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+impl<F: RichField> BlockHashes<F> {
+    pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(pis.len() == BlockHashesTarget::SIZE);
 
         let prev_hashes: [H256; 256] = core::array::from_fn(|i| {
@@ -277,6 +316,36 @@ impl BlockHashes {
         Self {
             prev_hashes: prev_hashes.to_vec(),
             cur_hash,
+            consolidated_hash: None, // we only care about this at the block proof level
+        }
+    }
+
+    /// Generates the consolidated hash for this instance of `BlockHashes`.
+    ///
+    /// If `is_left` is set, it will consider the associated block proof to be
+    /// placed on the left of the aggregation, and hence hash only the most
+    /// recent 255 `prev_hashes` along with the current hash. If `is_left`
+    /// is not set, it will simply hash the 256 `prev_hashes`.
+    pub(crate) fn consolidate<H: Hasher<F>>(&self, is_left: bool) -> Self {
+        let mut payload = self
+            .prev_hashes
+            .iter()
+            .flat_map(|&h| h256_limbs(h))
+            .collect_vec();
+        payload.extend_from_slice(&h256_limbs(self.cur_hash));
+
+        let consolidated = if is_left {
+            // Skipping most ancient hash
+            H::hash_no_pad(&payload[TARGET_HASH_SIZE..])
+        } else {
+            // Skipping current hash
+            H::hash_no_pad(&payload[..TARGET_HASH_SIZE * 256])
+        };
+
+        Self {
+            prev_hashes: self.prev_hashes.clone(),
+            cur_hash: self.cur_hash,
+            consolidated_hash: Some(consolidated.to_vec()),
         }
     }
 }
@@ -553,9 +622,11 @@ impl PublicValuesTarget {
         let BlockHashesTarget {
             prev_hashes,
             cur_hash,
+            consolidated_hash,
         } = self.block_hashes;
         buffer.write_target_array(&prev_hashes)?;
         buffer.write_target_array(&cur_hash)?;
+        buffer.write_target_array(&consolidated_hash)?;
 
         let ExtraBlockDataTarget {
             checkpoint_state_trie_root,
@@ -637,6 +708,7 @@ impl PublicValuesTarget {
         let block_hashes = BlockHashesTarget {
             prev_hashes: buffer.read_target_array()?,
             cur_hash: buffer.read_target_array()?,
+            consolidated_hash: buffer.read_target_array()?,
         };
 
         let extra_block_data = ExtraBlockDataTarget {
@@ -1108,13 +1180,16 @@ pub struct BlockHashesTarget {
     /// hash, i.e. `prev_hashes[0..8]`, is the oldest, and the rightmost,
     /// i.e. `prev_hashes[255 * 7..255 * 8]` is the hash of the parent block.
     pub(crate) prev_hashes: [Target; 2048],
-    // `Target` for the hash of the current block.
+    // `Target`s for the hash of the current block.
     pub(crate) cur_hash: [Target; 8],
+    /// `Target`s for the compact view of the previous block hashes, for
+    /// connection past checkpoints.
+    pub consolidated_hash: [Target; 4],
 }
 
 impl BlockHashesTarget {
     /// Number of `Target`s required for previous and current block hashes.
-    pub(crate) const SIZE: usize = 2056;
+    pub(crate) const SIZE: usize = 2060;
 
     /// Extracts the previous and current block hash `Target`s from the public
     /// input `Target`s. The provided `pis` should start with the block
@@ -1123,6 +1198,7 @@ impl BlockHashesTarget {
         Self {
             prev_hashes: pis[0..2048].try_into().unwrap(),
             cur_hash: pis[2048..2056].try_into().unwrap(),
+            consolidated_hash: pis[2056..2060].try_into().unwrap(),
         }
     }
 
@@ -1141,6 +1217,13 @@ impl BlockHashesTarget {
             cur_hash: core::array::from_fn(|i| {
                 builder.select(condition, bm0.cur_hash[i], bm1.cur_hash[i])
             }),
+            consolidated_hash: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    bm0.consolidated_hash[i],
+                    bm1.consolidated_hash[i],
+                )
+            }),
         }
     }
 
@@ -1156,6 +1239,9 @@ impl BlockHashesTarget {
         for i in 0..8 {
             builder.connect(bm0.cur_hash[i], bm1.cur_hash[i]);
         }
+        for i in 0..4 {
+            builder.connect(bm0.consolidated_hash[i], bm1.consolidated_hash[i]);
+        }
     }
 
     /// If `condition`, asserts that `bm0 == bm1`.
@@ -1170,6 +1256,13 @@ impl BlockHashesTarget {
         }
         for i in 0..8 {
             builder.conditional_assert_eq(condition.target, bm0.cur_hash[i], bm1.cur_hash[i]);
+        }
+        for i in 0..4 {
+            builder.conditional_assert_eq(
+                condition.target,
+                bm0.consolidated_hash[i],
+                bm1.consolidated_hash[i],
+            );
         }
     }
 }

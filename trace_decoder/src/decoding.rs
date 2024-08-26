@@ -16,6 +16,7 @@ use mpt_trie::{
     special_query::path_for_query,
     utils::{IntoTrieKey as _, TriePath},
 };
+use plonky2::hash::hash_types::RichField;
 
 use crate::{
     hash,
@@ -23,7 +24,7 @@ use crate::{
         NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
     },
     typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
-    OtherBlockData, PartialTriePreImages,
+    Field, OtherBlockData, PartialTriePreImages,
 };
 
 /// The current state of all tries as we process txn deltas. These are mutated
@@ -53,7 +54,7 @@ pub fn into_txn_proof_gen_ir(
     }: ProcessedBlockTrace,
     other_data: OtherBlockData,
     batch_size: usize,
-) -> anyhow::Result<Vec<GenerationInputs>> {
+) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
     let mut curr_block_tries = PartialTrieState {
         state: state.clone(),
         storage: storage.iter().map(|(k, v)| (*k, v.clone())).collect(),
@@ -438,8 +439,8 @@ fn node_deletion_resulted_in_a_branch_collapse(
 }
 
 /// The withdrawals are always in the final ir payload.
-fn add_withdrawals_to_txns(
-    txn_ir: &mut [GenerationInputs],
+fn add_withdrawals_to_txns<F: RichField>(
+    txn_ir: &mut [GenerationInputs<F>],
     final_trie_state: &mut PartialTrieState,
     mut withdrawals: Vec<(Address, U256)>,
 ) -> anyhow::Result<()> {
@@ -524,7 +525,7 @@ fn process_txn_info(
     curr_block_tries: &mut PartialTrieState,
     extra_data: &mut ExtraBlockData,
     other_data: &OtherBlockData,
-) -> anyhow::Result<GenerationInputs> {
+) -> anyhow::Result<GenerationInputs<Field>> {
     log::trace!(
         "Generating proof IR for txn {} through {}...",
         txn_range.start,

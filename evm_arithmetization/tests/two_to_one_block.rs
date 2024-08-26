@@ -29,7 +29,7 @@ fn init_logger() {
 
 /// Get `GenerationInputs` for a dummy payload, where the block has the given
 /// timestamp.
-fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<GenerationInputs> {
+fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<GenerationInputs<F>> {
     let beneficiary = hex!("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
 
     let block_metadata = BlockMetadata {
@@ -148,15 +148,10 @@ fn get_test_block_proof(
 
     let (block_proof, block_public_values) = all_circuits.prove_block(
         None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
-        &agg_proof,
-        pv.clone(),
+        &agg_proof, pv,
     )?;
 
     all_circuits.verify_block(&block_proof)?;
-
-    // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values = PublicValues::from_public_inputs(&block_proof.public_inputs);
-    assert_eq!(retrieved_public_values, block_public_values);
 
     let (wrapped_block_proof, block_final_public_values) =
         all_circuits.prove_block_wrapper(&block_proof, block_public_values)?;

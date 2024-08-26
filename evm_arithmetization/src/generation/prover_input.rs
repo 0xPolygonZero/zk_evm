@@ -7,7 +7,7 @@ use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
 use num_bigint::BigUint;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::LinkedList;
@@ -52,7 +52,7 @@ impl From<Vec<String>> for ProverInputFn {
     }
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     pub(crate) fn prover_input(&mut self, input_fn: &ProverInputFn) -> Result<U256, ProgramError> {
         match input_fn.0[0].as_str() {
             "end_of_txns" => self.run_end_of_txns(),
@@ -791,7 +791,7 @@ impl<F: Field> GenerationState<F> {
     }
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     /// Simulate the user's code and store all the jump addresses with their
     /// respective contexts.
     fn generate_jumpdest_table(&mut self) -> Result<(), ProgramError> {

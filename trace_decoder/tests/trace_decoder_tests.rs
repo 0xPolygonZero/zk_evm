@@ -14,15 +14,12 @@ use evm_arithmetization::GenerationInputs;
 use itertools::Itertools;
 use log::info;
 use mpt_trie::partial_trie::PartialTrie;
-use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::util::timing::TimingTree;
 use plonky2_maybe_rayon::*;
 use pretty_env_logger::env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use prover::BlockProverInput;
 use rstest::rstest;
-use trace_decoder::OtherBlockData;
-
-type F = GoldilocksField;
+use trace_decoder::{Field, OtherBlockData};
 
 const JERIGON_WITNESS_DIR: &str = "tests/data/witnesses/zero_jerigon";
 ///TODO Add CDK Erigon witness test data.
@@ -77,7 +74,7 @@ fn derive_header_file_path(witness_file_path: &Path) -> Result<PathBuf, anyhow::
 
 fn decode_generation_inputs(
     block_prover_input: BlockProverInput,
-) -> anyhow::Result<Vec<GenerationInputs>> {
+) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
     let block_num = block_prover_input.other_data.b_data.b_meta.block_number;
     let trace_decoder_output = trace_decoder::entrypoint(
         block_prover_input.block_trace,
@@ -89,14 +86,14 @@ fn decode_generation_inputs(
         block_num
     ))?
     .into_iter()
-    .collect::<Vec<GenerationInputs>>();
+    .collect::<Vec<GenerationInputs<Field>>>();
     Ok(trace_decoder_output)
 }
 
 fn verify_generation_inputs(
     header: &Header,
     other: &OtherBlockData,
-    generation_inputs: Vec<GenerationInputs>,
+    generation_inputs: Vec<GenerationInputs<Field>>,
 ) -> anyhow::Result<()> {
     assert!(generation_inputs.len() >= 2);
     assert_eq!(
@@ -198,7 +195,7 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                             ),
                             log::Level::Info,
                         );
-                        simulate_execution_all_segments::<F>(generation_inputs, 19)?;
+                        simulate_execution_all_segments::<Field>(generation_inputs, 19)?;
                         timing.filter(Duration::from_millis(100)).print();
                         Ok::<(), anyhow::Error>(())
                     })

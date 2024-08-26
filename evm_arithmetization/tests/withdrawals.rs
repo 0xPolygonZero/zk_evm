@@ -101,9 +101,10 @@ fn test_withdrawals() -> anyhow::Result<()> {
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0.into(),
-        block_hashes: BlockHashes {
+        block_hashes: BlockHashes::<F> {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
+            consolidated_hash: None,
         },
     };
 

@@ -9,14 +9,14 @@ use evm_arithmetization::{
 use plonky2::plonk::config::Hasher as _;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{Hash, Hasher, PlonkyProofIntern};
+use crate::types::{Field, Hash, Hasher, PlonkyProofIntern};
 
 /// A transaction proof along with its public values, for proper connection with
 /// contiguous proofs.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedSegmentProof {
     /// Public values of this transaction proof.
-    pub p_vals: PublicValues,
+    pub p_vals: PublicValues<Field>,
     /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }
@@ -29,7 +29,7 @@ pub struct GeneratedSegmentProof {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedSegmentAggProof {
     /// Public values of this aggregation proof.
-    pub p_vals: PublicValues,
+    pub p_vals: PublicValues<Field>,
     /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }
@@ -42,7 +42,7 @@ pub struct GeneratedSegmentAggProof {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GeneratedTxnAggProof {
     /// Public values of this transaction aggregation proof.
-    pub p_vals: PublicValues,
+    pub p_vals: PublicValues<Field>,
     /// Underlying plonky2 proof.
     pub intern: PlonkyProofIntern,
 }
@@ -94,7 +94,7 @@ pub enum BatchAggregatableProof {
 }
 
 impl SegmentAggregatableProof {
-    pub(crate) fn public_values(&self) -> PublicValues {
+    pub(crate) fn public_values(&self) -> PublicValues<Field> {
         match self {
             SegmentAggregatableProof::Seg(info) => info.p_vals.clone(),
             SegmentAggregatableProof::Agg(info) => info.p_vals.clone(),
@@ -117,7 +117,7 @@ impl SegmentAggregatableProof {
 }
 
 impl BatchAggregatableProof {
-    pub(crate) fn public_values(&self) -> PublicValues {
+    pub(crate) fn public_values(&self) -> PublicValues<Field> {
         match self {
             BatchAggregatableProof::Segment(info) => info.p_vals.clone(),
             BatchAggregatableProof::Txn(info) => info.p_vals.clone(),
