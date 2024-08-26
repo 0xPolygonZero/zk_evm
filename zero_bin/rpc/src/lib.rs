@@ -154,7 +154,7 @@ where
     // We use that execution not to produce a new contract bytecode - instead, we
     // return hashes. To look at the code use `cast disassemble <bytecode>`.
     let bytes = cached_provider
-        .as_provider()
+        .get_provider().await?
         .raw_request::<_, Bytes>(
             "eth_call".into(),
             (json!({"input": "0x60005B60010180430340816020025280610101116300000002576120205FF3"}), target_block_number),
@@ -216,7 +216,7 @@ where
         .header
         .number
         .context("target block is missing field `number`")?;
-    let chain_id = cached_provider.as_provider().get_chain_id().await?;
+    let chain_id = cached_provider.get_provider().await?.get_chain_id().await?;
     let prev_hashes = fetch_previous_block_hashes(cached_provider, target_block_number).await?;
 
     let other_data = OtherBlockData {
