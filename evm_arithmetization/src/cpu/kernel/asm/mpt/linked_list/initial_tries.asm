@@ -3,7 +3,7 @@
 // for i =0..n_leaves. This is used to constraint the
 // initial state and account tries payload pointers such that they are exactly
 // those of the initial accounts and linked lists.
-// Pre stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, retdest
+// Pre stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
 // Post stack: account_ptr_ptr, storage_ptr_ptr
 global mpt_set_payload:
     // stack: node_ptr, account_ptr_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
@@ -55,7 +55,7 @@ skip:
     %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
 %endmacro
 
-// Pre stack: node_ptr, storage_ptr_ptr, retdest
+// Pre stack: node_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
 // Post stack: storage_ptr_ptr
 global mpt_set_storage_payload:
     // stack: node_ptr, storage_ptr_ptr, num_nibbles, packed_nibbles, retdest
