@@ -7,26 +7,10 @@ use NormalizedTxnField::*;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::memory::segments::Segment;
+use crate::cpu::kernel::tests::transaction_parsing::prepare_interpreter_for_txn_parsing;
 
 #[test]
 fn process_type_2_txn() -> Result<()> {
-    let process_type_2_txn = KERNEL.global_labels["process_type_2_txn"];
-    let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
-
-    let retaddr = 0xDEADBEEFu32.into();
-    const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
-    let mut interpreter: Interpreter<F> = Interpreter::new(
-        process_type_2_txn,
-        vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
-        None,
-    );
-
-    // When we reach process_normalized_txn, we're done with parsing and
-    // normalizing. Processing normalized transactions is outside the scope of
-    // this test.
-    interpreter.halt_offsets.push(process_normalized_txn);
-
     // Generated with py-evm:
     // from eth_keys import keys
     // from eth_utils import decode_hex
@@ -62,7 +46,15 @@ fn process_type_2_txn() -> Result<()> {
     //         )
     // signed_tx = unsigned_tx.as_signed_transaction(SENDER_PRIVATE_KEY)
     // encode(signed_tx).hex()[4::] # We don't need the initial RLP prefix.
-    interpreter.extend_memory_segment_bytes(Segment::RlpRaw, hex!("02f86a820539018203e88201f482520894000000000000000000000000000000000000000201824242c080a06312f059f931a9cf9e9ef4648b14fff1d6f88fbc1aed5ebcb1138f50e295a6b3a0252349ddb42d28b1b2b7c749370867047c8c33d4a0ada8ff7f0d5b71bea862ab").to_vec());
+    let txn =  hex!("02f86a820539018203e88201f482520894000000000000000000000000000000000000000201824242c080a06312f059f931a9cf9e9ef4648b14fff1d6f88fbc1aed5ebcb1138f50e295a6b3a0252349ddb42d28b1b2b7c749370867047c8c33d4a0ada8ff7f0d5b71bea862ab").to_vec();
+
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    prepare_interpreter_for_txn_parsing(
+        &mut interpreter,
+        KERNEL.global_labels["process_type_2_txn"],
+        KERNEL.global_labels["process_normalized_txn"],
+        txn,
+    )?;
 
     interpreter.run()?;
 
@@ -88,31 +80,29 @@ fn process_type_2_txn() -> Result<()> {
             "252349ddb42d28b1b2b7c749370867047c8c33d4a0ada8ff7f0d5b71bea862ab"
         ))
     );
+    assert_eq!(
+        interpreter.get_txn_field(Origin),
+        U256::from_big_endian(&hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b"))
+    );
 
     Ok(())
 }
 
 #[test]
 fn process_type_2_txn_invalid_sig() -> Result<()> {
-    let process_type_2_txn = KERNEL.global_labels["process_type_2_txn"];
-    let process_normalized_txn = KERNEL.global_labels["process_normalized_txn"];
-
-    let retaddr = 0xDEADBEEFu32.into();
-    const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
-    let mut interpreter: Interpreter<F> = Interpreter::new(
-        process_type_2_txn,
-        vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
-        None,
-    );
-
-    // If we reach process_normalized_txn, the test fails (we should have had a
-    // kernel panic beforehand).
-    interpreter.halt_offsets.push(process_normalized_txn);
-
     // Same transaction as `process_type_2_txn()`, with the exception that the `s`
     // component in the signature is flipped (i.e. `s' = N - s`, where `N` is the
     // order of the SECP256k1 prime subgroup).
-    interpreter.extend_memory_segment_bytes(Segment::RlpRaw, hex!("f86a820539018203e88201f482520894000000000000000000000000000000000000000201824242c080a06312f059f931a9cf9e9ef4648b14fff1d6f88fbc1aed5ebcb1138f50e295a6b3a0dadcb6224bd2d74e4d4838b6c8f798fa3e22a9120e9af73c40c5031b118dde96").to_vec());
+    // It should fail according to EIP-2 (`s` must be no greater than `N/2`).
+    let txn = hex!("f86a820539018203e88201f482520894000000000000000000000000000000000000000201824242c080a06312f059f931a9cf9e9ef4648b14fff1d6f88fbc1aed5ebcb1138f50e295a6b3a0dadcb6224bd2d74e4d4838b6c8f798fa3e22a9120e9af73c40c5031b118dde96").to_vec();
+
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    prepare_interpreter_for_txn_parsing(
+        &mut interpreter,
+        KERNEL.global_labels["process_type_2_txn"],
+        KERNEL.global_labels["process_normalized_txn"],
+        txn,
+    )?;
 
     let result = interpreter.run();
     assert!(result.is_err());

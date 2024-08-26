@@ -1,31 +1,31 @@
 use anyhow::Result;
-use ethereum_types::U256;
+use ethereum_types::{Address, U256};
 use hex_literal::hex;
+use keccak_hash::H256;
 use plonky2::field::goldilocks_field::GoldilocksField as F;
 use NormalizedTxnField::*;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
 use crate::cpu::kernel::interpreter::Interpreter;
-use crate::memory::segments::Segment;
+use crate::cpu::kernel::tests::account_code::prepare_interpreter;
+use crate::cpu::kernel::tests::transaction_parsing::prepare_interpreter_for_txn_parsing;
+use crate::generation::mpt::AccountRlp;
+use crate::testing_utils::EMPTY_NODE_HASH;
 
 #[test]
 fn process_type_3_txn() -> Result<()> {
-    let process_type_3_txn = KERNEL.global_labels["process_type_3_txn"];
-    let deduct_blob_fee = KERNEL.global_labels["deduct_blob_fee"];
+    let sender_address = Address::from_slice(&hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b"));
+    let sender_account = AccountRlp {
+        nonce: 1.into(),
+        balance: 0x1000000.into(),
+        storage_root: EMPTY_NODE_HASH,
+        code_hash: H256::default(),
+    };
 
-    let retaddr = 0xDEADBEEFu32.into();
-    const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
-    let mut interpreter: Interpreter<F> = Interpreter::new(
-        process_type_3_txn,
-        vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
-        None,
-    );
-
-    // When we reach process_normalized_txn, we're done with parsing and
-    // normalizing. Processing normalized transactions is outside the scope of
-    // this test.
-    interpreter.halt_offsets.push(deduct_blob_fee);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
+    // Prepare the interpreter by inserting the sender account in the state trie.
+    prepare_interpreter(&mut interpreter, sender_address, &sender_account)?;
 
     // Generated with py-evm:
     // from eth_keys import keys
@@ -63,7 +63,14 @@ fn process_type_3_txn() -> Result<()> {
     //         )
     // signed_tx = unsigned_tx.as_signed_transaction(SENDER_PRIVATE_KEY)
     // encode(signed_tx).hex()[4::] # We don't need the initial RLP prefix.
-    interpreter.extend_memory_segment_bytes(Segment::RlpRaw, hex!("03f8b1820539018203e88201f482520894000000000000000000000000000000000000000201824242c08203e8f842a00101010101010101010101010101010101010101010101010101010101010101a0010101010101010101010101010101010101010101010101010101010101010180a076e2a81a28e69fb1e96f5e9470b454b80663197b416c3783be98a6b5bd162b21a01a182d7a386f81bcbdcc714b2b481b78547b26eaa6b4de417ecd3c1cd53ab839").to_vec());
+    let txn = hex!("03f8b1820539018203e88201f482520894000000000000000000000000000000000000000201824242c08203e8f842a00101010101010101010101010101010101010101010101010101010101010101a0010101010101010101010101010101010101010101010101010101010101010180a076e2a81a28e69fb1e96f5e9470b454b80663197b416c3783be98a6b5bd162b21a01a182d7a386f81bcbdcc714b2b481b78547b26eaa6b4de417ecd3c1cd53ab839").to_vec();
+
+    prepare_interpreter_for_txn_parsing(
+        &mut interpreter,
+        KERNEL.global_labels["process_type_3_txn"],
+        KERNEL.global_labels["process_normalized_txn"],
+        txn,
+    )?;
 
     interpreter.run()?;
 
@@ -89,31 +96,41 @@ fn process_type_3_txn() -> Result<()> {
             "1a182d7a386f81bcbdcc714b2b481b78547b26eaa6b4de417ecd3c1cd53ab839"
         ))
     );
+    assert_eq!(
+        interpreter.get_txn_field(Origin),
+        U256::from_big_endian(&hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b"))
+    );
 
     Ok(())
 }
 
 #[test]
 fn process_type_3_txn_invalid_sig() -> Result<()> {
-    let process_type_3_txn = KERNEL.global_labels["process_type_3_txn"];
-    let deduct_blob_fee = KERNEL.global_labels["deduct_blob_fee"];
+    let sender_address = Address::from_slice(&hex!("a94f5374fce5edbc8e2a8697c15331677e6ebf0b"));
+    let sender_account = AccountRlp {
+        nonce: 1.into(),
+        balance: 0x1000000.into(),
+        storage_root: EMPTY_NODE_HASH,
+        code_hash: H256::default(),
+    };
 
-    let retaddr = 0xDEADBEEFu32.into();
-    const INITIAL_TXN_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
-    let mut interpreter: Interpreter<F> = Interpreter::new(
-        process_type_3_txn,
-        vec![retaddr, INITIAL_TXN_RLP_ADDR.into()],
-        None,
-    );
-
-    // If we reach deduct_blob_fee, the test fails (we should have had a
-    // kernel panic beforehand).
-    interpreter.halt_offsets.push(deduct_blob_fee);
+    let mut interpreter: Interpreter<F> = Interpreter::new(0, vec![], None);
+    // Prepare the interpreter by inserting the sender account in the state trie.
+    prepare_interpreter(&mut interpreter, sender_address, &sender_account)?;
 
     // Same transaction as `process_type_3_txn()`, with the exception that the `s`
     // component in the signature is flipped (i.e. `s' = N - s`, where `N` is the
     // order of the SECP256k1 prime subgroup).
-    interpreter.extend_memory_segment_bytes(Segment::RlpRaw, hex!("03f8b1820539018203e88201f482520894000000000000000000000000000000000000000201824242c08203e8f842a00101010101010101010101010101010101010101010101010101010101010101a0010101010101010101010101010101010101010101010101010101010101010180a076e2a81a28e69fb1e96f5e9470b454b80663197b416c3783be98a6b5bd162b21a0e5e7d285c7907e4342338eb4d4b7e4866633b5fc0893c1fa4105226ffafb8908").to_vec());
+    // It should fail according to EIP-2 (`s` must be no greater than `N/2`).
+    let txn = hex!("03f8b1820539018203e88201f482520894000000000000000000000000000000000000000201824242c08203e8f842a00101010101010101010101010101010101010101010101010101010101010101a0010101010101010101010101010101010101010101010101010101010101010180a076e2a81a28e69fb1e96f5e9470b454b80663197b416c3783be98a6b5bd162b21a0e5e7d285c7907e4342338eb4d4b7e4866633b5fc0893c1fa4105226ffafb8908").to_vec();
+
+    let mut interpreter = Interpreter::<F>::new(0, vec![], None);
+    prepare_interpreter_for_txn_parsing(
+        &mut interpreter,
+        KERNEL.global_labels["process_type_3_txn"],
+        KERNEL.global_labels["process_normalized_txn"],
+        txn,
+    )?;
 
     let result = interpreter.run();
     assert!(result.is_err());
