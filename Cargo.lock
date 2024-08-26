@@ -2029,6 +2029,7 @@ dependencies = [
  "sha2",
  "starky",
  "static_assertions",
+ "thiserror",
  "tiny-keccak",
  "zk_evm_proc_macro",
 ]
@@ -4179,6 +4180,7 @@ dependencies = [
  "evm_arithmetization",
  "futures",
  "hex",
+ "itertools 0.13.0",
  "lru",
  "mpt_trie",
  "primitive-types 0.12.2",

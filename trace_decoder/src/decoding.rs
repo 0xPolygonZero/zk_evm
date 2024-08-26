@@ -20,7 +20,7 @@ use mpt_trie::{
 use crate::{
     hash,
     processed_block_trace::{
-        NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateTrieWrites, TxnMetaState,
+        NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
     },
     typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     OtherBlockData, PartialTriePreImages,
@@ -202,15 +202,12 @@ fn update_txn_and_receipt_tries(
     meta: &TxnMetaState,
     txn_idx: usize,
 ) -> anyhow::Result<()> {
-    if meta.is_dummy() {
-        // This is a dummy payload, that does not mutate these tries.
-        return Ok(());
-    }
-
-    trie_state.txn.insert(txn_idx, meta.txn_bytes())?;
-    trie_state
-        .receipt
-        .insert(txn_idx, meta.receipt_node_bytes.clone())?;
+    if let Some(bytes) = &meta.txn_bytes {
+        trie_state.txn.insert(txn_idx, bytes.clone())?;
+        trie_state
+            .receipt
+            .insert(txn_idx, meta.receipt_node_bytes.clone())?;
+    } // else it's just a dummy
     Ok(())
 }
 
@@ -220,11 +217,11 @@ fn update_txn_and_receipt_tries(
 fn init_any_needed_empty_storage_tries<'a>(
     storage_tries: &mut HashMap<H256, StorageTrie>,
     accounts_with_storage: impl Iterator<Item = &'a H256>,
-    state_accounts_with_no_accesses_but_storage_tries: &'a HashMap<H256, H256>,
+    accts_with_unaccessed_storage: &HashMap<H256, H256>,
 ) {
     for h_addr in accounts_with_storage {
         if !storage_tries.contains_key(h_addr) {
-            let trie = state_accounts_with_no_accesses_but_storage_tries
+            let trie = accts_with_unaccessed_storage
                 .get(h_addr)
                 .map(|s_root| {
                     let mut it = StorageTrie::default();
@@ -537,9 +534,7 @@ fn process_txn_info(
     init_any_needed_empty_storage_tries(
         &mut curr_block_tries.storage,
         txn_info.nodes_used_by_txn.storage_accesses.keys(),
-        &txn_info
-            .nodes_used_by_txn
-            .state_accounts_with_no_accesses_but_storage_tries,
+        &txn_info.nodes_used_by_txn.accts_with_unaccessed_storage,
     );
 
     // For each non-dummy txn, we increment `txn_number_after` and
@@ -594,8 +589,7 @@ fn process_txn_info(
         signed_txns: txn_info
             .meta
             .iter()
-            .filter(|t| t.txn_bytes.is_some())
-            .map(|tx| tx.txn_bytes())
+            .filter_map(|t| t.txn_bytes.clone())
             .collect::<Vec<_>>(),
         withdrawals: Vec::default(), /* Only ever set in a dummy txn at the end of
                                       * the block (see `[add_withdrawals_to_txns]`
@@ -607,7 +601,11 @@ fn process_txn_info(
             receipts_root: curr_block_tries.receipt.root(),
         },
         checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
-        contract_code: txn_info.contract_code_accessed,
+        contract_code: txn_info
+            .contract_code_accessed
+            .into_iter()
+            .map(|code| (hash(&code), code))
+            .collect(),
         block_metadata: other_data.b_data.b_meta.clone(),
         block_hashes: other_data.b_data.b_hashes.clone(),
         global_exit_roots: vec![],
@@ -621,7 +619,7 @@ fn process_txn_info(
     Ok(gen_inputs)
 }
 
-impl StateTrieWrites {
+impl StateWrite {
     fn apply_writes_to_state_node(
         &self,
         state_node: &mut AccountRlp,
@@ -706,21 +704,6 @@ fn create_trie_subset_wrapped(
         accesses.into_iter().map(TrieKey::into_nibbles),
     )
     .context(format!("missing keys when creating {}", trie_type))
-}
-
-impl TxnMetaState {
-    /// Outputs a boolean indicating whether this `TxnMetaState`
-    /// represents a dummy payload or an actual transaction.
-    const fn is_dummy(&self) -> bool {
-        self.txn_bytes.is_none()
-    }
-
-    fn txn_bytes(&self) -> Vec<u8> {
-        match self.txn_bytes.as_ref() {
-            Some(v) => v.clone(),
-            None => Vec::default(),
-        }
-    }
 }
 
 fn eth_to_gwei(eth: U256) -> U256 {

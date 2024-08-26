@@ -24,8 +24,8 @@
 /// The values at the respective positions are:
 /// - 0: The account key
 /// - 1: The slot key
-/// - 2: A ptr to the payload (the stored value)
-/// - 3: A ptr to the initial payload.
+/// - 2: The slot value.
+/// - 3: The initial slot value.
 /// - 4: A ptr (in segment @SEGMENT_ACCOUNTS_LINKED_LIST) to the next node in the list.
 
 %macro store_initial_accounts

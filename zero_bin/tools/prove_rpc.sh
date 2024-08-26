@@ -17,18 +17,8 @@ export RUST_LOG=info
 # See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
-if [[ $8 == "test_only" ]]; then
-  # Circuit sizes don't matter in test_only mode, so we keep them minimal.
-    export ARITHMETIC_CIRCUIT_SIZE="16..17"
-    export BYTE_PACKING_CIRCUIT_SIZE="9..10"
-    export CPU_CIRCUIT_SIZE="12..13"
-    export KECCAK_CIRCUIT_SIZE="4..5"
-    export KECCAK_SPONGE_CIRCUIT_SIZE="9..10"
-    export LOGIC_CIRCUIT_SIZE="12..13"
-    export MEMORY_CIRCUIT_SIZE="17..18"
-    export MEMORY_BEFORE_CIRCUIT_SIZE="7..8"
-    export MEMORY_AFTER_CIRCUIT_SIZE="7..8"
-else
+# Circuit sizes only matter in non test_only mode.
+if ! [[ $8 == "test_only" ]]; then
     export ARITHMETIC_CIRCUIT_SIZE="16..21"
     export BYTE_PACKING_CIRCUIT_SIZE="8..21"
     export CPU_CIRCUIT_SIZE="8..21"
@@ -40,7 +30,7 @@ else
     export MEMORY_AFTER_CIRCUIT_SIZE="7..23"
 fi
 
-# Force the working directory to always be the `tools/` directory. 
+# Force the working directory to always be the `tools/` directory.
 TOOLS_DIR=$(dirname $(realpath "$0"))
 
 PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
@@ -66,12 +56,12 @@ RECOMMENDED_FILE_HANDLE_LIMIT=8192
 
 mkdir -p $PROOF_OUTPUT_DIR
 
-if [ $IGNORE_PREVIOUS_PROOFS ]; then
+if $IGNORE_PREVIOUS_PROOFS ; then
     # Set checkpoint height to previous block number for the first block in range
     prev_proof_num=$(($1-1))
     PREV_PROOF_EXTRA_ARG="--checkpoint-block-number ${prev_proof_num}"
 else
-    if [ $1 -gt 1 ]; then
+    if [[ $1 -gt 1 ]]; then
         prev_proof_num=$(($1-1))
         PREV_PROOF_EXTRA_ARG="-f ${PROOF_OUTPUT_DIR}/b${prev_proof_num}.zkproof"
     fi
@@ -112,7 +102,7 @@ fi
 if [[ $8 == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --features test_only --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    command='cargo r --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
         retVal=$?
@@ -163,8 +153,7 @@ if [ "$RUN_VERIFICATION" = true ]; then
 
   proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
   echo "Verifying the proof of the latest block in the interval:" $proof_file_name
-  echo [ > $PROOF_OUTPUT_DIR/proofs.json && cat $proof_file_name >> $PROOF_OUTPUT_DIR/proofs.json && echo ] >> $PROOF_OUTPUT_DIR/proofs.json
-  cargo r --release --bin verifier -- -f $PROOF_OUTPUT_DIR/proofs.json > $PROOF_OUTPUT_DIR/verify.out 2>&1
+  cargo r --release --bin verifier -- -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
 
   if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
       echo "All proofs verified successfully!";

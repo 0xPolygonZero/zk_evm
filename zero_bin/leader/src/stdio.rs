@@ -3,7 +3,7 @@ use std::io::{Read, Write};
 use anyhow::Result;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
-use prover::{ProverConfig, ProverInput};
+use prover::{BlockProverInput, BlockProverInputFuture, ProverConfig};
 use tracing::info;
 
 /// The main function for the stdio mode.
@@ -16,17 +16,17 @@ pub(crate) async fn stdio_main(
     std::io::stdin().read_to_string(&mut buffer)?;
 
     let des = &mut serde_json::Deserializer::from_str(&buffer);
-    let prover_input = ProverInput {
-        blocks: serde_path_to_error::deserialize(des)?,
-    };
+    let block_prover_inputs = serde_path_to_error::deserialize::<_, Vec<BlockProverInput>>(des)?
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<BlockProverInputFuture>>();
 
-    let proved_blocks = prover_input
-        .prove(&runtime, previous, prover_config, None)
-        .await;
+    let proved_blocks =
+        prover::prove(block_prover_inputs, &runtime, previous, prover_config, None).await;
     runtime.close().await?;
     let proved_blocks = proved_blocks?;
 
-    if cfg!(feature = "test_only") {
+    if prover_config.test_only {
         info!("All proof witnesses have been generated successfully.");
     } else {
         info!("All proofs have been generated successfully.");

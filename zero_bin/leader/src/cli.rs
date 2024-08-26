@@ -26,6 +26,8 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
+    /// Deletes all the previously cached circuits.
+    Clean,
     /// Reads input from stdin and writes output to stdout.
     Stdio {
         /// The previous proof output.

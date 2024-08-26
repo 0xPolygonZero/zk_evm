@@ -108,6 +108,20 @@ impl BlockInterval {
         }
     }
 
+    pub fn get_start_block(&self) -> Result<u64> {
+        match self {
+            BlockInterval::SingleBlockId(BlockId::Number(num)) => {
+                let num_value = num
+                    .as_number()
+                    .ok_or_else(|| anyhow!("invalid block number '{num}'"))?;
+                Ok(num_value) // Return the valid block number
+            }
+            BlockInterval::Range(range) => Ok(range.start),
+            BlockInterval::FollowFrom { start_block, .. } => Ok(*start_block),
+            _ => Err(anyhow!("Unknown BlockInterval variant")), // Handle unknown variants
+        }
+    }
+
     /// Convert the block interval into an unbounded async stream of block
     /// numbers. Query the blockchain node for the latest block number.
     pub async fn into_unbounded_stream<ProviderT, TransportT>(

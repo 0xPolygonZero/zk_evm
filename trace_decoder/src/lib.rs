@@ -103,7 +103,7 @@ use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
-use mpt_trie::partial_trie::HashedPartialTrie;
+use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
 use typed_mpt::{StateTrie, StorageTrie, TrieKey};
@@ -258,15 +258,6 @@ pub enum ContractCodeUsage {
     Write(#[serde(with = "crate::hex")] Vec<u8>),
 }
 
-impl ContractCodeUsage {
-    fn get_code_hash(&self) -> H256 {
-        match self {
-            ContractCodeUsage::Read(hash) => *hash,
-            ContractCodeUsage::Write(bytes) => hash(bytes),
-        }
-    }
-}
-
 /// Other data that is needed for proof gen.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OtherBlockData {
@@ -294,13 +285,12 @@ pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
     batch_size: usize,
-    resolve: impl Fn(H256) -> Vec<u8>,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     use anyhow::Context as _;
     use mpt_trie::partial_trie::PartialTrie as _;
 
     use crate::processed_block_trace::{
-        CodeHashResolving, ProcessedBlockTrace, ProcessedBlockTracePreImages,
+        Hash2Code, ProcessedBlockTrace, ProcessedBlockTracePreImages,
     };
     use crate::PartialTriePreImages;
     use crate::{
@@ -321,7 +311,7 @@ pub fn entrypoint(
         }) => ProcessedBlockTracePreImages {
             tries: PartialTriePreImages {
                 state: state.items().try_fold(
-                    StateTrie::default(),
+                    StateTrie::new(OnOrphanedHashNode::Reject),
                     |mut acc, (nibbles, hash_or_val)| {
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
@@ -343,18 +333,21 @@ pub fn entrypoint(
                     .into_iter()
                     .map(|(k, SeparateTriePreImage::Direct(v))| {
                         v.items()
-                            .try_fold(StorageTrie::default(), |mut acc, (nibbles, hash_or_val)| {
-                                let path = TrieKey::from_nibbles(nibbles);
-                                match hash_or_val {
-                                    mpt_trie::trie_ops::ValOrHash::Val(value) => {
-                                        acc.insert(path, value)?;
-                                    }
-                                    mpt_trie::trie_ops::ValOrHash::Hash(h) => {
-                                        acc.insert_hash(path, h)?;
-                                    }
-                                };
-                                anyhow::Ok(acc)
-                            })
+                            .try_fold(
+                                StorageTrie::new(OnOrphanedHashNode::Reject),
+                                |mut acc, (nibbles, hash_or_val)| {
+                                    let path = TrieKey::from_nibbles(nibbles);
+                                    match hash_or_val {
+                                        mpt_trie::trie_ops::ValOrHash::Val(value) => {
+                                            acc.insert(path, value)?;
+                                        }
+                                        mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                            acc.insert_hash(path, h)?;
+                                        }
+                                    };
+                                    anyhow::Ok(acc)
+                                },
+                            )
                             .map(|v| (k, v))
                     })
                     .collect::<Result<_, _>>()?,
@@ -396,18 +389,17 @@ pub fn entrypoint(
         .map(|(addr, data)| (addr.into_hash_left_padded(), data))
         .collect::<Vec<_>>();
 
-    let code_db = {
-        let mut code_db = code_db.unwrap_or_default();
-        if let Some(code_mappings) = pre_images.extra_code_hash_mappings {
-            code_db.extend(code_mappings);
-        }
-        code_db
-    };
-
-    let mut code_hash_resolver = CodeHashResolving {
-        client_code_hash_resolve_f: |it: &ethereum_types::H256| resolve(*it),
-        extra_code_hash_mappings: code_db,
-    };
+    // Note we discard any user-provided hashes.
+    let mut hash2code = code_db
+        .unwrap_or_default()
+        .into_values()
+        .chain(
+            pre_images
+                .extra_code_hash_mappings
+                .unwrap_or_default()
+                .into_values(),
+        )
+        .collect::<Hash2Code>();
 
     let last_tx_idx = txn_info.len().saturating_sub(1) / batch_size;
 
@@ -433,10 +425,10 @@ pub fn entrypoint(
                 &pre_images.tries,
                 &all_accounts_in_pre_images,
                 &extra_state_accesses,
-                &mut code_hash_resolver,
+                &mut hash2code,
             )
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, _>>()?;
 
     while txn_info.len() < 2 {
         txn_info.push(ProcessedTxnInfo::default());
@@ -461,8 +453,6 @@ struct PartialTriePreImages {
 
 /// Like `#[serde(with = "hex")`, but tolerates and emits leading `0x` prefixes
 mod hex {
-    use std::{borrow::Cow, fmt};
-
     use serde::{de::Error as _, Deserialize as _, Deserializer, Serializer};
 
     pub fn serialize<S: Serializer, T>(data: T, serializer: S) -> Result<S::Ok, S::Error>
@@ -476,9 +466,9 @@ mod hex {
     pub fn deserialize<'de, D: Deserializer<'de>, T>(deserializer: D) -> Result<T, D::Error>
     where
         T: hex::FromHex,
-        T::Error: fmt::Display,
+        T::Error: std::fmt::Display,
     {
-        let s = Cow::<str>::deserialize(deserializer)?;
+        let s = String::deserialize(deserializer)?;
         match s.strip_prefix("0x") {
             Some(rest) => T::from_hex(rest),
             None => T::from_hex(&*s),

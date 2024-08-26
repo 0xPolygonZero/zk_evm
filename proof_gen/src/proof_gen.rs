@@ -4,8 +4,8 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use evm_arithmetization::{
-    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs,
-    prover::GenerationSegmentData, AllStark, StarkConfig,
+    fixed_recursive_verifier::ProverOutputData, generation::TrimmedGenerationInputs, AllStark,
+    GenerationSegmentData, StarkConfig,
 };
 use hashbrown::HashMap;
 use plonky2::{
