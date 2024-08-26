@@ -415,7 +415,7 @@ impl<F: Field> GenerationState<F> {
             },
         );
         self.memory.insert_preinitialized_segment(
-            Segment::HashedNodes,
+            Segment::HashNodes,
             crate::witness::memory::MemorySegmentState { content: hash_nodes },
         );
         self.memory.insert_preinitialized_segment(

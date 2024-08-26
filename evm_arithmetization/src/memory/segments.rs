@@ -79,8 +79,8 @@ pub(crate) enum Segment {
     AccountsLinkedList = 34 << SEGMENT_SCALING_FACTOR,
     /// List of storage slots of all the accounts in state trie,
     StorageLinkedList = 35 << SEGMENT_SCALING_FACTOR,
-    /// Array of state and storage hashed nodes
-    HashedNodes = 36 << SEGMENT_SCALING_FACTOR,
+    /// Array of state and storage hash nodes
+    HashNodes = 36 << SEGMENT_SCALING_FACTOR,
     // The transient storage of the current transaction.
     TransientStorage = 37 << SEGMENT_SCALING_FACTOR,
     /// List of contracts which have been created during the current
@@ -96,7 +96,7 @@ pub(crate) const PREINITIALIZED_SEGMENTS_INDICES: [usize; 5] = [
     Segment::TrieData.unscale(),
     Segment::AccountsLinkedList.unscale(),
     Segment::StorageLinkedList.unscale(),
-    Segment::HashedNodes.unscale(),
+    Segment::HashNodes.unscale(),
 ];
 
 impl Segment {
@@ -145,7 +145,7 @@ impl Segment {
             Self::RegistersStates,
             Self::AccountsLinkedList,
             Self::StorageLinkedList,
-            Self::HashedNodes,
+            Self::HashNodes,
             Self::TransientStorage,
             Self::CreatedContracts,
             Self::TxnBlobVersionedHashes,
@@ -191,7 +191,7 @@ impl Segment {
             Segment::RegistersStates => "SEGMENT_REGISTERS_STATES",
             Segment::AccountsLinkedList => "SEGMENT_ACCOUNTS_LINKED_LIST",
             Segment::StorageLinkedList => "SEGMENT_STORAGE_LINKED_LIST",
-            Segment::HashedNodes => "SEGMENT_HASH_NODES",
+            Segment::HashNodes => "SEGMENT_HASH_NODES",
             Segment::TransientStorage => "SEGMENT_TRANSIENT_STORAGE",
             Segment::CreatedContracts => "SEGMENT_CREATED_CONTRACTS",
             Segment::TxnBlobVersionedHashes => "SEGMENT_TXN_BLOB_VERSIONED_HASHES",
@@ -236,7 +236,7 @@ impl Segment {
             Segment::RegistersStates => 256,
             Segment::AccountsLinkedList => 256,
             Segment::StorageLinkedList => 256,
-            Segment::HashedNodes => 256,
+            Segment::HashNodes => 256,
             Segment::TransientStorage => 256,
             Segment::CreatedContracts => 256,
             Segment::TxnBlobVersionedHashes => 256,

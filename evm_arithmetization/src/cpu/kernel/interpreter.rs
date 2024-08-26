@@ -258,7 +258,7 @@ impl<F: Field> Interpreter<F> {
             preinit_accounts_ll_segment,
         );
         self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
-        self.insert_preinitialized_segment(Segment::HashedNodes, preinit_hash_nodes_data_segment);
+        self.insert_preinitialized_segment(Segment::HashNodes, preinit_hash_nodes_data_segment);
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);

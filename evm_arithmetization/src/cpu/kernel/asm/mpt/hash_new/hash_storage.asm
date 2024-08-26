@@ -74,16 +74,14 @@ global encode_or_hash_node_storage:
     SWAP2
     // stack: next_hash_node_ptr, next_slot_ptr, cur_len, retdest
     
-    // TODO: Check that node hash nibbles are 
+    // TODO: Check that node hash nibbles are correct
     DUP1
     %next_hash_node
     // stack: next_next_hash_node_ptr, next_hash_node_ptr, next_slot_ptr, cur_len, retdest
     SWAP3
     SWAP1
     // stack: next_hash_node_ptr, cur_len, next_slot_ptr, next_next_hash_node_ptr, retdest
-    %add_const(2) // Skip over the is_account flag and hash node nibbles
-    // stack: hash_ptr, cur_len, next_slot_ptr, next_next_hash_node_ptr, retdest
-    MLOAD_GENERAL
+    %get_hash // Skips the first three words (numbe of nibbles and keys)
     // stack: hash, cur_len, next_slot_ptr, next_next_hash_node_ptr, retdest
     // Update the length of the `TrieData` segment: there are only two 
     // elements in a hash node.

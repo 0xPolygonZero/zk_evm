@@ -941,6 +941,16 @@ remove_all_slots_end:
 
 %macro next_hash_node
     // stack: hash_node_ptr
-    %add_const(3)
+    %add_const(4)
     // stack: next_hash_node_ptr
+%endmacro
+
+// Skip over the the first three words (number of nibbles and jeys)
+// and load the hash from memory.
+%macro get_hash
+    // stack: hash_node_ptr
+    %add_const(3)
+    // stack: next_ptr
+    MLOAD_GENERAL
+    // stack: hash
 %endmacro

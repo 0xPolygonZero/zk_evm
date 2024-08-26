@@ -118,7 +118,7 @@ impl<F: Field> GenerationState<F> {
             "final_state" => {
                 let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
                 let mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-                let accounts_linked_list =
+                let mut accounts_linked_list =
                     LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
                         &mem,
                         Segment::AccountsLinkedList,
@@ -129,10 +129,10 @@ impl<F: Field> GenerationState<F> {
                         &mem,
                         Segment::StorageLinkedList,
                     )?;
-                let hashed_nodes = self.memory.get_preinit_memory(Segment::HashedNodes);
+                let hashed_nodes = self.memory.get_preinit_memory(Segment::HashNodes);
 
                 let n = load_final_state_mpt(
-                    accounts_linked_list,
+                    &mut accounts_linked_list,
                     &mut storage_linked_list,
                     hashed_nodes,
                     &mut new_content,

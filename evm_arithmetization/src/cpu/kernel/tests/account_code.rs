@@ -40,7 +40,7 @@ pub(crate) fn initialize_mpts<F: Field>(
         [Segment::StorageLinkedList.unscale()]
     .content = storage_leaves;
     interpreter.generation_state.memory.contexts[0].segments
-        [Segment::HashedNodes.unscale()]
+        [Segment::HashNodes.unscale()]
     .content = hash_nodes;
     interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
         trie_data.clone();

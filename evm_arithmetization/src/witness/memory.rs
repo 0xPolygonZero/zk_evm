@@ -206,7 +206,7 @@ impl MemoryState {
             segment == Segment::AccountsLinkedList
                 || segment == Segment::StorageLinkedList
                 || segment == Segment::TrieData
-                || segment == Segment::HashedNodes
+                || segment == Segment::HashNodes
         );
         assert!(PREINITIALIZED_SEGMENTS_INDICES.contains(&segment.unscale()));
         let len = self
