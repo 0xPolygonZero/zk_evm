@@ -39,3 +39,6 @@ default = []
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
 anyhow = { workspace = true }
+
+[lints]
+workspace = true
