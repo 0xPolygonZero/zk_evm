@@ -155,7 +155,6 @@ store_origin:
     %jumpi(panic)
 
     // stack: address, retdest
-
     // EIP-4844: Deduct blob_gas_fee from the sender and burn it
     %compute_blob_gas_fee
     DUP2
