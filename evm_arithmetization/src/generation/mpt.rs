@@ -16,7 +16,7 @@ use super::TrimmedTrieInputs;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
-use crate::util::{h2u, u256_to_usize};
+use crate::util::{h2u, u256_to_u64, u256_to_usize};
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
@@ -442,10 +442,12 @@ fn get_state_and_storage_leaves(
             Ok(())
         }
         Node::Hash(hash) => {
+            // Num nibbles between 0 and 64 indicates an account
+            hash_nodes.push(Some(key.count.into()));
             hash_nodes.push(Some(
                 key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
             ));
-            hash_nodes.push(Some(U256::one())); // Set flag is_account to 1
+            hash_nodes.push(Some(U256::one()));
             hash_nodes.push(Some(h2u(*hash)));
             Ok(())
         }
@@ -532,6 +534,8 @@ where
         }
         Node::Hash(hash) => {
             log::debug!("adding hash node");
+            // Num nibbles between 65 and 129 indicates a storage node
+            hash_nodes.push(Some((key.count + 65).into()));
             hash_nodes.push(Some(
                 addr_key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
             ));
@@ -697,13 +701,15 @@ pub(crate) fn get_final_state_mpt(
         let mut storage_trie = HashedPartialTrie::from(Node::Empty);
         let mut hashed_storage_trie = false;
         while let Some(hash_node) = last_hash_node
-            && Some(account[0]) == hash_node[0]
-            && hash_node[1] == Some(U256::one())
+            && hash_node[0].unwrap_or_default() <= U256::from(64)
         {
             log::debug!("inserting account hash node {:?}", hash_node[2]);
             final_state_trie
                 .insert(
-                    hash_node[0].unwrap_or_default().to_nibbles_padded(),
+                    Nibbles {
+                        count: u256_to_usize(hash_node[0].unwrap_or_default())?,
+                        packed: hash_node[1].unwrap_or_default().try_into().unwrap(), // TODO: return a proper error
+                    },
                     H256::from_uint(&hash_node[2].unwrap_or_default()),
                 )
                 .unwrap(); // TODO: Map to a proper error.
@@ -711,21 +717,26 @@ pub(crate) fn get_final_state_mpt(
         }
         loop {
             while let Some(hash_node) = last_hash_node
-                && Some(account[0]) == hash_node[0]
+                && hash_node[0].unwrap_or_default() > U256::from(64) && hash_node[0].unwrap_or_default() <= U256::from(129)
+                && Some(account[0]) == hash_node[1]
             {
-                // If the node key is 0 the storage trie is a single hash node
-                if hash_node[1] == Some(U256::zero()) {
-                    log::debug!("inserting hashed storage {:?}", hash_node[2]);
+                // If 65 + number of nibbles = 65, the storage trie is a single hash node
+                // TODO: do we need this extra condition now?
+                if hash_node[0].unwrap_or_default() == U256::from(65) {
+                    log::debug!("inserting hashed storage {:?}", hash_node[3]);
                     storage_trie = HashedPartialTrie::new(Node::Hash(H256::from_uint(
                         &hash_node[2].unwrap_or_default(),
                     )));
                     hashed_storage_trie = true;
                 } else {
-                    log::debug!("inserting storage hash node {:?}", hash_node[2]);
+                    log::debug!("inserting storage hash node {:?}", hash_node[3]);
                     storage_trie
                         .insert(
-                            hash_node[0].unwrap_or_default().to_nibbles_padded(),
-                            H256::from_uint(&hash_node[2].unwrap_or_default()),
+                            Nibbles{
+                                count: u256_to_usize(hash_node[0].unwrap_or_default())? - 65,
+                                packed: hash_node[2].unwrap_or_default().try_into().unwrap(), // TODO: return a proper error
+                            },
+                            H256::from_uint(&hash_node[3].unwrap_or_default()),
                         )
                         .unwrap(); // TODO: Map to a proper error.
                 }
