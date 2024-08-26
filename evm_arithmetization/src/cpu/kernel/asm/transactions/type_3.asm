@@ -17,6 +17,10 @@ global process_type_3_txn:
 
     // stack: rlp_addr, retdest
     %store_chain_id_present_true
+    // stack: rlp_addr, retdest
+    // Keep track of the chain id position.
+    DUP1
+    // stack: rlp_addr, chain_id_addr, retdest
     %decode_and_store_chain_id
     %decode_and_store_nonce
     %decode_and_store_max_priority_fee
@@ -28,100 +32,24 @@ global process_type_3_txn:
     %decode_and_store_access_list
     %decode_and_store_max_fee_per_blob_gas
     %decode_and_store_blob_versioned_hashes
+    // stack: rlp_addr, chain_id_addr, retdest
+    DUP1
+    // stack: rlp_addr, after_blob_hashes_addr, chain_id_addr, retdest
     %decode_and_store_y_parity
     %decode_and_store_r
     %decode_and_store_s
 
-    // stack: rlp_addr, retdest
+    // stack: rlp_addr, after_blob_hashes_addr, chain_id_addr, retdest
     POP
-    // stack: retdest
+    // stack: after_blob_hashes_addr, chain_id_addr, retdest
 
 // From EIP-4844:
 // The signature_y_parity, signature_r, signature_s elements of this transaction represent a secp256k1 signature over
 // keccak256(0x03 || rlp([chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes]))
+// We know that [chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to, value, data, access_list, max_fee_per_blob_gas, blob_versioned_hashes] is already encoded
+// at `chain_id_addr`; we just need to overwrite the existing RLP prefix. This is fine since we don't need the original encoding anymore.
 type_3_compute_signed_data:
-    %alloc_rlp_block
-    // stack: rlp_addr_start, retdest
-    %mload_txn_field(@TXN_FIELD_CHAIN_ID)
-    // stack: chain_id, rlp_start, retdest
-    DUP2
-    // stack: rlp_addr, chain_id, rlp_start, retdest
-    %encode_rlp_scalar
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_NONCE)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_MAX_PRIORITY_FEE_PER_GAS)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_MAX_FEE_PER_GAS)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_GAS_LIMIT)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    // As per EIP-4844, blob transactions cannot have the form of a create transaction.
-    %mload_txn_field(@TXN_FIELD_TO)
-    %mload_global_metadata(@GLOBAL_METADATA_CONTRACT_CREATION) %jumpi(panic)
-    // stack: to, rlp_addr, rlp_start, retdest
-    SWAP1 %encode_rlp_160
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_VALUE)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    // Encode txn data.
-    %mload_txn_field(@TXN_FIELD_DATA_LEN)
-    PUSH @SEGMENT_TXN_DATA // ctx == virt == 0
-    // stack: ADDR, len, rlp_addr, rlp_start, retdest
-    PUSH after_serializing_txn_data
-    // stack: after_serializing_txn_data, ADDR, len, rlp_addr, rlp_start, retdest
-    SWAP3
-    // stack: rlp_addr, ADDR, len, after_serializing_txn_data, rlp_start, retdest
-    %jump(encode_rlp_string)
-
-after_serializing_txn_data:
-    // Instead of manually encoding the access list, we just copy the raw RLP from the transaction.
-    %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_START)
-    %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN)
-    %stack (al_len, al_start, rlp_addr, rlp_start, retdest) ->
-        (
-            rlp_addr,
-            al_start,
-            al_len,
-            after_serializing_access_list,
-            rlp_addr, rlp_start, retdest)
-    %jump(memcpy_bytes)
-after_serializing_access_list:
-    // stack: rlp_addr, rlp_start, retdest
-    %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN) ADD
-    // stack: rlp_addr, rlp_start, retdest
-
-    %mload_txn_field(@TXN_FIELD_MAX_FEE_PER_BLOB_GAS)
-    %encode_rlp_scalar_swapped_inputs
-    // stack: rlp_addr, rlp_start, retdest
-
-    // Instead of manually encoding the blob versioned hashes, we just copy the raw RLP from the transaction.
-    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START)
-    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN)
-    %stack (bvh_len, bvh_start, rlp_addr, rlp_start, retdest) ->
-        (
-            rlp_addr,
-            bvh_start,
-            bvh_len,
-            after_serializing_blob_versioned_hashes,
-            rlp_addr, rlp_start, retdest)
-    %jump(memcpy_bytes)
-after_serializing_blob_versioned_hashes:
-    // stack: rlp_addr, rlp_start, retdest
-    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN) ADD
-    // stack: rlp_addr, rlp_start, retdest
+    // stack: after_blob_hashes_addr, chain_id_addr, retdest
     %prepend_rlp_list_prefix
     // stack: prefix_start_pos, rlp_len, retdest
 
