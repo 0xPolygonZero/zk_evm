@@ -1,0 +1,49 @@
+name: zkEVM mdbook
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches:
+      - "**" # TODO: Remove before merge, this is to test the behavior
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
+      # mdBook for mdbook-pdf compatibility by fixing broken links in print.html
+      # Waiting for https://github.com/rust-lang/mdBook/pull/1738 to get merged
+      - name: Install patched mdbook
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: mdbook --git https://github.com/HollowMan6/mdBook.git --rev 5830c9555a4dc051675d17f1fcb04dd0920543e8
+
+      - name: Install mdbook-katex and mdbook-pdf
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: mdbook-katex mdbook-pdf
+
+      - name: Install mdbook-pdf-outline
+        run: pip3 install mdbook-pdf-outline
+
+      - name: Build book
+        run: mdbook build docs/book/
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs/arithemtization/book/html
