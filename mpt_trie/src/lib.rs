@@ -12,7 +12,6 @@
 //! hash of the node it replaces.
 
 #![allow(incomplete_features)]
-#![allow(clippy::too_long_first_doc_paragraph)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(missing_debug_implementations)]
 #![deny(missing_docs)]

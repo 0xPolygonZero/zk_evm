@@ -133,7 +133,6 @@
 //!     // Have the verifier attest validity of the proof.
 //!     assert!(verifier_state.verify(block_proof.intern).is_ok());
 //! ```
-#![allow(clippy::too_long_first_doc_paragraph)]
 
 pub(crate) mod constants;
 pub mod proof_gen;

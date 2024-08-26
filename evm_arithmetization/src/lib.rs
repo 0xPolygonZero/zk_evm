@@ -181,7 +181,6 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::field_reassign_with_default)]
-#![allow(clippy::too_long_first_doc_paragraph)]
 #![feature(let_chains)]
 
 // Individual STARK processing units

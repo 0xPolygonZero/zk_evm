@@ -1,5 +1,3 @@
-#![allow(clippy::too_long_first_doc_paragraph)]
-
 pub mod cli;
 
 use std::future::Future;
