@@ -18,6 +18,7 @@ global process_type_3_txn:
     // stack: rlp_addr, retdest
     %store_chain_id_present_true
     // stack: rlp_addr, retdest
+    // Store the chain id position in the RLP segment.
     DUP1
     // stack: rlp_addr, chain_id_addr, retdest
     %decode_and_store_chain_id

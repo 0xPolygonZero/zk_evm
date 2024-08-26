@@ -18,6 +18,7 @@ global process_type_0_txn:
     %stack (rlp_addr, len) -> (rlp_addr)
 
     // stack: rlp_addr, retdest
+    // Store the nonce position in the RLP segment.
     DUP1
     // stack: rlp_addr, nonce_addr, retdest
     %decode_and_store_nonce
