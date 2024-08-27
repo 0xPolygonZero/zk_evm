@@ -23,13 +23,13 @@ pub(crate) struct RpcConfig {
     /// The RPC URL.
     #[arg(short = 'u', long, value_hint = ValueHint::Url)]
     rpc_url: Url,
-    /// The RPC Tracer Type
+    /// The RPC Tracer Type.
     #[arg(short = 't', long, default_value = "jerigon")]
     rpc_type: RpcType,
-    /// Backoff in milliseconds for retry requests
+    /// Backoff in milliseconds for retry requests.
     #[arg(long, default_value_t = 0)]
     backoff: u64,
-    /// The maximum number of retries
+    /// The maximum number of retries.
     #[arg(long, default_value_t = 0)]
     max_retries: u32,
 }
@@ -37,19 +37,19 @@ pub(crate) struct RpcConfig {
 #[derive(Subcommand)]
 pub(crate) enum Command {
     Fetch {
-        /// Starting block of interval to fetch
+        /// Starting block of interval to fetch.
         #[arg(short, long)]
         start_block: u64,
-        /// End block of interval to fetch
+        /// End block of interval to fetch.
         #[arg(short, long)]
         end_block: u64,
         /// The checkpoint block number. If not provided,
-        /// the block before the `start_block` is the checkpoint
+        /// the block before the `start_block` is the checkpoint.
         #[arg(short, long)]
         checkpoint_block_number: Option<u64>,
     },
     Extract {
-        /// Transaction hash
+        /// Transaction hash.
         #[arg(long, short)]
         tx: String,
         /// Number of transactions in a batch to process at once.
@@ -63,7 +63,7 @@ pub(crate) struct Cli {
     #[clap(flatten)]
     pub(crate) config: RpcConfig,
 
-    /// Fetch and generate prover input from the RPC endpoint
+    /// Fetch and generate prover input from the RPC endpoint.
     #[command(subcommand)]
     pub(crate) command: Command,
 }
