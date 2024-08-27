@@ -141,7 +141,8 @@ impl Cli {
                 // Get transaction info.
                 match cached_provider
                     .clone()
-                    .get_provider().await?
+                    .get_provider()
+                    .await?
                     .get_transaction_by_hash(tx_hash)
                     .await?
                 {
