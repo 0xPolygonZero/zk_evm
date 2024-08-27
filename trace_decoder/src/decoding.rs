@@ -74,7 +74,7 @@ pub fn batches2gis(
 
     let num_txs = batch_infos
         .iter()
-        .map(|tx_info| tx_info.meta.len())
+        .map(|batch| batch.each_txn.len())
         .sum::<usize>();
 
     let mut gis = batch_infos
@@ -531,9 +531,9 @@ fn batch2gi(
 
     // For each non-dummy txn, we increment `txn_number_after` and
     // update `gas_used_after` accordingly.
-    extra_data.txn_number_after += batch_info.meta.len().into();
+    extra_data.txn_number_after += batch_info.each_txn.len().into();
     extra_data.gas_used_after += batch_info
-        .meta
+        .each_txn
         .iter()
         .map(|i| i.gas_used)
         .sum::<u64>()
@@ -544,7 +544,7 @@ fn batch2gi(
     // do this clone every iteration.
     let tries_at_start_of_txn = curr_block_tries.clone();
 
-    for (i, meta) in batch_info.meta.iter().enumerate() {
+    for (i, meta) in batch_info.each_txn.iter().enumerate() {
         update_txn_and_receipt_tries(
             curr_block_tries,
             meta,
@@ -553,7 +553,7 @@ fn batch2gi(
     }
 
     let mut delta_out =
-        apply_deltas_to_trie_state(curr_block_tries, &batch_info.touch, &batch_info.meta)?;
+        apply_deltas_to_trie_state(curr_block_tries, &batch_info.touch, &batch_info.each_txn)?;
 
     let nodes_used_by_txn = if is_initial_payload {
         let mut nodes_used = batch_info.touch;
@@ -581,7 +581,7 @@ fn batch2gi(
         gas_used_before: extra_data.gas_used_before,
         gas_used_after: extra_data.gas_used_after,
         signed_txns: batch_info
-            .meta
+            .each_txn
             .iter()
             .filter_map(|t| t.txn_bytes.clone())
             .collect::<Vec<_>>(),

@@ -260,11 +260,6 @@ impl StateMpt {
     ) -> anyhow::Result<Option<AccountRlp>> {
         self.typed.insert(TrieKey::from_hash(key), account)
     }
-    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.typed
-            .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
-    }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
@@ -316,6 +311,11 @@ impl StateTrie for StateMpt {
         };
         Ok(())
     }
+    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.typed
+            .iter()
+            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
+    }
 }
 
 impl From<StateMpt> for HashedPartialTrie {
@@ -343,6 +343,7 @@ pub trait StateTrie {
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
     fn contains_address(&self, address: Address) -> bool;
     fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
 }
 
 impl StateTrie for StateSmt {
@@ -370,6 +371,9 @@ impl StateTrie for StateSmt {
     fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         let _ = address;
         Ok(())
+    }
+    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.address2state.iter().map(|(k, v)| (crate::hash(k), *v))
     }
 }
 
@@ -404,5 +408,15 @@ impl StorageTrie {
 
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
+    }
+
+    /// Delete the given `key`, returning any remaining branch on collapse
+    pub fn reporting_remove(&mut self, key: TrieKey) -> anyhow::Result<Option<TrieKey>> {
+        Ok(
+            crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
+                &mut self.untyped,
+                &key,
+            )?,
+        )
     }
 }

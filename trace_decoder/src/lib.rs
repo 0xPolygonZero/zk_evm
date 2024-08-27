@@ -96,10 +96,10 @@ mod type2;
 mod typed_mpt;
 mod wire;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 
-use anyhow::ensure;
+use anyhow::{ensure, Context as _};
 use ethereum_types::{Address, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
@@ -107,9 +107,10 @@ use evm_arithmetization::GenerationInputs;
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
-use processed_block_trace::{BatchInfo, BatchTouch, Hash2Code, StateWrite};
+use processed_block_trace::{BatchInfo, Hash2Code, StateWrite};
 use serde::{Deserialize, Serialize};
-use typed_mpt::{ReceiptTrie, StateMpt, StateTrie as _, StorageTrie, TransactionTrie, TrieKey};
+use typed_mpt::{ReceiptTrie, StateMpt, StateTrie, StorageTrie, TransactionTrie, TrieKey};
+use zk_evm_common::EMPTY_TRIE_HASH;
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -414,7 +415,7 @@ pub fn entrypoint(
 #[allow(unused, private_interfaces, missing_docs)]
 pub fn start(
     // state at the beginning of the block
-    state0: StateMpt,
+    mut state: impl StateTrie,
     // storage at the beginning of the block
     mut storage: BTreeMap<H256, StorageTrie>,
     code: &mut Hash2Code,
@@ -425,7 +426,7 @@ pub fn start(
     let mut transaction_trie = TransactionTrie::new();
     let mut receipt_trie = ReceiptTrie::new();
 
-    for (haddr, acct) in state0.iter() {
+    for (haddr, acct) in state.iter() {
         let storage = storage.entry(haddr).or_insert({
             let mut it = StorageTrie::default();
             it.insert_hash(TrieKey::default(), acct.storage_root)
@@ -484,11 +485,54 @@ pub fn start(
                 let storage_trie_change = !storage_written.is_empty();
 
                 for (k, v) in storage_written {
+                    let storage = storage
+                        .get_mut(&hash(addr))
+                        .context(format!("missing storage for account with address {addr:x}"))?;
+
+                    let slot: TrieKey = todo!();
+                    match v.is_zero() {
+                        true => {
+                            // this is actually a delete
+                            per_batch
+                                .storage_accesses
+                                .entry(hash(addr))
+                                .or_default()
+                                .extend(storage.reporting_remove(slot)?);
+                        }
+                        false => {
+                            storage.insert(slot, rlp::encode(&v).to_vec())?;
+                        }
+                    };
                     per_batch
                         .storage_writes
                         .entry(hash(addr))
                         .or_default()
                         .insert(TrieKey::from_hash(k), rlp::encode(&v).to_vec());
+                }
+
+                let mut acct = state.get_by_address(addr).unwrap_or_default();
+                acct.balance = balance.unwrap_or(acct.balance);
+                acct.nonce = nonce.unwrap_or(acct.nonce);
+                acct.code_hash = code_usage
+                    .map(|it| match it {
+                        ContractCodeUsage::Read(hash) => {
+                            per_batch.accessed_code.insert(code.get(hash)?);
+                            anyhow::Ok(hash)
+                        }
+                        ContractCodeUsage::Write(bytes) => {
+                            code.insert(bytes.clone());
+                            let hash = hash(&bytes);
+                            per_batch.accessed_code.insert(bytes);
+                            anyhow::Ok(hash)
+                        }
+                    })
+                    .transpose()?
+                    .unwrap_or(acct.code_hash);
+                if storage_trie_change {
+                    acct.storage_root = storage
+                        .get(&hash(addr))
+                        .context(format!("missing storage for account with address {addr:x}"))?
+                        .root();
                 }
 
                 let state_write = StateWrite {
@@ -514,7 +558,7 @@ pub fn start(
                     // a write occurred
 
                     // Account creations are flagged to handle reverts.
-                    if !state0.contains_address(addr) {
+                    if !state.contains_address(addr) {
                         created_in_txn.insert(addr);
                     }
 
@@ -552,7 +596,7 @@ pub fn start(
                 // shouldn't include them in this transaction's `state_accesses` to allow the
                 // decoder to build a minimal state trie without hitting any hash node.
 
-                if !is_precompile || state0.get_by_address(addr).is_some() {
+                if !is_precompile || state.get_by_address(addr).is_some() {
                     per_batch.state_accesses.insert(addr);
                 }
 
@@ -561,6 +605,26 @@ pub fn start(
                 }
             }
 
+            let did_access_storage = per_batch
+                .storage_accesses
+                .iter()
+                .filter_map(|(haddr, accesses)| match accesses.is_empty() {
+                    true => None,
+                    false => Some(*haddr),
+                })
+                .collect::<HashSet<_>>();
+            per_batch.accts_with_ignored_storage = state
+                .iter()
+                .filter_map(|(haddr, AccountRlp { storage_root, .. })| {
+                    match storage_root != EMPTY_TRIE_HASH
+                        && !did_access_storage.contains(&hash(haddr))
+                    {
+                        true => Some((haddr, storage_root)),
+                        false => None,
+                    }
+                })
+                .collect();
+
             // TODO(0xaatif): in the reference, this is not done
             //                - for dummy transactions
             //                - if `byte_code` is empty
@@ -568,9 +632,8 @@ pub fn start(
             receipt_trie.insert(txn_ix, new_receipt_trie_node_byte)?;
 
             txn_ix += 1;
-        }
-        //
-    }
+        } // txn in batch
+    } // batch in batches
     Ok(())
 }
 

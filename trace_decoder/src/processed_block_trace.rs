@@ -17,7 +17,7 @@ const LAST_PRECOMPILE_ADDRESS: U256 = U256([10, 0, 0, 0]);
 pub(crate) struct BatchInfo {
     pub touch: BatchTouch,
     pub contract_code_accessed: HashSet<Vec<u8>>,
-    pub meta: Vec<TxnMetaState>,
+    pub each_txn: Vec<TxnMetaState>,
 }
 
 /// Code hash mappings that we have constructed from parsing the block
@@ -227,7 +227,7 @@ impl TxnInfo {
         Ok(BatchInfo {
             touch: touched_in_batch,
             contract_code_accessed,
-            meta,
+            each_txn: meta,
         })
     }
 }
