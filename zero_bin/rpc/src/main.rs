@@ -138,7 +138,7 @@ impl Cli {
             }
             Command::Extract { tx, batch_size } => {
                 let tx_hash: B256 = tx.parse()?;
-                // Get transaction info
+                // Get transaction info.
                 match cached_provider
                     .clone()
                     .as_provider()

@@ -52,7 +52,7 @@ pub(crate) async fn client_main(
         &params.previous_proof,
         block_interval.get_start_block()?,
     )?;
-    // Grab interval checkpoint block state trie
+    // Grab interval checkpoint block state trie.
     let checkpoint_state_trie_root = cached_provider
         .get_block(
             params.checkpoint_block_number.into(),
