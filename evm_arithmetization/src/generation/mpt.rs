@@ -447,7 +447,11 @@ fn get_state_and_storage_leaves(
             hash_nodes.push(Some(
                 key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
             ));
+<<<<<<< HEAD
             hash_nodes.push(Some(U256::zero())); // No storage key
+=======
+            hash_nodes.push(Some(U256::one()));
+>>>>>>> refs/remotes/origin/refactor_ll_hashing
             hash_nodes.push(Some(h2u(*hash)));
             Ok(())
         }
