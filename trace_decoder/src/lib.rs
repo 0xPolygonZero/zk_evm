@@ -316,8 +316,10 @@ pub fn entrypoint(
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
                             mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
-                                acc.insert_by_key(
-                                    path,
+                                #[expect(deprecated)] // this is MPT specific
+                                acc.insert_by_hashed_address(
+                                    path.into_hash()
+                                        .context("invalid path length in direct state trie")?,
                                     rlp::decode(&bytes)
                                         .context("invalid AccountRlp in direct state trie")?,
                                 )?;
@@ -414,7 +416,7 @@ pub fn entrypoint(
                     .b_data
                     .withdrawals
                     .iter()
-                    .map(|(addr, _)| crate::hash(addr.as_bytes()))
+                    .map(|(addr, _)| *addr)
                     .collect::<Vec<_>>()
             } else {
                 Vec::new()
