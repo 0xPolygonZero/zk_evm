@@ -16,6 +16,9 @@ use alloy::{
 };
 use tower::{retry::Policy, Layer, Service};
 
+const HTTP_CLIENT_CONNECTION_POOL_IDLE_TIMEOUT: u64 = 90;
+const HTTP_CLIENT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 64;
+
 #[derive(Debug)]
 pub struct RetryPolicy {
     backoff: tokio::time::Duration,
@@ -146,8 +149,10 @@ pub fn build_http_retry_provider(
         max_retries,
     ));
     let reqwest_client = reqwest::ClientBuilder::new()
-        .pool_max_idle_per_host(64)
-        .pool_idle_timeout(Duration::from_secs(90))
+        .pool_max_idle_per_host(HTTP_CLIENT_MAX_IDLE_CONNECTIONS_PER_HOST)
+        .pool_idle_timeout(Duration::from_secs(
+            HTTP_CLIENT_CONNECTION_POOL_IDLE_TIMEOUT,
+        ))
         .build()?;
 
     let http = alloy::transports::http::Http::with_client(reqwest_client, rpc_url);

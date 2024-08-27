@@ -14,6 +14,10 @@ const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 64;
 /// frequently used data.
 pub struct CachedProvider<ProviderT, TransportT> {
     provider: Arc<ProviderT>,
+    // `Alloy` provider is using `Reqwest` http client under the hood. It has an unbounded
+    // connection pool. We need to limit the number of parallel connections by ourselves, so we
+    // use semaphore to count the number of parallel RPC requests happening at any moment with
+    // CachedProvider.
     semaphore: Arc<Semaphore>,
     blocks_by_number: Arc<Mutex<lru::LruCache<u64, Block>>>,
     blocks_by_hash: Arc<Mutex<lru::LruCache<BlockHash, u64>>>,
