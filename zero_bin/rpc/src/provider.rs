@@ -22,7 +22,7 @@ pub struct CachedProvider<ProviderT, TransportT> {
 
 pub struct ProviderGuard<'a, ProviderT> {
     provider: Arc<ProviderT>,
-    _semaphore: SemaphorePermit<'a>,
+    _permit: SemaphorePermit<'a>,
 }
 
 impl<'a, ProviderT> Deref for ProviderGuard<'a, ProviderT> {
@@ -61,7 +61,7 @@ where
     pub async fn get_provider(&self) -> Result<ProviderGuard<ProviderT>, anyhow::Error> {
         Ok(ProviderGuard {
             provider: self.provider.clone(),
-            _semaphore: self.semaphore.acquire().await?,
+            _permit: self.semaphore.acquire().await?,
         })
     }
 
