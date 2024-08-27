@@ -1,9 +1,11 @@
+use std::time::Duration;
 use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
 };
 
+use alloy::transports::http::reqwest;
 use alloy::{
     providers::{ProviderBuilder, RootProvider},
     rpc::{
@@ -13,6 +15,9 @@ use alloy::{
     transports::TransportError,
 };
 use tower::{retry::Policy, Layer, Service};
+
+const HTTP_CLIENT_CONNECTION_POOL_IDLE_TIMEOUT: u64 = 90;
+const HTTP_CLIENT_MAX_IDLE_CONNECTIONS_PER_HOST: usize = 64;
 
 #[derive(Debug)]
 pub struct RetryPolicy {
@@ -138,11 +143,22 @@ pub fn build_http_retry_provider(
     rpc_url: url::Url,
     backoff: u64,
     max_retries: u32,
-) -> RootProvider<RetryService<alloy::transports::http::ReqwestTransport>> {
+) -> Result<RootProvider<RetryService<alloy::transports::http::ReqwestTransport>>, anyhow::Error> {
     let retry_policy = RetryLayer::new(RetryPolicy::new(
-        tokio::time::Duration::from_millis(backoff),
+        Duration::from_millis(backoff),
         max_retries,
     ));
-    let client = ClientBuilder::default().layer(retry_policy).http(rpc_url);
-    ProviderBuilder::new().on_client(client)
+    let reqwest_client = reqwest::ClientBuilder::new()
+        .pool_max_idle_per_host(HTTP_CLIENT_MAX_IDLE_CONNECTIONS_PER_HOST)
+        .pool_idle_timeout(Duration::from_secs(
+            HTTP_CLIENT_CONNECTION_POOL_IDLE_TIMEOUT,
+        ))
+        .build()?;
+
+    let http = alloy::transports::http::Http::with_client(reqwest_client, rpc_url);
+    let is_local = http.guess_local();
+    let client = ClientBuilder::default()
+        .layer(retry_policy)
+        .transport(http, is_local);
+    Ok(ProviderBuilder::new().on_client(client))
 }

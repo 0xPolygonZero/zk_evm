@@ -182,7 +182,8 @@ where
             let provider = provider.clone();
             async move {
                 let proof = provider
-                    .as_provider()
+                    .get_provider()
+                    .await?
                     .get_proof(address, keys.into_iter().collect())
                     .block_id((block_number - 1).into())
                     .await
@@ -196,7 +197,8 @@ where
         let provider = provider.clone();
         async move {
             let proof = provider
-                .as_provider()
+                .get_provider()
+                .await?
                 .get_proof(address, keys.into_iter().collect())
                 .block_id(block_number.into())
                 .await

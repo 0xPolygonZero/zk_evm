@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use alloy::{
@@ -53,7 +54,7 @@ where
         .await?;
 
     let (code_db, txn_info) =
-        txn::process_transactions(&block, cached_provider.as_provider()).await?;
+        txn::process_transactions(&block, cached_provider.get_provider().await?.deref()).await?;
     let trie_pre_images = state::process_state_witness(cached_provider, block, &txn_info).await?;
 
     Ok(BlockTrace {

@@ -117,7 +117,7 @@ impl Cli {
             self.config.rpc_url.clone(),
             self.config.backoff,
             self.config.max_retries,
-        )));
+        )?));
 
         match self.command {
             Command::Fetch {
@@ -141,7 +141,8 @@ impl Cli {
                 // Get transaction info.
                 match cached_provider
                     .clone()
-                    .as_provider()
+                    .get_provider()
+                    .await?
                     .get_transaction_by_hash(tx_hash)
                     .await?
                 {
