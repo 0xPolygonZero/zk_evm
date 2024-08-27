@@ -2050,7 +2050,7 @@ where
                 checkpoint_state_trie_root: lhs_public_values
                     .extra_block_data
                     .checkpoint_state_trie_root,
-                checkpoint_consolidated_hash: real_public_values
+                checkpoint_consolidated_hash: lhs_public_values
                     .extra_block_data
                     .checkpoint_consolidated_hash,
                 txn_number_before: lhs_public_values.extra_block_data.txn_number_before,

@@ -82,7 +82,7 @@ where
         .state_root;
 
     let prev_hashes = fetch_block_hashes(cached_provider.clone(), target_block_number).await?;
-    let checkpoint_prev_hashes = fetch_block_hashes(cached_provider, checkpoint_block_number)
+    let checkpoint_prev_hashes = fetch_block_hashes(cached_provider, checkpoint_block_number + 1) // include the checkpoint block
         .await?
         .map(|it| it.compat());
 
