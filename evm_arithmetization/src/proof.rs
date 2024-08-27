@@ -335,10 +335,18 @@ impl<F: RichField> BlockHashes<F> {
         payload.extend_from_slice(&h256_limbs(self.cur_hash));
 
         let consolidated = if is_left {
+            println!(
+                "Skipping old hash {:?}",
+                get_h256(&payload[0..TARGET_HASH_SIZE])
+            );
             // Skipping most ancient hash
             H::hash_no_pad(&payload[TARGET_HASH_SIZE..])
         } else {
             // Skipping current hash
+            println!(
+                "Skipping current hash {:?}",
+                get_h256(&payload[TARGET_HASH_SIZE * 256..])
+            );
             H::hash_no_pad(&payload[..TARGET_HASH_SIZE * 256])
         };
 

@@ -2231,9 +2231,24 @@ where
         mut public_values: PublicValues<F>,
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues<F>)> {
         let mut block_inputs = PartialWitness::new();
+
+        println!("Current hash: {:?}", public_values.block_hashes.cur_hash);
+        println!(
+            "Oldest hash: {:?}",
+            public_values.block_hashes.prev_hashes[0]
+        );
+
+        println!(
+            "Consolidated BEFORE: {:?}",
+            public_values.block_hashes.consolidated_hash
+        );
         public_values.block_hashes = public_values
             .block_hashes
             .consolidate::<C::Hasher>(opt_parent_block_proof.is_none());
+        println!(
+            "Consolidated AFTER: {:?}",
+            public_values.block_hashes.consolidated_hash
+        );
 
         block_inputs.set_bool_target(
             self.block.has_parent_block,
