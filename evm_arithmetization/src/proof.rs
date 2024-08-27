@@ -165,13 +165,14 @@ impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
 
 impl<H: Hasher<F>, F: RichField> From<PublicValues<F>> for FinalPublicValues<F, H> {
     fn from(value: PublicValues<F>) -> Self {
+        let mut hash_payload = value.block_hashes.prev_hashes[1..].to_vec();
+        hash_payload.push(value.block_hashes.cur_hash);
+
         Self {
             checkpoint_state_trie_root: value.trie_roots_before.state_root,
             new_state_trie_root: value.trie_roots_after.state_root,
             checkpoint_consolidated_hash: value.extra_block_data.checkpoint_consolidated_hash,
-            new_consolidated_hash: consolidate_hashes::<H, F>(
-                &value.block_hashes.prev_hashes.try_into().unwrap(),
-            ),
+            new_consolidated_hash: consolidate_hashes::<H, F>(&hash_payload),
             _phantom: PhantomData,
         }
     }
@@ -255,8 +256,10 @@ impl FinalPublicValuesTarget {
             );
         }
 
+        let mut hash_payload = pv.block_hashes.prev_hashes[TARGET_HASH_SIZE..].to_vec();
+        hash_payload.extend_from_slice(&pv.block_hashes.cur_hash);
         let consolidated_hash = builder
-            .hash_n_to_hash_no_pad::<C::InnerHasher>(pv.block_hashes.prev_hashes.to_vec())
+            .hash_n_to_hash_no_pad::<C::InnerHasher>(hash_payload)
             .elements;
 
         for i in 0..NUM_HASH_OUT_ELTS {
@@ -338,9 +341,9 @@ impl BlockHashes {
 /// Generates the consolidated hash for a sequence of block hashes.
 ///
 /// It will pack 256 contiguous block hashes and hash them out.
-pub fn consolidate_hashes<H: Hasher<F>, F: RichField>(
-    hashes: &[H256; 256],
-) -> [F; NUM_HASH_OUT_ELTS] {
+pub fn consolidate_hashes<H: Hasher<F>, F: RichField>(hashes: &[H256]) -> [F; NUM_HASH_OUT_ELTS] {
+    debug_assert!(hashes.len() == 256);
+
     let payload = hashes.iter().flat_map(|&h| h256_limbs(h)).collect_vec();
     H::hash_no_pad(&payload)
         .to_vec()

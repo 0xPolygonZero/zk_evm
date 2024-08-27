@@ -2393,6 +2393,7 @@ where
     /// This method outputs a tuple of [`ProofWithPublicInputs<F, C, D>`] and
     /// associated [`FinalPublicValues`]. Only the proof with public inputs is
     /// necessary for a verifier to assert correctness of the computation.
+    #[allow(clippy::type_complexity)]
     pub fn prove_block_wrapper(
         &self,
         block_proof: &ProofWithPublicInputs<F, C, D>,
