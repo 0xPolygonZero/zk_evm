@@ -13,6 +13,7 @@ use prover::BlockProverInput;
 use rpc::{retry::build_http_retry_provider, RpcParams, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
+use zero_bin_common::block_interval::BlockIntervalStream;
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 use zero_bin_common::provider::CachedProvider;
 use zero_bin_common::version;
@@ -93,9 +94,9 @@ where
 
     let block_interval = BlockInterval::Range(params.start_block..params.end_block + 1);
     let mut block_prover_inputs = Vec::new();
-    let mut block_interval = block_interval.clone().into_bounded_stream()?;
+    let mut block_interval: BlockIntervalStream = block_interval.clone().into_bounded_stream()?;
     while let Some(block_num) = block_interval.next().await {
-        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
+        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num?));
         // Get the prover input for particular block.
         let result = rpc::block_prover_input(
             cached_provider.clone(),

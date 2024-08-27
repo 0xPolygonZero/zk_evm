@@ -1,3 +1,6 @@
+use std::pin::Pin;
+use std::sync::Arc;
+
 use alloy::primitives::B256;
 use alloy::rpc::types::eth::BlockId;
 use alloy::{hex, providers::Provider, transports::Transport};
@@ -7,8 +10,11 @@ use futures::Stream;
 use tracing::info;
 
 use crate::parsing;
+use crate::provider::CachedProvider;
 
 const DEFAULT_BLOCK_TIME: u64 = 1000;
+
+pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<u64, anyhow::Error>>>>;
 
 /// Range of blocks to be processed and proven.
 #[derive(Debug, PartialEq, Clone)]
@@ -93,15 +99,20 @@ impl BlockInterval {
     }
 
     /// Convert the block interval into an async stream of block numbers.
-    pub fn into_bounded_stream(self) -> anyhow::Result<impl Stream<Item = u64>> {
+    pub fn into_bounded_stream(self) -> Result<BlockIntervalStream, anyhow::Error> {
         match self {
             BlockInterval::SingleBlockId(BlockId::Number(num)) => {
                 let num = num
                     .as_number()
                     .ok_or(anyhow!("invalid block number '{num}'"))?;
-                Ok(futures::stream::iter(num..num + 1))
+                let range = (num..num + 1).map(Ok).collect::<Vec<_>>();
+
+                Ok(Box::pin(futures::stream::iter(range)))
             }
-            BlockInterval::Range(range) => Ok(futures::stream::iter(range)),
+            BlockInterval::Range(range) => {
+                let range = range.map(Ok).collect::<Vec<_>>();
+                Ok(Box::pin(futures::stream::iter(range)))
+            }
             _ => Err(anyhow!(
                 "could not create bounded stream from unbounded follow-from interval",
             )),
@@ -126,20 +137,20 @@ impl BlockInterval {
     /// numbers. Query the blockchain node for the latest block number.
     pub async fn into_unbounded_stream<ProviderT, TransportT>(
         self,
-        provider: ProviderT,
-    ) -> Result<impl Stream<Item = Result<u64, anyhow::Error>>, anyhow::Error>
+        cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
+    ) -> Result<BlockIntervalStream, anyhow::Error>
     where
-        ProviderT: Provider<TransportT>,
+        ProviderT: Provider<TransportT> + 'static,
         TransportT: Transport + Clone,
     {
         match self {
             BlockInterval::FollowFrom {
                 start_block,
                 block_time,
-            } => Ok(try_stream! {
+            } => Ok(Box::pin(try_stream! {
                 let mut current = start_block;
                  loop {
-                    let last_block_number = provider.get_block_number().await.map_err(|e: alloy::transports::RpcError<_>| {
+                    let last_block_number = cached_provider.get_provider().await?.get_block_number().await.map_err(|e: alloy::transports::RpcError<_>| {
                         anyhow!("could not retrieve latest block number from the provider: {e}")
                     })?;
 
@@ -155,7 +166,7 @@ impl BlockInterval {
                        tokio::time::sleep(tokio::time::Duration::from_millis(block_time)).await;
                     }
                 }
-            }),
+            })),
             _ => Err(anyhow!(
                 "could not create unbounded follow-from stream from fixed bounded interval",
             )),
@@ -270,7 +281,7 @@ mod test {
             .into_bounded_stream()
             .unwrap();
         while let Some(val) = stream.next().await {
-            result.push(val);
+            result.push(val.unwrap());
         }
         assert_eq!(result, Vec::from_iter(1u64..10u64));
     }
