@@ -297,7 +297,13 @@
         },
         "withdrawals": []
       },
-      "checkpoint_state_trie_root": "0xfa446f2a9bf579b0ea805b88e3ee2acf601573f6ff48baaa8880915613aec508"
+      "checkpoint_state_trie_root": "0xfa446f2a9bf579b0ea805b88e3ee2acf601573f6ff48baaa8880915613aec508",
+      "checkpoint_consolidated_hash": [
+        11109195215272999485,
+        17437738218251795093,
+        11926305777431453557,
+        9928709665788626500
+      ]
     }
   },
   {
@@ -612,7 +618,13 @@
         },
         "withdrawals": []
       },
-      "checkpoint_state_trie_root": "0xfa446f2a9bf579b0ea805b88e3ee2acf601573f6ff48baaa8880915613aec508"
+      "checkpoint_state_trie_root": "0xfa446f2a9bf579b0ea805b88e3ee2acf601573f6ff48baaa8880915613aec508",
+      "checkpoint_consolidated_hash": [
+        11109195215272999485,
+        17437738218251795093,
+        11926305777431453557,
+        9928709665788626500
+      ]
     }
   },
   {
@@ -927,7 +939,13 @@
         },
         "withdrawals": []
       },
-      "checkpoint_state_trie_root": "0xfa446f2a9bf579b0ea805b88e3ee2acf601573f6ff48baaa8880915613aec508"
+      "checkpoint_state_trie_root": "0xfa446f2a9bf579b0ea805b88e3ee2acf601573f6ff48baaa8880915613aec508",
+      "checkpoint_consolidated_hash": [
+        11109195215272999485,
+        17437738218251795093,
+        11926305777431453557,
+        9928709665788626500
+      ]
     }
   },
   {
@@ -1284,7 +1302,13 @@
         },
         "withdrawals": []
       },
-      "checkpoint_state_trie_root": "0xfa446f2a9bf579b0ea805b88e3ee2acf601573f6ff48baaa8880915613aec508"
+      "checkpoint_state_trie_root": "0xfa446f2a9bf579b0ea805b88e3ee2acf601573f6ff48baaa8880915613aec508",
+      "checkpoint_consolidated_hash": [
+        11109195215272999485,
+        17437738218251795093,
+        11926305777431453557,
+        9928709665788626500
+      ]
     }
   }
 ]
