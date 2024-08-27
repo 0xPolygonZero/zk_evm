@@ -117,7 +117,7 @@ impl Cli {
             self.config.rpc_url.clone(),
             self.config.backoff,
             self.config.max_retries,
-        )));
+        )?));
 
         match self.command {
             Command::Fetch {

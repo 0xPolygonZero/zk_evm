@@ -1,9 +1,11 @@
+use std::time::Duration;
 use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
 };
 
+use alloy::transports::http::reqwest;
 use alloy::{
     providers::{ProviderBuilder, RootProvider},
     rpc::{
@@ -138,11 +140,20 @@ pub fn build_http_retry_provider(
     rpc_url: url::Url,
     backoff: u64,
     max_retries: u32,
-) -> RootProvider<RetryService<alloy::transports::http::ReqwestTransport>> {
+) -> Result<RootProvider<RetryService<alloy::transports::http::ReqwestTransport>>, anyhow::Error> {
     let retry_policy = RetryLayer::new(RetryPolicy::new(
-        tokio::time::Duration::from_millis(backoff),
+        Duration::from_millis(backoff),
         max_retries,
     ));
-    let client = ClientBuilder::default().layer(retry_policy).http(rpc_url);
-    ProviderBuilder::new().on_client(client)
+    let reqwest_client = reqwest::ClientBuilder::new()
+        .pool_max_idle_per_host(64)
+        .pool_idle_timeout(Duration::from_secs(90))
+        .build()?;
+
+    let http = alloy::transports::http::Http::with_client(reqwest_client, rpc_url);
+    let is_local = http.guess_local();
+    let client = ClientBuilder::default()
+        .layer(retry_policy)
+        .transport(http, is_local);
+    Ok(ProviderBuilder::new().on_client(client))
 }
