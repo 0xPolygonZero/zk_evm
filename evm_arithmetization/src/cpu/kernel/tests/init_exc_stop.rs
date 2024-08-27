@@ -108,10 +108,9 @@ fn test_init_exc_stop() {
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0.into(),
-        block_hashes: BlockHashes::<F> {
+        block_hashes: BlockHashes {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
-            consolidated_hash: None,
         },
         global_exit_roots: vec![],
     };

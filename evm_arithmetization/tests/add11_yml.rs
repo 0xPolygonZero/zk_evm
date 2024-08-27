@@ -200,10 +200,9 @@ fn get_generation_inputs() -> GenerationInputs<F> {
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: 0xa868u64.into(),
-        block_hashes: BlockHashes::<F> {
+        block_hashes: BlockHashes {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
-            consolidated_hash: None,
         },
     }
 }

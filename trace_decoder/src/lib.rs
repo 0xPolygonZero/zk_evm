@@ -282,7 +282,7 @@ pub struct BlockLevelData {
     /// All block data excluding block hashes and withdrawals.
     pub b_meta: BlockMetadata,
     /// Block hashes: the previous 256 block hashes and the current block hash.
-    pub b_hashes: BlockHashes<Field>,
+    pub b_hashes: BlockHashes,
     /// Block withdrawal addresses and values.
     pub withdrawals: Vec<(Address, U256)>,
 }

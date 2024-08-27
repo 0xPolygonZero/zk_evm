@@ -253,10 +253,9 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         gas_used_before: 0.into(),
         gas_used_after: gas_used.into(),
 
-        block_hashes: BlockHashes::<F> {
+        block_hashes: BlockHashes {
             prev_hashes: vec![H256::default(); 256],
             cur_hash: H256::default(),
-            consolidated_hash: None,
         },
     };
 

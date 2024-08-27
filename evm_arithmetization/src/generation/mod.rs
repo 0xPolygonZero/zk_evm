@@ -95,7 +95,7 @@ pub struct GenerationInputs<F: RichField> {
 
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
-    pub block_hashes: BlockHashes<F>,
+    pub block_hashes: BlockHashes,
 }
 
 /// A lighter version of [`GenerationInputs`], which have been trimmed
@@ -141,7 +141,7 @@ pub struct TrimmedGenerationInputs<F: RichField> {
 
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
-    pub block_hashes: BlockHashes<F>,
+    pub block_hashes: BlockHashes,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

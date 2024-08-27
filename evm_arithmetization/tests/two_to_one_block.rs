@@ -4,7 +4,9 @@ use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_final_public_values, extract_two_to_one_block_hash,
 };
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockMetadata, FinalPublicValues, PublicValues, TrieRoots};
+use evm_arithmetization::proof::{
+    BlockMetadata, FinalPublicValues, PublicValues, TrieRoots, EMPTY_CONSOLIDATED_BLOCKHASH,
+};
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
@@ -14,6 +16,7 @@ use evm_arithmetization::{AllRecursiveCircuits, AllStark, Node, StarkConfig};
 use hex_literal::hex;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::types::Field;
 use plonky2::hash::poseidon::PoseidonHash;
 use plonky2::plonk::config::{Hasher, PoseidonGoldilocksConfig};
 use plonky2::plonk::proof::ProofWithPublicInputs;
@@ -96,6 +99,7 @@ fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<Gener
         tries: tries_before.clone(),
         trie_roots_after,
         checkpoint_state_trie_root,
+        checkpoint_consolidated_hash: EMPTY_CONSOLIDATED_BLOCKHASH.map(F::from_canonical_u64),
         block_metadata,
         ..Default::default()
     };

@@ -146,7 +146,7 @@ fn observe_block_hashes<
     const D: usize,
 >(
     challenger: &mut Challenger<F, C::Hasher>,
-    block_hashes: &BlockHashes<F>,
+    block_hashes: &BlockHashes,
 ) {
     for i in 0..256 {
         challenger.observe_elements(&h256_limbs::<F>(block_hashes.prev_hashes[i]));

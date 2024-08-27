@@ -14,7 +14,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, Hasher};
 use plonky2::plonk::proof::{ProofWithPublicInputs, ProofWithPublicInputsTarget};
 use plonky2::util::serialization::{
     Buffer, GateSerializer, IoResult, Read, WitnessGeneratorSerializer, Write,
@@ -38,7 +38,7 @@ use crate::proof::{
     BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, ExtraBlockData,
     ExtraBlockDataTarget, FinalPublicValues, FinalPublicValuesTarget, MemCap, MemCapTarget,
     PublicValues, PublicValuesTarget, RegistersData, RegistersDataTarget, TrieRoots,
-    TrieRootsTarget, DEFAULT_CAP_LEN, EMPTY_CONSOLIDATED_BLOCKHASH,
+    TrieRootsTarget, DEFAULT_CAP_LEN,
 };
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
@@ -722,12 +722,10 @@ pub(crate) fn add_virtual_block_hashes_public_input<
 ) -> BlockHashesTarget {
     let prev_hashes = builder.add_virtual_public_input_arr();
     let cur_hash = builder.add_virtual_public_input_arr();
-    let consolidated_hash = builder.add_virtual_public_input_arr();
 
     BlockHashesTarget {
         prev_hashes,
         cur_hash,
-        consolidated_hash,
     }
 }
 
@@ -850,13 +848,14 @@ where
     Ok(())
 }
 
-pub fn set_final_public_value_targets<F, W, const D: usize>(
+pub fn set_final_public_value_targets<F, H, W, const D: usize>(
     witness: &mut W,
     public_values_target: &FinalPublicValuesTarget,
-    public_values: &FinalPublicValues<F>,
+    public_values: &FinalPublicValues<F, H>,
 ) -> Result<(), ProgramError>
 where
     F: RichField + Extendable<D>,
+    H: Hasher<F>,
     W: Witness<F>,
 {
     for (i, limb) in public_values
@@ -1038,7 +1037,7 @@ where
 pub(crate) fn set_block_hashes_target<F, W, const D: usize>(
     witness: &mut W,
     block_hashes_target: &BlockHashesTarget,
-    block_hashes: &BlockHashes<F>,
+    block_hashes: &BlockHashes,
 ) where
     F: RichField + Extendable<D>,
     W: Witness<F>,
@@ -1052,14 +1051,6 @@ pub(crate) fn set_block_hashes_target<F, W, const D: usize>(
     }
     let cur_block_hash_limbs: [F; 8] = h256_limbs::<F>(block_hashes.cur_hash);
     witness.set_target_arr(&block_hashes_target.cur_hash, &cur_block_hash_limbs);
-    witness.set_target_arr(
-        &block_hashes_target.consolidated_hash,
-        block_hashes.consolidated_hash.as_ref().unwrap_or(
-            &EMPTY_CONSOLIDATED_BLOCKHASH
-                .map(|u| F::from_canonical_u64(u))
-                .to_vec(),
-        ),
-    );
 }
 
 pub(crate) fn set_extra_public_values_target<F, W, const D: usize>(
@@ -1074,6 +1065,10 @@ where
     witness.set_target_arr(
         &ed_target.checkpoint_state_trie_root,
         &h256_limbs::<F>(ed.checkpoint_state_trie_root),
+    );
+    witness.set_target_arr(
+        &ed_target.checkpoint_consolidated_hash,
+        &ed.checkpoint_consolidated_hash,
     );
     witness.set_target(
         ed_target.txn_number_before,

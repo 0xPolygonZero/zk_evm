@@ -41,9 +41,10 @@ use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, Se
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values_target;
 use crate::proof::{
-    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
-    FinalPublicValues, FinalPublicValuesTarget, MemCapTarget, PublicValues, PublicValuesTarget,
-    RegistersDataTarget, TrieRoots, TrieRootsTarget, DEFAULT_CAP_LEN, TARGET_HASH_SIZE,
+    consolidate_hashes, AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData,
+    ExtraBlockDataTarget, FinalPublicValues, FinalPublicValuesTarget, MemCapTarget, PublicValues,
+    PublicValuesTarget, RegistersDataTarget, TrieRoots, TrieRootsTarget, DEFAULT_CAP_LEN,
+    TARGET_HASH_SIZE,
 };
 use crate::prover::{check_abort_signal, prove};
 use crate::recursive_verifier::{
@@ -1492,7 +1493,7 @@ where
         // This also enforces that the initial state trie root that will be stored in
         // these `FinalPublicValues` actually matches the known checkpoint state trie
         // root.
-        final_pv.connect_parent(&mut builder, &parent_pv);
+        final_pv.connect_parent::<F, C, D>(&mut builder, &parent_pv);
 
         let block_verifier_data = builder.constant_verifier_data(&block.circuit.verifier_only);
 
@@ -1623,13 +1624,6 @@ where
         for i in 0..TARGET_HASH_SIZE {
             builder.connect(expected_hash[i], prev_block_hash[i]);
         }
-
-        for i in 0..NUM_HASH_OUT_ELTS {
-            builder.connect(
-                lhs_public_values.block_hashes.consolidated_hash[i],
-                rhs_public_values.block_hashes.consolidated_hash[i],
-            )
-        }
     }
 
     fn connect_block_proof(
@@ -1697,6 +1691,18 @@ where
             let mut constr = builder.sub(limb0, limb1);
             constr = builder.mul(has_not_parent_block, constr);
             builder.assert_zero(constr);
+        }
+
+        let consolidated_hash = builder
+            .hash_n_to_hash_no_pad::<C::InnerHasher>(x.block_hashes.prev_hashes.to_vec())
+            .elements;
+
+        for i in 0..NUM_HASH_OUT_ELTS {
+            builder.conditional_assert_eq(
+                has_not_parent_block,
+                x.extra_block_data.checkpoint_consolidated_hash[i],
+                consolidated_hash[i],
+            )
         }
     }
 
@@ -2044,7 +2050,7 @@ where
                 checkpoint_state_trie_root: lhs_public_values
                     .extra_block_data
                     .checkpoint_state_trie_root,
-                checkpoint_consolidated_hash: lhs_public_values
+                checkpoint_consolidated_hash: real_public_values
                     .extra_block_data
                     .checkpoint_consolidated_hash,
                 txn_number_before: lhs_public_values.extra_block_data.txn_number_before,
@@ -2231,27 +2237,9 @@ where
         &self,
         opt_parent_block_proof: Option<&ProofWithPublicInputs<F, C, D>>,
         agg_root_proof: &ProofWithPublicInputs<F, C, D>,
-        mut public_values: PublicValues<F>,
+        public_values: PublicValues<F>,
     ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, PublicValues<F>)> {
         let mut block_inputs = PartialWitness::new();
-
-        println!("Current hash: {:?}", public_values.block_hashes.cur_hash);
-        println!(
-            "Oldest hash: {:?}",
-            public_values.block_hashes.prev_hashes[0]
-        );
-
-        println!(
-            "Consolidated BEFORE: {:?}",
-            public_values.block_hashes.consolidated_hash
-        );
-        public_values.block_hashes = public_values
-            .block_hashes
-            .consolidate::<C::Hasher>(opt_parent_block_proof.is_none());
-        println!(
-            "Consolidated AFTER: {:?}",
-            public_values.block_hashes.consolidated_hash
-        );
 
         block_inputs.set_bool_target(
             self.block.has_parent_block,
@@ -2322,7 +2310,7 @@ where
             // These will be all zeros the initial genesis checkpoint.
             let block_hashes_keys = TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE
                 ..TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    - 20;
+                    - 16;
             for i in 0..public_values.block_hashes.prev_hashes.len() - 1 {
                 let targets = h256_limbs::<F>(public_values.block_hashes.prev_hashes[i]);
                 for j in 0..8 {
@@ -2331,22 +2319,10 @@ where
             }
 
             let block_hashes_current_start =
-                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE
-                    - 12;
+                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE - 8;
             let cur_targets = h256_limbs::<F>(public_values.block_hashes.prev_hashes[255]);
             for i in 0..8 {
                 nonzero_pis.insert(block_hashes_current_start + i, cur_targets[i]);
-            }
-
-            let block_hashes_consolidated_start =
-                TrieRootsTarget::SIZE * 2 + BlockMetadataTarget::SIZE + BlockHashesTarget::SIZE - 4;
-            let consolidated_hash = public_values
-                .block_hashes
-                .consolidated_hash
-                .as_ref()
-                .expect("We computed it previously");
-            for i in 0..NUM_HASH_OUT_ELTS {
-                nonzero_pis.insert(block_hashes_consolidated_start + i, consolidated_hash[i]);
             }
 
             // Initialize the checkpoint block number.
@@ -2391,6 +2367,24 @@ where
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
 
+        println!(
+            "{:?}",
+            block_public_values
+                .extra_block_data
+                .checkpoint_consolidated_hash
+        );
+        println!(
+            "{:?}",
+            consolidate_hashes::<C::InnerHasher, F>(
+                &block_public_values
+                    .block_hashes
+                    .prev_hashes
+                    .clone()
+                    .try_into()
+                    .unwrap()
+            )
+        );
+
         let block_proof = self.block.circuit.prove(block_inputs)?;
         Ok((block_proof, block_public_values))
     }
@@ -2422,7 +2416,10 @@ where
         &self,
         block_proof: &ProofWithPublicInputs<F, C, D>,
         public_values: PublicValues<F>,
-    ) -> anyhow::Result<(ProofWithPublicInputs<F, C, D>, FinalPublicValues<F>)> {
+    ) -> anyhow::Result<(
+        ProofWithPublicInputs<F, C, D>,
+        FinalPublicValues<F, C::InnerHasher>,
+    )> {
         let mut block_wrapper_inputs = PartialWitness::new();
 
         block_wrapper_inputs
