@@ -59,7 +59,7 @@ pub struct PublicValues<F: RichField> {
     /// 256 previous block hashes and current block's hash.
     pub block_hashes: BlockHashes<F>,
     /// Extra block data that is specific to the current proof.
-    pub extra_block_data: ExtraBlockData,
+    pub extra_block_data: ExtraBlockData<F>,
     /// Registers to initialize the current proof.
     pub registers_before: RegistersData,
     /// Registers at the end of the current proof.
@@ -276,7 +276,7 @@ impl<F: RichField> Default for BlockHashes<F> {
     }
 }
 
-pub(crate) const EMPTY_CONSOLIDATED_BLOCKHASH: [u64; NUM_HASH_OUT_ELTS] = [
+pub const EMPTY_CONSOLIDATED_BLOCKHASH: [u64; NUM_HASH_OUT_ELTS] = [
     5498946765822202150,
     10724662260254836878,
     9161393967331872654,
@@ -327,28 +327,30 @@ impl<F: RichField> BlockHashes<F> {
     /// recent 255 `prev_hashes` along with the current hash. If `is_left`
     /// is not set, it will simply hash the 256 `prev_hashes`.
     pub(crate) fn consolidate<H: Hasher<F>>(&self, is_left: bool) -> Self {
+        if !is_left {
+            // Skipping current hash
+            println!("Skipping current hash {:?}", self.cur_hash);
+            return Self {
+                prev_hashes: self.prev_hashes.clone(),
+                cur_hash: self.cur_hash,
+                // TODO(Robin): change type to [H256; 256]
+                consolidated_hash: Some(
+                    consolidate_hashes::<H, F>(&self.prev_hashes.clone().try_into().unwrap())
+                        .to_vec(),
+                ),
+            };
+        }
+
+        // Skipping most ancient hash
+        println!("Skipping old hash {:?}", self.prev_hashes[0]);
         let mut payload = self
             .prev_hashes
             .iter()
+            .skip(1)
             .flat_map(|&h| h256_limbs(h))
             .collect_vec();
         payload.extend_from_slice(&h256_limbs(self.cur_hash));
-
-        let consolidated = if is_left {
-            println!(
-                "Skipping old hash {:?}",
-                get_h256(&payload[0..TARGET_HASH_SIZE])
-            );
-            // Skipping most ancient hash
-            H::hash_no_pad(&payload[TARGET_HASH_SIZE..])
-        } else {
-            // Skipping current hash
-            println!(
-                "Skipping current hash {:?}",
-                get_h256(&payload[TARGET_HASH_SIZE * 256..])
-            );
-            H::hash_no_pad(&payload[..TARGET_HASH_SIZE * 256])
-        };
+        let consolidated = H::hash_no_pad(&payload[TARGET_HASH_SIZE..]);
 
         Self {
             prev_hashes: self.prev_hashes.clone(),
@@ -356,6 +358,19 @@ impl<F: RichField> BlockHashes<F> {
             consolidated_hash: Some(consolidated.to_vec()),
         }
     }
+}
+
+/// Generates the consolidated hash for a sequence of block hashes.
+///
+/// It will pack 256 contiguous block hashes and hash them out.
+pub fn consolidate_hashes<H: Hasher<F>, F: RichField>(
+    hashes: &[H256; 256],
+) -> [F; NUM_HASH_OUT_ELTS] {
+    let payload = hashes.iter().flat_map(|&h| h256_limbs(h)).collect_vec();
+    H::hash_no_pad(&payload)
+        .to_vec()
+        .try_into()
+        .expect("Digests have fixed size.")
 }
 
 /// Metadata contained in a block header. Those are identical between
@@ -433,9 +448,12 @@ impl BlockMetadata {
 /// Additional block data that are specific to the local transaction being
 /// proven, unlike `BlockMetadata`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
-pub struct ExtraBlockData {
+#[serde(bound = "")]
+pub struct ExtraBlockData<F: RichField> {
     /// The state trie digest of the checkpoint block.
     pub checkpoint_state_trie_root: H256,
+    /// The consolidated previous block hashes, at the checkpoint block.
+    pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
     /// The transaction count prior execution of the local state transition,
     /// starting at 0 for the initial transaction of a block.
     pub txn_number_before: U256,
@@ -450,18 +468,20 @@ pub struct ExtraBlockData {
     pub gas_used_after: U256,
 }
 
-impl ExtraBlockData {
-    pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
+impl<F: RichField> ExtraBlockData<F> {
+    pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(pis.len() == ExtraBlockDataTarget::SIZE);
 
         let checkpoint_state_trie_root = get_h256(&pis[0..8]);
-        let txn_number_before = pis[8].to_canonical_u64().into();
-        let txn_number_after = pis[9].to_canonical_u64().into();
-        let gas_used_before = pis[10].to_canonical_u64().into();
-        let gas_used_after = pis[11].to_canonical_u64().into();
+        let checkpoint_consolidated_hash = pis[8..12].try_into().unwrap();
+        let txn_number_before = pis[12].to_canonical_u64().into();
+        let txn_number_after = pis[13].to_canonical_u64().into();
+        let gas_used_before = pis[14].to_canonical_u64().into();
+        let gas_used_after = pis[15].to_canonical_u64().into();
 
         Self {
             checkpoint_state_trie_root,
+            checkpoint_consolidated_hash,
             txn_number_before,
             txn_number_after,
             gas_used_before,
@@ -638,12 +658,14 @@ impl PublicValuesTarget {
 
         let ExtraBlockDataTarget {
             checkpoint_state_trie_root,
+            checkpoint_consolidated_hash,
             txn_number_before,
             txn_number_after,
             gas_used_before,
             gas_used_after,
         } = self.extra_block_data;
         buffer.write_target_array(&checkpoint_state_trie_root)?;
+        buffer.write_target_array(&checkpoint_consolidated_hash)?;
         buffer.write_target(txn_number_before)?;
         buffer.write_target(txn_number_after)?;
         buffer.write_target(gas_used_before)?;
@@ -721,6 +743,7 @@ impl PublicValuesTarget {
 
         let extra_block_data = ExtraBlockDataTarget {
             checkpoint_state_trie_root: buffer.read_target_array()?,
+            checkpoint_consolidated_hash: buffer.read_target_array()?,
             txn_number_before: buffer.read_target()?,
             txn_number_after: buffer.read_target()?,
             gas_used_before: buffer.read_target()?,
@@ -1282,6 +1305,9 @@ impl BlockHashesTarget {
 pub struct ExtraBlockDataTarget {
     /// `Target`s for the state trie digest of the checkpoint block.
     pub checkpoint_state_trie_root: [Target; 8],
+    /// `Target`s for the consolidated previous block hashes, at the checkpoint
+    /// block.
+    pub checkpoint_consolidated_hash: [Target; NUM_HASH_OUT_ELTS],
     /// `Target` for the transaction count prior execution of the local state
     /// transition, starting at 0 for the initial trnasaction of a block.
     pub txn_number_before: Target,
@@ -1299,19 +1325,21 @@ pub struct ExtraBlockDataTarget {
 
 impl ExtraBlockDataTarget {
     /// Number of `Target`s required for the extra block data.
-    pub(crate) const SIZE: usize = 12;
+    pub(crate) const SIZE: usize = 16;
 
     /// Extracts the extra block data `Target`s from the public input `Target`s.
     /// The provided `pis` should start with the extra vblock data.
     pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
         let checkpoint_state_trie_root = pis[0..8].try_into().unwrap();
-        let txn_number_before = pis[8];
-        let txn_number_after = pis[9];
-        let gas_used_before = pis[10];
-        let gas_used_after = pis[11];
+        let checkpoint_consolidated_hash = pis[8..12].try_into().unwrap();
+        let txn_number_before = pis[12];
+        let txn_number_after = pis[13];
+        let gas_used_before = pis[14];
+        let gas_used_after = pis[15];
 
         Self {
             checkpoint_state_trie_root,
+            checkpoint_consolidated_hash,
             txn_number_before,
             txn_number_after,
             gas_used_before,
@@ -1333,6 +1361,13 @@ impl ExtraBlockDataTarget {
                     condition,
                     ed0.checkpoint_state_trie_root[i],
                     ed1.checkpoint_state_trie_root[i],
+                )
+            }),
+            checkpoint_consolidated_hash: core::array::from_fn(|i| {
+                builder.select(
+                    condition,
+                    ed0.checkpoint_consolidated_hash[i],
+                    ed1.checkpoint_consolidated_hash[i],
                 )
             }),
             txn_number_before: builder.select(

@@ -23,6 +23,8 @@ use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::types::Field;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use plonky2::util::timing::TimingTree;
 
@@ -237,7 +239,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         receipts_root: receipts_trie.hash(),
     };
 
-    let inputs = GenerationInputs {
+    let inputs = GenerationInputs::<F> {
         signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         global_exit_roots: vec![],
@@ -245,6 +247,7 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         trie_roots_after,
         contract_code,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
         block_metadata,
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),

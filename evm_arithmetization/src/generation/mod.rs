@@ -7,7 +7,7 @@ use log::log_enabled;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::extension::Extendable;
 use plonky2::field::polynomial::PolynomialValues;
-use plonky2::hash::hash_types::RichField;
+use plonky2::hash::hash_types::{RichField, NUM_HASH_OUT_ELTS};
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
 use segments::GenerationSegmentData;
@@ -83,6 +83,9 @@ pub struct GenerationInputs<F: RichField> {
     /// without requiring proofs for blocks past this checkpoint.
     pub checkpoint_state_trie_root: H256,
 
+    /// Consolidated previous block hashes, at the checkpoint block.
+    pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
+
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
     pub contract_code: HashMap<H256, Vec<u8>>,
@@ -125,6 +128,9 @@ pub struct TrimmedGenerationInputs<F: RichField> {
     /// prover to continue proving blocks from certain checkpoint heights
     /// without requiring proofs for blocks past this checkpoint.
     pub checkpoint_state_trie_root: H256,
+
+    /// Consolidated previous block hashes, at the checkpoint block.
+    pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
 
     /// Mapping between smart contract code hashes and the contract byte code.
     /// All account smart contracts that are invoked will have an entry present.
@@ -205,6 +211,7 @@ impl<F: RichField> GenerationInputs<F> {
             },
             trie_roots_after: self.trie_roots_after.clone(),
             checkpoint_state_trie_root: self.checkpoint_state_trie_root,
+            checkpoint_consolidated_hash: self.checkpoint_consolidated_hash,
             contract_code: self.contract_code.clone(),
             block_metadata: self.block_metadata.clone(),
             block_hashes: self.block_hashes.clone(),
@@ -484,6 +491,7 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
 
     let extra_block_data = ExtraBlockData {
         checkpoint_state_trie_root: inputs.checkpoint_state_trie_root,
+        checkpoint_consolidated_hash: inputs.checkpoint_consolidated_hash,
         txn_number_before: inputs.txn_number_before,
         txn_number_after,
         gas_used_before: inputs.gas_used_before,

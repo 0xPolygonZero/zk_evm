@@ -7,6 +7,8 @@ use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, Node, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField as F;
+use plonky2::field::types::Field;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
@@ -179,7 +181,7 @@ fn test_add11_yml() {
         receipts_root: receipts_trie.hash(),
     };
 
-    let inputs = GenerationInputs {
+    let inputs = GenerationInputs::<F> {
         signed_txns: vec![txn.to_vec()],
         withdrawals: vec![],
         global_exit_roots: vec![],
@@ -188,6 +190,7 @@ fn test_add11_yml() {
         contract_code: contract_code.clone(),
         block_metadata,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: gas_used,
@@ -370,6 +373,7 @@ fn test_add11_yml_with_exception() {
         contract_code: contract_code.clone(),
         block_metadata,
         checkpoint_state_trie_root: HashedPartialTrie::from(Node::Empty).hash(),
+        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
         txn_number_before: 0.into(),
         gas_used_before: 0.into(),
         gas_used_after: txn_gas_limit.into(),

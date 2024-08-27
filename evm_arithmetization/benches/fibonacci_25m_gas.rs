@@ -27,6 +27,8 @@ use keccak_hash::keccak;
 use mpt_trie::nibbles::Nibbles;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::field::types::Field;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 
 type F = GoldilocksField;
 
@@ -185,6 +187,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
         checkpoint_state_trie_root: H256(hex!(
             "fe07ff6d1ab215df17884b89112ccf2373597285a56c5902150313ad1a53ee57"
         )),
+        checkpoint_consolidated_hash: [F::ZERO; NUM_HASH_OUT_ELTS],
         global_exit_roots: vec![],
         block_metadata,
         txn_number_before: 0.into(),

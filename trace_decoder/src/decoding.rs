@@ -61,8 +61,9 @@ pub fn into_txn_proof_gen_ir(
         ..Default::default()
     };
 
-    let mut extra_data = ExtraBlockData {
+    let mut extra_data = ExtraBlockData::<Field> {
         checkpoint_state_trie_root: other_data.checkpoint_state_trie_root,
+        checkpoint_consolidated_hash: other_data.checkpoint_consolidated_hash,
         txn_number_before: U256::zero(),
         txn_number_after: U256::zero(),
         gas_used_before: U256::zero(),
@@ -523,7 +524,7 @@ fn process_txn_info(
     is_initial_payload: bool,
     txn_info: ProcessedTxnInfo,
     curr_block_tries: &mut PartialTrieState,
-    extra_data: &mut ExtraBlockData,
+    extra_data: &mut ExtraBlockData<Field>,
     other_data: &OtherBlockData,
 ) -> anyhow::Result<GenerationInputs<Field>> {
     log::trace!(
@@ -602,6 +603,7 @@ fn process_txn_info(
             receipts_root: curr_block_tries.receipt.root(),
         },
         checkpoint_state_trie_root: extra_data.checkpoint_state_trie_root,
+        checkpoint_consolidated_hash: extra_data.checkpoint_consolidated_hash,
         contract_code: txn_info
             .contract_code_accessed
             .into_iter()

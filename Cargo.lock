@@ -4184,6 +4184,7 @@ dependencies = [
  "lru",
  "mpt_trie",
  "primitive-types 0.12.2",
+ "proof_gen",
  "prover",
  "serde",
  "serde_json",

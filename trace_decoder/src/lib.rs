@@ -105,6 +105,7 @@ use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
 use typed_mpt::{StateTrie, StorageTrie, TrieKey};
@@ -270,6 +271,8 @@ pub struct OtherBlockData {
     pub b_data: BlockLevelData,
     /// State trie root hash at the checkpoint.
     pub checkpoint_state_trie_root: H256,
+    /// Consolidated block hashes at the checkpoint.
+    pub checkpoint_consolidated_hash: [Field; NUM_HASH_OUT_ELTS],
 }
 
 /// Data that is specific to a block and is constant for all txns in a given

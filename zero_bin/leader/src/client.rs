@@ -2,7 +2,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use alloy::rpc::types::{BlockId, BlockNumberOrTag, BlockTransactionsKind};
+use alloy::rpc::types::{BlockId, BlockNumberOrTag};
 use alloy::transports::http::reqwest::Url;
 use anyhow::Result;
 use paladin::runtime::Runtime;
@@ -52,15 +52,6 @@ pub(crate) async fn client_main(
         &params.previous_proof,
         block_interval.get_start_block()?,
     )?;
-    // Grab interval checkpoint block state trie
-    let checkpoint_state_trie_root = cached_provider
-        .get_block(
-            params.checkpoint_block_number.into(),
-            BlockTransactionsKind::Hashes,
-        )
-        .await?
-        .header
-        .state_root;
 
     let mut block_prover_inputs = Vec::new();
     let mut block_interval = block_interval.into_bounded_stream()?;
@@ -70,7 +61,7 @@ pub(crate) async fn client_main(
         let block_prover_input = rpc::block_prover_input(
             cached_provider.clone(),
             block_id,
-            checkpoint_state_trie_root,
+            params.checkpoint_block_number,
             rpc_params.rpc_type,
         )
         .boxed();

@@ -2,7 +2,7 @@ use std::env;
 use std::sync::Arc;
 
 use alloy::rpc::types::eth::BlockId;
-use alloy::rpc::types::{BlockNumberOrTag, BlockTransactionsKind};
+use alloy::rpc::types::BlockNumberOrTag;
 use clap::{Parser, ValueHint};
 use futures::StreamExt;
 use rpc::provider::CachedProvider;
@@ -65,16 +65,6 @@ impl Cli {
                     max_retries,
                 )));
 
-                // Grab interval checkpoint block state trie
-                let checkpoint_state_trie_root = cached_provider
-                    .get_block(
-                        BlockId::Number(checkpoint_block_number.into()),
-                        BlockTransactionsKind::Hashes,
-                    )
-                    .await?
-                    .header
-                    .state_root;
-
                 let mut block_prover_inputs = Vec::new();
                 let mut block_interval = block_interval.clone().into_bounded_stream()?;
                 while let Some(block_num) = block_interval.next().await {
@@ -83,7 +73,7 @@ impl Cli {
                     let result = rpc::block_prover_input(
                         cached_provider.clone(),
                         block_id,
-                        checkpoint_state_trie_root,
+                        checkpoint_block_number,
                         rpc_type,
                     )
                     .await?;
