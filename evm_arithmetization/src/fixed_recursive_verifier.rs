@@ -41,10 +41,9 @@ use crate::generation::segments::{GenerationSegmentData, SegmentDataIterator, Se
 use crate::generation::{GenerationInputs, TrimmedGenerationInputs};
 use crate::get_challenges::observe_public_values_target;
 use crate::proof::{
-    consolidate_hashes, AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData,
-    ExtraBlockDataTarget, FinalPublicValues, FinalPublicValuesTarget, MemCapTarget, PublicValues,
-    PublicValuesTarget, RegistersDataTarget, TrieRoots, TrieRootsTarget, DEFAULT_CAP_LEN,
-    TARGET_HASH_SIZE,
+    AllProof, BlockHashesTarget, BlockMetadataTarget, ExtraBlockData, ExtraBlockDataTarget,
+    FinalPublicValues, FinalPublicValuesTarget, MemCapTarget, PublicValues, PublicValuesTarget,
+    RegistersDataTarget, TrieRoots, TrieRootsTarget, DEFAULT_CAP_LEN, TARGET_HASH_SIZE,
 };
 use crate::prover::{check_abort_signal, prove};
 use crate::recursive_verifier::{
@@ -2366,24 +2365,6 @@ where
         .map_err(|_| {
             anyhow::Error::msg("Invalid conversion when setting public values targets.")
         })?;
-
-        println!(
-            "{:?}",
-            block_public_values
-                .extra_block_data
-                .checkpoint_consolidated_hash
-        );
-        println!(
-            "{:?}",
-            consolidate_hashes::<C::InnerHasher, F>(
-                &block_public_values
-                    .block_hashes
-                    .prev_hashes
-                    .clone()
-                    .try_into()
-                    .unwrap()
-            )
-        );
 
         let block_proof = self.block.circuit.prove(block_inputs)?;
         Ok((block_proof, block_public_values))

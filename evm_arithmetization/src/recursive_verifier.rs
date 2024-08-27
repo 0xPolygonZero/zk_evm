@@ -618,16 +618,16 @@ pub(crate) fn add_virtual_final_public_values_public_input<
 >(
     builder: &mut CircuitBuilder<F, D>,
 ) -> FinalPublicValuesTarget {
-    let state_trie_root_before = builder.add_virtual_public_input_arr();
-    let state_trie_root_after = builder.add_virtual_public_input_arr();
+    let checkpoint_state_trie_root = builder.add_virtual_public_input_arr();
+    let new_state_trie_root = builder.add_virtual_public_input_arr();
     let checkpoint_consolidated_hash = builder.add_virtual_public_input_arr();
-    let consolidated_hash = builder.add_virtual_public_input_arr();
+    let new_consolidated_hash = builder.add_virtual_public_input_arr();
 
     FinalPublicValuesTarget {
-        state_trie_root_before,
-        state_trie_root_after,
+        checkpoint_state_trie_root,
+        new_state_trie_root,
         checkpoint_consolidated_hash,
-        consolidated_hash,
+        new_consolidated_hash,
     }
 }
 
@@ -861,41 +861,41 @@ where
     W: Witness<F>,
 {
     for (i, limb) in public_values
-        .state_trie_root_before
+        .checkpoint_state_trie_root
         .into_uint()
         .0
         .into_iter()
         .enumerate()
     {
         witness.set_target(
-            public_values_target.state_trie_root_before[2 * i],
+            public_values_target.checkpoint_state_trie_root[2 * i],
             F::from_canonical_u32(limb as u32),
         );
         witness.set_target(
-            public_values_target.state_trie_root_before[2 * i + 1],
+            public_values_target.checkpoint_state_trie_root[2 * i + 1],
             F::from_canonical_u32((limb >> 32) as u32),
         );
     }
 
     for (i, limb) in public_values
-        .state_trie_root_after
+        .new_state_trie_root
         .into_uint()
         .0
         .into_iter()
         .enumerate()
     {
         witness.set_target(
-            public_values_target.state_trie_root_after[2 * i],
+            public_values_target.new_state_trie_root[2 * i],
             F::from_canonical_u32(limb as u32),
         );
         witness.set_target(
-            public_values_target.state_trie_root_after[2 * i + 1],
+            public_values_target.new_state_trie_root[2 * i + 1],
             F::from_canonical_u32((limb >> 32) as u32),
         );
     }
 
-    for (i, limb) in public_values.consolidated_hash.iter().enumerate() {
-        witness.set_target(public_values_target.consolidated_hash[i], *limb);
+    for (i, limb) in public_values.new_consolidated_hash.iter().enumerate() {
+        witness.set_target(public_values_target.new_consolidated_hash[i], *limb);
     }
 
     Ok(())

@@ -124,14 +124,14 @@ impl<F: RichField> PublicValues<F> {
 #[serde(bound = "")]
 pub struct FinalPublicValues<F: RichField, H: Hasher<F>> {
     /// State trie root before the execution of this global state transition.
-    pub state_trie_root_before: H256,
+    pub checkpoint_state_trie_root: H256,
     /// State trie root after the execution of this global state transition.
-    pub state_trie_root_after: H256,
+    pub new_state_trie_root: H256,
     /// A compact view of the block hashes before the previous checkpoint.
     pub checkpoint_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
     /// A compact view of the previous block hashes, for connection past
     /// checkpoints.
-    pub consolidated_hash: [F; NUM_HASH_OUT_ELTS],
+    pub new_consolidated_hash: [F; NUM_HASH_OUT_ELTS],
 
     _phantom: PhantomData<H>,
 }
@@ -144,20 +144,20 @@ impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
         assert!(FinalPublicValuesTarget::SIZE <= pis.len());
 
         let mut offset = 0;
-        let state_trie_root_before = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        let checkpoint_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
         offset += TARGET_HASH_SIZE;
-        let state_trie_root_after = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        let new_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
         offset += TARGET_HASH_SIZE;
         let checkpoint_consolidated_hash =
             pis[offset..offset + NUM_HASH_OUT_ELTS].try_into().unwrap();
         offset += NUM_HASH_OUT_ELTS;
-        let consolidated_hash = pis[offset..offset + NUM_HASH_OUT_ELTS].try_into().unwrap();
+        let new_consolidated_hash = pis[offset..offset + NUM_HASH_OUT_ELTS].try_into().unwrap();
 
         Self {
-            state_trie_root_before,
-            state_trie_root_after,
+            checkpoint_state_trie_root,
+            new_state_trie_root,
             checkpoint_consolidated_hash,
-            consolidated_hash,
+            new_consolidated_hash,
             _phantom: PhantomData,
         }
     }
@@ -166,10 +166,10 @@ impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
 impl<H: Hasher<F>, F: RichField> From<PublicValues<F>> for FinalPublicValues<F, H> {
     fn from(value: PublicValues<F>) -> Self {
         Self {
-            state_trie_root_before: value.trie_roots_before.state_root,
-            state_trie_root_after: value.trie_roots_after.state_root,
+            checkpoint_state_trie_root: value.trie_roots_before.state_root,
+            new_state_trie_root: value.trie_roots_after.state_root,
             checkpoint_consolidated_hash: value.extra_block_data.checkpoint_consolidated_hash,
-            consolidated_hash: consolidate_hashes::<H, F>(
+            new_consolidated_hash: consolidate_hashes::<H, F>(
                 &value.block_hashes.prev_hashes.try_into().unwrap(),
             ),
             _phantom: PhantomData,
@@ -183,14 +183,14 @@ impl<H: Hasher<F>, F: RichField> From<PublicValues<F>> for FinalPublicValues<F, 
 #[derive(Eq, PartialEq, Debug)]
 pub struct FinalPublicValuesTarget {
     /// State trie root before the execution of this global state transition.
-    pub state_trie_root_before: [Target; TARGET_HASH_SIZE],
+    pub checkpoint_state_trie_root: [Target; TARGET_HASH_SIZE],
     /// State trie root after the execution of this global state transition.
-    pub state_trie_root_after: [Target; TARGET_HASH_SIZE],
+    pub new_state_trie_root: [Target; TARGET_HASH_SIZE],
     /// A compact view of the block hashes before the previous checkpoint.
     pub checkpoint_consolidated_hash: [Target; NUM_HASH_OUT_ELTS],
     /// A compact view of the previous block hashes, for connection past
     /// checkpoints.
-    pub consolidated_hash: [Target; NUM_HASH_OUT_ELTS],
+    pub new_consolidated_hash: [Target; NUM_HASH_OUT_ELTS],
 }
 
 impl FinalPublicValuesTarget {
@@ -198,26 +198,26 @@ impl FinalPublicValuesTarget {
 
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
-        buffer.write_target_array(&self.state_trie_root_before)?;
-        buffer.write_target_array(&self.state_trie_root_after)?;
+        buffer.write_target_array(&self.checkpoint_state_trie_root)?;
+        buffer.write_target_array(&self.new_state_trie_root)?;
         buffer.write_target_array(&self.checkpoint_consolidated_hash)?;
-        buffer.write_target_array(&self.consolidated_hash)?;
+        buffer.write_target_array(&self.new_consolidated_hash)?;
 
         Ok(())
     }
 
     /// Deserializes public value targets.
     pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
-        let state_trie_root_before = buffer.read_target_array()?;
-        let state_trie_root_after = buffer.read_target_array()?;
+        let checkpoint_state_trie_root = buffer.read_target_array()?;
+        let new_state_trie_root = buffer.read_target_array()?;
         let checkpoint_consolidated_hash = buffer.read_target_array()?;
-        let consolidated_hash = buffer.read_target_array()?;
+        let new_consolidated_hash = buffer.read_target_array()?;
 
         Ok(Self {
-            state_trie_root_before,
-            state_trie_root_after,
+            checkpoint_state_trie_root,
+            new_state_trie_root,
             checkpoint_consolidated_hash,
-            consolidated_hash,
+            new_consolidated_hash,
         })
     }
 
@@ -233,17 +233,17 @@ impl FinalPublicValuesTarget {
     {
         for i in 0..TARGET_HASH_SIZE {
             builder.connect(
-                self.state_trie_root_before[i],
+                self.checkpoint_state_trie_root[i],
                 pv.trie_roots_before.state_root[i],
             );
             builder.connect(
-                self.state_trie_root_after[i],
+                self.new_state_trie_root[i],
                 pv.trie_roots_after.state_root[i],
             );
             // We only use `FinalPublicValues` at the final block proof wrapping stage,
             // where we should enforce consistency with the known checkpoint.
             builder.connect(
-                self.state_trie_root_before[i],
+                self.checkpoint_state_trie_root[i],
                 pv.extra_block_data.checkpoint_state_trie_root[i],
             );
         }
@@ -260,7 +260,7 @@ impl FinalPublicValuesTarget {
             .elements;
 
         for i in 0..NUM_HASH_OUT_ELTS {
-            builder.connect(self.consolidated_hash[i], consolidated_hash[i]);
+            builder.connect(self.new_consolidated_hash[i], consolidated_hash[i]);
         }
     }
 }
