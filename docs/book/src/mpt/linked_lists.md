@@ -22,7 +22,7 @@ Our linked list construction guarantees these properties:
 
 These properties allows us to efficiently modify the list.
 
-#### Search {#search .unnumbered}
+#### Search
 
 To search a node given its index, we provide via `PROVER_INPUT` a
 pointer to its predecessor $p$. We first check that $p$'s index is
@@ -32,7 +32,7 @@ the node index, we found the node. If $s$'s index is lower than the node
 index, then the provided $p$ was invalid. If $s$'s index is greater than
 the node index, then the node doesn't exist.
 
-#### Insertion {#insertion .unnumbered}
+#### Insertion
 
 To insert a node given its index, we provide via `PROVER_INPUT` a
 pointer to its predecessor $p$. We first check that $p$'s index is
@@ -41,7 +41,7 @@ invalid. Then, we check $s$, $p$'s successor, and make sure that $s$ is
 strictly greater than the node index. We create a new node, and make it
 $p$'s successor; then we make $s$ the new node's successor.
 
-#### Deletion {#deletion .unnumbered}
+#### Deletion
 
 To delete a node given its index, we provide via `PROVER_INPUT` a
 pointer to its predecessor $p$. We check that $p$'s successor is equal
@@ -53,7 +53,7 @@ again, we set its next pointer to MAX.
 We maintain two linked lists: one for the state accounts and one for the
 storage slots.
 
-### Account linked list {#account-linked-list .unnumbered}
+### Account linked list
 
 An account node is made of four memory cells:
 
@@ -69,7 +69,7 @@ An account node is made of four memory cells:
 -   A pointer to the next node (which points to the next node's account
     key).
 
-### Storage linked list {#storage-linked-list .unnumbered}
+### Storage linked list
 
 A storage node is made of five memory cells:
 

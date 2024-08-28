@@ -132,7 +132,7 @@ timestamps, this is easy to do: the last value of an address is the
 value of the last row touching this address. In other words, we
 propagate values of rows before the address changes.
 
-#### Context pruning {#context-pruning .unnumbered}
+#### Context pruning {#context-pruning}
 
 We can observe that whenever we return from a context (e.g. with a
 RETURN opcode, from an exception\...), we will never access it again and

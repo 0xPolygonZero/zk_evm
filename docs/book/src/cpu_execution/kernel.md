@@ -4,7 +4,7 @@ The kernel is in charge of the proving logic. This section aims at
 providing a high level overview of this logic. For details about any
 specific part of the logic, one can consult the various "asm" files in
 the ["kernel"
-folder](https://github.com/0xPolygonZero/plonky2/tree/main/evm/src/cpu/kernel).
+module](https://github.com/0xPolygonZero/plonky2/tree/main/evm/src/cpu/kernel).
 
 We prove a batch of transactions, split into segments. These proofs can
 later be aggregated recursively to prove a block. Proof aggregation is
@@ -49,7 +49,7 @@ of prover provided values necessary to the kernel is the following:
 
 7.  the RLP encoding of the transactions.
 
-### Memory addresses {#memoryaddresses}
+### Memory addresses
 
 Kernel operations deal with memory addresses as single U256 elements.
 However, when processing the operations to generate the proof witness,
@@ -71,7 +71,7 @@ $$\mathrm{addr} = 2^{64} \cdot \mathrm{context} + 2^{32} \cdot \mathrm{segment} 
 This allows to easily retrieve each component individually once a Memory
 address has been decomposed into 32-bit limbs.
 
-### Segment handling: {#segment-handling .unnumbered}
+### Segment handling
 
 An execution run is split into one or more segments. To ensure
 continuity, the first cycles of a segment are used to \"load\" segment
@@ -102,7 +102,7 @@ The initial memory of the first segment is fixed and contains:
 
 -   the shift table.
 
-### Initialization: {#initialization .unnumbered}
+### Initialization
 
 The first step of a run consists in initializing:
 

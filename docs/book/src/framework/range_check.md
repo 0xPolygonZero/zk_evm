@@ -8,9 +8,7 @@ One can note that every element that ever appears on the stack has been pushed. 
 
 1.  Pushes and memory writes for "MSTORE_32BYTES" are range-checked in
     "BytePackingStark", except PUSH operations happening in privileged
-    mode. See
-    [\[push_general_view\]](#push_general_view){reference-type="ref"
-    reference="push_general_view"}.
+    mode. See [push_general_view](./../tables/cpu.md#general-columns).
 
 2.  Syscalls, exceptions and prover inputs are range-checked in
     "ArithmeticStark".

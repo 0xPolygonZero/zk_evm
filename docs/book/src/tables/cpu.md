@@ -36,7 +36,7 @@ context, syscalls may be executed, which are specific instructions
 written in the kernel. They don't change the context but change the code
 context, which is where the instructions are read from.
 
-#### Continuations {#continuations .unnumbered}
+#### Continuations
 
 A full run of the zkEVM consists in initializing the zkEVM with the
 input state, executing a certain number of transactions, and then
@@ -55,7 +55,7 @@ compared to the Merkle cap of the next `MemBefore`.
 
 ### CPU columns
 
-#### Registers: {#registers .unnumbered}
+#### Registers
 
 -   `context`: Indicates which context we are in. 0 for the kernel, and
     a positive integer for every user context. Incremented by 1 at every
@@ -84,7 +84,7 @@ compared to the Merkle cap of the next `MemBefore`.
 -   `opcode_bits`: 8 boolean columns, which are the bit decomposition of
     the opcode being read at the current PC.
 
-#### Operation flags: {#operation-flags .unnumbered}
+#### Operation flags
 
 Boolean flags. During CPU cycles phase, each row executes a single
 instruction, which sets one and only one operation flag. No flag is set
@@ -99,7 +99,7 @@ respective opcode: since the first bit of `EQ`'s opcode (resp.
 instruction with `eq_iszero * (1 - opcode_bits[0])` (resp.
 `eq_iszero * opcode_bits[0]`).
 
-#### Memory columns: {#memory-columns .unnumbered}
+#### Memory columns
 
 The CPU interacts with the EVM memory via its memory channels. At each
 row, a memory channel can execute a write, a read, or be disabled. A
@@ -122,7 +122,7 @@ The last memory channel is a partial channel: it doesn't have its own
 `value` columns and shares them with the first full memory channel. This
 allows us to save eight columns.
 
-#### General columns: {#general-columns .unnumbered}
+#### General columns
 
 There are 8 shared general columns. Depending on the instruction, they
 are used differently:
@@ -165,9 +165,7 @@ are used differently:
     `stack_len_bounds_ aux` is used to check that the stack doesn't
     overflow in user mode. We use the last four columns to prevent
     conflicts with the other general columns. See
-    [5.5](#stackhandling){reference-type="ref"
-    reference="stackhandling"} for more details. []{#push_general_view
-    label="push_general_view"}
+    [stack handling](./../cpu_execution/stack_handling.md) for more details.
 
 -   `Push`: `is_not_kernel` is used to skip range-checking the output of
     a PUSH operation when we are in privileged mode, as the kernel code
@@ -176,6 +174,4 @@ are used differently:
 -   `Context pruning`: When `SET_CONTEXT` is called to return to a
     parent context, this makes the current context stale. The kernel
     indicates it by setting one general column to 1. For more details
-    about context pruning, see
-    [\[context-pruning\]](#context-pruning){reference-type="ref"
-    reference="context-pruning"}.
+    about context pruning, see [context-pruning](./memory.md#context-pruning).

@@ -6,7 +6,7 @@ $f_{op}$ in the table, such that $f_{\texttt{op}} = 1$ whenever the
 operation is $\texttt{op}$ and 0 otherwise. The full list of operations
 carried out by the table is as follows:
 
-#### Binary operations: {#binary-operations .unnumbered}
+#### Binary operations
 
 -   basic operations: "add", "mul", "sub" and "div",
 
@@ -26,7 +26,7 @@ For 'mod', the second input is the modulus. "AddFp254", "MulFp254" and
 "SubFp254" are modular operations modulo "Fp254'' -- the prime for the
 BN curve's base field.
 
-#### Ternary operations: {#ternary-operations .unnumbered}
+#### Ternary operations
 
 There are three ternary operations: modular addition "AddMod", modular
 multiplication "MulMod" and modular subtraction "SubMod".
@@ -63,7 +63,7 @@ Overall, the table comprises the following columns:
 -   1 column storing the frequency of appearance of each value in the
     range $[0, 2^{16} - 1]$.
 
-#### Note on $op$:
+#### Note on $op$
 
 The opcode column is only used for range-checks. For optimization
 purposes, we check all arithmetic operations against the cpu table
@@ -93,7 +93,7 @@ Refer to:
 
 5.  "shift.rs" for details on how shifts are checked.
 
-#### Note on "lt" and "gt": {#note-on-lt-and-gt .unnumbered}
+#### Note on "lt" and "gt"
 
 For "lt" and "gt", auxiliary columns hold the difference $d$ between the
 two inputs $x_1, x_2$. We can then treat them similarly to subtractions
@@ -103,7 +103,7 @@ subtractions. In the comparisons case, it holds the overflow flag.
 Contrary to subtractions, the output of "lt" and "gt" operations is not
 $d$ but $cy$.
 
-#### Note on "div": {#note-on-div .unnumbered}
+#### Note on "div"
 
 It might be unclear why "div" and "mod" are dealt with in the same file.
 
@@ -117,7 +117,7 @@ addressed in almost the same way as "mod". The only difference is that
 in the "mod" case, the output is $\texttt{rem}$ and the auxiliary value
 is $q$.
 
-#### Note on shifts:
+#### Note on shifts
 
 "shr" and "shl" are internally constrained as "div" and "mul"
 respectively with shifted operands. Indeed, given inputs $s, x$, the

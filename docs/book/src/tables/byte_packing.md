@@ -28,7 +28,7 @@ Each row contains the following columns:
 
 4.  2 columns $r_i$ needed for range-checking the byte values.
 
-#### Notes on columns generation:
+#### Notes on columns generation
 
 Whenever a byte unpacking operation is called, the value $\texttt{val}$
 is read from the stack, but because the EVM and the STARKs use different
@@ -49,7 +49,7 @@ The $b_i$ columns hold a boolean value. $b_i = 1$ whenever we are
 currently reading or writing the i-th element in the byte sequence.
 $b_i = 0$ otherwise.
 
-#### Cross-table lookups: {#cross-table-lookups}
+#### Cross-table lookups
 
 The read or written bytes need to be checked against both the cpu and
 the memory tables. Whenever we call $\texttt{MSTORE\_32BYTES}$,
@@ -88,7 +88,7 @@ of the sequence of bytes. The virtual address for the $i$-th byte is
 written as: $$\texttt{virt} + \sum_{j=0}^{31} b_j * j - i$$ where
 $\sum_{j=0}^{31} b_j * j$ is equal to $\texttt{sequence\_length} - 1$.
 
-#### Note on range-check: {#note-on-range-check .unnumbered}
+#### Note on range-check
 
 Range-checking is necessary whenever we do a memory unpacking operation
 that will write values to memory. These values are constrained by the

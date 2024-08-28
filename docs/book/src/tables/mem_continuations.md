@@ -14,5 +14,5 @@ values, there are no constraints between the rows.
 
 A CTL copies all of the MemBefore values in the memory trace as reads,
 at timestamp $\tau = 0$. Another CTL copies the final values from memory
-to MemAfter. For more details on which values are propagated, consult
-[3.5.4](#final-memory){reference-type="ref" reference="final-memory"}.
+to MemAfter. For more details on which values are propagated, consult the
+[Final Memory](./memory.md#final-memory) section.

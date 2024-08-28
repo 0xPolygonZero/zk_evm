@@ -1,4 +1,4 @@
-## Stack handling {#stackhandling}
+## Stack handling
 
 ### Top of the stack
 
@@ -9,11 +9,7 @@ and may push at most once. However, for efficiency purposes, we hold the
 top of the stack in the first memory channel
 `current_row.mem_channels[0]`, only writing it in memory if necessary.
 
-#### Motivation: {#motivation .unnumbered}
-
-See [this issue](https://github.com/0xPolygonZero/plonky2/issues/1149).
-
-#### Top reading and writing: {#top-reading-and-writing .unnumbered}
+#### Top reading and writing
 
 When a CPU instruction modifies the stack, it must update the top of the
 stack accordingly. There are three cases.
@@ -65,7 +61,7 @@ This logic can be found in code in the `eval_packed_one` function of
 The function multiplies all of the stack constraints with the degree 1
 filter associated with the current instruction.
 
-#### Operation flag merging: {#operation-flag-merging .unnumbered}
+#### Operation flag merging
 
 To reduce the total number of columns, many operation flags are merged
 together (e.g. `DUP` and `SWAP`) and are distinguished with the binary
@@ -88,7 +84,7 @@ happens, an honest prover should trigger the corresponding exception. If
 a malicious prover doesn't trigger the exception, constraints must fail
 the proof.
 
-#### Stack underflow: {#stack-underflow .unnumbered}
+#### Stack underflow
 
 There is no explicit constraint checking for stack underflow. An
 underflow happens when the CPU tries to pop the empty stack, which would
@@ -98,7 +94,7 @@ two consecutive addresses to be lower than the length of the Memory
 trace. Since the prime of the Plonky2 field is 64-bit long, this would
 require a Memory trace longer than $2^{32}$.
 
-#### Stack overflow: {#stack-overflow .unnumbered}
+#### Stack overflow
 
 An instruction can only push at most once, meaning that an overflow
 occurs whenever the stack length is exactly one more than the maximum

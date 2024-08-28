@@ -15,8 +15,7 @@ which resets the kernel mode to its state right before the syscall. It
 also sets the PC to point to the opcode right after the syscall.
 
 Exceptions are handled differently for simple opcodes and syscalls. When
-necessary, simple opcodes throw an exception (see
-[5.7](#exceptions){reference-type="ref" reference="exceptions"}). This
+necessary, simple opcodes throw an exception (see [exceptions](./exceptions.md)). This
 activates the "exception flag" in the CPU and runs the exception
 operations. On the other hand, syscalls handle exceptions in the kernel
 directly.
