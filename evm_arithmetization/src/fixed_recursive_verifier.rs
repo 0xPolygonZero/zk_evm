@@ -476,8 +476,8 @@ where
     ) -> IoResult<Self> {
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
         let parent_block_proof = buffer.read_target_proof_with_public_inputs()?;
-        let public_values = FinalPublicValuesTarget::from_buffer(buffer)?;
         let local_vk = buffer.read_target_verifier_circuit()?;
+        let public_values = FinalPublicValuesTarget::from_buffer(buffer)?;
 
         Ok(Self {
             circuit,
