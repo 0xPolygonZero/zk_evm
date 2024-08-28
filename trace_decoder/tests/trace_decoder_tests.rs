@@ -205,7 +205,7 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                             generation_inputs.txn_number_before
                                 + generation_inputs.signed_txns.len()
                         );
-                        simulate_execution_all_segments::<F>(generation_inputs, 20)?;
+                        simulate_execution_all_segments::<F>(generation_inputs, 25)?;
                         timing.filter(Duration::from_millis(100)).print();
                         Ok::<(), anyhow::Error>(())
                     })
