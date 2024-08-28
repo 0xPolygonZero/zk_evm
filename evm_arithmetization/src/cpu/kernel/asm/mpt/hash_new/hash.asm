@@ -234,14 +234,16 @@ encode_node_branch_prepend_prefix:
 global encode_node_extension_new:
     // stack: node_type, node_payload_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     SWAP3 %add_const(4) SWAP3
-    %stack (node_type, node_payload_ptr, encode_value, cur_len)
-        -> (node_payload_ptr, encode_value, cur_len, encode_node_extension_after_encode_child, node_payload_ptr)
+    %stack (node_type, node_payload_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr)
+        -> (node_payload_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, encode_node_extension_after_encode_child, node_payload_ptr)
     %add_const(2) %mload_trie_data
-    // stack: child_ptr, encode_value, cur_len, encode_node_extension_after_encode_child, node_payload_ptr, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: child_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, encode_node_extension_after_encode_child, node_payload_ptr, retdest
     %jump(encode_or_hash_node_new)
 encode_node_extension_after_encode_child:
-    // stack: result, result_len, cur_len, node_payload_ptr, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
-    %stack (result, result_len, cur_len, node_payload_ptr) -> (result, result_len, node_payload_ptr, cur_len)
+    // stack: result, result_len, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, node_payload_ptr, retdest
+    %stack 
+        (result, result_len, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, node_payload_ptr) -> 
+        (result, result_len, node_payload_ptr, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr)
     %alloc_rlp_block
     // stack: rlp_start, result, result_len, node_payload_ptr, cur_len, next_addr_ptr, next_slot_ptr, next_hash_node_ptr, retdest
     PUSH encode_node_extension_after_hex_prefix // retdest
