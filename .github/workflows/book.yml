@@ -1,0 +1,36 @@
+name: zkEVM mdbook
+
+on:
+  push:
+    branches: [develop, main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
+      - name: Install mdbook
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: mdbook
+
+      - name: Install mdbook-katex and mdbook-bib
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: mdbook-katex mdbook-bib
+
+      - name: Build book
+        run: mdbook build book
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./book/book
