@@ -17,22 +17,17 @@ jobs:
           toolchain: nightly
           override: true
 
-      # mdBook for mdbook-pdf compatibility by fixing broken links in print.html
-      # Waiting for https://github.com/rust-lang/mdBook/pull/1738 to get merged
-      - name: Install patched mdbook
+      - name: Install mdbook
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: mdbook --git https://github.com/HollowMan6/mdBook.git --rev 5830c9555a4dc051675d17f1fcb04dd0920543e8
+          args: mdbook
 
-      - name: Install mdbook-katex and mdbook-pdf
+      - name: Install mdbook-katex and mdbook-bib
         uses: actions-rs/cargo@v1
         with:
           command: install
-          args: mdbook-katex mdbook-pdf
-
-      - name: Install mdbook-pdf-outline
-        run: pip3 install mdbook-pdf-outline
+          args: mdbook-katex mdbook-bib
 
       - name: Build book
         run: mdbook build docs/book/
@@ -42,8 +37,21 @@ jobs:
           toolchain: nightly
           override: true
 
+      - name: Build latest rustdocs
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps --workspace
+        env:
+          RUSTDOCFLAGS: -Z unstable-options --enable-index-page --cfg docsrs --html-in-header ${{ github.workspace }}/.cargo/katex-header.html
+
+      - name: Move latest rustdocs into book
+        run: |
+          mkdir -p ./docs/book/book/html/rustdoc
+          mv ./target/doc ./docs/book/book/html/rustdoc/latest
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/arithemtization/book/html
+          publish_dir: ./docs/book/book/html
