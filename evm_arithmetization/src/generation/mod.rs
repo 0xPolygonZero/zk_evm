@@ -12,6 +12,7 @@ use plonky2::field::types::Field;
 use plonky2::hash::hash_types::RichField;
 use plonky2::timed;
 use plonky2::util::timing::TimingTree;
+use segments::GenerationSegmentData;
 use serde::{Deserialize, Serialize};
 use starky::config::StarkConfig;
 use GlobalMetadata::{
@@ -29,7 +30,6 @@ use crate::memory::segments::{Segment, PREINITIALIZED_SEGMENTS_INDICES};
 use crate::proof::{
     BlockHashes, BlockMetadata, ExtraBlockData, MemCap, PublicValues, RegistersData, TrieRoots,
 };
-use crate::prover::GenerationSegmentData;
 use crate::util::{h2u, u256_to_usize};
 use crate::witness::memory::{MemoryAddress, MemoryChannel, MemoryState};
 use crate::witness::state::RegistersState;
@@ -38,6 +38,7 @@ pub(crate) mod linked_list;
 pub mod mpt;
 pub(crate) mod prover_input;
 pub(crate) mod rlp;
+pub(crate) mod segments;
 pub(crate) mod state;
 pub(crate) mod trie_extractor;
 

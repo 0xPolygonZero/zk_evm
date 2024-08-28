@@ -19,3 +19,6 @@ hex-literal = { workspace = true }
 plonky2 = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
+
+[lints]
+workspace = true

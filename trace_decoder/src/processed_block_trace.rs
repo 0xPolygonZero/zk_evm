@@ -75,7 +75,7 @@ impl TxnInfo {
         tx_infos: &[Self],
         tries: &PartialTriePreImages,
         all_accounts_in_pre_image: &[(H256, AccountRlp)],
-        extra_state_accesses: &[H256],
+        extra_state_accesses: &[Address],
         hash2code: &mut Hash2Code,
     ) -> anyhow::Result<ProcessedTxnInfo> {
         let mut nodes_used_by_txn = NodesUsedByTxn::default();
@@ -85,7 +85,7 @@ impl TxnInfo {
         let all_accounts: BTreeSet<H256> =
             all_accounts_in_pre_image.iter().map(|(h, _)| *h).collect();
 
-        for txn in tx_infos.iter() {
+        for txn in tx_infos {
             let mut created_accounts = BTreeSet::new();
 
             for (
@@ -98,10 +98,8 @@ impl TxnInfo {
                     code_usage,
                     self_destructed,
                 },
-            ) in txn.traces.iter()
+            ) in &txn.traces
             {
-                let hashed_addr = hash(addr.as_bytes());
-
                 // record storage changes
                 let storage_written = storage_written.clone().unwrap_or_default();
 
@@ -113,7 +111,7 @@ impl TxnInfo {
                 let storage_written_keys = storage_written.keys();
                 let storage_access_keys = storage_read_keys.chain(storage_written_keys.copied());
 
-                if let Some(storage) = nodes_used_by_txn.storage_accesses.get_mut(&hashed_addr) {
+                if let Some(storage) = nodes_used_by_txn.storage_accesses.get_mut(&hash(addr)) {
                     storage.extend(
                         storage_access_keys
                             .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
@@ -121,7 +119,7 @@ impl TxnInfo {
                     )
                 } else {
                     nodes_used_by_txn.storage_accesses.insert(
-                        hashed_addr,
+                        hash(addr),
                         storage_access_keys
                             .map(|H256(bytes)| TrieKey::from_hash(hash(bytes)))
                             .collect(),
@@ -143,20 +141,17 @@ impl TxnInfo {
                     // a write occurred
 
                     // Account creations are flagged to handle reverts.
-                    if !all_accounts.contains(&hashed_addr) {
-                        created_accounts.insert(hashed_addr);
+                    if !all_accounts.contains(&hash(addr)) {
+                        created_accounts.insert(*addr);
                     }
 
                     // Some edge case may see a contract creation followed by a `SELFDESTRUCT`, with
                     // then a follow-up transaction within the same batch updating the state of the
                     // account. If that happens, we should not delete the account after processing
                     // this batch.
-                    nodes_used_by_txn
-                        .self_destructed_accounts
-                        .remove(&hashed_addr);
+                    nodes_used_by_txn.self_destructed_accounts.remove(addr);
 
-                    if let Some(existing_state_write) =
-                        nodes_used_by_txn.state_writes.get_mut(&hashed_addr)
+                    if let Some(existing_state_write) = nodes_used_by_txn.state_writes.get_mut(addr)
                     {
                         // The entry already exists, so we update only the relevant fields.
                         if state_write.balance.is_some() {
@@ -173,18 +168,16 @@ impl TxnInfo {
                             existing_state_write.code_hash = state_write.code_hash;
                         }
                     } else {
-                        nodes_used_by_txn
-                            .state_writes
-                            .insert(hashed_addr, state_write);
+                        nodes_used_by_txn.state_writes.insert(*addr, state_write);
                     }
                 }
 
                 for (k, v) in storage_written.into_iter() {
-                    if let Some(storage) = nodes_used_by_txn.storage_writes.get_mut(&hashed_addr) {
+                    if let Some(storage) = nodes_used_by_txn.storage_writes.get_mut(&hash(addr)) {
                         storage.insert(TrieKey::from_hash(k), rlp::encode(&v).to_vec());
                     } else {
                         nodes_used_by_txn.storage_writes.insert(
-                            hashed_addr,
+                            hash(addr),
                             HashMap::from_iter([(TrieKey::from_hash(k), rlp::encode(&v).to_vec())]),
                         );
                     }
@@ -197,13 +190,8 @@ impl TxnInfo {
                 // nodes if the transaction calling them reverted. If this is the case, we
                 // shouldn't include them in this transaction's `state_accesses` to allow the
                 // decoder to build a minimal state trie without hitting any hash node.
-                if !is_precompile
-                    || tries
-                        .state
-                        .get_by_key(TrieKey::from_hash(hashed_addr))
-                        .is_some()
-                {
-                    nodes_used_by_txn.state_accesses.insert(hashed_addr);
+                if !is_precompile || tries.state.get_by_address(*addr).is_some() {
+                    nodes_used_by_txn.state_accesses.insert(*addr);
                 }
 
                 match code_usage {
@@ -218,14 +206,12 @@ impl TxnInfo {
                 }
 
                 if self_destructed.unwrap_or_default() {
-                    nodes_used_by_txn
-                        .self_destructed_accounts
-                        .insert(hashed_addr);
+                    nodes_used_by_txn.self_destructed_accounts.insert(*addr);
                 }
             }
 
-            for &hashed_addr in extra_state_accesses {
-                nodes_used_by_txn.state_accesses.insert(hashed_addr);
+            for &addr in extra_state_accesses {
+                nodes_used_by_txn.state_accesses.insert(addr);
             }
 
             let accounts_with_storage_accesses = nodes_used_by_txn
@@ -280,15 +266,16 @@ fn check_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
 /// Note that "*_accesses" includes writes.
 #[derive(Debug, Default)]
 pub(crate) struct NodesUsedByTxn {
-    pub state_accesses: HashSet<H256>,
-    pub state_writes: HashMap<H256, StateWrite>,
+    pub state_accesses: HashSet<Address>,
+    pub state_writes: HashMap<Address, StateWrite>,
 
     // Note: All entries in `storage_writes` also appear in `storage_accesses`.
     pub storage_accesses: HashMap<H256, Vec<TrieKey>>,
     pub storage_writes: HashMap<H256, HashMap<TrieKey, Vec<u8>>>,
+
     /// Hashed address -> storage root.
     pub accts_with_unaccessed_storage: HashMap<H256, H256>,
-    pub self_destructed_accounts: HashSet<H256>,
+    pub self_destructed_accounts: HashSet<Address>,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -305,5 +292,5 @@ pub(crate) struct TxnMetaState {
     pub txn_bytes: Option<Vec<u8>>,
     pub receipt_node_bytes: Vec<u8>,
     pub gas_used: u64,
-    pub created_accounts: BTreeSet<H256>,
+    pub created_accounts: BTreeSet<Address>,
 }

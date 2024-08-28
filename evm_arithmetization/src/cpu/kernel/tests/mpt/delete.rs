@@ -120,6 +120,12 @@ fn test_state_trie(
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
+        .push(0.into()) // Initial nibbles
+        .expect("The stack should not overflow");
+    interpreter
+        .push(0.into()) // Initial number of nibbles
+        .expect("The stack should not overflow");
+    interpreter
         .push((Segment::StorageLinkedList as usize + 8).into())
         .expect("The stack should not overflow");
     interpreter

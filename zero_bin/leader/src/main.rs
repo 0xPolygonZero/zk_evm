@@ -70,6 +70,7 @@ async fn main() -> Result<()> {
     }
 
     match args.command {
+        Command::Clean => zero_bin_common::prover_state::persistence::delete_all()?,
         Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
             stdio::stdio_main(runtime, previous_proof, prover_config).await?;

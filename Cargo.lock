@@ -4191,6 +4191,7 @@ dependencies = [
  "tokio",
  "tower",
  "trace_decoder",
+ "tracing",
  "tracing-subscriber",
  "url",
  "vergen",

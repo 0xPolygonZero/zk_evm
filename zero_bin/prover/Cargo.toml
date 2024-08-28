@@ -31,3 +31,6 @@ clap = {workspace = true}
 [features]
 default = []
 cdk_erigon = []
+
+[lints]
+workspace = true

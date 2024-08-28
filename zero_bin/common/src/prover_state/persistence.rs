@@ -2,10 +2,11 @@ use std::{
     fmt::{Debug, Display},
     fs::{self, OpenOptions},
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use alloy::hex;
+use anyhow::anyhow;
 use directories::ProjectDirs;
 use evm_arithmetization::cpu::kernel::aggregator::KERNEL;
 use once_cell::sync::Lazy;
@@ -270,6 +271,30 @@ pub fn persist_all_to_disk(
     Ok(())
 }
 
+/// Flushes all existing prover state configurations and associated circuits
+/// that have been written to disk.
+pub fn delete_all() -> anyhow::Result<()> {
+    let circuit_dir = circuit_dir();
+    let path = Path::new(&circuit_dir);
+
+    if path.is_dir() {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let file_path = entry.path();
+
+            if file_path.is_file()
+                && (file_path.starts_with("prover_state")
+                    || file_path.starts_with("verifier_state"))
+            {
+                // Delete all circuit files.
+                fs::remove_file(file_path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Writes the provided [`AllRecursiveCircuits`] to disk.
 ///
 /// In particular, we cover both the monolothic and base prover states, as well
@@ -307,14 +332,25 @@ fn circuit_dir() -> String {
 /// variable. If the user does not set this, then we set it base to the OS's
 /// standard location for the cache directory.
 pub fn set_circuit_cache_dir_env_if_not_set() -> anyhow::Result<()> {
-    if std::env::var_os(ZK_EVM_CACHE_DIR_ENV).is_none() {
-        let circuit_cache_dir = match ProjectDirs::from("", "", ZK_EVM_CACHE_DIR_NAME) {
+    let circuit_cache_dir = if let Some(path_str) = std::env::var_os(ZK_EVM_CACHE_DIR_ENV) {
+        PathBuf::from(&path_str)
+    } else {
+        match ProjectDirs::from("", "", ZK_EVM_CACHE_DIR_NAME) {
             Some(proj_dir) => proj_dir.cache_dir().to_path_buf(),
             None => std::env::current_dir()?,
-        };
+        }
+    };
 
-        std::env::set_var(ZK_EVM_CACHE_DIR_ENV, circuit_cache_dir);
+    // Sanity check on naming convention for the circuit cache directory.
+    if let Some(path_str) = Path::new(&circuit_cache_dir).to_str() {
+        if !path_str.ends_with("_circuit_cache") {
+            return Err(anyhow!(
+            "zkEVM circuit cache directory {:?} does not follow convention of ending with \"_circuit_cache\".", path_str
+        ));
+        }
     }
+
+    std::env::set_var(ZK_EVM_CACHE_DIR_ENV, circuit_cache_dir);
 
     Ok(())
 }

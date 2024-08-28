@@ -26,6 +26,8 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
+    /// Deletes all the previously cached circuits.
+    Clean,
     /// Reads input from stdin and writes output to stdout.
     Stdio {
         /// The previous proof output.
@@ -66,7 +68,7 @@ pub(crate) enum Command {
             default_value_t = false
         )]
         keep_intermediate_proofs: bool,
-        /// Backoff in milliseconds for request retries
+        /// Backoff in milliseconds for retry requests
         #[arg(long, default_value_t = 0)]
         backoff: u64,
         /// The maximum number of retries

@@ -212,6 +212,7 @@ pub mod extension_tower;
 pub mod testing_utils;
 pub mod util;
 
+use generation::segments::SegmentError;
 use generation::TrimmedGenerationInputs;
 use mpt_trie::partial_trie::HashedPartialTrie;
 
@@ -223,8 +224,8 @@ pub type BlockHeight = u64;
 
 pub use all_stark::AllStark;
 pub use fixed_recursive_verifier::AllRecursiveCircuits;
+pub use generation::segments::{GenerationSegmentData, SegmentDataIterator};
 pub use generation::GenerationInputs;
-use prover::{GenerationSegmentData, SegmentError};
 pub use starky::config::StarkConfig;
 
 /// Returned type from a `SegmentDataIterator`, needed to prove all segments in

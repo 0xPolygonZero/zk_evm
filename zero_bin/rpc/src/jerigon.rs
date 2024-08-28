@@ -29,7 +29,8 @@ where
 {
     // Grab trace information
     let tx_results = cached_provider
-        .as_provider()
+        .get_provider()
+        .await?
         .raw_request::<_, Vec<ZeroTxResult>>(
             "debug_traceBlockByNumber".into(),
             (target_block_id, json!({"tracer": "zeroTracer"})),
@@ -39,7 +40,8 @@ where
     // Grab block witness info (packed as combined trie pre-images)
 
     let block_witness = cached_provider
-        .as_provider()
+        .get_provider()
+        .await?
         .raw_request::<_, String>("eth_getWitness".into(), vec![target_block_id])
         .await?;
 
