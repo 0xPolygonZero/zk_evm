@@ -215,6 +215,13 @@ impl TransactionTrie {
     }
 }
 
+impl From<TransactionTrie> for HashedPartialTrie {
+    fn from(value: TransactionTrie) -> Self {
+        let TransactionTrie { untyped } = value;
+        untyped
+    }
+}
+
 /// Per-block, `txn_ix -> [u8]`.
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#transaction-trie>
@@ -250,6 +257,13 @@ impl ReceiptTrie {
                 .map(|it| TrieKey::from_txn_ix(it).into_nibbles()),
         )?;
         Ok(())
+    }
+}
+
+impl From<ReceiptTrie> for HashedPartialTrie {
+    fn from(value: ReceiptTrie) -> Self {
+        let ReceiptTrie { untyped } = value;
+        untyped
     }
 }
 
@@ -446,5 +460,12 @@ impl StorageTrie {
     }
     pub fn trim_to(&mut self, keys: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+impl From<StorageTrie> for HashedPartialTrie {
+    fn from(value: StorageTrie) -> Self {
+        let StorageTrie { untyped } = value;
+        untyped
     }
 }

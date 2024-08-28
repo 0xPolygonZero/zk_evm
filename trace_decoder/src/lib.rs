@@ -348,16 +348,19 @@ pub fn entrypoint(
             },
             global_exit_roots: vec![],
             tries: evm_arithmetization::generation::TrieInputs {
-                state_trie: todo!(),
-                transactions_trie: todo!(),
-                receipts_trie: todo!(),
-                storage_tries: todo!(),
+                state_trie: state.into(),
+                transactions_trie: transaction.into(),
+                receipts_trie: receipt.into(),
+                storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
             },
-            trie_roots_after: todo!(),
-            checkpoint_state_trie_root: todo!(),
-            contract_code: todo!(),
-            block_metadata: todo!(),
-            block_hashes: todo!(),
+            trie_roots_after: after,
+            contract_code: contract_code
+                .into_iter()
+                .map(|it| (hash(&it), it))
+                .collect(),
+            checkpoint_state_trie_root: other.checkpoint_state_trie_root,
+            block_metadata: other.b_data.b_meta.clone(),
+            block_hashes: other.b_data.b_hashes.clone(),
         };
     }
 
