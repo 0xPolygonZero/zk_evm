@@ -10,7 +10,7 @@ use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand, ValueHint};
 use futures::StreamExt;
 use prover::BlockProverInput;
-use rpc::provider::CachedProvider;
+use zero_bin_common::provider::CachedProvider;
 use rpc::{retry::build_http_retry_provider, RpcParams, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;

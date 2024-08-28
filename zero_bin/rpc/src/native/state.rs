@@ -16,7 +16,7 @@ use trace_decoder::{
     SeparateTriePreImages, TxnInfo,
 };
 
-use crate::provider::CachedProvider;
+use zero_bin_common::provider::CachedProvider;
 use crate::Compat;
 
 /// Processes the state witness for the given block.

@@ -8,7 +8,7 @@ use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
 
 use super::fetch_other_block_data;
-use crate::provider::CachedProvider;
+use zero_bin_common::provider::CachedProvider;
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]

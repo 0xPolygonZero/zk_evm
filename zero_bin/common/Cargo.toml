@@ -9,25 +9,26 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-directories = "5.0.1"
-
-thiserror = { workspace = true }
-trace_decoder = { workspace = true }
-tracing = { workspace = true }
-proof_gen = { workspace = true }
-plonky2 = { workspace = true }
-evm_arithmetization = { workspace = true }
-clap = { workspace = true }
-anyhow = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-futures = { workspace = true }
-tokio = { workspace = true }
 alloy = { workspace = true }
+anyhow = { workspace = true }
 async-stream = { workspace = true }
 cargo_metadata = { workspace = true }
-vergen = { workspace = true }
+clap = { workspace = true }
+evm_arithmetization = { workspace = true }
+futures = { workspace = true }
+lru = { workspace = true }
 once_cell = { workspace = true }
+plonky2 = { workspace = true }
+proof_gen = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+trace_decoder = { workspace = true }
+tracing = { workspace = true }
+vergen = { workspace = true }
+
+directories = "5.0.1"
 
 [build-dependencies]
 cargo_metadata = { workspace = true }

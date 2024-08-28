@@ -17,7 +17,6 @@ clap = { workspace = true }
 evm_arithmetization = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
-lru = { workspace = true }
 mpt_trie = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
