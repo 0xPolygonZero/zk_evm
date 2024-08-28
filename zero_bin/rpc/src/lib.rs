@@ -154,10 +154,14 @@ where
     // We use that execution not to produce a new contract bytecode - instead, we
     // return hashes. To look at the code use `cast disassemble <bytecode>`.
     let bytes = cached_provider
-        .get_provider().await?
+        .get_provider()
+        .await?
         .raw_request::<_, Bytes>(
             "eth_call".into(),
-            (json!({"data": "0x60005B60010180430340816020025280610101116300000002576120205FF3"}), &format!("{:#x}", target_block_number)),
+            (
+                json!({"data": "0x60005B60010180430340816020025280610101116300000002576120205FF3"}),
+                &format!("{:#x}", target_block_number),
+            ),
         )
         .await?;
 
