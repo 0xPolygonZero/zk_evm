@@ -633,6 +633,7 @@ fn sload() -> Result<()> {
     // Now, execute `mpt_hash_state_trie`. We check that the state trie has not
     // changed.
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
+    let initial_rlp_addr = Segment::RlpRaw as usize + 1;
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
     interpreter.set_is_kernel(true);
     interpreter.set_context(0);
@@ -643,7 +644,7 @@ fn sload() -> Result<()> {
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow.");
     interpreter
-        .push(0.into()) // rlp_start
+        .push(initial_rlp_addr.into()) // rlp_start
         .expect("The stack should not overflow.");
     interpreter.run()?;
 

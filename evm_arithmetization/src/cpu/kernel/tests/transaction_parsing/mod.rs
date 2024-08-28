@@ -29,6 +29,10 @@ pub(crate) fn prepare_interpreter_for_txn_parsing<F: Field>(
     // normalizing. Processing normalized transactions is outside the scope of
     // this test.
     interpreter.halt_offsets.push(exit_point);
+    // Clear the RlpRaw segment (the first byte contains the empty node encoding).
+    interpreter.generation_state.memory.contexts[0].segments[Segment::RlpRaw.unscale()]
+        .content
+        .truncate(1);
     interpreter.extend_memory_segment_bytes(Segment::RlpRaw, txn);
 
     Ok(())
