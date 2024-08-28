@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -17,7 +17,7 @@ use crate::provider::CachedProvider;
 mod state;
 mod txn;
 
-type CodeDb = HashMap<__compat_primitive_types::H256, Vec<u8>>;
+type CodeDb = BTreeMap<__compat_primitive_types::H256, Vec<u8>>;
 
 /// Fetches the prover input for the given BlockId.
 pub async fn block_prover_input<ProviderT, TransportT>(
@@ -59,7 +59,7 @@ where
 
     Ok(BlockTrace {
         txn_info,
-        code_db: Option::from(code_db).filter(|x| !x.is_empty()),
+        code_db,
         trie_pre_images,
     })
 }
