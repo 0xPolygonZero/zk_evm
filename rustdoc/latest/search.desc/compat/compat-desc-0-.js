@@ -1,0 +1,1 @@
+searchState.loadedDescShard("compat", 0, "A trait to convert between alloy and ethereum types.\nConvert the type to another type")

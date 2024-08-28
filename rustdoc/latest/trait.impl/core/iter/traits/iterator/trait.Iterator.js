@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["evm_arithmetization",[["impl&lt;F: RichField&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"evm_arithmetization/struct.SegmentDataIterator.html\" title=\"struct evm_arithmetization::SegmentDataIterator\">SegmentDataIterator</a>&lt;F&gt;"]]],["mpt_trie",[["impl&lt;N: <a class=\"trait\" href=\"mpt_trie/partial_trie/trait.PartialTrie.html\" title=\"trait mpt_trie::partial_trie::PartialTrie\">PartialTrie</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"mpt_trie/trie_ops/struct.PartialTrieIter.html\" title=\"struct mpt_trie::trie_ops::PartialTrieIter\">PartialTrieIter</a>&lt;N&gt;"],["impl&lt;T: <a class=\"trait\" href=\"mpt_trie/partial_trie/trait.PartialTrie.html\" title=\"trait mpt_trie::partial_trie::PartialTrie\">PartialTrie</a>&gt; <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/iter/traits/iterator/trait.Iterator.html\" title=\"trait core::iter::traits::iterator::Iterator\">Iterator</a> for <a class=\"struct\" href=\"mpt_trie/special_query/struct.TriePathIter.html\" title=\"struct mpt_trie::special_query::TriePathIter\">TriePathIter</a>&lt;T&gt;"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[406,1010]}

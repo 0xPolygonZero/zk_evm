@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NUMBER_KERNEL_FILES"],"static":["KERNEL","KERNEL_FILES"]};

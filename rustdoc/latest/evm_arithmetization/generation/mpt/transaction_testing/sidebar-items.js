@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AccessListItemRlp","AccessListTransactionRlp","AddressOption","BlobTransactionRlp","FeeMarketTransactionRlp","LegacyTransactionRlp"]};

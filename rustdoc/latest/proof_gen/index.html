@@ -1,0 +1,140 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This library is intended to generate proofs with the plonky2 zkEVM, given transactions provided in Intermediate Representation (IR) format."><title>proof_gen - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-492a78a4a87dcc01.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="proof_gen" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0-nightly (1f12b9b0f 2024-08-27)" data-channel="nightly" data-search-js="search-acd2e111c9cb27e3.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-cb0df477c2d67d00.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-3b12f09e550e0385.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css"
+    integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.js"
+    integrity="sha384-y23I5Q6l+B6vatafAwxRu/0oK/79VlbSz7Q9aiSZUvyWYIYsd+qj+o24G5ZU2zJz"
+    crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/auto-render.min.js"
+    integrity="sha384-kWPLUVMOks5AQFrykwIup5lo0m3iMkkHrD0uJ4H5cjeGihAutqP0yW0J6dpFiVkI"
+    crossorigin="anonymous"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        renderMathInElement(document.body, {
+            fleqn: false,
+            macros: {
+                "\\F": "\\mathbb{F}",
+                "\\G": "\\mathbb{G}",
+                "\\O": "\\mathcal{O}",
+                "\\(": "\\left(",
+                "\\)": "\\right)",
+                "\\norm": "\\left\\vert #1 \\right\\vert",
+                "\\set": "\\mathcal{ #1 }",
+            },
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "$", right: "$", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });
+    });
+</script>
+</head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../proof_gen/index.html">proof_<wbr>gen</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">proof_gen</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/proof_gen/lib.rs.html#1-147">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This library is intended to generate proofs with the <a href="https://github.com/0xPolygonZero/plonky2/evm">plonky2 zkEVM</a>, given
+transactions provided in Intermediate Representation (IR) format.</p>
+<p>The exact format of this IR is defined by the <a href="https://github.com/0xPolygonZero/plonky2/evm/src/generation/mod.rs">GenerationInputs</a>
+used by the zkEVM prover, containing an RLP-encoded transaction along with
+state metadata prior and post execution of this transaction.</p>
+<h2 id="usage"><a class="doc-anchor" href="#usage">§</a>Usage</h2>
+<p>First, a prover needs to initialize its <code>ProverState</code>. For this, one can
+use the <code>ProverStateBuilder</code>, which contains the ranges to be used by all
+internal STARK tables of the zkEVM.</p>
+<p>The default method contains an initial set of ranges for each table, that
+can be overridden at will by calling
+<code>ProverStateBuilder::set_foo_circuit_size</code> where <code>foo</code> is the name of the
+targeted table. At the moment, plonky2 zkEVM contains seven tables:
+<code>arithmetic</code>, <code>byte_packing</code>, <code>cpu</code>, <code>keccak</code>, <code>keccak_sponge</code>, <code>logic</code> and
+<code>memory</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>    <span class="kw">let </span><span class="kw-2">mut </span>builder = ProverStateBuilder::default();
+     
+    <span class="comment">// Change Cpu and Memory tables supported ranges.
+    </span><span class="kw">let </span>builder = builder
+        .set_cpu_circuit_size(<span class="number">12</span>..<span class="number">25</span>)
+        .set_memory_circuit_size(<span class="number">18</span>..<span class="number">28</span>);
+
+    <span class="comment">// Generate a `ProverState` from the builder.
+    </span><span class="kw">let </span>prover_state = builder.build();</code></pre></div>
+<p><em><strong>NOTE</strong></em>: All the circuits to generate the different kind of proofs, from
+transaction proofs to block proofs, are specific to the initial set of
+ranges selected for each table. Changing one of them will require building a
+new <code>ProverState</code>, and will make all previously generated proofs
+incompatible with the new state. Make sure you select sufficiently large
+ranges for your application!</p>
+<p>Once all circuits have been pre-processed, a prover can now generate proofs
+from inputs passed as Intermediary Representation.</p>
+<p>This library handles the 3 kinds of proof generations necessary for the
+zkEVM:</p>
+<h4 id="segment-proofs"><a class="doc-anchor" href="#segment-proofs">§</a>Segment proofs</h4>
+<p>From a <code>ProverState</code> and a transaction processed with some metadata in
+Intermediate Representation, one can obtain a segment proof by calling
+the method below:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code> <span class="kw">pub fn </span>generate_txn_proof(
+    p_state: <span class="kw-2">&amp;</span>ProverState,
+    gen_inputs: GenerationInputs,
+    abort_signal: <span class="prelude-ty">Option</span>&lt;Arc&lt;AtomicBool&gt;&gt;,
+) -&gt; ProofGenResult&lt;GeneratedTxnProof&gt; { ... }</code></pre></div>
+<p>The obtained <code>GeneratedTxnProof</code> contains the actual proof and some
+additional data to be used when aggregating this transaction with others.</p>
+<h4 id="segment-aggregation-proofs"><a class="doc-anchor" href="#segment-aggregation-proofs">§</a>Segment Aggregation proofs</h4>
+<p>Two proofs can be aggregated together with a <code>ProverState</code>. These <code>child</code>
+proofs can either be segment proofs, or aggregated proofs themselves.
+This library abstracts their type behind an <code>AggregatableProof</code> enum.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code> <span class="kw">pub fn </span>generate_agg_proof(
+    p_state: <span class="kw-2">&amp;</span>ProverState,
+    lhs_child: <span class="kw-2">&amp;</span>AggregatableProof,
+    rhs_child: <span class="kw-2">&amp;</span>AggregatableProof,
+) -&gt; ProofGenResult&lt;GeneratedAggProof&gt; { ... }</code></pre></div>
+<h4 id="transaction-aggregation-proofs"><a class="doc-anchor" href="#transaction-aggregation-proofs">§</a>Transaction Aggregation proofs</h4>
+<p>Given a <code>GeneratedAggProof</code> corresponding to the entire set of segment
+proofs within one transaction proof, the prover can wrap it into a
+<code>GeneratedBlockProof</code>. The prover can pass an optional previous transaction
+proof as argument to the <code>generate_transaction_agg_proof</code> method, to combine
+both statements into one.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code> <span class="kw">pub fn </span>generate_transaction_agg_proof(
+     p_state: <span class="kw-2">&amp;</span>ProverState,
+     prev_opt_parent_b_proof: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>GeneratedBlockProof&gt;,
+     curr_block_agg_proof: <span class="kw-2">&amp;</span>GeneratedAggProof,
+ ) -&gt; ProofGenResult&lt;GeneratedBlockProof&gt; { ... }</code></pre></div>
+<h4 id="block-proofs"><a class="doc-anchor" href="#block-proofs">§</a>Block proofs</h4>
+<p>Once the prover has obtained a <code>GeneratedBlockProof</code> corresponding to the
+entire set of transactions within a block, they can then wrap it into a
+final <code>GeneratedBlockProof</code>. The prover can pass an optional previous
+block proof as argument to the <code>generate_block_proof</code> method, to combine
+both statement into one, effectively proving an entire chain from genesis
+through a single final proof.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code> <span class="kw">pub fn </span>generate_block_proof(
+    p_state: <span class="kw-2">&amp;</span>ProverState,
+    prev_opt_parent_b_proof: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>GeneratedBlockProof&gt;,
+    curr_block_agg_proof: <span class="kw-2">&amp;</span>GeneratedAggProof,
+) -&gt; ProofGenResult&lt;GeneratedBlockProof&gt; { ... }</code></pre></div>
+<h3 id="verifying-block-proofs"><a class="doc-anchor" href="#verifying-block-proofs">§</a>Verifying block proofs</h3>
+<p>The <code>ProverState</code> can be used to verify any block proofs emitted with the
+same set of circuits.
+However, because the prover state can be quite heavy, the necessary verifier
+data to verify block proofs can be saved independently into a
+<code>VerifierState</code>, to allow anyone to easily verify block proofs.</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code>    <span class="kw">let </span><span class="kw-2">mut </span>builder = ProverStateBuilder::default();
+
+    <span class="comment">// Generate a `ProverState` from the builder.
+    </span><span class="kw">let </span>prover_state = builder.build();
+
+    <span class="comment">// Derive a `VerifierState` from the `ProverState`.
+    </span><span class="kw">let </span>verifier_state: VerifierState = prover_state.into();
+
+    <span class="comment">// The prover generates some block proof.
+    </span><span class="kw">let </span>block_proof = prover_state.generate_block_proof(...);
+     
+    <span class="comment">// Have the verifier attest validity of the proof.
+    </span><span class="macro">assert!</span>(verifier_state.verify(block_proof.intern).is_ok());</code></pre></div>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name" id="reexport.ProverState"><code>pub use prover_state::<a class="struct" href="prover_state/struct.ProverState.html" title="struct proof_gen::prover_state::ProverState">ProverState</a>;</code></div></li><li><div class="item-name" id="reexport.VerifierState"><code>pub use verifier_state::<a class="struct" href="verifier_state/struct.VerifierState.html" title="struct proof_gen::verifier_state::VerifierState">VerifierState</a>;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="proof_gen/index.html" title="mod proof_gen::proof_gen">proof_<wbr>gen</a></div><div class="desc docblock-short">This module defines the proof generation methods corresponding to the three
+types of proofs the zkEVM internally handles.</div></li><li><div class="item-name"><a class="mod" href="proof_types/index.html" title="mod proof_gen::proof_types">proof_<wbr>types</a></div><div class="desc docblock-short">This module defines the various proof types used throughout the block proof
+generation process.</div></li><li><div class="item-name"><a class="mod" href="prover_state/index.html" title="mod proof_gen::prover_state">prover_<wbr>state</a></div><div class="desc docblock-short">This module defines the <code>ProverState</code>, that contains all pre-processed
+circuits necessary to handle arbitrary transaction proving and proof
+aggregation to generate succinct block proofs attesting validity of an
+entire EVM-based chain.</div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod proof_gen::types">types</a></div><div class="desc docblock-short">This module contains type aliases and custom <code>Error</code> definition for
+convenient proof generation.</div></li><li><div class="item-name"><a class="mod" href="verifier_state/index.html" title="mod proof_gen::verifier_state">verifier_<wbr>state</a></div><div class="desc docblock-short">This module defines the <code>VerifierState</code>, that contains the necessary data to
+handle succinct block proofs verification.</div></li></ul></section></div></main></body></html>

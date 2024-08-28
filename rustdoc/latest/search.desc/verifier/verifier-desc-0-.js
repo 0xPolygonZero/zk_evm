@@ -1,0 +1,1 @@
+searchState.loadedDescShard("verifier", 0, "The file containing the proof to verify\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nThe prover configuration used to generate the preprocessed …")

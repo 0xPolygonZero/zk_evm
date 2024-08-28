@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_trie_stats","get_trie_stats_with_name"],"struct":["TrieComparison","TrieStats"]};

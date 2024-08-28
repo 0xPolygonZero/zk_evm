@@ -1,0 +1,127 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `evm_arithmetization/src/byte_packing/columns.rs`."><title>columns.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-492a78a4a87dcc01.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="evm_arithmetization" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0-nightly (1f12b9b0f 2024-08-27)" data-channel="nightly" data-search-js="search-acd2e111c9cb27e3.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-cb0df477c2d67d00.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-3b12f09e550e0385.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css"
+    integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.js"
+    integrity="sha384-y23I5Q6l+B6vatafAwxRu/0oK/79VlbSz7Q9aiSZUvyWYIYsd+qj+o24G5ZU2zJz"
+    crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/auto-render.min.js"
+    integrity="sha384-kWPLUVMOks5AQFrykwIup5lo0m3iMkkHrD0uJ4H5cjeGihAutqP0yW0J6dpFiVkI"
+    crossorigin="anonymous"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        renderMathInElement(document.body, {
+            fleqn: false,
+            macros: {
+                "\\F": "\\mathbb{F}",
+                "\\G": "\\mathbb{G}",
+                "\\O": "\\mathcal{O}",
+                "\\(": "\\left(",
+                "\\)": "\\right)",
+                "\\norm": "\\left\\vert #1 \\right\\vert",
+                "\\set": "\\mathcal{ #1 }",
+            },
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "$", right: "$", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });
+    });
+</script>
+</head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! Byte packing registers.
+
+</span><span class="kw">use </span>std::mem::transmute;
+
+<span class="kw">use </span>zk_evm_proc_macro::Columns;
+
+<span class="kw">use crate</span>::{byte_packing::NUM_BYTES, util::indices_arr};
+
+<span class="doccomment">/// A view of `BytePackingStark`'s columns.
+</span><span class="attr">#[repr(C)]
+#[derive(Columns, Eq, PartialEq, Debug)]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>BytePackingColumnsView&lt;T: Copy&gt; {
+    <span class="doccomment">/// 1 if this is a READ operation, and 0 if this is a WRITE operation.
+    </span><span class="kw">pub </span>is_read: T,
+
+    <span class="comment">// There are `NUM_BYTES` columns used to represent the length of
+    // the input byte sequence for a (un)packing operation.
+    // index_len[i] is 1 iff the length is i+1.
+    </span><span class="kw">pub </span>index_len: [T; NUM_BYTES],
+
+    <span class="kw">pub </span>addr_context: T,
+    <span class="kw">pub </span>addr_segment: T,
+    <span class="kw">pub </span>addr_virtual: T,
+    <span class="kw">pub </span>timestamp: T,
+
+    <span class="comment">// 32 byte limbs hold a total of 256 bits.
+    // There are `NUM_BYTES` columns used to store the values of the bytes
+    // that are being read/written for an (un)packing operation.
+    </span><span class="kw">pub </span>value_bytes: [T; NUM_BYTES],
+
+    <span class="doccomment">/// The counter column (used for the logUp range check) starts from 0 and
+    /// increments.
+    </span><span class="kw">pub </span>range_counter: T,
+    <span class="doccomment">/// The frequencies column used in logUp.
+    </span><span class="kw">pub </span>rc_frequencies: T,
+}
+
+<span class="comment">// `u8` is guaranteed to have a `size_of` of 1.
+</span><span class="doccomment">/// Number of columns in `BytePackingStark`.
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>NUM_COLUMNS: usize = size_of::&lt;BytePackingColumnsView&lt;u8&gt;&gt;();
+
+<span class="kw">const fn </span>make_col_map() -&gt; BytePackingColumnsView&lt;usize&gt; {
+    <span class="kw">let </span>indices_arr = indices_arr::&lt;NUM_COLUMNS&gt;();
+    <span class="kw">unsafe </span>{ transmute::&lt;[usize; NUM_COLUMNS], BytePackingColumnsView&lt;usize&gt;&gt;(indices_arr) }
+}
+
+<span class="doccomment">/// Map between the `BytePacking` columns and (0..`NUM_COLUMNS`)
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>BYTE_PACKING_COL_MAP: BytePackingColumnsView&lt;usize&gt; = make_col_map();
+</code></pre></div></section></main></body></html>

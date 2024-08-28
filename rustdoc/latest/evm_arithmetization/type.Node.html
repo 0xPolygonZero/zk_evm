@@ -1,0 +1,62 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `Node` type in crate `evm_arithmetization`."><title>Node in evm_arithmetization - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-492a78a4a87dcc01.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="evm_arithmetization" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0-nightly (1f12b9b0f 2024-08-27)" data-channel="nightly" data-search-js="search-acd2e111c9cb27e3.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-cb0df477c2d67d00.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-3b12f09e550e0385.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css"
+    integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.js"
+    integrity="sha384-y23I5Q6l+B6vatafAwxRu/0oK/79VlbSz7Q9aiSZUvyWYIYsd+qj+o24G5ZU2zJz"
+    crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/auto-render.min.js"
+    integrity="sha384-kWPLUVMOks5AQFrykwIup5lo0m3iMkkHrD0uJ4H5cjeGihAutqP0yW0J6dpFiVkI"
+    crossorigin="anonymous"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        renderMathInElement(document.body, {
+            fleqn: false,
+            macros: {
+                "\\F": "\\mathbb{F}",
+                "\\G": "\\mathbb{G}",
+                "\\O": "\\mathcal{O}",
+                "\\(": "\\left(",
+                "\\)": "\\right)",
+                "\\norm": "\\left\\vert #1 \\right\\vert",
+                "\\set": "\\mathcal{ #1 }",
+            },
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "$", right: "$", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });
+    });
+</script>
+</head><body class="rustdoc type"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../evm_arithmetization/index.html">evm_<wbr>arithmetization</a><span class="version">0.4.0</span></h2></div><h2 class="location"><a href="#">Node</a></h2><div class="sidebar-elems"><section><h3><a href="#aliased-type">Aliased type</a></h3><h3><a href="#variants">Variants</a></h3><ul class="block variant"><li><a href="#variant.Branch">Branch</a></li><li><a href="#variant.Empty">Empty</a></li><li><a href="#variant.Extension">Extension</a></li><li><a href="#variant.Hash">Hash</a></li><li><a href="#variant.Leaf">Leaf</a></li></ul></section><h2><a href="index.html">In crate evm_<wbr>arithmetization</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Type Alias <a href="index.html">evm_arithmetization</a>::<wbr><a class="type" href="#">Node</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/evm_arithmetization/lib.rs.html#221">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub type Node = <a class="enum" href="../mpt_trie/partial_trie/enum.Node.html" title="enum mpt_trie::partial_trie::Node">Node</a>&lt;<a class="struct" href="../mpt_trie/partial_trie/struct.HashedPartialTrie.html" title="struct mpt_trie::partial_trie::HashedPartialTrie">HashedPartialTrie</a>&gt;;</code></pre><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>enum Node {
+    Empty,
+    Hash(H256),
+    Branch {
+        children: [<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;<a class="struct" href="../mpt_trie/partial_trie/struct.HashedPartialTrie.html" title="struct mpt_trie::partial_trie::HashedPartialTrie">HashedPartialTrie</a>&gt;&gt;; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">16</a>],
+        value: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;,
+    },
+    Extension {
+        nibbles: <a class="struct" href="../mpt_trie/nibbles/struct.Nibbles.html" title="struct mpt_trie::nibbles::Nibbles">Nibbles</a>,
+        child: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;<a class="struct" href="../mpt_trie/partial_trie/struct.HashedPartialTrie.html" title="struct mpt_trie::partial_trie::HashedPartialTrie">HashedPartialTrie</a>&gt;&gt;,
+    },
+    Leaf {
+        nibbles: <a class="struct" href="../mpt_trie/nibbles/struct.Nibbles.html" title="struct mpt_trie::nibbles::Nibbles">Nibbles</a>,
+        value: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;,
+    },
+}</code></pre><h2 id="variants" class="variants section-header">Variants<a href="#variants" class="anchor">§</a></h2><div class="variants"><section id="variant.Empty" class="variant"><a href="#variant.Empty" class="anchor">§</a><h3 class="code-header">Empty</h3></section><div class="docblock"><p>An empty trie.</p>
+</div><section id="variant.Hash" class="variant"><a href="#variant.Hash" class="anchor">§</a><h3 class="code-header">Hash(H256)</h3></section><div class="docblock"><p>The digest of trie whose data does not need to be stored.</p>
+<p><strong>Important note</strong>: Hash nodes should <strong>only</strong> be created to replace
+<code>PartialTrie</code>s whose RLP encoding is &gt;= 32 bytes. Creating a hash node
+for a <code>PartialTrie</code> smaller than this will cause an incorrect hash to be
+generated for the trie.</p>
+</div><section id="variant.Branch" class="variant"><a href="#variant.Branch" class="anchor">§</a><h3 class="code-header">Branch</h3></section><div class="docblock"><p>A branch node, which consists of 16 children and an optional value.</p>
+</div><div class="sub-variant" id="variant.Branch.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.Branch.field.children" class="section-header"><a href="#variant.Branch.field.children" class="anchor field">§</a><code>children: [<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;<a class="struct" href="../mpt_trie/partial_trie/struct.HashedPartialTrie.html" title="struct mpt_trie::partial_trie::HashedPartialTrie">HashedPartialTrie</a>&gt;&gt;; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">16</a>]</code></span><div class="docblock"><p>A slice containing the 16 children of this branch node.</p>
+</div></div><div class="sub-variant-field"><span id="variant.Branch.field.value" class="section-header"><a href="#variant.Branch.field.value" class="anchor field">§</a><code>value: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;</code></span><div class="docblock"><p>The payload of this node.</p>
+</div></div></div><section id="variant.Extension" class="variant"><a href="#variant.Extension" class="anchor">§</a><h3 class="code-header">Extension</h3></section><div class="docblock"><p>An extension node, which consists of a list of nibbles and a single
+child.</p>
+</div><div class="sub-variant" id="variant.Extension.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.Extension.field.nibbles" class="section-header"><a href="#variant.Extension.field.nibbles" class="anchor field">§</a><code>nibbles: <a class="struct" href="../mpt_trie/nibbles/struct.Nibbles.html" title="struct mpt_trie::nibbles::Nibbles">Nibbles</a></code></span><div class="docblock"><p>The path of this extension.</p>
+</div></div><div class="sub-variant-field"><span id="variant.Extension.field.child" class="section-header"><a href="#variant.Extension.field.child" class="anchor field">§</a><code>child: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;<a class="struct" href="../mpt_trie/partial_trie/struct.HashedPartialTrie.html" title="struct mpt_trie::partial_trie::HashedPartialTrie">HashedPartialTrie</a>&gt;&gt;</code></span><div class="docblock"><p>The child of this extension node.</p>
+</div></div></div><section id="variant.Leaf" class="variant"><a href="#variant.Leaf" class="anchor">§</a><h3 class="code-header">Leaf</h3></section><div class="docblock"><p>A leaf node, which consists of a list of nibbles and a value.</p>
+</div><div class="sub-variant" id="variant.Leaf.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.Leaf.field.nibbles" class="section-header"><a href="#variant.Leaf.field.nibbles" class="anchor field">§</a><code>nibbles: <a class="struct" href="../mpt_trie/nibbles/struct.Nibbles.html" title="struct mpt_trie::nibbles::Nibbles">Nibbles</a></code></span><div class="docblock"><p>The path of this leaf node.</p>
+</div></div><div class="sub-variant-field"><span id="variant.Leaf.field.value" class="section-header"><a href="#variant.Leaf.field.value" class="anchor field">§</a><code>value: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>&gt;</code></span><div class="docblock"><p>The payload of this node</p>
+</div></div></div></div><script src="../type.impl/mpt_trie/partial_trie/enum.Node.js" data-self-path="evm_arithmetization::Node" async></script></section></div></main></body></html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This trait defines the method which multiplies by the Fp2 element t^3 whose cube root we will adjoin in the subsequent cubic extension. For BN254 this is 9+i, and for BLS381 it is 1+i. It also defines the relevant FROB constants, given by t^(p^n) and (t^2)^(p^n) for various n, used to compute the frobenius operations."><title>Adj in evm_arithmetization::extension_tower - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-492a78a4a87dcc01.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="evm_arithmetization" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0-nightly (1f12b9b0f 2024-08-27)" data-channel="nightly" data-search-js="search-acd2e111c9cb27e3.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-cb0df477c2d67d00.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-3b12f09e550e0385.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css"
+    integrity="sha384-zB1R0rpPzHqg7Kpt0Aljp8JPLqbXI3bhnPWROx27a9N0Ll6ZP/+DiW/UqRcLbRjq" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.js"
+    integrity="sha384-y23I5Q6l+B6vatafAwxRu/0oK/79VlbSz7Q9aiSZUvyWYIYsd+qj+o24G5ZU2zJz"
+    crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/auto-render.min.js"
+    integrity="sha384-kWPLUVMOks5AQFrykwIup5lo0m3iMkkHrD0uJ4H5cjeGihAutqP0yW0J6dpFiVkI"
+    crossorigin="anonymous"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        renderMathInElement(document.body, {
+            fleqn: false,
+            macros: {
+                "\\F": "\\mathbb{F}",
+                "\\G": "\\mathbb{G}",
+                "\\O": "\\mathcal{O}",
+                "\\(": "\\left(",
+                "\\)": "\\right)",
+                "\\norm": "\\left\\vert #1 \\right\\vert",
+                "\\set": "\\mathcal{ #1 }",
+            },
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "\\(", right: "\\)", display: false },
+                { left: "$", right: "$", display: false },
+                { left: "\\[", right: "\\]", display: true }
+            ]
+        });
+    });
+</script>
+</head><body class="rustdoc trait"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../evm_arithmetization/index.html">evm_<wbr>arithmetization</a><span class="version">0.4.0</span></h2></div><h2 class="location"><a href="#">Adj</a></h2><div class="sidebar-elems"><section><h3><a href="#required-associated-consts">Required Associated Constants</a></h3><ul class="block"><li><a href="#associatedconstant.FROB_T">FROB_T</a></li><li><a href="#associatedconstant.FROB_Z">FROB_Z</a></li></ul><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.mul_adj">mul_adj</a></li></ul><h3><a href="#object-safety">Object Safety</a></h3><h3><a href="#implementors">Implementors</a></h3></section><h2><a href="index.html">In evm_<wbr>arithmetization::<wbr>extension_<wbr>tower</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Trait <a href="../index.html">evm_arithmetization</a>::<wbr><a href="index.html">extension_tower</a>::<wbr><a class="trait" href="#">Adj</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../src/evm_arithmetization/extension_tower.rs.html#486-490">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub trait Adj: <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a> {
+    const <a href="#associatedconstant.FROB_T" class="constant">FROB_T</a>: [[Self; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">6</a>]; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">2</a>];
+    const <a href="#associatedconstant.FROB_Z" class="constant">FROB_Z</a>: [Self; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">12</a>];
+
+    // Required method
+    fn <a href="#tymethod.mul_adj" class="fn">mul_adj</a>(self) -&gt; Self;
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This trait defines the method which multiplies
+by the Fp2 element t^3 whose cube root we will
+adjoin in the subsequent cubic extension.
+For BN254 this is 9+i, and for BLS381 it is 1+i.
+It also defines the relevant FROB constants,
+given by t^(p^n) and (t^2)^(p^n) for various n,
+used to compute the frobenius operations.</p>
+</div></details><h2 id="required-associated-consts" class="section-header">Required Associated Constants<a href="#required-associated-consts" class="anchor">§</a></h2><div class="methods"><section id="associatedconstant.FROB_T" class="method"><a class="src rightside" href="../../src/evm_arithmetization/extension_tower.rs.html#488">source</a><h4 class="code-header">const <a href="#associatedconstant.FROB_T" class="constant">FROB_T</a>: [[Self; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">6</a>]; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">2</a>]</h4></section><section id="associatedconstant.FROB_Z" class="method"><a class="src rightside" href="../../src/evm_arithmetization/extension_tower.rs.html#489">source</a><h4 class="code-header">const <a href="#associatedconstant.FROB_Z" class="constant">FROB_Z</a>: [Self; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">12</a>]</h4></section></div><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><section id="tymethod.mul_adj" class="method"><a class="src rightside" href="../../src/evm_arithmetization/extension_tower.rs.html#487">source</a><h4 class="code-header">fn <a href="#tymethod.mul_adj" class="fn">mul_adj</a>(self) -&gt; Self</h4></section></div><h2 id="object-safety" class="section-header">Object Safety<a href="#object-safety" class="anchor">§</a></h2><div class="object-safety-info">This trait is <b>not</b> <a href="https://doc.rust-lang.org/nightly/reference/items/traits.html#object-safety">object safe</a>.</div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"></div><script src="../../trait.impl/evm_arithmetization/extension_tower/trait.Adj.js" async></script></section></div></main></body></html>

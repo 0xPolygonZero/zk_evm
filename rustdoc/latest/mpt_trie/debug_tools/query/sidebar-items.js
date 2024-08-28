@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_path_from_query"],"struct":["DebugQuery","DebugQueryOutput","DebugQueryParams","DebugQueryParamsBuilder"]};

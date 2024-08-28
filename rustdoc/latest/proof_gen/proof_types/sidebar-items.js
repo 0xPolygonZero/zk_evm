@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AggregatableBlockProof","BatchAggregatableProof","SegmentAggregatableProof"],"struct":["GeneratedAggBlockProof","GeneratedBlockProof","GeneratedSegmentAggProof","GeneratedSegmentProof","GeneratedTxnAggProof"]};

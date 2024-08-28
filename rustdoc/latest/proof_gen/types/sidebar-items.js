@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EXTENSION_DEGREE"],"type":["AllRecursiveCircuits","Config","Field","Hash","Hasher","PlonkyProofIntern","VerifierData"]};

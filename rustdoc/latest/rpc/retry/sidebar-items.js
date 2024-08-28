@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_http_retry_provider"],"struct":["RetryLayer","RetryPolicy","RetryService"]};

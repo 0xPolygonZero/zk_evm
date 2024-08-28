@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_previous_proof","load_dotenvy_vars_if_present","main"],"mod":["cli","client","http","init","stdio"]};
