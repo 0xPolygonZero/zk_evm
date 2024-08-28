@@ -444,4 +444,7 @@ impl StorageTrie {
             )?,
         )
     }
+    pub fn trim_to(&mut self, keys: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
