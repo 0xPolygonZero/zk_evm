@@ -138,8 +138,7 @@ pub struct FinalPublicValues {
     /// Address to store the base fee to be burnt: only used when feature
     /// `cdk_erigon` is active.
     pub burn_addr: Option<U256>,
-    /// Block metadata: it remains unchanged within a
-    /// block.
+    /// Block metadata: it remains unchanged within a block.
     pub block_metadata: BlockMetadata,
     /// 256 previous block hashes and current block's hash.
     pub block_hashes: BlockHashes,
@@ -924,6 +923,10 @@ impl BurnAddrTarget {
 
     /// If `condition`, returns the burn address in `ba0`,
     /// otherwise returns the burn address in `ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget`s are `BurnAddr` variants.
     pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         condition: BoolTarget,
@@ -946,6 +949,10 @@ impl BurnAddrTarget {
     }
 
     /// Connects the burn address in `ba0` to the burn address in `ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget`s are `BurnAddr` variants.
     pub(crate) fn connect<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         ba0: Self,
@@ -968,6 +975,10 @@ impl BurnAddrTarget {
     }
 
     /// If `condition`, asserts that `ba0 == ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget` are `BurnAddr` variants.
     pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         condition: BoolTarget,

@@ -148,6 +148,7 @@ fn observe_burn_addr<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, c
 }
 
 #[cfg(feature = "cdk_erigon")]
+/// This will panic if no burn address was specified.  
 fn observe_burn_addr_target<
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
@@ -204,19 +205,19 @@ pub(crate) fn observe_public_values<
     observe_trie_roots::<F, C, D>(challenger, &public_values.trie_roots_after);
     observe_block_metadata::<F, C, D>(challenger, &public_values.block_metadata)?;
     observe_block_hashes::<F, C, D>(challenger, &public_values.block_hashes);
-    #[cfg(not(feature = "cdk_erigon"))]
-    return observe_extra_block_data::<F, C, D>(challenger, &public_values.extra_block_data);
+    observe_extra_block_data::<F, C, D>(challenger, &public_values.extra_block_data)?;
+
     #[cfg(feature = "cdk_erigon")]
     {
-        observe_extra_block_data::<F, C, D>(challenger, &public_values.extra_block_data)?;
-
         observe_burn_addr::<F, C, D>(
             challenger,
             public_values
                 .burn_addr
                 .expect("There should be an address set in cdk_erigon."),
-        )
+        )?;
     }
+
+    Ok(())
 }
 
 pub(crate) fn observe_public_values_target<

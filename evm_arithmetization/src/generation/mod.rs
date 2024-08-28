@@ -70,8 +70,9 @@ pub struct GenerationInputs {
     /// of a transaction.
     pub signed_txns: Vec<Vec<u8>>,
     /// Target address for the base fee to be 'burnt', if there is one. If
-    /// `None`, then the base fee is directly burnt. Note: this is only used
-    /// when feature `cdk_erigon` is activated.
+    /// `None`, then the base fee is directly burnt.
+    ///
+    /// Note: this is only used  when feature `cdk_erigon` is activated.
     pub burn_addr: Option<H160>,
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.

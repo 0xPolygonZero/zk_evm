@@ -1,5 +1,5 @@
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
-use ethereum_types::{Address, BigEndianHash, H160, H256};
+use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_public_values, extract_two_to_one_block_hash,
 };
@@ -94,8 +94,7 @@ fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<Gener
 
     let inputs = GenerationInputs {
         tries: tries_before.clone(),
-        #[cfg(feature = "cdk_erigon")]
-        burn_addr: Some(Address::from(H160::random())),
+        burn_addr: None,
         trie_roots_after,
         checkpoint_state_trie_root,
         block_metadata,

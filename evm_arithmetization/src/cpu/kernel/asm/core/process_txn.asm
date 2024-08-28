@@ -376,9 +376,9 @@ process_message_txn_fail:
 
 #[cfg(feature = cdk_erigon)]
 {
+    // Deduct the extra burn fees from the burn target.
     %macro deduct_extra_burn_fees
         // stack: leftover_gas'
-        // Deduct the extra burn fees from the burn target.
         %mload_global_metadata(@GLOBAL_METADATA_BURN_ADDR) DUP1
         %eq_const(@U256_MAX) %jumpi(%%deduct_extra_burn_fees_pop)
         // stack: burn_target, leftover_gas'
@@ -432,6 +432,7 @@ process_message_txn_fail:
 
 #[cfg(feature = cdk_erigon)]
 {
+    // Refund extra burn fees to the burn target.
     %macro add_max_burnt_eth
         // stack: (empty)
         %mload_global_metadata(@GLOBAL_METADATA_BURN_ADDR)

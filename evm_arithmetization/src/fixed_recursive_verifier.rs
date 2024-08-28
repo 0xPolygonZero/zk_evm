@@ -2224,8 +2224,8 @@ where
 
             #[cfg(feature = "cdk_erigon")]
             {
-                let burn_addr_keys = TrieRootsTarget::SIZE * 2
-                    ..TrieRootsTarget::SIZE * 2 + BurnAddrTarget::get_size();
+                let burn_addr_keys =
+                    TrieRootsTarget::SIZE * 2..TrieRootsTarget::SIZE * 2 + burn_addr_offset;
                 for (key, &value) in burn_addr_keys.zip_eq(&u256_limbs(
                     public_values
                         .burn_addr

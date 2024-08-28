@@ -111,13 +111,6 @@ fn get_generation_inputs() -> GenerationInputs {
         let beacon_roots_account =
             beacon_roots_contract_from_storage(&beacon_roots_account_storage);
 
-        #[cfg(feature = "cdk_erigon")]
-        let beneficiary_account_after = AccountRlp {
-            nonce: 1.into(),
-            balance: block_metadata.block_base_fee * block_metadata.block_gas_used,
-            ..AccountRlp::default()
-        };
-        #[cfg(not(feature = "cdk_erigon"))]
         let beneficiary_account_after = AccountRlp {
             nonce: 1.into(),
             ..AccountRlp::default()
@@ -192,14 +185,9 @@ fn get_generation_inputs() -> GenerationInputs {
         receipts_root: receipts_trie.hash(),
     };
 
-    let burn_addr = match cfg!(feature = "cdk_erigon") {
-        true => Some(Address::from(beneficiary)),
-        false => None,
-    };
-
     GenerationInputs {
         signed_txns: vec![txn.to_vec()],
-        burn_addr,
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,
