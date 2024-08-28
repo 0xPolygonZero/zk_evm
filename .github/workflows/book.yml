@@ -3,9 +3,6 @@ name: zkEVM mdbook
 on:
   push:
     branches: [develop, main]
-  pull_request:
-    branches:
-      - "**" # TODO: Remove before merge, this is to test the behavior
 
 jobs:
   deploy:
