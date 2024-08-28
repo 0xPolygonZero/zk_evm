@@ -35,7 +35,7 @@ pub fn sh2u(s: &str) -> U256 {
 }
 
 /// Inserts a new pair `(slot, value)` into the provided storage trie.
-fn insert_storage(trie: &mut HashedPartialTrie, slot: U256, value: U256) -> anyhow::Result<()> {
+pub fn insert_storage(trie: &mut HashedPartialTrie, slot: U256, value: U256) -> anyhow::Result<()> {
     let mut bytes = [0; 32];
     slot.to_big_endian(&mut bytes);
     let key = keccak(bytes);
