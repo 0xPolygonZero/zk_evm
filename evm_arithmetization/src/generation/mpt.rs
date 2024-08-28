@@ -808,7 +808,7 @@ pub(crate) fn get_final_state_mpt(
                     Nibbles {
                         count: u256_to_usize(hash_node[0].unwrap_or_default())?,
                         packed:
-    hash_node[1].unwrap_or_default().try_into().unwrap(), // TODO: return aproper error
+                            hash_node[1].unwrap_or_default().try_into().unwrap(), // TODO: return aproper error
                  },
                     H256::from_uint(&hash_node[3].unwrap_or_default()),
                 )
@@ -880,6 +880,26 @@ pub(crate) fn get_final_state_mpt(
         if !hashed_storage_trie {
             storage_tries_by_state_key.insert(account_nibbles, storage_trie);
         }
+    }
+
+    // There might be still some account hash nodes
+    while let Some(hash_node) = last_hash_node {
+        if hash_node[0].unwrap_or_default() <= U256::from(64) {
+            log::debug!("inserting account hash node {:?}", hash_node[3]);
+            final_state_trie
+                .insert(
+                    Nibbles {
+                        count: u256_to_usize(hash_node[0].unwrap_or_default())?,
+                        packed:
+                            hash_node[1].unwrap_or_default().try_into().unwrap(), // TODO: return aproper error
+                 },
+                    H256::from_uint(&hash_node[3].unwrap_or_default()),
+                )
+                .unwrap(); // TODO: Map to a proper error.
+        } else {
+            log::debug!("whops, this should not happen");
+        }
+        last_hash_node = hash_nodes.next();
     }
 
     log::debug!("final state trie = {:?}", final_state_trie);
