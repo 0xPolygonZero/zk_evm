@@ -235,6 +235,10 @@ impl<F: Field> Interpreter<F> {
             load_linked_lists_and_txn_and_receipt_mpts(&inputs.tries)
                 .expect("Invalid MPT data for preinitialization");
 
+        println!("TrieData length:           {:?}", trie_data.len());
+        println!("AccountsLinkedList length: {:?}", state_leaves.len());
+        println!("StorageLinkedList length:  {:?}", storage_leaves.len());
+
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;
 
