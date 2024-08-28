@@ -1,15 +1,12 @@
 //! Principled MPT types used in this library.
 
 use core::fmt;
-use std::marker::PhantomData;
+use std::{collections::BTreeMap, marker::PhantomData};
 
 use copyvec::CopyVec;
 use ethereum_types::{Address, H256};
 use evm_arithmetization::generation::mpt::AccountRlp;
-use mpt_trie::{
-    partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _},
-    trie_ops::TrieOpError,
-};
+use mpt_trie::partial_trie::{HashedPartialTrie, Node, OnOrphanedHashNode, PartialTrie as _};
 use u4::{AsNibbles, U4};
 
 /// Map where keys are [up to 64 nibbles](TrieKey),
@@ -34,22 +31,20 @@ impl<T> TypedMpt<T> {
         }
     }
     /// Insert a node which represents an out-of-band sub-trie.
-    fn insert_hash(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
-        self.inner
-            .insert(key.into_nibbles(), hash)
-            .map_err(|source| Error { source })
+    fn insert_hash(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.inner.insert(key.into_nibbles(), hash)?;
+        Ok(())
     }
     /// Returns an [`Error`] if the `key` crosses into a part of the trie that
     /// isn't hydrated.
-    fn insert(&mut self, key: TrieKey, value: T) -> Result<Option<T>, Error>
+    fn insert(&mut self, key: TrieKey, value: T) -> anyhow::Result<Option<T>>
     where
         T: rlp::Encodable + rlp::Decodable,
     {
         let prev = self.get(key);
         self.inner
-            .insert(key.into_nibbles(), rlp::encode(&value).to_vec())
-            .map_err(|source| Error { source })
-            .map(|_| prev)
+            .insert(key.into_nibbles(), rlp::encode(&value).to_vec())?;
+        Ok(prev)
     }
     /// Note that this returns [`None`] if `key` crosses into a part of the
     /// trie that isn't hydrated.
@@ -62,16 +57,6 @@ impl<T> TypedMpt<T> {
     {
         let bytes = self.inner.get(key.into_nibbles())?;
         Some(rlp::decode(bytes).expect(Self::PANIC_MSG))
-    }
-    fn remove(&mut self, key: TrieKey) -> Result<Option<T>, Error>
-    where
-        T: rlp::Decodable,
-    {
-        match self.inner.delete(key.into_nibbles()) {
-            Ok(Some(it)) => Ok(Some(rlp::decode(&it).expect(Self::PANIC_MSG))),
-            Ok(None) => Ok(None),
-            Err(source) => Err(Error { source }),
-        }
     }
     fn as_hashed_partial_trie(&self) -> &HashedPartialTrie {
         &self.inner
@@ -111,12 +96,6 @@ where
     }
 }
 
-#[derive(thiserror::Error, Debug)]
-#[error(transparent)]
-pub struct Error {
-    source: TrieOpError,
-}
-
 /// Bounded sequence of [`U4`],
 /// used as a key for [`TypedMpt`].
 ///
@@ -145,7 +124,7 @@ impl TrieKey {
         AsNibbles(&mut packed).pack_from_slice(&self.0);
         H256::from_slice(&packed)
     }
-    fn from_address(address: Address) -> Self {
+    pub fn from_address(address: Address) -> Self {
         Self::from_hash(keccak_hash::keccak(address))
     }
     pub fn from_hash(H256(bytes): H256) -> Self {
@@ -207,14 +186,13 @@ pub struct TransactionTrie {
 }
 
 impl TransactionTrie {
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
             .get(TrieKey::from_txn_ix(txn_ix).into_nibbles())
             .map(Vec::from);
         self.untyped
-            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)
-            .map_err(|source| Error { source })?;
+            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)?;
         Ok(prev)
     }
     pub fn root(&self) -> H256 {
@@ -234,14 +212,13 @@ pub struct ReceiptTrie {
 }
 
 impl ReceiptTrie {
-    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+    pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
             .get(TrieKey::from_txn_ix(txn_ix).into_nibbles())
             .map(Vec::from);
         self.untyped
-            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)
-            .map_err(|source| Error { source })?;
+            .insert(TrieKey::from_txn_ix(txn_ix).into_nibbles(), val)?;
         Ok(prev)
     }
     pub fn root(&self) -> H256 {
@@ -256,11 +233,11 @@ impl ReceiptTrie {
 ///
 /// See <https://ethereum.org/en/developers/docs/data-structures-and-encoding/patricia-merkle-trie/#state-trie>
 #[derive(Debug, Clone, Default)]
-pub struct StateTrie {
+pub struct StateMpt {
     typed: TypedMpt<AccountRlp>,
 }
 
-impl StateTrie {
+impl StateMpt {
     pub fn new(strategy: OnOrphanedHashNode) -> Self {
         Self {
             typed: TypedMpt {
@@ -269,72 +246,124 @@ impl StateTrie {
             },
         }
     }
-    pub fn insert_by_address(
-        &mut self,
-        address: Address,
-        account: AccountRlp,
-    ) -> Result<Option<AccountRlp>, Error> {
-        #[expect(deprecated)]
-        self.insert_by_hashed_address(crate::hash(address), account)
-    }
     #[deprecated = "prefer operations on `Address` where possible, as SMT support requires this"]
     pub fn insert_by_hashed_address(
         &mut self,
         key: H256,
         account: AccountRlp,
-    ) -> Result<Option<AccountRlp>, Error> {
+    ) -> anyhow::Result<Option<AccountRlp>> {
         self.typed.insert(TrieKey::from_hash(key), account)
     }
-    /// Insert a deferred part of the trie
-    pub fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
-        self.typed.insert_hash(key, hash)
-    }
-    pub fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
         self.typed
-            .get(TrieKey::from_hash(keccak_hash::keccak(address)))
-    }
-    pub fn root(&self) -> H256 {
-        self.typed.root()
-    }
-    pub fn iter(&self) -> impl Iterator<Item = (TrieKey, AccountRlp)> + '_ {
-        self.typed.iter()
+            .iter()
+            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
     }
-    pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
-        self.typed.as_mut_hashed_partial_trie_unchecked()
+    pub fn root(&self) -> H256 {
+        self.typed.root()
     }
-    pub fn remove_address(&mut self, address: Address) -> Result<Option<AccountRlp>, Error> {
-        self.typed.remove(TrieKey::from_address(address))
+}
+
+impl StateTrie for StateMpt {
+    fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> anyhow::Result<Option<AccountRlp>> {
+        #[expect(deprecated)]
+        self.insert_by_hashed_address(crate::hash(address), account)
     }
-    pub fn contains_address(&self, address: Address) -> bool {
+    /// Insert a deferred part of the trie
+    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.typed.insert_hash(key, hash)
+    }
+    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+        self.typed
+            .get(TrieKey::from_hash(keccak_hash::keccak(address)))
+    }
+    /// Delete the account at `address`, returning any remaining branch on
+    /// collapse
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
+        Ok(
+            crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
+                self.typed.as_mut_hashed_partial_trie_unchecked(),
+                &TrieKey::from_address(address),
+            )?,
+        )
+    }
+    fn contains_address(&self, address: Address) -> bool {
         self.typed
             .as_hashed_partial_trie()
             .contains(TrieKey::from_address(address).into_nibbles())
     }
-    /// This allows users to break the [`TypedMpt`] invariant.
-    /// If data that isn't a [`rlp::encode`]-ed [`AccountRlp`] is inserted,
-    /// subsequent API calls may panic.
-    pub fn from_hashed_partial_trie_unchecked(
-        src: mpt_trie::partial_trie::HashedPartialTrie,
-    ) -> Self {
-        Self {
-            typed: TypedMpt {
-                inner: src,
-                _ty: PhantomData,
-            },
-        }
+    fn trim_to(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+        let inner = mpt_trie::trie_subsets::create_trie_subset(
+            self.typed.as_hashed_partial_trie(),
+            addresses.into_iter().map(TrieKey::into_nibbles),
+        )?;
+        self.typed = TypedMpt {
+            inner,
+            _ty: PhantomData,
+        };
+        Ok(())
     }
 }
 
-impl<'a> IntoIterator for &'a StateTrie {
-    type Item = (TrieKey, AccountRlp);
+impl From<StateMpt> for HashedPartialTrie {
+    fn from(value: StateMpt) -> Self {
+        let StateMpt {
+            typed: TypedMpt { inner, _ty },
+        } = value;
+        inner
+    }
+}
 
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+pub struct StateSmt {
+    address2state: BTreeMap<Address, AccountRlp>,
+    deferred: BTreeMap<TrieKey, H256>,
+}
 
-    fn into_iter(self) -> Self::IntoIter {
-        self.typed.into_iter()
+pub trait StateTrie {
+    fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> anyhow::Result<Option<AccountRlp>>;
+    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()>;
+    fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
+    fn contains_address(&self, address: Address) -> bool;
+    fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+}
+
+impl StateTrie for StateSmt {
+    fn insert_by_address(
+        &mut self,
+        address: Address,
+        account: AccountRlp,
+    ) -> anyhow::Result<Option<AccountRlp>> {
+        Ok(self.address2state.insert(address, account))
+    }
+    fn insert_hash_by_key(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.deferred.insert(key, hash);
+        Ok(())
+    }
+    fn get_by_address(&self, address: Address) -> Option<AccountRlp> {
+        self.address2state.get(&address).copied()
+    }
+    fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>> {
+        self.address2state.remove(&address);
+        Ok(None)
+    }
+    fn contains_address(&self, address: Address) -> bool {
+        self.address2state.contains_key(&address)
+    }
+    fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+        let _ = address;
+        Ok(())
     }
 }
 
@@ -351,17 +380,14 @@ impl StorageTrie {
             untyped: HashedPartialTrie::new_with_strategy(Node::Empty, strategy),
         }
     }
-    pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> Result<Option<Vec<u8>>, Error> {
+    pub fn insert(&mut self, key: TrieKey, value: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self.untyped.get(key.into_nibbles()).map(Vec::from);
-        self.untyped
-            .insert(key.into_nibbles(), value)
-            .map_err(|source| Error { source })?;
+        self.untyped.insert(key.into_nibbles(), value)?;
         Ok(prev)
     }
-    pub fn insert_hash(&mut self, key: TrieKey, hash: H256) -> Result<(), Error> {
-        self.untyped
-            .insert(key.into_nibbles(), hash)
-            .map_err(|source| Error { source })
+    pub fn insert_hash(&mut self, key: TrieKey, hash: H256) -> anyhow::Result<()> {
+        self.untyped.insert(key.into_nibbles(), hash)?;
+        Ok(())
     }
     pub fn root(&self) -> H256 {
         self.untyped.hash()
