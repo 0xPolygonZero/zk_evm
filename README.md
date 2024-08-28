@@ -60,11 +60,10 @@ flowchart LR
 
 ## Documentation
 
-Documentation is still incomplete and will be improved over time, a lot of useful material can
-be found in the [docs](./docs/) section, including:
-
-* [sequence diagrams](./docs/usage_seq_diagrams.md) for the proof generation flow
-* [zkEVM specifications](./docs/arithmetization/zkevm.pdf), detailing the underlying EVM proving statement
+Documentation is still incomplete and will be improved over time.
+You can look at the [sequence diagrams](./docs/usage_seq_diagrams.md) for the proof generation flow,
+or go through the [zkEVM book](https://0xpolygonzero.github.io/zk_evm/)
+for explanations on the zkEVM design and architecture.
 
 ## Branches
 The default branch for the repo is the `develop` branch which is not stable but under active development. Most PRs should target `develop`. If you need a stable branch then a tagged version of `main` is what you're after.
