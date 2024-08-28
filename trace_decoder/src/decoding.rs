@@ -555,23 +555,22 @@ fn batch2gi(
     let mut delta_out =
         apply_deltas_to_trie_state(curr_block_tries, &batch_info.touch, &batch_info.each_txn)?;
 
-    let nodes_used_by_txn = if is_initial_payload {
-        let mut nodes_used = batch_info.touch;
-        update_beacon_block_root_contract_storage(
-            curr_block_tries,
-            &mut delta_out,
-            &mut nodes_used,
-            &other_data.b_data.b_meta,
-        )?;
-
-        nodes_used
-    } else {
-        batch_info.touch
-    };
-
     let tries = create_minimal_partial_tries_needed_by_txn(
         &tries_at_start_of_txn,
-        &nodes_used_by_txn,
+        &(match is_initial_payload {
+            true => {
+                let mut nodes_used = batch_info.touch;
+                update_beacon_block_root_contract_storage(
+                    curr_block_tries,
+                    &mut delta_out,
+                    &mut nodes_used,
+                    &other_data.b_data.b_meta,
+                )?;
+
+                nodes_used
+            }
+            false => batch_info.touch,
+        }),
         txn_range,
         delta_out,
     )?;

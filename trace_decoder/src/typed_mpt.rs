@@ -204,6 +204,15 @@ impl TransactionTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
+    pub fn trim_to(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
+        self.untyped = mpt_trie::trie_subsets::create_trie_subset(
+            &self.untyped,
+            txn_ixs
+                .into_iter()
+                .map(|it| TrieKey::from_txn_ix(it).into_nibbles()),
+        )?;
+        Ok(())
+    }
 }
 
 /// Per-block, `txn_ix -> [u8]`.
@@ -232,6 +241,15 @@ impl ReceiptTrie {
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
+    }
+    pub fn trim_to(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
+        self.untyped = mpt_trie::trie_subsets::create_trie_subset(
+            &self.untyped,
+            txn_ixs
+                .into_iter()
+                .map(|it| TrieKey::from_txn_ix(it).into_nibbles()),
+        )?;
+        Ok(())
     }
 }
 
@@ -316,6 +334,9 @@ impl StateTrie for StateMpt {
             .iter()
             .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
     }
+    fn root(&self) -> anyhow::Result<H256> {
+        Ok(self.typed.root())
+    }
 }
 
 impl From<StateMpt> for HashedPartialTrie {
@@ -344,6 +365,7 @@ pub trait StateTrie {
     fn contains_address(&self, address: Address) -> bool;
     fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
+    fn root(&self) -> anyhow::Result<H256>;
 }
 
 impl StateTrie for StateSmt {
@@ -374,6 +396,9 @@ impl StateTrie for StateSmt {
     }
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
         self.address2state.iter().map(|(k, v)| (crate::hash(k), *v))
+    }
+    fn root(&self) -> anyhow::Result<H256> {
+        todo!()
     }
 }
 

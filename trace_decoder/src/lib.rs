@@ -99,10 +99,10 @@ mod wire;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ops::Range;
 
-use anyhow::{ensure, Context as _};
+use anyhow::{anyhow, ensure, Context as _};
 use ethereum_types::{Address, U256};
 use evm_arithmetization::generation::mpt::AccountRlp;
-use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
+use evm_arithmetization::proof::{BlockHashes, BlockMetadata, TrieRoots};
 use evm_arithmetization::GenerationInputs;
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
@@ -412,21 +412,42 @@ pub fn entrypoint(
     )
 }
 
-#[allow(unused, private_interfaces, missing_docs)]
-pub fn start(
+/// Halfway between [`start`] and [`GenerationInputs`].
+struct Batch<StateTrieT> {
+    first_txn_ix: usize,
+    gas_used: u64,
+    /// See [`GenerationInputs::contract_code`].
+    contract_code: BTreeSet<Vec<u8>>,
+    /// For each transaction in batch, in order.
+    byte_code: Vec<Vec<u8>>,
+
+    before: TrieInputs<StateTrieT>,
+    after: TrieRoots,
+}
+
+/// [`evm_arithmetization::generation::TrieInputs`],
+/// generic over state trie representation.
+///
+/// These SHOULD be trimmed.
+struct TrieInputs<StateTrieT> {
+    state: StateTrieT,
+    transaction: TransactionTrie,
+    receipts: ReceiptTrie,
+    storage: BTreeMap<H256, StorageTrie>,
+}
+
+#[allow(private_interfaces, missing_docs)]
+pub fn start<StateTrieT: StateTrie + Clone>(
     // state at the beginning of the block
-    mut state: impl StateTrie,
+    mut state_trie: StateTrieT,
     // storage at the beginning of the block
     mut storage: BTreeMap<H256, StorageTrie>,
     code: &mut Hash2Code,
     batches: Vec<Vec<TxnInfo>>,
     withdrawals: Vec<(Address, U256)>,
 ) -> anyhow::Result<()> {
-    // These are the per-block tries.
-    let mut transaction_trie = TransactionTrie::new();
-    let mut receipt_trie = ReceiptTrie::new();
-
-    for (haddr, acct) in state.iter() {
+    // Initialise the storage tries.
+    for (haddr, acct) in state_trie.iter() {
         let storage = storage.entry(haddr).or_insert({
             let mut it = StorageTrie::default();
             it.insert_hash(TrieKey::default(), acct.storage_root)
@@ -435,30 +456,48 @@ pub fn start(
         });
         ensure!(
             storage.root() == acct.storage_root,
-            "bad initial storage for {haddr}"
+            "inconsistent initial storage for hashed address {haddr:x}"
         )
     }
 
+    // These are the per-block tries.
+    let mut transaction_trie = TransactionTrie::new();
+    let mut receipt_trie = ReceiptTrie::new();
+
+    let mut out: Vec<Batch<StateTrieT>> = vec![];
+
     let mut txn_ix = 0;
-    let final_txn_ix = batches
-        .iter()
-        .map(Vec::len)
-        .sum::<usize>()
-        .saturating_sub(1);
-    for (batch) in batches {
-        let mut per_batch = PerBatch::default();
+    for batch in batches {
+        let first_txn_ix = txn_ix;
+        let mut batch_gas_used = 0;
+        let mut batch_byte_code = vec![];
+        let mut batch_contract_code = BTreeSet::<Vec<u8>>::new();
+
+        let mut before = TrieInputs {
+            state: state_trie.clone(),
+            transaction: transaction_trie.clone(),
+            receipts: receipt_trie.clone(),
+            storage: storage.clone(),
+        };
+        // We want to trim the TrieInputs above,
+        // but won't know the bounds until after the loop below,
+        // so store that information here.
+        let mut trim_storage = BTreeMap::<Address, BTreeSet<TrieKey>>::new();
+        let mut trim_state = BTreeSet::<TrieKey>::new();
 
         for TxnInfo {
             traces,
             meta:
                 TxnMeta {
-                    byte_code,
+                    byte_code: txn_byte_code,
                     new_receipt_trie_node_byte,
-                    gas_used,
+                    gas_used: txn_gas_used,
                 },
         } in batch
         {
-            let mut created_in_txn = BTreeSet::new();
+            batch_gas_used += txn_gas_used;
+            batch_byte_code.push(txn_byte_code.clone());
+
             for (
                 addr,
                 TxnTrace {
@@ -471,121 +510,83 @@ pub fn start(
                 },
             ) in traces
             {
-                per_batch
-                    .storage_accesses
-                    .entry(hash(addr))
-                    .or_default()
-                    .extend(
-                        storage_written
-                            .keys()
-                            .chain(&storage_read)
-                            .map(|hash| TrieKey::from_hash(crate::hash(hash))),
-                    );
+                let trim_storage = trim_storage.entry(addr).or_default();
+
+                trim_storage.extend(
+                    storage_written
+                        .keys()
+                        .chain(&storage_read)
+                        .map(|it| TrieKey::from_hash(hash(it))),
+                );
 
                 let storage_trie_change = !storage_written.is_empty();
 
                 for (k, v) in storage_written {
+                    // TODO(0xaatif): can we lift this out of the loop?
                     let storage = storage
                         .get_mut(&hash(addr))
                         .context(format!("missing storage for account with address {addr:x}"))?;
 
-                    let slot: TrieKey = todo!();
+                    let slot = TrieKey::from_hash(hash(k));
+
                     match v.is_zero() {
                         true => {
                             // this is actually a delete
-                            per_batch
-                                .storage_accesses
-                                .entry(hash(addr))
-                                .or_default()
-                                .extend(storage.reporting_remove(slot)?);
+                            trim_storage.extend(storage.reporting_remove(slot)?);
                         }
                         false => {
                             storage.insert(slot, rlp::encode(&v).to_vec())?;
                         }
                     };
-                    per_batch
-                        .storage_writes
-                        .entry(hash(addr))
-                        .or_default()
-                        .insert(TrieKey::from_hash(k), rlp::encode(&v).to_vec());
                 }
 
-                let mut acct = state.get_by_address(addr).unwrap_or_default();
-                acct.balance = balance.unwrap_or(acct.balance);
-                acct.nonce = nonce.unwrap_or(acct.nonce);
-                acct.code_hash = code_usage
-                    .map(|it| match it {
-                        ContractCodeUsage::Read(hash) => {
-                            per_batch.accessed_code.insert(code.get(hash)?);
-                            anyhow::Ok(hash)
-                        }
-                        ContractCodeUsage::Write(bytes) => {
-                            code.insert(bytes.clone());
-                            let hash = hash(&bytes);
-                            per_batch.accessed_code.insert(bytes);
-                            anyhow::Ok(hash)
-                        }
-                    })
-                    .transpose()?
-                    .unwrap_or(acct.code_hash);
-                if storage_trie_change {
-                    acct.storage_root = storage
-                        .get(&hash(addr))
-                        .context(format!("missing storage for account with address {addr:x}"))?
-                        .root();
-                }
+                let (mut acct, newly_created) = state_trie
+                    .get_by_address(addr)
+                    .map(|acct| (acct, false))
+                    .unwrap_or((AccountRlp::default(), true));
 
-                let state_write = StateWrite {
-                    balance,
-                    nonce,
-                    storage_trie_change,
-                    code_hash: code_usage
+                let commit = match newly_created {
+                    false => true,
+                    true => {
+                        let (_, _, receipt) = evm_arithmetization::generation::mpt::decode_receipt(
+                            &new_receipt_trie_node_byte,
+                        )
+                        .map_err(|e| anyhow!("{e:?}"))?;
+                        receipt.status
+                    } // if txn failed, don't commit changes to trie
+                };
+
+                if commit {
+                    acct.balance = balance.unwrap_or(acct.balance);
+                    acct.nonce = nonce.unwrap_or(acct.nonce);
+                    acct.code_hash = code_usage
                         .map(|it| match it {
                             ContractCodeUsage::Read(hash) => {
-                                per_batch.accessed_code.insert(code.get(hash)?);
+                                batch_contract_code.insert(code.get(hash)?);
                                 anyhow::Ok(hash)
                             }
                             ContractCodeUsage::Write(bytes) => {
                                 code.insert(bytes.clone());
                                 let hash = hash(&bytes);
-                                per_batch.accessed_code.insert(bytes);
-                                anyhow::Ok(hash)
+                                batch_contract_code.insert(bytes);
+                                Ok(hash)
                             }
                         })
-                        .transpose()?,
-                };
-                if state_write != StateWrite::default() {
-                    // a write occurred
-
-                    // Account creations are flagged to handle reverts.
-                    if !state.contains_address(addr) {
-                        created_in_txn.insert(addr);
+                        .transpose()?
+                        .unwrap_or(acct.code_hash);
+                    if storage_trie_change {
+                        acct.storage_root = storage
+                            .get(&hash(addr))
+                            .context(format!("missing storage for account with address {addr:x}"))?
+                            .root();
                     }
 
-                    // Some edge case may see a contract creation followed by a `SELFDESTRUCT`, with
-                    // then a follow-up transaction within the same batch updating the state of the
-                    // account. If that happens, we should not delete the account after processing
-                    // this batch.
-                    per_batch.self_destructed.remove(&addr);
+                    state_trie.insert_by_address(addr, acct)?;
+                }
 
-                    per_batch
-                        .state_writes
-                        .entry(addr)
-                        .and_modify(
-                            |StateWrite {
-                                 balance,
-                                 nonce,
-                                 storage_trie_change,
-                                 code_hash,
-                             }| {
-                                *balance = state_write.balance.or(*balance);
-                                *nonce = state_write.nonce.or(*nonce);
-                                *code_hash = state_write.code_hash.or(*code_hash);
-                                *storage_trie_change =
-                                    state_write.storage_trie_change || *storage_trie_change;
-                            },
-                        )
-                        .or_insert(state_write);
+                if self_destructed {
+                    storage.remove(&hash(addr));
+                    trim_state.extend(state_trie.reporting_remove(addr)?)
                 }
 
                 let is_precompile =
@@ -596,12 +597,8 @@ pub fn start(
                 // shouldn't include them in this transaction's `state_accesses` to allow the
                 // decoder to build a minimal state trie without hitting any hash node.
 
-                if !is_precompile || state.get_by_address(addr).is_some() {
-                    per_batch.state_accesses.insert(addr);
-                }
-
-                if self_destructed {
-                    per_batch.self_destructed.insert(addr);
+                if !is_precompile || state_trie.get_by_address(addr).is_some() {
+                    trim_state.insert(TrieKey::from_address(addr));
                 }
             }
 
@@ -613,7 +610,7 @@ pub fn start(
                     false => Some(*haddr),
                 })
                 .collect::<HashSet<_>>();
-            per_batch.accts_with_ignored_storage = state
+            per_batch.accts_with_ignored_storage = state_trie
                 .iter()
                 .filter_map(|(haddr, AccountRlp { storage_root, .. })| {
                     match storage_root != EMPTY_TRIE_HASH
@@ -628,11 +625,24 @@ pub fn start(
             // TODO(0xaatif): in the reference, this is not done
             //                - for dummy transactions
             //                - if `byte_code` is empty
-            transaction_trie.insert(txn_ix, byte_code)?;
+            transaction_trie.insert(txn_ix, txn_byte_code)?;
             receipt_trie.insert(txn_ix, new_receipt_trie_node_byte)?;
 
             txn_ix += 1;
         } // txn in batch
+
+        out.push(Batch {
+            first_txn_ix,
+            gas_used: batch_gas_used,
+            contract_code: batch_contract_code,
+            byte_code: batch_byte_code,
+            before,
+            after: TrieRoots {
+                state_root: state_trie.root()?,
+                transactions_root: transaction_trie.root(),
+                receipts_root: receipt_trie.root(),
+            },
+        });
     } // batch in batches
     Ok(())
 }
@@ -651,6 +661,8 @@ struct PerBatch {
 
     self_destructed: BTreeSet<Address>,
     accessed_code: BTreeSet<Vec<u8>>,
+    byte_code: Vec<Vec<u8>>,
+    gas_used: u64,
 }
 
 // TODO(0xaatif): is this _meant_ to exclude the final member?
@@ -711,4 +723,19 @@ struct Case {
 #[cfg(test)]
 fn h256<'de, D: serde::Deserializer<'de>>(it: D) -> Result<ethereum_types::H256, D::Error> {
     Ok(ethereum_types::H256(hex::deserialize(it)?))
+}
+
+#[test]
+fn test_slot() {
+    for h in [
+        H256(std::array::from_fn(|ix| ix as u8)),
+        H256([0; 32]),
+        H256([1; 32]),
+        H256([2; 32]),
+        H256([u8::MAX; 32]),
+    ] {
+        let theirs = TrieKey::from_hash(hash(TrieKey::from_hash(h).into_nibbles().bytes_be()));
+        let ours = TrieKey::from_hash(hash(h));
+        assert_eq!(theirs, ours);
+    }
 }
