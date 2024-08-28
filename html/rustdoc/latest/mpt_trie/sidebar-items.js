@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["builder","debug_tools","nibbles","partial_trie","special_query","trie_ops","trie_subsets","utils"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["key_balance","key_code","key_code_length","key_nonce","key_storage"]};

@@ -1,2 +1,0 @@
-window.ALL_CRATES = ["compat","evm_arithmetization","leader","mpt_trie","ops","proof_gen","prover","rpc","smt_trie","trace_decoder","verifier","worker","zero_bin_common","zk_evm_common","zk_evm_proc_macro"];
-//{"start":21,"fragment_lengths":[8,22,9,11,6,12,9,6,11,16,11,9,18,16,20]}

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["check_previous_proof_and_checkpoint"]};

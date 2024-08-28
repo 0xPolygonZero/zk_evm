@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["AllProof","BlockHashes","BlockHashesTarget","BlockMetadata","BlockMetadataTarget","ExtraBlockData","ExtraBlockDataTarget","FinalPublicValues","MemCap","MemCapTarget","PublicValues","PublicValuesTarget","RegistersData","RegistersDataTarget","TrieRoots","TrieRootsTarget"]};

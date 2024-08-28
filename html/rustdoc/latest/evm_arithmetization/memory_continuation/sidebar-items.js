@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["columns","memory_continuation_stark"]};

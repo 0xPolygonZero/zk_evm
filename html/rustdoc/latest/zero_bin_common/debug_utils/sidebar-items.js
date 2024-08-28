@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["SaveInputError"],"fn":["save_inputs_to_disk"]};

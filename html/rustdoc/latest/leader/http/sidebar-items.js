@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["http_main","prove","write_to_file"],"struct":["HttpProverInput"]};

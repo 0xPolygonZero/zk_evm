@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["hash_serialize","hash_serialize_u256"],"struct":["Key","Node","Smt"],"type":["F","Hash","HashOut"]};

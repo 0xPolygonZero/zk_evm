@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Node","OnOrphanedHashNode"],"struct":["HashedPartialTrie","StandardTrie"],"trait":["PartialTrie","TrieNodeIntern"],"type":["WrappedNode"]};

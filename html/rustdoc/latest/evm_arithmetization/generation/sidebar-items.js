@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["NUM_EXTRA_CYCLES_AFTER","NUM_EXTRA_CYCLES_BEFORE"],"fn":["generate_traces"],"mod":["mpt"],"struct":["GenerationInputs","TrieInputs","TrimmedGenerationInputs","TrimmedTrieInputs"],"type":["MemBeforeValues"]};

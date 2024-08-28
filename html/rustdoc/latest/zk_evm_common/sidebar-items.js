@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["EMPTY_CODE_HASH","EMPTY_TRIE_HASH"]};

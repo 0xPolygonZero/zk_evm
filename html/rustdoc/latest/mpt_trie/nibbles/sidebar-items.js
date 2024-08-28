@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["BytesToNibblesError","FromHexPrefixError","NibblesToTypeError"],"struct":["Nibbles","NibblesIntern","StrToNibblesError"],"trait":["ToNibbles"],"type":["Nibble"]};

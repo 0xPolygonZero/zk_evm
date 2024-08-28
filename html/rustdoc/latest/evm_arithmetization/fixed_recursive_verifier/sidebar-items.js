@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["extract_block_public_values","extract_two_to_one_block_hash","verification_key_len"],"struct":["AllRecursiveCircuits","BlockCircuitData","ProverOutputData","RecursiveCircuitsForTable","RecursiveCircuitsForTableSize","RootCircuitData","SegmentAggregationCircuitData","TwoToOneBlockCircuitData","TxnAggregationCircuitData"]};

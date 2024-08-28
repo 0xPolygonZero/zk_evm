@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["decode_receipt"],"mod":["transaction_testing"],"struct":["AccountRlp","LegacyReceiptRlp","LogRlp","TrieRootPtrs"]};

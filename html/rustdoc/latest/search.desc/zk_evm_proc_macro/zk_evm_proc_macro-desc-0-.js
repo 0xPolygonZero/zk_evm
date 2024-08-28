@@ -1,1 +1,0 @@
-searchState.loadedDescShard("zk_evm_proc_macro", 0, "This library provides two convenient derive macros for …")

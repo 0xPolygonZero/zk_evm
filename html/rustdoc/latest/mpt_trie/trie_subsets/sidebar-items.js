@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["create_trie_subset","create_trie_subsets"],"struct":["SubsetTrieError"],"type":["SubsetTrieResult"]};

@@ -1,1 +1,0 @@
-searchState.loadedDescShard("zk_evm_common", 0, "The hash value of an account empty EVM code. …\nThe hash of an empty Merkle Patricia trie. …")

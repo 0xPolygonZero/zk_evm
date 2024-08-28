@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["path_for_query"],"struct":["TriePathIter"]};

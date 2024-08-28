@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["dummy_proof","generate_agg_block_proof","generate_block_proof","generate_segment_agg_proof","generate_segment_proof","generate_transaction_agg_proof"],"struct":["ProofGenError"],"type":["ProofGenResult"]};
