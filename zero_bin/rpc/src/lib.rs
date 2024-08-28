@@ -157,7 +157,7 @@ where
         .get_provider().await?
         .raw_request::<_, Bytes>(
             "eth_call".into(),
-            (json!({"input": "0x60005B60010180430340816020025280610101116300000002576120205FF3"}), target_block_number),
+            (json!({"data": "0x60005B60010180430340816020025280610101116300000002576120205FF3"}), &format!("{:#x}", target_block_number)),
         )
         .await?;
 
