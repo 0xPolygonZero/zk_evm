@@ -1,0 +1,403 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>KeccakSponge - The Polygon Zero zkEVM Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../intro.html">Introduction</a></li><li class="chapter-item expanded "><a href="../framework/intro.html"><strong aria-hidden="true">1.</strong> STARK framework</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../framework/cost_model.html"><strong aria-hidden="true">1.1.</strong> Cost model</a></li><li class="chapter-item expanded "><a href="../framework/field.html"><strong aria-hidden="true">1.2.</strong> Field</a></li><li class="chapter-item expanded "><a href="../framework/ctls.html"><strong aria-hidden="true">1.3.</strong> Cross-Table Lookups</a></li><li class="chapter-item expanded "><a href="../framework/range_check.html"><strong aria-hidden="true">1.4.</strong> Range-Checks</a></li></ol></li><li class="chapter-item expanded "><a href="../tables/intro.html"><strong aria-hidden="true">2.</strong> Tables</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tables/cpu.html"><strong aria-hidden="true">2.1.</strong> CPU</a></li><li class="chapter-item expanded "><a href="../tables/arithmetic.html"><strong aria-hidden="true">2.2.</strong> Arithmetic</a></li><li class="chapter-item expanded "><a href="../tables/byte_packing.html"><strong aria-hidden="true">2.3.</strong> BytePacking</a></li><li class="chapter-item expanded "><a href="../tables/keccak.html"><strong aria-hidden="true">2.4.</strong> Keccak</a></li><li class="chapter-item expanded "><a href="../tables/keccak_sponge.html" class="active"><strong aria-hidden="true">2.5.</strong> KeccakSponge</a></li><li class="chapter-item expanded "><a href="../tables/logic.html"><strong aria-hidden="true">2.6.</strong> Logic</a></li><li class="chapter-item expanded "><a href="../tables/memory.html"><strong aria-hidden="true">2.7.</strong> Memory</a></li><li class="chapter-item expanded "><a href="../tables/mem_continuations.html"><strong aria-hidden="true">2.8.</strong> MemBefore & MemAfter</a></li></ol></li><li class="chapter-item expanded "><a href="../mpt/intro.html"><strong aria-hidden="true">3.</strong> Merkle Patricia Tries</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../mpt/memory_format.html"><strong aria-hidden="true">3.1.</strong> Memory format</a></li><li class="chapter-item expanded "><a href="../mpt/prover_input_format.html"><strong aria-hidden="true">3.2.</strong> Prover input format</a></li><li class="chapter-item expanded "><a href="../mpt/encoding_hashing.html"><strong aria-hidden="true">3.3.</strong> Encoding and hashing</a></li><li class="chapter-item expanded "><a href="../mpt/linked_lists.html"><strong aria-hidden="true">3.4.</strong> Linked lists</a></li></ol></li><li class="chapter-item expanded "><a href="../cpu_execution/intro.html"><strong aria-hidden="true">4.</strong> CPU Execution</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../cpu_execution/kernel.html"><strong aria-hidden="true">4.1.</strong> Kernel</a></li><li class="chapter-item expanded "><a href="../cpu_execution/opcodes_syscalls.html"><strong aria-hidden="true">4.2.</strong> Opcodes & Syscalls</a></li><li class="chapter-item expanded "><a href="../cpu_execution/privileged_instructions.html"><strong aria-hidden="true">4.3.</strong> Privileged Instructions</a></li><li class="chapter-item expanded "><a href="../cpu_execution/stack_handling.html"><strong aria-hidden="true">4.4.</strong> Stack handling</a></li><li class="chapter-item expanded "><a href="../cpu_execution/gas_handling.html"><strong aria-hidden="true">4.5.</strong> Gas handling</a></li><li class="chapter-item expanded "><a href="../cpu_execution/exceptions.html"><strong aria-hidden="true">4.6.</strong> Exceptions</a></li></ol></li><li class="chapter-item expanded "><a href="../bibliography.html">Bibliography</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The Polygon Zero zkEVM Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
+<h2 id="keccak-sponge"><a class="header" href="#keccak-sponge">KeccakSponge</a></h2>
+<p>This table computes the Keccak256 hash, a sponge-based hash built on top
+of the Keccak-f[1600] permutation. An instance of KeccakSponge takes
+as input a Memory address <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span>, a length <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span></span></span></span>, and computes the Keccak256
+digest of the memory segment starting at <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span> and of size <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span></span></span></span>. An
+instance can span many rows, each individual row being a single call to
+the Keccak table. Note that all the read elements must be bytes; the
+proof will be unverifiable if this is not the case. Following the Keccak
+specifications, the input string is padded to the next multiple of 136
+bytes. Each row contains the following columns:</p>
+<ul>
+<li>
+<p>Read bytes:</p>
+<ul>
+<li>
+<p>3 address columns: <code>context</code>, <code>segment</code> and the offset <code>virt</code> of
+<span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span>.</p>
+</li>
+<li>
+<p><code>timestamp</code>: the timestamp which will be used for all memory
+reads of this instance.</p>
+</li>
+<li>
+<p><code>already_absorbed_bytes</code>: keeps track of how many bytes have
+been hashed in the current instance. At the end of an instance,
+we should have absorbed <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span></span></span></span> bytes in total.</p>
+</li>
+<li>
+<p><code>KECCAK_RATE_BYTES</code> <code>block_bytes</code> columns: the bytes being
+absorbed at this row. They are read from memory and will be
+XORed to the rate part of the current state.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Input columns:</p>
+<ul>
+<li>
+<p><code>KECCAK_RATE_U32S</code> <code>original_rate_u32s</code> columns: hold the rate
+part of the state before XORing it with <code>block_bytes</code>. At the
+beginning of an instance, they are initialized with 0.</p>
+</li>
+<li>
+<p><code>KECCAK_RATE_U32s</code> <code>xored_rate_u32s</code> columns: hold the original
+rate XORed with <code>block_bytes</code>.</p>
+</li>
+<li>
+<p><code>KECCAK_CAPACITY_U32S</code> <code>original_capacity_u32s</code> columns: hold
+the capacity part of the state before applying the Keccak
+permutation.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Output columns:</p>
+<ul>
+<li>
+<p><code>KECCAK_DIGEST_BYTES</code> <code>updated_digest_state_bytes columns</code>: the
+beginning of the output state after applying the Keccak
+permutation. At the last row of an instance, they hold the
+computed hash. They are decomposed in bytes for endianness
+reasons.</p>
+</li>
+<li>
+<p><code>KECCAK_WIDTH_MINUS_DIGEST_U32S</code> <code>partial_updated_state_u32s</code>
+columns: the rest of the output state. They are discarded for
+the final digest, but are used between instance rows.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>Helper columns:</p>
+<ul>
+<li>
+<p><code>is_full_input_block</code>: indicates if the current row has a full
+input block, i.e. <code>block_bytes</code> contains only bytes read from
+memory and no padding bytes.</p>
+</li>
+<li>
+<p><code>KECCAK_RATE_BYTES</code> <code>is_final_input_len</code> columns: in the final
+row of an instance, indicate where the final read byte is. If
+the <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span>-th column is set to 1, it means that all bytes after the
+<span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span>-th are padding bytes. In a full input block, all columns are
+set to 0.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p>For each instance, constraints ensure that:</p>
+<ul>
+<li>
+<p>at each row:</p>
+<ul>
+<li>
+<p><code>is_full_input_block</code> and <code>is_final_input_len</code> columns are all
+binary.</p>
+</li>
+<li>
+<p>Only one column in <code>is_full_input_block</code> and
+<code>is_final_input_len</code> is set to 1.</p>
+</li>
+<li>
+<p><code>xored_rate_u32s</code> is <code>original_rate_u32s</code> XOR <code>block_bytes</code>.</p>
+</li>
+<li>
+<p>The CTL with Keccak ensures that
+(<code>updated_digest_state_bytes columns</code>,
+<code>partial_updated_state_u32s</code>) is the Keccak permutation output
+of (<code>xored_rate_u32s</code>, <code>original_capacity_u32s</code>).</p>
+</li>
+</ul>
+</li>
+<li>
+<p>at the first row:</p>
+<ul>
+<li>
+<p><code>original_rate_u32s</code> is all 0.</p>
+</li>
+<li>
+<p><code>already_absorbed_bytes</code> is 0.</p>
+</li>
+</ul>
+</li>
+<li>
+<p>at each full input row (i.e. <code>is_full_input_block</code> is 1, all
+<code>is_final_input_len</code> columns are 0):</p>
+<ul>
+<li>
+<p><code>context</code>, <code>segment</code>, <code>virt</code> and <code>timestamp</code> are unchanged in
+the next row.</p>
+</li>
+<li>
+<p>Next <code>already_absorbed_bytes</code> is current
+<code>already_absorbed_bytes</code> + <code>KECCAK_RATE_BYTES</code>.</p>
+</li>
+<li>
+<p>Next (<code>original_rate_u32s</code>, <code>original_capacity_u32s</code>) is current
+(<code>updated_digest_state_bytes columns</code>,
+<code>partial_updated_state_u32s</code>).</p>
+</li>
+<li>
+<p>The CTL with Memory ensures that <code>block_bytes</code> is filled with
+contiguous memory elements [<span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span> + <code>already_absorbed_bytes</code>,
+<span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span> + <code>already_absorbed_bytes</code> + <code>KECCAK_RATE_BYTES</code> - 1]</p>
+</li>
+</ul>
+</li>
+<li>
+<p>at the final row (i.e. <code>is_full_input_block</code> is 0,
+<code>is_final_input_len</code>'s <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span>-th column is 1 for a certain <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span>, the
+rest are 0):</p>
+<ul>
+<li>
+<p>The CTL with Memory ensures that <code>block_bytes</code> is filled with
+contiguous memory elements [<span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span> + <code>already_absorbed_bytes</code>,
+<span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span> + <code>already_absorbed_bytes</code> + <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span> - 1]. The rest are padding
+bytes.</p>
+</li>
+<li>
+<p>The CTL with CPU ensures that <code>context</code>, <code>segment</code>, <code>virt</code> and
+<code>timestamp</code> match the <code>KECCAK_GENERAL</code> call.</p>
+</li>
+<li>
+<p>The CTL with CPU ensures that <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span></span></span></span> = <code>already_absorbed_bytes</code> +
+<span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span>.</p>
+</li>
+<li>
+<p>The CTL with CPU ensures that <code>updated_digest_state_bytes</code> is
+the output of the <code>KECCAK_GENERAL</code> call.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p>The trace is padded to the next power of two with dummy rows, whose
+<code>is_full_input_block</code> and <code>is_final_input_len</code> columns are all 0.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../tables/keccak.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../tables/logic.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../tables/keccak.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../tables/logic.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </div>
+    </body>
+</html>
