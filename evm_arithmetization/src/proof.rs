@@ -123,6 +123,8 @@ impl<F: RichField> PublicValues<F> {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(bound = "")]
 pub struct FinalPublicValues<F: RichField, H: Hasher<F>> {
+    /// The chain id of this chian.
+    pub chain_id: U256,
     /// State trie root before the execution of this global state transition.
     pub checkpoint_state_trie_root: H256,
     /// State trie root after the execution of this global state transition.
@@ -143,7 +145,8 @@ impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
     pub fn from_public_inputs(pis: &[F]) -> Self {
         assert!(FinalPublicValuesTarget::SIZE <= pis.len());
 
-        let mut offset = 0;
+        let chain_id = pis[0].to_noncanonical_u64().into();
+        let mut offset = 1;
         let checkpoint_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
         offset += TARGET_HASH_SIZE;
         let new_state_trie_root = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
@@ -154,6 +157,7 @@ impl<F: RichField, H: Hasher<F>> FinalPublicValues<F, H> {
         let new_consolidated_hash = pis[offset..offset + NUM_HASH_OUT_ELTS].try_into().unwrap();
 
         Self {
+            chain_id,
             checkpoint_state_trie_root,
             new_state_trie_root,
             checkpoint_consolidated_hash,
@@ -169,6 +173,7 @@ impl<H: Hasher<F>, F: RichField> From<PublicValues<F>> for FinalPublicValues<F, 
         hash_payload.push(value.block_hashes.cur_hash);
 
         Self {
+            chain_id: value.block_metadata.block_chain_id,
             checkpoint_state_trie_root: value.trie_roots_before.state_root,
             new_state_trie_root: value.trie_roots_after.state_root,
             checkpoint_consolidated_hash: value.extra_block_data.checkpoint_consolidated_hash,
@@ -183,6 +188,8 @@ impl<H: Hasher<F>, F: RichField> From<PublicValues<F>> for FinalPublicValues<F, 
 /// order.
 #[derive(Eq, PartialEq, Debug)]
 pub struct FinalPublicValuesTarget {
+    /// The chain id of this chian.
+    pub chain_id: Target,
     /// State trie root before the execution of this global state transition.
     pub checkpoint_state_trie_root: [Target; TARGET_HASH_SIZE],
     /// State trie root after the execution of this global state transition.
@@ -195,10 +202,11 @@ pub struct FinalPublicValuesTarget {
 }
 
 impl FinalPublicValuesTarget {
-    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 2 + NUM_HASH_OUT_ELTS * 2;
+    pub(crate) const SIZE: usize = 1 + TARGET_HASH_SIZE * 2 + NUM_HASH_OUT_ELTS * 2;
 
     /// Serializes public value targets.
     pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        buffer.write_target(self.chain_id)?;
         buffer.write_target_array(&self.checkpoint_state_trie_root)?;
         buffer.write_target_array(&self.new_state_trie_root)?;
         buffer.write_target_array(&self.checkpoint_consolidated_hash)?;
@@ -209,12 +217,14 @@ impl FinalPublicValuesTarget {
 
     /// Deserializes public value targets.
     pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let chain_id = buffer.read_target()?;
         let checkpoint_state_trie_root = buffer.read_target_array()?;
         let new_state_trie_root = buffer.read_target_array()?;
         let checkpoint_consolidated_hash = buffer.read_target_array()?;
         let new_consolidated_hash = buffer.read_target_array()?;
 
         Ok(Self {
+            chain_id,
             checkpoint_state_trie_root,
             new_state_trie_root,
             checkpoint_consolidated_hash,
@@ -232,6 +242,8 @@ impl FinalPublicValuesTarget {
         F: RichField + Extendable<D>,
         C: GenericConfig<D, F = F> + 'static,
     {
+        builder.connect(self.chain_id, pv.block_metadata.block_chain_id);
+
         for i in 0..TARGET_HASH_SIZE {
             builder.connect(
                 self.checkpoint_state_trie_root[i],

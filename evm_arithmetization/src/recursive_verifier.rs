@@ -618,12 +618,14 @@ pub(crate) fn add_virtual_final_public_values_public_input<
 >(
     builder: &mut CircuitBuilder<F, D>,
 ) -> FinalPublicValuesTarget {
+    let chain_id = builder.add_virtual_public_input();
     let checkpoint_state_trie_root = builder.add_virtual_public_input_arr();
     let new_state_trie_root = builder.add_virtual_public_input_arr();
     let checkpoint_consolidated_hash = builder.add_virtual_public_input_arr();
     let new_consolidated_hash = builder.add_virtual_public_input_arr();
 
     FinalPublicValuesTarget {
+        chain_id,
         checkpoint_state_trie_root,
         new_state_trie_root,
         checkpoint_consolidated_hash,
@@ -860,6 +862,11 @@ where
     H: Hasher<F>,
     W: Witness<F>,
 {
+    witness.set_target(
+        public_values_target.chain_id,
+        F::from_canonical_u64(public_values.chain_id.low_u64()),
+    );
+
     for (i, limb) in public_values
         .checkpoint_state_trie_root
         .into_uint()
