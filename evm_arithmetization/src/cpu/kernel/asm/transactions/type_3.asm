@@ -119,7 +119,6 @@ store_origin:
     PUSH @SEGMENT_TXN_BLOB_VERSIONED_HASHES // ctx 0
     %memset
     // Reset the global metadata
-    PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN)
     PUSH 0 %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN)
     // stack: (empty)
 %endmacro

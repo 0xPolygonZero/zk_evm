@@ -106,7 +106,7 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
 use processed_block_trace::ProcessedTxnInfo;
 use serde::{Deserialize, Serialize};
-use typed_mpt::{StateTrie, StorageTrie, TrieKey};
+use typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey};
 
 /// Core payload needed to generate proof for a block.
 /// Additional data retrievable from the blockchain node (using standard ETH RPC
@@ -312,7 +312,7 @@ pub fn entrypoint(
         }) => ProcessedBlockTracePreImages {
             tries: PartialTriePreImages {
                 state: state.items().try_fold(
-                    StateTrie::new(OnOrphanedHashNode::Reject),
+                    StateMpt::new(OnOrphanedHashNode::Reject),
                     |mut acc, (nibbles, hash_or_val)| {
                         let path = TrieKey::from_nibbles(nibbles);
                         match hash_or_val {
@@ -368,10 +368,7 @@ pub fn entrypoint(
             ProcessedBlockTracePreImages {
                 tries: PartialTriePreImages {
                     state,
-                    storage: storage
-                        .into_iter()
-                        .map(|(path, trie)| (path.into_hash_left_padded(), trie))
-                        .collect(),
+                    storage: storage.into_iter().collect(),
                 },
                 extra_code_hash_mappings: match code.is_empty() {
                     true => None,
@@ -385,12 +382,7 @@ pub fn entrypoint(
         }
     };
 
-    let all_accounts_in_pre_images = pre_images
-        .tries
-        .state
-        .iter()
-        .map(|(addr, data)| (addr.into_hash_left_padded(), data))
-        .collect::<Vec<_>>();
+    let all_accounts_in_pre_images = pre_images.tries.state.iter().collect::<Vec<_>>();
 
     // Note we discard any user-provided hashes.
     let mut hash2code = code_db
@@ -451,7 +443,7 @@ pub fn entrypoint(
 
 #[derive(Debug, Default)]
 struct PartialTriePreImages {
-    pub state: StateTrie,
+    pub state: StateMpt,
     pub storage: HashMap<H256, StorageTrie>,
 }
 
@@ -478,6 +470,23 @@ mod hex {
             None => T::from_hex(&*s),
         }
         .map_err(D::Error::custom)
+    }
+}
+
+trait TryIntoExt<T> {
+    type Error: std::error::Error + Send + Sync + 'static;
+    fn try_into(self) -> Result<T, Self::Error>;
+}
+
+impl<ThisT, T, E> TryIntoExt<T> for ThisT
+where
+    ThisT: TryInto<T, Error = E>,
+    E: std::error::Error + Send + Sync + 'static,
+{
+    type Error = ThisT::Error;
+
+    fn try_into(self) -> Result<T, Self::Error> {
+        TryInto::try_into(self)
     }
 }
 

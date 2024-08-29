@@ -37,17 +37,17 @@ strum = { version = "0.26.3", features = ["derive"] }
 thiserror = { workspace = true }
 u4 = { workspace = true }
 winnow = { workspace = true }
-zk_evm_common = {workspace = true}
+zk_evm_common = { workspace = true }
 
 [dev-dependencies]
-criterion = { workspace = true }
-pretty_env_logger = { workspace = true }
-serde_json = { workspace = true }
-prover = { workspace = true }
-serde_path_to_error = { workspace = true }
-plonky2_maybe_rayon = { workspace = true }
 alloy = { workspace = true }
+criterion = { workspace = true }
+plonky2_maybe_rayon = { workspace = true }
+pretty_env_logger = { workspace = true }
+prover = { workspace = true }
 rstest = "0.21.0"
+serde_json = { workspace = true }
+serde_path_to_error = { workspace = true }
 
 [[bench]]
 name = "block_processing"
