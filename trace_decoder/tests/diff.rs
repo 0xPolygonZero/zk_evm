@@ -1,5 +1,4 @@
 use std::{
-    collections::BTreeMap,
     fs::File,
     path::{Path, PathBuf},
 };
@@ -8,101 +7,14 @@ use alloy::rpc::types::Header;
 use anyhow::{bail, ensure, Context as _};
 use camino::Utf8Path;
 use clap::Parser;
-use ethereum_types::{Address, U256};
-use evm_arithmetization::{
-    generation::TrieInputs,
-    proof::{BlockHashes, BlockMetadata, TrieRoots},
-    GenerationInputs,
-};
 use itertools::Itertools;
-use keccak_hash::H256;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use prover::BlockProverInput;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 
 #[derive(Parser)]
 struct Args {
     /// If omitted, a default set of vectors be loaded from the codebase.
     block_prover_input: Vec<PathBuf>,
-}
-
-#[derive(Serialize, PartialEq)]
-struct ReprGenerationInputs {
-    txn_number: U256,
-    gas_before: U256,
-    gas_after: U256,
-    #[serde(with = "hex::slice")]
-    txns: Vec<Vec<u8>>,
-    withdrawals: Vec<(Address, U256)>,
-    exit_roots: Vec<(U256, H256)>,
-
-    #[serde(with = "hashed_partial_trie")]
-    state: HashedPartialTrie,
-    #[serde(with = "hashed_partial_trie")]
-    transaction: HashedPartialTrie,
-    #[serde(with = "hashed_partial_trie")]
-    receipts: HashedPartialTrie,
-    #[serde(with = "hashed_partial_trie::btree_map")]
-    storage: BTreeMap<H256, HashedPartialTrie>,
-
-    checkpoint_root: H256,
-    state_root: H256,
-    transaction_root: H256,
-    receipt_root: H256,
-
-    #[serde(with = "hex::btree_map")]
-    contract_code: BTreeMap<H256, Vec<u8>>,
-    meta: BlockMetadata,
-    hashes: BlockHashes,
-}
-
-impl From<GenerationInputs> for ReprGenerationInputs {
-    fn from(value: GenerationInputs) -> Self {
-        let GenerationInputs {
-            txn_number_before,
-            gas_used_before,
-            gas_used_after,
-            signed_txns,
-            withdrawals,
-            global_exit_roots,
-            tries:
-                TrieInputs {
-                    state_trie,
-                    transactions_trie,
-                    receipts_trie,
-                    storage_tries,
-                },
-            trie_roots_after:
-                TrieRoots {
-                    state_root,
-                    transactions_root,
-                    receipts_root,
-                },
-            checkpoint_state_trie_root,
-            contract_code,
-            block_metadata,
-            block_hashes,
-        } = value;
-        Self {
-            txn_number: txn_number_before,
-            gas_before: gas_used_before,
-            gas_after: gas_used_after,
-            txns: signed_txns,
-            withdrawals,
-            exit_roots: global_exit_roots,
-            state: state_trie,
-            transaction: transactions_trie,
-            receipts: receipts_trie,
-            storage: storage_tries.into_iter().collect(),
-            state_root,
-            transaction_root: transactions_root,
-            receipt_root: receipts_root,
-            contract_code: contract_code.into_iter().collect(),
-            meta: block_metadata,
-            hashes: block_hashes,
-            checkpoint_root: checkpoint_state_trie_root,
-        }
-    }
 }
 
 mod hex {
@@ -132,7 +44,102 @@ mod hex {
     }
 }
 
-mod hashed_partial_trie {
+mod repr {
+    use std::{collections::BTreeMap, fmt, iter};
+
+    use ethereum_types::{Address, U256};
+    use evm_arithmetization::{
+        generation::TrieInputs,
+        proof::{BlockHashes, BlockMetadata, TrieRoots},
+    };
+    use hex::ToHex as _;
+    use keccak_hash::H256;
+    use mpt_trie::{
+        nibbles::Nibbles,
+        partial_trie::{HashedPartialTrie, Node},
+    };
+    use serde::{Serialize, Serializer};
+    use stackstack::Stack;
+    use u4::U4;
+
+    #[derive(Serialize, PartialEq)]
+    pub struct GenerationInputs {
+        txn_number: U256,
+        gas_before: U256,
+        gas_after: U256,
+        #[serde(with = "crate::hex::slice")]
+        txns: Vec<Vec<u8>>,
+        withdrawals: Vec<(Address, U256)>,
+        exit_roots: Vec<(U256, H256)>,
+
+        state: ReprTrie,
+        transaction: ReprTrie,
+        receipts: ReprTrie,
+        storage: BTreeMap<H256, ReprTrie>,
+
+        checkpoint_root: H256,
+        state_root: H256,
+        transaction_root: H256,
+        receipt_root: H256,
+
+        #[serde(with = "crate::hex::btree_map")]
+        contract_code: BTreeMap<H256, Vec<u8>>,
+        meta: BlockMetadata,
+        hashes: BlockHashes,
+    }
+
+    impl From<evm_arithmetization::generation::GenerationInputs> for GenerationInputs {
+        fn from(value: evm_arithmetization::generation::GenerationInputs) -> Self {
+            let evm_arithmetization::generation::GenerationInputs {
+                txn_number_before,
+                gas_used_before,
+                gas_used_after,
+                signed_txns,
+                withdrawals,
+                global_exit_roots,
+                tries:
+                    TrieInputs {
+                        state_trie,
+                        transactions_trie,
+                        receipts_trie,
+                        storage_tries,
+                    },
+                trie_roots_after:
+                    TrieRoots {
+                        state_root,
+                        transactions_root,
+                        receipts_root,
+                    },
+                checkpoint_state_trie_root,
+                contract_code,
+                block_metadata,
+                block_hashes,
+            } = value;
+            Self {
+                txn_number: txn_number_before,
+                gas_before: gas_used_before,
+                gas_after: gas_used_after,
+                txns: signed_txns,
+                withdrawals,
+                exit_roots: global_exit_roots,
+                state: ReprTrie::from_hashed_partial_trie(&state_trie),
+                transaction: ReprTrie::from_hashed_partial_trie(&transactions_trie),
+                receipts: ReprTrie::from_hashed_partial_trie(&receipts_trie),
+                storage: storage_tries
+                    .into_iter()
+                    .map(|(k, v)| (k, ReprTrie::from_hashed_partial_trie(&v)))
+                    .collect(),
+                state_root,
+                transaction_root: transactions_root,
+                receipt_root: receipts_root,
+                contract_code: contract_code.into_iter().collect(),
+                meta: block_metadata,
+                hashes: block_hashes,
+                checkpoint_root: checkpoint_state_trie_root,
+            }
+        }
+    }
+
     #[derive(Serialize, PartialEq)]
     struct ReprTrie(BTreeMap<ReprPath, ReprNode>);
 
@@ -142,27 +149,6 @@ mod hashed_partial_trie {
             visit(Stack::new(), hpt, &mut repr);
             Self(repr)
         }
-    }
-
-    use std::{collections::BTreeMap, fmt, iter};
-
-    use hex::ToHex as _;
-    use keccak_hash::H256;
-    use mpt_trie::{
-        nibbles::Nibbles,
-        partial_trie::{HashedPartialTrie, Node},
-    };
-    use serde::{Deserialize, Serialize, Serializer};
-    use stackstack::Stack;
-    use u4::U4;
-
-    pub fn serialize<S: Serializer>(
-        it: &HashedPartialTrie,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        let mut repr = BTreeMap::new();
-        visit(Stack::new(), it, &mut repr);
-        repr.serialize(serializer)
     }
 
     #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -251,25 +237,6 @@ mod hashed_partial_trie {
             _ => Some(U4::new(nibbles.pop_next_nibble_back()).unwrap()),
         })
     }
-
-    pub mod btree_map {
-        use serde::ser::SerializeMap as _;
-
-        use super::*;
-
-        pub fn serialize<S: Serializer>(
-            it: &BTreeMap<impl Serialize, HashedPartialTrie>,
-            serializer: S,
-        ) -> Result<S::Ok, S::Error> {
-            let mut serializer = serializer.serialize_map(Some(it.len()))?;
-            for (k, v) in it {
-                #[derive(Serialize)]
-                struct With<'a>(#[serde(with = "super")] &'a HashedPartialTrie);
-                serializer.serialize_entry(k, &With(v))?;
-            }
-            serializer.end()
-        }
-    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -305,12 +272,12 @@ fn main() -> anyhow::Result<()> {
         let reference = trace_decoder::entrypoint(block_trace.clone(), other_data.clone(), 1)
             .context("couldn't generate reference")?
             .into_iter()
-            .map(ReprGenerationInputs::from)
+            .map(repr::GenerationInputs::from)
             .collect::<Vec<_>>();
         let subject = trace_decoder::entrypoint2(block_trace, other_data, non0::nonzero!(1))
             .context("couldn't generate subject")?
             .into_iter()
-            .map(ReprGenerationInputs::from)
+            .map(repr::GenerationInputs::from)
             .collect::<Vec<_>>();
         match subject == reference {
             true => eprintln!("ok"),
@@ -325,7 +292,7 @@ fn main() -> anyhow::Result<()> {
                     );
                 }
                 serde_json::to_writer_pretty(File::create("subject.ignoreme")?, &subject)?;
-                serde_json::to_writer_pretty(File::create("reference.ignoreme")?, &subject)?;
+                serde_json::to_writer_pretty(File::create("reference.ignoreme")?, &reference)?;
                 bail!("failed");
             }
         }
