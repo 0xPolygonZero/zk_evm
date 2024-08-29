@@ -1511,6 +1511,8 @@ where
         );
 
         // Pad to match the (non-existing yet!) 2-to-1 circuit's degree.
+        // We use the block circuit's degree as target reference here, as they end up
+        // having same degree.
         while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
             builder.add_gate(NoopGate, vec![]);
         }
