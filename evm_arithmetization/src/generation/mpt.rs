@@ -338,7 +338,6 @@ fn get_state_and_storage_leaves(
     key: Nibbles,
     state_leaves: &mut Vec<Option<U256>>,
     storage_leaves: &mut Vec<Option<U256>>,
-    hash_nodes: &mut Vec<Option<U256>>,
     trie_data: &mut Vec<Option<U256>>,
     storage_tries_by_state_key: &HashMap<Nibbles, &HashedPartialTrie>,
 ) -> Result<(), ProgramError> {
@@ -361,7 +360,6 @@ fn get_state_and_storage_leaves(
                     extended_key,
                     state_leaves,
                     storage_leaves,
-                    hash_nodes,
                     trie_data,
                     storage_tries_by_state_key,
                 )?;
@@ -376,7 +374,6 @@ fn get_state_and_storage_leaves(
                 extended_key,
                 state_leaves,
                 storage_leaves,
-                hash_nodes,
                 trie_data,
                 storage_tries_by_state_key,
             )?;
@@ -435,20 +432,9 @@ fn get_state_and_storage_leaves(
                 empty_nibbles(),
                 storage_trie,
                 storage_leaves,
-                hash_nodes,
                 &parse_storage_value,
             )?;
 
-            Ok(())
-        }
-        Node::Hash(hash) => {
-            // Num nibbles between 0 and 64 indicates an account
-            hash_nodes.push(Some(key.count.into()));
-            hash_nodes.push(Some(
-                key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
-            ));
-            hash_nodes.push(Some(U256::zero())); // No storage key
-            hash_nodes.push(Some(h2u(*hash)));
             Ok(())
         }
         _ => Ok(()),
@@ -460,7 +446,6 @@ pub(crate) fn get_storage_leaves<F>(
     key: Nibbles,
     trie: &HashedPartialTrie,
     storage_leaves: &mut Vec<Option<U256>>,
-    hash_nodes: &mut Vec<Option<U256>>,
     parse_value: &F,
 ) -> Result<(), ProgramError>
 where
@@ -479,7 +464,6 @@ where
                     extended_key,
                     child,
                     storage_leaves,
-                    hash_nodes,
                     parse_value,
                 )?;
             }
@@ -494,7 +478,6 @@ where
                 extended_key,
                 child,
                 storage_leaves,
-                hash_nodes,
                 parse_value,
             )?;
 
@@ -532,21 +515,6 @@ where
 
             Ok(())
         }
-        Node::Hash(hash) => {
-            log::debug!("adding hash node");
-            // Num nibbles between 65 and 129 indicates a storage node
-            hash_nodes.push(Some((key.count + 65).into()));
-            hash_nodes.push(Some(
-                addr_key
-                    .try_into()
-                    .map_err(|_| ProgramError::IntegerTooLarge)?,
-            ));
-            hash_nodes.push(Some(
-                key.try_into().map_err(|_| ProgramError::IntegerTooLarge)?,
-            ));
-            hash_nodes.push(Some(h2u(*hash)));
-            Ok(())
-        }
         _ => Ok(()),
     }
 }
@@ -555,11 +523,9 @@ where
 ///     - the trie root pointers for all tries
 ///     - the vector of state trie leaves
 ///     - the vector of storage trie leaves
-///     - the vector of state and storage hashed nodes
 ///     - the `TrieData` segment's memory content
 type TriePtrsLinkedLists = (
     TrieRootPtrs,
-    Vec<Option<U256>>,
     Vec<Option<U256>>,
     Vec<Option<U256>>,
     Vec<Option<U256>>,
@@ -572,7 +538,6 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         empty_list_mem::<ACCOUNTS_LINKED_LIST_NODE_SIZE>(Segment::AccountsLinkedList).to_vec();
     let mut storage_leaves =
         empty_list_mem::<STORAGE_LINKED_LIST_NODE_SIZE>(Segment::StorageLinkedList).to_vec();
-    let mut hash_nodes = vec![];
     let mut trie_data = vec![Some(U256::zero())];
 
     let storage_tries_by_state_key = trie_inputs
@@ -593,18 +558,14 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
 
     let receipt_root_ptr = load_mpt(&trie_inputs.receipts_trie, &mut trie_data, &parse_receipts)?;
 
-    log::debug!("hash_nodes_before = {:?}", hash_nodes);
-
     get_state_and_storage_leaves(
         &trie_inputs.state_trie,
         empty_nibbles(),
         &mut state_leaves,
         &mut storage_leaves,
-        &mut hash_nodes,
         &mut trie_data,
         &storage_tries_by_state_key,
     )?;
-    log::debug!("hash nodes = {:?}", hash_nodes);
 
     Ok((
         TrieRootPtrs {
@@ -614,7 +575,6 @@ pub(crate) fn load_linked_lists_and_txn_and_receipt_mpts(
         },
         state_leaves,
         storage_leaves,
-        hash_nodes,
         trie_data,
     ))
 }
@@ -639,273 +599,6 @@ pub(crate) fn load_state_mpt(
         trie_data,
         &storage_tries_by_state_key,
     )
-}
-
-pub(crate) fn load_final_state_mpt(
-    accounts_linked_list: &mut LinkedList<ACCOUNTS_LINKED_LIST_NODE_SIZE>,
-    storage_linked_list: &mut LinkedList<STORAGE_LINKED_LIST_NODE_SIZE>,
-    hashed_nodes: Vec<Option<U256>>,
-    trie_data: &mut Vec<Option<U256>>,
-) -> Result<usize, ProgramError> {
-    log::debug!("accounts = {:?}", accounts_linked_list);
-    log::debug!("storage = {:?}", storage_linked_list);
-    log::debug!("hash_nodes = {:?}", hashed_nodes);
-
-    let (final_state_trie, storage_tries_by_state_key) = get_final_state_mpt(
-        accounts_linked_list,
-        storage_linked_list,
-        hashed_nodes,
-        trie_data,
-    )?;
-    let ref_storage_tries_by_state_key: HashMap<_, _> = storage_tries_by_state_key
-        .iter()
-        .map(|(&k, v)| (k, v))
-        .collect();
-
-    log::debug!("trie_data len before = {:?}", trie_data.len());
-    log::debug!(
-        "trie_data before = {:?}",
-        trie_data.iter().enumerate().collect::<Vec<_>>()
-    );
-
-    let res = load_state_trie(
-        &final_state_trie,
-        empty_nibbles(),
-        trie_data,
-        &ref_storage_tries_by_state_key,
-    );
-
-    log::debug!("trie_data len after = {:?}", trie_data.len());
-    log::debug!("final trie = {:?}", final_state_trie);
-    log::debug!("final trie hash = {:?}", final_state_trie.hash());
-    res
-}
-
-pub(crate) fn get_final_state_mpt(
-    accounts_linked_list: &mut LinkedList<ACCOUNTS_LINKED_LIST_NODE_SIZE>,
-    storage_linked_list: &mut LinkedList<STORAGE_LINKED_LIST_NODE_SIZE>,
-    hashed_nodes: Vec<Option<U256>>,
-    trie_data: &mut Vec<Option<U256>>,
-) -> Result<(HashedPartialTrie, HashMap<Nibbles, HashedPartialTrie>), ProgramError> {
-    let mut storage_tries_by_state_key = HashMap::<Nibbles, HashedPartialTrie>::new();
-    let mut final_state_trie = HashedPartialTrie::from(Node::Empty);
-
-    let mut last_slot = storage_linked_list.next();
-    let mut hash_nodes = hashed_nodes.chunks(4);
-    let mut last_hash_node = hash_nodes.next();
-    log::debug!("last hash node = {:?}", last_hash_node);
-
-    // while let Some(hash_node) = last_hash_node {
-    //     let num_nibbles = u256_to_usize(hash_node[0].unwrap_or_default())?;
-    //     match num_nibbles {
-    //         // Account hash node
-    //         0..=64 => {
-    //             log::debug!(
-    //                 "inserting hashed account. num nibbles = {num_nibbles},
-    // nibbles = {:?}, {:?}",                 hash_node[1].unwrap_or_default(),
-    //                 H256::from_uint(&hash_node[3].unwrap_or_default())
-    //             );
-    //             final_state_trie
-    //             .insert(
-    //                 Nibbles {
-    //                     count: num_nibbles,
-    //                     packed:
-    // hash_node[1].unwrap_or_default().try_into().unwrap(), // TODO: return a
-    // proper error                 },
-    //                 H256::from_uint(&hash_node[3].unwrap_or_default()),
-    //             )
-    //             .unwrap();
-    //             last_hash_node = hash_nodes.next();
-    //         }
-    //         // A storage hash node
-    //         65..=129 => {
-    //             // If we have a storage hash node we first add the next account
-    // with al its             // slots
-    //             if let Some([key, value, ..]) = accounts_linked_list.next() {
-    //                 if key == U256::MAX {
-    //                     break;
-    //                 }
-
-    //                 let mut storage_trie = HashedPartialTrie::from(Node::Empty);
-
-    //                 // Insert all hash nodes
-    //                 // We're doing this again for the first hash node in this
-    // account's storage                 while let Some(hash_node) =
-    // last_hash_node                     && hash_node[1].unwrap_or_default() ==
-    // key                 {
-    //                     let num_nibbles =
-    // u256_to_usize(hash_node[0].unwrap_or_default())? - 65;
-    // let slot_key = hash_node[2].unwrap_or_default().try_into().unwrap(); // TODO:
-    // return a proper error                     let hash =
-    // H256::from_uint(&hash_node[3].unwrap_or_default());
-
-    //                     log::debug!("inserting hashed storage. num nibbles =
-    // {num_nibbles}, nibbles = {:?}, {:?}", slot_key, hash);
-    // storage_trie                         .insert(
-    //                             Nibbles {
-    //                                 count: num_nibbles,
-    //                                 packed: slot_key,
-    //                             },
-    //                             hash,
-    //                         )
-    //                         .unwrap(); // TODO: Map to a proper error.
-    //                     last_hash_node = hash_nodes.next();
-    //                 }
-
-    //                 // Insert all non-hashed slots
-    //                 while let Some([account_key, slot_key, value, ..]) =
-    // last_slot                     && account_key == key
-    //                 {
-    //                     log::debug!("inserting storage leaf {:?}", value);
-    //                     log::debug!("rlp = {:?}",
-    // rlp::encode(&value).freeze().to_vec());                     storage_trie
-    //                         .insert(
-    //                             slot_key.to_nibbles_padded(),
-    //                             rlp::encode(&value).freeze().to_vec(),
-    //                         )
-    //                         .unwrap(); // TODO: map error into ProgramError
-    //                     last_slot = storage_linked_list.next();
-    //                 }
-
-    //                 let payload_ptr = u256_to_usize(value).unwrap(); //TODO:
-    // Catch error                 let account_nibbles =
-    // key.to_nibbles_padded();                 log::debug!("payload_ptr =
-    // {payload_ptr}");                 // If the storage trie contains a single
-    // hash node with key 0x0...0 then it has                 // a hashed
-    // storage trie.
-
-    //                 let account = AccountRlp {
-    //                     nonce: trie_data[payload_ptr].unwrap_or_default(),
-    //                     balance: trie_data[payload_ptr + 1].unwrap_or_default(),
-    //                     storage_root: storage_trie.hash(),
-    //                     code_hash: H256::from_uint(&trie_data[payload_ptr +
-    // 3].unwrap_or_default()),                 };
-
-    //                 log::debug!("inserting account {:?}", account);
-    //                 log::debug!("rlp = {:?}", rlp::encode(&account).to_vec());
-    //                 final_state_trie
-    //                     .insert(account_nibbles, rlp::encode(&account).to_vec())
-    //                     .unwrap(); // TODO: output proper erro
-    //             }
-    //         }
-    //         _ => panic!(),
-    //     }
-    // }
-
-    for account in accounts_linked_list {
-        if account[0] == U256::MAX {
-            break;
-        }
-        log::debug!("en el for");
-        let mut storage_trie = HashedPartialTrie::from(Node::Empty);
-        let mut hashed_storage_trie = false;
-        while let Some(hash_node) = last_hash_node
-            && hash_node[0].unwrap_or_default() <= U256::from(64)
-        {
-            log::debug!("inserting account hash node {:?}", hash_node[3]);
-            final_state_trie
-                .insert(
-                    Nibbles {
-                        count: u256_to_usize(hash_node[0].unwrap_or_default())?,
-                        packed:
-                            hash_node[1].unwrap_or_default().try_into().unwrap(), // TODO: return aproper error
-                 },
-                    H256::from_uint(&hash_node[3].unwrap_or_default()),
-                )
-                .unwrap(); // TODO: Map to a proper error.
-            last_hash_node = hash_nodes.next();
-        }
-        loop {
-            while let Some(hash_node) = last_hash_node
-                && hash_node[0].unwrap_or_default() > U256::from(64)
-                && hash_node[0].unwrap_or_default() <= U256::from(129)
-                && Some(account[0]) == hash_node[1]
-            {
-                // If 65 + number of nibbles = 65, the storage trie is a single hash node
-                // TODO: do we need this extra condition now?
-                if hash_node[0].unwrap_or_default() == U256::from(65) {
-                    log::debug!("inserting hashed storage {:?}", hash_node[3]);
-                    storage_trie = HashedPartialTrie::new(Node::Hash(H256::from_uint(
-                        &hash_node[3].unwrap_or_default(),
-                    )));
-                    hashed_storage_trie = true;
-                } else {
-                    log::debug!("inserting storage hash node {:?}", hash_node[3]);
-                    storage_trie
-                        .insert(
-                            Nibbles{
-                                count:
-                                    u256_to_usize(hash_node[0].unwrap_or_default())? - 65,
-                                    packed: hash_node[2].unwrap_or_default().try_into().unwrap(), // TODO: return a proper error                         
-                                },
-                            H256::from_uint(&hash_node[3].unwrap_or_default()),
-                        )
-                        .unwrap(); // TODO: Map to a proper error.
-                }
-                last_hash_node = hash_nodes.next();
-            }
-            if let Some(slot) = last_slot
-                && slot[0] == account[0]
-                && !hashed_storage_trie
-            {
-                log::debug!("inserting storage leaf {:?}", slot[2]);
-                log::debug!("rlp = {:?}", rlp::encode(&slot[2]).freeze().to_vec());
-                storage_trie
-                    .insert(
-                        slot[1].to_nibbles_padded(),
-                        rlp::encode(&slot[2]).freeze().to_vec(),
-                    )
-                    .unwrap(); // TODO: map error into ProgramError
-                last_slot = storage_linked_list.next();
-            } else {
-                break;
-            }
-        }
-        let payload_ptr = u256_to_usize(account[1]).unwrap(); //TODO: Catch error
-        let account_nibbles = account[0].to_nibbles_padded();
-        log::debug!("payload_ptr = {payload_ptr}");
-        // If the storage trie contains a single hash node with key 0x0...0 thenit has
-        // a hashed storage trie.
-
-        let account = AccountRlp {
-            nonce: trie_data[payload_ptr].unwrap_or_default(),
-            balance: trie_data[payload_ptr + 1].unwrap_or_default(),
-            storage_root: storage_trie.hash(),
-            code_hash: H256::from_uint(&trie_data[payload_ptr + 3].unwrap_or_default()),
-        };
-
-        log::debug!("inserting account {:?}", account);
-        log::debug!("rlp = {:?}", rlp::encode(&account).to_vec());
-        final_state_trie.insert(account_nibbles, rlp::encode(&account).to_vec());
-        if !hashed_storage_trie {
-            storage_tries_by_state_key.insert(account_nibbles, storage_trie);
-        }
-    }
-
-    // There might be still some account hash nodes
-    while let Some(hash_node) = last_hash_node {
-        if hash_node[0].unwrap_or_default() <= U256::from(64) {
-            log::debug!("inserting account hash node {:?}", hash_node[3]);
-            final_state_trie
-                .insert(
-                    Nibbles {
-                        count: u256_to_usize(hash_node[0].unwrap_or_default())?,
-                        packed:
-                            hash_node[1].unwrap_or_default().try_into().unwrap(), // TODO: return aproper error
-                 },
-                    H256::from_uint(&hash_node[3].unwrap_or_default()),
-                )
-                .unwrap(); // TODO: Map to a proper error.
-        } else {
-            log::debug!("whops, this should not happen");
-        }
-        last_hash_node = hash_nodes.next();
-    }
-
-    log::debug!("final state trie = {:?}", final_state_trie);
-    log::debug!("final storages = {:?}", storage_tries_by_state_key);
-    log::debug!("final_state_trie hash = {:?}", final_state_trie.hash());
-    Ok((final_state_trie, storage_tries_by_state_key))
 }
 
 pub mod transaction_testing {

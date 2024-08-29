@@ -29,7 +29,7 @@ pub(crate) fn initialize_mpts<F: Field>(
     trie_inputs: &TrieInputs,
 ) {
     // Load all MPTs.
-    let (mut trie_root_ptrs, state_leaves, storage_leaves, hash_nodes, trie_data) =
+    let (mut trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
         load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
             .expect("Invalid MPT data for preinitialization");
 
@@ -39,9 +39,6 @@ pub(crate) fn initialize_mpts<F: Field>(
     interpreter.generation_state.memory.contexts[0].segments
         [Segment::StorageLinkedList.unscale()]
     .content = storage_leaves;
-    interpreter.generation_state.memory.contexts[0].segments
-        [Segment::HashNodes.unscale()]
-    .content = hash_nodes;
     interpreter.generation_state.memory.contexts[0].segments[Segment::TrieData.unscale()].content =
         trie_data.clone();
     interpreter.generation_state.trie_root_ptrs = trie_root_ptrs.clone();

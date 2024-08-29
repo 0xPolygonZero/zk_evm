@@ -12,7 +12,7 @@ use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::LinkedList;
-use super::mpt::{load_final_state_mpt, load_state_mpt};
+use super::mpt::load_state_mpt;
 use super::state::State;
 use super::trie_extractor::get_state_trie;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
@@ -115,44 +115,6 @@ impl<F: Field> GenerationState<F> {
                     Ok,
                 )
                 .map(U256::from),
-            "final_state" => {
-                let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
-                let mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
-                let mut accounts_linked_list =
-                    LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                        &mem,
-                        Segment::AccountsLinkedList,
-                    )?;
-                let mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
-                let mut storage_linked_list =
-                    LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                        &mem,
-                        Segment::StorageLinkedList,
-                    )?;
-                let hashed_nodes = self.memory.get_preinit_memory(Segment::HashNodes);
-
-                let n = load_final_state_mpt(
-                    &mut accounts_linked_list,
-                    &mut storage_linked_list,
-                    hashed_nodes,
-                    &mut new_content,
-                )?;
-
-                self.memory.insert_preinitialized_segment(
-                    Segment::TrieData,
-                    crate::witness::memory::MemorySegmentState {
-                        content: new_content,
-                    },
-                );
-
-                log::debug!(
-                    "root_ptr = {n} Trie in memory = {:?}",
-                    get_state_trie::<HashedPartialTrie>(&self.memory, n)
-                );
-
-
-                Ok(U256::from(n))
-            }
             "txn" => Ok(U256::from(self.trie_root_ptrs.txn_root_ptr)),
             "receipt" => Ok(U256::from(self.trie_root_ptrs.receipt_root_ptr)),
             "trie_data_size" => Ok(self

@@ -398,7 +398,7 @@ impl<F: Field> GenerationState<F> {
         &mut self,
         trie_inputs: &TrieInputs,
     ) -> TrieRootPtrs {
-        let (trie_roots_ptrs, state_leaves, storage_leaves, hash_nodes, trie_data) =
+        let (trie_roots_ptrs, state_leaves, storage_leaves, trie_data) =
             load_linked_lists_and_txn_and_receipt_mpts(trie_inputs)
                 .expect("Invalid MPT data for preinitialization");
 
@@ -413,10 +413,6 @@ impl<F: Field> GenerationState<F> {
             crate::witness::memory::MemorySegmentState {
                 content: storage_leaves,
             },
-        );
-        self.memory.insert_preinitialized_segment(
-            Segment::HashNodes,
-            crate::witness::memory::MemorySegmentState { content: hash_nodes },
         );
         self.memory.insert_preinitialized_segment(
             Segment::TrieData,

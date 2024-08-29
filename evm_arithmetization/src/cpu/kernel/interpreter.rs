@@ -235,7 +235,6 @@ impl<F: Field> Interpreter<F> {
             trie_root_ptrs,
             state_leaves,
             storage_leaves,
-            hash_nodes,
             trie_data,
         ) = load_linked_lists_and_txn_and_receipt_mpts(&inputs.tries)
             .expect("Invalid MPT data for preinitialization");
@@ -251,14 +250,12 @@ impl<F: Field> Interpreter<F> {
         let preinit_storage_ll_segment = MemorySegmentState {
             content: storage_leaves,
         };
-        let preinit_hash_nodes_data_segment = MemorySegmentState {content: hash_nodes};
         self.insert_preinitialized_segment(Segment::TrieData, preinit_trie_data_segment);
         self.insert_preinitialized_segment(
             Segment::AccountsLinkedList,
             preinit_accounts_ll_segment,
         );
         self.insert_preinitialized_segment(Segment::StorageLinkedList, preinit_storage_ll_segment);
-        self.insert_preinitialized_segment(Segment::HashNodes, preinit_hash_nodes_data_segment);
 
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);

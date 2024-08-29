@@ -211,25 +211,18 @@ global debug_bench_insertions_init:
 global debug_check_initial_state_trie:
     %assert_eq
     // Check that the stored trie data length is correct.
-    
-    // TODO: Uncomment 
-    //%mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
-    //%assert_eq
+    // TODO: uncommen the following 2 lines
+    // %mload_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE) 
+    // %assert_eq
 
     // We set a dummy value as an initial trie data length,
     // as we do not need to compute the actual trie data length here.
     PUSH 1
 global check_final_state_trie:
-
-    PROVER_INPUT(trie_ptr::final_state)
-    %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-
-    %mpt_hash_state_trie_final
-global debug_el_stack:
-    
-    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
-
-global debug_final_hash:
+    %set_final_tries
+global debug_after_set_final_tries:
+    %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
+global debug_final_state_trie:
     %assert_eq
     // We don't need the trie data length here.
     POP
@@ -238,7 +231,6 @@ global debug_final_hash:
     PUSH 1
     SET_CONTEXT
     
-    %jump(panic)
     %jump(halt)
 
 %macro reinitialize_memory_pre_txn

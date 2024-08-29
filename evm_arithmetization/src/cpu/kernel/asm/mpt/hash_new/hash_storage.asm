@@ -14,39 +14,39 @@
 // Given the initial length of the `TrieData` segment, it also updates the length
 // for the current trie.
 //
-// Pre stack: node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
-// Post stack: hash, new_len, next_slot_ptr, next_hash_node_ptr
+// Pre stack: node_ptr, encode_value, cur_len, next_slot_ptr, retdest
+// Post stack: hash, new_len, next_slot_ptr
 global mpt_hash_storage:
-    // stack: node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_ptr, encode_value, cur_len, next_slot_ptr, retdest
     %stack 
-        (node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr) -> 
-        (node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, mpt_hash_hash_if_rlp)
+        (node_ptr, encode_value, cur_len, next_slot_ptr) -> 
+        (node_ptr, encode_value, cur_len, next_slot_ptr, mpt_hash_hash_if_rlp)
     %jump(encode_or_hash_node_storage)
 mpt_hash_hash_if_rlp:
-    // stack: result, result_len, new_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: result, result_len, new_len, next_slot_ptr, retdest
     // If result_len < 32, then we have an RLP blob, and we need to hash it.
     DUP2 %lt_const(32) %jumpi(mpt_hash_hash_rlp)
     // Otherwise, we already have a hash, so just return it.
-    // stack: result, result_len, new_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: result, result_len, new_len, next_slot_ptr, retdest
     %stack
-        (result, result_len, new_len, next_slot_ptr, next_hash_node_ptr, retdest) -> 
-        (retdest, result, new_len, next_slot_ptr, next_hash_node_ptr)
+        (result, result_len, new_len, next_slot_ptr, retdest) -> 
+        (retdest, result, new_len, next_slot_ptr)
     JUMP
 mpt_hash_hash_rlp:
-    // stack: result, result_len, new_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: result, result_len, new_len, next_slot_ptr, retdest
     %stack (result, result_len, new_len)
         -> (@SEGMENT_RLP_RAW, result, result_len, mpt_hash_hash_rlp_after_unpacking, result_len, new_len)
     // stack: addr, result, result_len, mpt_hash_hash_rlp_after_unpacking, result_len, new_len
     %jump(mstore_unpacking)
 mpt_hash_hash_rlp_after_unpacking:
-    // stack: result_addr, result_len, new_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: result_addr, result_len, new_len, next_slot_ptr, retdest
     POP PUSH @SEGMENT_RLP_RAW // ctx == virt == 0
-    // stack: result_addr, result_len, new_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: result_addr, result_len, new_len, next_slot_ptr, retdest
     KECCAK_GENERAL
-    // stack: hash, new_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: hash, new_len, next_slot_ptr, retdest
     %stack
-        (hash, new_len, next_slot_ptr, next_hash_node_ptr, retdest) -> 
-        (retdest, hash, new_len, next_slot_ptr, next_hash_node_ptr)
+        (hash, new_len, next_slot_ptr, retdest) -> 
+        (retdest, hash, new_len, next_slot_ptr)
     JUMP
 
 // Given a trie node, return its RLP encoding if it is is less than 32 bytes,
@@ -55,13 +55,13 @@ mpt_hash_hash_rlp_after_unpacking:
 // The result is given as a (value, length) pair, where the length is given
 // in bytes.
 //
-// Pre stack: node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
-// Post stack: result, result_len, cur_len, next_slot_ptr, next_hash_node_ptr
+// Pre stack: node_ptr, encode_value, cur_len, next_slot_ptr, retdest
+// Post stack: result, result_len, cur_len, next_slot_ptr
 global encode_or_hash_node_storage:
     DUP1 %mload_trie_data
 
     // Check if we're dealing with a concrete node, i.e. not a hash node.
-    // stack: node_type, node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_type, node_ptr, encode_value, cur_len, next_slot_ptr, retdest
     DUP1
     PUSH @MPT_NODE_HASH
     SUB
@@ -69,66 +69,60 @@ global encode_or_hash_node_storage:
 
     // If we got here, node_type == @MPT_NODE_HASH.
     // Load the hash and return (hash, 32).
-    // stack: node_type, node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
-    %pop3
-    SWAP2
-    // stack: next_hash_node_ptr, next_slot_ptr, cur_len, retdest
+    // stack: node_type, node_ptr, encode_value, cur_len, next_slot_ptr, retdest
+    POP
     
-    // TODO: Check that node hash nibbles are correct
-    DUP1
-    %next_hash_node
-    // stack: next_next_hash_node_ptr, next_hash_node_ptr, next_slot_ptr, cur_len, retdest
-    SWAP3
-    SWAP1
-    // stack: next_hash_node_ptr, cur_len, next_slot_ptr, next_next_hash_node_ptr, retdest
-    %get_hash // Skips the first three words (numbe of nibbles and keys)
-    // stack: hash, cur_len, next_slot_ptr, next_next_hash_node_ptr, retdest
+    // stack: node_ptr, encode_value, cur_len, next_slot_ptr, retdest
+    %increment // Skip over node type prefix
+    // stack: hash_ptr, encode_value, cur_len, next_slot_ptr, retdest
+    %mload_trie_data
+    // stack: hash, encode_value, cur_len, next_slot_ptr, retdest
     // Update the length of the `TrieData` segment: there are only two 
     // elements in a hash node.
-    SWAP1 %add_const(2)
-    %stack
-        (cur_len, hash, next_slot_ptr, next_next_hash_node_ptr, retdest) -> 
-        (retdest, hash, 32, cur_len, next_slot_ptr, next_next_hash_node_ptr)
+    SWAP2 %add_const(2)
+    %stack 
+        (cur_len, encode_value, hash, next_slot_ptr, retdest) -> 
+        (retdest, hash, 32, cur_len, next_slot_ptr)
     JUMP
 encode_or_hash_concrete_node:
     %stack
-        (node_type, node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr) -> 
-        (node_type, node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, maybe_hash_node)
+        (node_type, node_ptr, encode_value, cur_len, next_slot_ptr) -> 
+        (node_type, node_ptr, encode_value, cur_len, next_slot_ptr, maybe_hash_node)
 global debug_before_jump_encode_node:
     %jump(encode_node)
 maybe_hash_node:
-    // stack: result_addr, result_len, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: result_addr, result_len, cur_len, next_slot_ptr, retdest
     DUP2 %lt_const(32)
     %jumpi(pack_small_rlp)
 
     // result_len >= 32, so we hash the result.
-    // stack: result_addr, result_len, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: result_addr, result_len, cur_len, next_slot_ptr, retdest
     KECCAK_GENERAL
     %stack
-        (hash, cur_len, next_slot_ptr, next_hash_node_ptr, retdest) -> 
-        (retdest, hash, 32, cur_len, next_slot_ptr, next_hash_node_ptr)
+        (hash, cur_len, next_slot_ptr, retdest) -> 
+        (retdest, hash, 32, cur_len, next_slot_ptr)
     JUMP
 pack_small_rlp:
-    // stack: result_ptr, result_len, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: result_ptr, result_len, cur_len, next_slot_ptr, retdest
     %stack (result_ptr, result_len, cur_len)
         -> (result_ptr, result_len, result_len, cur_len)
     MLOAD_32BYTES
 after_packed_small_rlp:
     %stack
-        (result, result_len, cur_len, next_slot_ptr, next_hash_node_ptr, retdest) -> 
-        (retdest, result, result_len, cur_len, next_slot_ptr, next_hash_node_ptr)
+        (result, result_len, cur_len, next_slot_ptr, retdest) -> 
+        (retdest, result, result_len, cur_len, next_slot_ptr)
     JUMP
 
 // RLP encode the given trie node, and return an (pointer, length) pair
 // indicating where the data lives within @SEGMENT_RLP_RAW.
 //
-// Pre stack: node_type, node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
-// Post stack: result_ptr, result_len, cur_len, next_slot_ptr, next_hash_node_ptr
+// Pre stack: node_type, node_ptr, encode_value, cur_len, next_slot_ptr, retdest
+// Post stack: result_ptr, result_len, cur_len, next_slot_ptr
 encode_node:
-    // stack: node_type, node_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_type, node_ptr, encode_value, cur_len, next_slot_ptr, retdest
     // Increment node_ptr, so it points to the node payload instead of its type.
     SWAP1 %increment SWAP1
-    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
 
     DUP1 %eq_const(@MPT_NODE_EMPTY)     %jumpi(encode_node_empty_storage)
     DUP1 %eq_const(@MPT_NODE_BRANCH)
@@ -142,24 +136,24 @@ global debug_jump_to_branch_storage:
     PANIC
 
 global encode_node_empty_storage:
-    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     %pop3
     %stack
-        (cur_len, next_slot_ptr, next_hash_node_ptr, retdest) ->
-        (retdest, @ENCODED_EMPTY_NODE_ADDR, 1, cur_len, next_slot_ptr, next_hash_node_ptr)
+        (cur_len, next_slot_ptr, retdest) ->
+        (retdest, @ENCODED_EMPTY_NODE_ADDR, 1, cur_len, next_slot_ptr)
     JUMP
 
 global encode_node_branch_storage:
-    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     POP
 
     // `TrieData` stores the node type, 16 children pointers, and a value pointer.
     SWAP2 %add_const(18) SWAP2
-    // stack: node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
 
     // Allocate a block of RLP memory
     %alloc_rlp_block DUP1
-    // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
 
     // Call encode_or_hash_node on each child 
     global debug_bef_new_1:
@@ -196,101 +190,101 @@ global encode_node_branch_storage:
     %encode_child_storage(15)
     global debug_bef_new_17:
 
-    // stack: rlp_pos', rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos', rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
 
     %stack (rlp_pos, rlp_start, node_payload_ptr)
         -> (node_payload_ptr, rlp_pos, rlp_start)
     %add_const(16)
-    // stack: value_ptr_ptr, rlp_pos', rlp_start, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: value_ptr_ptr, rlp_pos', rlp_start, encode_value, cur_len, next_slot_ptr, retdest
     %mload_trie_data
-    // stack: value_ptr, rlp_pos', rlp_start, encode_value, cur_len,next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: value_ptr, rlp_pos', rlp_start, encode_value, cur_len,next_slot_ptr, retdest
     DUP1 %jumpi(encode_node_branch_with_value)
 
     // No value; append the empty string (0x80).
-    // stack: value_ptr, rlp_pos', rlp_start, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: value_ptr, rlp_pos', rlp_start, encode_value, cur_len, next_slot_ptr, retdest
     %stack (value_ptr, rlp_pos, rlp_start, encode_value) -> (0x80, rlp_pos, rlp_pos, rlp_start)
     MSTORE_GENERAL
-    // stack: rlp_pos', rlp_start, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos', rlp_start, cur_len, next_slot_ptr, retdest
     %increment
-    // stack: rlp_pos'', rlp_start, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos'', rlp_start, cur_len, next_slot_ptr, retdest
     %jump(encode_node_branch_prepend_prefix)
 encode_node_branch_with_value:
-    // stack: value_ptr, rlp_pos', rlp_start, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: value_ptr, rlp_pos', rlp_start, encode_value, cur_len, next_slot_ptr, retdest
     %stack (value_ptr, rlp_pos, rlp_start, encode_value, cur_len)
         -> (encode_value, rlp_pos, value_ptr, cur_len, encode_node_branch_after_value, rlp_start)
     JUMP // call encode_value
 encode_node_branch_after_value:
-    // stack: rlp_pos'', cur_len, rlp_start, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos'', cur_len, rlp_start, next_slot_ptr, retdest
     %stack(rlp_pos, cur_len, rlp_start) -> (rlp_pos, rlp_start, cur_len)
 encode_node_branch_prepend_prefix:
-    // stack: rlp_pos'', rlp_start, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos'', rlp_start, cur_len, next_slot_ptr, retdest
     %prepend_rlp_list_prefix
-    // stack: rlp_prefix_start, rlp_len, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
-    %stack (rlp_prefix_start, rlp_len, cur_len, next_slot_ptr, next_hash_node_ptr, retdest)
-        -> (retdest, rlp_prefix_start, rlp_len, cur_len, next_slot_ptr, next_hash_node_ptr)
+    // stack: rlp_prefix_start, rlp_len, cur_len, next_slot_ptr, retdest
+    %stack (rlp_prefix_start, rlp_len, cur_len, next_slot_ptr, retdest)
+        -> (retdest, rlp_prefix_start, rlp_len, cur_len, next_slot_ptr)
 global debug_before_branch_jump:
     JUMP
 
 
 // Part of the encode_node_branch function. Encodes the i'th child.
 %macro encode_child_storage(i)
-    // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     %stack
-        (rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr) ->
-        (node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, %%after_encode,
+        (rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr) ->
+        (node_payload_ptr, encode_value, cur_len, next_slot_ptr, %%after_encode,
             rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len)
-    // stack: node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, %%after_encode, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, retdest
+    // stack: node_payload_ptr, encode_value, cur_len, next_slot_ptr, %%after_encode, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, retdest
     %add_const($i) %mload_trie_data
-    // stack: child_i_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, %%after_encode, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, retdest
+    // stack: child_i_ptr, encode_value, cur_len, next_slot_ptr, %%after_encode, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, retdest
     %jump(encode_or_hash_node_storage)
 %%after_encode:
-    // stack: result, result_len, cur_len, next_slot_ptr, next_hash_node_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len, retdest
+    // stack: result, result_len, cur_len, next_slot_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len, retdest
     // If result_len != 32, result is raw RLP, with an appropriate RLP prefix already.
     SWAP1 
     PUSH 32 DUP2 SUB
     %jumpi(%%unpack)
     // Otherwise, result is a hash, and we need to add the prefix 0x80 + 32 = 160.
-    // stack: result_len, result, cur_len, next_slot_ptr, next_hash_node_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len, retdest
-    DUP6 // rlp_pos
+    // stack: result_len, result, cur_len, next_slot_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len, retdest
+    DUP5 // rlp_pos
     PUSH 160
     MSTORE_GENERAL
-    SWAP5 %increment SWAP5 // rlp_pos += 1
+    SWAP4 %increment SWAP4 // rlp_pos += 1
 %%unpack:
-    %stack (result_len, result, cur_len, next_slot_ptr, next_hash_node_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len)
+    %stack (result_len, result, cur_len, next_slot_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, old_len)
         -> (rlp_pos, result, result_len, %%after_unpacking,
-            rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr)
+            rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr)
     %jump(mstore_unpacking)
 %%after_unpacking:
-    // stack: rlp_pos', rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos', rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
 %endmacro
 
 global encode_node_extension_storage:
-    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     SWAP3 %add_const(4) SWAP3
-    %stack (node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr)
-        -> (node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, encode_node_extension_after_encode_child, node_payload_ptr)
+    %stack (node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr)
+        -> (node_payload_ptr, encode_value, cur_len, next_slot_ptr, encode_node_extension_after_encode_child, node_payload_ptr)
     %add_const(2) %mload_trie_data
-    // stack: child_ptr, encode_value, cur_len, encode_node_extension_after_encode_child, node_payload_ptr, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: child_ptr, encode_value, cur_len, encode_node_extension_after_encode_child, node_payload_ptr, next_slot_ptr, retdest
     %jump(encode_or_hash_node_storage)
 encode_node_extension_after_encode_child:
-    // stack: result, result_len, cur_len, next_slot_ptr, next_hash_node_ptr, node_payload_ptr, retdest
+    // stack: result, result_len, cur_len, next_slot_ptr, node_payload_ptr, retdest
     %stack 
-        (result, result_len, cur_len, next_slot_ptr, next_hash_node_ptr, node_payload_ptr) -> 
-        (result, result_len, node_payload_ptr, cur_len, next_slot_ptr, next_hash_node_ptr)
+        (result, result_len, cur_len, next_slot_ptr, node_payload_ptr) -> 
+        (result, result_len, node_payload_ptr, cur_len, next_slot_ptr)
     %alloc_rlp_block
-    // stack: rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, retdest
     PUSH encode_node_extension_after_hex_prefix // retdest
     PUSH 0 // terminated
-    // stack: terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, retdest
     DUP6 %increment %mload_trie_data // Load the packed_nibbles field, which is at index 1.
-    // stack: packed_nibbles, terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: packed_nibbles, terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, retdest
     DUP7 %mload_trie_data // Load the num_nibbles field, which is at index 0.
-    // stack: num_nibbles, packed_nibbles, terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: num_nibbles, packed_nibbles, terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, retdest
     DUP5
-    // stack: rlp_start, num_nibbles, packed_nibbles, terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_start, num_nibbles, packed_nibbles, terminated, encode_node_extension_after_hex_prefix, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, retdest
     %jump(hex_prefix_rlp)
 encode_node_extension_after_hex_prefix:
-    // stack: rlp_pos, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos, rlp_start, result, result_len, node_payload_ptr, cur_len, next_slot_ptr, retdest
     // If result_len != 32, result is raw RLP, with an appropriate RLP prefix already.
     PUSH 32 DUP5 SUB
     %jumpi(encode_node_extension_unpack)
@@ -304,48 +298,48 @@ encode_node_extension_unpack:
         -> (rlp_pos, result, result_len, encode_node_extension_after_unpacking, rlp_start, cur_len)
     %jump(mstore_unpacking)
 encode_node_extension_after_unpacking:
-    // stack: rlp_pos, rlp_start, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos, rlp_start, cur_len, next_slot_ptr, retdest
     %prepend_rlp_list_prefix
-    %stack (rlp_prefix_start_pos, rlp_len, cur_len, next_slot_ptr, next_hash_node_ptr, retdest)
-        -> (retdest, rlp_prefix_start_pos, rlp_len, cur_len, next_slot_ptr, next_hash_node_ptr)
+    %stack (rlp_prefix_start_pos, rlp_len, cur_len, next_slot_ptr, retdest)
+        -> (retdest, rlp_prefix_start_pos, rlp_len, cur_len, next_slot_ptr)
     JUMP
 
 global encode_node_leaf_storage:
-    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_type, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     POP
-    // stack: node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     %alloc_rlp_block
     PUSH encode_node_leaf_after_hex_prefix // retdest
     PUSH 1 // terminated
-    // stack: terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     DUP4 %increment %mload_trie_data // Load the packed_nibbles field, which is at index 1.
-    // stack: packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     DUP5 %mload_trie_data // Load the num_nibbles field, which is at index 0.
-    // stack: num_nibbles, packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: num_nibbles, packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     DUP5
-    // stack: rlp_start, num_nibbles, packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_start, num_nibbles, packed_nibbles, terminated, encode_node_leaf_after_hex_prefix, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     %jump(hex_prefix_rlp)
 encode_node_leaf_after_hex_prefix:
-    // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_slot_ptr, retdest
     SWAP5
-    // stack: next_slot_ptr, rlp_start, node_payload_ptr, encode_value, cur_len, rlp_pos, next_hash_node_ptr, retdest
+    // stack: next_slot_ptr, rlp_start, node_payload_ptr, encode_value, cur_len, rlp_pos, retdest
     DUP1
     %next_initial_slot
-    // stack: next_next_slot_ptr, next_slot_ptr, rlp_start, node_payload_ptr, encode_value, cur_len, rlp_pos, next_hash_node_ptr, retdest
+    // stack: next_next_slot_ptr, next_slot_ptr, rlp_start, node_payload_ptr, encode_value, cur_len, rlp_pos, retdest
     SWAP6
     SWAP1
-    // stack: next_slot_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: next_slot_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_slot_ptr, retdest
     %add_const(3) // The initial value pointer starts at index 3.
-    // stack: value_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: value_ptr, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_slot_ptr, retdest
     MLOAD_GENERAL
-    // stack: value, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: value, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len, next_next_next_slot_ptr, retdest
     %stack (value, rlp_pos, rlp_start, node_payload_ptr, encode_value, cur_len)
         -> (encode_value, rlp_pos, value, cur_len, encode_node_leaf_after_encode_value, rlp_start)
     JUMP
 
 //// Up to here
 encode_node_leaf_after_encode_value:
-    // stack: rlp_end_pos, cur_len, rlp_start, next_next_slot_ptr, next_hash_node_ptr, retdest
+    // stack: rlp_end_pos, cur_len, rlp_start, next_next_slot_ptr, retdest
     // `TrieData` holds the node type, the number of nibbles, the nibbles,
     // the pointer to the value and the value.
     // We add 4 for the node type, the number of nibbles, the nibbles
@@ -353,7 +347,7 @@ encode_node_leaf_after_encode_value:
     SWAP1 %add_const(4)
     %stack(cur_len, rlp_end_pos, rlp_start) -> (rlp_end_pos, rlp_start, cur_len)
     %prepend_rlp_list_prefix
-    %stack (rlp_prefix_start_pos, rlp_len, cur_len, next_next_slot_ptr, next_hash_node_ptr, retdest)
-        -> (retdest, rlp_prefix_start_pos, rlp_len, cur_len, next_next_slot_ptr, next_hash_node_ptr)
+    %stack (rlp_prefix_start_pos, rlp_len, cur_len, next_next_slot_ptr, retdest)
+        -> (retdest, rlp_prefix_start_pos, rlp_len, cur_len, next_next_slot_ptr)
     JUMP
 

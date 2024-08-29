@@ -211,7 +211,7 @@ global set_final_tries:
     PUSH set_final_tries_after
     %first_initial_slot // Skip the first node.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-    %first_initial_slot // Skip the first node.
+    %first_initial_account // Skip the first node.
     %jump(delete_removed_accounts)
 set_final_tries_after:
     // stack: new_state_root
