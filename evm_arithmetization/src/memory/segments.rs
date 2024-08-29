@@ -80,12 +80,12 @@ pub(crate) enum Segment {
     /// List of storage slots of all the accounts in state trie,
     StorageLinkedList = 35 << SEGMENT_SCALING_FACTOR,
     // The transient storage of the current transaction.
-    TransientStorage = 37 << SEGMENT_SCALING_FACTOR,
+    TransientStorage = 36 << SEGMENT_SCALING_FACTOR,
     /// List of contracts which have been created during the current
     /// transaction.
-    CreatedContracts = 38 << SEGMENT_SCALING_FACTOR,
+    CreatedContracts = 37 << SEGMENT_SCALING_FACTOR,
     /// Blob versioned hashes specified in a type-3 transaction.
-    TxnBlobVersionedHashes = 39 << SEGMENT_SCALING_FACTOR,
+    TxnBlobVersionedHashes = 38 << SEGMENT_SCALING_FACTOR,
 }
 
 // These segments are not zero-initialized.
