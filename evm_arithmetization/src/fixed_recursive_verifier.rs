@@ -449,7 +449,7 @@ where
     pub circuit: CircuitData<F, C, D>,
     parent_block_proof: ProofWithPublicInputsTarget<D>,
     public_values: FinalPublicValuesTarget,
-    local_vk: VerifierCircuitTarget,
+    cyclic_vk: VerifierCircuitTarget,
 }
 
 impl<F, C, const D: usize> BlockWrapperCircuitData<F, C, D>
@@ -465,7 +465,7 @@ where
     ) -> IoResult<()> {
         buffer.write_circuit_data(&self.circuit, gate_serializer, generator_serializer)?;
         buffer.write_target_proof_with_public_inputs(&self.parent_block_proof)?;
-        buffer.write_target_verifier_circuit(&self.local_vk)?;
+        buffer.write_target_verifier_circuit(&self.cyclic_vk)?;
         self.public_values.to_buffer(buffer)
     }
 
@@ -476,14 +476,14 @@ where
     ) -> IoResult<Self> {
         let circuit = buffer.read_circuit_data(gate_serializer, generator_serializer)?;
         let parent_block_proof = buffer.read_target_proof_with_public_inputs()?;
-        let local_vk = buffer.read_target_verifier_circuit()?;
+        let cyclic_vk = buffer.read_target_verifier_circuit()?;
         let public_values = FinalPublicValuesTarget::from_buffer(buffer)?;
 
         Ok(Self {
             circuit,
             parent_block_proof,
             public_values,
-            local_vk,
+            cyclic_vk,
         })
     }
 }
@@ -1499,7 +1499,7 @@ where
         // We want these wrapped block proofs to have the exact same structure as 2-to-1
         // aggregation proofs, so we add public inputs for cyclic verification,
         // even though they'll be ignored.
-        let local_vk = builder.add_verifier_data_public_inputs();
+        let cyclic_vk = builder.add_verifier_data_public_inputs();
 
         builder.verify_proof::<C>(
             &parent_block_proof,
@@ -1508,6 +1508,8 @@ where
         );
 
         // Pad to match the (non-existing yet!) 2-to-1 circuit's degree.
+        // We use the block circuit's degree as target reference here, as they end up
+        // having same degree.
         while log2_ceil(builder.num_gates()) < block.circuit.common.degree_bits() {
             builder.add_gate(NoopGate, vec![]);
         }
@@ -1518,7 +1520,7 @@ where
             circuit,
             parent_block_proof,
             public_values: final_pv,
-            local_vk,
+            cyclic_vk,
         }
     }
 
@@ -2408,7 +2410,7 @@ where
             .set_proof_with_pis_target(&self.block_wrapper.parent_block_proof, block_proof);
 
         block_wrapper_inputs.set_verifier_data_target(
-            &self.block_wrapper.local_vk, // dummy
+            &self.block_wrapper.cyclic_vk, // dummy
             &self.block_wrapper.circuit.verifier_only,
         );
 

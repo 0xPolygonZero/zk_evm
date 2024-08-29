@@ -67,12 +67,6 @@ global main:
     // Initialize transient storage length
     %init_transient_storage_len
 
-    // Initialize the RLP DATA pointer to its initial position, 
-    // skipping over the preinitialized empty node.
-    PUSH @INITIAL_TXN_RLP_ADDR
-    %add_const(@MAX_RLP_BLOB_SIZE)
-    %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
-
     // Encode constant nodes
     %initialize_rlp_segment
 
@@ -110,9 +104,11 @@ global hash_initial_tries:
     PUSH 8 MUL
     %increment
     // stack: init_trie_data_len
-
+    PUSH @INITIAL_RLP_ADDR
+    // stack: rlp_start, init_trie_data_len
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_BEFORE)      %assert_eq
-    // stack: trie_data_len
+    PUSH @INITIAL_RLP_ADDR
+    // stack: rlp_start, trie_data_len
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_BEFORE)  %assert_eq
     // stack: trie_data_full_len
     // Check that the trie data length is correct.
@@ -181,10 +177,14 @@ global perform_final_checks:
     // since the final transaction and receipt tries have already been
     // added to `GLOBAL_METADATA_TRIE_DATA_SIZE`.
     PUSH 1
+    PUSH @INITIAL_RLP_ADDR
     
 global check_txn_trie:
+    // stack: rlp_start, dummy_trie_len
     %mpt_hash_txn_trie     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_DIGEST_AFTER)       %assert_eq
+    PUSH @INITIAL_RLP_ADDR
 global check_receipt_trie:
+    // stack: rlp_start, dummy_trie_len
     %mpt_hash_receipt_trie %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_DIGEST_AFTER)   %assert_eq
 global check_state_trie:
     // First, check initial trie.
@@ -203,6 +203,9 @@ global check_state_trie:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
     %set_initial_tries
+
+    PUSH @INITIAL_RLP_ADDR
+    // stack: rlp_start, trie_data_len
     %mpt_hash_state_trie
 
     // stack: init_state_hash, trie_data_len
@@ -218,6 +221,8 @@ global check_state_trie:
     PUSH 1
 global check_final_state_trie:
     %set_final_tries
+    PUSH @INITIAL_RLP_ADDR
+    // stack: rlp_start, dummy_trie_len
     %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)     %assert_eq
     // We don't need the trie data length here.
     POP

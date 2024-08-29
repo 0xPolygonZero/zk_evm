@@ -4,9 +4,9 @@ use prover::BlockProverInput;
 use serde::Deserialize;
 use serde_json::json;
 use trace_decoder::{BlockTrace, BlockTraceTriePreImages, CombinedPreImages, TxnInfo};
+use zero_bin_common::provider::CachedProvider;
 
 use super::fetch_other_block_data;
-use crate::provider::CachedProvider;
 
 /// Transaction traces retrieved from Erigon zeroTracer.
 #[derive(Debug, Deserialize)]
@@ -27,7 +27,8 @@ where
 {
     // Grab trace information
     let tx_results = cached_provider
-        .as_provider()
+        .get_provider()
+        .await?
         .raw_request::<_, Vec<ZeroTxResult>>(
             "debug_traceBlockByNumber".into(),
             (target_block_id, json!({"tracer": "zeroTracer"})),
@@ -37,7 +38,8 @@ where
     // Grab block witness info (packed as combined trie pre-images)
 
     let block_witness = cached_provider
-        .as_provider()
+        .get_provider()
+        .await?
         .raw_request::<_, String>("eth_getWitness".into(), vec![target_block_id])
         .await?;
 

@@ -62,6 +62,11 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c.insert(MAX_NONCE.0.into(), U256::from(MAX_NONCE.1));
     c.insert(CALL_STACK_LIMIT.0.into(), U256::from(CALL_STACK_LIMIT.1));
     c.insert(
+        MAX_RLP_PREFIX_SIZE.0.into(),
+        U256::from(MAX_RLP_PREFIX_SIZE.1),
+    );
+    c.insert(INITIAL_RLP_ADDR.0.into(), U256::from(INITIAL_RLP_ADDR.1));
+    c.insert(
         cancun_constants::BEACON_ROOTS_CONTRACT_STATE_KEY.0.into(),
         U256::from_big_endian(&cancun_constants::BEACON_ROOTS_CONTRACT_STATE_KEY.1),
     );
@@ -113,7 +118,7 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c
 }
 
-const MISC_CONSTANTS: [(&str, [u8; 32]); 6] = [
+const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     // Base for limbs used in bignum arithmetic.
     (
         "BIGNUM_LIMB_BASE",
@@ -125,18 +130,6 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 6] = [
     (
         "ENCODED_EMPTY_NODE_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000b00000000"),
-    ),
-    // 0x10000 = 2^16 bytes, much larger than any RLP blob the EVM could possibly create.
-    (
-        "MAX_RLP_BLOB_SIZE",
-        hex!("0000000000000000000000000000000000000000000000000000000000010000"),
-    ),
-    // Address where the txn RLP encoding starts.
-    // It is the offset 1 within SEGMENT_RLP_RAW.
-    // *Note*: Changing this will break some tests.
-    (
-        "INITIAL_TXN_RLP_ADDR",
-        hex!("0000000000000000000000000000000000000000000000000000000b00000001"),
     ),
     // Address where the final registers start. It is the offset 6 within the
     // SEGMENT_REGISTERS_STATES.
@@ -359,6 +352,14 @@ const CODE_SIZE_LIMIT: [(&str, u64); 3] = [
 const MAX_NONCE: (&str, u64) = ("MAX_NONCE", 0xffffffffffffffff);
 const CALL_STACK_LIMIT: (&str, u64) = ("CALL_STACK_LIMIT", 1024);
 
+// 9 bytes, largest possible RLP prefix in our MPTs.
+const MAX_RLP_PREFIX_SIZE: (&str, u8) = ("MAX_RLP_PREFIX_SIZE", 9);
+// Address where RLP encoding generally starts.
+// It is the offset 1 within SEGMENT_RLP_RAW.
+// *Note*: Changing this will break some tests.
+pub(crate) const INITIAL_RLP_ADDR: (&str, usize) =
+    ("INITIAL_RLP_ADDR", Segment::RlpRaw as usize + 1);
+
 const LINKED_LISTS_CONSTANTS: [(&str, u16); 5] = [
     ("ACCOUNTS_LINKED_LISTS_NODE_SIZE", 4),
     ("STORAGE_LINKED_LISTS_NODE_SIZE", 5),
@@ -371,6 +372,8 @@ const LINKED_LISTS_CONSTANTS: [(&str, u16); 5] = [
 /// See <https://eips.ethereum.org/EIPS/eip-4788> and
 /// <https://eips.ethereum.org/EIPS/eip-4844>.
 pub mod cancun_constants {
+    use ethereum_types::{Address, H160};
+
     use super::*;
 
     pub const BLOB_BASE_FEE_UPDATE_FRACTION: U256 = U256([0x32f0ed, 0, 0, 0]);
@@ -394,19 +397,25 @@ pub mod cancun_constants {
         hex!("000000000000000000000000000000001666c54b0a32529503432fcae0181b4bef79de09fc63671fda5ed1ba9bfa07899495346f3d7ac9cd23048ef30d0a154f"), // y_im
     ];
 
-    pub const BEACON_ROOTS_CONTRACT_STATE_KEY: (&str, [u8; 20]) = (
-        "BEACON_ROOTS_CONTRACT_STATE_KEY",
-        hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"),
-    );
-
     pub const HISTORY_BUFFER_LENGTH: (&str, u64) = ("HISTORY_BUFFER_LENGTH", 8191);
 
+    // Beacon constants
+    ///////////////////
+
+    pub const BEACON_ROOTS_CONTRACT_ADDRESS: Address =
+        H160(hex!("000F3df6D732807Ef1319fB7B8bB8522d0Beac02"));
+
+    pub const BEACON_ROOTS_CONTRACT_ADDRESS_HASHED: H256 = H256(hex!(
+        "37d65eaa92c6bc4c13a5ec45527f0c18ea8932588728769ec7aecfe6d9f32e42"
+    ));
+
+    pub const BEACON_ROOTS_CONTRACT_STATE_KEY: (&str, [u8; 20]) = (
+        "BEACON_ROOTS_CONTRACT_STATE_KEY",
+        *BEACON_ROOTS_CONTRACT_ADDRESS.as_fixed_bytes(),
+    );
     pub const BEACON_ROOTS_CONTRACT_CODE: [u8; 97] = hex!("3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500");
     pub const BEACON_ROOTS_CONTRACT_CODE_HASH: [u8; 32] =
         hex!("f57acd40259872606d76197ef052f3d35588dadf919ee1f0e3cb9b62d3f4b02c");
-
-    pub const BEACON_ROOTS_CONTRACT_ADDRESS_HASHED: [u8; 32] =
-        hex!("37d65eaa92c6bc4c13a5ec45527f0c18ea8932588728769ec7aecfe6d9f32e42");
 
     pub const BEACON_ROOTS_ACCOUNT: AccountRlp = AccountRlp {
         nonce: U256::zero(),
@@ -417,6 +426,14 @@ pub mod cancun_constants {
         )),
         code_hash: H256(BEACON_ROOTS_CONTRACT_CODE_HASH),
     };
+
+    #[test]
+    fn hashed() {
+        assert_eq!(
+            keccak_hash::keccak(BEACON_ROOTS_CONTRACT_ADDRESS),
+            BEACON_ROOTS_CONTRACT_ADDRESS_HASHED
+        );
+    }
 }
 
 pub mod global_exit_root {
