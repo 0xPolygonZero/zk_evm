@@ -122,14 +122,8 @@
 
 %macro decode_and_store_access_list
     // stack: rlp_addr
-    DUP1 %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_START)
-    %decode_rlp_list_len
-    %stack (rlp_addr, len) -> (len, len, rlp_addr, %%after)
-    %jumpi(decode_and_store_access_list)
-    // stack: len, rlp_addr, %%after
-    POP SWAP1 POP
-    // stack: rlp_addr
-    %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_START) DUP2 SUB %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN)
+    %stack (rlp_addr) -> (rlp_addr, %%after)
+    %jump(decode_and_store_access_list)
 %%after:
 %endmacro
 
@@ -143,7 +137,6 @@
 
 %macro decode_and_store_blob_versioned_hashes
     // stack: rlp_addr
-    DUP1 %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START)
     %decode_rlp_list_len
     %stack (rlp_addr, len) -> (len, len, rlp_addr, %%after)
 
@@ -164,8 +157,6 @@ global decode_and_store_blob_versioned_hashes:
     // stack: len, rlp_addr
     DUP2 ADD
     // stack: end_rlp_addr, rlp_addr
-    // Store the RLP length.
-    %mload_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START) DUP2 SUB %mstore_global_metadata(@GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN)
     // stack: end_rlp_addr, rlp_addr
     PUSH @SEGMENT_TXN_BLOB_VERSIONED_HASHES // initial address to write to
     SWAP2
@@ -231,11 +222,13 @@ decode_and_store_blob_versioned_hashes_finish:
 
 // The access list is of the form `[[{20 bytes}, [{32 bytes}...]]...]`.
 global decode_and_store_access_list:
+    // stack: rlp_addr
+    %decode_rlp_list_len
+    // stack: rlp_addr, len
+    SWAP1
     // stack: len, rlp_addr
     DUP2 ADD
     // stack: end_rlp_addr, rlp_addr
-    // Store the RLP length.
-    %mload_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_START) DUP2 SUB %mstore_global_metadata(@GLOBAL_METADATA_ACCESS_LIST_RLP_LEN)
     SWAP1
 decode_and_store_access_list_loop:
     // stack: rlp_addr, end_rlp_addr
