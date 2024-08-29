@@ -67,11 +67,6 @@ global main:
     // Initialize transient storage length
     %init_transient_storage_len
 
-    // Initialize the RLP DATA pointer to its initial position, 
-    // skipping over the preinitialized empty node.
-    PUSH @INITIAL_RLP_ADDR
-    %mstore_global_metadata(@GLOBAL_METADATA_RLP_DATA_SIZE)
-
     // Encode constant nodes
     %initialize_rlp_segment
 
