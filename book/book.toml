@@ -1,0 +1,30 @@
+[book]
+authors = ["Polygon Zero"]
+language = "en"
+multilingual = false
+src = "src"
+title = "The Polygon Zero zkEVM Book"
+
+[rust]
+edition = "2021"
+
+[build]
+create-missing = true
+
+[preprocessor.index]
+
+[preprocessor.links]
+
+[preprocessor.katex]
+
+[preprocessor.bib]
+bibliography = "bibliography.bib"
+
+[output.html]
+
+[output.html.print]
+# Disable page break
+page-break = false
+
+[output.html.search]
+limit-results = 15
