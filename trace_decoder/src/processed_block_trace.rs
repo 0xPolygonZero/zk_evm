@@ -38,6 +38,7 @@ pub(crate) struct ProcessedTxnInfo {
 /// trace.
 /// If there are any txns that create contracts, then they will also
 /// get added here as we process the deltas.
+#[derive(Default)]
 pub(crate) struct Hash2Code {
     /// Key must always be [`hash`] of value.
     inner: HashMap<H256, Vec<u8>>,
@@ -45,17 +46,15 @@ pub(crate) struct Hash2Code {
 
 impl Hash2Code {
     pub fn new() -> Self {
-        Self {
-            inner: HashMap::new(),
-        }
+        Self::default()
     }
-    fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
+    pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
         match self.inner.get(&hash) {
             Some(code) => Ok(code.clone()),
             None => bail!("no code for hash {}", hash),
         }
     }
-    fn insert(&mut self, code: Vec<u8>) {
+    pub fn insert(&mut self, code: Vec<u8>) {
         self.inner.insert(hash(&code), code);
     }
 }
@@ -63,10 +62,16 @@ impl Hash2Code {
 impl FromIterator<Vec<u8>> for Hash2Code {
     fn from_iter<II: IntoIterator<Item = Vec<u8>>>(iter: II) -> Self {
         let mut this = Self::new();
-        for code in iter {
-            this.insert(code)
-        }
+        this.extend(iter);
         this
+    }
+}
+
+impl Extend<Vec<u8>> for Hash2Code {
+    fn extend<II: IntoIterator<Item = Vec<u8>>>(&mut self, iter: II) {
+        for it in iter {
+            self.insert(it)
+        }
     }
 }
 

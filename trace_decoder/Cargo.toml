@@ -41,8 +41,15 @@ zk_evm_common = { workspace = true }
 
 [dev-dependencies]
 alloy = { workspace = true }
+assert2 = "0.3.15"
+bstr = { version = "1.10.0", features = ["serde"] }
+camino = "1.1.9"
+clap.workspace = true
 criterion = { workspace = true }
+glob = "0.3.1"
+non0 = "0.1.0"
 plonky2_maybe_rayon = { workspace = true }
+pretty_assertions = "1.4.0"
 pretty_env_logger = { workspace = true }
 prover = { workspace = true }
 rstest = "0.21.0"
@@ -51,4 +58,8 @@ serde_path_to_error = { workspace = true }
 
 [[bench]]
 name = "block_processing"
+harness = false
+
+[[test]]
+name = "diff"
 harness = false

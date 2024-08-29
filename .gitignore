@@ -4,4 +4,4 @@
 *.iml
 .idea/
 .vscode
-
+/**/*.ignoreme

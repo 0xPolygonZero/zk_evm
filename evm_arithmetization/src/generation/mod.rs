@@ -53,7 +53,7 @@ pub const NUM_EXTRA_CYCLES_BEFORE: usize = 64;
 pub type MemBeforeValues = Vec<(MemoryAddress, U256)>;
 
 /// Inputs needed for trace generation.
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct GenerationInputs {
     /// The index of the transaction being proven within its block.
     pub txn_number_before: U256,
@@ -137,7 +137,7 @@ pub struct TrimmedGenerationInputs {
     pub block_hashes: BlockHashes,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct TrieInputs {
     /// A partial version of the state trie prior to these transactions. It
     /// should include all nodes that will be accessed by these

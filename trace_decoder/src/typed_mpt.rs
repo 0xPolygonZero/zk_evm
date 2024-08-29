@@ -186,6 +186,9 @@ pub struct TransactionTrie {
 }
 
 impl TransactionTrie {
+    pub fn new() -> Self {
+        Self::default()
+    }
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
@@ -200,6 +203,21 @@ impl TransactionTrie {
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
+    }
+    pub fn trim_to(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
+        self.untyped = mpt_trie::trie_subsets::create_trie_subset(
+            &self.untyped,
+            txn_ixs
+                .into_iter()
+                .map(|it| TrieKey::from_txn_ix(it).into_nibbles()),
+        )?;
+        Ok(())
+    }
+}
+
+impl From<TransactionTrie> for HashedPartialTrie {
+    fn from(value: TransactionTrie) -> Self {
+        value.untyped
     }
 }
 
@@ -212,6 +230,9 @@ pub struct ReceiptTrie {
 }
 
 impl ReceiptTrie {
+    pub fn new() -> Self {
+        Self::default()
+    }
     pub fn insert(&mut self, txn_ix: usize, val: Vec<u8>) -> anyhow::Result<Option<Vec<u8>>> {
         let prev = self
             .untyped
@@ -226,6 +247,21 @@ impl ReceiptTrie {
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
+    }
+    pub fn trim_to(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
+        self.untyped = mpt_trie::trie_subsets::create_trie_subset(
+            &self.untyped,
+            txn_ixs
+                .into_iter()
+                .map(|it| TrieKey::from_txn_ix(it).into_nibbles()),
+        )?;
+        Ok(())
+    }
+}
+
+impl From<ReceiptTrie> for HashedPartialTrie {
+    fn from(value: ReceiptTrie) -> Self {
+        value.untyped
     }
 }
 
@@ -253,11 +289,6 @@ impl StateMpt {
         account: AccountRlp,
     ) -> anyhow::Result<Option<AccountRlp>> {
         self.typed.insert(TrieKey::from_hash(key), account)
-    }
-    pub fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
-        self.typed
-            .iter()
-            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
     }
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         self.typed.as_hashed_partial_trie()
@@ -310,6 +341,14 @@ impl StateTrie for StateMpt {
         };
         Ok(())
     }
+    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.typed
+            .iter()
+            .map(|(key, rlp)| (key.into_hash().expect("key is always H256"), rlp))
+    }
+    fn root(&self) -> anyhow::Result<H256> {
+        Ok(self.typed.inner.hash())
+    }
 }
 
 impl From<StateMpt> for HashedPartialTrie {
@@ -337,6 +376,8 @@ pub trait StateTrie {
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
     fn contains_address(&self, address: Address) -> bool;
     fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
+    fn root(&self) -> anyhow::Result<H256>;
 }
 
 impl StateTrie for StateSmt {
@@ -364,6 +405,14 @@ impl StateTrie for StateSmt {
     fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         let _ = address;
         Ok(())
+    }
+    fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
+        self.address2state
+            .iter()
+            .map(|(key, rlp)| (keccak_hash::keccak(key), *rlp))
+    }
+    fn root(&self) -> anyhow::Result<H256> {
+        Err(anyhow::Error::msg("unsupported operation on StateTrie"))
     }
 }
 
@@ -398,5 +447,27 @@ impl StorageTrie {
 
     pub fn as_mut_hashed_partial_trie_unchecked(&mut self) -> &mut HashedPartialTrie {
         &mut self.untyped
+    }
+    /// Delete the given `key`, returning any remaining branch on collapse
+    pub fn reporting_remove(&mut self, key: TrieKey) -> anyhow::Result<Option<TrieKey>> {
+        Ok(
+            crate::decoding::delete_node_and_report_remaining_key_if_branch_collapsed(
+                &mut self.untyped,
+                &key,
+            )?,
+        )
+    }
+    pub fn trim_to(&mut self, txn_ixs: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+        self.untyped = mpt_trie::trie_subsets::create_trie_subset(
+            &self.untyped,
+            txn_ixs.into_iter().map(TrieKey::into_nibbles),
+        )?;
+        Ok(())
+    }
+}
+
+impl From<StorageTrie> for HashedPartialTrie {
+    fn from(value: StorageTrie) -> Self {
+        value.untyped
     }
 }

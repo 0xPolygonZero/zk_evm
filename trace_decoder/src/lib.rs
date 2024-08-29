@@ -97,10 +97,14 @@ mod typed_mpt;
 mod wire;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::mem;
+use std::num::NonZero;
 
 use ethereum_types::{Address, U256};
+use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
 use evm_arithmetization::GenerationInputs;
+use itertools::{Itertools, Position};
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
@@ -439,6 +443,426 @@ pub fn entrypoint(
         other,
         batch_size,
     )
+}
+
+#[allow(missing_docs)]
+pub fn entrypoint2(
+    trace: BlockTrace,
+    other: OtherBlockData,
+    batch_size: NonZero<usize>,
+) -> anyhow::Result<Vec<GenerationInputs>> {
+    let BlockTrace {
+        trie_pre_images,
+        code_db,
+        txn_info,
+    } = trace;
+    let (state, storage, mut code) = start::start(trie_pre_images)?;
+    code.extend(code_db);
+
+    let batches = middle::middle(
+        state,
+        storage,
+        txn_info
+            .into_iter()
+            .chunks(batch_size.get())
+            .into_iter()
+            .map(FromIterator::from_iter)
+            .collect(),
+        &mut code,
+    )?;
+
+    let OtherBlockData {
+        b_data:
+            BlockLevelData {
+                b_meta,
+                b_hashes,
+                mut withdrawals,
+            },
+        checkpoint_state_trie_root,
+    } = other;
+
+    let mut running_gas_used = 0;
+    Ok(batches
+        .into_iter()
+        .with_position()
+        .map(
+            |(
+                pos,
+                middle::Batch {
+                    first_txn_ix,
+                    gas_used,
+                    contract_code,
+                    byte_code,
+                    before:
+                        middle::IntraBlockTries {
+                            state,
+                            storage,
+                            transaction,
+                            receipt,
+                        },
+                    after,
+                },
+            )| GenerationInputs {
+                txn_number_before: first_txn_ix.into(),
+                gas_used_before: running_gas_used.into(),
+                gas_used_after: {
+                    running_gas_used += gas_used;
+                    running_gas_used.into()
+                },
+                signed_txns: byte_code,
+                withdrawals: match pos {
+                    Position::Only | Position::Last => mem::take(&mut withdrawals),
+                    Position::First | Position::Middle => vec![],
+                },
+                global_exit_roots: vec![],
+                tries: TrieInputs {
+                    state_trie: state.into(),
+                    transactions_trie: transaction.into(),
+                    receipts_trie: receipt.into(),
+                    storage_tries: storage.into_iter().map(|(k, v)| (k, v.into())).collect(),
+                },
+                trie_roots_after: after,
+                checkpoint_state_trie_root,
+                contract_code: contract_code
+                    .into_iter()
+                    .map(|it| (keccak_hash::keccak(&it), it))
+                    .collect(),
+                block_metadata: b_meta.clone(),
+                block_hashes: b_hashes.clone(),
+            },
+        )
+        .collect())
+}
+
+mod start {
+    use std::collections::BTreeMap;
+
+    use anyhow::Context as _;
+    use keccak_hash::H256;
+    use mpt_trie::partial_trie::{OnOrphanedHashNode, PartialTrie as _};
+
+    use crate::{
+        processed_block_trace::Hash2Code,
+        typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey},
+        BlockTraceTriePreImages, CombinedPreImages, SeparateStorageTriesPreImage,
+        SeparateTriePreImage, SeparateTriePreImages,
+    };
+
+    pub(crate) fn start(
+        pre_images: BlockTraceTriePreImages,
+    ) -> anyhow::Result<(StateMpt, BTreeMap<H256, StorageTrie>, Hash2Code)> {
+        Ok(match pre_images {
+            // TODO(0xaatif): refactor our convoluted input types
+            BlockTraceTriePreImages::Separate(SeparateTriePreImages {
+                state: SeparateTriePreImage::Direct(state),
+                storage: SeparateStorageTriesPreImage::MultipleTries(storage),
+            }) => {
+                let state = state.items().try_fold(
+                    StateMpt::new(OnOrphanedHashNode::Reject),
+                    |mut acc, (nibbles, hash_or_val)| {
+                        let path = TrieKey::from_nibbles(nibbles);
+                        match hash_or_val {
+                            mpt_trie::trie_ops::ValOrHash::Val(bytes) => {
+                                #[expect(deprecated)] // this is MPT specific
+                                acc.insert_by_hashed_address(
+                                    path.into_hash()
+                                        .context("invalid path length in direct state trie")?,
+                                    rlp::decode(&bytes)
+                                        .context("invalid AccountRlp in direct state trie")?,
+                                )?;
+                            }
+                            mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                acc.insert_hash_by_key(path, h)?;
+                            }
+                        };
+                        anyhow::Ok(acc)
+                    },
+                )?;
+                let storage = storage
+                    .into_iter()
+                    .map(|(k, SeparateTriePreImage::Direct(v))| {
+                        v.items()
+                            .try_fold(
+                                StorageTrie::new(OnOrphanedHashNode::Reject),
+                                |mut acc, (nibbles, hash_or_val)| {
+                                    let path = TrieKey::from_nibbles(nibbles);
+                                    match hash_or_val {
+                                        mpt_trie::trie_ops::ValOrHash::Val(value) => {
+                                            acc.insert(path, value)?;
+                                        }
+                                        mpt_trie::trie_ops::ValOrHash::Hash(h) => {
+                                            acc.insert_hash(path, h)?;
+                                        }
+                                    };
+                                    anyhow::Ok(acc)
+                                },
+                            )
+                            .map(|v| (k, v))
+                    })
+                    .collect::<Result<_, _>>()?;
+                (state, storage, Hash2Code::new())
+            }
+            BlockTraceTriePreImages::Combined(CombinedPreImages { compact }) => {
+                let instructions = crate::wire::parse(&compact)
+                    .context("couldn't parse instructions from binary format")?;
+                let crate::type1::Frontend {
+                    state,
+                    storage,
+                    code,
+                } = crate::type1::frontend(instructions)?;
+                (state, storage, code.into_iter().map(Into::into).collect())
+            }
+        })
+    }
+}
+
+mod middle {
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        ops::Range,
+    };
+
+    use anyhow::{anyhow, ensure, Context as _};
+    use ethereum_types::{Address, U256};
+    use evm_arithmetization::{generation::mpt::AccountRlp, proof::TrieRoots};
+    use keccak_hash::H256;
+
+    use crate::{
+        processed_block_trace::Hash2Code,
+        typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
+        ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace,
+    };
+
+    pub(crate) struct Batch<StateTrieT> {
+        pub first_txn_ix: usize,
+        pub gas_used: u64,
+        /// See [`GenerationInputs::contract_code`].
+        pub contract_code: BTreeSet<Vec<u8>>,
+        /// For each transaction in batch, in order.
+        pub byte_code: Vec<Vec<u8>>,
+
+        pub before: IntraBlockTries<StateTrieT>,
+        pub after: TrieRoots,
+    }
+
+    /// [`evm_arithmetization::generation::TrieInputs`],
+    /// generic over state trie representation.
+    pub(crate) struct IntraBlockTries<StateTrieT> {
+        pub state: StateTrieT,
+        pub storage: BTreeMap<H256, StorageTrie>,
+        pub transaction: TransactionTrie,
+        pub receipt: ReceiptTrie,
+    }
+    pub(crate) fn middle<StateTrieT: StateTrie + Clone>(
+        // state at the beginning of the block
+        mut state_trie: StateTrieT,
+        // storage at the beginning of the block
+        mut storage: BTreeMap<H256, StorageTrie>,
+        batches: Vec<Vec<TxnInfo>>,
+        code: &mut Hash2Code,
+    ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
+        // Initialise the storage tries.
+        for (haddr, acct) in state_trie.iter() {
+            let storage = storage.entry(haddr).or_insert({
+                let mut it = StorageTrie::default();
+                it.insert_hash(TrieKey::default(), acct.storage_root)
+                    .expect("empty trie insert cannot fail");
+                it
+            });
+            ensure!(
+                storage.root() == acct.storage_root,
+                "inconsistent initial storage for hashed address {haddr:x}"
+            )
+        }
+
+        // These are the per-block tries.
+        let mut transaction_trie = TransactionTrie::new();
+        let mut receipt_trie = ReceiptTrie::new();
+
+        let mut out = vec![];
+
+        let mut txn_ix = 0;
+        for batch in batches {
+            let batch_first_txn_ix = txn_ix; // GOTCHA: if there are no transactions in this batch
+            let mut batch_gas_used = 0;
+            let mut batch_byte_code = vec![];
+            let mut batch_contract_code = BTreeSet::<Vec<u8>>::new();
+
+            let mut before = IntraBlockTries {
+                state: state_trie.clone(),
+                transaction: transaction_trie.clone(),
+                receipt: receipt_trie.clone(),
+                storage: storage.clone(),
+            };
+            // We want to trim the TrieInputs above,
+            // but won't know the bounds until after the loop below,
+            // so store that information here.
+            let mut trim_storage = BTreeMap::<Address, BTreeSet<TrieKey>>::new();
+            let mut trim_state = BTreeSet::<TrieKey>::new();
+
+            for TxnInfo {
+                traces,
+                meta:
+                    TxnMeta {
+                        byte_code: txn_byte_code,
+                        new_receipt_trie_node_byte,
+                        gas_used: txn_gas_used,
+                    },
+            } in batch
+            {
+                batch_gas_used += txn_gas_used;
+                batch_byte_code.push(txn_byte_code.clone());
+
+                for (
+                    addr,
+                    TxnTrace {
+                        balance,
+                        nonce,
+                        storage_read,
+                        storage_written,
+                        code_usage,
+                        self_destructed,
+                    },
+                ) in traces
+                {
+                    let trim_storage = trim_storage.entry(addr).or_default();
+
+                    trim_storage.extend(
+                        storage_written
+                            .keys()
+                            .chain(&storage_read)
+                            .map(|it| TrieKey::from_hash(keccak_hash::keccak(it))),
+                    );
+
+                    let storage_trie_change = !storage_written.is_empty();
+
+                    if storage_trie_change {
+                        let storage =
+                            storage
+                                .get_mut(&keccak_hash::keccak(addr))
+                                .context(format!(
+                                    "missing storage for account with address {addr:x}"
+                                ))?;
+
+                        for (k, v) in storage_written {
+                            let slot = TrieKey::from_hash(keccak_hash::keccak(k));
+                            match v.is_zero() {
+                                true => {
+                                    // this is actually a delete
+                                    trim_storage.extend(storage.reporting_remove(slot)?)
+                                }
+                                false => {
+                                    storage.insert(slot, rlp::encode(&v).to_vec())?;
+                                }
+                            }
+                        }
+                    }
+
+                    let (mut acct, newly_created) = state_trie
+                        .get_by_address(addr)
+                        .map(|acct| (acct, false))
+                        .unwrap_or((AccountRlp::default(), true));
+
+                    let commit = match newly_created {
+                        false => true,
+                        true => {
+                            let (_, _, receipt) =
+                                evm_arithmetization::generation::mpt::decode_receipt(
+                                    &new_receipt_trie_node_byte,
+                                )
+                                .map_err(|e| anyhow!("{e:?}"))
+                                .context("couldn't decode receipt")?;
+                            receipt.status
+                        } // if txn failed, don't commit changes to trie
+                    };
+
+                    if commit {
+                        acct.balance = balance.unwrap_or(acct.balance);
+                        acct.nonce = nonce.unwrap_or(acct.nonce);
+                        acct.code_hash = code_usage
+                            .map(|it| match it {
+                                ContractCodeUsage::Read(hash) => {
+                                    batch_contract_code.insert(code.get(hash)?);
+                                    anyhow::Ok(hash)
+                                }
+                                ContractCodeUsage::Write(bytes) => {
+                                    code.insert(bytes.clone());
+                                    let hash = keccak_hash::keccak(&bytes);
+                                    batch_contract_code.insert(bytes);
+                                    Ok(hash)
+                                }
+                            })
+                            .transpose()?
+                            .unwrap_or(acct.code_hash);
+                        if storage_trie_change {
+                            acct.storage_root = storage
+                                .get(&keccak_hash::keccak(addr))
+                                .context(format!(
+                                    "missing storage for account with address {addr:x}"
+                                ))?
+                                .root();
+                        }
+
+                        state_trie.insert_by_address(addr, acct)?;
+                    }
+
+                    if self_destructed {
+                        storage.remove(&keccak_hash::keccak(addr));
+                        trim_state.extend(state_trie.reporting_remove(addr)?)
+                    }
+
+                    let is_precompile =
+                        PRECOMPILE_ADDRESS_RANGE.contains(&U256::from_big_endian(addr.as_bytes()));
+
+                    // Trie witnesses will only include accessed precompile accounts as hash
+                    // nodes if the transaction calling them reverted. If this is the case, we
+                    // shouldn't include them in this transaction's `state_accesses` to allow the
+                    // decoder to build a minimal state trie without hitting any hash node.
+
+                    if !is_precompile || state_trie.get_by_address(addr).is_some() {
+                        trim_state.insert(TrieKey::from_address(addr));
+                    }
+                }
+
+                // TODO(0xaatif): in the reference, this is not done
+                //                - for dummy transactions
+                //                - if `byte_code` is empty
+                transaction_trie.insert(txn_ix, txn_byte_code)?;
+                receipt_trie.insert(txn_ix, new_receipt_trie_node_byte)?;
+
+                txn_ix += 1;
+            } // txn in batch
+
+            before.state.trim_to(trim_state)?;
+            before.receipt.trim_to(batch_first_txn_ix..txn_ix)?;
+            before.transaction.trim_to(batch_first_txn_ix..txn_ix)?;
+            for (k, v) in trim_storage {
+                before
+                    .storage
+                    .get_mut(&keccak_hash::keccak(k))
+                    .unwrap()
+                    .trim_to(v)?;
+            }
+
+            out.push(Batch {
+                first_txn_ix: batch_first_txn_ix,
+                gas_used: batch_gas_used,
+                contract_code: batch_contract_code,
+                byte_code: batch_byte_code,
+                before,
+                after: TrieRoots {
+                    state_root: state_trie.root()?,
+                    transactions_root: transaction_trie.root(),
+                    receipts_root: receipt_trie.root(),
+                },
+            });
+        } // batch in batches
+
+        Ok(out)
+    }
+
+    // TODO(0xaatif): is this _meant_ to exclude the final member?
+    const PRECOMPILE_ADDRESS_RANGE: Range<U256> = U256([1, 0, 0, 0])..U256([10, 0, 0, 0]);
 }
 
 #[derive(Debug, Default)]
