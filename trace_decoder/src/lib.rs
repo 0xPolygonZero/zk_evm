@@ -121,12 +121,10 @@ pub struct BlockTrace {
     /// the execution of the current block) in multiple possible formats.
     pub trie_pre_images: BlockTraceTriePreImages,
 
-    /// The code_db is a map of code hashes to the actual code. This is needed
-    /// to execute transactions.
-    // We actually ignore the keys in this map,
-    // this format is only retained for compatibility reasons
+    /// A collection of contract code.
+    /// This will be accessed by its hash internally.
     #[serde(default)]
-    pub code_db: BTreeMap<H256, Vec<u8>>,
+    pub code_db: BTreeSet<Vec<u8>>,
 
     /// Traces and other info per transaction. The index of the transaction
     /// within the block corresponds to the slot in this vec.
@@ -390,7 +388,7 @@ pub fn entrypoint(
 
     // Note we discard any user-provided hashes.
     let mut hash2code = code_db
-        .into_values()
+        .into_iter()
         .chain(
             pre_images
                 .extra_code_hash_mappings

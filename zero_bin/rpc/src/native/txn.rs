@@ -43,7 +43,7 @@ where
         .map(|tx| process_transaction(provider, tx))
         .collect::<FuturesOrdered<_>>()
         .try_fold(
-            (BTreeMap::new(), Vec::new()),
+            (BTreeSet::new(), Vec::new()),
             |(mut code_db, mut txn_infos), (tx_code_db, txn_info)| async move {
                 code_db.extend(tx_code_db);
                 txn_infos.push(txn_info);
@@ -159,7 +159,7 @@ async fn process_tx_traces(
         .collect();
 
     let mut traces = BTreeMap::new();
-    let mut code_db: CodeDb = BTreeMap::new();
+    let mut code_db: CodeDb = BTreeSet::new();
 
     for address in addresses {
         let read_state = read_trace.0.get(&address);
@@ -281,14 +281,12 @@ async fn process_code(
         read_state.and_then(|x| x.code.as_ref()),
     ) {
         (Some(post_code), _) => {
-            let code_hash = keccak256(post_code).compat();
-            code_db.insert(code_hash, post_code.to_vec());
+            code_db.insert(post_code.to_vec());
             Some(ContractCodeUsage::Write(post_code.to_vec()))
         }
         (_, Some(read_code)) => {
             let code_hash = keccak256(read_code).compat();
-            code_db.insert(code_hash, read_code.to_vec());
-
+            code_db.insert(read_code.to_vec());
             Some(ContractCodeUsage::Read(code_hash))
         }
         _ => None,
