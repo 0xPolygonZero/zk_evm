@@ -195,3 +195,23 @@ set_payload_storage_leaf_end:
     // stack: storage_ptr_ptr', retdest
     SWAP1
     JUMP
+
+global set_initial_tries_w_insertions:
+    // stack: retdest
+    PUSH set_initial_tries_w_insertions_after
+    %first_slot
+    %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+    %first_account
+    // stack: account_ptr_ptr, state_root, storage_ptr_ptr, set_final_tries_after_after, retdest
+    %jump(insert_all_accounts)
+set_initial_tries_w_insertions_after:
+    //stack: new_state_root
+    %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+    JUMP
+
+%macro set_initial_tries_w_insertions
+    // stack: (empty)
+    PUSH %%after
+    %jump(set_initial_tries_w_insertions)
+%%after:
+%endmacro

@@ -203,11 +203,12 @@ global check_state_trie:
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
     %mpt_hash_state_trie_new
+global debug_bench_insertions_init:
 
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
-global debug_check_inital_state_trie:
+global debug_check_initial_state_trie:
     %assert_eq
     // Check that the stored trie data length is correct.
     
@@ -237,6 +238,7 @@ global debug_final_hash:
     PUSH 1
     SET_CONTEXT
     
+    %jump(panic)
     %jump(halt)
 
 %macro reinitialize_memory_pre_txn
