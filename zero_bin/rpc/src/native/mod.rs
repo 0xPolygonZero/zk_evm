@@ -11,7 +11,6 @@ use alloy::{
 use futures::try_join;
 use prover::BlockProverInput;
 use trace_decoder::BlockTrace;
-
 use zero_bin_common::provider::CachedProvider;
 
 mod state;

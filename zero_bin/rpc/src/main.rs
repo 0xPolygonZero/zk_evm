@@ -10,11 +10,11 @@ use anyhow::anyhow;
 use clap::{Args, Parser, Subcommand, ValueHint};
 use futures::StreamExt;
 use prover::BlockProverInput;
-use zero_bin_common::provider::CachedProvider;
 use rpc::{retry::build_http_retry_provider, RpcParams, RpcType};
 use tracing_subscriber::{prelude::*, EnvFilter};
 use url::Url;
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
+use zero_bin_common::provider::CachedProvider;
 use zero_bin_common::version;
 use zero_bin_common::{block_interval::BlockInterval, prover_state::persistence::CIRCUIT_VERSION};
 
