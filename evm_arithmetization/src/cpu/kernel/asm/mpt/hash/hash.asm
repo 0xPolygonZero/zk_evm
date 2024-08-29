@@ -1,5 +1,4 @@
-// Computes the Merkle root of the given trie node. RLP encoding (if any) will
-// start at position `rlp_start`.
+// Computes the Merkle root of the given trie node.
 //
 // encode_value is a function which should take as input
 // - the position within @SEGMENT_RLP_RAW to write to,
