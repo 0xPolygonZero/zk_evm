@@ -170,8 +170,9 @@ fn verify_generation_inputs(
 fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
     init_logger();
 
-    // TODO: Once CDK_ERIGON_WITNESS_DIR is available, change this so
-    // `use_burn_addr` is only true in that case.
+    // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+    //       Once CDK_ERIGON_WITNESS_DIR is available, change this so
+    //       `use_burn_addr` is only true in that case.
     let use_burn_addr = test_witness_directory != JERIGON_WITNESS_DIR;
     let results = find_witness_data_files(test_witness_directory)
         .expect("valid json data files found")
@@ -231,8 +232,9 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
 fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
     init_logger();
 
-    // TODO: Once CDK_ERIGON_WITNESS_DIR is available, change this so
-    // `use_burn_addr` is only true in that case.
+    // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+    //       Once CDK_ERIGON_WITNESS_DIR is available, change this so
+    //       `use_burn_addr` is only true in that case.
     let use_burn_addr = test_witness_directory != JERIGON_WITNESS_DIR;
     let result: Vec<Result<(), anyhow::Error>> = find_witness_data_files(test_witness_directory)
         .expect("valid json data files found")

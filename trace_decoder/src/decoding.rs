@@ -586,7 +586,8 @@ fn process_txn_info(
     )?;
 
     let burn_addr = match use_burn_target {
-        // TODO: retrieve the actual burn address from cdk-erigon.
+        // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+        //       Retrieve the actual burn address from `cdk-erigon`.
         true => Some(H160::zero()),
         false => None,
     };
