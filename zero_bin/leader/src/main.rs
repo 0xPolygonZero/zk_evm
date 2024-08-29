@@ -55,7 +55,14 @@ async fn main() -> Result<()> {
 
     let args = cli::Cli::parse();
 
-    let runtime = Runtime::from_config(&args.paladin, register()).await?;
+    let mut block_proof_paladin_args = args.paladin.clone();
+    block_proof_paladin_args.task_bus_routing_key = Some("block_proof".to_string());
+
+    let mut segment_paladin_args = args.paladin.clone();
+    segment_paladin_args.task_bus_routing_key = Some("segment".to_string());
+
+    let block_proof_runtime = Runtime::from_config(&block_proof_paladin_args, register()).await?;
+    let segment_runtime = Runtime::from_config(&segment_paladin_args, register()).await?;
 
     let prover_config: ProverConfig = args.prover_config.into();
 
@@ -73,7 +80,13 @@ async fn main() -> Result<()> {
         Command::Clean => zero_bin_common::prover_state::persistence::delete_all()?,
         Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(runtime, previous_proof, prover_config).await?;
+            stdio::stdio_main(
+                block_proof_runtime,
+                segment_runtime,
+                previous_proof,
+                prover_config,
+            )
+            .await?;
         }
         Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
@@ -85,7 +98,14 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(runtime, port, output_dir, prover_config).await?;
+            http::http_main(
+                block_proof_runtime,
+                segment_runtime,
+                port,
+                output_dir,
+                prover_config,
+            )
+            .await?;
         }
         Command::Rpc {
             rpc_url,
@@ -99,7 +119,6 @@ async fn main() -> Result<()> {
             backoff,
             max_retries,
         } => {
-            let runtime = Runtime::from_config(&args.paladin, register()).await?;
             let previous_proof = get_previous_proof(previous_proof)?;
             let mut block_interval = BlockInterval::new(&block_interval)?;
 
@@ -113,7 +132,8 @@ async fn main() -> Result<()> {
 
             info!("Proving interval {block_interval}");
             client_main(
-                runtime,
+                block_proof_runtime,
+                segment_runtime,
                 RpcParams {
                     rpc_url,
                     rpc_type,

@@ -12,7 +12,8 @@ use tracing::{debug, error, info};
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(
-    runtime: Runtime,
+    block_proof_runtime: Runtime,
+    segment_runtime: Runtime,
     port: u16,
     output_dir: PathBuf,
     prover_config: ProverConfig,
@@ -20,12 +21,22 @@ pub(crate) async fn http_main(
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     debug!("listening on {}", addr);
 
-    let runtime = Arc::new(runtime);
+    let block_proof_runtime = Arc::new(block_proof_runtime);
+    let segment_runtime = Arc::new(segment_runtime);
     let app = Router::new().route(
         "/prove",
         post({
-            let runtime = runtime.clone();
-            move |body| prove(body, runtime, output_dir.clone(), prover_config)
+            let block_proof_runtime = block_proof_runtime.clone();
+            let segment_runtime = segment_runtime.clone();
+            move |body| {
+                prove(
+                    body,
+                    block_proof_runtime,
+                    segment_runtime,
+                    output_dir.clone(),
+                    prover_config,
+                )
+            }
         }),
     );
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -63,7 +74,8 @@ struct HttpProverInput {
 
 async fn prove(
     Json(payload): Json<HttpProverInput>,
-    runtime: Arc<Runtime>,
+    block_proof_runtime: Arc<Runtime>,
+    segment_runtime: Arc<Runtime>,
     output_dir: PathBuf,
     prover_config: ProverConfig,
 ) -> StatusCode {
@@ -75,7 +87,7 @@ async fn prove(
         payload
             .prover_input
             .prove_test(
-                &runtime,
+                &segment_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
@@ -84,7 +96,8 @@ async fn prove(
         payload
             .prover_input
             .prove(
-                &runtime,
+                &block_proof_runtime,
+                &segment_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )

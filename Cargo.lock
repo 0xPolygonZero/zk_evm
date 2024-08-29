@@ -3347,8 +3347,7 @@ dependencies = [
 [[package]]
 name = "paladin-core"
 version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5af1955eaab1506a43d046628c218b7b3915539554838feb85ed31f54aace2f2"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=arpit/507-2#2ba9ac248eb22b4480b01d78c8182609bbdff0fe"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3366,6 +3365,7 @@ dependencies = [
  "paladin-opkind-derive",
  "pin-project",
  "postcard",
+ "rand",
  "serde",
  "thiserror",
  "tokio",
@@ -3374,14 +3374,12 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
 name = "paladin-opkind-derive"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af25dcb10b7c0ce99abee8694e2e79e4787d7f778b9339dc5a50ba6fc45e5cc9"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=arpit/507-2#2ba9ac248eb22b4480b01d78c8182609bbdff0fe"
 dependencies = [
  "quote",
  "syn 2.0.70",
@@ -5382,17 +5380,6 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
-
-[[package]]
-name = "uuid"
-version = "1.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81dfa00651efa65069b0b6b651f4aaa31ba9e3c3ce0137aaad053604ee7e0314"
-dependencies = [
- "getrandom",
- "rand",
- "serde",
-]
 
 [[package]]
 name = "valuable"

@@ -50,7 +50,8 @@ impl BlockProverInput {
 
     pub async fn prove(
         self,
-        runtime: &Runtime,
+        block_proof_runtime: &Runtime,
+        segment_runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
@@ -99,7 +100,7 @@ impl BlockProverInput {
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
-                    .run(runtime)
+                    .run(segment_runtime)
                     .map(move |e| {
                         e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
                     })
@@ -109,7 +110,7 @@ impl BlockProverInput {
         // Fold the batch aggregated proof stream into a single proof.
         let final_batch_proof =
             Directive::fold(IndexedStream::new(batch_proof_futs), &batch_agg_ops)
-                .run(runtime)
+                .run(block_proof_runtime)
                 .await?;
 
         if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
@@ -126,7 +127,7 @@ impl BlockProverInput {
                     prev,
                     save_inputs_on_error,
                 })
-                .run(runtime)
+                .run(block_proof_runtime)
                 .await?;
 
             info!("Successfully proved block {block_number}");
@@ -139,7 +140,7 @@ impl BlockProverInput {
 
     pub async fn prove_test(
         self,
-        runtime: &Runtime,
+        segment_runtime: &Runtime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
@@ -175,7 +176,7 @@ impl BlockProverInput {
         );
 
         simulation
-            .run(runtime)
+            .run(segment_runtime)
             .await?
             .try_for_each(|_| future::ok(()))
             .await?;
@@ -204,7 +205,8 @@ impl BlockProverInput {
 /// block proofs as well.
 pub async fn prove(
     block_prover_inputs: Vec<BlockProverInputFuture>,
-    runtime: &Runtime,
+    block_proof_runtime: &Runtime,
+    segment_runtime: &Runtime,
     previous_proof: Option<GeneratedBlockProof>,
     prover_config: ProverConfig,
     proof_output_dir: Option<PathBuf>,
@@ -226,7 +228,7 @@ pub async fn prove(
             // Prove the block
             let block_proof = if prover_config.test_only {
                 block
-                    .prove_test(runtime, previous_block_proof, prover_config)
+                    .prove_test(segment_runtime, previous_block_proof, prover_config)
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;
@@ -250,7 +252,12 @@ pub async fn prove(
                     .await?
             } else {
                 block
-                    .prove(runtime, previous_block_proof, prover_config)
+                    .prove(
+                        block_proof_runtime,
+                        segment_runtime,
+                        previous_block_proof,
+                        prover_config,
+                    )
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;

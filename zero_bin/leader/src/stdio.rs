@@ -8,7 +8,8 @@ use tracing::info;
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(
-    runtime: Runtime,
+    block_proof_runtime: Runtime,
+    segment_runtime: Runtime,
     previous: Option<GeneratedBlockProof>,
     prover_config: ProverConfig,
 ) -> Result<()> {
@@ -21,9 +22,17 @@ pub(crate) async fn stdio_main(
         .map(Into::into)
         .collect::<Vec<BlockProverInputFuture>>();
 
-    let proved_blocks =
-        prover::prove(block_prover_inputs, &runtime, previous, prover_config, None).await;
-    runtime.close().await?;
+    let proved_blocks = prover::prove(
+        block_prover_inputs,
+        &block_proof_runtime,
+        &segment_runtime,
+        previous,
+        prover_config,
+        None,
+    )
+    .await;
+    block_proof_runtime.close().await?;
+    segment_runtime.close().await?;
     let proved_blocks = proved_blocks?;
 
     if prover_config.test_only {
