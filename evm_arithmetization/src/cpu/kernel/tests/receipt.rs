@@ -8,6 +8,7 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
+use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::generation::mpt::{LegacyReceiptRlp, LogRlp};
@@ -531,6 +532,9 @@ fn test_mpt_insert_receipt() -> Result<()> {
         .push(1.into()) // Initial length of the trie data segment, unused.; // Initial length of the trie data
         // segment, unused.
         .expect("The stack should not overflow");
+    interpreter
+        .push(INITIAL_RLP_ADDR.1.into()) // rlp_start
+        .expect("The stack should not overflow.");
     interpreter.run()?;
     assert_eq!(
         interpreter.stack()[1],

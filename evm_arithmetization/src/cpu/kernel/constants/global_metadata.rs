@@ -18,10 +18,6 @@ pub(crate) enum GlobalMetadata {
     /// The size of the `TrieData` segment, in bytes. In other words, the next
     /// address available for appending additional trie data.
     TrieDataSize,
-    /// The size of the `RLP` segment, in bytes, represented as a whole
-    /// address. In other words, the next address available for appending
-    /// additional RLP data.
-    RlpDataSize,
     /// A pointer to the root of the state trie within the `TrieData` buffer.
     StateTrieRoot,
     /// A pointer to the root of the transaction trie within the `TrieData`
@@ -119,7 +115,7 @@ pub(crate) enum GlobalMetadata {
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 55;
+    pub(crate) const COUNT: usize = 54;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -131,7 +127,6 @@ impl GlobalMetadata {
             Self::LargestContext,
             Self::MemorySize,
             Self::TrieDataSize,
-            Self::RlpDataSize,
             Self::StateTrieRoot,
             Self::TransactionTrieRoot,
             Self::ReceiptTrieRoot,
@@ -192,7 +187,6 @@ impl GlobalMetadata {
             Self::LargestContext => "GLOBAL_METADATA_LARGEST_CONTEXT",
             Self::MemorySize => "GLOBAL_METADATA_MEMORY_SIZE",
             Self::TrieDataSize => "GLOBAL_METADATA_TRIE_DATA_SIZE",
-            Self::RlpDataSize => "GLOBAL_METADATA_RLP_DATA_SIZE",
             Self::StateTrieRoot => "GLOBAL_METADATA_STATE_TRIE_ROOT",
             Self::TransactionTrieRoot => "GLOBAL_METADATA_TXN_TRIE_ROOT",
             Self::ReceiptTrieRoot => "GLOBAL_METADATA_RECEIPT_TRIE_ROOT",

@@ -10,7 +10,7 @@
 // - write the receipt in MPT_TRIE_DATA ,
 // - insert a new node in receipt_trie,
 // - set the bloom filter back to 0
-global process_receipt:    
+global process_receipt:
     // stack: status, leftover_gas, prev_cum_gas, txn_nb, num_nibbles, retdest
     DUP2 DUP4
     // stack: prev_cum_gas, leftover_gas, status, leftover_gas, prev_cum_gas, txn_nb, num_nibbles, retdest
@@ -54,10 +54,9 @@ process_receipt_after_bloom:
     // Now we can write the receipt in MPT_TRIE_DATA.
     %get_trie_data_size
     // stack: receipt_ptr, payload_len, status, new_cum_gas, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
-    // Write transaction type if necessary. The address INITIAL_TXN_RLP_ADDR contains the current transaction type.
-    PUSH @INITIAL_TXN_RLP_ADDR
-    MLOAD_GENERAL
-    // stack: first_txn_byte, receipt_ptr, payload_len, status, new_cum_gas, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
+    // Write transaction type if necessary.
+    %mload_txn_field(@TXN_FIELD_TYPE)
+    // stack: txn_type, receipt_ptr, payload_len, status, new_cum_gas, txn_nb, new_cum_gas, txn_nb, num_nibbles, retdest
     DUP1 %eq_const(1) %jumpi(receipt_nonzero_type)
     DUP1 %eq_const(2) %jumpi(receipt_nonzero_type)
     DUP1 %eq_const(3) %jumpi(receipt_nonzero_type)

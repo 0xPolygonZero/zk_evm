@@ -9,9 +9,10 @@ use crate::memory::segments::Segment;
 #[repr(usize)]
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd, Debug)]
 pub(crate) enum NormalizedTxnField {
+    Type = Segment::TxnFields as usize,
     /// Whether a chain ID was present in the txn data. Type 0 transaction with
     /// v=27 or v=28 have no chain ID. This affects what fields get signed.
-    ChainIdPresent = Segment::TxnFields as usize,
+    ChainIdPresent,
     ChainId,
     Nonce,
     MaxPriorityFeePerGas,
@@ -37,7 +38,7 @@ pub(crate) enum NormalizedTxnField {
 }
 
 impl NormalizedTxnField {
-    pub(crate) const COUNT: usize = 17;
+    pub(crate) const COUNT: usize = 18;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     #[cfg(test)]
@@ -47,6 +48,7 @@ impl NormalizedTxnField {
 
     pub(crate) const fn all() -> [Self; Self::COUNT] {
         [
+            Self::Type,
             Self::ChainIdPresent,
             Self::ChainId,
             Self::Nonce,
@@ -70,6 +72,7 @@ impl NormalizedTxnField {
     /// The variable name that gets passed into kernel assembly code.
     pub(crate) const fn var_name(&self) -> &'static str {
         match self {
+            NormalizedTxnField::Type => "TXN_FIELD_TYPE",
             NormalizedTxnField::ChainIdPresent => "TXN_FIELD_CHAIN_ID_PRESENT",
             NormalizedTxnField::ChainId => "TXN_FIELD_CHAIN_ID",
             NormalizedTxnField::Nonce => "TXN_FIELD_NONCE",
