@@ -8,7 +8,7 @@ use anyhow::Context;
 use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 
 const CACHE_SIZE: usize = 1024;
-const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 64;
+const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 128;
 
 /// Wrapper around alloy provider to cache blocks and other
 /// frequently used data.
