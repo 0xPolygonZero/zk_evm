@@ -13,6 +13,7 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
 use crate::generation::mpt::{
@@ -633,7 +634,6 @@ fn sload() -> Result<()> {
     // Now, execute `mpt_hash_state_trie`. We check that the state trie has not
     // changed.
     let mpt_hash_state_trie = KERNEL.global_labels["mpt_hash_state_trie"];
-    let initial_rlp_addr = Segment::RlpRaw as usize + 1;
     interpreter.generation_state.registers.program_counter = mpt_hash_state_trie;
     interpreter.set_is_kernel(true);
     interpreter.set_context(0);
@@ -644,7 +644,7 @@ fn sload() -> Result<()> {
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial length of the trie data segment, unused.
         .expect("The stack should not overflow.");
     interpreter
-        .push(initial_rlp_addr.into()) // rlp_start
+        .push(INITIAL_RLP_ADDR.1.into()) // rlp_start
         .expect("The stack should not overflow.");
     interpreter.run()?;
 

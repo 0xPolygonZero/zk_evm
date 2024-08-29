@@ -1,7 +1,10 @@
 use anyhow::{anyhow, Result};
 use plonky2::field::types::Field;
 
-use crate::{cpu::kernel::interpreter::Interpreter, memory::segments::Segment};
+use crate::{
+    cpu::kernel::{constants::INITIAL_RLP_ADDR, interpreter::Interpreter},
+    memory::segments::Segment,
+};
 
 mod parse_type_0_txn;
 mod parse_type_1_txn;
@@ -15,13 +18,12 @@ pub(crate) fn prepare_interpreter_for_txn_parsing<F: Field>(
     txn: Vec<u8>,
 ) -> Result<()> {
     let retaddr = 0xDEADBEEFu32.into();
-    const INITIAL_RLP_ADDR: usize = Segment::RlpRaw as usize + 1;
 
     interpreter.generation_state.registers.program_counter = entry_point;
     interpreter.push(retaddr).or(Err(anyhow!(
         "Error in `prepare_interpreter_for_txn_parsing`."
     )))?;
-    interpreter.push(INITIAL_RLP_ADDR.into()).or(Err(anyhow!(
+    interpreter.push(INITIAL_RLP_ADDR.1.into()).or(Err(anyhow!(
         "Error in `prepare_interpreter_for_txn_parsing`."
     )))?;
 

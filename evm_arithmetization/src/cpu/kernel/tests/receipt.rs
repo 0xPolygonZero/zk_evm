@@ -8,6 +8,7 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::cpu::kernel::constants::txn_fields::NormalizedTxnField;
+use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::generation::mpt::{LegacyReceiptRlp, LogRlp};
@@ -523,7 +524,6 @@ fn test_mpt_insert_receipt() -> Result<()> {
 
     // Finally, check that the hashes correspond.
     let mpt_hash_receipt = KERNEL.global_labels["mpt_hash_receipt_trie"];
-    let initial_rlp_addr = Segment::RlpRaw as usize + 1;
     interpreter.generation_state.registers.program_counter = mpt_hash_receipt;
     interpreter
         .push(retdest)
@@ -533,7 +533,7 @@ fn test_mpt_insert_receipt() -> Result<()> {
         // segment, unused.
         .expect("The stack should not overflow");
     interpreter
-        .push(initial_rlp_addr.into()) // rlp_start
+        .push(INITIAL_RLP_ADDR.1.into()) // rlp_start
         .expect("The stack should not overflow.");
     interpreter.run()?;
     assert_eq!(
