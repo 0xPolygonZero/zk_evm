@@ -36,8 +36,9 @@ use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
 use crate::proof::{
     BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, ExtraBlockData,
-    ExtraBlockDataTarget, MemCap, MemCapTarget, PublicValues, PublicValuesTarget, RegistersData,
-    RegistersDataTarget, TrieRoots, TrieRootsTarget, DEFAULT_CAP_LEN,
+    ExtraBlockDataTarget, FinalPublicValues, FinalPublicValuesTarget, MemCap, MemCapTarget,
+    PublicValues, PublicValuesTarget, RegistersData, RegistersDataTarget, TrieRoots,
+    TrieRootsTarget, DEFAULT_CAP_LEN,
 };
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
 use crate::witness::errors::ProgramError;
@@ -611,16 +612,34 @@ fn add_data_write<F: RichField + Extendable<D>, const D: usize>(
     builder.add(running_sum, inverse)
 }
 
-pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn add_virtual_final_public_values_public_input<
+    F: RichField + Extendable<D>,
+    const D: usize,
+>(
+    builder: &mut CircuitBuilder<F, D>,
+) -> FinalPublicValuesTarget {
+    let state_trie_root_before = builder.add_virtual_public_input_arr();
+    let state_trie_root_after = builder.add_virtual_public_input_arr();
+
+    FinalPublicValuesTarget {
+        state_trie_root_before,
+        state_trie_root_after,
+    }
+}
+
+pub(crate) fn add_virtual_public_values_public_input<
+    F: RichField + Extendable<D>,
+    const D: usize,
+>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> PublicValuesTarget {
-    let trie_roots_before = add_virtual_trie_roots(builder);
-    let trie_roots_after = add_virtual_trie_roots(builder);
-    let block_metadata = add_virtual_block_metadata(builder);
-    let block_hashes = add_virtual_block_hashes(builder);
-    let extra_block_data = add_virtual_extra_block_data(builder);
-    let registers_before = add_virtual_registers_data(builder);
-    let registers_after = add_virtual_registers_data(builder);
+    let trie_roots_before = add_virtual_trie_roots_public_input(builder);
+    let trie_roots_after = add_virtual_trie_roots_public_input(builder);
+    let block_metadata = add_virtual_block_metadata_public_input(builder);
+    let block_hashes = add_virtual_block_hashes_public_input(builder);
+    let extra_block_data = add_virtual_extra_block_data_public_input(builder);
+    let registers_before = add_virtual_registers_data_public_input(builder);
+    let registers_after = add_virtual_registers_data_public_input(builder);
 
     let mem_before = MemCapTarget {
         mem_cap: MerkleCapTarget(builder.add_virtual_hashes_public_input(DEFAULT_CAP_LEN)),
@@ -642,12 +661,13 @@ pub(crate) fn add_virtual_public_values<F: RichField + Extendable<D>, const D: u
     }
 }
 
-pub(crate) fn add_virtual_trie_roots<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn add_virtual_trie_roots_public_input<F: RichField + Extendable<D>, const D: usize>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> TrieRootsTarget {
     let state_root = builder.add_virtual_public_input_arr();
     let transactions_root = builder.add_virtual_public_input_arr();
     let receipts_root = builder.add_virtual_public_input_arr();
+
     TrieRootsTarget {
         state_root,
         transactions_root,
@@ -655,7 +675,10 @@ pub(crate) fn add_virtual_trie_roots<F: RichField + Extendable<D>, const D: usiz
     }
 }
 
-pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn add_virtual_block_metadata_public_input<
+    F: RichField + Extendable<D>,
+    const D: usize,
+>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> BlockMetadataTarget {
     let block_beneficiary = builder.add_virtual_public_input_arr();
@@ -671,6 +694,7 @@ pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: 
     let block_excess_blob_gas = builder.add_virtual_public_input_arr();
     let parent_beacon_block_root = builder.add_virtual_public_input_arr();
     let block_bloom = builder.add_virtual_public_input_arr();
+
     BlockMetadataTarget {
         block_beneficiary,
         block_timestamp,
@@ -688,17 +712,25 @@ pub(crate) fn add_virtual_block_metadata<F: RichField + Extendable<D>, const D: 
     }
 }
 
-pub(crate) fn add_virtual_block_hashes<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn add_virtual_block_hashes_public_input<
+    F: RichField + Extendable<D>,
+    const D: usize,
+>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> BlockHashesTarget {
     let prev_hashes = builder.add_virtual_public_input_arr();
     let cur_hash = builder.add_virtual_public_input_arr();
+
     BlockHashesTarget {
         prev_hashes,
         cur_hash,
     }
 }
-pub(crate) fn add_virtual_extra_block_data<F: RichField + Extendable<D>, const D: usize>(
+
+pub(crate) fn add_virtual_extra_block_data_public_input<
+    F: RichField + Extendable<D>,
+    const D: usize,
+>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> ExtraBlockDataTarget {
     let checkpoint_state_trie_root = builder.add_virtual_public_input_arr();
@@ -706,6 +738,7 @@ pub(crate) fn add_virtual_extra_block_data<F: RichField + Extendable<D>, const D
     let txn_number_after = builder.add_virtual_public_input();
     let gas_used_before = builder.add_virtual_public_input();
     let gas_used_after = builder.add_virtual_public_input();
+
     ExtraBlockDataTarget {
         checkpoint_state_trie_root,
         txn_number_before,
@@ -715,7 +748,10 @@ pub(crate) fn add_virtual_extra_block_data<F: RichField + Extendable<D>, const D
     }
 }
 
-pub(crate) fn add_virtual_registers_data<F: RichField + Extendable<D>, const D: usize>(
+pub(crate) fn add_virtual_registers_data_public_input<
+    F: RichField + Extendable<D>,
+    const D: usize,
+>(
     builder: &mut CircuitBuilder<F, D>,
 ) -> RegistersDataTarget {
     let program_counter = builder.add_virtual_public_input();
@@ -724,6 +760,7 @@ pub(crate) fn add_virtual_registers_data<F: RichField + Extendable<D>, const D: 
     let stack_top = builder.add_virtual_public_input_arr();
     let context = builder.add_virtual_public_input();
     let gas_used = builder.add_virtual_public_input();
+
     RegistersDataTarget {
         program_counter,
         is_kernel,
@@ -803,6 +840,52 @@ where
         &public_values_target.mem_after,
         &public_values.mem_after,
     )?;
+
+    Ok(())
+}
+
+pub fn set_final_public_value_targets<F, W, const D: usize>(
+    witness: &mut W,
+    public_values_target: &FinalPublicValuesTarget,
+    public_values: &FinalPublicValues,
+) -> Result<(), ProgramError>
+where
+    F: RichField + Extendable<D>,
+    W: Witness<F>,
+{
+    for (i, limb) in public_values
+        .state_trie_root_before
+        .into_uint()
+        .0
+        .into_iter()
+        .enumerate()
+    {
+        witness.set_target(
+            public_values_target.state_trie_root_before[2 * i],
+            F::from_canonical_u32(limb as u32),
+        );
+        witness.set_target(
+            public_values_target.state_trie_root_before[2 * i + 1],
+            F::from_canonical_u32((limb >> 32) as u32),
+        );
+    }
+
+    for (i, limb) in public_values
+        .state_trie_root_after
+        .into_uint()
+        .0
+        .into_iter()
+        .enumerate()
+    {
+        witness.set_target(
+            public_values_target.state_trie_root_after[2 * i],
+            F::from_canonical_u32(limb as u32),
+        );
+        witness.set_target(
+            public_values_target.state_trie_root_after[2 * i + 1],
+            F::from_canonical_u32((limb >> 32) as u32),
+        );
+    }
 
     Ok(())
 }
