@@ -33,7 +33,7 @@ pub struct GenerationSegmentData {
 
 impl GenerationSegmentData {
     /// Retrieves the index of this segment.
-    pub fn segment_index(&self) -> usize {
+    pub const fn segment_index(&self) -> usize {
         self.segment_index
     }
 }

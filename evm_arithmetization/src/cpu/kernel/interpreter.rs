@@ -427,7 +427,7 @@ impl<F: Field> Interpreter<F> {
     }
 
     /// Returns the max number of CPU cycles.
-    pub(crate) fn get_max_cpu_len_log(&self) -> Option<usize> {
+    pub(crate) const fn get_max_cpu_len_log(&self) -> Option<usize> {
         self.max_cpu_len_log
     }
 

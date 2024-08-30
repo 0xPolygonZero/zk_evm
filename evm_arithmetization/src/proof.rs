@@ -925,7 +925,7 @@ pub enum BurnAddrTarget {
 }
 
 impl BurnAddrTarget {
-    pub fn get_size() -> usize {
+    pub const fn get_size() -> usize {
         match cfg!(feature = "cdk_erigon") {
             true => 8,
             false => 0,
