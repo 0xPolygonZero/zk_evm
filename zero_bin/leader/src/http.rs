@@ -13,7 +13,7 @@ use tracing::{debug, error, info};
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(
     block_proof_runtime: Runtime,
-    segment_runtime: Runtime,
+    segment_proof_runtime: Runtime,
     port: u16,
     output_dir: PathBuf,
     prover_config: ProverConfig,
@@ -22,17 +22,17 @@ pub(crate) async fn http_main(
     debug!("listening on {}", addr);
 
     let block_proof_runtime = Arc::new(block_proof_runtime);
-    let segment_runtime = Arc::new(segment_runtime);
+    let segment_proof_runtime = Arc::new(segment_proof_runtime);
     let app = Router::new().route(
         "/prove",
         post({
             let block_proof_runtime = block_proof_runtime.clone();
-            let segment_runtime = segment_runtime.clone();
+            let segment_proof_runtime = segment_proof_runtime.clone();
             move |body| {
                 prove(
                     body,
                     block_proof_runtime,
-                    segment_runtime,
+                    segment_proof_runtime,
                     output_dir.clone(),
                     prover_config,
                 )
@@ -75,7 +75,7 @@ struct HttpProverInput {
 async fn prove(
     Json(payload): Json<HttpProverInput>,
     block_proof_runtime: Arc<Runtime>,
-    segment_runtime: Arc<Runtime>,
+    segment_proof_runtime: Arc<Runtime>,
     output_dir: PathBuf,
     prover_config: ProverConfig,
 ) -> StatusCode {
@@ -87,7 +87,7 @@ async fn prove(
         payload
             .prover_input
             .prove_test(
-                &segment_runtime,
+                &segment_proof_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
@@ -97,7 +97,7 @@ async fn prove(
             .prover_input
             .prove(
                 &block_proof_runtime,
-                &segment_runtime,
+                &segment_proof_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )

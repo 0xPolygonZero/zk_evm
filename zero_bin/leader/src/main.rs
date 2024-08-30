@@ -36,6 +36,9 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProo
     Ok(Some(proof))
 }
 
+const SEGMENT_PROOF_ROUTING_KEY: &str = "segment_proof";
+const BLOCK_PROOF_ROUTING_KEY: &str = "block_proof";
+
 #[tokio::main]
 async fn main() -> Result<()> {
     load_dotenvy_vars_if_present();
@@ -56,13 +59,14 @@ async fn main() -> Result<()> {
     let args = cli::Cli::parse();
 
     let mut block_proof_paladin_args = args.paladin.clone();
-    block_proof_paladin_args.task_bus_routing_key = Some("block_proof".to_string());
+    block_proof_paladin_args.task_bus_routing_key = Some(BLOCK_PROOF_ROUTING_KEY.to_string());
 
-    let mut segment_paladin_args = args.paladin.clone();
-    segment_paladin_args.task_bus_routing_key = Some("segment".to_string());
+    let mut segment_proof_paladin_args = args.paladin.clone();
+    segment_proof_paladin_args.task_bus_routing_key = Some(SEGMENT_PROOF_ROUTING_KEY.to_string());
 
     let block_proof_runtime = Runtime::from_config(&block_proof_paladin_args, register()).await?;
-    let segment_runtime = Runtime::from_config(&segment_paladin_args, register()).await?;
+    let segment_proof_runtime =
+        Runtime::from_config(&segment_proof_paladin_args, register()).await?;
 
     let prover_config: ProverConfig = args.prover_config.into();
 
@@ -82,7 +86,7 @@ async fn main() -> Result<()> {
             let previous_proof = get_previous_proof(previous_proof)?;
             stdio::stdio_main(
                 block_proof_runtime,
-                segment_runtime,
+                segment_proof_runtime,
                 previous_proof,
                 prover_config,
             )
@@ -100,7 +104,7 @@ async fn main() -> Result<()> {
 
             http::http_main(
                 block_proof_runtime,
-                segment_runtime,
+                segment_proof_runtime,
                 port,
                 output_dir,
                 prover_config,
@@ -133,7 +137,7 @@ async fn main() -> Result<()> {
             info!("Proving interval {block_interval}");
             client_main(
                 block_proof_runtime,
-                segment_runtime,
+                segment_proof_runtime,
                 RpcParams {
                     rpc_url,
                     rpc_type,

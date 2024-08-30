@@ -101,7 +101,7 @@ Paladin options:
   -t, --task-bus-routing-key <TASK_BUS_ROUTING_KEY>
           Specifies the routing key for publishing task messages. In most cases, the default value should suffice
 
-          [default: ""]
+          [default: task]
 
   -s, --serializer <SERIALIZER>
           Determines the serialization format to be used

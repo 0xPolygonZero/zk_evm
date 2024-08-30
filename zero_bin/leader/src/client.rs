@@ -34,7 +34,7 @@ pub struct ProofParams {
 /// The main function for the client.
 pub(crate) async fn client_main(
     block_proof_runtime: Runtime,
-    segment_runtime: Runtime,
+    segment_proof_runtime: Runtime,
     rpc_params: RpcParams,
     block_interval: BlockInterval,
     mut params: ProofParams,
@@ -84,14 +84,14 @@ pub(crate) async fn client_main(
     let proved_blocks = prover::prove(
         block_prover_inputs,
         &block_proof_runtime,
-        &segment_runtime,
+        &segment_proof_runtime,
         params.previous_proof.take(),
         params.prover_config,
         params.proof_output_dir.clone(),
     )
     .await;
     block_proof_runtime.close().await?;
-    segment_runtime.close().await?;
+    segment_proof_runtime.close().await?;
     let proved_blocks = proved_blocks?;
 
     if params.prover_config.test_only {
