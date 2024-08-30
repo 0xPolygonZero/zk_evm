@@ -2,15 +2,18 @@ pub mod cli;
 
 use std::future::Future;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use alloy::primitives::{BlockNumber, U256};
+use alloy::primitives::U256;
 use anyhow::{Context, Result};
+use evm_arithmetization::BlockHeight;
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot;
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::info;
@@ -25,12 +28,12 @@ pub struct ProverConfig {
 }
 
 pub type BlockProverInputFuture = std::pin::Pin<
-    Box<dyn Future<Output = std::result::Result<BlockProverInput, anyhow::Error>> + Send>,
+    Box<dyn Future<Output = std::result::Result<BlockProverInput, Box<anyhow::Error>>> + Send>,
 >;
 
 impl From<BlockProverInput> for BlockProverInputFuture {
     fn from(item: BlockProverInput) -> Self {
-        async fn _from(item: BlockProverInput) -> Result<BlockProverInput, anyhow::Error> {
+        async fn _from(item: BlockProverInput) -> Result<BlockProverInput, Box<anyhow::Error>> {
             Ok(item)
         }
         Box::pin(_from(item))
@@ -50,7 +53,7 @@ impl BlockProverInput {
 
     pub async fn prove(
         self,
-        runtime: &Runtime,
+        runtime: Arc<Runtime>,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
@@ -104,7 +107,7 @@ impl BlockProverInput {
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
-                    .run(runtime)
+                    .run(&runtime)
                     .map(move |e| {
                         e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
                     })
@@ -114,7 +117,7 @@ impl BlockProverInput {
         // Fold the batch aggregated proof stream into a single proof.
         let final_batch_proof =
             Directive::fold(IndexedStream::new(batch_proof_futs), &batch_agg_ops)
-                .run(runtime)
+                .run(&runtime)
                 .await?;
 
         if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
@@ -131,7 +134,7 @@ impl BlockProverInput {
                     prev,
                     save_inputs_on_error,
                 })
-                .run(runtime)
+                .run(&runtime)
                 .await?;
 
             info!("Successfully proved block {block_number}");
@@ -144,7 +147,7 @@ impl BlockProverInput {
 
     pub async fn prove_test(
         self,
-        runtime: &Runtime,
+        runtime: Arc<Runtime>,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
@@ -185,7 +188,7 @@ impl BlockProverInput {
         );
 
         simulation
-            .run(runtime)
+            .run(&runtime)
             .await?
             .try_for_each(|_| future::ok(()))
             .await?;
@@ -208,90 +211,86 @@ impl BlockProverInput {
     }
 }
 
+async fn prove_block(
+    block: BlockProverInput,
+    runtime: Arc<Runtime>,
+    previous_block_proof: Option<BoxFuture<'_, Result<GeneratedBlockProof>>>,
+    prover_config: ProverConfig,
+) -> Result<GeneratedBlockProof> {
+    if prover_config.test_only {
+        block
+            .prove_test(runtime, previous_block_proof, prover_config)
+            .await
+    } else {
+        block
+            .prove(runtime, previous_block_proof, prover_config)
+            .await
+    }
+}
+
 /// Prove all the blocks in the input, or simulate their execution depending on
 /// the selected prover configuration. Return the list of block numbers that are
 /// proved and if the proof data is not saved to disk, return the generated
 /// block proofs as well.
 pub async fn prove(
-    block_prover_inputs: Vec<BlockProverInputFuture>,
-    runtime: &Runtime,
-    previous_proof: Option<GeneratedBlockProof>,
+    mut block_receiver: Receiver<BlockProverInput>,
+    runtime: Arc<Runtime>,
+    checkpoint_proof: Option<GeneratedBlockProof>,
     prover_config: ProverConfig,
     proof_output_dir: Option<PathBuf>,
-) -> Result<Vec<(BlockNumber, Option<GeneratedBlockProof>)>> {
-    let mut prev: Option<BoxFuture<Result<GeneratedBlockProof>>> =
-        previous_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
+) -> Result<()> {
+    let mut prev_proof: Option<BoxFuture<Result<GeneratedBlockProof>>> =
+        checkpoint_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
 
     let mut results = FuturesOrdered::new();
-    for block_prover_input in block_prover_inputs {
+    while let Some(block_prover_input) = block_receiver.recv().await {
         let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
         let proof_output_dir = proof_output_dir.clone();
-        let previous_block_proof = prev.take();
-        let fut = async move {
-            // Get the prover input data from the external source (e.g. Erigon node).
-            let block = block_prover_input.await?;
-            let block_number = block.get_block_number();
-            info!("Proving block {block_number}");
+        let previous_block_proof = prev_proof.take();
+        let runtime = runtime.clone();
+        let fut: BoxFuture<Result<(BlockHeight, Option<GeneratedBlockProof>), anyhow::Error>> =
+            async move {
+                let block_number = block_prover_input.get_block_number();
+                info!("Proving block {block_number}");
 
-            // Prove the block
-            let block_proof = if prover_config.test_only {
-                block
-                    .prove_test(runtime, previous_block_proof, prover_config)
-                    .then(move |proof| async move {
-                        let proof = proof?;
-                        let block_number = proof.b_height;
+                // Prove the block
+                let block_proof = prove_block(
+                    block_prover_input,
+                    runtime,
+                    previous_block_proof,
+                    prover_config,
+                )
+                .then(move |proof| async move {
+                    let proof = proof?;
+                    let block_number = proof.b_height;
 
-                        // Write latest generated proof to disk if proof_output_dir is provided
-                        // or alternatively return proof as function result.
-                        let return_proof: Option<GeneratedBlockProof> =
-                            if let Some(output_dir) = proof_output_dir {
-                                write_proof_to_dir(output_dir, proof.clone()).await?;
-                                None
-                            } else {
-                                Some(proof.clone())
-                            };
+                    // Write latest generated proof to disk if proof_output_dir is provided
+                    // or alternatively return proof as function result.
+                    let return_proof: Option<GeneratedBlockProof> =
+                        if let Some(output_dir) = proof_output_dir {
+                            write_proof_to_dir(output_dir, proof.clone()).await?;
+                            None
+                        } else {
+                            Some(proof.clone())
+                        };
 
-                        if tx.send(proof).is_err() {
-                            anyhow::bail!("Failed to send proof");
-                        }
+                    if tx.send(proof).is_err() {
+                        anyhow::bail!("Failed to send proof");
+                    }
 
-                        Ok((block_number, return_proof))
-                    })
-                    .await?
-            } else {
-                block
-                    .prove(runtime, previous_block_proof, prover_config)
-                    .then(move |proof| async move {
-                        let proof = proof?;
-                        let block_number = proof.b_height;
+                    Ok((block_number, return_proof))
+                })
+                .await?;
 
-                        // Write latest generated proof to disk if proof_output_dir is provided
-                        // or alternatively return proof as function result.
-                        let return_proof: Option<GeneratedBlockProof> =
-                            if let Some(output_dir) = proof_output_dir {
-                                write_proof_to_dir(output_dir, proof.clone()).await?;
-                                None
-                            } else {
-                                Some(proof.clone())
-                            };
-
-                        if tx.send(proof).is_err() {
-                            anyhow::bail!("Failed to send proof");
-                        }
-
-                        Ok((block_number, return_proof))
-                    })
-                    .await?
-            };
-
-            Ok(block_proof)
-        }
-        .boxed();
-        prev = Some(Box::pin(rx.map_err(anyhow::Error::new)));
+                Ok(block_proof)
+            }
+            .boxed();
+        prev_proof = Some(Box::pin(rx.map_err(anyhow::Error::new)));
         results.push_back(fut);
     }
 
-    results.try_collect().await
+    _ = results.try_collect::<Vec<_>>().await;
+    Ok(())
 }
 
 /// Write the proof to the `output_dir` directory.

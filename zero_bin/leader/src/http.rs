@@ -75,7 +75,7 @@ async fn prove(
         payload
             .prover_input
             .prove_test(
-                &runtime,
+                runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
@@ -84,7 +84,7 @@ async fn prove(
         payload
             .prover_input
             .prove(
-                &runtime,
+                runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )

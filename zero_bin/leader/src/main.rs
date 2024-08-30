@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{env, io};
 use std::{fs::File, path::PathBuf};
 
@@ -113,7 +114,7 @@ async fn main() -> Result<()> {
 
             info!("Proving interval {block_interval}");
             client_main(
-                runtime,
+                Arc::new(runtime),
                 RpcParams {
                     rpc_url,
                     rpc_type,
