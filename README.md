@@ -16,7 +16,7 @@ This repository contains the following Rust crates:
 understood by the zkEVM prover.
 
 * [evm_arithmetization](./evm_arithmetization/README.md): Defines all the STARK constraints and recursive circuits to generate succinct proofs of EVM execution.
-It uses starky and plonky2 as proving backend: https://github.com/0xPolygonZero/plonky2.
+It uses starky and plonky2 as a proving backend: https://github.com/0xPolygonZero/plonky2.
 
 * [proof_gen](./proof_gen/README.md): A convenience library for generating proofs from inputs already in Intermediate Representation (IR) format.
 
@@ -63,7 +63,7 @@ flowchart LR
 Documentation is still incomplete and will be improved over time.
 You can look at the [sequence diagrams](./docs/usage_seq_diagrams.md) for the proof generation flow,
 or go through the [zkEVM book](https://0xpolygonzero.github.io/zk_evm/)
-for explanations on the zkEVM design and architecture.
+for explanations of the zkEVM design and architecture.
 
 ## Branches
 The default branch for the repo is the `develop` branch which is not stable but under active development. Most PRs should target `develop`. If you need a stable branch then a tagged version of `main` is what you're after.
