@@ -1,15 +1,28 @@
 use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs::File,
     path::{Path, PathBuf},
 };
 
 use alloy::rpc::types::Header;
-use anyhow::{bail, ensure, Context as _};
+use anyhow::{ensure, Context as _};
 use camino::Utf8Path;
 use clap::Parser;
+use ethereum_types::{Address, U256};
+use evm_arithmetization::{
+    generation::mpt::AccountRlp,
+    proof::{BlockHashes, BlockMetadata},
+};
 use itertools::Itertools;
+use keccak_hash::H256;
+use mpt_trie::partial_trie::HashedPartialTrie;
 use prover::BlockProverInput;
 use serde::de::DeserializeOwned;
+use trace_decoder::{
+    BlockLevelData, BlockTrace, BlockTraceTriePreImages, OtherBlockData,
+    SeparateStorageTriesPreImage, SeparateTriePreImage, SeparateTriePreImages, TxnInfo,
+};
+use u4::U4;
 
 #[derive(Parser)]
 struct Args {
@@ -239,65 +252,81 @@ mod repr {
     }
 }
 
-fn main() -> anyhow::Result<()> {
-    let Args { block_prover_input } = Args::parse();
-    let bpis = match block_prover_input.is_empty() {
-        true => {
-            eprint!("loading default test vectors...");
-            let res = default_bpis()?;
-            eprintln!("ok");
-            res
-        }
-        false => block_prover_input
-            .into_iter()
-            .try_fold(vec![], |mut acc, path| {
-                acc.extend(
-                    json::<Vec<_>>(&path)?
-                        .into_iter()
-                        .enumerate()
-                        .map(|(ix, it)| (format!("{}[{ix}]", path.display()), it)),
-                );
-                anyhow::Ok(acc)
-            })?,
-    };
-    for (
-        name,
-        BlockProverInput {
-            block_trace,
-            other_data,
-        },
-    ) in bpis
-    {
-        eprint!("{name}...");
-        let reference = trace_decoder::entrypoint(block_trace.clone(), other_data.clone(), 1)
-            .context("couldn't generate reference")?
-            .into_iter()
-            .map(repr::GenerationInputs::from)
-            .collect::<Vec<_>>();
-        let subject = trace_decoder::entrypoint2(block_trace, other_data, non0::nonzero!(1))
-            .context("couldn't generate subject")?
-            .into_iter()
-            .map(repr::GenerationInputs::from)
-            .collect::<Vec<_>>();
-        match subject == reference {
-            true => eprintln!("ok"),
-            false => {
-                eprintln!("failed");
-                if subject.len() != reference.len() {
-                    eprintln!(
-                        "length differs by {} (subject: {}, reference: {})",
-                        subject.len().abs_diff(reference.len()),
-                        subject.len(),
-                        reference.len()
-                    );
-                }
-                serde_json::to_writer_pretty(File::create("subject.ignoreme")?, &subject)?;
-                serde_json::to_writer_pretty(File::create("reference.ignoreme")?, &reference)?;
-                bail!("failed");
-            }
-        }
+fn do_test(trace: BlockTrace, other: OtherBlockData) {
+    let reference = stringify(
+        trace_decoder::entrypoint(trace.clone(), other.clone(), 1)
+            .expect("couldn't generate reference"),
+    );
+    let subject = stringify(
+        trace_decoder::entrypoint2(trace, other, non0::nonzero!(1))
+            .expect("couldn't generate subject"),
+    );
+
+    pretty_assertions::assert_str_eq!(reference, subject);
+
+    #[track_caller]
+    fn stringify(src: Vec<evm_arithmetization::GenerationInputs>) -> String {
+        serde_json::to_string_pretty(
+            &src.into_iter()
+                .map(repr::GenerationInputs::from)
+                .collect::<Vec<_>>(),
+        )
+        .expect("unable to serialize")
     }
-    Ok(())
+}
+
+#[test]
+fn test() {
+    do_test(trace(), other());
+}
+
+fn state(
+    full: impl Into<BTreeMap<Address, AccountRlp>>,
+    deferred: impl Into<BTreeMap<Vec<U4>, H256>>,
+) -> HashedPartialTrie {
+    todo!()
+}
+
+fn storage(
+    owner: Address,
+    full: impl Into<BTreeMap<H256, Vec<u8>>>,
+    deferred: impl Into<BTreeMap<Vec<U4>, H256>>,
+) -> HashedPartialTrie {
+    todo!()
+}
+
+fn trace(
+    state: impl Into<HashedPartialTrie>,
+    storage: impl Into<HashMap<H256, HashedPartialTrie>>,
+    code_db: impl Into<BTreeSet<Vec<u8>>>,
+    txn_info: impl Into<Vec<TxnInfo>>,
+) -> BlockTrace {
+    BlockTrace {
+        trie_pre_images: BlockTraceTriePreImages::Separate(SeparateTriePreImages {
+            state: SeparateTriePreImage::Direct(state.into()),
+            storage: SeparateStorageTriesPreImage::MultipleTries(
+                Into::<HashMap<H256, HashedPartialTrie>>::into(storage)
+                    .into_iter()
+                    .map(|(k, v)| (k, SeparateTriePreImage::Direct(v)))
+                    .collect(),
+            ),
+        }),
+        code_db: code_db.into(),
+        txn_info: txn_info.into(),
+    }
+}
+fn other() -> OtherBlockData {
+    OtherBlockData {
+        b_data: BlockLevelData {
+            b_meta: BlockMetadata::default(),
+            b_hashes: BlockHashes {
+                prev_hashes: Vec::<H256>::default(),
+                cur_hash: H256::default(),
+            },
+            withdrawals: Vec::<(Address, U256)>::default(),
+        },
+        checkpoint_state_trie_root: H256::default(),
+    }
 }
 
 fn default_bpis() -> anyhow::Result<Vec<(String, BlockProverInput)>> {
