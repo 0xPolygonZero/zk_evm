@@ -6,15 +6,12 @@ use std::str::FromStr;
 use anyhow::{bail, Error, Result};
 use ethereum_types::{BigEndianHash, H256, U256, U512};
 use itertools::Itertools;
-use mpt_trie::partial_trie::HashedPartialTrie;
 use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
 use super::linked_list::LinkedList;
 use super::mpt::load_state_mpt;
-use super::state::State;
-use super::trie_extractor::get_state_trie;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
     BLOB_BASE_FEE_UPDATE_FRACTION, G2_TRUSTED_SETUP_POINT, MIN_BASE_FEE_PER_BLOB_GAS,

@@ -16,7 +16,7 @@
 //
 // Pre stack: node_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, retdest
 // Post stack: hash, new_len, next_addr_ptr, next_slot_ptr
-global mpt_hash_new:
+global mpt_hash_and_set_payload:
     // stack: node_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr, retdest
     %stack 
         (node_ptr, encode_value, cur_len, next_addr_ptr, next_slot_ptr) -> 
@@ -37,11 +37,13 @@ mpt_hash_hash_rlp:
     %stack (result, result_len, new_len)
         -> (@SEGMENT_RLP_RAW, result, result_len, mpt_hash_hash_rlp_after_unpacking, result_len, new_len)
     // stack: addr, result, result_len, mpt_hash_hash_rlp_after_unpacking, result_len, new_len
+    %increment
     %jump(mstore_unpacking)
 mpt_hash_hash_rlp_after_unpacking:
     // stack: result_addr, result_len, new_len, next_addr_ptr, next_slot_ptr, retdest
     POP PUSH @SEGMENT_RLP_RAW // ctx == virt == 0
     // stack: result_addr, result_len, new_len, next_addr_ptr, next_slot_ptr,  retdest
+    %increment
     KECCAK_GENERAL
     // stack: hash, new_len, next_addr_ptr, next_slot_ptr, retdest
     %stack

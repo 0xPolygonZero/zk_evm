@@ -1,6 +1,6 @@
 // Hashing logic specific to a particular trie.
 
-global mpt_hash_state_trie_new:
+global mpt_hash_state_trie_and_set_payload:
     // stack: cur_len, retdest
     %first_initial_slot
     SWAP1
@@ -9,13 +9,13 @@ global mpt_hash_state_trie_new:
     PUSH encode_account_new
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
     // stack: node_ptr, encode_account_new, cur_len, next_addr_ptr, next_slot_ptr, retdest
-    %jump(mpt_hash_new)
+    %jump(mpt_hash_and_set_payload)
 
-%macro mpt_hash_state_trie_new
+%macro mpt_hash_state_trie_and_set_payload
     // stack: cur_len
     PUSH %%after
     SWAP1
-    %jump(mpt_hash_state_trie_new)
+    %jump(mpt_hash_state_trie_and_set_payload)
 %%after:
     %stack
         (hash, new_len, next_addr_ptr, next_slot_ptr) ->

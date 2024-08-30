@@ -10,10 +10,6 @@ use crate::cpu::membus::NUM_GP_CHANNELS;
 use crate::cpu::stack::{
     EQ_STACK_BEHAVIOR, IS_ZERO_STACK_BEHAVIOR, JUMPI_OP, JUMP_OP, MIGHT_OVERFLOW, STACK_BEHAVIORS,
 };
-use crate::generation::linked_list::LinkedList;
-use crate::generation::prover_input::{
-    ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
-};
 use crate::generation::state::State;
 use crate::memory::segments::Segment;
 use crate::witness::errors::ProgramError;
@@ -297,6 +293,14 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
             KERNEL.offset_name(pc),
             op,
             state.get_generation_state().stack(),
+        ),
+    );
+
+    state.log(
+        level,
+        format!(
+            "rlp[0] = {:?}",
+            state.get_generation_state().memory.contexts[0].segments[Segment::RlpRaw.unscale()].content[0],
         ),
     );
 

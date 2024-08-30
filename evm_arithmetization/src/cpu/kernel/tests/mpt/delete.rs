@@ -115,32 +115,28 @@ fn test_state_trie(
     interpreter.run().unwrap();
 
     assert_eq!(interpreter.stack(), vec![]);
-    // Set initial tries.
+    
+    // Now, set the payload.
     interpreter
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push((Segment::StorageLinkedList as usize + 8).into())
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize))
         .expect("The stack should not overflow");
-    interpreter
-        .push((Segment::AccountsLinkedList as usize + 6).into())
-        .expect("The stack should not overflow");
-    interpreter
-        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
-        .unwrap();
-
-    // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
-        KERNEL.global_labels["mpt_set_payload"];
+        KERNEL.global_labels["mpt_hash_state_trie_and_set_payload"];
 
     interpreter.run()?;
 
-    assert_eq!(interpreter.stack_len(), 2);
+    assert_eq!(interpreter.stack_len(), 4);
 
-    let acc_ptr = interpreter.pop().expect("The stack should not be empty") - 2;
-    let storage_ptr = interpreter.pop().expect("The stack should not be empty") - 3;
+    interpreter.pop().expect("The stack should not be empty"); // We don't need the hash.
+    interpreter.pop().expect("The stack should not be empty"); // Nor cur_len
+    let acc_ptr = interpreter.pop().expect("The stack should not be empty");
+    let storage_ptr = interpreter.pop().expect("The stack should not be empty");
     interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
     interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
+
 
     // Next, execute mpt_insert_state_trie.
     interpreter.generation_state.registers.program_counter = mpt_insert_state_trie;

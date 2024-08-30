@@ -4,19 +4,19 @@ use std::collections::HashMap;
 use bytes::Bytes;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
-use mpt_trie::nibbles::{Nibbles, NibblesIntern, ToNibbles};
+use mpt_trie::nibbles::{Nibbles, NibblesIntern};
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie};
 use rlp::{Decodable, DecoderError, Encodable, PayloadInfo, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
-use super::linked_list::{empty_list_mem, LinkedList};
+use super::linked_list::empty_list_mem;
 use super::prover_input::{ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE};
 use super::TrimmedTrieInputs;
 use crate::cpu::kernel::constants::trie_type::PartialTrieType;
 use crate::generation::TrieInputs;
 use crate::memory::segments::Segment;
-use crate::util::{h2u, u256_to_u64, u256_to_usize};
+use crate::util::h2u;
 use crate::witness::errors::{ProgramError, ProverInputError};
 use crate::Node;
 
@@ -453,13 +453,7 @@ where
                     count: 1,
                     packed: i.into(),
                 });
-                get_storage_leaves(
-                    addr_key,
-                    extended_key,
-                    child,
-                    storage_leaves,
-                    parse_value,
-                )?;
+                get_storage_leaves(addr_key, extended_key, child, storage_leaves, parse_value)?;
             }
 
             Ok(())
@@ -467,13 +461,7 @@ where
 
         Node::Extension { nibbles, child } => {
             let extended_key = key.merge_nibbles(nibbles);
-            get_storage_leaves(
-                addr_key,
-                extended_key,
-                child,
-                storage_leaves,
-                parse_value,
-            )?;
+            get_storage_leaves(addr_key, extended_key, child, storage_leaves, parse_value)?;
 
             Ok(())
         }

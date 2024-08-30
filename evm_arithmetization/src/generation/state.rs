@@ -15,11 +15,7 @@ use crate::byte_packing::byte_packing_stark::BytePackingOp;
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata;
 use crate::cpu::stack::MAX_USER_STACK_SIZE;
-use crate::generation::linked_list::LinkedList;
 use crate::generation::mpt::load_linked_lists_and_txn_and_receipt_mpts;
-use crate::generation::prover_input::{
-    ACCOUNTS_LINKED_LIST_NODE_SIZE, STORAGE_LINKED_LIST_NODE_SIZE,
-};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::CpuColumnsView;
 use crate::generation::GenerationInputs;
@@ -187,7 +183,7 @@ pub(crate) trait State<F: Field> {
         let mut final_registers = RegistersState::default();
         let mut running = true;
         let mut final_clock = 0;
-        
+
         loop {
             let registers = self.get_registers();
             let pc = registers.program_counter;

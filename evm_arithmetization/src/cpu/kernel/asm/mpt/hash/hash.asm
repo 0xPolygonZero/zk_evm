@@ -31,11 +31,13 @@ mpt_hash_hash_rlp:
     %stack (result, result_len, new_len)
         -> (@SEGMENT_RLP_RAW, result, result_len, mpt_hash_hash_rlp_after_unpacking, result_len, new_len)
     // stack: addr, result, result_len, mpt_hash_hash_rlp_after_unpacking, result_len, new_len
+    %increment
     %jump(mstore_unpacking)
 mpt_hash_hash_rlp_after_unpacking:
     // stack: result_addr, result_len, new_len, retdest
     POP PUSH @SEGMENT_RLP_RAW // ctx == virt == 0
     // stack: result_addr, result_len, new_len, retdest
+    %increment
     KECCAK_GENERAL
     // stack: hash, new_len, retdest
     %stack(hash, new_len, retdest) -> (retdest, hash, new_len)

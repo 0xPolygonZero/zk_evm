@@ -202,7 +202,7 @@ global check_state_trie:
     PROVER_INPUT(trie_ptr::trie_data_size)
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
-    %mpt_hash_state_trie_new
+    %mpt_hash_state_trie_and_set_payload
 
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.

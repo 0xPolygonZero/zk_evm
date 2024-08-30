@@ -8,6 +8,7 @@ use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::prepare_interpreter;
 use crate::generation::mpt::AccountRlp;
+use crate::testing_utils::init_logger;
 use crate::Node;
 
 // Test account with a given code hash.
@@ -22,6 +23,7 @@ fn test_account(balance: U256) -> AccountRlp {
 
 #[test]
 fn test_balance() -> Result<()> {
+    init_logger();
     let mut rng = thread_rng();
     let balance = U256(rng.gen());
     let account = test_account(balance);
