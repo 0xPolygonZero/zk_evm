@@ -2,7 +2,7 @@
 //! generation process.
 
 use evm_arithmetization::{
-    fixed_recursive_verifier::{extract_block_public_values, extract_two_to_one_block_hash},
+    fixed_recursive_verifier::{extract_block_final_public_values, extract_two_to_one_block_hash},
     proof::PublicValues,
     BlockHeight,
 };
@@ -187,7 +187,7 @@ impl AggregatableBlockProof {
     pub fn pv_hash(&self) -> Hash {
         match self {
             AggregatableBlockProof::Block(info) => {
-                let pv = extract_block_public_values(&info.intern.public_inputs);
+                let pv = extract_block_final_public_values(&info.intern.public_inputs);
                 Hasher::hash_no_pad(pv)
             }
             AggregatableBlockProof::Agg(info) => {

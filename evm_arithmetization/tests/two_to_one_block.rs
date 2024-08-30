@@ -1,10 +1,10 @@
 use env_logger::{try_init_from_env, Env, DEFAULT_FILTER_ENV};
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
-    extract_block_public_values, extract_two_to_one_block_hash,
+    extract_block_final_public_values, extract_two_to_one_block_hash,
 };
 use evm_arithmetization::generation::{GenerationInputs, TrieInputs};
-use evm_arithmetization::proof::{BlockMetadata, PublicValues, TrieRoots};
+use evm_arithmetization::proof::{BlockMetadata, FinalPublicValues, PublicValues, TrieRoots};
 use evm_arithmetization::testing_utils::{
     beacon_roots_account_nibbles, beacon_roots_contract_from_storage, ger_account_nibbles,
     preinitialized_state_and_storage_tries, update_beacon_roots_account_storage,
@@ -128,7 +128,7 @@ fn get_test_block_proof(
     let dummy0_proof =
         all_circuits.prove_segment_aggregation(false, &dummy1_proof[0], false, &dummy1_proof[1])?;
 
-    let (agg_proof0, pv0) = all_circuits.prove_transaction_aggregation(
+    let (agg_proof, pv) = all_circuits.prove_transaction_aggregation(
         false,
         &inputs0_proof.proof_with_pis,
         inputs0_proof.public_values,
@@ -137,26 +137,39 @@ fn get_test_block_proof(
         dummy0_proof.public_values,
     )?;
 
-    all_circuits.verify_txn_aggregation(&agg_proof0)?;
+    all_circuits.verify_txn_aggregation(&agg_proof)?;
 
     // Test retrieved public values from the proof public inputs.
-    let retrieved_public_values0 = PublicValues::from_public_inputs(&agg_proof0.public_inputs);
-    assert_eq!(retrieved_public_values0, pv0);
+    let retrieved_public_values = PublicValues::from_public_inputs(&agg_proof.public_inputs);
+    assert_eq!(retrieved_public_values, pv);
     assert_eq!(
-        pv0.trie_roots_before.state_root,
-        pv0.extra_block_data.checkpoint_state_trie_root
+        pv.trie_roots_before.state_root,
+        pv.extra_block_data.checkpoint_state_trie_root
     );
 
-    let (block_proof0, block_public_values) = all_circuits.prove_block(
+    let (block_proof, block_public_values) = all_circuits.prove_block(
         None, // We don't specify a previous proof, considering block 1 as the new checkpoint.
-        &agg_proof0,
-        pv0.clone(),
+        &agg_proof,
+        pv.clone(),
     )?;
 
-    let pv_block = PublicValues::from_public_inputs(&block_proof0.public_inputs);
-    assert_eq!(block_public_values, pv_block.into());
+    all_circuits.verify_block(&block_proof)?;
 
-    Ok(block_proof0)
+    // Test retrieved public values from the proof public inputs.
+    let retrieved_public_values = PublicValues::from_public_inputs(&block_proof.public_inputs);
+    assert_eq!(retrieved_public_values, block_public_values);
+
+    let (wrapped_block_proof, block_final_public_values) =
+        all_circuits.prove_block_wrapper(&block_proof, block_public_values)?;
+
+    // Test retrieved final public values from the proof public inputs.
+    let retrieved_final_public_values =
+        FinalPublicValues::from_public_inputs(&wrapped_block_proof.public_inputs);
+    assert_eq!(retrieved_final_public_values, block_final_public_values);
+
+    all_circuits.verify_block_wrapper(&wrapped_block_proof)?;
+
+    Ok(wrapped_block_proof)
 }
 
 #[ignore]
@@ -171,28 +184,22 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
         &all_stark,
         &[
             16..17,
-            9..15,
-            12..18,
+            8..9,
             14..15,
             9..10,
-            12..13,
-            17..20,
-            16..17,
+            8..9,
+            7..8,
+            17..18,
+            17..18,
             7..8,
         ],
         &config,
     );
 
-    let unrelated_block_proofs = some_timestamps
+    let bp = some_timestamps
         .iter()
         .map(|&ts| get_test_block_proof(ts, &all_circuits, &all_stark, &config))
         .collect::<anyhow::Result<Vec<ProofWithPublicInputs<F, C, D>>>>()?;
-
-    unrelated_block_proofs
-        .iter()
-        .try_for_each(|bp| all_circuits.verify_block(bp))?;
-
-    let bp = unrelated_block_proofs;
 
     {
         // Aggregate the same proof twice
@@ -225,7 +232,8 @@ fn test_two_to_one_block_aggregation() -> anyhow::Result<()> {
             let mut hashes: Vec<_> = bp
                 .iter()
                 .map(|block_proof| {
-                    let public_values = extract_block_public_values(&block_proof.public_inputs);
+                    let public_values =
+                        extract_block_final_public_values(&block_proof.public_inputs);
                     PoseidonHash::hash_no_pad(public_values)
                 })
                 .collect();

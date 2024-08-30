@@ -101,12 +101,9 @@ impl TxnInfo {
             ) in &txn.traces
             {
                 // record storage changes
-                let storage_written = storage_written.clone().unwrap_or_default();
+                let storage_written = storage_written.clone();
 
-                let storage_read_keys = storage_read
-                    .clone()
-                    .into_iter()
-                    .flat_map(|reads| reads.into_iter());
+                let storage_read_keys = storage_read.clone().into_iter();
 
                 let storage_written_keys = storage_written.keys();
                 let storage_access_keys = storage_read_keys.chain(storage_written_keys.copied());
@@ -205,7 +202,7 @@ impl TxnInfo {
                     None => {}
                 }
 
-                if self_destructed.unwrap_or_default() {
+                if *self_destructed {
                     nodes_used_by_txn.self_destructed_accounts.insert(*addr);
                 }
             }

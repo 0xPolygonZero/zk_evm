@@ -128,22 +128,13 @@ impl PublicValues {
     }
 }
 
-/// Memory values which are public.
+/// Memory values which are public once a final block proof is generated.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct FinalPublicValues {
-    /// Trie hashes before the execution of the local state transition
-    pub trie_roots_before: TrieRoots,
-    /// Trie hashes after the execution of the local state transition.
-    pub trie_roots_after: TrieRoots,
-    /// Address to store the base fee to be burnt: only used when feature
-    /// `cdk_erigon` is active.
-    pub burn_addr: Option<U256>,
-    /// Block metadata: it remains unchanged within a block.
-    pub block_metadata: BlockMetadata,
-    /// 256 previous block hashes and current block's hash.
-    pub block_hashes: BlockHashes,
-    /// Extra block data that is specific to the current proof.
-    pub extra_block_data: ExtraBlockData,
+    /// State trie root before the execution of this global state transition.
+    pub state_trie_root_before: H256,
+    /// State trie root after the execution of this global state transition.
+    pub state_trie_root_after: H256,
 }
 
 impl FinalPublicValues {
@@ -151,43 +142,16 @@ impl FinalPublicValues {
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
-        assert!(
-            PublicValuesTarget::SIZE - 2 * RegistersDataTarget::SIZE - 2 * MemCapTarget::SIZE
-                <= pis.len()
-        );
+        assert!(FinalPublicValuesTarget::SIZE <= pis.len());
 
         let mut offset = 0;
-        let trie_roots_before =
-            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
-        offset += TrieRootsTarget::SIZE;
-        let trie_roots_after =
-            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
-        offset += TrieRootsTarget::SIZE;
-        let burn_addr = match cfg!(feature = "cdk_erigon") {
-            true => Some(get_u256(
-                &pis[offset..offset + BurnAddrTarget::get_size()]
-                    .try_into()
-                    .unwrap(),
-            )),
-            false => None,
-        };
-        offset += BurnAddrTarget::get_size();
-        let block_metadata =
-            BlockMetadata::from_public_inputs(&pis[offset..offset + BlockMetadataTarget::SIZE]);
-        offset += BlockMetadataTarget::SIZE;
-        let block_hashes =
-            BlockHashes::from_public_inputs(&pis[offset..offset + BlockHashesTarget::SIZE]);
-        offset += BlockHashesTarget::SIZE;
-        let extra_block_data =
-            ExtraBlockData::from_public_inputs(&pis[offset..offset + ExtraBlockDataTarget::SIZE]);
+        let state_trie_root_before = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        offset += TARGET_HASH_SIZE;
+        let state_trie_root_after = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
 
         Self {
-            trie_roots_before,
-            trie_roots_after,
-            burn_addr,
-            block_metadata,
-            block_hashes,
-            extra_block_data,
+            state_trie_root_before,
+            state_trie_root_after,
         }
     }
 }
@@ -195,12 +159,67 @@ impl FinalPublicValues {
 impl From<PublicValues> for FinalPublicValues {
     fn from(value: PublicValues) -> Self {
         Self {
-            trie_roots_before: value.trie_roots_before,
-            trie_roots_after: value.trie_roots_after,
-            burn_addr: value.burn_addr,
-            block_metadata: value.block_metadata,
-            block_hashes: value.block_hashes,
-            extra_block_data: value.extra_block_data,
+            state_trie_root_before: value.trie_roots_before.state_root,
+            state_trie_root_after: value.trie_roots_after.state_root,
+        }
+    }
+}
+
+/// Memory values which are public once a final block proof is generated.
+/// Note: All the larger integers are encoded with 32-bit limbs in little-endian
+/// order.
+#[derive(Eq, PartialEq, Debug)]
+pub struct FinalPublicValuesTarget {
+    /// State trie root before the execution of this global state transition.
+    pub state_trie_root_before: [Target; TARGET_HASH_SIZE],
+    /// State trie root after the execution of this global state transition.
+    pub state_trie_root_after: [Target; TARGET_HASH_SIZE],
+}
+
+impl FinalPublicValuesTarget {
+    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 2;
+
+    /// Serializes public value targets.
+    pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        buffer.write_target_array(&self.state_trie_root_before)?;
+        buffer.write_target_array(&self.state_trie_root_after)?;
+
+        Ok(())
+    }
+
+    /// Deserializes public value targets.
+    pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let state_trie_root_before = buffer.read_target_array()?;
+        let state_trie_root_after = buffer.read_target_array()?;
+
+        Ok(Self {
+            state_trie_root_before,
+            state_trie_root_after,
+        })
+    }
+
+    /// Connects these `FinalPublicValuesTarget` with their corresponding
+    /// counterpart in a full parent `PublicValuesTarget`.
+    pub(crate) fn connect_parent<F: RichField + Extendable<D>, const D: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        pv1: &PublicValuesTarget,
+    ) {
+        for i in 0..8 {
+            builder.connect(
+                self.state_trie_root_before[i],
+                pv1.trie_roots_before.state_root[i],
+            );
+            builder.connect(
+                self.state_trie_root_after[i],
+                pv1.trie_roots_after.state_root[i],
+            );
+            // We only use `FinalPublicValues` at the final block proof wrapping stage,
+            // where we should enforce consistency with the known checkpoint.
+            builder.connect(
+                self.state_trie_root_before[i],
+                pv1.extra_block_data.checkpoint_state_trie_root[i],
+            );
         }
     }
 }
@@ -446,6 +465,7 @@ pub struct MemCap {
     /// STARK cap.
     pub mem_cap: Vec<[U256; NUM_HASH_OUT_ELTS]>,
 }
+
 impl MemCap {
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         let mem_cap = (0..DEFAULT_CAP_LEN)

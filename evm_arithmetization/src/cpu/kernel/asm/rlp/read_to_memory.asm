@@ -8,10 +8,10 @@ global read_rlp_to_memory:
     // stack: retdest
     PROVER_INPUT(rlp) // Read the RLP blob length from the prover tape.
     // stack: len, retdest
-    PUSH @INITIAL_TXN_RLP_ADDR
-    %build_kernel_address
+    PUSH @INITIAL_RLP_ADDR
+    ADD
 
-    PUSH @INITIAL_TXN_RLP_ADDR
+    PUSH @INITIAL_RLP_ADDR
     // stack: addr, final_addr, retdest
 read_rlp_to_memory_loop:
     // stack: addr, final_addr, retdest
@@ -30,9 +30,9 @@ read_rlp_to_memory_loop:
 
 read_rlp_to_memory_finish:
     // stack: addr, final_addr, retdest
-    // we recover the offset here
-    PUSH @INITIAL_TXN_RLP_ADDR
+    // we recover the length here
+    PUSH @INITIAL_RLP_ADDR
     DUP3 SUB
-    // stack: pos, addr, final_addr, retdest
-    %stack(pos, addr, final_addr, retdest) -> (retdest, pos)
+    // stack: len, addr, final_addr, retdest
+    %stack(len, addr, final_addr, retdest) -> (retdest, len)
     JUMP
