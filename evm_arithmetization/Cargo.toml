@@ -64,6 +64,7 @@ parallel = [
   "starky/parallel",
 ]
 polygon_pos = []
+cdk_erigon = []
 
 [[bin]]
 name = "assemble"

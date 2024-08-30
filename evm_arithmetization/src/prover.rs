@@ -40,6 +40,9 @@ where
     F: RichField + Extendable<D>,
     C: GenericConfig<D, F = F>,
 {
+    if inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
+        log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
+    }
     // Sanity check on the provided config
     assert_eq!(DEFAULT_CAP_LEN, 1 << config.fri_config.cap_height);
 
@@ -467,6 +470,9 @@ pub mod testing {
     /// Simulates the zkEVM CPU execution.
     /// It does not generate any trace or proof of correct state transition.
     pub fn simulate_execution<F: RichField>(inputs: GenerationInputs) -> Result<()> {
+        if inputs.burn_addr.is_some() && !cfg!(feature = "cdk_erigon") {
+            log::warn!("The burn address in the GenerationInputs will be ignored, as the `cdk_erigon` feature is not activated.")
+        }
         let initial_stack = vec![];
         let initial_offset = KERNEL.global_labels["init"];
         let mut interpreter: Interpreter<F> =

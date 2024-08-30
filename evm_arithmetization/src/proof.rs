@@ -52,6 +52,9 @@ pub struct PublicValues {
     pub trie_roots_before: TrieRoots,
     /// Trie hashes after the execution of the local state transition.
     pub trie_roots_after: TrieRoots,
+    /// Address to store the base fee to be burnt: only used when feature
+    /// `cdk_erigon` is active.
+    pub burn_addr: Option<U256>,
     /// Block metadata: it remains unchanged within a block.
     pub block_metadata: BlockMetadata,
     /// 256 previous block hashes and current block's hash.
@@ -82,6 +85,15 @@ impl PublicValues {
         let trie_roots_after =
             TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
         offset += TrieRootsTarget::SIZE;
+        let burn_addr = match cfg!(feature = "cdk_erigon") {
+            true => Some(get_u256(
+                &pis[offset..offset + BurnAddrTarget::get_size()]
+                    .try_into()
+                    .unwrap(),
+            )),
+            false => None,
+        };
+        offset += BurnAddrTarget::get_size();
         let block_metadata =
             BlockMetadata::from_public_inputs(&pis[offset..offset + BlockMetadataTarget::SIZE]);
         offset += BlockMetadataTarget::SIZE;
@@ -104,6 +116,7 @@ impl PublicValues {
         Self {
             trie_roots_before,
             trie_roots_after,
+            burn_addr,
             block_metadata,
             block_hashes,
             extra_block_data,
@@ -476,6 +489,8 @@ pub struct PublicValuesTarget {
     pub trie_roots_before: TrieRootsTarget,
     /// Trie hashes after the execution of the local state transition.
     pub trie_roots_after: TrieRootsTarget,
+    /// Address to store the base fee to be burnt.
+    pub burn_addr: BurnAddrTarget,
     /// Block metadata: it remains unchanged within a block.
     pub block_metadata: BlockMetadataTarget,
     /// 256 previous block hashes and current block's hash.
@@ -618,6 +633,11 @@ impl PublicValuesTarget {
             receipts_root: buffer.read_target_array()?,
         };
 
+        let burn_addr = match cfg!(feature = "cdk_erigon") {
+            true => BurnAddrTarget::BurnAddr(buffer.read_target_array()?),
+            false => BurnAddrTarget::Burnt(),
+        };
+
         let block_metadata = BlockMetadataTarget {
             block_beneficiary: buffer.read_target_array()?,
             block_timestamp: buffer.read_target()?,
@@ -674,6 +694,7 @@ impl PublicValuesTarget {
         Ok(Self {
             trie_roots_before,
             trie_roots_after,
+            burn_addr,
             block_metadata,
             block_hashes,
             extra_block_data,
@@ -697,6 +718,9 @@ impl PublicValuesTarget {
         let trie_roots_after =
             TrieRootsTarget::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
         offset += TrieRootsTarget::SIZE;
+        let burn_addr =
+            BurnAddrTarget::from_public_inputs(&pis[offset..offset + BurnAddrTarget::get_size()]);
+        offset += BurnAddrTarget::get_size();
         let block_metadata = BlockMetadataTarget::from_public_inputs(
             &pis[offset..offset + BlockMetadataTarget::SIZE],
         );
@@ -724,6 +748,7 @@ impl PublicValuesTarget {
         Self {
             trie_roots_before,
             trie_roots_after,
+            burn_addr,
             block_metadata,
             block_hashes,
             extra_block_data,
@@ -754,6 +779,7 @@ impl PublicValuesTarget {
                 pv0.trie_roots_after,
                 pv1.trie_roots_after,
             ),
+            burn_addr: BurnAddrTarget::select(builder, condition, pv0.burn_addr, pv1.burn_addr),
             block_metadata: BlockMetadataTarget::select(
                 builder,
                 condition,
@@ -886,6 +912,115 @@ impl TrieRootsTarget {
                 tr0.receipts_root[i],
                 tr1.receipts_root[i],
             );
+        }
+    }
+}
+
+/// Circuit version of `BurnAddr`.
+/// Address used to store the base fee to be burnt.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub enum BurnAddrTarget {
+    BurnAddr([Target; 8]),
+    Burnt(),
+}
+
+impl BurnAddrTarget {
+    pub fn get_size() -> usize {
+        match cfg!(feature = "cdk_erigon") {
+            true => 8,
+            false => 0,
+        }
+    }
+
+    /// Extracts the burn address from the provided public input
+    /// `Target`s. The provided `pis` should start with the burn address.
+    pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
+        match cfg!(feature = "cdk_erigon") {
+            true => BurnAddrTarget::BurnAddr(pis[0..8].try_into().unwrap()),
+            false => BurnAddrTarget::Burnt(),
+        }
+    }
+
+    /// If `condition`, returns the burn address in `ba0`,
+    /// otherwise returns the burn address in `ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget`s are `BurnAddr` variants.
+    pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        ba0: Self,
+        ba1: Self,
+    ) -> Self {
+        match cfg!(feature = "cdk_erigon") {
+            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of type
+            // `BurnAddr`.
+            true => match (ba0, ba1) {
+                (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
+                    BurnAddrTarget::BurnAddr(core::array::from_fn(|i| {
+                        builder.select(condition, a0[i], a1[i])
+                    }))
+                }
+                _ => panic!("We should have already set an address (or U256::MAX) before."),
+            },
+            false => BurnAddrTarget::Burnt(),
+        }
+    }
+
+    /// Connects the burn address in `ba0` to the burn address in `ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget`s are `BurnAddr` variants.
+    pub(crate) fn connect<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        ba0: Self,
+        ba1: Self,
+    ) {
+        // There only are targets to connect if there is a burn address, i.e. when the
+        // `cdk_erigon` feature is active.
+        if cfg!(feature = "cdk_erigon") == true {
+            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of
+            // type `BurnAddr`.
+            match (ba0, ba1) {
+                (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
+                    for i in 0..BurnAddrTarget::get_size() {
+                        builder.connect(a0[i], a1[i]);
+                    }
+                }
+                _ => panic!("We should have already set an address (or U256::MAX) before."),
+            }
+        }
+    }
+
+    /// If `condition`, asserts that `ba0 == ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget` are `BurnAddr` variants.
+    pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        ba0: Self,
+        ba1: Self,
+    ) {
+        if cfg!(feature = "cdk_erigon") {
+            match (ba0, ba1) {
+                (
+                    BurnAddrTarget::BurnAddr(addr_targets_0),
+                    BurnAddrTarget::BurnAddr(addr_targets_1),
+                ) => {
+                    for i in 0..BurnAddrTarget::get_size() {
+                        builder.conditional_assert_eq(
+                            condition.target,
+                            addr_targets_0[i],
+                            addr_targets_1[i],
+                        )
+                    }
+                }
+                _ => panic!("There should be an address set in cdk_erigon."),
+            }
         }
     }
 }

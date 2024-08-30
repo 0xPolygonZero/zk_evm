@@ -156,6 +156,13 @@ fn test_log_opcodes() -> anyhow::Result<()> {
 
     // Update the state and receipt tries after the transaction, so that we have the
     // correct expected tries: Update accounts
+    #[cfg(feature = "cdk_erigon")]
+    let beneficiary_account_after = AccountRlp {
+        nonce: 1.into(),
+        balance: block_metadata.block_base_fee * gas_used,
+        ..AccountRlp::default()
+    };
+    #[cfg(not(feature = "cdk_erigon"))]
     let beneficiary_account_after = AccountRlp {
         nonce: 1.into(),
         ..AccountRlp::default()
@@ -237,8 +244,14 @@ fn test_log_opcodes() -> anyhow::Result<()> {
         receipts_root: receipts_trie.hash(),
     };
 
+    let burn_addr = match cfg!(feature = "cdk_erigon") {
+        true => Some(Address::from(beneficiary)),
+        false => None,
+    };
+
     let inputs = GenerationInputs {
         signed_txns: vec![txn.to_vec()],
+        burn_addr,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,

@@ -94,6 +94,7 @@ fn dummy_payload(timestamp: u64, is_first_payload: bool) -> anyhow::Result<Gener
 
     let inputs = GenerationInputs {
         tries: tries_before.clone(),
+        burn_addr: None,
         trie_roots_after,
         checkpoint_state_trie_root,
         block_metadata,
