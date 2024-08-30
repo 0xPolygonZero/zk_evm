@@ -64,7 +64,6 @@ fn test_erc20() -> anyhow::Result<()> {
     let sender_nibbles = Nibbles::from_bytes_be(sender_state_key.as_bytes()).unwrap();
     let giver_nibbles = Nibbles::from_bytes_be(giver_state_key.as_bytes()).unwrap();
     let token_nibbles = Nibbles::from_bytes_be(token_state_key.as_bytes()).unwrap();
-    log::debug!("Sender nibbles = {:?}", sender_nibbles);
 
     let (mut state_trie_before, mut storage_tries) = preinitialized_state_and_storage_tries()?;
     let mut beacon_roots_account_storage = storage_tries[0].1.clone();
@@ -173,8 +172,6 @@ fn test_erc20() -> anyhow::Result<()> {
         value: txn.to_vec(),
     }
     .into();
-
-    log::debug!("expected_state_trie_after = {:?}", expected_state_trie_after);
 
     let trie_roots_after = TrieRoots {
         state_root: expected_state_trie_after.hash(),

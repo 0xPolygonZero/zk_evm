@@ -203,8 +203,6 @@ fn test_erc721() -> anyhow::Result<()> {
     let max_cpu_len_log = 20;
     let mut timing = TimingTree::new("prove", log::Level::Debug);
 
-    log::debug!("expected state trie = {:?}", expected_state_trie_after);
-
     let proofs = prove_all_segments::<F, C, D>(
         &all_stark,
         &config,

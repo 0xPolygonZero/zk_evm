@@ -564,9 +564,9 @@ pub(crate) fn output_debug_tries<F: RichField>(state: &GenerationState<F>) -> an
 
     let label = KERNEL.offset_name(previous_pc);
 
-    // if label.contains("check_state_trie")
-    //     || label.contains("check_txn_trie")
-    //     || label.contains("check_receipt_trie")
+    if label.contains("check_state_trie")
+        || label.contains("check_txn_trie")
+        || label.contains("check_receipt_trie")
     {
         let state_trie_ptr = u256_to_usize(
             state

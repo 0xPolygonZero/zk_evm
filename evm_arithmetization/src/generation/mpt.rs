@@ -158,7 +158,6 @@ where
         trie_data.push(Some(type_of_trie.into()));
     }
 
-    log::debug!("{:?} node at {node_ptr}", trie.deref());
     match trie.deref() {
         Node::Empty => Ok(0),
         Node::Hash(h) => {
@@ -303,8 +302,6 @@ fn load_state_trie(
             assert_eq!(storage_trie.hash(), storage_root,
                 "In TrieInputs, an account's storage_root didn't match the associated storage trie hash");
 
-            log::debug!("storage_trie = {:?}", storage_trie);
-
             trie_data.push(Some(nibbles.count.into()));
             trie_data.push(Some(
                 nibbles
@@ -318,7 +315,6 @@ fn load_state_trie(
             trie_data.push(Some(balance));
             // Storage trie ptr.
             let storage_ptr_ptr = trie_data.len();
-            log::debug!("storage trie ptr = {storage_ptr_ptr}");
             trie_data.push(Some((trie_data.len() + 2).into()));
             trie_data.push(Some(code_hash.into_uint()));
             // We don't need to store the slot values, as they will be overwritten in
@@ -424,8 +420,6 @@ fn get_state_and_storage_leaves(
             trie_data.push(Some(balance));
             // The Storage pointer is only written in the trie.
             trie_data.push(Some(0.into()));
-
-            log::debug!("new storage trie = {:?}", storage_trie);
             trie_data.push(Some(code_hash.into_uint()));
             get_storage_leaves(
                 addr_key,

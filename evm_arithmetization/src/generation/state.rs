@@ -187,27 +187,7 @@ pub(crate) trait State<F: Field> {
         let mut final_registers = RegistersState::default();
         let mut running = true;
         let mut final_clock = 0;
-
-        let mem = self
-            .get_generation_state()
-            .memory
-            .get_preinit_memory(Segment::AccountsLinkedList);
-        log::debug!("Initial state = {:?}", {
-            LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                &mem,
-                Segment::AccountsLinkedList,
-            )
-        });
-        let mem = self
-                .get_generation_state()
-                .memory
-                .get_preinit_memory(Segment::StorageLinkedList);
-        log::debug!("Initial storage = {:?}", {
-            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                &mem,
-                Segment::StorageLinkedList,
-            )
-        });
+        
         loop {
             let registers = self.get_registers();
             let pc = registers.program_counter;

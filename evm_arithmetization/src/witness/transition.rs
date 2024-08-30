@@ -288,33 +288,6 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
         log::Level::Trace
     };
 
-    // if state.get_clock() >= 43934 && state.get_clock() <= 46455
-    // state.get_clock() == 51522
-    // {
-        // let mem = state
-        //     .get_generation_state()
-        //     .memory
-        //     .get_preinit_memory(Segment::AccountsLinkedList);
-        // log::debug!("accounts = {:?}", {
-        //     LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-        //         &mem,
-        //         Segment::AccountsLinkedList,
-        //     )
-        // });
-        // let mem = state
-        //     .get_generation_state()
-        //     .memory
-        //     .get_preinit_memory(Segment::StorageLinkedList);
-        // log::debug!("cycle = {:?}", state.get_clock());
-        // let ll = LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-        //     &mem,
-        //     Segment::StorageLinkedList,
-        // );
-        // state.log(level, format!("mem = {:?}", mem));
-        // state.log(level, format!("storage = {:?}", { ll }));
-        // log::debug!("pataplaf!");
-    // }
-
     state.log(
         level,
         format!(
