@@ -429,19 +429,20 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
     });
 
     #[cfg(feature = "cdk_erigon")]
-    let burn_addr = match public_values.burn_addr {
-        BurnAddrTarget::BurnAddr(addr) => addr,
-        BurnAddrTarget::Burnt() => panic!("There should be an address set in cdk_erigon."),
-    };
-    #[cfg(feature = "cdk_erigon")]
-    let mut sum = add_data_write(
-        builder,
-        challenge,
-        sum,
-        metadata_segment,
-        GlobalMetadata::BurnAddr.unscale(),
-        &burn_addr,
-    );
+    {
+        let burn_addr = match public_values.burn_addr {
+            BurnAddrTarget::BurnAddr(addr) => addr,
+            BurnAddrTarget::Burnt() => panic!("There should be an address set in cdk_erigon."),
+        };
+        sum = add_data_write(
+            builder,
+            challenge,
+            sum,
+            metadata_segment,
+            GlobalMetadata::BurnAddr.unscale(),
+            &burn_addr,
+        );
+    }
 
     block_fields_arrays.map(|(field, targets)| {
         sum = add_data_write(
