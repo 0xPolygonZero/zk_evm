@@ -135,7 +135,7 @@ fn verify_generation_inputs(
     // Block hash check
     assert_eq!(
         last_generation_input.block_hashes.cur_hash.as_bytes(),
-        &header.hash.unwrap().to_vec()
+        &header.hash.to_vec()
     );
     // Previous block hash check
     assert_eq!(

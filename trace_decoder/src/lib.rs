@@ -633,6 +633,7 @@ mod middle {
         ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace,
     };
 
+    #[derive(Debug)]
     pub(crate) struct Batch<StateTrieT> {
         pub first_txn_ix: usize,
         pub gas_used: u64,
@@ -647,6 +648,7 @@ mod middle {
 
     /// [`evm_arithmetization::generation::TrieInputs`],
     /// generic over state trie representation.
+    #[derive(Debug)]
     pub(crate) struct IntraBlockTries<StateTrieT> {
         pub state: StateTrieT,
         pub storage: BTreeMap<H256, StorageTrie>,
@@ -827,7 +829,9 @@ mod middle {
                 // TODO(0xaatif): in the reference, this is not done
                 //                - for dummy transactions
                 //                - if `byte_code` is empty
-                transaction_trie.insert(txn_ix, txn_byte_code)?;
+                if !txn_byte_code.is_empty() {
+                    transaction_trie.insert(txn_ix, txn_byte_code)?;
+                }
                 receipt_trie.insert(txn_ix, new_receipt_trie_node_byte)?;
 
                 txn_ix += 1;

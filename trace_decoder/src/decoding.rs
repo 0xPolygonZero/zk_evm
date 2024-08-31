@@ -191,7 +191,7 @@ fn update_beacon_block_root_contract_storage(
         .state
         .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
         .context(format!(
-            "missing account storage trie for address {:x}",
+            "missing account state for address {:x}",
             BEACON_ROOTS_CONTRACT_ADDRESS
         ))?;
 
