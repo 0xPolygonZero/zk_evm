@@ -31,10 +31,7 @@ where
 {
     let state_access = process_states_access(txn_infos, &block)?;
 
-    let block_number = block
-        .header
-        .number
-        .context("Block number not returned with block")?;
+    let block_number = block.header.number;
     let prev_state_root = cached_provider
         .get_block((block_number - 1).into(), BlockTransactionsKind::Hashes)
         .await?
