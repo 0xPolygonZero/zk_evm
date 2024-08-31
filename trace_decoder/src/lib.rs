@@ -509,7 +509,7 @@ pub fn entrypoint2(
                     running_gas_used += gas_used;
                     running_gas_used.into()
                 },
-                signed_txns: byte_code,
+                signed_txns: byte_code.into_iter().map(Into::into).collect(),
                 withdrawals: match pos {
                     Position::Only | Position::Last => mem::take(&mut withdrawals),
                     Position::First | Position::Middle => vec![],
@@ -626,6 +626,7 @@ mod middle {
     use ethereum_types::{Address, U256};
     use evm_arithmetization::{generation::mpt::AccountRlp, proof::TrieRoots};
     use keccak_hash::H256;
+    use nunny::NonEmpty;
 
     use crate::{
         processed_block_trace::Hash2Code,
@@ -640,7 +641,7 @@ mod middle {
         /// See [`GenerationInputs::contract_code`].
         pub contract_code: BTreeSet<Vec<u8>>,
         /// For each transaction in batch, in order.
-        pub byte_code: Vec<Vec<u8>>,
+        pub byte_code: Vec<NonEmpty<Vec<u8>>>,
 
         pub before: IntraBlockTries<StateTrieT>,
         pub after: TrieRoots,
@@ -712,8 +713,9 @@ mod middle {
                     },
             } in batch
             {
+                let txn_byte_code = NonEmpty::<Vec<_>>::new(txn_byte_code).ok();
                 batch_gas_used += txn_gas_used;
-                batch_byte_code.push(txn_byte_code.clone());
+                batch_byte_code.extend(txn_byte_code.clone());
 
                 for (
                     addr,
@@ -826,13 +828,11 @@ mod middle {
                     }
                 }
 
-                // TODO(0xaatif): in the reference, this is not done
-                //                - for dummy transactions
-                //                - if `byte_code` is empty
-                if !txn_byte_code.is_empty() {
-                    transaction_trie.insert(txn_ix, txn_byte_code)?;
+                // TODO(0xaatif): I don't understand why this is done
+                if let Some(txn_byte_code) = txn_byte_code {
+                    transaction_trie.insert(txn_ix, txn_byte_code.into_vec())?;
+                    receipt_trie.insert(txn_ix, new_receipt_trie_node_byte)?;
                 }
-                receipt_trie.insert(txn_ix, new_receipt_trie_node_byte)?;
 
                 txn_ix += 1;
             } // txn in batch
