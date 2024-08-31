@@ -62,32 +62,78 @@ fn parse_item(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
     }
 }
 
-fn parse_conditional_block(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
-    /// Outputs true if any of the listed features is in the active set.
-    fn is_supported(active_features: &HashSet<&str>, features_string: &str) -> bool {
-        let features = features_string.split(",");
-        for feature in features {
-            if active_features.contains(feature) {
-                return true;
-            }
+enum FeatureGroupRule {
+    /// Ignore code if any of the listed features is active.
+    Not,
+    /// Include code if any of the listed features is active.
+    Any,
+    /// Include code if all the listed features are active.
+    All,
+}
+
+impl FeatureGroupRule {
+    fn from_rule(string: &str) -> Self {
+        if string.starts_with("not") {
+            return Self::Not;
+        }
+        if string.starts_with("all") {
+            return Self::All;
         }
 
-        false
+        Self::Any
+    }
+}
+
+fn parse_conditional_block(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
+    /// Outputs true if any of the listed features is in the active set.
+    fn is_supported(
+        active_features: &HashSet<&str>,
+        features_string: &str,
+        group_rule: FeatureGroupRule,
+    ) -> bool {
+        let features = features_string.split(",");
+
+        match group_rule {
+            FeatureGroupRule::Not => {
+                for feature in features {
+                    if active_features.contains(feature) {
+                        return false;
+                    }
+                }
+                true
+            }
+            FeatureGroupRule::Any => {
+                for feature in features {
+                    if active_features.contains(feature) {
+                        return true;
+                    }
+                }
+                false
+            }
+            FeatureGroupRule::All => {
+                for feature in features {
+                    if !active_features.contains(feature) {
+                        return false;
+                    }
+                }
+                true
+            }
+        }
     }
 
     assert_eq!(item.as_rule(), Rule::conditional_block);
     let mut inner = item.into_inner().peekable();
 
     let mut name = inner.next().unwrap().as_str();
-    let ignore_features = name.starts_with("not");
-    if ignore_features {
+    let group_rule = FeatureGroupRule::from_rule(name);
+    if name.contains(")") {
         // Remove last `)` char
         name = &name[..name.len() - 1];
     }
     let features = name.split(" = ").collect_vec()[1];
-    let feature_supported = is_supported(active_features, features);
+    let feature_supported = is_supported(active_features, features, group_rule);
 
-    if (feature_supported && !ignore_features) || (!feature_supported && ignore_features) {
+    if feature_supported {
         Item::ConditionalBlock(
             name.into(),
             inner.map(|i| parse_item(i, active_features)).collect(),
@@ -267,10 +313,14 @@ mod tests {
     fn test_feature() {
         let code = r#"
         %macro bar_foo
-            // requires any of the two features
+            // requires any of the two features, using the default format
             #[cfg(feature = feature_1,feature_2)]
             {
                 %bar
+            }
+            // requires any of the two features, using the `any` identifier
+            #[cfg(any(feature = feature_1,feature_2))]
+            {
                 PUSH 3
                 ADD
             }
@@ -319,6 +369,14 @@ mod tests {
                     PUSH 8
                 }
             MOD
+        }
+
+        // requires all features
+        #[cfg(all(feature = feature_1,feature_2))]
+        {
+            global foo_5:
+                PUSH 1
+                POP
         }
         "#;
 
@@ -431,6 +489,10 @@ mod tests {
             PUSH 7
             PUSH 8
             MOD
+        
+        global foo_5:
+            PUSH 1
+            POP
         "#;
 
         let parsed_expected = parse(expected_code, &HashSet::new());
