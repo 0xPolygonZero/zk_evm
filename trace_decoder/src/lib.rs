@@ -398,6 +398,8 @@ pub fn entrypoint(
         )
         .collect::<Hash2Code>();
 
+    // Make sure the batch size is smaller than the total number of transactions,
+    // or we would need to generate dummy proofs for the aggregation layers.
     if batch_size > txn_info.len() {
         batch_size = txn_info.len() / 2 + 1;
     }
