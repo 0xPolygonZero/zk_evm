@@ -878,6 +878,16 @@ remove_all_slots_end:
     // stack: slot_value
 %endmacro
 
+%macro read_storage_linked_list_w_state_key
+    // stack: slot, state_key
+    %slot_to_storage_key
+    SWAP1
+    %stack (state_key, key) -> (state_key, key, 0, %%after)
+    %jump(search_slot)
+%%after:
+    // stack: slot_ptr
+%endmacro
+
 %macro first_account
     // stack: empty
     PUSH @SEGMENT_ACCOUNTS_LINKED_LIST

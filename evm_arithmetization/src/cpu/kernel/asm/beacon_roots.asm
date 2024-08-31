@@ -4,7 +4,16 @@
 /// *NOTE*: This will panic if one of the provided timestamps is zero.
 
 global set_beacon_root:
-    PUSH set_global_exit_roots
+    // TODO(Robin): Add conditional neg feature
+    #[cfg(feature = cdk_erigon)]
+    {
+        PUSH pre_block_execution
+    }
+    #[cfg(feature = not_cdk_erigon)]
+    {
+        PUSH start_txn
+    }
+
     %timestamp
     // stack: timestamp, retdest
     PUSH @HISTORY_BUFFER_LENGTH
