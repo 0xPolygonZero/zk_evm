@@ -689,7 +689,7 @@ mod middle {
             let batch_first_txn_ix = txn_ix; // GOTCHA: if there are no transactions in this batch
             let mut batch_gas_used = 0;
             let mut batch_byte_code = vec![];
-            let mut batch_contract_code = BTreeSet::<Vec<u8>>::new();
+            let mut batch_contract_code = BTreeSet::from([vec![]]); // always include empty code
 
             let mut before = IntraBlockTries {
                 state: state_trie.clone(),
@@ -713,9 +713,13 @@ mod middle {
                     },
             } in batch
             {
-                let txn_byte_code = NonEmpty::<Vec<_>>::new(txn_byte_code).ok();
+                if let Ok(nonempty) = nunny::Vec::new(txn_byte_code) {
+                    batch_byte_code.push(nonempty.clone());
+                    transaction_trie.insert(txn_ix, nonempty.into())?;
+                    receipt_trie.insert(txn_ix, new_receipt_trie_node_byte.clone())?;
+                }
+
                 batch_gas_used += txn_gas_used;
-                batch_byte_code.extend(txn_byte_code.clone());
 
                 for (
                     addr,
@@ -826,12 +830,6 @@ mod middle {
                     if !is_precompile || state_trie.get_by_address(addr).is_some() {
                         trim_state.insert(TrieKey::from_address(addr));
                     }
-                }
-
-                // TODO(0xaatif): I don't understand why this is done
-                if let Some(txn_byte_code) = txn_byte_code {
-                    transaction_trie.insert(txn_ix, txn_byte_code.into_vec())?;
-                    receipt_trie.insert(txn_ix, new_receipt_trie_node_byte)?;
                 }
 
                 txn_ix += 1;
