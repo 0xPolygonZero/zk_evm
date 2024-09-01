@@ -287,7 +287,7 @@ pub struct BlockLevelData {
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
-    batch_size: usize,
+    mut batch_size: usize,
     use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     use anyhow::Context as _;
@@ -397,6 +397,12 @@ pub fn entrypoint(
                 .into_values(),
         )
         .collect::<Hash2Code>();
+
+    // Make sure the batch size is smaller than the total number of transactions,
+    // or we would need to generate dummy proofs for the aggregation layers.
+    if batch_size > txn_info.len() {
+        batch_size = txn_info.len() / 2 + 1;
+    }
 
     let last_tx_idx = txn_info.len().saturating_sub(1) / batch_size;
 
