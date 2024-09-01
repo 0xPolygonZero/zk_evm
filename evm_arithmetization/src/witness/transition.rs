@@ -296,14 +296,6 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
         ),
     );
 
-    state.log(
-        level,
-        format!(
-            "rlp[0] = {:?}",
-            state.get_generation_state().memory.contexts[0].segments[Segment::RlpRaw.unscale()].content[0],
-        ),
-    );
-
     assert!(pc < KERNEL.code.len(), "Kernel PC is out of range: {}", pc);
 }
 

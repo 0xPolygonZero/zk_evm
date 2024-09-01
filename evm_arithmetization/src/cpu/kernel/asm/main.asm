@@ -202,11 +202,13 @@ global check_state_trie:
     PROVER_INPUT(trie_ptr::trie_data_size)
     %mstore_global_metadata(@GLOBAL_METADATA_TRIE_DATA_SIZE)
 
-    %mpt_hash_state_trie_and_set_payload
+    %set_initial_state_trie
+    %mpt_hash_state_trie
 
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
+global debug_wtf:
     %assert_eq
     // Check that the stored trie data length is correct.
     // TODO: uncommen the following 2 lines
@@ -219,6 +221,7 @@ global check_state_trie:
 global check_final_state_trie:
     %set_final_tries
     %mpt_hash_state_trie   %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_AFTER)
+global debug_final_trie_hash:
     %assert_eq
     // We don't need the trie data length here.
     POP

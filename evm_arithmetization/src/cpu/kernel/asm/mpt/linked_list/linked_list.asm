@@ -91,6 +91,8 @@ loop_store_initial_accounts:
 store_initial_accounts_end:
     %pop2
     // stack: cur_len, retdest
+    DUP1
+    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
     %mstore_global_metadata(@GLOBAL_METADATA_ACCOUNTS_LINKED_LIST_NEXT_AVAILABLE)
     JUMP
 
