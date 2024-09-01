@@ -94,7 +94,7 @@ where
     pub segment_aggregation: SegmentAggregationCircuitData<F, C, D>,
     /// The transaction aggregation circuit, which verifies the aggregation of
     /// two proofs that can either be a segment aggregation representing a
-    /// transaction or an aggregation of transactions.
+    /// batch of transactions or an aggregation of those batches.
     pub txn_aggregation: TxnAggregationCircuitData<F, C, D>,
     /// The block circuit, which verifies a transaction aggregation proof and an
     /// optional previous block proof.

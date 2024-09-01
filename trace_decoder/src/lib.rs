@@ -104,7 +104,7 @@ use evm_arithmetization::GenerationInputs;
 use keccak_hash::keccak as hash;
 use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
-use processed_block_trace::ProcessedTxnInfo;
+use processed_block_trace::ProcessedTxnBatchInfo;
 use serde::{Deserialize, Serialize};
 use typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey};
 
@@ -434,7 +434,7 @@ pub fn entrypoint(
         .collect::<Result<Vec<_>, _>>()?;
 
     while txn_info.len() < 2 {
-        txn_info.push(ProcessedTxnInfo::default());
+        txn_info.push(ProcessedTxnBatchInfo::default());
     }
 
     decoding::into_txn_proof_gen_ir(
