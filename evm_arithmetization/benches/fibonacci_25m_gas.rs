@@ -180,6 +180,7 @@ fn prepare_setup() -> anyhow::Result<GenerationInputs<F>> {
 
     Ok(GenerationInputs {
         signed_txns: vec![txn.to_vec()],
+        burn_addr: None,
         withdrawals: vec![],
         tries: tries_before,
         trie_roots_after,

@@ -112,10 +112,13 @@ pub(crate) enum GlobalMetadata {
 
     // Number of blob versioned hashes contained in the current type-3 transaction.
     BlobVersionedHashesLen,
+
+    /// Address where the base fee to be burnt is sent.
+    BurnAddr,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 54;
+    pub(crate) const COUNT: usize = 55;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -178,6 +181,7 @@ impl GlobalMetadata {
             Self::InitialStorageLinkedListLen,
             Self::TransientStorageLen,
             Self::BlobVersionedHashesLen,
+            Self::BurnAddr,
         ]
     }
 
@@ -244,6 +248,7 @@ impl GlobalMetadata {
             Self::InitialStorageLinkedListLen => "GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN",
             Self::TransientStorageLen => "GLOBAL_METADATA_TRANSIENT_STORAGE_LEN",
             Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",
+            Self::BurnAddr => "GLOBAL_METADATA_BURN_ADDR",
         }
     }
 }

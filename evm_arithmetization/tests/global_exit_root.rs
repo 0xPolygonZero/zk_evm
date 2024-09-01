@@ -80,6 +80,7 @@ fn test_global_exit_root() -> anyhow::Result<()> {
 
     let inputs = GenerationInputs::<F> {
         signed_txns: vec![],
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots,
         tries: TrieInputs {

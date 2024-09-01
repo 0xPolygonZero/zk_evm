@@ -111,7 +111,7 @@ where
                         .context("couldn't get block")?;
                     anyhow::Ok([
                         (block.header.hash, Some(block_num)),
-                        (Some(block.header.parent_hash), previous_block_number),
+                        (block.header.parent_hash, previous_block_number),
                     ])
                 }
             }),
@@ -128,7 +128,7 @@ where
         .skip(odd_offset as usize)
         .take(PREVIOUS_HASHES_COUNT)
         .for_each(|(hash, block_num)| {
-            if let (Some(hash), Some(block_num)) = (hash, block_num) {
+            if let (hash, Some(block_num)) = (hash, block_num) {
                 // Most recent previous block hash is expected at the end of the array
                 prev_hashes
                     [PREVIOUS_HASHES_COUNT - (target_block_number - block_num as u64) as usize] =
@@ -215,10 +215,7 @@ where
     let target_block = cached_provider
         .get_block(target_block_id, BlockTransactionsKind::Hashes)
         .await?;
-    let target_block_number = target_block
-        .header
-        .number
-        .context("target block is missing field `number`")?;
+    let target_block_number = target_block.header.number;
     let chain_id = cached_provider.get_provider().await?.get_chain_id().await?;
 
     // Grab interval checkpoint block state trie
@@ -277,11 +274,7 @@ where
             },
             b_hashes: BlockHashes {
                 prev_hashes: prev_hashes.map(|it| it.compat()).into(),
-                cur_hash: target_block
-                    .header
-                    .hash
-                    .context("target block is missing field `hash`")?
-                    .compat(),
+                cur_hash: target_block.header.hash.compat(),
             },
             withdrawals: target_block
                 .withdrawals

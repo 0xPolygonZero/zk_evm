@@ -106,7 +106,7 @@ use keccak_hash::H256;
 use mpt_trie::partial_trie::{HashedPartialTrie, OnOrphanedHashNode};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::hash_types::NUM_HASH_OUT_ELTS;
-use processed_block_trace::ProcessedTxnInfo;
+use processed_block_trace::ProcessedTxnBatchInfo;
 use serde::{Deserialize, Serialize};
 use typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey};
 
@@ -295,7 +295,8 @@ pub struct BlockLevelData {
 pub fn entrypoint(
     trace: BlockTrace,
     other: OtherBlockData,
-    batch_size: usize,
+    mut batch_size: usize,
+    use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs<Field>>> {
     use anyhow::Context as _;
     use mpt_trie::partial_trie::PartialTrie as _;
@@ -405,6 +406,12 @@ pub fn entrypoint(
         )
         .collect::<Hash2Code>();
 
+    // Make sure the batch size is smaller than the total number of transactions,
+    // or we would need to generate dummy proofs for the aggregation layers.
+    if batch_size > txn_info.len() {
+        batch_size = txn_info.len() / 2 + 1;
+    }
+
     let last_tx_idx = txn_info.len().saturating_sub(1) / batch_size;
 
     let mut txn_info = txn_info
@@ -435,7 +442,7 @@ pub fn entrypoint(
         .collect::<Result<Vec<_>, _>>()?;
 
     while txn_info.len() < 2 {
-        txn_info.push(ProcessedTxnInfo::default());
+        txn_info.push(ProcessedTxnBatchInfo::default());
     }
 
     decoding::into_txn_proof_gen_ir(
@@ -445,6 +452,7 @@ pub fn entrypoint(
             withdrawals: other.b_data.withdrawals.clone(),
         },
         other,
+        use_burn_addr,
         batch_size,
     )
 }

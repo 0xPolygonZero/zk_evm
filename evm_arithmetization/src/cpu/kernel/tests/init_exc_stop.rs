@@ -93,6 +93,7 @@ fn test_init_exc_stop() {
 
     let inputs = GenerationInputs::<F> {
         signed_txns: vec![],
+        burn_addr: None,
         withdrawals: vec![],
         tries: TrieInputs {
             state_trie: state_trie_before,

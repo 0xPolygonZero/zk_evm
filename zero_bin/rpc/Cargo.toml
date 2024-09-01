@@ -38,3 +38,6 @@ prover = { workspace = true }
 cargo_metadata = { workspace = true }
 vergen = { workspace = true }
 anyhow = { workspace = true }
+
+[features]
+cdk_erigon = []

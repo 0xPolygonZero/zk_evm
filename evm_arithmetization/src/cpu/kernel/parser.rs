@@ -12,14 +12,14 @@ use crate::cpu::kernel::ast::{File, Item, PushTarget, StackReplacement};
 #[grammar = "cpu/kernel/evm_asm.pest"]
 struct AsmParser;
 
-pub(crate) fn parse(s: &str, active_features: HashSet<&str>) -> File {
+pub(crate) fn parse(s: &str, active_features: &HashSet<&str>) -> File {
     let file = AsmParser::parse(Rule::file, s)
         .expect("Parsing failed")
         .next()
         .unwrap();
     let body = file
         .into_inner()
-        .map(|i| parse_item(i, &active_features))
+        .map(|i| parse_item(i, active_features))
         .collect();
     File { body }
 }
@@ -292,7 +292,7 @@ mod tests {
         // Test `feature_1`.
         let active_features = HashSet::from(["feature_1"]);
 
-        let parsed_code = parse(code, active_features);
+        let parsed_code = parse(code, &active_features);
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
@@ -318,7 +318,7 @@ mod tests {
             DIV
         "#;
 
-        let parsed_expected = parse(expected_code, HashSet::new());
+        let parsed_expected = parse(expected_code, &HashSet::new());
         let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
 
         assert_eq!(final_code.code, final_expected.code);
@@ -326,7 +326,7 @@ mod tests {
         // Test `feature_2`.
         let active_features = HashSet::from(["feature_2"]);
 
-        let parsed_code = parse(code, active_features);
+        let parsed_code = parse(code, &active_features);
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
@@ -348,7 +348,7 @@ mod tests {
             MOD
         "#;
 
-        let parsed_expected = parse(expected_code, HashSet::new());
+        let parsed_expected = parse(expected_code, &HashSet::new());
         let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
 
         assert_eq!(final_code.code, final_expected.code);
@@ -356,7 +356,7 @@ mod tests {
         // Test with both features enabled.
         let active_features = HashSet::from(["feature_1", "feature_2"]);
 
-        let parsed_code = parse(code, active_features);
+        let parsed_code = parse(code, &active_features);
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
@@ -387,7 +387,7 @@ mod tests {
             MOD
         "#;
 
-        let parsed_expected = parse(expected_code, HashSet::new());
+        let parsed_expected = parse(expected_code, &HashSet::new());
         let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
 
         assert_eq!(final_code.code, final_expected.code);
@@ -395,7 +395,7 @@ mod tests {
         // Test with all features disabled.
         let active_features = HashSet::new();
 
-        let parsed_code = parse(code, active_features);
+        let parsed_code = parse(code, &active_features);
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
@@ -412,7 +412,7 @@ mod tests {
             DIV
         "#;
 
-        let parsed_expected = parse(expected_code, HashSet::new());
+        let parsed_expected = parse(expected_code, &HashSet::new());
         let final_expected = assemble(vec![parsed_expected], HashMap::new(), false);
 
         assert_eq!(final_code.code, final_expected.code);

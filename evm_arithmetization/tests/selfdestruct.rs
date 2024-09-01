@@ -157,6 +157,7 @@ fn test_selfdestruct() -> anyhow::Result<()> {
 
     let inputs = GenerationInputs::<F> {
         signed_txns: vec![txn.to_vec()],
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,

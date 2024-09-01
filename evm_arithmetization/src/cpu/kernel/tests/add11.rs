@@ -183,6 +183,7 @@ fn test_add11_yml() {
 
     let inputs = GenerationInputs::<F> {
         signed_txns: vec![txn.to_vec()],
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,
@@ -365,6 +366,7 @@ fn test_add11_yml_with_exception() {
 
     let inputs = GenerationInputs {
         signed_txns: vec![txn.to_vec()],
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,

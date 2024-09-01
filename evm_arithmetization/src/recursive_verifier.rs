@@ -35,9 +35,9 @@ use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
 use crate::memory::segments::Segment;
 use crate::memory::VALUE_LIMBS;
 use crate::proof::{
-    BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, ExtraBlockData,
-    ExtraBlockDataTarget, FinalPublicValues, FinalPublicValuesTarget, MemCap, MemCapTarget,
-    PublicValues, PublicValuesTarget, RegistersData, RegistersDataTarget, TrieRoots,
+    BlockHashes, BlockHashesTarget, BlockMetadata, BlockMetadataTarget, BurnAddrTarget,
+    ExtraBlockData, ExtraBlockDataTarget, FinalPublicValues, FinalPublicValuesTarget, MemCap,
+    MemCapTarget, PublicValues, PublicValuesTarget, RegistersData, RegistersDataTarget, TrieRoots,
     TrieRootsTarget, DEFAULT_CAP_LEN,
 };
 use crate::util::{h256_limbs, u256_limbs, u256_to_u32, u256_to_u64};
@@ -428,6 +428,22 @@ pub(crate) fn get_memory_extra_looking_sum_circuit<F: RichField + Extendable<D>,
         );
     });
 
+    #[cfg(feature = "cdk_erigon")]
+    {
+        let burn_addr = match public_values.burn_addr {
+            BurnAddrTarget::BurnAddr(addr) => addr,
+            BurnAddrTarget::Burnt() => panic!("There should be an address set in cdk_erigon."),
+        };
+        sum = add_data_write(
+            builder,
+            challenge,
+            sum,
+            metadata_segment,
+            GlobalMetadata::BurnAddr.unscale(),
+            &burn_addr,
+        );
+    }
+
     block_fields_arrays.map(|(field, targets)| {
         sum = add_data_write(
             builder,
@@ -641,6 +657,7 @@ pub(crate) fn add_virtual_public_values_public_input<
 ) -> PublicValuesTarget {
     let trie_roots_before = add_virtual_trie_roots_public_input(builder);
     let trie_roots_after = add_virtual_trie_roots_public_input(builder);
+    let burn_addr = add_virtual_burn_addr(builder);
     let block_metadata = add_virtual_block_metadata_public_input(builder);
     let block_hashes = add_virtual_block_hashes_public_input(builder);
     let extra_block_data = add_virtual_extra_block_data_public_input(builder);
@@ -657,6 +674,7 @@ pub(crate) fn add_virtual_public_values_public_input<
     PublicValuesTarget {
         trie_roots_before,
         trie_roots_after,
+        burn_addr,
         block_metadata,
         block_hashes,
         extra_block_data,
@@ -664,6 +682,15 @@ pub(crate) fn add_virtual_public_values_public_input<
         registers_after,
         mem_before,
         mem_after,
+    }
+}
+
+pub(crate) fn add_virtual_burn_addr<F: RichField + Extendable<D>, const D: usize>(
+    builder: &mut CircuitBuilder<F, D>,
+) -> BurnAddrTarget {
+    match cfg!(feature = "cdk_erigon") {
+        true => BurnAddrTarget::BurnAddr(builder.add_virtual_public_input_arr()),
+        false => BurnAddrTarget::Burnt(),
     }
 }
 
@@ -827,6 +854,14 @@ where
         &public_values_target.extra_block_data,
         &public_values.extra_block_data,
     )?;
+    #[cfg(feature = "cdk_erigon")]
+    set_burn_addr_target(
+        witness,
+        &public_values_target.burn_addr,
+        public_values
+            .burn_addr
+            .expect("There should be an address set in cdk_erigon."),
+    )?;
     set_registers_target(
         witness,
         &public_values_target.registers_before,
@@ -960,6 +995,27 @@ pub(crate) fn set_trie_roots_target<F, W, const D: usize>(
             F::from_canonical_u32((limb >> 32) as u32),
         );
     }
+}
+
+#[cfg(feature = "cdk_erigon")]
+pub(crate) fn set_burn_addr_target<F, W, const D: usize>(
+    witness: &mut W,
+    burn_addr_target: &BurnAddrTarget,
+    burn_addr: U256,
+) -> Result<(), ProgramError>
+where
+    F: RichField + Extendable<D>,
+    W: Witness<F>,
+{
+    match burn_addr_target {
+        BurnAddrTarget::BurnAddr(addr_target) => {
+            let burn_addr_limbs: [F; 8] = u256_limbs::<F>(burn_addr);
+            witness.set_target_arr(addr_target, &burn_addr_limbs);
+        }
+        BurnAddrTarget::Burnt() => panic!("There should be an address target set in cdk_erigon."),
+    }
+
+    Ok(())
 }
 
 pub(crate) fn set_block_metadata_target<F, W, const D: usize>(
