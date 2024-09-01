@@ -362,6 +362,8 @@ loop_store_initial_slots:
 store_initial_slots_end:
     POP
     // stack: cur_len, retdest
+    DUP1
+    %mstore_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
     %mstore_global_metadata(@GLOBAL_METADATA_STORAGE_LINKED_LIST_NEXT_AVAILABLE)
     JUMP
 

@@ -8,6 +8,7 @@ global set_initial_state_trie:
 set_inital_state_trie_after:
     //stack: new_state_root
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
+global debug_que_tenimos_aca:
     JUMP
 
 %macro set_initial_state_trie
