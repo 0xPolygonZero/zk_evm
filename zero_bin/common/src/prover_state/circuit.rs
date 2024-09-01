@@ -5,15 +5,11 @@ use std::{
     str::FromStr,
 };
 
+pub use evm_arithmetization::NUM_TABLES;
 use evm_arithmetization::{AllStark, StarkConfig};
 use proof_gen::types::AllRecursiveCircuits;
 
 use crate::parsing::{parse_range_exclusive, RangeParseError};
-
-/// Number of tables defined in plonky2.
-///
-/// TODO: This should be made public in the evm_arithmetization crate.
-pub(crate) const NUM_TABLES: usize = 9;
 
 /// New type wrapper for [`Range`] that implements [`FromStr`] and [`Display`].
 ///
@@ -68,6 +64,8 @@ pub enum Circuit {
     Memory,
     MemoryBefore,
     MemoryAfter,
+    #[cfg(feature = "cdk_erigon")]
+    Poseidon,
 }
 
 impl Display for Circuit {
@@ -89,6 +87,8 @@ impl Circuit {
             Circuit::Memory => 17..28,
             Circuit::MemoryBefore => 7..23,
             Circuit::MemoryAfter => 7..27,
+            #[cfg(feature = "cdk_erigon")]
+            Circuit::Poseidon => 4..22,
         }
     }
 
@@ -104,6 +104,8 @@ impl Circuit {
             Circuit::Memory => "MEMORY_CIRCUIT_SIZE",
             Circuit::MemoryBefore => "MEMORY_BEFORE_CIRCUIT_SIZE",
             Circuit::MemoryAfter => "MEMORY_AFTER_CIRCUIT_SIZE",
+            #[cfg(feature = "cdk_erigon")]
+            Circuit::Poseidon => "POSEIDON_CIRCUIT_SIZE",
         }
     }
 
@@ -119,6 +121,8 @@ impl Circuit {
             Circuit::Memory => "memory",
             Circuit::MemoryBefore => "memory before",
             Circuit::MemoryAfter => "memory after",
+            #[cfg(feature = "cdk_erigon")]
+            Circuit::Poseidon => "poseidon",
         }
     }
 
@@ -134,6 +138,8 @@ impl Circuit {
             Circuit::Memory => "m",
             Circuit::MemoryBefore => "m_b",
             Circuit::MemoryAfter => "m_a",
+            #[cfg(feature = "cdk_erigon")]
+            Circuit::Poseidon => "p",
         }
     }
 }
@@ -150,6 +156,8 @@ impl From<usize> for Circuit {
             6 => Circuit::Memory,
             7 => Circuit::MemoryBefore,
             8 => Circuit::MemoryAfter,
+            #[cfg(feature = "cdk_erigon")]
+            9 => Circuit::Poseidon,
             _ => unreachable!(),
         }
     }
@@ -189,6 +197,8 @@ impl Default for CircuitConfig {
                 Circuit::Memory.default_size(),
                 Circuit::MemoryBefore.default_size(),
                 Circuit::MemoryAfter.default_size(),
+                #[cfg(feature = "cdk_erigon")]
+                Circuit::Poseidon.default_size(),
             ],
         }
     }

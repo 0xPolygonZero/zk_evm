@@ -192,6 +192,8 @@ pub mod keccak_sponge;
 pub mod logic;
 pub mod memory;
 pub mod memory_continuation;
+#[cfg(feature = "cdk_erigon")]
+pub mod poseidon;
 
 // Proving system components
 pub mod all_stark;
@@ -222,7 +224,7 @@ pub type Node = mpt_trie::partial_trie::Node<HashedPartialTrie>;
 /// A type alias for `u64` of a block height.
 pub type BlockHeight = u64;
 
-pub use all_stark::AllStark;
+pub use all_stark::{AllStark, NUM_TABLES};
 pub use fixed_recursive_verifier::AllRecursiveCircuits;
 pub use generation::segments::{GenerationSegmentData, SegmentDataIterator};
 pub use generation::GenerationInputs;

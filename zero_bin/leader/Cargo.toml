@@ -35,7 +35,13 @@ zero_bin_common = { workspace = true }
 
 [features]
 default = []
-cdk_erigon = ["prover/cdk_erigon", "evm_arithmetization/cdk_erigon", "rpc/cdk_erigon"]
+cdk_erigon = [
+    "evm_arithmetization/cdk_erigon",
+    "proof_gen/cdk_erigon",
+    "prover/cdk_erigon",
+    "rpc/cdk_erigon",
+    "zero_bin_common/cdk_erigon"
+]
 
 [build-dependencies]
 cargo_metadata = { workspace = true }

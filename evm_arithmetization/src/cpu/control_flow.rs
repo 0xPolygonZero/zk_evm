@@ -8,7 +8,9 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 use crate::cpu::columns::{CpuColumnsView, COL_MAP};
 use crate::cpu::kernel::aggregator::KERNEL;
 
-const NATIVE_INSTRUCTIONS: [usize; 12] = [
+const NATIVE_INST_LEN: usize = if cfg!(feature = "cdk_erigon") { 13 } else { 12 };
+
+const NATIVE_INSTRUCTIONS: [usize; NATIVE_INST_LEN] = [
     COL_MAP.op.binary_op,
     COL_MAP.op.ternary_op,
     COL_MAP.op.fp254_op,
@@ -17,6 +19,8 @@ const NATIVE_INSTRUCTIONS: [usize; 12] = [
     COL_MAP.op.not_pop,
     COL_MAP.op.shift,
     COL_MAP.op.jumpdest_keccak_general,
+    #[cfg(feature = "cdk_erigon")]
+    COL_MAP.op.poseidon,
     // Not PROVER_INPUT: it is dealt with manually below.
     // not JUMPS (possible need to jump)
     COL_MAP.op.pc_push0,

@@ -7,6 +7,8 @@ use starky::constraint_consumer::{ConstraintConsumer, RecursiveConstraintConsume
 
 use crate::cpu::columns::{CpuColumnsView, COL_MAP};
 
+const OPCODES_LEN: usize = if cfg!(feature = "cdk_erigon") { 6 } else { 5 };
+
 /// List of opcode blocks
 /// Each block corresponds to exactly one flag, and each flag corresponds to
 /// exactly one block.  Each block of opcodes:
@@ -29,13 +31,15 @@ use crate::cpu::columns::{CpuColumnsView, COL_MAP};
 /// Note: invalid opcodes are not represented here. _Any_ opcode is permitted to
 /// decode to `is_invalid`. The kernel then verifies that the opcode was
 /// _actually_ invalid.
-const OPCODES: [(u8, usize, bool, usize); 5] = [
+const OPCODES: [(u8, usize, bool, usize); OPCODES_LEN] = [
     // (start index of block, number of top bits to check (log2), kernel-only, flag column)
     // ADD, MUL, SUB, DIV, MOD, LT, GT and BYTE flags are handled partly manually here, and partly
     // through the Arithmetic table CTL. ADDMOD, MULMOD and SUBMOD flags are handled partly
     // manually here, and partly through the Arithmetic table CTL. FP254 operation flags are
     // handled partly manually here, and partly through the Arithmetic table CTL.
     (0x14, 1, false, COL_MAP.op.eq_iszero),
+    #[cfg(feature = "cdk_erigon")]
+    (0x22, 1, true, COL_MAP.op.poseidon),
     // AND, OR and XOR flags are handled partly manually here, and partly through the Logic table
     // CTL. NOT and POP are handled manually here.
     // SHL and SHR flags are handled partly manually here, and partly through the Logic table CTL.

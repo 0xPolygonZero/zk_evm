@@ -6,7 +6,7 @@ use ethereum_types::{Address, BigEndianHash, H160, H256, U256};
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::Level;
-use plonky2::field::types::Field;
+use plonky2::hash::hash_types::RichField;
 
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
@@ -22,6 +22,8 @@ use crate::generation::GenerationInputs;
 use crate::keccak_sponge::columns::KECCAK_WIDTH_BYTES;
 use crate::keccak_sponge::keccak_sponge_stark::KeccakSpongeOp;
 use crate::memory::segments::Segment;
+#[cfg(feature = "cdk_erigon")]
+use crate::poseidon::poseidon_stark::PoseidonOp;
 use crate::util::u256_to_usize;
 use crate::witness::errors::ProgramError;
 use crate::witness::memory::MemoryChannel::GeneralPurpose;
@@ -39,7 +41,7 @@ use crate::{arithmetic, keccak, logic};
 
 /// A State is either an `Interpreter` (used for tests and jumpdest analysis) or
 /// a `GenerationState`.
-pub(crate) trait State<F: Field> {
+pub(crate) trait State<F: RichField> {
     /// Returns a `State`'s latest `Checkpoint`.
     fn checkpoint(&mut self) -> GenerationStateCheckpoint;
 
@@ -146,6 +148,11 @@ pub(crate) trait State<F: Field> {
             .traces
             .keccak_sponge_ops
             .push(op);
+    }
+
+    #[cfg(feature = "cdk_erigon")]
+    fn push_poseidon(&mut self, op: PoseidonOp<F>) {
+        self.get_mut_generation_state().traces.poseidon_ops.push(op);
     }
 
     /// Returns the content of a the `KernelGeneral` segment of a `State`.
@@ -326,7 +333,7 @@ pub(crate) trait State<F: Field> {
 }
 
 #[derive(Debug, Default)]
-pub struct GenerationState<F: Field> {
+pub struct GenerationState<F: RichField> {
     pub(crate) inputs: TrimmedGenerationInputs,
     pub(crate) registers: RegistersState,
     pub(crate) memory: MemoryState,
@@ -368,7 +375,7 @@ pub struct GenerationState<F: Field> {
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
 }
 
-impl<F: Field> GenerationState<F> {
+impl<F: RichField> GenerationState<F> {
     fn preinitialize_linked_lists_and_txn_and_receipt_mpts(
         &mut self,
         trie_inputs: &TrieInputs,
@@ -559,7 +566,7 @@ impl<F: Field> GenerationState<F> {
     }
 }
 
-impl<F: Field> State<F> for GenerationState<F> {
+impl<F: RichField> State<F> for GenerationState<F> {
     fn checkpoint(&mut self) -> GenerationStateCheckpoint {
         GenerationStateCheckpoint {
             registers: self.registers,
@@ -665,7 +672,7 @@ impl<F: Field> State<F> for GenerationState<F> {
     }
 }
 
-impl<F: Field> Transition<F> for GenerationState<F> {
+impl<F: RichField> Transition<F> for GenerationState<F> {
     fn skip_if_necessary(&mut self, op: Operation) -> Result<Operation, ProgramError> {
         Ok(op)
     }

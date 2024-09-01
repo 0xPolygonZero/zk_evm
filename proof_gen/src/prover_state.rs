@@ -31,6 +31,8 @@ pub struct ProverStateBuilder {
     pub(crate) memory_circuit_size: Range<usize>,
     pub(crate) memory_before_circuit_size: Range<usize>,
     pub(crate) memory_after_circuit_size: Range<usize>,
+    #[cfg(feature = "cdk_erigon")]
+    pub(crate) poseidon_circuit_size: Range<usize>,
 }
 
 impl Default for ProverStateBuilder {
@@ -52,6 +54,8 @@ impl Default for ProverStateBuilder {
             memory_circuit_size: DEFAULT_MEMORY_RANGE,
             memory_before_circuit_size: DEFAULT_MEMORY_BEFORE_RANGE,
             memory_after_circuit_size: DEFAULT_MEMORY_AFTER_RANGE,
+            #[cfg(feature = "cdk_erigon")]
+            poseidon_circuit_size: DEFAULT_POSEIDON_RANGE,
         }
     }
 }
@@ -79,6 +83,8 @@ impl ProverStateBuilder {
     define_set_circuit_size_method!(memory);
     define_set_circuit_size_method!(memory_before);
     define_set_circuit_size_method!(memory_after);
+    #[cfg(feature = "cdk_erigon")]
+    define_set_circuit_size_method!(poseidon);
 
     // TODO: Consider adding async version?
     /// Instantiate the prover state from the builder. Note that this is a very
@@ -98,6 +104,8 @@ impl ProverStateBuilder {
                 self.memory_circuit_size,
                 self.memory_before_circuit_size,
                 self.memory_after_circuit_size,
+                #[cfg(feature = "cdk_erigon")]
+                self.poseidon_circuit_size,
             ],
             &StarkConfig::standard_fast_config(),
         );
