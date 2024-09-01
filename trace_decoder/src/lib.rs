@@ -469,6 +469,8 @@ pub fn entrypoint2(
             .map(FromIterator::from_iter)
             .collect(),
         &mut code,
+        other.b_data.b_meta.block_timestamp,
+        other.b_data.b_meta.parent_beacon_block_root,
     )?;
 
     let OtherBlockData {
@@ -622,10 +624,13 @@ mod middle {
         ops::Range,
     };
 
+    use alloy_compat::Compat;
     use anyhow::{anyhow, ensure, Context as _};
     use ethereum_types::{Address, U256};
     use evm_arithmetization::{
-        generation::mpt::AccountRlp, proof::TrieRoots, testing_utils::BEACON_ROOTS_CONTRACT_ADDRESS,
+        generation::mpt::AccountRlp,
+        proof::TrieRoots,
+        testing_utils::{BEACON_ROOTS_CONTRACT_ADDRESS, HISTORY_BUFFER_LENGTH_VALUE},
     };
     use keccak_hash::H256;
     use nunny::NonEmpty;
@@ -665,6 +670,8 @@ mod middle {
         mut storage: BTreeMap<H256, StorageTrie>,
         batches: Vec<Vec<TxnInfo>>,
         code: &mut Hash2Code,
+        block_timestamp: U256,
+        parent_beacon_block_root: H256,
     ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
         // Initialise the storage tries.
         for (haddr, acct) in state_trie.iter() {
@@ -702,12 +709,53 @@ mod middle {
             // We want to trim the TrieInputs above,
             // but won't know the bounds until after the loop below,
             // so store that information here.
-            let mut trim_storage = BTreeMap::<Address, BTreeSet<TrieKey>>::new();
-            let mut trim_state = match txn_ix == 0 {
-                // always include the beacon state for the first transaction
-                true => BTreeSet::from([TrieKey::from_address(BEACON_ROOTS_CONTRACT_ADDRESS)]),
-                false => BTreeSet::new(),
-            };
+            let mut trim_storage = BTreeMap::<_, BTreeSet<TrieKey>>::new();
+            let mut trim_state = BTreeSet::new();
+
+            if txn_ix == 0 {
+                // Cancun specific
+
+                let history_buffer_length = U256::from(HISTORY_BUFFER_LENGTH_VALUE);
+                let history_timestamp = block_timestamp % history_buffer_length;
+                let history_timestamp_next = history_timestamp + history_buffer_length;
+                let beacon_storage = storage
+                    .get_mut(&keccak_hash::keccak(BEACON_ROOTS_CONTRACT_ADDRESS))
+                    .context("missing beacon contract storage trie")?;
+                let beacon_trim = trim_storage
+                    .entry(BEACON_ROOTS_CONTRACT_ADDRESS)
+                    .or_default();
+                for (ix, u) in [
+                    (history_timestamp, block_timestamp),
+                    (
+                        history_timestamp_next,
+                        U256::from_big_endian(parent_beacon_block_root.as_bytes()),
+                    ),
+                ] {
+                    let mut h = [0; 32];
+                    ix.to_big_endian(&mut h);
+                    let slot = TrieKey::from_hash(keccak_hash::keccak(H256::from_slice(&h)));
+                    beacon_trim.insert(slot);
+
+                    match u.is_zero() {
+                        true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
+                        false => {
+                            beacon_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
+                            beacon_trim.insert(slot);
+                        }
+                    }
+                }
+                trim_state.insert(TrieKey::from_address(BEACON_ROOTS_CONTRACT_ADDRESS));
+
+                let mut beacon_acct = state_trie
+                    .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
+                    .context("missing beacon contract address")?;
+                beacon_acct.storage_root = beacon_storage.root();
+                state_trie
+                    .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
+                    // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+                    //                Add an entry API
+                    .expect("insert must succeed with the same key as a successful `get`");
+            }
 
             for TxnInfo {
                 traces,

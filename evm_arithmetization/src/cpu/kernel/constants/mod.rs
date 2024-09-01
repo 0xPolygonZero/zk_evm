@@ -396,7 +396,10 @@ pub mod cancun_constants {
         hex!("000000000000000000000000000000001666c54b0a32529503432fcae0181b4bef79de09fc63671fda5ed1ba9bfa07899495346f3d7ac9cd23048ef30d0a154f"), // y_im
     ];
 
-    pub const HISTORY_BUFFER_LENGTH: (&str, u64) = ("HISTORY_BUFFER_LENGTH", 8191);
+    pub const HISTORY_BUFFER_LENGTH_KEY: &str = "HISTORY_BUFFER_LENGTH";
+    pub const HISTORY_BUFFER_LENGTH_VALUE: u64 = 8191;
+    pub const HISTORY_BUFFER_LENGTH: (&str, u64) =
+        (HISTORY_BUFFER_LENGTH_KEY, HISTORY_BUFFER_LENGTH_VALUE);
 
     // Beacon constants
     ///////////////////
