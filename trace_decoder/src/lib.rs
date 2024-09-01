@@ -624,7 +624,9 @@ mod middle {
 
     use anyhow::{anyhow, ensure, Context as _};
     use ethereum_types::{Address, U256};
-    use evm_arithmetization::{generation::mpt::AccountRlp, proof::TrieRoots};
+    use evm_arithmetization::{
+        generation::mpt::AccountRlp, proof::TrieRoots, testing_utils::BEACON_ROOTS_CONTRACT_ADDRESS,
+    };
     use keccak_hash::H256;
     use nunny::NonEmpty;
 
@@ -701,7 +703,11 @@ mod middle {
             // but won't know the bounds until after the loop below,
             // so store that information here.
             let mut trim_storage = BTreeMap::<Address, BTreeSet<TrieKey>>::new();
-            let mut trim_state = BTreeSet::<TrieKey>::new();
+            let mut trim_state = match txn_ix == 0 {
+                // always include the beacon state for the first transaction
+                true => BTreeSet::from([TrieKey::from_address(BEACON_ROOTS_CONTRACT_ADDRESS)]),
+                false => BTreeSet::new(),
+            };
 
             for TxnInfo {
                 traces,
@@ -838,6 +844,7 @@ mod middle {
             before.state.trim_to(trim_state)?;
             before.receipt.trim_to(batch_first_txn_ix..txn_ix)?;
             before.transaction.trim_to(batch_first_txn_ix..txn_ix)?;
+
             for (k, v) in trim_storage {
                 before
                     .storage

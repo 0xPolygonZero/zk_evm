@@ -1,4 +1,8 @@
-use std::{cmp::min, collections::HashMap, ops::Range};
+use std::{
+    cmp::min,
+    collections::{BTreeSet, HashMap},
+    ops::Range,
+};
 
 use anyhow::{anyhow, Context as _};
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};

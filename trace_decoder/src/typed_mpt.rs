@@ -100,7 +100,7 @@ where
 /// used as a key for [`TypedMpt`].
 ///
 /// Semantically equivalent to [`mpt_trie::nibbles::Nibbles`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct TrieKey(CopyVec<U4, 64>);
 
 impl fmt::Display for TrieKey {
@@ -109,6 +109,12 @@ impl fmt::Display for TrieKey {
             f.write_fmt(format_args!("{:x}", u))?
         }
         Ok(())
+    }
+}
+
+impl fmt::Debug for TrieKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("TrieKey({})", self))
     }
 }
 
