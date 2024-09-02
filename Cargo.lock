@@ -3347,7 +3347,7 @@ dependencies = [
 [[package]]
 name = "paladin-core"
 version = "0.4.2"
-source = "git+https://github.com/0xPolygonZero/paladin.git?branch=arpit/507-2#2ba9ac248eb22b4480b01d78c8182609bbdff0fe"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=arpit/507-2#6c752fd2ec9bc81dc2f4b727580d7dd7a42b9165"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3379,7 +3379,7 @@ dependencies = [
 [[package]]
 name = "paladin-opkind-derive"
 version = "0.4.1"
-source = "git+https://github.com/0xPolygonZero/paladin.git?branch=arpit/507-2#2ba9ac248eb22b4480b01d78c8182609bbdff0fe"
+source = "git+https://github.com/0xPolygonZero/paladin.git?branch=arpit/507-2#6c752fd2ec9bc81dc2f4b727580d7dd7a42b9165"
 dependencies = [
  "quote",
  "syn 2.0.70",
