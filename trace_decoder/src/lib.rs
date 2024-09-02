@@ -282,8 +282,8 @@ pub struct BlockLevelData {
     pub withdrawals: Vec<(Address, U256)>,
 }
 
-pub use entrypoint_old as entrypoint;
-pub use imp::entrypoint as entrypoint_new;
+// pub use entrypoint_old as entrypoint;
+pub use imp::entrypoint;
 
 mod imp;
 
