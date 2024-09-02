@@ -1,4 +1,4 @@
-
+[
     {
         "number": "0x13862fa",
         "hash": "0xd130f124c32962894a74ce0d07fe5b2fe081a2ac5659df122a309a10b87cd2cb",
@@ -197,3 +197,4 @@
         "blobGasUsed": "0x20000",
         "timestamp": "0x66b2a627"
     }
+]
