@@ -1,4 +1,4 @@
-[{
+{
     "block_trace": {
         "trie_pre_images": {
             "combined": {
@@ -363,4 +363,4 @@
         },
         "checkpoint_state_trie_root": "0x319da7faf76836d1ca1c48e0540a97c0d7f2515b7fd7be7dfb1aef9ed5dd588a"
     }
-}]
+}
