@@ -53,7 +53,7 @@ fn find_witness_data_files(dir: &str) -> anyhow::Result<Vec<PathBuf>> {
         .context(format!("Failed to find witness files in dir {dir}"))
 }
 
-fn read_witness_file(file_path: &Path) -> anyhow::Result<BlockProverInput> {
+fn read_witness_file(file_path: &Path) -> anyhow::Result<Vec<BlockProverInput>> {
     let witness = fs::File::open(file_path).context("Unable to read file")?;
     let mut reader = std::io::BufReader::new(witness);
     let jd = &mut serde_json::Deserializer::from_reader(&mut reader);
@@ -183,35 +183,38 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                 read_witness_file(&file_path)
             }
         })
-        .map_ok(|block_prover_input| {
-            // Run trace decoder, create list of generation inputs
-            let block_generation_inputs =
-                decode_generation_inputs(block_prover_input, use_burn_addr)?;
-            block_generation_inputs
-                .into_par_iter()
-                .map(|generation_inputs| {
-                    // For every generation input, simulate execution.
-                    // Execution will be simulated in parallel.
-                    // If system runs out of memory, limit the rayon
-                    // with setting env variable RAYON_NUM_THREADS=<number>.
-                    let timing = TimingTree::new(
-                        &format!(
-                            "simulate zkEVM CPU for block {}, txns {:?}..{:?}.",
-                            generation_inputs.block_metadata.block_number,
-                            generation_inputs.txn_number_before,
-                            generation_inputs.txn_number_before
-                                + generation_inputs.signed_txns.len()
-                        ),
-                        log::Level::Info,
-                    );
-                    simulate_execution_all_segments::<F>(generation_inputs, 19)?;
-                    timing.filter(Duration::from_millis(100)).print();
-                    Ok::<(), anyhow::Error>(())
-                })
-                .collect::<Result<Vec<_>, anyhow::Error>>()
+        .map_ok(|block_prover_inputs| {
+            block_prover_inputs.into_iter().map(|block_prover_input| {
+                // Run trace decoder, create list of generation inputs
+                let block_generation_inputs =
+                    decode_generation_inputs(block_prover_input, use_burn_addr)?;
+                block_generation_inputs
+                    .into_par_iter()
+                    .map(|generation_inputs| {
+                        // For every generation input, simulate execution.
+                        // Execution will be simulated in parallel.
+                        // If system runs out of memory, limit the rayon
+                        // with setting env variable RAYON_NUM_THREADS=<number>.
+                        let timing = TimingTree::new(
+                            &format!(
+                                "simulate zkEVM CPU for block {}, txns {:?}..{:?}.",
+                                generation_inputs.block_metadata.block_number,
+                                generation_inputs.txn_number_before,
+                                generation_inputs.txn_number_before
+                                    + generation_inputs.signed_txns.len()
+                            ),
+                            log::Level::Info,
+                        );
+                        simulate_execution_all_segments::<F>(generation_inputs, 19)?;
+                        timing.filter(Duration::from_millis(100)).print();
+                        Ok::<(), anyhow::Error>(())
+                    })
+                    .collect::<Result<Vec<_>, anyhow::Error>>()
+            })
         })
         .flatten_ok()
-        .collect::<Vec<Result<_, _>>>();
+        .map(|it| it?)
+        .collect::<Vec<Result<_, anyhow::Error>>>();
 
     results.iter().for_each(|it| {
         if let Err(e) = it {
@@ -246,16 +249,19 @@ fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
                     header_file_path.display()
                 ))?;
                 let mut header_reader = std::io::BufReader::new(header_file);
-                let hdr =
-                    serde_json::from_reader::<_, Header>(&mut header_reader).context(format!(
-                        "Failed to deserialize header json file {}",
-                        header_file_path.display()
-                    ))?;
+                let block_headers = serde_json::from_reader::<_, Vec<Header>>(&mut header_reader)
+                    .context(format!(
+                    "Failed to deserialize header json file {}",
+                    header_file_path.display()
+                ))?;
                 // Read one json witness file and get list of BlockProverInputs
-                let bpi = read_witness_file(&file_path)?;
-                Ok((hdr, bpi))
+                let block_prover_inputs = read_witness_file(&file_path)?;
+                Ok(block_headers
+                    .into_iter()
+                    .zip(block_prover_inputs.into_iter()))
             }
         })
+        .flatten_ok()
         .map_ok(|(block_header, block_prover_input)| {
             let other_block_data = block_prover_input.other_data.clone();
             // Run trace decoder, create generation inputs for this block
