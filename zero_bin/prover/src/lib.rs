@@ -6,8 +6,7 @@ use std::sync::Arc;
 
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
-use evm_arithmetization::BlockHeight;
-use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
+use futures::{future::BoxFuture, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
 use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
@@ -241,18 +240,23 @@ pub async fn prove(
     checkpoint_proof: Option<GeneratedBlockProof>,
     prover_config: Arc<ProverConfig>,
 ) -> Result<()> {
+    use tokio::task::JoinSet;
     let mut block_counter: u64 = 0;
     let mut prev_proof: Option<BoxFuture<Result<GeneratedBlockProof>>> =
         checkpoint_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
 
-    let mut results = FuturesOrdered::new();
+    // let mut results = FuturesOrdered::new();
+    // let mut handles = FuturesOrdered::new();
+    let mut task_set: JoinSet<
+        std::result::Result<std::result::Result<u64, anyhow::Error>, anyhow::Error>,
+    > = JoinSet::new();
     while let Some((block_prover_input, is_last_block)) = block_receiver.recv().await {
         block_counter += 1;
         let (tx, rx) = oneshot::channel::<GeneratedBlockProof>();
         let prover_config = prover_config.clone();
         let previous_block_proof = prev_proof.take();
         let runtime = runtime.clone();
-        let fut: BoxFuture<Result<BlockHeight, anyhow::Error>> = async move {
+        let _abort_handle = task_set.spawn(async move {
             let block_number = block_prover_input.get_block_number();
             info!("Proving block {block_number}");
             // Prove the block
@@ -285,16 +289,19 @@ pub async fn prove(
 
                 Ok(block_number)
             })
-            .await?;
+            .await;
 
             Ok(block_proof)
-        }
-        .boxed();
+        });
         prev_proof = Some(Box::pin(rx.map_err(anyhow::Error::new)));
-        results.push_back(fut);
+        if is_last_block {
+            break;
+        }
     }
 
-    _ = results.try_collect::<Vec<_>>().await;
+    while let Some(res) = task_set.join_next().await {
+        let _proved_block_height = res???;
+    }
     Ok(())
 }
 
@@ -310,8 +317,14 @@ async fn write_proof_to_dir(output_dir: &Path, proof: GeneratedBlockProof) -> Re
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    let mut f = tokio::fs::File::create(block_proof_file_path).await?;
+    let mut f = tokio::fs::File::create(block_proof_file_path.clone()).await?;
     f.write_all(&proof_serialized)
         .await
-        .context("Failed to write proof to disk")
+        .context("Failed to write proof to disk")?;
+
+    info!(
+        "Successfully wrote to disk proof file {}",
+        block_proof_file_path.display()
+    );
+    Ok(())
 }
