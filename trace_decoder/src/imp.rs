@@ -1,4 +1,5 @@
 use std::{
+    cmp,
     collections::{BTreeMap, BTreeSet},
     mem,
     ops::Range,
@@ -63,13 +64,7 @@ pub fn entrypoint(
     let batches = middle(
         state,
         storage,
-        txn_info
-            .into_iter()
-            .pad_using(2, |_ix| TxnInfo::default())
-            .chunks(batch_size)
-            .into_iter()
-            .map(FromIterator::from_iter)
-            .collect(),
+        batch(txn_info, batch_size),
         &mut code,
         b_meta.block_timestamp,
         b_meta.parent_beacon_block_root,
@@ -186,6 +181,33 @@ fn start(
             (state, storage, code.into_iter().map(Into::into).collect())
         }
     })
+}
+
+/// Break `txns` into batches of length `hint`, prioritising creating at least
+/// two batches.
+fn batch(mut txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<TxnInfo>> {
+    let hint = cmp::min(hint, 1);
+    let n_batches = txns.iter().chunks(hint).into_iter().count();
+    match (txns.len(), n_batches) {
+        // enough
+        (_, 2..) => txns
+            .into_iter()
+            .chunks(hint)
+            .into_iter()
+            .map(FromIterator::from_iter)
+            .collect(),
+        // not enough batches at `hint`, but enough real transactions
+        (2.., ..2) => {
+            let second = txns.split_off(txns.len() / 2);
+            vec![txns, second]
+        }
+        // add padding
+        (0 | 1, _) => txns
+            .into_iter()
+            .pad_using(2, |_ix| TxnInfo::default())
+            .map(|it| vec![it])
+            .collect(),
+    }
 }
 
 #[derive(Debug)]
