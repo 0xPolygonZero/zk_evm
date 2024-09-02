@@ -4,4 +4,5 @@ pub mod fs;
 pub mod parsing;
 pub mod pre_checks;
 pub mod prover_state;
+pub mod provider;
 pub mod version;

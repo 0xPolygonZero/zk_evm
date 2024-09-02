@@ -15,8 +15,8 @@ use trace_decoder::{
     BlockTraceTriePreImages, SeparateStorageTriesPreImage, SeparateTriePreImage,
     SeparateTriePreImages, TxnInfo,
 };
+use zero_bin_common::provider::CachedProvider;
 
-use crate::provider::CachedProvider;
 use crate::Compat;
 
 /// Processes the state witness for the given block.
@@ -31,10 +31,7 @@ where
 {
     let state_access = process_states_access(txn_infos, &block)?;
 
-    let block_number = block
-        .header
-        .number
-        .context("Block number not returned with block")?;
+    let block_number = block.header.number;
     let prev_state_root = cached_provider
         .get_block((block_number - 1).into(), BlockTransactionsKind::Hashes)
         .await?
@@ -81,13 +78,10 @@ pub fn process_states_access(
         for (address, trace) in txn_info.traces.iter() {
             let address_storage_access = state_access.entry((*address).compat()).or_default();
 
-            if let Some(read_keys) = trace.storage_read.as_ref() {
-                address_storage_access.extend(read_keys.iter().copied().map(Compat::compat));
-            }
+            address_storage_access.extend(trace.storage_read.iter().copied().map(Compat::compat));
 
-            if let Some(written_keys) = trace.storage_written.as_ref() {
-                address_storage_access.extend(written_keys.keys().copied().map(Compat::compat));
-            }
+            address_storage_access
+                .extend(trace.storage_written.keys().copied().map(Compat::compat));
         }
     }
 
@@ -182,7 +176,8 @@ where
             let provider = provider.clone();
             async move {
                 let proof = provider
-                    .as_provider()
+                    .get_provider()
+                    .await?
                     .get_proof(address, keys.into_iter().collect())
                     .block_id((block_number - 1).into())
                     .await
@@ -196,7 +191,8 @@ where
         let provider = provider.clone();
         async move {
             let proof = provider
-                .as_provider()
+                .get_provider()
+                .await?
                 .get_proof(address, keys.into_iter().collect())
                 .block_id(block_number.into())
                 .await

@@ -40,19 +40,19 @@ pub(crate) async fn client_main(
 ) -> Result<()> {
     use futures::{FutureExt, StreamExt};
 
-    let cached_provider = Arc::new(rpc::provider::CachedProvider::new(
+    let cached_provider = Arc::new(zero_bin_common::provider::CachedProvider::new(
         build_http_retry_provider(
             rpc_params.rpc_url.clone(),
             rpc_params.backoff,
             rpc_params.max_retries,
-        ),
+        )?,
     ));
     check_previous_proof_and_checkpoint(
         params.checkpoint_block_number,
         &params.previous_proof,
         block_interval.get_start_block()?,
     )?;
-    // Grab interval checkpoint block state trie
+    // Grab interval checkpoint block state trie.
     let checkpoint_state_trie_root = cached_provider
         .get_block(
             params.checkpoint_block_number.into(),

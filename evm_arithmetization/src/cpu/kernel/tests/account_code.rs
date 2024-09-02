@@ -13,6 +13,7 @@ use rand::{thread_rng, Rng};
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::context_metadata::ContextMetadata::{self, GasLimit};
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::mpt::nibbles_64;
 use crate::generation::mpt::{
@@ -194,21 +195,25 @@ pub(crate) fn prepare_interpreter<F: Field>(
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize))
+        .push((Segment::StorageLinkedList as usize + 5).into())
         .expect("The stack should not overflow");
+    interpreter
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .unwrap();
+    interpreter
+        .push((Segment::AccountsLinkedList as usize + 4).into())
+        .expect("The stack should not overflow");
+
+    // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
-        KERNEL.global_labels["mpt_hash_state_trie_and_set_payload"];
+        KERNEL.global_labels["insert_all_initial_accounts"];
 
     interpreter.run()?;
 
-    assert_eq!(interpreter.stack_len(), 4);
+    assert_eq!(interpreter.stack_len(), 1);
 
-    interpreter.pop().expect("The stack should not be empty"); // We don't need the hash.
-    interpreter.pop().expect("The stack should not be empty"); // Nor cur_len
-    let acc_ptr = interpreter.pop().expect("The stack should not be empty");
-    let storage_ptr = interpreter.pop().expect("The stack should not be empty");
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
+    let state_root = interpreter.pop().expect("The stack should not be empty");
+    interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
     // Now, execute `mpt_hash_state_trie`.
     state_trie.insert(k, rlp::encode(account).to_vec())?;
@@ -404,22 +409,25 @@ fn prepare_interpreter_all_accounts<F: Field>(
         .push(0xDEADBEEFu32.into())
         .expect("The stack should not overflow");
     interpreter
-        .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize))
+        .push((Segment::StorageLinkedList as usize + 5).into())
+        .expect("The stack should not overflow");
+    interpreter
+        .push(interpreter.get_global_metadata_field(GlobalMetadata::StateTrieRoot))
+        .unwrap();
+    interpreter
+        .push((Segment::AccountsLinkedList as usize + 4).into())
         .expect("The stack should not overflow");
 
+    // Now, set the payload.
     interpreter.generation_state.registers.program_counter =
-        KERNEL.global_labels["mpt_hash_state_trie_and_set_payload"];
+        KERNEL.global_labels["insert_all_initial_accounts"];
 
     interpreter.run()?;
 
-    assert_eq!(interpreter.stack_len(), 4);
+    assert_eq!(interpreter.stack_len(), 1);
 
-    interpreter.pop().expect("The stack should not be empty"); // We don't need the hash.
-    interpreter.pop().expect("The stack should not be empty"); // Nor cur_len
-    let acc_ptr = interpreter.pop().expect("The stack should not be empty");
-    let storage_ptr = interpreter.pop().expect("The stack should not be empty");
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialAccountsLinkedListLen, acc_ptr);
-    interpreter.set_global_metadata_field(GlobalMetadata::InitialStorageLinkedListLen, storage_ptr);
+    let state_root = interpreter.pop().expect("The stack should not be empty");
+    interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
 
     // Switch context and initialize memory with the data we need for the tests.
@@ -616,6 +624,9 @@ fn sload() -> Result<()> {
         .expect("The stack should not overflow.");
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial length of the trie data segment, unused.
+        .expect("The stack should not overflow.");
+    interpreter
+        .push(INITIAL_RLP_ADDR.1.into()) // rlp_start
         .expect("The stack should not overflow.");
     interpreter.run()?;
 

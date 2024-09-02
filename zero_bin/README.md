@@ -230,7 +230,7 @@ Options:
   -k, --keep-intermediate-proofs
           Keep intermediate proofs. Default action is to delete them after the final proof is generated [env: ZERO_BIN_KEEP_INTERMEDIATE_PROOFS=]
       --backoff <BACKOFF>
-          Backoff in milliseconds for request retries [default: 0]
+          Backoff in milliseconds for retry requests [default: 0]
       --max-retries <MAX_RETRIES>
           The maximum number of retries [default: 0]
   -h, --help
@@ -272,7 +272,7 @@ Options:
   -k, --keep-intermediate-proofs
           Keep intermediate proofs. Default action is to delete them after the final proof is generated [env: ZERO_BIN_KEEP_INTERMEDIATE_PROOFS=]
       --backoff <BACKOFF>
-          Backoff in milliseconds for request retries [default: 0]
+          Backoff in milliseconds for retry requests [default: 0]
       --max-retries <MAX_RETRIES>
           The maximum number of retries [default: 0]
   -h, --help

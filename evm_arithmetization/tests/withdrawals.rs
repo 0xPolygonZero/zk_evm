@@ -86,6 +86,7 @@ fn test_withdrawals() -> anyhow::Result<()> {
 
     let inputs = GenerationInputs {
         signed_txns: vec![],
+        burn_addr: None,
         withdrawals,
         global_exit_roots: vec![],
         tries: TrieInputs {

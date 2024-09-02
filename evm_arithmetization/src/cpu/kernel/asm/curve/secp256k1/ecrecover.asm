@@ -17,7 +17,7 @@ global ecrecover:
     // If inputs are invalid or lifting fails, abort.
     SWAP3
     // stack: isValid(v,r,s), sqrtOk, hash, y, r, s, retdest
-    AND
+    MUL // cheaper than AND
     // stack: isValid(v,r,s) & sqrtOk, hash, y, r, s, retdest
     %jumpi(ecrecover_valid_input)
     // stack: hash, y, r, s, retdest
@@ -102,7 +102,7 @@ ecdsa_after_precompute_loop_contd2:
     %jump(ecdsa_after_precompute_loop)
 ecdsa_after_precompute_loop_end:
     // Check that the public key is not the point at infinity. See https://github.com/ethereum/eth-keys/pull/76 for discussion.
-    DUP2 DUP2 ISZERO SWAP1 ISZERO MUL %jumpi(pk_is_infinity)
+    DUP2 ISZERO DUP2 ISZERO MUL %jumpi(pk_is_infinity)
     %stack (accx, accy, ecdsa_after_precompute_loop_contd2, i, a0, a1, b0, b1, retdest) -> (retdest, accx, accy)
     JUMP
 

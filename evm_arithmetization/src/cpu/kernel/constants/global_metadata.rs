@@ -18,10 +18,6 @@ pub(crate) enum GlobalMetadata {
     /// The size of the `TrieData` segment, in bytes. In other words, the next
     /// address available for appending additional trie data.
     TrieDataSize,
-    /// The size of the `RLP` segment, in bytes, represented as a whole
-    /// address. In other words, the next address available for appending
-    /// additional RLP data.
-    RlpDataSize,
     /// A pointer to the root of the state trie within the `TrieData` buffer.
     StateTrieRoot,
     /// A pointer to the root of the transaction trie within the `TrieData`
@@ -81,10 +77,6 @@ pub(crate) enum GlobalMetadata {
     TouchedAddressesLen,
     // Gas cost for the access list in type-1 txns. See EIP-2930.
     AccessListDataCost,
-    // Start of the access list in the RLP for type-1 txns.
-    AccessListRlpStart,
-    // Length of the access list in the RLP for type-1 txns.
-    AccessListRlpLen,
     // Boolean flag indicating if the txn is a contract creation txn.
     ContractCreation,
     IsPrecompileFromEoa,
@@ -118,16 +110,15 @@ pub(crate) enum GlobalMetadata {
     /// The length of the transient storage segment.
     TransientStorageLen,
 
-    // Start of the blob versioned hashes in the RLP for type-3 txns.
-    BlobVersionedHashesRlpStart,
-    // Length of the blob versioned hashes in the RLP for type-3 txns.
-    BlobVersionedHashesRlpLen,
     // Number of blob versioned hashes contained in the current type-3 transaction.
     BlobVersionedHashesLen,
+
+    /// Address where the base fee to be burnt is sent.
+    BurnAddr,
 }
 
 impl GlobalMetadata {
-    pub(crate) const COUNT: usize = 59;
+    pub(crate) const COUNT: usize = 55;
 
     /// Unscales this virtual offset by their respective `Segment` value.
     pub(crate) const fn unscale(&self) -> usize {
@@ -139,7 +130,6 @@ impl GlobalMetadata {
             Self::LargestContext,
             Self::MemorySize,
             Self::TrieDataSize,
-            Self::RlpDataSize,
             Self::StateTrieRoot,
             Self::TransactionTrieRoot,
             Self::ReceiptTrieRoot,
@@ -173,8 +163,6 @@ impl GlobalMetadata {
             Self::CurrentCheckpoint,
             Self::TouchedAddressesLen,
             Self::AccessListDataCost,
-            Self::AccessListRlpStart,
-            Self::AccessListRlpLen,
             Self::ContractCreation,
             Self::IsPrecompileFromEoa,
             Self::CallStackDepth,
@@ -192,9 +180,8 @@ impl GlobalMetadata {
             Self::InitialAccountsLinkedListLen,
             Self::InitialStorageLinkedListLen,
             Self::TransientStorageLen,
-            Self::BlobVersionedHashesRlpStart,
-            Self::BlobVersionedHashesRlpLen,
             Self::BlobVersionedHashesLen,
+            Self::BurnAddr,
         ]
     }
 
@@ -204,7 +191,6 @@ impl GlobalMetadata {
             Self::LargestContext => "GLOBAL_METADATA_LARGEST_CONTEXT",
             Self::MemorySize => "GLOBAL_METADATA_MEMORY_SIZE",
             Self::TrieDataSize => "GLOBAL_METADATA_TRIE_DATA_SIZE",
-            Self::RlpDataSize => "GLOBAL_METADATA_RLP_DATA_SIZE",
             Self::StateTrieRoot => "GLOBAL_METADATA_STATE_TRIE_ROOT",
             Self::TransactionTrieRoot => "GLOBAL_METADATA_TXN_TRIE_ROOT",
             Self::ReceiptTrieRoot => "GLOBAL_METADATA_RECEIPT_TRIE_ROOT",
@@ -239,8 +225,6 @@ impl GlobalMetadata {
             Self::CurrentCheckpoint => "GLOBAL_METADATA_CURRENT_CHECKPOINT",
             Self::TouchedAddressesLen => "GLOBAL_METADATA_TOUCHED_ADDRESSES_LEN",
             Self::AccessListDataCost => "GLOBAL_METADATA_ACCESS_LIST_DATA_COST",
-            Self::AccessListRlpStart => "GLOBAL_METADATA_ACCESS_LIST_RLP_START",
-            Self::AccessListRlpLen => "GLOBAL_METADATA_ACCESS_LIST_RLP_LEN",
             Self::ContractCreation => "GLOBAL_METADATA_CONTRACT_CREATION",
             Self::IsPrecompileFromEoa => "GLOBAL_METADATA_IS_PRECOMPILE_FROM_EOA",
             Self::CallStackDepth => "GLOBAL_METADATA_CALL_STACK_DEPTH",
@@ -263,9 +247,8 @@ impl GlobalMetadata {
             }
             Self::InitialStorageLinkedListLen => "GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN",
             Self::TransientStorageLen => "GLOBAL_METADATA_TRANSIENT_STORAGE_LEN",
-            Self::BlobVersionedHashesRlpStart => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_START",
-            Self::BlobVersionedHashesRlpLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_RLP_LEN",
             Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",
+            Self::BurnAddr => "GLOBAL_METADATA_BURN_ADDR",
         }
     }
 }

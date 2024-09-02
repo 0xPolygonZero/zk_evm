@@ -9,7 +9,7 @@ use super::assembler::{assemble, Kernel};
 use crate::cpu::kernel::constants::evm_constants;
 use crate::cpu::kernel::parser::parse;
 
-pub const NUMBER_KERNEL_FILES: usize = 162;
+pub const NUMBER_KERNEL_FILES: usize = 159;
 
 pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     "global jumped_to_0: PANIC",
@@ -132,9 +132,6 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
     include_str!("asm/mpt/linked_list/linked_list.asm"),
     include_str!("asm/mpt/linked_list/final_tries.asm"),
     include_str!("asm/mpt/linked_list/initial_tries.asm"),
-    include_str!("asm/mpt/linked_list/initial_tries/hash.asm"),
-    include_str!("asm/mpt/linked_list/initial_tries/hash_storage.asm"),
-    include_str!("asm/mpt/linked_list/initial_tries/hash_trie_specific.asm"),
     include_str!("asm/mpt/read.asm"),
     include_str!("asm/mpt/storage/storage_read.asm"),
     include_str!("asm/mpt/storage/storage_write.asm"),
@@ -181,7 +178,15 @@ pub static KERNEL_FILES: [&str; NUMBER_KERNEL_FILES] = [
 pub static KERNEL: Lazy<Kernel> = Lazy::new(combined_kernel);
 
 pub(crate) fn combined_kernel_from_files<const N: usize>(files: [&str; N]) -> Kernel {
-    let parsed_files = files.iter().map(|f| parse(f, HashSet::new())).collect_vec();
+    let mut active_features = HashSet::new();
+    if cfg!(feature = "cdk_erigon") {
+        active_features.insert("cdk_erigon");
+    }
+
+    let parsed_files = files
+        .iter()
+        .map(|f| parse(f, &active_features))
+        .collect_vec();
     assemble(parsed_files, evm_constants(), true)
 }
 

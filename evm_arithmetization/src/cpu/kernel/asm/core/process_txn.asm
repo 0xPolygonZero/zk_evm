@@ -75,6 +75,11 @@ global buy_gas:
     // stack: deduct_eth_status, retdest
     %jumpi(panic)
     // stack: retdest
+    #[cfg(feature = cdk_erigon)]
+    {
+        %add_max_burnt_eth
+        // stack: retdest
+    }
 
 global increment_sender_nonce:
     %mload_txn_field(@TXN_FIELD_ORIGIN)
@@ -362,7 +367,37 @@ process_message_txn_fail:
     // stack: origin, leftover_gas_cost, leftover_gas'
     %add_eth
     // stack: leftover_gas'
+
+    #[cfg(feature = cdk_erigon)]
+    {
+        %deduct_extra_burn_fees
+    }
 %endmacro
+
+#[cfg(feature = cdk_erigon)]
+{
+    // Deduct the extra burn fees from the burn target.
+    %macro deduct_extra_burn_fees
+        // stack: leftover_gas'
+        %mload_global_metadata(@GLOBAL_METADATA_BURN_ADDR) DUP1
+        %eq_const(@U256_MAX) %jumpi(%%deduct_extra_burn_fees_pop)
+        // stack: burn_target, leftover_gas'
+        DUP2
+        %mload_global_metadata(@GLOBAL_METADATA_BLOCK_BASE_FEE)
+        MUL
+        // stack: refund_base_cost, burn_target, leftover_gas'
+        SWAP1
+        %deduct_eth
+        // stack: deduct_status, leftover_gas'
+        %jumpi(panic)
+        %jump(%%deduct_extra_burn_fees_end)
+    %%deduct_extra_burn_fees_pop:
+        // stack: burn_target, leftover_gas'
+        POP
+    %%deduct_extra_burn_fees_end:
+        // stack: leftover_gas'
+    %endmacro
+}
 
 // Sets @TXN_FIELD_MAX_FEE_PER_GAS and @TXN_FIELD_MAX_PRIORITY_FEE_PER_GAS.
 %macro compute_fees
@@ -395,6 +430,30 @@ process_message_txn_fail:
     // stack: gas_limit - intrinsic_gas
 %endmacro
 
+#[cfg(feature = cdk_erigon)]
+{
+    // Refund extra burn fees to the burn target.
+    %macro add_max_burnt_eth
+        // stack: (empty)
+        %mload_global_metadata(@GLOBAL_METADATA_BURN_ADDR)
+        // If there is no burn target, we skip the transfer.
+        DUP1 %eq_const(@U256_MAX) %jumpi(%%add_max_burnt_eth_pop)
+        // stack: burn_target
+        %mload_global_metadata(@GLOBAL_METADATA_BLOCK_BASE_FEE)
+        %mload_txn_field(@TXN_FIELD_GAS_LIMIT)
+        MUL
+        // stack: max_burnt_cost, burn_target
+        SWAP1 
+        %add_eth
+        %jump(%%add_max_burnt_eth_end)
+    %%add_max_burnt_eth_pop:
+        // stack: burn_target
+        POP
+    %%add_max_burnt_eth_end:
+        // stack: (empty)
+    %endmacro
+}
+    
 create_contract_account_fault:
     %revert_checkpoint
     // stack: address, retdest

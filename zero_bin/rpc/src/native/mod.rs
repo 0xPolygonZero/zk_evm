@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::BTreeSet;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use alloy::{
@@ -10,13 +11,12 @@ use alloy::{
 use futures::try_join;
 use prover::BlockProverInput;
 use trace_decoder::BlockTrace;
-
-use crate::provider::CachedProvider;
+use zero_bin_common::provider::CachedProvider;
 
 mod state;
 mod txn;
 
-type CodeDb = HashMap<__compat_primitive_types::H256, Vec<u8>>;
+type CodeDb = BTreeSet<Vec<u8>>;
 
 /// Fetches the prover input for the given BlockId.
 pub async fn block_prover_input<ProviderT, TransportT>(
@@ -53,12 +53,12 @@ where
         .await?;
 
     let (code_db, txn_info) =
-        txn::process_transactions(&block, cached_provider.as_provider()).await?;
+        txn::process_transactions(&block, cached_provider.get_provider().await?.deref()).await?;
     let trie_pre_images = state::process_state_witness(cached_provider, block, &txn_info).await?;
 
     Ok(BlockTrace {
         txn_info,
-        code_db: Option::from(code_db).filter(|x| !x.is_empty()),
+        code_db,
         trie_pre_images,
     })
 }

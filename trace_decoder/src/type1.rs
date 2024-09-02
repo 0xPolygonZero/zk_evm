@@ -7,20 +7,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{bail, ensure, Context as _};
 use either::Either;
 use evm_arithmetization::generation::mpt::AccountRlp;
+use keccak_hash::H256;
 use mpt_trie::partial_trie::OnOrphanedHashNode;
 use nunny::NonEmpty;
 use u4::U4;
 
-use crate::typed_mpt::{StateTrie, StorageTrie, TrieKey};
+use crate::typed_mpt::{StateMpt, StateTrie as _, StorageTrie, TrieKey};
 use crate::wire::{Instruction, SmtLeaf};
 
 #[derive(Debug, Clone)]
 pub struct Frontend {
-    pub state: StateTrie,
+    pub state: StateMpt,
     pub code: BTreeSet<NonEmpty<Vec<u8>>>,
-    /// The key here matches the [`TriePath`] inside [`Self::state`] for
-    /// accounts which had inline storage.
-    pub storage: BTreeMap<TrieKey, StorageTrie>,
+    pub storage: BTreeMap<H256, StorageTrie>,
 }
 
 impl Default for Frontend {
@@ -28,7 +27,7 @@ impl Default for Frontend {
     // which covers branch-to-extension collapse edge cases.
     fn default() -> Self {
         Self {
-            state: StateTrie::new(OnOrphanedHashNode::CollapseToExtension),
+            state: StateMpt::new(OnOrphanedHashNode::CollapseToExtension),
             code: BTreeSet::new(),
             storage: BTreeMap::new(),
         }
@@ -70,7 +69,9 @@ fn visit(
                 .insert_hash_by_key(TrieKey::new(path.iter().copied())?, raw_hash.into())?;
         }
         Node::Leaf(Leaf { key, value }) => {
-            let path = TrieKey::new(path.iter().copied().chain(key))?;
+            let path = TrieKey::new(path.iter().copied().chain(key))?
+                .into_hash()
+                .context("invalid depth for leaf of state trie")?;
             match value {
                 Either::Left(Value { .. }) => bail!("unsupported value node at top level"),
                 Either::Right(Account {
@@ -104,7 +105,8 @@ fn visit(
                             }
                         },
                     };
-                    let clobbered = frontend.state.insert_by_key(path, account)?;
+                    #[expect(deprecated)] // this is MPT-specific code
+                    let clobbered = frontend.state.insert_by_hashed_address(path, account)?;
                     ensure!(clobbered.is_none(), "duplicate account");
                 }
             }
@@ -390,9 +392,9 @@ fn test_tries() {
         let frontend = frontend(instructions).unwrap();
         assert_eq!(case.expected_state_root, frontend.state.root());
 
-        for (path, acct) in &frontend.state {
-            if acct.storage_root != StateTrie::default().root() {
-                assert!(frontend.storage.contains_key(&path))
+        for (haddr, acct) in frontend.state.iter() {
+            if acct.storage_root != StateMpt::default().root() {
+                assert!(frontend.storage.contains_key(&haddr))
             }
         }
     }

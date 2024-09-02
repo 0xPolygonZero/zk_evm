@@ -53,9 +53,9 @@ after_mpt_read:
     %add_const(2) // intial account_ptr = account_ptr_ptr + 2
     MLOAD_GENERAL
     // stack: account_ptr, trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    SWAP1 DUP2
+    DUP1 SWAP2
     // stack: account_ptr, trie_account_ptr_ptr, account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
-    MSTORE_GENERAL // The trie's account points to the linked list inital account
+    %mstore_trie_data // The trie's account points to the linked list inital account
     // stack: account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %add_const(2)
     // stack: storage_root_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
@@ -94,7 +94,6 @@ global insert_all_initial_slots:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     %stack (addr, storage_ptr_ptr, root_ptr, retdest) -> (retdest, storage_ptr_ptr, root_ptr)
     JUMP
-
 insert_next_slot:
     // stack: addr, storage_ptr_ptr, root_ptr, retdest
     DUP2
