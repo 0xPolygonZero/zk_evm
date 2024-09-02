@@ -220,7 +220,7 @@ pub struct TxnMeta {
 ///
 /// Specifically, since we can not execute the txn before proof generation, we
 /// rely on a separate EVM to run the txn and supply this data for us.
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct TxnTrace {
     /// If the balance changed, then the new balance will appear here. Will be
     /// `None` if no change.
@@ -256,7 +256,7 @@ fn is_false(b: &bool) -> bool {
 }
 
 /// Contract code access type. Used by txn traces.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ContractCodeUsage {
     /// Contract was read.
@@ -695,23 +695,6 @@ mod middle {
             )
         }
 
-        // Look into the future
-        // TODO(0xaatif): document why this is required
-        //                (trying to decode the immediate receipts fails)
-        let birth2latest_receipt = batches
-            .iter()
-            .flatten()
-            .flat_map(|info| {
-                info.traces
-                    .keys()
-                    .map(|addr| (addr, &info.meta.new_receipt_trie_node_byte))
-            })
-            .filter_map(|(addr, rcpt)| match state_trie.contains_address(*addr) {
-                true => None,
-                false => Some((*addr, rcpt.clone())),
-            })
-            .collect::<BTreeMap<_, _>>();
-
         // These are the per-block tries.
         let mut transaction_trie = TransactionTrie::new();
         let mut receipt_trie = ReceiptTrie::new();
@@ -739,48 +722,14 @@ mod middle {
             let mut trim_state = BTreeSet::new();
 
             if curr_txn_ix == 0 {
-                // Cancun specific
-
-                let history_buffer_length = U256::from(HISTORY_BUFFER_LENGTH_VALUE);
-                let history_timestamp = block_timestamp % history_buffer_length;
-                let history_timestamp_next = history_timestamp + history_buffer_length;
-                let beacon_storage = storage
-                    .get_mut(&keccak_hash::keccak(BEACON_ROOTS_CONTRACT_ADDRESS))
-                    .context("missing beacon contract storage trie")?;
-                let beacon_trim = trim_storage
-                    .entry(BEACON_ROOTS_CONTRACT_ADDRESS)
-                    .or_default();
-                for (ix, u) in [
-                    (history_timestamp, block_timestamp),
-                    (
-                        history_timestamp_next,
-                        U256::from_big_endian(parent_beacon_block_root.as_bytes()),
-                    ),
-                ] {
-                    let mut h = [0; 32];
-                    ix.to_big_endian(&mut h);
-                    let slot = TrieKey::from_hash(keccak_hash::keccak(H256::from_slice(&h)));
-                    beacon_trim.insert(slot);
-
-                    match u.is_zero() {
-                        true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
-                        false => {
-                            beacon_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
-                            beacon_trim.insert(slot);
-                        }
-                    }
-                }
-                trim_state.insert(TrieKey::from_address(BEACON_ROOTS_CONTRACT_ADDRESS));
-
-                let mut beacon_acct = state_trie
-                    .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
-                    .context("missing beacon contract address")?;
-                beacon_acct.storage_root = beacon_storage.root();
-                state_trie
-                    .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
-                    // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
-                    //                Add an entry API
-                    .expect("insert must succeed with the same key as a successful `get`");
+                cancun_hook(
+                    block_timestamp,
+                    &mut storage,
+                    &mut trim_storage,
+                    parent_beacon_block_root,
+                    &mut trim_state,
+                    &mut state_trie,
+                )?;
             }
 
             for TxnInfo {
@@ -806,6 +755,7 @@ mod middle {
 
                 for (
                     addr,
+                    empty,
                     TxnTrace {
                         balance,
                         nonce,
@@ -815,6 +765,8 @@ mod middle {
                         self_destructed,
                     },
                 ) in traces
+                    .into_iter()
+                    .map(|(addr, trc)| (addr, trc == TxnTrace::default(), trc))
                 {
                     let (mut acct, born) = state_trie
                         .get_by_address(addr)
@@ -822,7 +774,7 @@ mod middle {
                         .unwrap_or((AccountRlp::default(), true));
 
                     let commit = match born {
-                        false => true,
+                        false => !empty,
                         true => {
                             let (_, _, receipt) =
                                 evm_arithmetization::generation::mpt::decode_receipt(
@@ -830,7 +782,7 @@ mod middle {
                                 )
                                 .map_err(|e| anyhow!("{e:?}"))
                                 .context("couldn't decode receipt")?;
-                            receipt.status
+                            receipt.status && !empty
                         } // if txn failed, don't commit changes to trie
                     };
 
@@ -876,10 +828,8 @@ mod middle {
                             for (k, v) in storage_written {
                                 let slot = TrieKey::from_hash(keccak_hash::keccak(k));
                                 match v.is_zero() {
-                                    true => {
-                                        // this is actually a delete
-                                        trim_storage.extend(storage.reporting_remove(slot)?)
-                                    }
+                                    // this is actually a delete
+                                    true => trim_storage.extend(storage.reporting_remove(slot)?),
                                     false => {
                                         storage.insert(slot, rlp::encode(&v).to_vec())?;
                                     }
@@ -960,6 +910,56 @@ mod middle {
         } // batch in batches
 
         Ok(out)
+    }
+
+    fn cancun_hook<StateTrieT: StateTrie + Clone>(
+        block_timestamp: U256,
+        storage: &mut BTreeMap<H256, StorageTrie>,
+        trim_storage: &mut BTreeMap<ethereum_types::H160, BTreeSet<TrieKey>>,
+        parent_beacon_block_root: H256,
+        trim_state: &mut BTreeSet<TrieKey>,
+        state_trie: &mut StateTrieT,
+    ) -> anyhow::Result<()> {
+        let history_buffer_length = U256::from(HISTORY_BUFFER_LENGTH_VALUE);
+        let history_timestamp = block_timestamp % history_buffer_length;
+        let history_timestamp_next = history_timestamp + history_buffer_length;
+        let beacon_storage = storage
+            .get_mut(&keccak_hash::keccak(BEACON_ROOTS_CONTRACT_ADDRESS))
+            .context("missing beacon contract storage trie")?;
+        let beacon_trim = trim_storage
+            .entry(BEACON_ROOTS_CONTRACT_ADDRESS)
+            .or_default();
+        for (ix, u) in [
+            (history_timestamp, block_timestamp),
+            (
+                history_timestamp_next,
+                U256::from_big_endian(parent_beacon_block_root.as_bytes()),
+            ),
+        ] {
+            let mut h = [0; 32];
+            ix.to_big_endian(&mut h);
+            let slot = TrieKey::from_hash(keccak_hash::keccak(H256::from_slice(&h)));
+            beacon_trim.insert(slot);
+
+            match u.is_zero() {
+                true => beacon_trim.extend(beacon_storage.reporting_remove(slot)?),
+                false => {
+                    beacon_storage.insert(slot, alloy::rlp::encode(u.compat()))?;
+                    beacon_trim.insert(slot);
+                }
+            }
+        }
+        trim_state.insert(TrieKey::from_address(BEACON_ROOTS_CONTRACT_ADDRESS));
+        let mut beacon_acct = state_trie
+            .get_by_address(BEACON_ROOTS_CONTRACT_ADDRESS)
+            .context("missing beacon contract address")?;
+        beacon_acct.storage_root = beacon_storage.root();
+        state_trie
+            .insert_by_address(BEACON_ROOTS_CONTRACT_ADDRESS, beacon_acct)
+            // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+            //                Add an entry API
+            .expect("insert must succeed with the same key as a successful `get`");
+        Ok(())
     }
 
     // TODO(0xaatif): is this _meant_ to exclude the final member?

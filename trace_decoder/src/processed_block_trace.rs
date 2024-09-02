@@ -223,11 +223,9 @@ impl TxnInfo {
                 .map(|(addr, _)| *addr)
                 .collect::<HashSet<_>>();
 
-            let all_accounts_with_non_empty_storage = all_accounts_in_pre_image
+            let accounts_with_storage_but_no_storage_accesses = all_accounts_in_pre_image
                 .iter()
-                .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH);
-
-            let accounts_with_storage_but_no_storage_accesses = all_accounts_with_non_empty_storage
+                .filter(|(_, data)| data.storage_root != EMPTY_TRIE_HASH)
                 .filter(|&(addr, _data)| !accounts_with_storage_accesses.contains(addr))
                 .map(|(addr, data)| (*addr, data.storage_root));
 

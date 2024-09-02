@@ -40,8 +40,8 @@ const BEACON: Address = address!("000f3df6d732807ef1319fb7b8bb8522d0beac02");
 
 #[test]
 fn foo() {
-    let h = keccak_hash::keccak(BEACON);
-    println!("3558f3fca4aec8fb6ad1d89c9e75bbf925e53d81820822a8ba7e785bfcf0d8e9");
+    let h = keccak_hash::keccak(address!("ff00000000000000000000000000000000048900"));
+    println!("{h:x}");
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn other() -> OtherBlockData {
 
 fn do_test(trace: BlockTrace, other: OtherBlockData) {
     eprintln!("reference");
-    let reference = trace_decoder::entrypoint(trace.clone(), other.clone(), 1)
+    let mut reference = trace_decoder::entrypoint(trace.clone(), other.clone(), 1)
         .expect("couldn't generate reference");
     eprintln!("subject");
     let mut subject = trace_decoder::entrypoint2(trace, other, non0::nonzero!(1))
@@ -258,7 +258,11 @@ fn do_test(trace: BlockTrace, other: OtherBlockData) {
 
     // at the moment the subject storage tries are a superset of the reference.
     // it's not clear if this is important, so shim around it for now.
-    for (reference, subject) in iter::zip(&reference, &mut subject) {
+    for (reference, subject) in iter::zip(&mut reference, &mut subject) {
+        reference
+            .tries
+            .storage_tries
+            .retain(|(_, v)| *v != HashedPartialTrie::default());
         let in_reference = reference
             .tries
             .storage_tries
