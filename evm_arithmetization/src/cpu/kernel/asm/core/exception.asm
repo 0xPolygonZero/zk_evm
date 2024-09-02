@@ -187,7 +187,6 @@ global exc_stop:
     // Now, check that we end up with the correct stack_top.
     // stack: stack_len_before_exc, addr_registers, trap_info
     DUP1 PUSH 0 LT
-global debug_sera_por_aqui:
     // stack: 0 < stack_len_before_exc, stack_len_before_exc, addr_registers, trap_info
     PUSH 1 DUP3 SUB
     // stack: stack_len_before_exc - 1, 0 < stack_len_before_exc, stack_len_before_exc, addr_registers, trap_info
@@ -244,7 +243,6 @@ global debug_sera_por_aqui:
     // stack: stored_context
     GET_CONTEXT
     %assert_eq
-global debug_que_sucede:
     // stack: (empty)
     // The following two instructions are needed to not have failing constraints. 
     // `ISZERO` pops and pushes, which means that there is no need to read the next top of the stack after it. 

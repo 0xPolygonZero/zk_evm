@@ -164,7 +164,6 @@ after_mpt_delete:
 // Pre stack: addr, root_ptr, storage_ptr_ptr, retdest
 // Post stack: new_root_ptr, storage_ptr_ptr'.
 delete_removed_slots:
-global debug_delete_removed_slots:
     // stack: addr, root_ptr, storage_ptr_ptr, retdest
     DUP3
     MLOAD_GENERAL

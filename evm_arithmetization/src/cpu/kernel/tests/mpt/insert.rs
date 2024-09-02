@@ -253,8 +253,6 @@ fn test_state_trie(
         interpreter.stack()
     );
 
-    log::debug!("after insert");
-
     // Now, execute `mpt_hash_state_trie` and check the hash value (both are done
     // under `check_state_trie`).
     state_trie.insert(k, rlp::encode(&account).to_vec())?;

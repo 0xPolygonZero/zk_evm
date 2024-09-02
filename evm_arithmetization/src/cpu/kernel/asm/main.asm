@@ -211,7 +211,6 @@ global check_state_trie:
     // stack: init_state_hash, trie_data_len
     // Check that the initial trie is correct.
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
-global debug_wtf:
     %assert_eq
     // Check that the stored trie data length is correct.
     // TODO: uncommen the following 2 lines

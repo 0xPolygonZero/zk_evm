@@ -189,7 +189,7 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                 let block_generation_inputs =
                     decode_generation_inputs(block_prover_input, use_burn_addr)?;
                 block_generation_inputs
-                    .into_iter()
+                    .into_par_iter()
                     .map(|generation_inputs| {
                         // For every generation input, simulate execution.
                         // Execution will be simulated in parallel.
@@ -205,7 +205,7 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
                             ),
                             log::Level::Info,
                         );
-                        simulate_execution_all_segments::<F>(generation_inputs, 25)?;
+                        simulate_execution_all_segments::<F>(generation_inputs, 19)?;
                         timing.filter(Duration::from_millis(100)).print();
                         Ok::<(), anyhow::Error>(())
                     })

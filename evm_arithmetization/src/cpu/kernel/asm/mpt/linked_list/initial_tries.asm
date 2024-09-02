@@ -8,7 +8,6 @@ global set_initial_state_trie:
 set_inital_state_trie_after:
     //stack: new_state_root
     %mstore_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-global debug_que_tenimos_aca:
     JUMP
 
 %macro set_initial_state_trie
@@ -31,7 +30,6 @@ global insert_all_initial_accounts:
     // stack: key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP4
     %mload_global_metadata(@GLOBAL_METADATA_INITIAL_ACCOUNTS_LINKED_LIST_LEN)
-global debug_it_should_stop:
     EQ
     %jumpi(no_more_accounts)
     // stack: key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
@@ -54,7 +52,7 @@ after_mpt_read:
     MLOAD_GENERAL
     // stack: account_ptr, trie_account_ptr_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     DUP1 SWAP2
-    // stack: account_ptr, trie_account_ptr_ptr, account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
+    // stack: trie_account_ptr_ptr, account_ptr, account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %mstore_trie_data // The trie's account points to the linked list inital account
     // stack: account_ptr, trie_storage_root, key, storage_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     %add_const(2)
@@ -66,7 +64,6 @@ after_mpt_read:
     %jump(insert_all_initial_slots)
 
 after_insert_all_initial_slots:
-global debug_after_insert_all_initial_slots:
     // stack: storage_ptr_ptr', trie_storage_root_ptr', storage_root_ptr_ptr, root_ptr, account_ptr_ptr, retdest
     SWAP2
     %mstore_trie_data
@@ -89,6 +86,10 @@ global insert_all_initial_slots:
     MLOAD_GENERAL
     DUP2
     EQ // Check that the node addres is the same as `addr`
+    DUP3
+    %mload_global_metadata(@GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN)
+    SUB
+    MUL
     %jumpi(insert_next_slot)
     // The addr has changed, meaning that we've inserted all slots for addr
     // stack: addr, storage_ptr_ptr, root_ptr, retdest

@@ -283,7 +283,6 @@ pub(crate) fn log_kernel_instruction<F: Field, S: State<F>>(state: &mut S, op: O
     } else {
         log::Level::Trace
     };
-
     state.log(
         level,
         format!(
