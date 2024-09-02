@@ -38,6 +38,7 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProo
 
 const SEGMENT_PROOF_ROUTING_KEY: &str = "segment_proof";
 const BLOCK_PROOF_ROUTING_KEY: &str = "block_proof";
+const DEFAULT_ROUTING_KEY: &str = "task";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -58,11 +59,21 @@ async fn main() -> Result<()> {
 
     let args = cli::Cli::parse();
 
+    let mut block_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
+    let mut segment_proof_routing_key = DEFAULT_ROUTING_KEY.to_string();
+    if args.worker_run_mode == cli::WorkerRunMode::Split {
+        // If we're running in split mode, we need to set the routing key for the
+        // block proof and segment proof.
+        info!("Workers running in split mode");
+        block_proof_routing_key = BLOCK_PROOF_ROUTING_KEY.to_string();
+        segment_proof_routing_key = SEGMENT_PROOF_ROUTING_KEY.to_string();
+    }
+
     let mut block_proof_paladin_args = args.paladin.clone();
-    block_proof_paladin_args.task_bus_routing_key = Some(BLOCK_PROOF_ROUTING_KEY.to_string());
+    block_proof_paladin_args.task_bus_routing_key = Some(block_proof_routing_key);
 
     let mut segment_proof_paladin_args = args.paladin.clone();
-    segment_proof_paladin_args.task_bus_routing_key = Some(SEGMENT_PROOF_ROUTING_KEY.to_string());
+    segment_proof_paladin_args.task_bus_routing_key = Some(segment_proof_routing_key);
 
     let block_proof_runtime = Runtime::from_config(&block_proof_paladin_args, register()).await?;
     let segment_proof_runtime =

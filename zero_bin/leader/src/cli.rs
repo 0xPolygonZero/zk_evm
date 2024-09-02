@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 
 use alloy::transports::http::reqwest::Url;
-use clap::{Parser, Subcommand, ValueHint};
+use clap::{Parser, Subcommand, ValueEnum, ValueHint};
 use prover::cli::CliProverConfig;
 use rpc::RpcType;
 use zero_bin_common::prover_state::cli::CliProverStateConfig;
+
+const WORKER_HELP_HEADING: &str = "Worker Config options";
 
 /// zero-bin leader config
 #[derive(Parser)]
@@ -22,6 +24,16 @@ pub(crate) struct Cli {
     // mode.
     #[clap(flatten)]
     pub(crate) prover_state_config: CliProverStateConfig,
+
+    // Mode to use for worker for setup (split or unified)
+    #[arg(long = "worker-run-mode", help_heading = WORKER_HELP_HEADING, value_enum, default_value = "unified")]
+    pub(crate) worker_run_mode: WorkerRunMode,
+}
+
+#[derive(ValueEnum, Clone, PartialEq, Debug)]
+pub enum WorkerRunMode {
+    Split,
+    Unified,
 }
 
 #[derive(Subcommand)]
