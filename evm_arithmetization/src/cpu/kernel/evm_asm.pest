@@ -43,7 +43,11 @@ prover_input_instruction = { ^"PROVER_INPUT" ~ "(" ~ prover_input_fn ~ ")" }
 prover_input_fn = { identifier ~ ("::" ~ identifier)*}
 nullary_instruction = { identifier }
 
-conditional_block = { ^"#" ~ "[" ~ "cfg" ~ "(" ~ "feature" ~ "=" ~ identifier ~ ")" ~ "]" ~ "{" ~ item* ~ ^"}"}
+feature_list = { "feature" ~ "=" ~ identifier ~ ("," ~ identifier)* }
+feature_prefix = { "not" | "all" | "any" }
+prefixed_feature_list = { feature_prefix ~ "(" ~ feature_list ~ ")"}
+conditional_block_args = { prefixed_feature_list | feature_list }
+conditional_block = { ^"#" ~ "[" ~ "cfg" ~ "(" ~ conditional_block_args ~ ")" ~ "]" ~ "{" ~ item* ~ ^"}"}
 
 file = { SOI ~ item* ~ silent_eoi }
 silent_eoi = _{ !ANY }
