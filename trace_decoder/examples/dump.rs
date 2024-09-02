@@ -1,5 +1,8 @@
 use std::io;
 
+use anyhow::Context;
+use itertools::Itertools;
+
 #[derive(clap::Parser)]
 struct Args {
     #[arg(long)]
@@ -26,25 +29,58 @@ fn main() -> anyhow::Result<()> {
         pretty,
     } = clap::Parser::parse();
 
-    let prover::BlockProverInput {
-        block_trace,
-        other_data,
-    } = serde_path_to_error::deserialize(&mut serde_json::Deserializer::from_reader(io::stdin()))?;
-
-    let gis = (match method {
-        Method::Old => trace_decoder::entrypoint_old as fn(_, _, _, _) -> anyhow::Result<Vec<_>>,
+    let entrypoint = match method {
+        Method::Old => trace_decoder::entrypoint_old as fn(_, _, _, _) -> anyhow::Result<_>,
         Method::New => trace_decoder::entrypoint_new as _,
-    })(block_trace, other_data, batch_size, use_burn_addr)?
-    .into_iter()
-    .map(repr::GenerationInputs::from)
-    .collect::<Vec<_>>();
+    };
 
-    (match pretty {
+    let out = Input::into_iter(serde_path_to_error::deserialize(
+        &mut serde_json::Deserializer::from_reader(io::stdin()),
+    )?)
+    .enumerate()
+    .map(
+        |(
+            ix,
+            prover::BlockProverInput {
+                block_trace,
+                other_data,
+            },
+        )| {
+            entrypoint(block_trace, other_data, batch_size, use_burn_addr)
+                .context(format!("couldn't prove input at {ix}"))
+        },
+    )
+    .map_ok(|it| {
+        Vec::into_iter(it)
+            .map(repr::GenerationInputs::from)
+            .collect::<Vec<_>>()
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+
+    let printer = match pretty {
         true => serde_json::to_writer_pretty as fn(_, _) -> _,
         false => serde_json::to_writer as _,
-    })(io::stdout(), &gis)?;
+    };
+
+    printer(io::stdout(), &out)?;
 
     Ok(())
+}
+
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum Input<T> {
+    One(T),
+    Many(Vec<T>),
+}
+
+impl<T> Input<T> {
+    fn into_iter(self) -> impl Iterator<Item = T> {
+        match self {
+            Input::One(it) => vec![it].into_iter(),
+            Input::Many(it) => it.into_iter(),
+        }
+    }
 }
 
 mod repr {
