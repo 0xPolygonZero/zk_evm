@@ -685,7 +685,7 @@ fn create_trie_subset_wrapped(
     .context(format!("missing keys when creating {}", trie_type))
 }
 
-fn eth_to_gwei(eth: U256) -> U256 {
+pub fn eth_to_gwei(eth: U256) -> U256 {
     // 1 ether = 10^9 gwei.
     eth * U256::from(10).pow(9.into())
 }

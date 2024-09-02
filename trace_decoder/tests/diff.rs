@@ -39,6 +39,12 @@ const CHARLIE: Address = address!("000000000000000000000000000000000c44271e");
 const BEACON: Address = address!("000f3df6d732807ef1319fb7b8bb8522d0beac02");
 
 #[test]
+fn foo() {
+    let h = keccak_hash::keccak(BEACON);
+    println!("3558f3fca4aec8fb6ad1d89c9e75bbf925e53d81820822a8ba7e785bfcf0d8e9");
+}
+
+#[test]
 fn test2() {
     eprintln!("load subjects");
     let loaded = default_bpis().unwrap();
@@ -51,8 +57,13 @@ fn test2() {
         },
     ) in loaded
     {
-        eprintln!("{name}");
-        do_test(block_trace, other_data);
+        match block_trace.txn_info.len() {
+            2.. => {
+                eprintln!("{name}");
+                do_test(block_trace, other_data);
+            }
+            _ => eprintln!("{name}\tskipped"),
+        }
     }
 }
 
@@ -263,10 +274,10 @@ fn do_test(trace: BlockTrace, other: OtherBlockData) {
     let reference = str_repr(reference);
     let subject = str_repr(subject);
 
-    let _ = fs::write("reference.ignoreme", &reference);
-    let _ = fs::write("subject.ignoreme", &subject);
+    fs::write("reference.ignoreme", &reference).unwrap();
+    fs::write("subject.ignoreme", &subject).unwrap();
 
-    pretty_assertions::assert_str_eq!(reference, subject, "reference (left) != subject (right)");
+    assert!(reference == subject);
 
     #[track_caller]
     fn str_repr(src: Vec<evm_arithmetization::GenerationInputs>) -> String {

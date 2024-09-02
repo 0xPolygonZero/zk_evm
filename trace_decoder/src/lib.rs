@@ -100,6 +100,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::mem;
 use std::num::NonZero;
 
+use anyhow::Context;
+use decoding::eth_to_gwei;
 use ethereum_types::{Address, U256};
 use evm_arithmetization::generation::TrieInputs;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
@@ -459,20 +461,6 @@ pub fn entrypoint2(
     let (state, storage, mut code) = start::start(trie_pre_images)?;
     code.extend(code_db);
 
-    let batches = middle::middle(
-        state,
-        storage,
-        txn_info
-            .into_iter()
-            .chunks(batch_size.get())
-            .into_iter()
-            .map(FromIterator::from_iter)
-            .collect(),
-        &mut code,
-        other.b_data.b_meta.block_timestamp,
-        other.b_data.b_meta.parent_beacon_block_root,
-    )?;
-
     let OtherBlockData {
         b_data:
             BlockLevelData {
@@ -483,28 +471,46 @@ pub fn entrypoint2(
         checkpoint_state_trie_root,
     } = other;
 
+    // TODO(0xaatif): docs for the RPC field say this is gwei already...
+    //                in any case, this shouldn't be our problem.
+    for (_, amt) in &mut withdrawals {
+        *amt = eth_to_gwei(*amt)
+    }
+
+    let batches = middle::middle(
+        state,
+        storage,
+        txn_info
+            .into_iter()
+            .chunks(batch_size.get())
+            .into_iter()
+            .map(FromIterator::from_iter)
+            .collect(),
+        &mut code,
+        b_meta.block_timestamp,
+        b_meta.parent_beacon_block_root,
+        withdrawals,
+    )?;
+
     let mut running_gas_used = 0;
     Ok(batches
         .into_iter()
-        .with_position()
         .map(
-            |(
-                pos,
-                middle::Batch {
-                    first_txn_ix,
-                    gas_used,
-                    contract_code,
-                    byte_code,
-                    before:
-                        middle::IntraBlockTries {
-                            state,
-                            storage,
-                            transaction,
-                            receipt,
-                        },
-                    after,
-                },
-            )| GenerationInputs {
+            |middle::Batch {
+                 first_txn_ix,
+                 gas_used,
+                 contract_code,
+                 byte_code,
+                 before:
+                     middle::IntraBlockTries {
+                         state,
+                         storage,
+                         transaction,
+                         receipt,
+                     },
+                 after,
+                 withdrawals,
+             }| GenerationInputs {
                 txn_number_before: first_txn_ix.into(),
                 gas_used_before: running_gas_used.into(),
                 gas_used_after: {
@@ -512,10 +518,7 @@ pub fn entrypoint2(
                     running_gas_used.into()
                 },
                 signed_txns: byte_code.into_iter().map(Into::into).collect(),
-                withdrawals: match pos {
-                    Position::Only | Position::Last => mem::take(&mut withdrawals),
-                    Position::First | Position::Middle => vec![],
-                },
+                withdrawals,
                 global_exit_roots: vec![],
                 tries: TrieInputs {
                     state_trie: state.into(),
@@ -621,6 +624,7 @@ mod start {
 mod middle {
     use std::{
         collections::{BTreeMap, BTreeSet},
+        mem,
         ops::Range,
     };
 
@@ -636,7 +640,7 @@ mod middle {
     use nunny::NonEmpty;
 
     use crate::{
-        processed_block_trace::Hash2Code,
+        processed_block_trace::{map_receipt_bytes, Hash2Code},
         typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
         ContractCodeUsage, TxnInfo, TxnMeta, TxnTrace,
     };
@@ -652,6 +656,9 @@ mod middle {
 
         pub before: IntraBlockTries<StateTrieT>,
         pub after: TrieRoots,
+
+        /// Empty for all but the final batch
+        pub withdrawals: Vec<(Address, U256)>,
     }
 
     /// [`evm_arithmetization::generation::TrieInputs`],
@@ -672,6 +679,7 @@ mod middle {
         code: &mut Hash2Code,
         block_timestamp: U256,
         parent_beacon_block_root: H256,
+        mut withdrawals: Vec<(Address, U256)>,
     ) -> anyhow::Result<Vec<Batch<StateTrieT>>> {
         // Initialise the storage tries.
         for (haddr, acct) in state_trie.iter() {
@@ -687,15 +695,33 @@ mod middle {
             )
         }
 
+        // Look into the future
+        // TODO(0xaatif): document why this is required
+        //                (trying to decode the immediate receipts fails)
+        let birth2latest_receipt = batches
+            .iter()
+            .flatten()
+            .flat_map(|info| {
+                info.traces
+                    .keys()
+                    .map(|addr| (addr, &info.meta.new_receipt_trie_node_byte))
+            })
+            .filter_map(|(addr, rcpt)| match state_trie.contains_address(*addr) {
+                true => None,
+                false => Some((*addr, rcpt.clone())),
+            })
+            .collect::<BTreeMap<_, _>>();
+
         // These are the per-block tries.
         let mut transaction_trie = TransactionTrie::new();
         let mut receipt_trie = ReceiptTrie::new();
 
         let mut out = vec![];
 
-        let mut txn_ix = 0;
+        let mut curr_txn_ix = 0;
+        let len_txns = batches.iter().flatten().count();
         for batch in batches {
-            let batch_first_txn_ix = txn_ix; // GOTCHA: if there are no transactions in this batch
+            let batch_first_txn_ix = curr_txn_ix; // GOTCHA: if there are no transactions in this batch
             let mut batch_gas_used = 0;
             let mut batch_byte_code = vec![];
             let mut batch_contract_code = BTreeSet::from([vec![]]); // always include empty code
@@ -712,7 +738,7 @@ mod middle {
             let mut trim_storage = BTreeMap::<_, BTreeSet<TrieKey>>::new();
             let mut trim_state = BTreeSet::new();
 
-            if txn_ix == 0 {
+            if curr_txn_ix == 0 {
                 // Cancun specific
 
                 let history_buffer_length = U256::from(HISTORY_BUFFER_LENGTH_VALUE);
@@ -769,8 +795,11 @@ mod middle {
             {
                 if let Ok(nonempty) = nunny::Vec::new(txn_byte_code) {
                     batch_byte_code.push(nonempty.clone());
-                    transaction_trie.insert(txn_ix, nonempty.into())?;
-                    receipt_trie.insert(txn_ix, new_receipt_trie_node_byte.clone())?;
+                    transaction_trie.insert(curr_txn_ix, nonempty.into())?;
+                    receipt_trie.insert(
+                        curr_txn_ix,
+                        map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
+                    )?;
                 }
 
                 batch_gas_used += txn_gas_used;
@@ -787,50 +816,17 @@ mod middle {
                     },
                 ) in traces
                 {
-                    let trim_storage = trim_storage.entry(addr).or_default();
-
-                    trim_storage.extend(
-                        storage_written
-                            .keys()
-                            .chain(&storage_read)
-                            .map(|it| TrieKey::from_hash(keccak_hash::keccak(it))),
-                    );
-
-                    let storage_trie_change = !storage_written.is_empty();
-
-                    if storage_trie_change {
-                        let storage =
-                            storage
-                                .get_mut(&keccak_hash::keccak(addr))
-                                .context(format!(
-                                    "missing storage for account with address {addr:x}"
-                                ))?;
-
-                        for (k, v) in storage_written {
-                            let slot = TrieKey::from_hash(keccak_hash::keccak(k));
-                            match v.is_zero() {
-                                true => {
-                                    // this is actually a delete
-                                    trim_storage.extend(storage.reporting_remove(slot)?)
-                                }
-                                false => {
-                                    storage.insert(slot, rlp::encode(&v).to_vec())?;
-                                }
-                            }
-                        }
-                    }
-
-                    let (mut acct, newly_created) = state_trie
+                    let (mut acct, born) = state_trie
                         .get_by_address(addr)
                         .map(|acct| (acct, false))
                         .unwrap_or((AccountRlp::default(), true));
 
-                    let commit = match newly_created {
+                    let commit = match born {
                         false => true,
                         true => {
                             let (_, _, receipt) =
                                 evm_arithmetization::generation::mpt::decode_receipt(
-                                    &new_receipt_trie_node_byte,
+                                    &map_receipt_bytes(new_receipt_trie_node_byte.clone())?,
                                 )
                                 .map_err(|e| anyhow!("{e:?}"))
                                 .context("couldn't decode receipt")?;
@@ -856,13 +852,40 @@ mod middle {
                             })
                             .transpose()?
                             .unwrap_or(acct.code_hash);
+
+                        let trim_storage = trim_storage.entry(addr).or_default();
+
+                        trim_storage.extend(
+                            storage_written
+                                .keys()
+                                .chain(&storage_read)
+                                .map(|it| TrieKey::from_hash(keccak_hash::keccak(it))),
+                        );
+
+                        let storage_trie_change = !storage_written.is_empty();
+
                         if storage_trie_change {
-                            acct.storage_root = storage
-                                .get(&keccak_hash::keccak(addr))
-                                .context(format!(
-                                    "missing storage for account with address {addr:x}"
-                                ))?
-                                .root();
+                            let storage =
+                                match born {
+                                    true => storage.entry(keccak_hash::keccak(addr)).or_default(),
+                                    false => storage.get_mut(&keccak_hash::keccak(addr)).context(
+                                        format!("missing storage trie for address {addr:x}"),
+                                    )?,
+                                };
+
+                            for (k, v) in storage_written {
+                                let slot = TrieKey::from_hash(keccak_hash::keccak(k));
+                                match v.is_zero() {
+                                    true => {
+                                        // this is actually a delete
+                                        trim_storage.extend(storage.reporting_remove(slot)?)
+                                    }
+                                    false => {
+                                        storage.insert(slot, rlp::encode(&v).to_vec())?;
+                                    }
+                                }
+                            }
+                            acct.storage_root = storage.root();
                         }
 
                         state_trie.insert_by_address(addr, acct)?;
@@ -886,27 +909,48 @@ mod middle {
                     }
                 }
 
-                txn_ix += 1;
+                curr_txn_ix += 1;
             } // txn in batch
-
-            before.state.trim_to(trim_state)?;
-            before.receipt.trim_to(batch_first_txn_ix..txn_ix)?;
-            before.transaction.trim_to(batch_first_txn_ix..txn_ix)?;
-
-            for (k, v) in trim_storage {
-                before
-                    .storage
-                    .get_mut(&keccak_hash::keccak(k))
-                    .unwrap()
-                    .trim_to(v)?;
-            }
 
             out.push(Batch {
                 first_txn_ix: batch_first_txn_ix,
                 gas_used: batch_gas_used,
                 contract_code: batch_contract_code,
                 byte_code: batch_byte_code,
-                before,
+                withdrawals: match curr_txn_ix == len_txns {
+                    true => {
+                        for (addr, amt) in &withdrawals {
+                            trim_state.insert(TrieKey::from_address(*addr));
+                            let mut acct = state_trie
+                                .get_by_address(*addr)
+                                .context("missing address for withdrawal")?;
+                            acct.balance += *amt;
+                            state_trie
+                                .insert_by_address(*addr, acct)
+                                // TODO(0xaatif): https://github.com/0xPolygonZero/zk_evm/issues/275
+                                //                Add an entry API
+                                .expect(
+                                    "insert must succeed with the same key as a successful `get`",
+                                );
+                        }
+                        mem::take(&mut withdrawals)
+                    }
+                    false => vec![],
+                },
+                before: {
+                    before.state.trim_to(trim_state)?;
+                    before.receipt.trim_to(batch_first_txn_ix..curr_txn_ix)?;
+                    before
+                        .transaction
+                        .trim_to(batch_first_txn_ix..curr_txn_ix)?;
+
+                    for (k, v) in trim_storage {
+                        if let Some(trim_me) = before.storage.get_mut(&keccak_hash::keccak(k)) {
+                            trim_me.trim_to(v)?
+                        } // TODO(0xaatif): why is this fallible?
+                    }
+                    before
+                },
                 after: TrieRoots {
                     state_root: state_trie.root()?,
                     transactions_root: transaction_trie.root(),

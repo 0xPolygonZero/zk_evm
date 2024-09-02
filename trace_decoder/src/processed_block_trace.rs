@@ -240,9 +240,7 @@ impl TxnInfo {
                     false => Some(txn.meta.byte_code.clone()),
                     true => None,
                 },
-                receipt_node_bytes: check_receipt_bytes(
-                    txn.meta.new_receipt_trie_node_byte.clone(),
-                )?,
+                receipt_node_bytes: map_receipt_bytes(txn.meta.new_receipt_trie_node_byte.clone())?,
                 gas_used: txn.meta.gas_used,
                 created_accounts,
             });
@@ -256,7 +254,7 @@ impl TxnInfo {
     }
 }
 
-fn check_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+pub fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
     match rlp::decode::<LegacyReceiptRlp>(&bytes) {
         Ok(_) => Ok(bytes),
         Err(_) => {
