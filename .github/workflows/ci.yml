@@ -186,6 +186,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
+          mkdir proofs
           ./prove_stdio.sh artifacts/witness_b19807080.json
 
   simple_proof_witness_only:
@@ -199,6 +200,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
+          mkdir proofs
           ./prove_stdio.sh artifacts/witness_b19807080.json test_only
 
   multi_blocks_proof_regular:
@@ -212,6 +214,7 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
+          mkdir -p proofs
           ./prove_stdio.sh artifacts/witness_b3_b6.json
 
   lints:

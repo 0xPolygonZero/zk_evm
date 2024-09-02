@@ -98,7 +98,8 @@ impl BlockInterval {
         }
     }
 
-    /// Convert the block interval into an async stream of block numbers.
+    /// Convert the block interval into an async stream of block numbers. The
+    /// second bool flag indicates if the element in last in the interval.
     pub fn into_bounded_stream(self) -> Result<BlockIntervalStream, anyhow::Error> {
         match self {
             BlockInterval::SingleBlockId(BlockId::Number(num)) => {
@@ -284,7 +285,12 @@ mod test {
         while let Some(val) = stream.next().await {
             result.push(val.unwrap());
         }
-        assert_eq!(result, Vec::from_iter(1u64..10u64));
+        let mut expected = Vec::from_iter(1u64..10u64)
+            .into_iter()
+            .map(|it| (it, false))
+            .collect::<Vec<_>>();
+        expected.last_mut().unwrap().1 = true;
+        assert_eq!(result, expected);
     }
 
     #[test]
