@@ -178,7 +178,7 @@ pub enum SeparateStorageTriesPreImage {
 }
 
 /// Info specific to txns in the block.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TxnInfo {
     /// Trace data for the txn. This is used by the protocol to:
     /// - Mutate it's own trie state between txns to arrive at the correct trie
@@ -192,7 +192,7 @@ pub struct TxnInfo {
 }
 
 /// Structure holding metadata for one transaction.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct TxnMeta {
     /// Txn byte code. This is also the raw RLP bytestring inserted into the txn
     /// trie by this txn. Note that the key is not included and this is only
@@ -214,7 +214,7 @@ pub struct TxnMeta {
 ///
 /// Specifically, since we can not execute the txn before proof generation, we
 /// rely on a separate EVM to run the txn and supply this data for us.
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq)]
 pub struct TxnTrace {
     /// If the balance changed, then the new balance will appear here. Will be
     /// `None` if no change.
@@ -250,7 +250,7 @@ fn is_false(b: &bool) -> bool {
 }
 
 /// Contract code access type. Used by txn traces.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ContractCodeUsage {
     /// Contract was read.
@@ -282,9 +282,14 @@ pub struct BlockLevelData {
     pub withdrawals: Vec<(Address, U256)>,
 }
 
+pub use entrypoint_old as entrypoint;
+pub use imp::entrypoint as entrypoint_new;
+
+mod imp;
+
 /// TODO(0xaatif): <https://github.com/0xPolygonZero/zk_evm/issues/275>
 ///                document this once we have the API finalized
-pub fn entrypoint(
+pub fn entrypoint_old(
     trace: BlockTrace,
     other: OtherBlockData,
     mut batch_size: usize,

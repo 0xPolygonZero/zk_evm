@@ -84,6 +84,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-compat"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6216c5ab5502a6824ec87a7bcd5c52ca14137f00b37dea3ab321a1656ff46383"
+dependencies = [
+ "alloy-primitives",
+ "ethereum-types",
+]
+
+[[package]]
 name = "alloy-consensus"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5092,6 +5102,7 @@ name = "trace_decoder"
 version = "0.6.0"
 dependencies = [
  "alloy",
+ "alloy-compat",
  "anyhow",
  "bitflags 2.6.0",
  "bitvec",

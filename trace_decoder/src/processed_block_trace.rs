@@ -52,23 +52,29 @@ impl Hash2Code {
             inner: HashMap::new(),
         }
     }
-    fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
+    pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
         match self.inner.get(&hash) {
             Some(code) => Ok(code.clone()),
             None => bail!("no code for hash {}", hash),
         }
     }
-    fn insert(&mut self, code: Vec<u8>) {
+    pub fn insert(&mut self, code: Vec<u8>) {
         self.inner.insert(hash(&code), code);
+    }
+}
+
+impl Extend<Vec<u8>> for Hash2Code {
+    fn extend<II: IntoIterator<Item = Vec<u8>>>(&mut self, iter: II) {
+        for it in iter {
+            self.insert(it)
+        }
     }
 }
 
 impl FromIterator<Vec<u8>> for Hash2Code {
     fn from_iter<II: IntoIterator<Item = Vec<u8>>>(iter: II) -> Self {
         let mut this = Self::new();
-        for code in iter {
-            this.insert(code)
-        }
+        this.extend(iter);
         this
     }
 }
@@ -238,9 +244,7 @@ impl TxnInfo {
                     false => Some(txn.meta.byte_code.clone()),
                     true => None,
                 },
-                receipt_node_bytes: check_receipt_bytes(
-                    txn.meta.new_receipt_trie_node_byte.clone(),
-                )?,
+                receipt_node_bytes: map_receipt_bytes(txn.meta.new_receipt_trie_node_byte.clone())?,
                 gas_used: txn.meta.gas_used,
                 created_accounts,
             });
@@ -254,7 +258,7 @@ impl TxnInfo {
     }
 }
 
-fn check_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+pub fn map_receipt_bytes(bytes: Vec<u8>) -> anyhow::Result<Vec<u8>> {
     match rlp::decode::<LegacyReceiptRlp>(&bytes) {
         Ok(_) => Ok(bytes),
         Err(_) => {
