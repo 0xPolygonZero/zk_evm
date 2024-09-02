@@ -38,7 +38,7 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProo
 
 const SEGMENT_PROOF_ROUTING_KEY: &str = "segment_proof";
 const BLOCK_PROOF_ROUTING_KEY: &str = "block_proof";
-const DEFAULT_ROUTING_KEY: &str = "task";
+const DEFAULT_ROUTING_KEY: &str = paladin::runtime::DEFAULT_ROUTING_KEY;
 
 #[tokio::main]
 async fn main() -> Result<()> {
