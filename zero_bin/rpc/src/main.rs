@@ -95,8 +95,9 @@ where
     let block_interval = BlockInterval::Range(params.start_block..params.end_block + 1);
     let mut block_prover_inputs = Vec::new();
     let mut block_interval: BlockIntervalStream = block_interval.clone().into_bounded_stream()?;
-    while let Some(block_num) = block_interval.next().await {
-        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num?));
+    while let Some(block_interval_elem) = block_interval.next().await {
+        let (block_num, _is_last_block) = block_interval_elem?;
+        let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
         // Get the prover input for particular block.
         let result = rpc::block_prover_input(
             cached_provider.clone(),

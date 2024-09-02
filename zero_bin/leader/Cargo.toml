@@ -11,7 +11,7 @@ build = "../common/build.rs"
 
 [dependencies]
 paladin-core = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ["derive", "string"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }

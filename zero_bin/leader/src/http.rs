@@ -15,7 +15,7 @@ pub(crate) async fn http_main(
     runtime: Runtime,
     port: u16,
     output_dir: PathBuf,
-    prover_config: ProverConfig,
+    prover_config: Arc<ProverConfig>,
 ) -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     debug!("listening on {}", addr);
@@ -65,7 +65,7 @@ async fn prove(
     Json(payload): Json<HttpProverInput>,
     runtime: Arc<Runtime>,
     output_dir: PathBuf,
-    prover_config: ProverConfig,
+    prover_config: Arc<ProverConfig>,
 ) -> StatusCode {
     debug!("Received payload: {:#?}", payload);
 

@@ -17,7 +17,7 @@ use zero_bin_common::{
 };
 use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
 
-use crate::client::{client_main, ProofParams};
+use crate::client::{client_main, LeaderConfig};
 
 mod cli;
 mod client;
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
         Command::Clean => zero_bin_common::prover_state::persistence::delete_all()?,
         Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(runtime, previous_proof, prover_config).await?;
+            stdio::stdio_main(runtime, previous_proof, Arc::new(prover_config)).await?;
         }
         Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(runtime, port, output_dir, prover_config).await?;
+            http::http_main(runtime, port, output_dir, Arc::new(prover_config)).await?;
         }
         Command::Rpc {
             rpc_url,
@@ -94,9 +94,7 @@ async fn main() -> Result<()> {
             block_interval,
             checkpoint_block_number,
             previous_proof,
-            proof_output_dir,
             block_time,
-            keep_intermediate_proofs,
             backoff,
             max_retries,
         } => {
@@ -122,12 +120,10 @@ async fn main() -> Result<()> {
                     max_retries,
                 },
                 block_interval,
-                ProofParams {
+                LeaderConfig {
                     checkpoint_block_number,
                     previous_proof,
-                    proof_output_dir,
                     prover_config,
-                    keep_intermediate_proofs,
                 },
             )
             .await?;

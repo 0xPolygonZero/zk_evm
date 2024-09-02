@@ -14,7 +14,7 @@ use crate::provider::CachedProvider;
 
 const DEFAULT_BLOCK_TIME: u64 = 1000;
 
-pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<u64, anyhow::Error>>>>;
+pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<(u64, bool), anyhow::Error>>>>;
 
 /// Range of blocks to be processed and proven.
 #[derive(Debug, PartialEq, Clone)]
@@ -105,12 +105,13 @@ impl BlockInterval {
                 let num = num
                     .as_number()
                     .ok_or(anyhow!("invalid block number '{num}'"))?;
-                let range = (num..num + 1).map(Ok).collect::<Vec<_>>();
+                let range = (num..num + 1).map(|it| Ok((it, true))).collect::<Vec<_>>();
 
                 Ok(Box::pin(futures::stream::iter(range)))
             }
             BlockInterval::Range(range) => {
-                let range = range.map(Ok).collect::<Vec<_>>();
+                let mut range = range.map(|it| Ok((it, false))).collect::<Vec<_>>();
+                range.last_mut().map(|it| it.as_mut().map(|it| it.1 = true));
                 Ok(Box::pin(futures::stream::iter(range)))
             }
             _ => Err(anyhow!(
@@ -156,7 +157,7 @@ impl BlockInterval {
 
                     if current < last_block_number {
                         current += 1;
-                        yield current;
+                        yield (current, false);
                     } else {
                        info!("Waiting for the new blocks to be mined, requested block number: {current}, \
                        latest block number: {last_block_number}");
