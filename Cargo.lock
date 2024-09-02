@@ -5109,6 +5109,7 @@ dependencies = [
  "bytes",
  "ciborium",
  "ciborium-io",
+ "clap",
  "copyvec",
  "criterion",
  "either",

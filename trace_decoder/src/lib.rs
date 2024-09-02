@@ -283,7 +283,8 @@ pub struct BlockLevelData {
 }
 
 // pub use entrypoint_old as entrypoint;
-pub use imp::entrypoint;
+pub use entrypoint_new as entrypoint;
+pub use imp::entrypoint as entrypoint_new;
 
 mod imp;
 

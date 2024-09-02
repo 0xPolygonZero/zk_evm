@@ -43,6 +43,7 @@ zk_evm_common = { workspace = true }
 
 [dev-dependencies]
 alloy = { workspace = true }
+clap.workspace = true
 criterion = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }
 pretty_env_logger = { workspace = true }
