@@ -216,7 +216,6 @@ fn test_state_trie(
     let state_root = interpreter.pop().expect("The stack should not be empty");
     interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
-
     // Next, execute mpt_insert_state_trie.
     interpreter.generation_state.registers.program_counter = mpt_insert_state_trie;
     let trie_data = interpreter.get_trie_data_mut();

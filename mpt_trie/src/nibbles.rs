@@ -60,13 +60,14 @@ pub trait ToNibbles {
     /// would have `4` `Nibble`s).
     fn to_nibbles(self) -> Nibbles;
 
-    /// Convert the type to a sequence of nibbles padding with zeroes up to `2*size_of::<Self>`.
+    /// Convert the type to a sequence of nibbles padding with zeroes up to
+    /// `2*size_of::<Self>`.
     fn to_nibbles_padded(self) -> Nibbles
     where
         Self: Sized,
     {
         let mut nibbles = self.to_nibbles();
-        nibbles.count = 2*size_of::<Self>();
+        nibbles.count = 2 * size_of::<Self>();
 
         nibbles
     }

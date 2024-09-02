@@ -99,7 +99,7 @@ impl<F: Field> GenerationState<F> {
                     || {
                         let mut new_content = self.memory.get_preinit_memory(Segment::TrieData);
 
-                    let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
+                        let n = load_state_mpt(&self.inputs.trimmed_tries, &mut new_content)?;
 
                         self.memory.insert_preinitialized_segment(
                             Segment::TrieData,

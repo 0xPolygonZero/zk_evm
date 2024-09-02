@@ -231,13 +231,9 @@ impl<F: Field> Interpreter<F> {
         self.generation_state.inputs = inputs.trim();
 
         // Initialize the MPT's pointers.
-        let (
-            trie_root_ptrs,
-            state_leaves,
-            storage_leaves,
-            trie_data,
-        ) = load_linked_lists_and_txn_and_receipt_mpts(&inputs.tries)
-            .expect("Invalid MPT data for preinitialization");
+        let (trie_root_ptrs, state_leaves, storage_leaves, trie_data) =
+            load_linked_lists_and_txn_and_receipt_mpts(&inputs.tries)
+                .expect("Invalid MPT data for preinitialization");
 
         let trie_roots_after = &inputs.trie_roots_after;
         self.generation_state.trie_root_ptrs = trie_root_ptrs;

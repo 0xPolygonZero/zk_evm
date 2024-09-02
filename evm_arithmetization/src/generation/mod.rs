@@ -476,8 +476,8 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         simulate_cpu(&mut state, *max_cpu_len_log)
     );
     //  if cpu_res.is_err() {
-        output_debug_tries(&state)?;
-        cpu_res?;
+    output_debug_tries(&state)?;
+    cpu_res?;
     // };
 
     let trace_lengths = state.traces.get_lengths();

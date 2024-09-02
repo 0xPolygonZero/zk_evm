@@ -429,7 +429,6 @@ fn prepare_interpreter_all_accounts<F: Field>(
     let state_root = interpreter.pop().expect("The stack should not be empty");
     interpreter.set_global_metadata_field(GlobalMetadata::StateTrieRoot, state_root);
 
-
     // Switch context and initialize memory with the data we need for the tests.
     interpreter.generation_state.registers.program_counter = 0;
     interpreter.set_code(1, code.to_vec());
