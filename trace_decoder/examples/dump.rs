@@ -13,6 +13,8 @@ struct Args {
     use_burn_addr: bool,
     #[arg(long)]
     pretty: bool,
+    #[arg(long)]
+    quiet: bool,
 }
 
 #[derive(clap::ValueEnum, Clone)]
@@ -27,6 +29,7 @@ fn main() -> anyhow::Result<()> {
         batch_size,
         use_burn_addr,
         pretty,
+        quiet,
     } = clap::Parser::parse();
 
     let entrypoint = match method {
@@ -57,12 +60,14 @@ fn main() -> anyhow::Result<()> {
     })
     .collect::<Result<Vec<_>, _>>()?;
 
-    let printer = match pretty {
-        true => serde_json::to_writer_pretty as fn(_, _) -> _,
-        false => serde_json::to_writer as _,
-    };
+    if !quiet {
+        let printer = match pretty {
+            true => serde_json::to_writer_pretty as fn(_, _) -> _,
+            false => serde_json::to_writer as _,
+        };
 
-    printer(io::stdout(), &out)?;
+        printer(io::stdout(), &out)?;
+    }
 
     Ok(())
 }
