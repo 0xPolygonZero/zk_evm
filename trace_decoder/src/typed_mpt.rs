@@ -210,7 +210,8 @@ impl TransactionTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
-    pub fn trim_to(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
+    /// Defer (hash) parts of the trie that aren't in `txn_ixs`.
+    pub fn mask(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
             txn_ixs
@@ -254,7 +255,8 @@ impl ReceiptTrie {
     pub fn as_hashed_partial_trie(&self) -> &mpt_trie::partial_trie::HashedPartialTrie {
         &self.untyped
     }
-    pub fn trim_to(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
+    /// Defer (hash) parts of the trie that aren't in `txn_ixs`.
+    pub fn mask(&mut self, txn_ixs: impl IntoIterator<Item = usize>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
             txn_ixs
@@ -336,7 +338,7 @@ impl StateTrie for StateMpt {
             .as_hashed_partial_trie()
             .contains(TrieKey::from_address(address).into_nibbles())
     }
-    fn trim_to(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    fn mask(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         let inner = mpt_trie::trie_subsets::create_trie_subset(
             self.typed.as_hashed_partial_trie(),
             addresses.into_iter().map(TrieKey::into_nibbles),
@@ -381,7 +383,8 @@ pub trait StateTrie {
     fn get_by_address(&self, address: Address) -> Option<AccountRlp>;
     fn reporting_remove(&mut self, address: Address) -> anyhow::Result<Option<TrieKey>>;
     fn contains_address(&self, address: Address) -> bool;
-    fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
+    /// Defer (hash) the parts of the trie that aren't in `addresses`.
+    fn mask(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()>;
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_;
     fn root(&self) -> anyhow::Result<H256>;
 }
@@ -408,8 +411,8 @@ impl StateTrie for StateSmt {
     fn contains_address(&self, address: Address) -> bool {
         self.address2state.contains_key(&address)
     }
-    fn trim_to(&mut self, address: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
-        let _ = address;
+    fn mask(&mut self, addresses: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+        let _ = addresses;
         Ok(())
     }
     fn iter(&self) -> impl Iterator<Item = (H256, AccountRlp)> + '_ {
@@ -463,10 +466,11 @@ impl StorageTrie {
             )?,
         )
     }
-    pub fn trim_to(&mut self, txn_ixs: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
+    /// Defer (hash) the parts of the trie that aren't in `paths`.
+    pub fn mask(&mut self, paths: impl IntoIterator<Item = TrieKey>) -> anyhow::Result<()> {
         self.untyped = mpt_trie::trie_subsets::create_trie_subset(
             &self.untyped,
-            txn_ixs.into_iter().map(TrieKey::into_nibbles),
+            paths.into_iter().map(TrieKey::into_nibbles),
         )?;
         Ok(())
     }

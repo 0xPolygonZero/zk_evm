@@ -718,16 +718,16 @@ mod middle {
             // We want to trim the TrieInputs above,
             // but won't know the bounds until after the loop below,
             // so store that information here.
-            let mut trim_storage = BTreeMap::<_, BTreeSet<TrieKey>>::new();
-            let mut trim_state = BTreeSet::new();
+            let mut storage_masks = BTreeMap::<_, BTreeSet<TrieKey>>::new();
+            let mut state_mask = BTreeSet::new();
 
             if curr_txn_ix == 0 {
                 cancun_hook(
                     block_timestamp,
                     &mut storage,
-                    &mut trim_storage,
+                    &mut storage_masks,
                     parent_beacon_block_root,
-                    &mut trim_state,
+                    &mut state_mask,
                     &mut state_trie,
                 )?;
             }
@@ -805,7 +805,7 @@ mod middle {
                             .transpose()?
                             .unwrap_or(acct.code_hash);
 
-                        let trim_storage = trim_storage.entry(addr).or_default();
+                        let trim_storage = storage_masks.entry(addr).or_default();
 
                         trim_storage.extend(
                             storage_written
@@ -843,7 +843,7 @@ mod middle {
 
                     if self_destructed {
                         storage.remove(&keccak_hash::keccak(addr));
-                        trim_state.extend(state_trie.reporting_remove(addr)?)
+                        state_mask.extend(state_trie.reporting_remove(addr)?)
                     }
 
                     let is_precompile =
@@ -855,7 +855,7 @@ mod middle {
                     // decoder to build a minimal state trie without hitting any hash node.
 
                     if !is_precompile || state_trie.get_by_address(addr).is_some() {
-                        trim_state.insert(TrieKey::from_address(addr));
+                        state_mask.insert(TrieKey::from_address(addr));
                     }
                 }
 
@@ -870,7 +870,7 @@ mod middle {
                 withdrawals: match curr_txn_ix == len_txns {
                     true => {
                         for (addr, amt) in &withdrawals {
-                            trim_state.insert(TrieKey::from_address(*addr));
+                            state_mask.insert(TrieKey::from_address(*addr));
                             let mut acct = state_trie
                                 .get_by_address(*addr)
                                 .context("missing address for withdrawal")?;
@@ -888,15 +888,13 @@ mod middle {
                     false => vec![],
                 },
                 before: {
-                    before.state.trim_to(trim_state)?;
-                    before.receipt.trim_to(batch_first_txn_ix..curr_txn_ix)?;
-                    before
-                        .transaction
-                        .trim_to(batch_first_txn_ix..curr_txn_ix)?;
+                    before.state.mask(state_mask)?;
+                    before.receipt.mask(batch_first_txn_ix..curr_txn_ix)?;
+                    before.transaction.mask(batch_first_txn_ix..curr_txn_ix)?;
 
-                    for (k, v) in trim_storage {
-                        if let Some(trim_me) = before.storage.get_mut(&keccak_hash::keccak(k)) {
-                            trim_me.trim_to(v)?
+                    for (addr, mask) in storage_masks {
+                        if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
+                            it.mask(mask)?
                         } // TODO(0xaatif): why is this fallible?
                     }
                     before
