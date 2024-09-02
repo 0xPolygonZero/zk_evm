@@ -12,7 +12,7 @@ use tracing::info;
 use crate::parsing;
 use crate::provider::CachedProvider;
 
-const DEFAULT_BLOCK_TIME: u64 = 1000;
+const DEFAULT_BLOCK_TIME: u64 = 2000;
 
 pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<(u64, bool), anyhow::Error>>>>;
 
