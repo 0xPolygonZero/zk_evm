@@ -6,19 +6,14 @@
 
 global sload_current:
     %read_storage_linked_list
-    // stack: value_ptr, retdest
-    DUP1 %jumpi(storage_key_exists)
-
-    // Storage key not found. Return default value_ptr = 0,
-    // which derefs to 0 since @SEGMENT_TRIE_DATA[0] = 0.
-    %stack (value_ptr, retdest) -> (retdest, 0)
+    // stack: value, retdest
+    SWAP1
     JUMP
 
 // Read a word from the current account's storage trie.
 //
 // Pre stack: kexit_info, slot
 // Post stack: value
-
 global sys_sload:
     // stack: kexit_info, slot
     SWAP1
