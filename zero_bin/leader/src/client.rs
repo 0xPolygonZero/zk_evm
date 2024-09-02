@@ -9,9 +9,10 @@ use prover::{BlockProverInput, ProverConfig};
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tokio::sync::mpsc;
 use tracing::{error, info};
-use zero_bin_common::block_interval::BlockInterval;
+use zero_bin_common::block_interval::{BlockInterval, BlockIntervalStream};
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 
+// Use some arbitrary number for the channel size, adjust if needed.
 const BLOCK_CHANNEL_SIZE: usize = 16;
 
 #[derive(Debug)]
@@ -60,9 +61,9 @@ pub(crate) async fn client_main(
         .header
         .state_root;
 
-    // Create channel for block prover input and use it to send prover input to the
-    // proving task The second element of the tuple is a flag indicating whether
-    // the block is the last one in the interval.
+    // Create a channel for block prover input and use it to send prover input to
+    // the proving task. The second element of the tuple is a flag indicating
+    // whether the block is the last one in the interval.
     let (block_tx, block_rx) = mpsc::channel::<(BlockProverInput, bool)>(BLOCK_CHANNEL_SIZE);
     let test_only = leader_config.prover_config.test_only;
 
@@ -76,22 +77,21 @@ pub(crate) async fn client_main(
     ));
 
     // Create block interval stream. Could be bounded or unbounded.
-    let mut block_interval_stream: zero_bin_common::block_interval::BlockIntervalStream =
-        match block_interval {
-            block_interval @ BlockInterval::FollowFrom { .. } => {
-                block_interval
-                    .into_unbounded_stream(cached_provider.clone())
-                    .await?
-            }
-            _ => block_interval.into_bounded_stream()?,
-        };
+    let mut block_interval_stream: BlockIntervalStream = match block_interval {
+        block_interval @ BlockInterval::FollowFrom { .. } => {
+            block_interval
+                .into_unbounded_stream(cached_provider.clone())
+                .await?
+        }
+        _ => block_interval.into_bounded_stream()?,
+    };
 
     // Iterate over the block interval, retrieve prover input
-    // and it to the proving task
+    // and send it to the proving task
     while let Some(block_interval_elem) = block_interval_stream.next().await {
         let (block_num, is_last_block) = block_interval_elem?;
         let block_id = BlockId::Number(BlockNumberOrTag::Number(block_num));
-        // Get future of prover input for particular block.
+        // Get prover input for particular block.
         let block_prover_input = rpc::block_prover_input(
             cached_provider.clone(),
             block_id,
@@ -102,14 +102,21 @@ pub(crate) async fn client_main(
         block_tx
             .send((block_prover_input, is_last_block))
             .await
-            .map_err(|e| anyhow!("Failed to send block prover input through the channel: {e}"))?;
+            .map_err(|e| anyhow!("failed to send block prover input through the channel: {e}"))?;
     }
 
-    if let Err(e) = tokio::try_join!(prove_task) {
-        error!("Proving task finished with error {e:?}");
-    } else {
-        info!("Proving task successfully finished");
+    match prove_task.await {
+        Ok(Ok(_)) => {
+            info!("Proving task successfully finished");
+        }
+        Ok(Err(e)) => {
+            error!("Proving task finished with error {e:?}");
+        }
+        Err(e) => {
+            error!("Unable to join task, error {e:?}");
+        }
     }
+
     runtime.close().await?;
 
     if test_only {

@@ -4,7 +4,7 @@ use clap::{Args, ValueHint};
 
 const HELP_HEADING: &str = "Prover options";
 
-/// If not provided, default output path is `./proofs`.
+// If not provided, default output path is `./proofs/`.
 fn get_default_output_path() -> PathBuf {
     let mut path = std::env::current_dir().unwrap_or_default();
     path.push("proofs");
@@ -39,8 +39,8 @@ pub struct CliProverConfig {
         default_value_t = false
     )]
     keep_intermediate_proofs: bool,
-    /// Number of blocks in a batch. For every batch, the prover will generate
-    /// proof file.
+    /// Number of blocks in a batch. For every block batch, the prover will
+    /// generate one proof file.
     #[arg(long, default_value_t = 8)]
     block_batch_size: usize,
 }

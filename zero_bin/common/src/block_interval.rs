@@ -112,6 +112,7 @@ impl BlockInterval {
             }
             BlockInterval::Range(range) => {
                 let mut range = range.map(|it| Ok((it, false))).collect::<Vec<_>>();
+                // Set last element indicator to true
                 range.last_mut().map(|it| it.as_mut().map(|it| it.1 = true));
                 Ok(Box::pin(futures::stream::iter(range)))
             }

@@ -8,6 +8,7 @@ use prover::{BlockProverInput, ProverConfig};
 use tokio::sync::mpsc;
 use tracing::info;
 
+// Use some arbitrary number for the channel size, adjust if needed.
 const BLOCK_CHANNEL_SIZE: usize = 16;
 
 /// The main function for the stdio mode.
@@ -42,19 +43,12 @@ pub(crate) async fn stdio_main(
 
     let _ = proving_task.await?;
     runtime.close().await?;
-    // let proved_blocks = proved_blocks?;
 
     if prover_config.test_only {
         info!("All proof witnesses have been generated successfully.");
     } else {
         info!("All proofs have been generated successfully.");
     }
-
-    // let proofs: Vec<GeneratedBlockProof> = proved_blocks
-    //     .into_iter()
-    //     .filter_map(|(_, proof)| proof)
-    //     .collect();
-    // std::io::stdout().write_all(&serde_json::to_vec(&proofs)?)?;
 
     Ok(())
 }

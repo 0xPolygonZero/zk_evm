@@ -24,7 +24,6 @@ pub(crate) struct Cli {
     pub(crate) prover_state_config: CliProverStateConfig,
 }
 
-#[allow(unused_parens)]
 #[derive(Subcommand)]
 pub(crate) enum Command {
     /// Deletes all the previously cached circuits.

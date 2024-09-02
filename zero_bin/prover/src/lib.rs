@@ -29,19 +29,6 @@ pub struct ProverConfig {
     pub block_batch_size: usize,
 }
 
-pub type BlockProverInputFuture = std::pin::Pin<
-    Box<dyn Future<Output = std::result::Result<BlockProverInput, Box<anyhow::Error>>> + Send>,
->;
-
-impl From<BlockProverInput> for BlockProverInputFuture {
-    fn from(item: BlockProverInput) -> Self {
-        async fn _from(item: BlockProverInput) -> Result<BlockProverInput, Box<anyhow::Error>> {
-            Ok(item)
-        }
-        Box::pin(_from(item))
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlockProverInput {
     pub block_trace: BlockTrace,
@@ -245,8 +232,6 @@ pub async fn prove(
     let mut prev_proof: Option<BoxFuture<Result<GeneratedBlockProof>>> =
         checkpoint_proof.map(|proof| Box::pin(futures::future::ok(proof)) as BoxFuture<_>);
 
-    // let mut results = FuturesOrdered::new();
-    // let mut handles = FuturesOrdered::new();
     let mut task_set: JoinSet<
         std::result::Result<std::result::Result<u64, anyhow::Error>, anyhow::Error>,
     > = JoinSet::new();
@@ -271,9 +256,9 @@ pub async fn prove(
                 let block_number = proof.b_height;
 
                 // Write proof to disk if block is last in block batch,
-                // or if block is last in the interval (it contains all the necessary
+                // or if the block is last in the interval (it contains all the necessary
                 // information to verify the whole sequence). If flag
-                // `keep_intermediate_proofs` is set, write all proofs to disk.
+                // `keep_intermediate_proofs` is set, output all block proofs to disk.
                 let is_block_batch_finished =
                     block_counter % prover_config.block_batch_size as u64 == 0;
                 if is_last_block
