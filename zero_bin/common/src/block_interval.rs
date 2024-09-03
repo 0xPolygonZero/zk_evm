@@ -12,7 +12,9 @@ use tracing::info;
 use crate::parsing;
 use crate::provider::CachedProvider;
 
-const DEFAULT_BLOCK_TIME: u64 = 2000;
+// Time in milliseconds to poll the node for new blocks.
+// We set it to 12 seconds, default ETH block time.
+const DEFAULT_BLOCK_TIME: u64 = 12000;
 
 pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<(u64, bool), anyhow::Error>>>>;
 
