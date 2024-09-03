@@ -46,6 +46,7 @@ alloy = { workspace = true }
 clap.workspace = true
 criterion = { workspace = true }
 plonky2_maybe_rayon = { workspace = true }
+pretty_assertions = "1.4.0"
 pretty_env_logger = { workspace = true }
 prover = { workspace = true }
 rstest = "0.21.0"
