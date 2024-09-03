@@ -1,6 +1,9 @@
 mod common;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+};
 
 use alloy::{
     consensus::Account,
@@ -12,6 +15,7 @@ use common::{
     key::{key, TrieKey},
     obd, rcpt, repr, txn, ALICE, BEACON,
 };
+use itertools::Itertools;
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie as _},
@@ -20,6 +24,68 @@ use trace_decoder::{
     BlockTrace, BlockTraceTriePreImages, OtherBlockData, SeparateStorageTriesPreImage,
     SeparateTriePreImage, SeparateTriePreImages, TxnInfo, TxnTrace,
 };
+
+fn get(trie: &HashedPartialTrie, TrieKey(comps): TrieKey) -> Get<'_> {
+    use mpt_trie::partial_trie::{Node, PartialTrie};
+    use u4::U4;
+
+    return _get(&**trie, &comps);
+
+    fn _get<'a>(node: &'a Node<impl PartialTrie>, path: &[U4]) -> Get<'a> {
+        match path.split_first() {
+            Some((first, rest)) => match node {
+                Node::Empty => Get::Miss,
+                Node::Hash(thru) => Get::ThruHash {
+                    thru,
+                    remaining: path.len(),
+                },
+                Node::Branch { children, value: _ } => _get(&children[*first as u8 as usize], rest),
+                Node::Extension { nibbles, child } => {
+                    let TrieKey(ext) = TrieKey::from_nibbles(*nibbles);
+                    match path.split_at_checked(ext.len()) {
+                        Some((common, rest)) => match common == ext {
+                            true => _get(child, rest),
+                            false => Get::Miss,
+                        },
+                        None => Get::Miss,
+                    }
+                }
+                Node::Leaf { nibbles, value } => {
+                    let TrieKey(leaf) = TrieKey::from_nibbles(*nibbles);
+                    match leaf == path {
+                        true => Get::ExactValue(value),
+                        false => Get::Miss,
+                    }
+                }
+            },
+            // empty - this is the node we want
+            None => match node {
+                Node::Empty => Get::ExactEmpty,
+                Node::Hash(h) => Get::ExactHash(h),
+                Node::Branch { children: _, value } => Get::ExactValue(value),
+                Node::Extension { nibbles, child } => match nibbles.count {
+                    0 => _get(child, &[]),
+                    _ => Get::Miss,
+                },
+                Node::Leaf { nibbles, value } => match nibbles.count {
+                    0 => Get::ExactValue(value),
+                    _ => Get::Miss,
+                },
+            },
+        }
+    }
+}
+
+enum Get<'a> {
+    ExactValue(&'a [u8]),
+    ExactHash(&'a ethereum_types::H256),
+    ThruHash {
+        thru: &'a ethereum_types::H256,
+        remaining: usize,
+    },
+    ExactEmpty,
+    Miss,
+}
 
 /// Hey Aatif, is there a way in the current API to pass in a key (on the
 /// decoder side) to the state trie, and know whether we have a Leaf | Empty
@@ -68,7 +134,7 @@ fn repro() {
         [txn(
             [(ALICE, TxnTrace::default())], // alice has an empty trace
             [],
-            rcpt(true, 0, []),
+            rcpt(false, 0, []),
             0,
         )],
         obd(),

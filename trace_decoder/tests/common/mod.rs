@@ -97,9 +97,16 @@ pub mod key {
     use copyvec::CopyVec;
     use u4::U4;
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct TrieKey(CopyVec<U4, 64>);
+    pub struct TrieKey(pub CopyVec<U4, 64>);
 
     impl TrieKey {
+        pub fn from_nibbles(mut nibbles: mpt_trie::nibbles::Nibbles) -> Self {
+            let mut ours = CopyVec::new();
+            while nibbles.count > 0 {
+                ours.push(U4::new(nibbles.pop_next_nibble_front()).unwrap())
+            }
+            Self(ours)
+        }
         pub fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
             let mut theirs = mpt_trie::nibbles::Nibbles::new();
             let Self(ours) = self;
