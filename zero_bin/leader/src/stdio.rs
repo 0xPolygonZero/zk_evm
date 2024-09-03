@@ -1,15 +1,14 @@
 use std::io::{Read, Write};
 
 use anyhow::Result;
-use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use prover::{BlockProverInput, BlockProverInputFuture, ProverConfig};
 use tracing::info;
+use zero_bin_common::proof_runtime::ProofRuntime;
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(
-    block_proof_runtime: Runtime,
-    segment_proof_runtime: Runtime,
+    proof_runtime: ProofRuntime,
     previous: Option<GeneratedBlockProof>,
     prover_config: ProverConfig,
 ) -> Result<()> {
@@ -24,15 +23,14 @@ pub(crate) async fn stdio_main(
 
     let proved_blocks = prover::prove(
         block_prover_inputs,
-        &block_proof_runtime,
-        &segment_proof_runtime,
+        &proof_runtime,
         previous,
         prover_config,
         None,
     )
     .await;
-    block_proof_runtime.close().await?;
-    segment_proof_runtime.close().await?;
+    proof_runtime.block_proof_runtime.close().await?;
+    proof_runtime.segment_proof_runtime.close().await?;
     let proved_blocks = proved_blocks?;
 
     if prover_config.test_only {

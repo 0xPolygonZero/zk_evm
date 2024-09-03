@@ -3,17 +3,16 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use alloy::primitives::U256;
 use anyhow::{bail, Result};
 use axum::{http::StatusCode, routing::post, Json, Router};
-use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use prover::{BlockProverInput, ProverConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::to_writer;
 use tracing::{debug, error, info};
+use zero_bin_common::proof_runtime::ProofRuntime;
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(
-    block_proof_runtime: Runtime,
-    segment_proof_runtime: Runtime,
+    proof_runtime: ProofRuntime,
     port: u16,
     output_dir: PathBuf,
     prover_config: ProverConfig,
@@ -21,23 +20,10 @@ pub(crate) async fn http_main(
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     debug!("listening on {}", addr);
 
-    let block_proof_runtime = Arc::new(block_proof_runtime);
-    let segment_proof_runtime = Arc::new(segment_proof_runtime);
+    let proof_runtime = Arc::new(proof_runtime);
     let app = Router::new().route(
         "/prove",
-        post({
-            let block_proof_runtime = block_proof_runtime.clone();
-            let segment_proof_runtime = segment_proof_runtime.clone();
-            move |body| {
-                prove(
-                    body,
-                    block_proof_runtime,
-                    segment_proof_runtime,
-                    output_dir.clone(),
-                    prover_config,
-                )
-            }
-        }),
+        post(move |body| prove(body, proof_runtime, output_dir.clone(), prover_config)),
     );
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     Ok(axum::serve(listener, app).await?)
@@ -74,8 +60,7 @@ struct HttpProverInput {
 
 async fn prove(
     Json(payload): Json<HttpProverInput>,
-    block_proof_runtime: Arc<Runtime>,
-    segment_proof_runtime: Arc<Runtime>,
+    proof_runtime: Arc<ProofRuntime>,
     output_dir: PathBuf,
     prover_config: ProverConfig,
 ) -> StatusCode {
@@ -87,7 +72,7 @@ async fn prove(
         payload
             .prover_input
             .prove_test(
-                &segment_proof_runtime,
+                &proof_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
@@ -96,8 +81,7 @@ async fn prove(
         payload
             .prover_input
             .prove(
-                &block_proof_runtime,
-                &segment_proof_runtime,
+                &proof_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )

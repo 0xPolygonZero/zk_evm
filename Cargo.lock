@@ -5845,6 +5845,7 @@ dependencies = [
  "evm_arithmetization",
  "futures",
  "once_cell",
+ "paladin-core",
  "plonky2",
  "proof_gen",
  "serde",

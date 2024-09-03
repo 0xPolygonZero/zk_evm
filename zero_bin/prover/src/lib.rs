@@ -7,14 +7,13 @@ use alloy::primitives::{BlockNumber, U256};
 use anyhow::{Context, Result};
 use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt, TryFutureExt, TryStreamExt};
 use num_traits::ToPrimitive as _;
-use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::oneshot;
 use trace_decoder::{BlockTrace, OtherBlockData};
 use tracing::info;
-use zero_bin_common::fs::generate_block_proof_file_name;
+use zero_bin_common::{fs::generate_block_proof_file_name, proof_runtime::ProofRuntime};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ProverConfig {
@@ -50,8 +49,7 @@ impl BlockProverInput {
 
     pub async fn prove(
         self,
-        block_proof_runtime: &Runtime,
-        segment_proof_runtime: &Runtime,
+        proof_runtime: &ProofRuntime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
@@ -100,7 +98,7 @@ impl BlockProverInput {
 
                 Directive::map(IndexedStream::from(segment_data_iterator), &seg_prove_ops)
                     .fold(&seg_agg_ops)
-                    .run(segment_proof_runtime)
+                    .run(&proof_runtime.segment_proof_runtime)
                     .map(move |e| {
                         e.map(|p| (idx, proof_gen::proof_types::BatchAggregatableProof::from(p)))
                     })
@@ -110,7 +108,7 @@ impl BlockProverInput {
         // Fold the batch aggregated proof stream into a single proof.
         let final_batch_proof =
             Directive::fold(IndexedStream::new(batch_proof_futs), &batch_agg_ops)
-                .run(block_proof_runtime)
+                .run(&proof_runtime.block_proof_runtime)
                 .await?;
 
         if let proof_gen::proof_types::BatchAggregatableProof::Agg(proof) = final_batch_proof {
@@ -127,7 +125,7 @@ impl BlockProverInput {
                     prev,
                     save_inputs_on_error,
                 })
-                .run(block_proof_runtime)
+                .run(&proof_runtime.block_proof_runtime)
                 .await?;
 
             info!("Successfully proved block {block_number}");
@@ -140,7 +138,7 @@ impl BlockProverInput {
 
     pub async fn prove_test(
         self,
-        segment_proof_runtime: &Runtime,
+        proof_runtime: &ProofRuntime,
         previous: Option<impl Future<Output = Result<GeneratedBlockProof>>>,
         prover_config: ProverConfig,
     ) -> Result<GeneratedBlockProof> {
@@ -176,7 +174,7 @@ impl BlockProverInput {
         );
 
         simulation
-            .run(segment_proof_runtime)
+            .run(&proof_runtime.segment_proof_runtime)
             .await?
             .try_for_each(|_| future::ok(()))
             .await?;
@@ -205,8 +203,7 @@ impl BlockProverInput {
 /// block proofs as well.
 pub async fn prove(
     block_prover_inputs: Vec<BlockProverInputFuture>,
-    block_proof_runtime: &Runtime,
-    segment_proof_runtime: &Runtime,
+    proof_runtime: &ProofRuntime,
     previous_proof: Option<GeneratedBlockProof>,
     prover_config: ProverConfig,
     proof_output_dir: Option<PathBuf>,
@@ -228,7 +225,7 @@ pub async fn prove(
             // Prove the block
             let block_proof = if prover_config.test_only {
                 block
-                    .prove_test(segment_proof_runtime, previous_block_proof, prover_config)
+                    .prove_test(proof_runtime, previous_block_proof, prover_config)
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;
@@ -252,12 +249,7 @@ pub async fn prove(
                     .await?
             } else {
                 block
-                    .prove(
-                        block_proof_runtime,
-                        segment_proof_runtime,
-                        previous_block_proof,
-                        prover_config,
-                    )
+                    .prove(proof_runtime, previous_block_proof, prover_config)
                     .then(move |proof| async move {
                         let proof = proof?;
                         let block_number = proof.b_height;

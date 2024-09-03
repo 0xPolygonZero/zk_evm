@@ -12,7 +12,8 @@ use proof_gen::proof_types::GeneratedBlockProof;
 use prover::ProverConfig;
 use tracing::{info, warn};
 use zero_bin_common::{
-    block_interval::BlockInterval, prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
+    block_interval::BlockInterval, proof_runtime::ProofRuntime,
+    prover_state::persistence::set_circuit_cache_dir_env_if_not_set,
 };
 use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
 
@@ -91,17 +92,16 @@ async fn main() -> Result<()> {
         }
     }
 
+    let proof_runtime = ProofRuntime {
+        block_proof_runtime,
+        segment_proof_runtime,
+    };
+
     match args.command {
         Command::Clean => zero_bin_common::prover_state::persistence::delete_all()?,
         Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(
-                block_proof_runtime,
-                segment_proof_runtime,
-                previous_proof,
-                prover_config,
-            )
-            .await?;
+            stdio::stdio_main(proof_runtime, previous_proof, prover_config).await?;
         }
         Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
@@ -113,14 +113,7 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(
-                block_proof_runtime,
-                segment_proof_runtime,
-                port,
-                output_dir,
-                prover_config,
-            )
-            .await?;
+            http::http_main(proof_runtime, port, output_dir, prover_config).await?;
         }
         Command::Rpc {
             rpc_url,
@@ -147,8 +140,7 @@ async fn main() -> Result<()> {
 
             info!("Proving interval {block_interval}");
             client_main(
-                block_proof_runtime,
-                segment_proof_runtime,
+                proof_runtime,
                 RpcParams {
                     rpc_url,
                     rpc_type,

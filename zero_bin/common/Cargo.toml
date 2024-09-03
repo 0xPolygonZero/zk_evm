@@ -10,7 +10,7 @@ categories.workspace = true
 
 [dependencies]
 directories = "5.0.1"
-
+paladin-core = { workspace = true }
 thiserror = { workspace = true }
 trace_decoder = { workspace = true }
 tracing = { workspace = true }

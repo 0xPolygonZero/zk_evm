@@ -5,7 +5,6 @@ use std::sync::Arc;
 use alloy::rpc::types::{BlockId, BlockNumberOrTag, BlockTransactionsKind};
 use alloy::transports::http::reqwest::Url;
 use anyhow::Result;
-use paladin::runtime::Runtime;
 use proof_gen::proof_types::GeneratedBlockProof;
 use prover::ProverConfig;
 use rpc::{retry::build_http_retry_provider, RpcType};
@@ -13,6 +12,7 @@ use tracing::{error, info, warn};
 use zero_bin_common::block_interval::BlockInterval;
 use zero_bin_common::fs::generate_block_proof_file_name;
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
+use zero_bin_common::proof_runtime::ProofRuntime;
 
 #[derive(Debug)]
 pub struct RpcParams {
@@ -33,8 +33,7 @@ pub struct ProofParams {
 
 /// The main function for the client.
 pub(crate) async fn client_main(
-    block_proof_runtime: Runtime,
-    segment_proof_runtime: Runtime,
+    proof_runtime: ProofRuntime,
     rpc_params: RpcParams,
     block_interval: BlockInterval,
     mut params: ProofParams,
@@ -83,15 +82,14 @@ pub(crate) async fn client_main(
     // verify the whole sequence.
     let proved_blocks = prover::prove(
         block_prover_inputs,
-        &block_proof_runtime,
-        &segment_proof_runtime,
+        &proof_runtime,
         params.previous_proof.take(),
         params.prover_config,
         params.proof_output_dir.clone(),
     )
     .await;
-    block_proof_runtime.close().await?;
-    segment_proof_runtime.close().await?;
+    proof_runtime.block_proof_runtime.close().await?;
+    proof_runtime.segment_proof_runtime.close().await?;
     let proved_blocks = proved_blocks?;
 
     if params.prover_config.test_only {
