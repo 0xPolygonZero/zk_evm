@@ -4,17 +4,21 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use alloy::{
     consensus::Account,
-    primitives::{Address, B256},
+    primitives::{b256, Address, B256},
 };
 use alloy_compat::Compat as _;
-use common::{hpt, key::TrieKey, repr};
+use common::{
+    acct, hpt,
+    key::{key, TrieKey},
+    obd, rcpt, repr, txn, ALICE, BEACON,
+};
 use mpt_trie::{
     nibbles::Nibbles,
     partial_trie::{HashedPartialTrie, PartialTrie as _},
 };
 use trace_decoder::{
     BlockTrace, BlockTraceTriePreImages, OtherBlockData, SeparateStorageTriesPreImage,
-    SeparateTriePreImage, SeparateTriePreImages, TxnInfo,
+    SeparateTriePreImage, SeparateTriePreImages, TxnInfo, TxnTrace,
 };
 
 /// Hey Aatif, is there a way in the current API to pass in a key (on the
@@ -52,7 +56,24 @@ use trace_decoder::{
 /// the deltas ahead by removing any created account for which the initial state
 /// trie does not contain a path yielding a Leaf / Empty
 #[test]
-fn repro() {}
+fn repro() {
+    run(
+        [(BEACON, acct())],
+        [
+            // alice's subtree is hashed out
+            (key!("9"), b256!()),
+        ],
+        [(BEACON, hpt())],
+        [],
+        [txn(
+            [(ALICE, TxnTrace::default())], // alice has an empty trace
+            [],
+            rcpt(true, 0, []),
+            0,
+        )],
+        obd(),
+    );
+}
 
 fn run(
     state: impl Into<BTreeMap<Address, Account>>,
@@ -72,10 +93,11 @@ fn run(
                             Nibbles::from_h256_be(keccak_hash::keccak(addr)),
                             alloy::rlp::encode(acct),
                         )
-                        .unwrap();
+                        .expect("inserting full state");
                     }
                     for (key, hash) in deferred_state.into() {
-                        hpt.insert(key.into_nibbles(), hash.compat()).unwrap();
+                        hpt.insert(key.into_nibbles(), hash.compat())
+                            .expect("inserting deffered state");
                     }
                     SeparateTriePreImage::Direct(hpt)
                 },
@@ -96,7 +118,7 @@ fn run(
         1,
         false,
     )
-    .unwrap()
+    .expect("running trace_decoder")
     .into_iter()
     .map(Into::into)
     .collect()

@@ -100,9 +100,6 @@ pub mod key {
     pub struct TrieKey(CopyVec<U4, 64>);
 
     impl TrieKey {
-        pub const fn new() -> Self {
-            Self(CopyVec::new())
-        }
         pub fn into_nibbles(self) -> mpt_trie::nibbles::Nibbles {
             let mut theirs = mpt_trie::nibbles::Nibbles::new();
             let Self(ours) = self;
@@ -125,18 +122,14 @@ pub mod key {
         }
     }
 
-    const fn assert_trie_key(s: &str) {
-        let is_hex = alloy::hex::const_check_raw(s.as_bytes());
-        assert!(is_hex, "string must be hex characters only");
-        assert!(s.len() <= 64, "too many characters in string");
-    }
-
     macro_rules! key {
-        () => {
-            TrieKey::new()
-        };
         ($lit:literal) => {{
-            const { assert_trie_key($lit) };
+            const {
+                let s: &str = $lit;
+                let is_hex = alloy::hex::const_check_raw(s.as_bytes());
+                assert!(is_hex, "string must be hex characters only");
+                assert!(s.len() <= 64, "too many characters in string");
+            };
             $lit.parse::<TrieKey>().unwrap()
         }};
     }
