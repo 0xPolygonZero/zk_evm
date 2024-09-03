@@ -41,7 +41,18 @@ pub(crate) async fn stdio_main(
             .map_err(|e| anyhow!("Failed to send block prover input through the channel: {e}"))?;
     }
 
-    let _ = proving_task.await?;
+    match proving_task.await {
+        Ok(Ok(_)) => {
+            info!("Proving task successfully finished");
+        }
+        Ok(Err(e)) => {
+            anyhow::bail!("Proving task finished with error: {e:?}");
+        }
+        Err(e) => {
+            anyhow::bail!("Unable to join proving task, error: {e:?}");
+        }
+    }
+
     runtime.close().await?;
 
     if prover_config.test_only {

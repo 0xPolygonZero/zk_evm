@@ -8,7 +8,7 @@ use proof_gen::proof_types::GeneratedBlockProof;
 use prover::{BlockProverInput, ProverConfig};
 use rpc::{retry::build_http_retry_provider, RpcType};
 use tokio::sync::mpsc;
-use tracing::{error, info};
+use tracing::info;
 use zero_bin_common::block_interval::{BlockInterval, BlockIntervalStream};
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 
@@ -69,7 +69,7 @@ pub(crate) async fn client_main(
 
     // Run proving task
     let runtime_ = runtime.clone();
-    let prove_task = tokio::spawn(prover::prove(
+    let proving_task = tokio::spawn(prover::prove(
         block_rx,
         runtime_,
         leader_config.previous_proof.take(),
@@ -105,15 +105,15 @@ pub(crate) async fn client_main(
             .map_err(|e| anyhow!("failed to send block prover input through the channel: {e}"))?;
     }
 
-    match prove_task.await {
+    match proving_task.await {
         Ok(Ok(_)) => {
             info!("Proving task successfully finished");
         }
         Ok(Err(e)) => {
-            error!("Proving task finished with error {e:?}");
+            anyhow::bail!("Proving task finished with error: {e:?}");
         }
         Err(e) => {
-            error!("Unable to join task, error {e:?}");
+            anyhow::bail!("Unable to join proving task, error: {e:?}");
         }
     }
 
