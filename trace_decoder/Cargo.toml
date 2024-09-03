@@ -45,6 +45,8 @@ zk_evm_common = { workspace = true }
 alloy = { workspace = true }
 clap.workspace = true
 criterion = { workspace = true }
+expect-test = "1.5.0"
+insta = { version = "1.39.0", features = ["json"] }
 plonky2_maybe_rayon = { workspace = true }
 pretty_assertions = "1.4.0"
 pretty_env_logger = { workspace = true }
