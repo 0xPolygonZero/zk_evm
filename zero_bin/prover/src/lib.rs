@@ -15,7 +15,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::oneshot;
 use trace_decoder::{BlockTrace, OtherBlockData};
-use tracing::info;
+use tracing::{error, info};
 use zero_bin_common::fs::generate_block_proof_file_name;
 
 #[derive(Debug, Clone)]
@@ -241,6 +241,7 @@ pub async fn prove(
         let prover_config = prover_config.clone();
         let previous_block_proof = prev_proof.take();
         let runtime = runtime.clone();
+        let block_number = block_prover_input.get_block_number();
         let _abort_handle = task_set.spawn(async move {
             let block_number = block_prover_input.get_block_number();
             info!("Proving block {block_number}");
@@ -252,7 +253,9 @@ pub async fn prove(
                 prover_config.clone(),
             )
             .then(move |proof| async move {
-                let proof = proof?;
+                let proof = proof.inspect_err(|e| {
+                    error!("failed to generate proof for block {block_number}, error {e:?}")
+                })?;
                 let block_number = proof.b_height;
 
                 // Write proof to disk if block is last in block batch,
@@ -265,11 +268,13 @@ pub async fn prove(
                     || prover_config.keep_intermediate_proofs
                     || is_block_batch_finished
                 {
-                    write_proof_to_dir(&prover_config.proof_output_dir, proof.clone()).await?;
+                    write_proof_to_dir(&prover_config.proof_output_dir, proof.clone())
+                        .await
+                        .inspect_err(|e| error!("failed to output proof for block {block_number} to directory {e:?}"))?;
                 }
 
                 if tx.send(proof).is_err() {
-                    anyhow::bail!("Failed to send proof");
+                    anyhow::bail!("Failed to send proof for block {block_number}");
                 }
 
                 Ok(block_number)
@@ -278,7 +283,10 @@ pub async fn prove(
 
             Ok(block_proof)
         });
-        prev_proof = Some(Box::pin(rx.map_err(anyhow::Error::new)));
+        prev_proof = Some(Box::pin(rx.map_err(move |e| {
+            error!("failed to receive previous proof for block {block_number}: {e:?}");
+            anyhow::Error::new(e)
+        })));
         if is_last_block {
             break;
         }
