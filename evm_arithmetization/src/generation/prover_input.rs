@@ -1,6 +1,7 @@
 use core::mem::transmute;
 use core::ops::Neg;
 use std::collections::{BTreeSet, HashMap};
+use std::ops::Bound;
 use std::str::FromStr;
 
 use anyhow::{bail, Error, Result};
@@ -10,7 +11,10 @@ use num_bigint::BigUint;
 use plonky2::field::types::Field;
 use serde::{Deserialize, Serialize};
 
-use super::linked_list::LinkedList;
+use super::linked_list::{
+    AccountsLinkedList, LinkedList, StorageLinkedList, ACCOUNTS_LINKED_LIST_NODE_SIZE,
+    STORAGE_LINKED_LIST_NODE_SIZE,
+};
 use super::mpt::load_state_mpt;
 use crate::cpu::kernel::cancun_constants::KZG_VERSIONED_HASH;
 use crate::cpu::kernel::constants::cancun_constants::{
@@ -43,8 +47,6 @@ pub struct ProverInputFn(Vec<String>);
 
 pub const ADDRESSES_ACCESS_LIST_LEN: usize = 2;
 pub const STORAGE_KEYS_ACCESS_LIST_LEN: usize = 4;
-pub const ACCOUNTS_LINKED_LIST_NODE_SIZE: usize = 4;
-pub const STORAGE_LINKED_LIST_NODE_SIZE: usize = 5;
 
 impl From<Vec<String>> for ProverInputFn {
     fn from(v: Vec<String>) -> Self {
@@ -516,14 +518,25 @@ impl<F: Field> GenerationState<F> {
 
     /// Returns a pointer to a node in the list such that
     /// `node[0] <= addr < next_node[0]` and `addr` is the top of the stack.
-    fn run_next_insert_account(&self) -> Result<U256, ProgramError> {
+    fn run_next_insert_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
         let accounts_linked_list =
-            LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                &accounts_mem,
-                Segment::AccountsLinkedList,
-            )?;
+            AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)?;
+
+        let (&other_pred_addr, &other_pred_ptr) = self
+            .accounts
+            .range(..=addr)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
+        if other_pred_addr != addr {
+            self.accounts.insert(
+                addr,
+                self.memory
+                    .get_preinit_memory(Segment::AccountsLinkedList)
+                    .len(),
+            );
+        }
 
         if let Some(([.., pred_ptr], [_, ..], _)) =
             accounts_linked_list
@@ -532,6 +545,7 @@ impl<F: Field> GenerationState<F> {
                     (prev_addr <= addr || prev_addr == U256::MAX) && addr < next_addr
                 })
         {
+            assert_eq!(other_pred_ptr, u256_to_usize(pred_ptr).unwrap());
             Ok(pred_ptr / U256::from(ACCOUNTS_LINKED_LIST_NODE_SIZE))
         } else {
             Ok((Segment::AccountsLinkedList as usize).into())
@@ -542,15 +556,26 @@ impl<F: Field> GenerationState<F> {
     /// `node[0] <= addr < next_node[0]`, or  node[0] == addr and `node[1] <=
     /// key < next_node[1]`, where `addr` and `key` are the elements at the top
     /// of the stack.
-    fn run_next_insert_slot(&self) -> Result<U256, ProgramError> {
+    fn run_next_insert_slot(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
         let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
         let storage_linked_list =
-            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                &storage_mem,
-                Segment::StorageLinkedList,
-            )?;
+            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)?;
+
+        let (&(other_pred_addr, other_pred_slot_key), &other_pred_ptr) =
+            self.storage.range(..=(addr, key)).next_back().unwrap_or((
+                &(U256::MAX, U256::MAX),
+                &(Segment::StorageLinkedList as usize),
+            ));
+        if other_pred_addr != addr || other_pred_slot_key != key {
+            self.storage.insert(
+                (addr, key),
+                self.memory
+                    .get_preinit_memory(Segment::StorageLinkedList)
+                    .len(),
+            );
+        }
 
         if let Some(([.., pred_ptr], _, _)) = storage_linked_list.tuple_windows().find(
             |&(_, [prev_addr, prev_key, ..], [next_addr, next_key, ..])| {
@@ -561,6 +586,7 @@ impl<F: Field> GenerationState<F> {
                 prev_is_less_or_equal && next_is_strictly_larger
             },
         ) {
+            assert_eq!(other_pred_ptr, u256_to_usize(pred_ptr).unwrap());
             Ok((pred_ptr - U256::from(Segment::StorageLinkedList as usize))
                 / U256::from(STORAGE_LINKED_LIST_NODE_SIZE))
         } else {
@@ -571,19 +597,26 @@ impl<F: Field> GenerationState<F> {
     /// Returns a pointer `ptr` to a node of the form [next_addr, ..]  in the
     /// list such that `next_addr = addr` and `addr` is the top of the stack.
     /// If the element is not in the list, loops forever.
-    fn run_next_remove_account(&self) -> Result<U256, ProgramError> {
+    fn run_next_remove_account(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let accounts_mem = self.memory.get_preinit_memory(Segment::AccountsLinkedList);
         let accounts_linked_list =
-            LinkedList::<ACCOUNTS_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                &accounts_mem,
-                Segment::AccountsLinkedList,
-            )?;
+            AccountsLinkedList::from_mem_and_segment(&accounts_mem, Segment::AccountsLinkedList)?;
+
+        let (&other_pred_addr, &other_pred_ptr) = self
+            .accounts
+            .range(..=addr)
+            .next_back()
+            .unwrap_or((&U256::MAX, &(Segment::AccountsLinkedList as usize)));
+        if other_pred_addr == addr {
+            self.accounts.remove(&addr);
+        }
 
         if let Some(([.., ptr], _, _)) = accounts_linked_list
             .tuple_windows()
             .find(|&(_, _, [next_node_addr, ..])| next_node_addr == addr)
         {
+            assert_eq!(other_pred_ptr, u256_to_usize(ptr).unwrap());
             Ok(ptr / ACCOUNTS_LINKED_LIST_NODE_SIZE)
         } else {
             Ok((Segment::AccountsLinkedList as usize).into())
@@ -594,15 +627,21 @@ impl<F: Field> GenerationState<F> {
     /// such that `next_addr == addr` and `next_key == key`,
     /// and `addr, key` are the elements at the top of the stack.
     /// If the element is not in the list, loops forever.
-    fn run_next_remove_slot(&self) -> Result<U256, ProgramError> {
+    fn run_next_remove_slot(&mut self) -> Result<U256, ProgramError> {
         let addr = stack_peek(self, 0)?;
         let key = stack_peek(self, 1)?;
         let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
         let storage_linked_list =
-            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                &storage_mem,
-                Segment::StorageLinkedList,
-            )?;
+            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)?;
+
+        let (&(other_pred_addr, other_pred_slot_key), &other_pred_ptr) =
+            self.storage.range(..=(addr, key)).next_back().unwrap_or((
+                &(U256::MAX, U256::MAX),
+                &(Segment::AccountsLinkedList as usize),
+            ));
+        if other_pred_addr == addr && other_pred_slot_key == key {
+            self.storage.remove(&(addr, key));
+        }
 
         if let Some(([.., ptr], _, _)) = storage_linked_list
             .tuple_windows()
@@ -625,10 +664,7 @@ impl<F: Field> GenerationState<F> {
         let addr = stack_peek(self, 0)?;
         let storage_mem = self.memory.get_preinit_memory(Segment::StorageLinkedList);
         let storage_linked_list =
-            LinkedList::<STORAGE_LINKED_LIST_NODE_SIZE>::from_mem_and_segment(
-                &storage_mem,
-                Segment::StorageLinkedList,
-            )?;
+            StorageLinkedList::from_mem_and_segment(&storage_mem, Segment::StorageLinkedList)?;
 
         if let Some(([.., pred_ptr], _, _)) = storage_linked_list.tuple_windows().find(
             |&(_, [prev_addr, _, ..], [next_addr, _, ..])| {

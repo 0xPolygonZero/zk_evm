@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::mem::size_of;
 
 use anyhow::{anyhow, bail};
@@ -8,6 +8,7 @@ use keccak_hash::keccak;
 use log::Level;
 use plonky2::field::types::Field;
 
+use super::linked_list::{BoundedAccountsLinkedList, BoundedStorageLinkedList};
 use super::mpt::TrieRootPtrs;
 use super::segments::GenerationSegmentData;
 use super::{TrieInputs, TrimmedGenerationInputs, NUM_EXTRA_CYCLES_AFTER};
@@ -367,6 +368,16 @@ pub struct GenerationState<F: Field> {
     /// the code (not necessarily pointing to an opcode) such that for every
     /// j in [i, i+32] it holds that code[j] < 0x7f - j + i.
     pub(crate) jumpdest_table: Option<HashMap<usize, Vec<usize>>>,
+
+    /// Each entry contains the pait (key, ptr) where key is the (hashed) key
+    /// of an account in the accounts linked list, and ptr is the respective
+    /// node address in memory.
+    pub(crate) accounts: BTreeMap<U256, usize>,
+
+    /// Each entry contains the pair ((account_key, slot_key), ptr) where
+    /// account_key is the (hashed) key of an account, slot_key is the slot
+    /// key, and ptr is the respective node address in memory.
+    pub(crate) storage: BTreeMap<(U256, U256), usize>,
 }
 
 impl<F: Field> GenerationState<F> {
@@ -422,9 +433,40 @@ impl<F: Field> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
+            accounts: BTreeMap::new(),
+            storage: BTreeMap::new(),
         };
         let trie_root_ptrs =
             state.preinitialize_linked_lists_and_txn_and_receipt_mpts(&inputs.tries);
+
+        let accounts_mem = state.memory.get_preinit_memory(Segment::AccountsLinkedList);
+        state.accounts.extend(
+            BoundedAccountsLinkedList::from_mem_and_segment(
+                &accounts_mem,
+                Segment::AccountsLinkedList,
+            )?
+            .tuple_windows()
+            .map(|([.., ptr], [account_key, ..])| {
+                (
+                    account_key,
+                    u256_to_usize(ptr).expect("Node pointer must fit in a usize"),
+                )
+            }),
+        );
+        let storage_mem = state.memory.get_preinit_memory(Segment::StorageLinkedList);
+        state.storage.extend(
+            BoundedStorageLinkedList::from_mem_and_segment(
+                &storage_mem,
+                Segment::StorageLinkedList,
+            )?
+            .tuple_windows()
+            .map(|([.., ptr], [account_key, slot_key, ..])| {
+                (
+                    (account_key, slot_key),
+                    u256_to_usize(ptr).expect("Node pointer must fit in a usize")
+                )
+            }),
+        );
 
         state.trie_root_ptrs = trie_root_ptrs;
         Ok(state)
@@ -533,6 +575,8 @@ impl<F: Field> GenerationState<F> {
                 receipt_root_ptr: 0,
             },
             jumpdest_table: None,
+            accounts: self.accounts.clone(),
+            storage: self.storage.clone(),
         }
     }
 
