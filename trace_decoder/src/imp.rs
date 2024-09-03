@@ -456,6 +456,12 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     .transaction
                     .trim_to(batch_first_txn_ix..curr_txn_ix)?;
 
+                let keep = storage_masks
+                    .keys()
+                    .map(keccak_hash::keccak)
+                    .collect::<BTreeSet<_>>();
+                before.storage.retain(|haddr, _| keep.contains(haddr));
+
                 for (addr, mask) in storage_masks {
                     if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
                         it.trim_to(mask)?

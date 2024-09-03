@@ -48,9 +48,11 @@ pub(crate) struct Hash2Code {
 
 impl Hash2Code {
     pub fn new() -> Self {
-        Self {
+        let mut this = Self {
             inner: HashMap::new(),
-        }
+        };
+        this.insert(vec![]);
+        this
     }
     pub fn get(&mut self, hash: H256) -> anyhow::Result<Vec<u8>> {
         match self.inner.get(&hash) {
