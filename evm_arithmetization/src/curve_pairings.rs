@@ -1007,18 +1007,15 @@ mod tests {
         }
 
         // Finally, multiply by the accumulated inverse and check this matches the
-        // expected value.
-        let p = CurveAff::<BLS381>::int(acc);
-        let q = CurveAff::<Fp2<BLS381>>::GENERATOR;
-        running_product = running_product * bls381::ate_optim(p, q);
+        // expected value. Only do this when acc is nonzero, as the pairing is only
+        // defined over valid curve points.
+        if acc != 0 {
+            let p = CurveAff::<BLS381>::int(acc);
+            let q = CurveAff::<Fp2<BLS381>>::GENERATOR;
+            running_product = running_product * bls381::ate_optim(p, q);
+        }
 
-        let expected = if acc == 0 {
-            Fp12::<BLS381>::ZERO
-        } else {
-            Fp12::<BLS381>::UNIT
-        };
-
-        assert_eq!(running_product, expected);
+        assert_eq!(running_product, Fp12::<BLS381>::UNIT);
     }
 
     #[test]
@@ -1040,17 +1037,14 @@ mod tests {
         }
 
         // Finally, multiply by the accumulated inverse and check this matches the
-        // expected value.
-        let p = CurveAff::<BN254>::int(acc);
-        let q = CurveAff::<Fp2<BN254>>::GENERATOR;
-        running_product = running_product * bn254::tate(p, q);
+        // expected value. Only do this when acc is nonzero, as the pairing is only
+        // defined over valid curve points.
+        if acc != 0 {
+            let p = CurveAff::<BN254>::int(acc);
+            let q = CurveAff::<Fp2<BN254>>::GENERATOR;
+            running_product = running_product * bn254::tate(p, q);
+        }
 
-        let expected = if acc == 0 {
-            Fp12::<BN254>::ZERO
-        } else {
-            Fp12::<BN254>::UNIT
-        };
-
-        assert_eq!(running_product, expected);
+        assert_eq!(running_product, Fp12::<BN254>::UNIT);
     }
 }

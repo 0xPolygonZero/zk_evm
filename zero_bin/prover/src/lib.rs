@@ -67,8 +67,13 @@ impl BlockProverInput {
 
         let block_number = self.get_block_number();
 
-        let block_generation_inputs =
-            trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
+        let use_burn_addr = cfg!(feature = "cdk_erigon");
+        let block_generation_inputs = trace_decoder::entrypoint(
+            self.block_trace,
+            self.other_data,
+            batch_size,
+            use_burn_addr,
+        )?;
 
         // Create segment proof.
         let seg_prove_ops = ops::SegmentProof {
@@ -157,8 +162,13 @@ impl BlockProverInput {
         let block_number = self.get_block_number();
         info!("Testing witness generation for block {block_number}.");
 
-        let block_generation_inputs =
-            trace_decoder::entrypoint(self.block_trace, self.other_data, batch_size)?;
+        let use_burn_addr = cfg!(feature = "cdk_erigon");
+        let block_generation_inputs = trace_decoder::entrypoint(
+            self.block_trace,
+            self.other_data,
+            batch_size,
+            use_burn_addr,
+        )?;
 
         let seg_ops = ops::SegmentProofTestOnly {
             save_inputs_on_error,

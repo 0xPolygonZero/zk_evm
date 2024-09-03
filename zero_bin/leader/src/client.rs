@@ -40,7 +40,7 @@ pub(crate) async fn client_main(
 ) -> Result<()> {
     use futures::{FutureExt, StreamExt};
 
-    let cached_provider = Arc::new(rpc::provider::CachedProvider::new(
+    let cached_provider = Arc::new(zero_bin_common::provider::CachedProvider::new(
         build_http_retry_provider(
             rpc_params.rpc_url.clone(),
             rpc_params.backoff,

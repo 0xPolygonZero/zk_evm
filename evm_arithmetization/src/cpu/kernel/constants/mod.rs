@@ -62,6 +62,11 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c.insert(MAX_NONCE.0.into(), U256::from(MAX_NONCE.1));
     c.insert(CALL_STACK_LIMIT.0.into(), U256::from(CALL_STACK_LIMIT.1));
     c.insert(
+        MAX_RLP_PREFIX_SIZE.0.into(),
+        U256::from(MAX_RLP_PREFIX_SIZE.1),
+    );
+    c.insert(INITIAL_RLP_ADDR.0.into(), U256::from(INITIAL_RLP_ADDR.1));
+    c.insert(
         cancun_constants::BEACON_ROOTS_CONTRACT_STATE_KEY.0.into(),
         U256::from_big_endian(&cancun_constants::BEACON_ROOTS_CONTRACT_STATE_KEY.1),
     );
@@ -113,7 +118,7 @@ pub(crate) fn evm_constants() -> HashMap<String, U256> {
     c
 }
 
-const MISC_CONSTANTS: [(&str, [u8; 32]); 6] = [
+const MISC_CONSTANTS: [(&str, [u8; 32]); 4] = [
     // Base for limbs used in bignum arithmetic.
     (
         "BIGNUM_LIMB_BASE",
@@ -125,18 +130,6 @@ const MISC_CONSTANTS: [(&str, [u8; 32]); 6] = [
     (
         "ENCODED_EMPTY_NODE_ADDR",
         hex!("0000000000000000000000000000000000000000000000000000000b00000000"),
-    ),
-    // 0x10000 = 2^16 bytes, much larger than any RLP blob the EVM could possibly create.
-    (
-        "MAX_RLP_BLOB_SIZE",
-        hex!("0000000000000000000000000000000000000000000000000000000000010000"),
-    ),
-    // Address where the txn RLP encoding starts.
-    // It is the offset 1 within SEGMENT_RLP_RAW.
-    // *Note*: Changing this will break some tests.
-    (
-        "INITIAL_TXN_RLP_ADDR",
-        hex!("0000000000000000000000000000000000000000000000000000000b00000001"),
     ),
     // Address where the final registers start. It is the offset 6 within the
     // SEGMENT_REGISTERS_STATES.
@@ -358,6 +351,14 @@ const CODE_SIZE_LIMIT: [(&str, u64); 3] = [
 
 const MAX_NONCE: (&str, u64) = ("MAX_NONCE", 0xffffffffffffffff);
 const CALL_STACK_LIMIT: (&str, u64) = ("CALL_STACK_LIMIT", 1024);
+
+// 9 bytes, largest possible RLP prefix in our MPTs.
+const MAX_RLP_PREFIX_SIZE: (&str, u8) = ("MAX_RLP_PREFIX_SIZE", 9);
+// Address where RLP encoding generally starts.
+// It is the offset 1 within SEGMENT_RLP_RAW.
+// *Note*: Changing this will break some tests.
+pub(crate) const INITIAL_RLP_ADDR: (&str, usize) =
+    ("INITIAL_RLP_ADDR", Segment::RlpRaw as usize + 1);
 
 const LINKED_LISTS_CONSTANTS: [(&str, u16); 5] = [
     ("ACCOUNTS_LINKED_LISTS_NODE_SIZE", 4),

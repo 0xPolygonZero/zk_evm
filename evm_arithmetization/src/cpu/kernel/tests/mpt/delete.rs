@@ -7,6 +7,7 @@ use rand::random;
 
 use crate::cpu::kernel::aggregator::KERNEL;
 use crate::cpu::kernel::constants::global_metadata::GlobalMetadata;
+use crate::cpu::kernel::constants::INITIAL_RLP_ADDR;
 use crate::cpu::kernel::interpreter::Interpreter;
 use crate::cpu::kernel::tests::account_code::initialize_mpts;
 use crate::cpu::kernel::tests::mpt::{nibbles_64, test_account_1_rlp, test_account_2};
@@ -225,6 +226,9 @@ fn test_state_trie(
     interpreter
         .push(interpreter.get_global_metadata_field(GlobalMetadata::TrieDataSize)) // Initial trie data segment size, unused.
         .expect("The stack should not overflow");
+    interpreter
+        .push(INITIAL_RLP_ADDR.1.into()) // rlp_start
+        .expect("The stack should not overflow.");
     interpreter.run()?;
 
     assert_eq!(

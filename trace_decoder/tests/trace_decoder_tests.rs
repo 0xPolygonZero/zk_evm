@@ -77,12 +77,14 @@ fn derive_header_file_path(witness_file_path: &Path) -> Result<PathBuf, anyhow::
 
 fn decode_generation_inputs(
     block_prover_input: BlockProverInput,
+    use_burn_addr: bool,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     let block_num = block_prover_input.other_data.b_data.b_meta.block_number;
     let trace_decoder_output = trace_decoder::entrypoint(
         block_prover_input.block_trace,
         block_prover_input.other_data.clone(),
         3,
+        use_burn_addr,
     )
     .context(format!(
         "Failed to execute trace decoder on block {}",
@@ -135,7 +137,7 @@ fn verify_generation_inputs(
     // Block hash check
     assert_eq!(
         last_generation_input.block_hashes.cur_hash.as_bytes(),
-        &header.hash.unwrap().to_vec()
+        &header.hash.to_vec()
     );
     // Previous block hash check
     assert_eq!(
@@ -168,6 +170,10 @@ fn verify_generation_inputs(
 fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
     init_logger();
 
+    // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+    //       Once CDK_ERIGON_WITNESS_DIR is available, change this so
+    //       `use_burn_addr` is only true in that case.
+    let use_burn_addr = test_witness_directory != JERIGON_WITNESS_DIR;
     let results = find_witness_data_files(test_witness_directory)
         .expect("valid json data files found")
         .into_iter()
@@ -180,7 +186,8 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
         .map_ok(|block_prover_inputs| {
             block_prover_inputs.into_iter().map(|block_prover_input| {
                 // Run trace decoder, create list of generation inputs
-                let block_generation_inputs = decode_generation_inputs(block_prover_input)?;
+                let block_generation_inputs =
+                    decode_generation_inputs(block_prover_input, use_burn_addr)?;
                 block_generation_inputs
                     .into_par_iter()
                     .map(|generation_inputs| {
@@ -225,6 +232,10 @@ fn test_parsing_decoding_proving(#[case] test_witness_directory: &str) {
 fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
     init_logger();
 
+    // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+    //       Once CDK_ERIGON_WITNESS_DIR is available, change this so
+    //       `use_burn_addr` is only true in that case.
+    let use_burn_addr = test_witness_directory != JERIGON_WITNESS_DIR;
     let result: Vec<Result<(), anyhow::Error>> = find_witness_data_files(test_witness_directory)
         .expect("valid json data files found")
         .into_iter()
@@ -254,7 +265,8 @@ fn test_generation_inputs_consistency(#[case] test_witness_directory: &str) {
         .map_ok(|(block_header, block_prover_input)| {
             let other_block_data = block_prover_input.other_data.clone();
             // Run trace decoder, create generation inputs for this block
-            let block_generation_inputs = decode_generation_inputs(block_prover_input)?;
+            let block_generation_inputs =
+                decode_generation_inputs(block_prover_input, use_burn_addr)?;
             // Verify generation inputs for this block
             verify_generation_inputs(&block_header, &other_block_data, block_generation_inputs)
         })

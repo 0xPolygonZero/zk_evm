@@ -1,6 +1,7 @@
 use std::{cmp::min, collections::HashMap, ops::Range};
 
 use anyhow::{anyhow, Context as _};
+use ethereum_types::H160;
 use ethereum_types::{Address, BigEndianHash, H256, U256, U512};
 use evm_arithmetization::{
     generation::{
@@ -23,7 +24,7 @@ use mpt_trie::{
 use crate::{
     hash,
     processed_block_trace::{
-        NodesUsedByTxn, ProcessedBlockTrace, ProcessedTxnInfo, StateWrite, TxnMetaState,
+        NodesUsedByTxnBatch, ProcessedBlockTrace, ProcessedTxnBatchInfo, StateWrite, TxnMetaState,
     },
     typed_mpt::{ReceiptTrie, StateTrie, StorageTrie, TransactionTrie, TrieKey},
     OtherBlockData, PartialTriePreImages, TryIntoExt as TryIntoBounds,
@@ -55,6 +56,7 @@ pub fn into_txn_proof_gen_ir(
         withdrawals,
     }: ProcessedBlockTrace,
     other_data: OtherBlockData,
+    use_burn_addr: bool,
     batch_size: usize,
 ) -> anyhow::Result<Vec<GenerationInputs>> {
     let mut curr_block_tries = PartialTrieState {
@@ -91,6 +93,7 @@ pub fn into_txn_proof_gen_ir(
                 &mut curr_block_tries,
                 &mut extra_data,
                 &other_data,
+                use_burn_addr,
             )
             .context(format!(
                 "at transaction range {}..{}",
@@ -116,7 +119,7 @@ pub fn into_txn_proof_gen_ir(
 fn update_beacon_block_root_contract_storage(
     trie_state: &mut PartialTrieState<impl StateTrie>,
     delta_out: &mut TrieDeltaApplicationOutput,
-    nodes_used: &mut NodesUsedByTxn,
+    nodes_used: &mut NodesUsedByTxnBatch,
     block_data: &BlockMetadata,
 ) -> anyhow::Result<()> {
     const HISTORY_BUFFER_LENGTH_MOD: U256 = U256([HISTORY_BUFFER_LENGTH.1, 0, 0, 0]);
@@ -248,7 +251,7 @@ fn init_any_needed_empty_storage_tries<'a>(
 
 fn create_minimal_partial_tries_needed_by_txn(
     curr_block_tries: &PartialTrieState<impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>>,
-    nodes_used_by_txn: &NodesUsedByTxn,
+    nodes_used_by_txn: &NodesUsedByTxnBatch,
     txn_range: Range<usize>,
     delta_application_out: TrieDeltaApplicationOutput,
 ) -> anyhow::Result<TrieInputs> {
@@ -291,7 +294,7 @@ fn create_minimal_partial_tries_needed_by_txn(
 
 fn apply_deltas_to_trie_state(
     trie_state: &mut PartialTrieState<impl StateTrie>,
-    deltas: &NodesUsedByTxn,
+    deltas: &NodesUsedByTxnBatch,
     meta: &[TxnMetaState],
 ) -> anyhow::Result<TrieDeltaApplicationOutput> {
     let mut out = TrieDeltaApplicationOutput::default();
@@ -509,12 +512,13 @@ fn update_trie_state_from_withdrawals<'a>(
 fn process_txn_info(
     txn_range: Range<usize>,
     is_initial_payload: bool,
-    txn_info: ProcessedTxnInfo,
+    txn_info: ProcessedTxnBatchInfo,
     curr_block_tries: &mut PartialTrieState<
         impl StateTrie + Clone + TryIntoBounds<HashedPartialTrie>,
     >,
     extra_data: &mut ExtraBlockData,
     other_data: &OtherBlockData,
+    use_burn_target: bool,
 ) -> anyhow::Result<GenerationInputs> {
     log::trace!(
         "Generating proof IR for txn {} through {}...",
@@ -573,8 +577,15 @@ fn process_txn_info(
         delta_out,
     )?;
 
+    let burn_addr = match use_burn_target {
+        // TODO: https://github.com/0xPolygonZero/zk_evm/issues/565
+        //       Retrieve the actual burn address from `cdk-erigon`.
+        true => Some(H160::zero()),
+        false => None,
+    };
     let gen_inputs = GenerationInputs {
         txn_number_before: extra_data.txn_number_before,
+        burn_addr,
         gas_used_before: extra_data.gas_used_before,
         gas_used_after: extra_data.gas_used_after,
         signed_txns: txn_info

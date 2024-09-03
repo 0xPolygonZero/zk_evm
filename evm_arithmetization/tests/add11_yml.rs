@@ -187,6 +187,7 @@ fn get_generation_inputs() -> GenerationInputs {
 
     GenerationInputs {
         signed_txns: vec![txn.to_vec()],
+        burn_addr: None,
         withdrawals: vec![],
         global_exit_roots: vec![],
         tries: tries_before,

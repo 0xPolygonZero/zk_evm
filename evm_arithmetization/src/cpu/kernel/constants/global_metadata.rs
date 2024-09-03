@@ -18,10 +18,6 @@ pub(crate) enum GlobalMetadata {
     /// The size of the `TrieData` segment, in bytes. In other words, the next
     /// address available for appending additional trie data.
     TrieDataSize,
-    /// The size of the `RLP` segment, in bytes, represented as a whole
-    /// address. In other words, the next address available for appending
-    /// additional RLP data.
-    RlpDataSize,
     /// A pointer to the root of the state trie within the `TrieData` buffer.
     StateTrieRoot,
     /// A pointer to the root of the transaction trie within the `TrieData`
@@ -116,6 +112,9 @@ pub(crate) enum GlobalMetadata {
 
     // Number of blob versioned hashes contained in the current type-3 transaction.
     BlobVersionedHashesLen,
+
+    /// Address where the base fee to be burnt is sent.
+    BurnAddr,
 }
 
 impl GlobalMetadata {
@@ -131,7 +130,6 @@ impl GlobalMetadata {
             Self::LargestContext,
             Self::MemorySize,
             Self::TrieDataSize,
-            Self::RlpDataSize,
             Self::StateTrieRoot,
             Self::TransactionTrieRoot,
             Self::ReceiptTrieRoot,
@@ -183,6 +181,7 @@ impl GlobalMetadata {
             Self::InitialStorageLinkedListLen,
             Self::TransientStorageLen,
             Self::BlobVersionedHashesLen,
+            Self::BurnAddr,
         ]
     }
 
@@ -192,7 +191,6 @@ impl GlobalMetadata {
             Self::LargestContext => "GLOBAL_METADATA_LARGEST_CONTEXT",
             Self::MemorySize => "GLOBAL_METADATA_MEMORY_SIZE",
             Self::TrieDataSize => "GLOBAL_METADATA_TRIE_DATA_SIZE",
-            Self::RlpDataSize => "GLOBAL_METADATA_RLP_DATA_SIZE",
             Self::StateTrieRoot => "GLOBAL_METADATA_STATE_TRIE_ROOT",
             Self::TransactionTrieRoot => "GLOBAL_METADATA_TXN_TRIE_ROOT",
             Self::ReceiptTrieRoot => "GLOBAL_METADATA_RECEIPT_TRIE_ROOT",
@@ -250,6 +248,7 @@ impl GlobalMetadata {
             Self::InitialStorageLinkedListLen => "GLOBAL_METADATA_INITIAL_STORAGE_LINKED_LIST_LEN",
             Self::TransientStorageLen => "GLOBAL_METADATA_TRANSIENT_STORAGE_LEN",
             Self::BlobVersionedHashesLen => "GLOBAL_METADATA_BLOB_VERSIONED_HASHES_LEN",
+            Self::BurnAddr => "GLOBAL_METADATA_BURN_ADDR",
         }
     }
 }

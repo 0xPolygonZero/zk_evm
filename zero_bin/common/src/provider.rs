@@ -8,7 +8,7 @@ use anyhow::Context;
 use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 
 const CACHE_SIZE: usize = 1024;
-const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 64;
+const MAX_NUMBER_OF_PARALLEL_REQUESTS: usize = 128;
 
 /// Wrapper around alloy provider to cache blocks and other
 /// frequently used data.
@@ -105,15 +105,15 @@ where
                 .await?
                 .context(format!("target block {:?} does not exist", id))?;
 
-            if let Some(block_num) = block.header.number {
-                self.blocks_by_number
-                    .lock()
-                    .await
-                    .put(block_num, block.clone());
-                if let Some(hash) = block.header.hash {
-                    self.blocks_by_hash.lock().await.put(hash, block_num);
-                }
-            }
+            self.blocks_by_number
+                .lock()
+                .await
+                .put(block.header.number, block.clone());
+            self.blocks_by_hash
+                .lock()
+                .await
+                .put(block.header.hash, block.header.number);
+
             Ok(block)
         }
     }

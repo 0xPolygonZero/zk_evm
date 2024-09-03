@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::anyhow;
+use ethereum_types::H160;
 use ethereum_types::{Address, BigEndianHash, H256, U256};
 use keccak_hash::keccak;
 use log::log_enabled;
@@ -65,9 +66,14 @@ pub struct GenerationInputs {
     /// `gas_used_before`.
     pub gas_used_after: U256,
 
-    /// A None would yield an empty proof, otherwise this contains the encoding
-    /// of a transaction.
+    /// A batch of individually RLP-encoded transactions, which may be empty for
+    /// dummy payloads.
     pub signed_txns: Vec<Vec<u8>>,
+    /// Target address for the base fee to be 'burnt', if there is one. If
+    /// `None`, then the base fee is directly burnt.
+    ///
+    /// Note: this is only used  when feature `cdk_erigon` is activated.
+    pub burn_addr: Option<H160>,
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
@@ -131,6 +137,10 @@ pub struct TrimmedGenerationInputs {
 
     /// Information contained in the block header.
     pub block_metadata: BlockMetadata,
+
+    /// Address where the burnt fees are stored. Only used if the `cfg_erigon`
+    /// feature is activated.
+    pub burn_addr: Option<H160>,
 
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
@@ -205,6 +215,7 @@ impl GenerationInputs {
             trie_roots_after: self.trie_roots_after.clone(),
             checkpoint_state_trie_root: self.checkpoint_state_trie_root,
             contract_code: self.contract_code.clone(),
+            burn_addr: self.burn_addr,
             block_metadata: self.block_metadata.clone(),
             block_hashes: self.block_hashes.clone(),
         }
@@ -219,6 +230,10 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
 ) {
     let metadata = &inputs.block_metadata;
     let trie_roots_after = &inputs.trie_roots_after;
+    #[cfg(feature = "cdk_erigon")]
+    let burn_addr = inputs
+        .burn_addr
+        .map_or_else(U256::max_value, |addr| U256::from_big_endian(&addr.0));
     let fields = [
         (
             GlobalMetadata::BlockBeneficiary,
@@ -284,6 +299,8 @@ fn apply_metadata_and_tries_memops<F: RichField + Extendable<D>, const D: usize>
         ),
         (GlobalMetadata::KernelHash, h2u(KERNEL.code_hash)),
         (GlobalMetadata::KernelLen, KERNEL.code.len().into()),
+        #[cfg(feature = "cdk_erigon")]
+        (GlobalMetadata::BurnAddr, burn_addr),
     ];
 
     let channel = MemoryChannel::GeneralPurpose(0);
@@ -488,12 +505,24 @@ pub fn generate_traces<F: RichField + Extendable<D>, const D: usize>(
         gas_used_after,
     };
 
+    let burn_addr = match cfg!(feature = "cdk_erigon") {
+        true => {
+            if let Some(burn_addr) = inputs.burn_addr {
+                Some(U256::from_big_endian(&burn_addr.0))
+            } else {
+                Some(U256::MAX)
+            }
+        }
+        false => None,
+    };
+
     // `mem_before` and `mem_after` are initialized with an empty cap.
     // They will be set to the caps of `MemBefore` and `MemAfter`
     // respectively, while proving.
     let public_values = PublicValues {
         trie_roots_before,
         trie_roots_after,
+        burn_addr,
         block_metadata: inputs.block_metadata.clone(),
         block_hashes: inputs.block_hashes.clone(),
         extra_block_data,

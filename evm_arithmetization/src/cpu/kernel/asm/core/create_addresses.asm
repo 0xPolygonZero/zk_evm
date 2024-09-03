@@ -5,7 +5,8 @@
 // Post stack: address
 global get_create_address:
     // stack: sender, nonce, retdest
-    %alloc_rlp_block
+    PUSH @INITIAL_RLP_ADDR
+    %add_const(@MAX_RLP_PREFIX_SIZE)
     // stack: rlp_start, sender, nonce, retdest
     %stack (rlp_start, sender, nonce) -> (rlp_start, sender, nonce, rlp_start)
     // stack: rlp_start, sender, nonce, rlp_start, retdest

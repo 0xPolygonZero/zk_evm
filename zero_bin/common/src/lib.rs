@@ -5,4 +5,5 @@ pub mod parsing;
 pub mod pre_checks;
 pub mod proof_runtime;
 pub mod prover_state;
+pub mod provider;
 pub mod version;

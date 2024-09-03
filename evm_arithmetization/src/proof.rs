@@ -52,6 +52,9 @@ pub struct PublicValues {
     pub trie_roots_before: TrieRoots,
     /// Trie hashes after the execution of the local state transition.
     pub trie_roots_after: TrieRoots,
+    /// Address to store the base fee to be burnt: only used when feature
+    /// `cdk_erigon` is active.
+    pub burn_addr: Option<U256>,
     /// Block metadata: it remains unchanged within a block.
     pub block_metadata: BlockMetadata,
     /// 256 previous block hashes and current block's hash.
@@ -82,6 +85,15 @@ impl PublicValues {
         let trie_roots_after =
             TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
         offset += TrieRootsTarget::SIZE;
+        let burn_addr = match cfg!(feature = "cdk_erigon") {
+            true => Some(get_u256(
+                &pis[offset..offset + BurnAddrTarget::get_size()]
+                    .try_into()
+                    .unwrap(),
+            )),
+            false => None,
+        };
+        offset += BurnAddrTarget::get_size();
         let block_metadata =
             BlockMetadata::from_public_inputs(&pis[offset..offset + BlockMetadataTarget::SIZE]);
         offset += BlockMetadataTarget::SIZE;
@@ -104,6 +116,7 @@ impl PublicValues {
         Self {
             trie_roots_before,
             trie_roots_after,
+            burn_addr,
             block_metadata,
             block_hashes,
             extra_block_data,
@@ -115,19 +128,13 @@ impl PublicValues {
     }
 }
 
-/// Memory values which are public.
+/// Memory values which are public once a final block proof is generated.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct FinalPublicValues {
-    /// Trie hashes before the execution of the local state transition
-    pub trie_roots_before: TrieRoots,
-    /// Trie hashes after the execution of the local state transition.
-    pub trie_roots_after: TrieRoots,
-    /// Block metadata: it remains unchanged within a block.
-    pub block_metadata: BlockMetadata,
-    /// 256 previous block hashes and current block's hash.
-    pub block_hashes: BlockHashes,
-    /// Extra block data that is specific to the current proof.
-    pub extra_block_data: ExtraBlockData,
+    /// State trie root before the execution of this global state transition.
+    pub state_trie_root_before: H256,
+    /// State trie root after the execution of this global state transition.
+    pub state_trie_root_after: H256,
 }
 
 impl FinalPublicValues {
@@ -135,33 +142,16 @@ impl FinalPublicValues {
     /// Public values are always the first public inputs added to the circuit,
     /// so we can start extracting at index 0.
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
-        assert!(
-            PublicValuesTarget::SIZE - 2 * RegistersDataTarget::SIZE - 2 * MemCapTarget::SIZE
-                <= pis.len()
-        );
+        assert!(FinalPublicValuesTarget::SIZE <= pis.len());
 
         let mut offset = 0;
-        let trie_roots_before =
-            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
-        offset += TrieRootsTarget::SIZE;
-        let trie_roots_after =
-            TrieRoots::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
-        offset += TrieRootsTarget::SIZE;
-        let block_metadata =
-            BlockMetadata::from_public_inputs(&pis[offset..offset + BlockMetadataTarget::SIZE]);
-        offset += BlockMetadataTarget::SIZE;
-        let block_hashes =
-            BlockHashes::from_public_inputs(&pis[offset..offset + BlockHashesTarget::SIZE]);
-        offset += BlockHashesTarget::SIZE;
-        let extra_block_data =
-            ExtraBlockData::from_public_inputs(&pis[offset..offset + ExtraBlockDataTarget::SIZE]);
+        let state_trie_root_before = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
+        offset += TARGET_HASH_SIZE;
+        let state_trie_root_after = get_h256(&pis[offset..offset + TARGET_HASH_SIZE]);
 
         Self {
-            trie_roots_before,
-            trie_roots_after,
-            block_metadata,
-            block_hashes,
-            extra_block_data,
+            state_trie_root_before,
+            state_trie_root_after,
         }
     }
 }
@@ -169,11 +159,67 @@ impl FinalPublicValues {
 impl From<PublicValues> for FinalPublicValues {
     fn from(value: PublicValues) -> Self {
         Self {
-            trie_roots_before: value.trie_roots_before,
-            trie_roots_after: value.trie_roots_after,
-            block_metadata: value.block_metadata,
-            block_hashes: value.block_hashes,
-            extra_block_data: value.extra_block_data,
+            state_trie_root_before: value.trie_roots_before.state_root,
+            state_trie_root_after: value.trie_roots_after.state_root,
+        }
+    }
+}
+
+/// Memory values which are public once a final block proof is generated.
+/// Note: All the larger integers are encoded with 32-bit limbs in little-endian
+/// order.
+#[derive(Eq, PartialEq, Debug)]
+pub struct FinalPublicValuesTarget {
+    /// State trie root before the execution of this global state transition.
+    pub state_trie_root_before: [Target; TARGET_HASH_SIZE],
+    /// State trie root after the execution of this global state transition.
+    pub state_trie_root_after: [Target; TARGET_HASH_SIZE],
+}
+
+impl FinalPublicValuesTarget {
+    pub(crate) const SIZE: usize = TARGET_HASH_SIZE * 2;
+
+    /// Serializes public value targets.
+    pub(crate) fn to_buffer(&self, buffer: &mut Vec<u8>) -> IoResult<()> {
+        buffer.write_target_array(&self.state_trie_root_before)?;
+        buffer.write_target_array(&self.state_trie_root_after)?;
+
+        Ok(())
+    }
+
+    /// Deserializes public value targets.
+    pub(crate) fn from_buffer(buffer: &mut Buffer) -> IoResult<Self> {
+        let state_trie_root_before = buffer.read_target_array()?;
+        let state_trie_root_after = buffer.read_target_array()?;
+
+        Ok(Self {
+            state_trie_root_before,
+            state_trie_root_after,
+        })
+    }
+
+    /// Connects these `FinalPublicValuesTarget` with their corresponding
+    /// counterpart in a full parent `PublicValuesTarget`.
+    pub(crate) fn connect_parent<F: RichField + Extendable<D>, const D: usize>(
+        &self,
+        builder: &mut CircuitBuilder<F, D>,
+        pv1: &PublicValuesTarget,
+    ) {
+        for i in 0..8 {
+            builder.connect(
+                self.state_trie_root_before[i],
+                pv1.trie_roots_before.state_root[i],
+            );
+            builder.connect(
+                self.state_trie_root_after[i],
+                pv1.trie_roots_after.state_root[i],
+            );
+            // We only use `FinalPublicValues` at the final block proof wrapping stage,
+            // where we should enforce consistency with the known checkpoint.
+            builder.connect(
+                self.state_trie_root_before[i],
+                pv1.extra_block_data.checkpoint_state_trie_root[i],
+            );
         }
     }
 }
@@ -419,6 +465,7 @@ pub struct MemCap {
     /// STARK cap.
     pub mem_cap: Vec<[U256; NUM_HASH_OUT_ELTS]>,
 }
+
 impl MemCap {
     pub fn from_public_inputs<F: RichField>(pis: &[F]) -> Self {
         let mem_cap = (0..DEFAULT_CAP_LEN)
@@ -442,6 +489,8 @@ pub struct PublicValuesTarget {
     pub trie_roots_before: TrieRootsTarget,
     /// Trie hashes after the execution of the local state transition.
     pub trie_roots_after: TrieRootsTarget,
+    /// Address to store the base fee to be burnt.
+    pub burn_addr: BurnAddrTarget,
     /// Block metadata: it remains unchanged within a block.
     pub block_metadata: BlockMetadataTarget,
     /// 256 previous block hashes and current block's hash.
@@ -584,6 +633,11 @@ impl PublicValuesTarget {
             receipts_root: buffer.read_target_array()?,
         };
 
+        let burn_addr = match cfg!(feature = "cdk_erigon") {
+            true => BurnAddrTarget::BurnAddr(buffer.read_target_array()?),
+            false => BurnAddrTarget::Burnt(),
+        };
+
         let block_metadata = BlockMetadataTarget {
             block_beneficiary: buffer.read_target_array()?,
             block_timestamp: buffer.read_target()?,
@@ -640,6 +694,7 @@ impl PublicValuesTarget {
         Ok(Self {
             trie_roots_before,
             trie_roots_after,
+            burn_addr,
             block_metadata,
             block_hashes,
             extra_block_data,
@@ -663,6 +718,9 @@ impl PublicValuesTarget {
         let trie_roots_after =
             TrieRootsTarget::from_public_inputs(&pis[offset..offset + TrieRootsTarget::SIZE]);
         offset += TrieRootsTarget::SIZE;
+        let burn_addr =
+            BurnAddrTarget::from_public_inputs(&pis[offset..offset + BurnAddrTarget::get_size()]);
+        offset += BurnAddrTarget::get_size();
         let block_metadata = BlockMetadataTarget::from_public_inputs(
             &pis[offset..offset + BlockMetadataTarget::SIZE],
         );
@@ -690,6 +748,7 @@ impl PublicValuesTarget {
         Self {
             trie_roots_before,
             trie_roots_after,
+            burn_addr,
             block_metadata,
             block_hashes,
             extra_block_data,
@@ -720,6 +779,7 @@ impl PublicValuesTarget {
                 pv0.trie_roots_after,
                 pv1.trie_roots_after,
             ),
+            burn_addr: BurnAddrTarget::select(builder, condition, pv0.burn_addr, pv1.burn_addr),
             block_metadata: BlockMetadataTarget::select(
                 builder,
                 condition,
@@ -852,6 +912,115 @@ impl TrieRootsTarget {
                 tr0.receipts_root[i],
                 tr1.receipts_root[i],
             );
+        }
+    }
+}
+
+/// Circuit version of `BurnAddr`.
+/// Address used to store the base fee to be burnt.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub enum BurnAddrTarget {
+    BurnAddr([Target; 8]),
+    Burnt(),
+}
+
+impl BurnAddrTarget {
+    pub fn get_size() -> usize {
+        match cfg!(feature = "cdk_erigon") {
+            true => 8,
+            false => 0,
+        }
+    }
+
+    /// Extracts the burn address from the provided public input
+    /// `Target`s. The provided `pis` should start with the burn address.
+    pub(crate) fn from_public_inputs(pis: &[Target]) -> Self {
+        match cfg!(feature = "cdk_erigon") {
+            true => BurnAddrTarget::BurnAddr(pis[0..8].try_into().unwrap()),
+            false => BurnAddrTarget::Burnt(),
+        }
+    }
+
+    /// If `condition`, returns the burn address in `ba0`,
+    /// otherwise returns the burn address in `ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget`s are `BurnAddr` variants.
+    pub(crate) fn select<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        ba0: Self,
+        ba1: Self,
+    ) -> Self {
+        match cfg!(feature = "cdk_erigon") {
+            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of type
+            // `BurnAddr`.
+            true => match (ba0, ba1) {
+                (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
+                    BurnAddrTarget::BurnAddr(core::array::from_fn(|i| {
+                        builder.select(condition, a0[i], a1[i])
+                    }))
+                }
+                _ => panic!("We should have already set an address (or U256::MAX) before."),
+            },
+            false => BurnAddrTarget::Burnt(),
+        }
+    }
+
+    /// Connects the burn address in `ba0` to the burn address in `ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget`s are `BurnAddr` variants.
+    pub(crate) fn connect<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        ba0: Self,
+        ba1: Self,
+    ) {
+        // There only are targets to connect if there is a burn address, i.e. when the
+        // `cdk_erigon` feature is active.
+        if cfg!(feature = "cdk_erigon") == true {
+            // If the `cdk_erigon` feature is activated, both `ba0` and `ba1` should be of
+            // type `BurnAddr`.
+            match (ba0, ba1) {
+                (BurnAddrTarget::BurnAddr(a0), BurnAddrTarget::BurnAddr(a1)) => {
+                    for i in 0..BurnAddrTarget::get_size() {
+                        builder.connect(a0[i], a1[i]);
+                    }
+                }
+                _ => panic!("We should have already set an address (or U256::MAX) before."),
+            }
+        }
+    }
+
+    /// If `condition`, asserts that `ba0 == ba1`.
+    /// This is a no-op if `cdk_erigon` feature is not activated.  
+    ///  
+    /// This will panic if the `cdk_erigon` is activated and not both
+    /// `BurnAddrTarget` are `BurnAddr` variants.
+    pub(crate) fn conditional_assert_eq<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        condition: BoolTarget,
+        ba0: Self,
+        ba1: Self,
+    ) {
+        if cfg!(feature = "cdk_erigon") {
+            match (ba0, ba1) {
+                (
+                    BurnAddrTarget::BurnAddr(addr_targets_0),
+                    BurnAddrTarget::BurnAddr(addr_targets_1),
+                ) => {
+                    for i in 0..BurnAddrTarget::get_size() {
+                        builder.conditional_assert_eq(
+                            condition.target,
+                            addr_targets_0[i],
+                            addr_targets_1[i],
+                        )
+                    }
+                }
+                _ => panic!("There should be an address set in cdk_erigon."),
+            }
         }
     }
 }

@@ -1,57 +1,64 @@
 // Hashing logic specific to a particular trie.
 
 global mpt_hash_state_trie:
-    // stack: cur_len, retdest
+    // stack: rlp_start, cur_len, retdest
     PUSH encode_account
+    // stack: encode_account, rlp_start, cur_len, retdest
+    SWAP1
+    // stack: rlp_start, encode_account, cur_len, retdest
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_ROOT)
-    // stack: node_ptr, encode_account, cur_len, retdest
+    // stack: node_ptr, rlp_start, encode_account, cur_len, retdest
     %jump(mpt_hash)
 
 %macro mpt_hash_state_trie
-    // stack: cur_len
-    PUSH %%after
-    SWAP1
+    // stack: rlp_start, cur_len
+    %stack (rlp_start, cur_len) -> (rlp_start, cur_len, %%after)
     %jump(mpt_hash_state_trie)
 %%after:
 %endmacro
 
 global mpt_hash_storage_trie:
-    // stack: node_ptr, cur_len, retdest
-    %stack (node_ptr, cur_len) -> (node_ptr, encode_storage_value, cur_len)
+    // stack: rlp_start, node_ptr, cur_len, retdest
+    %stack (rlp_start, node_ptr, cur_len) -> (node_ptr, rlp_start, encode_storage_value, cur_len)
     %jump(mpt_hash)
 
 %macro mpt_hash_storage_trie
-    %stack (node_ptr, cur_len) -> (node_ptr, cur_len, %%after)
+    // stack: rlp_start, node_ptr, cur_len
+    %stack (rlp_start, node_ptr, cur_len) -> (rlp_start, node_ptr, cur_len, %%after)
     %jump(mpt_hash_storage_trie)
 %%after:
 %endmacro
 
 global mpt_hash_txn_trie:
-    // stack: cur_len, retdest
+    // stack: rlp_start, cur_len, retdest
     PUSH encode_txn
+    // stack: encode_txn, rlp_start, cur_len, retdest
+    SWAP1
+    // stack: rlp_start, encode_txn, cur_len, retdest
     %mload_global_metadata(@GLOBAL_METADATA_TXN_TRIE_ROOT)
-    // stack: node_ptr, encode_txn, cur_len, retdest
+    // stack: node_ptr, rlp_start, encode_txn, cur_len, retdest
     %jump(mpt_hash)
 
 %macro mpt_hash_txn_trie
-    // stack: cur_len
-    PUSH %%after
-    SWAP1
+    // stack: rlp_start, cur_len
+    %stack (rlp_start, cur_len) -> (rlp_start, cur_len, %%after)
     %jump(mpt_hash_txn_trie)
 %%after:
 %endmacro
 
 global mpt_hash_receipt_trie:
-    // stack: cur_len, retdest
+    // stack: rlp_start, cur_len, retdest
     PUSH encode_receipt
+    // stack: encode_receipt, rlp_start, cur_len, retdest
+    SWAP1
+    // stack: rlp_start, encode_receipt, cur_len, retdest
     %mload_global_metadata(@GLOBAL_METADATA_RECEIPT_TRIE_ROOT)
-    // stack: node_ptr, encode_receipt, cur_len, retdest
+    // stack: node_ptr, rlp_start, encode_receipt, cur_len, retdest
     %jump(mpt_hash)
 
 %macro mpt_hash_receipt_trie
-    // stack: cur_len
-    PUSH %%after
-    SWAP1
+    // stack: rlp_start, cur_len
+    %stack (rlp_start, cur_len) -> (rlp_start, cur_len, %%after)
     %jump(mpt_hash_receipt_trie)
 %%after:
 %endmacro
@@ -100,6 +107,8 @@ global encode_account:
     DUP3
     DUP3 %add_const(2) %mload_trie_data // storage_root_ptr = value[2]
     // stack: storage_root_ptr, cur_len, rlp_pos_5, value_ptr, cur_len, retdest
+    DUP3
+    // stack: rlp_pos_5, storage_root_ptr, cur_len, rlp_pos_5, value_ptr, cur_len, retdest
 
     // Hash storage trie.
     %mpt_hash_storage_trie
