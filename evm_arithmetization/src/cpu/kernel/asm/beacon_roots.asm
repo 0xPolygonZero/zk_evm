@@ -10,7 +10,7 @@ global set_beacon_root:
     }
     #[cfg(not(feature = cdk_erigon))]
     {
-        PUSH start_txn
+        PUSH txn_loop
     }
 
     %timestamp

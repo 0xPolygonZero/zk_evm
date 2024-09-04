@@ -77,8 +77,7 @@ pub struct GenerationInputs {
     /// Withdrawal pairs `(addr, amount)`. At the end of the txs, `amount` is
     /// added to `addr`'s balance. See EIP-4895.
     pub withdrawals: Vec<(Address, U256)>,
-    /// Global exit roots pairs `(timestamp, root)`.
-    pub global_exit_roots: Vec<(U256, H256)>,
+
     pub tries: TrieInputs,
     /// Expected trie roots after the transactions are executed.
     pub trie_roots_after: TrieRoots,
@@ -99,6 +98,12 @@ pub struct GenerationInputs {
     /// The hash of the current block, and a list of the 256 previous block
     /// hashes.
     pub block_hashes: BlockHashes,
+
+    /// The the global exit root along with the l1blockhash to write to the GER
+    /// manager.
+    ///
+    /// This is specific to `cdk-erigon`.
+    pub ger_data: Option<(H256, H256)>,
 }
 
 /// A lighter version of [`GenerationInputs`], which have been trimmed

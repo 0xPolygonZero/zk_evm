@@ -22,7 +22,7 @@ use crate::generation::debug_inputs;
 use crate::generation::mpt::{load_linked_lists_and_txn_and_receipt_mpts, TrieRootPtrs};
 use crate::generation::rlp::all_rlp_prover_inputs_reversed;
 use crate::generation::state::{
-    all_ger_prover_inputs_reversed, all_withdrawals_prover_inputs_reversed, GenerationState,
+    all_ger_prover_inputs, all_withdrawals_prover_inputs_reversed, GenerationState,
     GenerationStateCheckpoint,
 };
 use crate::generation::{state::State, GenerationInputs};
@@ -256,7 +256,7 @@ impl<F: Field> Interpreter<F> {
         // Update the RLP and withdrawal prover inputs.
         let rlp_prover_inputs = all_rlp_prover_inputs_reversed(&inputs.signed_txns);
         let withdrawal_prover_inputs = all_withdrawals_prover_inputs_reversed(&inputs.withdrawals);
-        let ger_prover_inputs = all_ger_prover_inputs_reversed(&inputs.global_exit_roots);
+        let ger_prover_inputs = all_ger_prover_inputs(inputs.ger_data);
         self.generation_state.rlp_prover_inputs = rlp_prover_inputs;
         self.generation_state.withdrawal_prover_inputs = withdrawal_prover_inputs;
         self.generation_state.ger_prover_inputs = ger_prover_inputs;

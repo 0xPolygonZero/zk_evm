@@ -2,40 +2,11 @@
 /// Reference implementation: `cdk-erigon/core/state/intra_block_state_zkevm.go`.
 /// This currently supports the Etrog upgrade.
 
-// TODO(Robin): Remove code template
-// func (sdb *IntraBlockState) SyncerPreExecuteStateSet(
-// 	chainConfig *chain.Config,
-// 	blockNumber uint64,
-// 	blockTimestamp uint64,
-// 	prevBlockHash, blockGer, l1BlockHash *libcommon.Hash,
-// 	gerUpdates *[]dstypes.GerUpdate,
-// 	reUsedL1InfoTreeIndex bool,
-// ) {
-
-// 	//ETROG
-// 	if chainConfig.IsForkID7Etrog(blockNumber) {
-// 		currentTimestamp := sdb.ScalableGetTimestamp()
-// 		if blockTimestamp > currentTimestamp {
-// 			sdb.ScalableSetTimestamp(blockTimestamp)
-// 		}
-
-// 		//save prev block hash
-// 		sdb.scalableSetBlockHash(blockNumber-1, prevBlockHash)
-
-// 		//save ger with l1blockhash - but only in the case that the l1 info tree index hasn't been
-// 		// re-used.  If it has been re-used we never write this to the contract storage
-// 		if !reUsedL1InfoTreeIndex && blockGer != nil && *blockGer != emptyHash {
-// 			sdb.WriteGerManagerL1BlockHash(*blockGer, *l1BlockHash)
-// 		}
-// 	}
-// }
-
-
 /// Pre-stack: (empty)
 /// Post-stack: (empty)
 global pre_block_execution:
     // stack: (empty)
-    PUSH start_txn
+    PUSH txn_loop
     // stack: retdest
     PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     %is_non_existent
@@ -61,14 +32,44 @@ global update_scalable_prev_block_root_hash:
     // stack: retdest
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
     // stack: prev_block_root, retdest
-    PUSH 1 %block_number SUB
+    PUSH 1 %blocknumber SUB
     // stack: block_number - 1, prev_block_root, retdest
     %write_scalable_storage
     // stack: retdest
 
-global update_scalable_l1_blockhash:
+global update_scalable_l1blockhash:
     // stack: retdest
-    // TODO(RObin): FINISH
+    PROVER_INPUT(ger)
+    // stack: l1blockhash?, retdest
+    DUP1 %eq_const(@U256_MAX) %jumpi(skip_and_exit)
+    // stack: l1blockhash, retdest
+    PUSH @GLOBAL_EXIT_ROOT_STORAGE_POS
+    PROVER_INPUT(ger)
+    // stack: root, GLOBAL_EXIT_ROOT_STORAGE_POS, l1blockhash, retdest
+    PUSH @SEGMENT_KERNEL_GENERAL
+    // stack: addr, root, GLOBAL_EXIT_ROOT_STORAGE_POS, l1blockhash, retdest
+    MSTORE_32BYTES_32
+    // stack: addr, GLOBAL_EXIT_ROOT_STORAGE_POS, l1blockhash, retdest
+    MSTORE_32BYTES_32
+    // stack: addr, l1blockhash, retdest
+    POP
+    // stack: l1blockhash, retdest
+    PUSH 64 PUSH @SEGMENT_KERNEL_GENERAL
+    // stack: addr, len, l1blockhash, retdest
+    KECCAK_GENERAL
+    // stack: slot, l1blockhash, retdest
+    %slot_to_storage_key
+    // stack: slot, 1blockhash, retdest
+    // stack: storage_key, 1blockhash, retdest
+    PUSH @GLOBAL_EXIT_ROOT_MANAGER_L2_STATE_KEY
+    // stack: state_key, storage_key, 1blockhash, retdest
+    %insert_slot_with_value_from_keys
+    // stack: retdest
+    JUMP
+
+skip_and_exit:
+    // stack: null, retdest
+    POP
     JUMP
 
 global update_scalable_timestamp:
@@ -90,7 +91,7 @@ global create_scalable_l2_account:
     PUSH 0 %append_to_trie_data // storage root pointer
     PUSH @EMPTY_STRING_HASH %append_to_trie_data // code hash
     // stack: new_account_ptr, retdest
-    PUSH @L2ADDRESS_SCALABLE_L2_STATE_KEY
+    PUSH @ADDRESS_SCALABLE_L2_STATE_KEY
     // stack: key, new_account_ptr, retdest
     %jump(mpt_insert_state_trie)
 

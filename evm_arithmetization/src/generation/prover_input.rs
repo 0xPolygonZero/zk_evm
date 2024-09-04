@@ -70,7 +70,7 @@ impl<F: Field> GenerationState<F> {
             "jumpdest_table" => self.run_jumpdest_table(input_fn),
             "access_lists" => self.run_access_lists(input_fn),
             "linked_list" => self.run_linked_list(input_fn),
-            "ger" => self.run_global_exit_roots(),
+            "ger" => self.run_global_exit_root(),
             "kzg_point_eval" => self.run_kzg_point_eval(),
             "kzg_point_eval_2" => self.run_kzg_point_eval_2(),
             _ => Err(ProgramError::ProverInputError(InvalidFunction)),
@@ -372,7 +372,7 @@ impl<F: Field> GenerationState<F> {
         }
     }
 
-    fn run_global_exit_roots(&mut self) -> Result<U256, ProgramError> {
+    fn run_global_exit_root(&mut self) -> Result<U256, ProgramError> {
         self.ger_prover_inputs
             .pop()
             .ok_or(ProgramError::ProverInputError(OutOfGerData))
