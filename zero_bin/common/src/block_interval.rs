@@ -12,10 +12,6 @@ use tracing::info;
 use crate::parsing;
 use crate::provider::CachedProvider;
 
-// Time in milliseconds to poll the node for new blocks.
-// We set it to 12 seconds, default ETH block time.
-const DEFAULT_BLOCK_TIME: u64 = 12000;
-
 pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<(u64, bool), anyhow::Error>>>>;
 
 /// Range of blocks to be processed and proven.
@@ -29,9 +25,6 @@ pub enum BlockInterval {
     FollowFrom {
         // Interval starting block number
         start_block: u64,
-        // Block time specified in milliseconds.
-        // If not set, use the default block time to poll node.
-        block_time: Option<u64>,
     },
 }
 
@@ -85,10 +78,7 @@ impl BlockInterval {
                         .map_err(|_| anyhow!("invalid block number '{num}'"))
                 })
                 .ok_or(anyhow!("invalid block interval range '{s}'"))??;
-            return Ok(BlockInterval::FollowFrom {
-                start_block: num,
-                block_time: None,
-            });
+            return Ok(BlockInterval::FollowFrom { start_block: num });
         }
         // Only single block number is left to try to parse
         else {
@@ -143,16 +133,14 @@ impl BlockInterval {
     pub async fn into_unbounded_stream<ProviderT, TransportT>(
         self,
         cached_provider: Arc<CachedProvider<ProviderT, TransportT>>,
+        block_time: u64,
     ) -> Result<BlockIntervalStream, anyhow::Error>
     where
         ProviderT: Provider<TransportT> + 'static,
         TransportT: Transport + Clone,
     {
         match self {
-            BlockInterval::FollowFrom {
-                start_block,
-                block_time,
-            } => Ok(Box::pin(try_stream! {
+            BlockInterval::FollowFrom { start_block } => Ok(Box::pin(try_stream! {
                 let mut current = start_block;
                  loop {
                     let last_block_number = cached_provider.get_provider().await?.get_block_number().await.map_err(|e: alloy::transports::RpcError<_>| {
@@ -165,7 +153,6 @@ impl BlockInterval {
                     } else {
                        info!("Waiting for the new blocks to be mined, requested block number: {current}, \
                        latest block number: {last_block_number}");
-                        let block_time = block_time.unwrap_or(DEFAULT_BLOCK_TIME);
                         // No need to poll the node too frequently, waiting
                         // a block time interval for a block to be mined should be enough
                        tokio::time::sleep(tokio::time::Duration::from_millis(block_time)).await;
@@ -230,10 +217,7 @@ mod test {
     fn can_create_follow_from_block_interval() {
         assert_eq!(
             BlockInterval::new("100..").unwrap(),
-            BlockInterval::FollowFrom {
-                start_block: 100,
-                block_time: None
-            }
+            BlockInterval::FollowFrom { start_block: 100 }
         );
     }
 

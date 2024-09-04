@@ -21,6 +21,7 @@ pub struct RpcParams {
     pub rpc_type: RpcType,
     pub backoff: u64,
     pub max_retries: u32,
+    pub block_time: u64,
 }
 
 #[derive(Debug)]
@@ -80,7 +81,7 @@ pub(crate) async fn client_main(
     let mut block_interval_stream: BlockIntervalStream = match block_interval {
         block_interval @ BlockInterval::FollowFrom { .. } => {
             block_interval
-                .into_unbounded_stream(cached_provider.clone())
+                .into_unbounded_stream(cached_provider.clone(), rpc_params.block_time)
                 .await?
         }
         _ => block_interval.into_bounded_stream()?,

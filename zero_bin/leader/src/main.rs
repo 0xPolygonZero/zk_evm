@@ -100,15 +100,7 @@ async fn main() -> Result<()> {
         } => {
             let runtime = Runtime::from_config(&args.paladin, register()).await?;
             let previous_proof = get_previous_proof(previous_proof)?;
-            let mut block_interval = BlockInterval::new(&block_interval)?;
-
-            if let BlockInterval::FollowFrom {
-                start_block: _,
-                block_time: ref mut block_time_opt,
-            } = block_interval
-            {
-                *block_time_opt = Some(block_time);
-            }
+            let block_interval = BlockInterval::new(&block_interval)?;
 
             info!("Proving interval {block_interval}");
             client_main(
@@ -118,6 +110,7 @@ async fn main() -> Result<()> {
                     rpc_type,
                     backoff,
                     max_retries,
+                    block_time,
                 },
                 block_interval,
                 LeaderConfig {

@@ -51,7 +51,7 @@ pub(crate) enum Command {
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,
-        /// Network block time in milliseconds. This value is used
+        /// Blockchain network block time in milliseconds. This value is used
         /// to determine the blockchain node polling interval.
         #[arg(short, long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
         block_time: u64,
