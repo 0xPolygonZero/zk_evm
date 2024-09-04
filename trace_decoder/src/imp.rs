@@ -61,32 +61,15 @@ pub fn entrypoint(
         *amt = eth_to_gwei(*amt)
     }
 
-    // TODO(0xaatif): I hate this
-    let batches = match txn_info.is_empty() {
-        true => {
-            let mut batches = middle(
-                state,
-                storage,
-                vec![vec![TxnInfo::default()]],
-                &mut code,
-                b_meta.block_timestamp,
-                b_meta.parent_beacon_block_root,
-                withdrawals,
-            )?;
-            assert_eq!(batches.len(), 1);
-            batches.push(batches[0].clone());
-            batches
-        }
-        false => middle(
-            state,
-            storage,
-            batch(txn_info, batch_size),
-            &mut code,
-            b_meta.block_timestamp,
-            b_meta.parent_beacon_block_root,
-            withdrawals,
-        )?,
-    };
+    let batches = middle(
+        state,
+        storage,
+        batch(txn_info, batch_size),
+        &mut code,
+        b_meta.block_timestamp,
+        b_meta.parent_beacon_block_root,
+        withdrawals,
+    )?;
 
     let mut running_gas_used = 0;
     Ok(batches
@@ -248,7 +231,7 @@ fn test_batch() {
     do_test(3, 3, [1, 2]); // big hint
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Batch<StateTrieT> {
     pub first_txn_ix: usize,
     pub gas_used: u64,
@@ -266,7 +249,7 @@ struct Batch<StateTrieT> {
 
 /// [`evm_arithmetization::generation::TrieInputs`],
 /// generic over state trie representation.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct IntraBlockTries<StateTrieT> {
     pub state: StateTrieT,
     pub storage: BTreeMap<H256, StorageTrie>,
