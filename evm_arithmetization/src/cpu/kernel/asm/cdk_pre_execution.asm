@@ -11,14 +11,6 @@
 // 	gerUpdates *[]dstypes.GerUpdate,
 // 	reUsedL1InfoTreeIndex bool,
 // ) {
-// 	if !sdb.Exist(ADDRESS_SCALABLE_L2) {
-// 		// create account if not exists
-// 		sdb.CreateAccount(ADDRESS_SCALABLE_L2, true)
-// 	}
-
-// 	//save block number
-// 	sdb.scalableSetBlockNum(blockNumber)
-// 	emptyHash := libcommon.Hash{}
 
 // 	//ETROG
 // 	if chainConfig.IsForkID7Etrog(blockNumber) {
@@ -80,6 +72,7 @@ global update_scalable_l1_blockhash:
     JUMP
 
 global update_scalable_timestamp:
+    // stack: retdest
     %timestamp
     PUSH @TIMESTAMP_STORAGE_POS
     // stack: timestamp_slot, timestamp, retdest
