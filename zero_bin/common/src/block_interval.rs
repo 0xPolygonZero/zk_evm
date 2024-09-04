@@ -12,7 +12,7 @@ use tracing::info;
 use crate::parsing;
 use crate::provider::CachedProvider;
 
-/// Async stream of block numbers.
+/// The async stream of block numbers.
 /// The second bool flag indicates if the element is last in the interval.
 pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<(u64, bool), anyhow::Error>>>>;
 

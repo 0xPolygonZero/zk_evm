@@ -212,7 +212,6 @@ jobs:
       - name: Run the script
         run: |
           pushd zero_bin/tools
-          mkdir -p proofs
           ./prove_stdio.sh artifacts/witness_b3_b6.json
 
   lints:
