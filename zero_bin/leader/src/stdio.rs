@@ -10,14 +10,12 @@ use tracing::info;
 
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(
-    runtime: Runtime,
+    runtime: Arc<Runtime>,
     previous: Option<GeneratedBlockProof>,
     prover_config: Arc<ProverConfig>,
 ) -> Result<()> {
     let mut buffer = String::new();
     std::io::stdin().read_to_string(&mut buffer)?;
-
-    let runtime = Arc::new(runtime);
 
     let des = &mut serde_json::Deserializer::from_str(&buffer);
     let block_prover_inputs = serde_path_to_error::deserialize::<_, Vec<BlockProverInput>>(des)?

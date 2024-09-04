@@ -12,7 +12,7 @@ use tracing::{debug, error, info};
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(
-    runtime: Runtime,
+    runtime: Arc<Runtime>,
     port: u16,
     output_dir: PathBuf,
     prover_config: Arc<ProverConfig>,
@@ -20,7 +20,6 @@ pub(crate) async fn http_main(
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     debug!("listening on {}", addr);
 
-    let runtime = Arc::new(runtime);
     let app = Router::new().route(
         "/prove",
         post({
