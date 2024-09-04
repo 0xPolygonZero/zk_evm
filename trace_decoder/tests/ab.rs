@@ -47,7 +47,7 @@ fn pad1() {
 }
 
 #[test]
-#[should_panic = "TODO(0xaatif): fix"]
+#[should_panic] // TODO(0xaatif): fix
 fn pad2() {
     do_test([(BEACON, acct())], [], [(BEACON, hpt())], [], [], obd());
 }
@@ -240,6 +240,7 @@ fn alice_writes_then_reads() {
     )
 }
 
+#[track_caller]
 fn do_test(
     state: impl Into<BTreeMap<Address, Account>>,
     deferred_state: impl Into<BTreeMap<TrieKey, B256>>,

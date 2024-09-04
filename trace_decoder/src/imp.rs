@@ -372,6 +372,15 @@ fn middle<StateTrieT: StateTrie + Clone>(
                     } // if txn failed, don't commit changes to trie
                 };
 
+                let trim_storage = storage_masks.entry(addr).or_default();
+
+                trim_storage.extend(
+                    storage_written
+                        .keys()
+                        .chain(&storage_read)
+                        .map(|it| TrieKey::from_hash(keccak_hash::keccak(it))),
+                );
+
                 if commit {
                     acct.balance = balance.unwrap_or(acct.balance);
                     acct.nonce = nonce.unwrap_or(acct.nonce);
@@ -391,18 +400,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
                         .transpose()?
                         .unwrap_or(acct.code_hash);
 
-                    let trim_storage = storage_masks.entry(addr).or_default();
-
-                    trim_storage.extend(
-                        storage_written
-                            .keys()
-                            .chain(&storage_read)
-                            .map(|it| TrieKey::from_hash(keccak_hash::keccak(it))),
-                    );
-
-                    let storage_trie_change = !storage_written.is_empty();
-
-                    if storage_trie_change {
+                    if !storage_written.is_empty() {
                         let storage = match born {
                             true => storage.entry(keccak_hash::keccak(addr)).or_default(),
                             false => storage
