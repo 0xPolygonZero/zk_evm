@@ -44,9 +44,14 @@ jobs:
           RUST_BACKTRACE: 1
 
   test_trace_decoder:
-    name: Test trace_decoder
+    name: test trace_decoder
     runs-on: zero-ci
     timeout-minutes: 30
+    env:
+      RUST_LOG: info
+      CARGO_INCREMENTAL: 1
+      RUST_BACKTRACE: 1
+
     if: "! contains(toJSON(github.event.commits.*.message), '[skip-ci]')"
     steps:
       - name: Checkout sources
@@ -60,12 +65,11 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Test in trace_decoder subdirectory
+      - name: build # build separately so test logs are actually nice
+        run: cargo build --tests --manifest-path trace_decoder/Cargo.toml
+
+      - name: test
         run: cargo test --release --manifest-path trace_decoder/Cargo.toml -- --nocapture
-        env:
-          RUST_LOG: info
-          CARGO_INCREMENTAL: 1
-          RUST_BACKTRACE: 1
 
   test_proof_gen:
     name: Test proof_gen
@@ -132,7 +136,7 @@ jobs:
       - name: Set up rust cache
         uses: Swatinem/rust-cache@v2
         with:
-            cache-on-failure: true
+          cache-on-failure: true
 
       - name: Test in zero_bin subdirectory
         run: |
