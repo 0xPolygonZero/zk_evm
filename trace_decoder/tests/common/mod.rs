@@ -2,10 +2,13 @@ use std::collections::BTreeMap;
 
 use alloy::{
     consensus::{Account, Eip658Value, Receipt, ReceiptWithBloom},
-    primitives::{Address, Bloom, FixedBytes, Log},
+    primitives::{Address, Bloom, FixedBytes, Log, B256},
 };
 use alloy_compat::Compat as _;
 use evm_arithmetization::proof::{BlockHashes, BlockMetadata};
+pub use keccak_hash::keccak as k;
+use keccak_hash::H256;
+use key::TrieKey;
 use mpt_trie::partial_trie::{HashedPartialTrie, PartialTrie as _};
 use trace_decoder::{BlockLevelData, OtherBlockData, TxnInfo, TxnMeta, TxnTrace};
 
@@ -65,6 +68,38 @@ pub fn acct() -> Account {
     }
 }
 
+pub fn stg(
+    full: impl IntoIterator<Item = (H256, Vec<u8>)>,
+    deferred: impl IntoIterator<Item = (TrieKey, B256)>,
+) -> HashedPartialTrie {
+    let mut hpt = hpt();
+    for (k, v) in full {
+        hpt.insert(TrieKey::from_hash(k).into_nibbles(), v).unwrap()
+    }
+    for (k, h) in deferred {
+        hpt.insert(k.into_nibbles(), h.compat()).unwrap()
+    }
+    hpt
+}
+
+pub fn pos(addr: Address, slot_ix: u64) -> H256 {
+    let address_left_padded = alloy::primitives::B256::left_padding_from(&**addr);
+    let slot_ix_left_padded = alloy::primitives::U256::from(slot_ix).to_be_bytes::<32>();
+    let concat = {
+        let mut storage = [0; 64];
+        for (ix, byte) in address_left_padded
+            .0
+            .into_iter()
+            .chain(slot_ix_left_padded)
+            .enumerate()
+        {
+            storage[ix] = byte
+        }
+        storage
+    };
+    k(concat)
+}
+
 /// Store the address next to the hash for reference when e.g debugging tries
 macro_rules! characters {
     ($($name:ident = $addr:literal ($hash:literal);)*) => {
@@ -93,11 +128,13 @@ characters! {
     BEACON  = "000f3df6d732807ef1319fb7b8bb8522d0beac02" ("37d65eaa92c6bc4c13a5ec45527f0c18ea8932588728769ec7aecfe6d9f32e42");
 }
 
+#[allow(unused)]
 pub mod key {
     use copyvec::CopyVec;
-    use u4::U4;
+    use keccak_hash::H256;
+    use u4::{AsNibbles, U4};
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct TrieKey(CopyVec<U4, 64>);
+    pub struct TrieKey(pub CopyVec<U4, 64>);
 
     impl TrieKey {
         pub const fn new() -> Self {
@@ -110,6 +147,13 @@ pub mod key {
                 theirs.push_nibble_back(nibble as _)
             }
             theirs
+        }
+        pub(super) fn from_hash(h: H256) -> Self {
+            let mut v = CopyVec::new();
+            for u4 in AsNibbles(h.0) {
+                v.push(u4)
+            }
+            Self(v)
         }
     }
 
@@ -125,18 +169,17 @@ pub mod key {
         }
     }
 
-    const fn assert_trie_key(s: &str) {
-        let is_hex = alloy::hex::const_check_raw(s.as_bytes());
-        assert!(is_hex, "string must be hex characters only");
-        assert!(s.len() <= 64, "too many characters in string");
-    }
-
     macro_rules! key {
         () => {
             TrieKey::new()
         };
         ($lit:literal) => {{
-            const { assert_trie_key($lit) };
+            const {
+                let s = $lit;
+                let is_hex = alloy::hex::const_check_raw(s.as_bytes());
+                assert!(is_hex, "string must be hex characters only");
+                assert!(s.len() <= 64, "too many characters in string");
+            };
             $lit.parse::<TrieKey>().unwrap()
         }};
     }
