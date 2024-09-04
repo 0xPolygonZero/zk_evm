@@ -1,3 +1,5 @@
+#![cfg(not(feature = "cdk_erigon"))]
+
 use ethereum_types::{Address, BigEndianHash, H256};
 use evm_arithmetization::fixed_recursive_verifier::{
     extract_block_final_public_values, extract_two_to_one_block_hash,
