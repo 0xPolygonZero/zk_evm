@@ -13,7 +13,7 @@ use crate::parsing;
 use crate::provider::CachedProvider;
 
 /// Async stream of block numbers.
-/// The second bool flag indicates if the element in last in the interval.
+/// The second bool flag indicates if the element is last in the interval.
 pub type BlockIntervalStream = Pin<Box<dyn Stream<Item = Result<(u64, bool), anyhow::Error>>>>;
 
 /// Range of blocks to be processed and proven.
@@ -93,7 +93,7 @@ impl BlockInterval {
     }
 
     /// Convert the block interval into an async stream of block numbers. The
-    /// second bool flag indicates if the element in last in the interval.
+    /// second bool flag indicates if the element is last in the interval.
     pub fn into_bounded_stream(self) -> Result<BlockIntervalStream, anyhow::Error> {
         match self {
             BlockInterval::SingleBlockId(BlockId::Number(num)) => {
