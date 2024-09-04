@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{env, io};
 use std::{fs::File, path::PathBuf};
 
@@ -16,7 +17,7 @@ use zero_bin_common::{
 };
 use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
 
-use crate::client::{client_main, ProofParams};
+use crate::client::{client_main, LeaderConfig};
 
 mod cli;
 mod client;
@@ -54,9 +55,7 @@ async fn main() -> Result<()> {
     }
 
     let args = cli::Cli::parse();
-
-    let runtime = Runtime::from_config(&args.paladin, register()).await?;
-
+    let runtime = Arc::new(Runtime::from_config(&args.paladin, register()).await?);
     let prover_config: ProverConfig = args.prover_config.into();
 
     // If not in test_only mode and running in emulation mode, we'll need to
@@ -73,7 +72,7 @@ async fn main() -> Result<()> {
         Command::Clean => zero_bin_common::prover_state::persistence::delete_all()?,
         Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(runtime, previous_proof, prover_config).await?;
+            stdio::stdio_main(runtime, previous_proof, Arc::new(prover_config)).await?;
         }
         Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
@@ -85,7 +84,7 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(runtime, port, output_dir, prover_config).await?;
+            http::http_main(runtime, port, output_dir, Arc::new(prover_config)).await?;
         }
         Command::Rpc {
             rpc_url,
@@ -93,23 +92,12 @@ async fn main() -> Result<()> {
             block_interval,
             checkpoint_block_number,
             previous_proof,
-            proof_output_dir,
             block_time,
-            keep_intermediate_proofs,
             backoff,
             max_retries,
         } => {
-            let runtime = Runtime::from_config(&args.paladin, register()).await?;
             let previous_proof = get_previous_proof(previous_proof)?;
-            let mut block_interval = BlockInterval::new(&block_interval)?;
-
-            if let BlockInterval::FollowFrom {
-                start_block: _,
-                block_time: ref mut block_time_opt,
-            } = block_interval
-            {
-                *block_time_opt = Some(block_time);
-            }
+            let block_interval = BlockInterval::new(&block_interval)?;
 
             info!("Proving interval {block_interval}");
             client_main(
@@ -119,14 +107,13 @@ async fn main() -> Result<()> {
                     rpc_type,
                     backoff,
                     max_retries,
+                    block_time,
                 },
                 block_interval,
-                ProofParams {
+                LeaderConfig {
                     checkpoint_block_number,
                     previous_proof,
-                    proof_output_dir,
                     prover_config,
-                    keep_intermediate_proofs,
                 },
             )
             .await?;

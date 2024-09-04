@@ -19,10 +19,13 @@ fi
 
 # Force the working directory to always be the `tools/` directory. 
 TOOLS_DIR=$(dirname $(realpath "$0"))
+PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
 
-LEADER_OUT_PATH="${TOOLS_DIR}/leader.out"
-PROOFS_JSON_PATH="${TOOLS_DIR}/proofs.json"
-VERIFY_OUT_PATH="${TOOLS_DIR}/verify.out"
+BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
+echo "Block batch size: $BLOCK_BATCH_SIZE"
+
+OUTPUT_LOG="${TOOLS_DIR}/output.log"
+PROOFS_FILE_LIST="${PROOF_OUTPUT_DIR}/proof_files.json"
 TEST_OUT_PATH="${TOOLS_DIR}/test.out"
 
 # Configured Rayon and Tokio with rough defaults
@@ -88,7 +91,7 @@ fi
 # proof. This is useful for quickly testing decoding and all of the
 # other non-proving code.
 if [[ $TEST_ONLY == "test_only" ]]; then
-    cargo run --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE &> $TEST_OUT_PATH
+    cargo run --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $TEST_OUT_PATH
     if grep -q 'All proof witnesses have been generated successfully.' $TEST_OUT_PATH; then
         echo -e "\n\nSuccess - Note this was just a test, not a proof"
         rm $TEST_OUT_PATH
@@ -101,24 +104,44 @@ fi
 
 cargo build --release --jobs "$num_procs"
 
+
 start_time=$(date +%s%N)
-"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand stdio < $INPUT_FILE &> $LEADER_OUT_PATH
+"${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
+ --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $OUTPUT_LOG
 end_time=$(date +%s%N)
 
-tail -n 1 $LEADER_OUT_PATH > $PROOFS_JSON_PATH
-
-"${TOOLS_DIR}/../../target/release/verifier" -f $PROOFS_JSON_PATH | tee $VERIFY_OUT_PATH
-
-if grep -q 'All proofs verified successfully!' $VERIFY_OUT_PATH; then
-    duration_ns=$((end_time - start_time))
-    duration_sec=$(echo "$duration_ns / 1000000000" | bc -l)
-    echo "Success!"
-    echo "Duration:" $duration_sec " seconds"
-    echo "Note, this duration is inclusive of circuit handling and overall process initialization";
-    rm $LEADER_OUT_PATH $VERIFY_OUT_PATH # we keep the generated proof for potential reuse
-else
-    echo "there was an issue with proof verification";
-    exit 1
+set +o pipefail
+cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
+if [ ! -s "$PROOFS_FILE_LIST" ]; then
+  echo "Proof list not generated, some error happened. For more details check the log file $OUTPUT_LOG"
+  exit 1
 fi
+
+cat $PROOFS_FILE_LIST | while read proof_file;
+do
+  echo "Verifying proof file $proof_file"
+  verify_file=$PROOF_OUTPUT_DIR/verify_$(basename $proof_file).out
+  "${TOOLS_DIR}/../../target/release/verifier" -f $proof_file | tee $verify_file
+  if grep -q 'All proofs verified successfully!' $verify_file; then
+      echo "Proof verification for file $proof_file successful";
+      rm $verify_file # we keep the generated proof for potential reuse
+  else
+      echo "there was an issue with proof verification";
+      exit 1
+  fi
+done
+
+duration_ns=$((end_time - start_time))
+duration_sec=$(echo "$duration_ns / 1000000000" | bc -l)
+
+echo "Success!"
+echo "Proving duration:" $duration_sec " seconds"
+echo "Note, this duration is inclusive of circuit handling and overall process initialization";
+
+# Clean up in case of success
+rm $OUTPUT_LOG
+
+
+
 
 

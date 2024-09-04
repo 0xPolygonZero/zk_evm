@@ -1,6 +1,7 @@
 use std::{collections::HashSet, str::FromStr};
 
 use ethereum_types::U256;
+use itertools::Itertools;
 use pest::iterators::Pair;
 use pest::Parser;
 
@@ -61,13 +62,78 @@ fn parse_item(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
     }
 }
 
+enum FeatureGroupRule {
+    /// Ignore code if any of the listed features is active.
+    Not,
+    /// Include code if any of the listed features is active.
+    Any,
+    /// Include code if all the listed features are active.
+    All,
+}
+
+impl FeatureGroupRule {
+    fn from_rule(string: &str) -> Self {
+        if string.starts_with("not") {
+            return Self::Not;
+        }
+        if string.starts_with("all") {
+            return Self::All;
+        }
+
+        Self::Any
+    }
+}
+
 fn parse_conditional_block(item: Pair<Rule>, active_features: &HashSet<&str>) -> Item {
+    /// Outputs true if any of the listed features is in the active set.
+    fn is_supported(
+        active_features: &HashSet<&str>,
+        features_string: &str,
+        group_rule: FeatureGroupRule,
+    ) -> bool {
+        let features = features_string.split(",");
+
+        match group_rule {
+            FeatureGroupRule::Not => {
+                for feature in features {
+                    if active_features.contains(feature) {
+                        return false;
+                    }
+                }
+                true
+            }
+            FeatureGroupRule::Any => {
+                for feature in features {
+                    if active_features.contains(feature) {
+                        return true;
+                    }
+                }
+                false
+            }
+            FeatureGroupRule::All => {
+                for feature in features {
+                    if !active_features.contains(feature) {
+                        return false;
+                    }
+                }
+                true
+            }
+        }
+    }
+
     assert_eq!(item.as_rule(), Rule::conditional_block);
     let mut inner = item.into_inner().peekable();
 
-    let name = inner.next().unwrap().as_str();
+    let mut name = inner.next().unwrap().as_str();
+    let group_rule = FeatureGroupRule::from_rule(name);
+    if name.contains(")") {
+        // Remove last `)` char
+        name = &name[..name.len() - 1];
+    }
+    let features = name.split(" = ").collect_vec()[1];
+    let feature_supported = is_supported(active_features, features, group_rule);
 
-    if active_features.contains(&name) {
+    if feature_supported {
         Item::ConditionalBlock(
             name.into(),
             inner.map(|i| parse_item(i, active_features)).collect(),
@@ -247,13 +313,20 @@ mod tests {
     fn test_feature() {
         let code = r#"
         %macro bar_foo
-            #[cfg(feature = feature_1)]
+            // requires any of the two features, using the default format
+            #[cfg(feature = feature_1,feature_2)]
             {
                 %bar
+            }
+            // requires any of the two features, using the `any` identifier
+            #[cfg(any(feature = feature_1,feature_2))]
+            {
                 PUSH 3
                 ADD
             }
         %endmacro
+
+        // requires `feature_1`
         #[cfg(feature = feature_1)]
         {
             %macro bar
@@ -266,6 +339,7 @@ mod tests {
             PUSH 1
             PUSH 2
 
+            // requires `feature_1`
             #[cfg(feature = feature_1)]
             {
                 %bar_foo
@@ -280,12 +354,29 @@ mod tests {
             PUSH 6
             DIV
 
+        // requires `feature_2`
         #[cfg(feature = feature_2)]
         {
             global foo_4:
-            PUSH 7
-            PUSH 8
+                PUSH 7
+                // requires to not have `feature_1`
+                #[cfg(not(feature = feature_1))]
+                {
+                    DUP1
+                }
+                #[cfg(feature = feature_1)]
+                {
+                    PUSH 8
+                }
             MOD
+        }
+
+        // requires all features
+        #[cfg(all(feature = feature_1,feature_2))]
+        {
+            global foo_5:
+                PUSH 1
+                POP
         }
         "#;
 
@@ -296,17 +387,21 @@ mod tests {
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
+        %macro bar_foo
+            %bar
+            PUSH 3
+            ADD
+        %endmacro
+    
         %macro bar
             PUSH 2
             MUL
-            PUSH 3
-            ADD
         %endmacro
 
         global foo_1:
             PUSH 1
             PUSH 2
-            %bar
+            %bar_foo
             PUSH 1
             PUSH 3
             PUSH 4
@@ -330,6 +425,11 @@ mod tests {
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
+        %macro bar_foo
+            PUSH 3
+            ADD
+        %endmacro
+    
         global foo_1:
             PUSH 1
             PUSH 2
@@ -344,7 +444,7 @@ mod tests {
 
         global foo_4:
             PUSH 7
-            PUSH 8
+            DUP1
             MOD
         "#;
 
@@ -360,17 +460,21 @@ mod tests {
         let final_code = assemble(vec![parsed_code], HashMap::new(), false);
 
         let expected_code = r#"
+        %macro bar_foo
+            %bar
+            PUSH 3
+            ADD
+        %endmacro
+    
         %macro bar
             PUSH 2
             MUL
-            PUSH 3
-            ADD
         %endmacro
 
         global foo_1:
             PUSH 1
             PUSH 2
-            %bar
+            %bar_foo
             PUSH 1
             PUSH 3
             PUSH 4
@@ -385,6 +489,10 @@ mod tests {
             PUSH 7
             PUSH 8
             MOD
+        
+        global foo_5:
+            PUSH 1
+            POP
         "#;
 
         let parsed_expected = parse(expected_code, &HashSet::new());

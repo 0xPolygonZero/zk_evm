@@ -300,15 +300,6 @@ after_read:
 
 sload_with_addr:
     %read_storage_linked_list_w_addr
-    // stack: value_ptr, retdest
-    DUP1 %jumpi(storage_key_exists)
-    // Storage key not found. Return default value_ptr = 0,
-    // which derefs to 0 since @SEGMENT_TRIE_DATA[0] = 0.
-    %stack (value, retdest) -> (retdest, 0)
-    
-    JUMP
-
-global storage_key_exists:
     // stack: value, retdest
     SWAP1
     JUMP

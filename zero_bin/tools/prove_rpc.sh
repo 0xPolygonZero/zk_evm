@@ -17,6 +17,9 @@ export RUST_LOG=info
 # See also .cargo/config.toml.
 export RUSTFLAGS='-C target-cpu=native -Zlinker-features=-lld'
 
+BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
+echo "Block batch size: $BLOCK_BATCH_SIZE"
+
 # Circuit sizes only matter in non test_only mode.
 if ! [[ $8 == "test_only" ]]; then
     export ARITHMETIC_CIRCUIT_SIZE="16..21"
@@ -76,10 +79,15 @@ if [[ $END_BLOCK == 0x* ]]; then
 fi
 
 # Define block interval
-if [ $START_BLOCK == $END_BLOCK ]; then
-    BLOCK_INTERVAL=$START_BLOCK
+if [ $END_BLOCK == '-' ]; then
+  # Follow from the start block to the end of the chain
+  BLOCK_INTERVAL=$START_BLOCK..
+elif [ $START_BLOCK == $END_BLOCK ]; then
+  # Single block
+  BLOCK_INTERVAL=$START_BLOCK
 else
-    BLOCK_INTERVAL=$START_BLOCK..=$END_BLOCK
+  # Block range
+  BLOCK_INTERVAL=$START_BLOCK..=$END_BLOCK
 fi
 
 # Print out a warning if the we're using `native` and our file descriptor limit is too low. Don't bother if we can't find `ulimit`.
@@ -102,7 +110,7 @@ fi
 if [[ $8 == "test_only" ]]; then
     # test only run
     echo "Proving blocks ${BLOCK_INTERVAL} in a test_only mode now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    command='cargo r --release --bin leader -- --test-only --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$NODE_RPC_URL" --block-interval $BLOCK_INTERVAL  $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
         retVal=$?
@@ -125,7 +133,7 @@ if [[ $8 == "test_only" ]]; then
 else
     # normal run
     echo "Proving blocks ${BLOCK_INTERVAL} now... (Total: ${TOT_BLOCKS})"
-    command='cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL --proof-output-dir $PROOF_OUTPUT_DIR $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
+    command='cargo r --release --bin leader -- --runtime in-memory --load-strategy on-demand --proof-output-dir $PROOF_OUTPUT_DIR --block-batch-size $BLOCK_BATCH_SIZE rpc --rpc-type "$NODE_RPC_TYPE" --rpc-url "$3" --block-interval $BLOCK_INTERVAL $PREV_PROOF_EXTRA_ARG --backoff "$BACKOFF" --max-retries "$RETRIES" '
     if [ "$OUTPUT_TO_TERMINAL" = true ]; then
         eval $command
         echo -e "Proof generation finished with result: $?"
@@ -149,14 +157,15 @@ fi
 
 # If we're running the verification, we'll do it here.
 if [ "$RUN_VERIFICATION" = true ]; then
-  echo "Running the verification"
+  echo "Running the verification for the last proof..."
 
   proof_file_name=$PROOF_OUTPUT_DIR/b$END_BLOCK.zkproof
   echo "Verifying the proof of the latest block in the interval:" $proof_file_name
   cargo r --release --bin verifier -- -f $proof_file_name > $PROOF_OUTPUT_DIR/verify.out 2>&1
 
   if grep -q 'All proofs verified successfully!' $PROOF_OUTPUT_DIR/verify.out; then
-      echo "All proofs verified successfully!";
+      echo "$proof_file_name verified successfully!";
+      rm  $PROOF_OUTPUT_DIR/verify.out
   else
       echo "there was an issue with proof verification";
       exit 1

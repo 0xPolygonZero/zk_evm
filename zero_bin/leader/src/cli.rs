@@ -51,23 +51,10 @@ pub(crate) enum Command {
         /// The previous proof output.
         #[arg(long, short = 'f', value_hint = ValueHint::FilePath)]
         previous_proof: Option<PathBuf>,
-        /// If provided, write the generated proofs to this directory instead of
-        /// stdout.
-        #[arg(long, short = 'o', value_hint = ValueHint::FilePath)]
-        proof_output_dir: Option<PathBuf>,
-        /// Network block time in milliseconds. This value is used
+        /// Blockchain network block time in milliseconds. This value is used
         /// to determine the blockchain node polling interval.
         #[arg(short, long, env = "ZERO_BIN_BLOCK_TIME", default_value_t = 2000)]
         block_time: u64,
-        /// Keep intermediate proofs. Default action is to
-        /// delete them after the final proof is generated.
-        #[arg(
-            short,
-            long,
-            env = "ZERO_BIN_KEEP_INTERMEDIATE_PROOFS",
-            default_value_t = false
-        )]
-        keep_intermediate_proofs: bool,
         /// Backoff in milliseconds for retry requests
         #[arg(long, default_value_t = 0)]
         backoff: u64,

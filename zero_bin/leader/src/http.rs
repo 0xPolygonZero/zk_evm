@@ -12,15 +12,14 @@ use tracing::{debug, error, info};
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(
-    runtime: Runtime,
+    runtime: Arc<Runtime>,
     port: u16,
     output_dir: PathBuf,
-    prover_config: ProverConfig,
+    prover_config: Arc<ProverConfig>,
 ) -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     debug!("listening on {}", addr);
 
-    let runtime = Arc::new(runtime);
     let app = Router::new().route(
         "/prove",
         post({
@@ -65,7 +64,7 @@ async fn prove(
     Json(payload): Json<HttpProverInput>,
     runtime: Arc<Runtime>,
     output_dir: PathBuf,
-    prover_config: ProverConfig,
+    prover_config: Arc<ProverConfig>,
 ) -> StatusCode {
     debug!("Received payload: {:#?}", payload);
 
@@ -75,7 +74,7 @@ async fn prove(
         payload
             .prover_input
             .prove_test(
-                &runtime,
+                runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
@@ -84,7 +83,7 @@ async fn prove(
         payload
             .prover_input
             .prove(
-                &runtime,
+                runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
