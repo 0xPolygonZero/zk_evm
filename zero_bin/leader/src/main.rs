@@ -56,10 +56,9 @@ async fn main() -> Result<()> {
 
     let args = cli::Cli::parse();
 
-    match args.command {
-        Command::Clean => return zero_bin_common::prover_state::persistence::delete_all(),
-        _ => (),
-    };
+    if let Command::Clean = args.command {
+        return zero_bin_common::prover_state::persistence::delete_all();
+    }
 
     let runtime = Arc::new(Runtime::from_config(&args.paladin, register()).await?);
     let prover_config: ProverConfig = args.prover_config.into();
