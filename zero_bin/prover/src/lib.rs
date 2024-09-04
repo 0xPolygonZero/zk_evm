@@ -302,6 +302,7 @@ pub async fn prove(
 async fn write_proof_to_dir(output_dir: &Path, proof: GeneratedBlockProof) -> Result<()> {
     // Check if output directory exists, and create one if it doesn't.
     if !output_dir.exists() {
+        info!("Created output directory {:?}", output_dir.display());
         std::fs::create_dir(output_dir)?;
     }
 

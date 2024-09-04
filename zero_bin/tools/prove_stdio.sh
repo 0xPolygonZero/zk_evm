@@ -24,6 +24,7 @@ PROOF_OUTPUT_DIR="${TOOLS_DIR}/proofs"
 BLOCK_BATCH_SIZE="${BLOCK_BATCH_SIZE:-8}"
 echo "Block batch size: $BLOCK_BATCH_SIZE"
 
+OUTPUT_LOG="${TOOLS_DIR}/output.log"
 PROOFS_FILE_LIST="${PROOF_OUTPUT_DIR}/proof_files.json"
 TEST_OUT_PATH="${TOOLS_DIR}/test.out"
 
@@ -103,10 +104,18 @@ fi
 
 cargo build --release --jobs "$num_procs"
 
+
 start_time=$(date +%s%N)
 "${TOOLS_DIR}/../../target/release/leader" --runtime in-memory --load-strategy on-demand --block-batch-size $BLOCK_BATCH_SIZE \
- --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
+ --proof-output-dir $PROOF_OUTPUT_DIR stdio < $INPUT_FILE &> $OUTPUT_LOG
 end_time=$(date +%s%N)
+
+set +o pipefail
+cat $OUTPUT_LOG | grep "Successfully wrote to disk proof file " | awk '{print $NF}' | tee $PROOFS_FILE_LIST
+if [ ! -s "$PROOFS_FILE_LIST" ]; then
+  echo "Proof list not generated, some error happened. For more details check the log file $OUTPUT_LOG"
+  exit 1
+fi
 
 cat $PROOFS_FILE_LIST | while read proof_file;
 do
