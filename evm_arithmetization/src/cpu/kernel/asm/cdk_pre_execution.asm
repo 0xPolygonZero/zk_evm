@@ -32,8 +32,21 @@ global update_scalable_prev_block_root_hash:
     // stack: retdest
     %mload_global_metadata(@GLOBAL_METADATA_STATE_TRIE_DIGEST_BEFORE)
     // stack: prev_block_root, retdest
+    PUSH @STATE_ROOT_STORAGE_POS
     PUSH 1 %blocknumber SUB
-    // stack: block_number - 1, prev_block_root, retdest
+    // stack: block_number - 1, STATE_ROOT_STORAGE_POS, prev_block_root, retdest
+    PUSH @SEGMENT_KERNEL_GENERAL
+    // stack: addr, block_number - 1, STATE_ROOT_STORAGE_POS, prev_block_root, retdest
+    MSTORE_32BYTES_32
+    // stack: addr, STATE_ROOT_STORAGE_POS, prev_block_root, retdest
+    MSTORE_32BYTES_32
+    // stack: addr, prev_block_root, retdest
+    POP
+    // stack: prev_block_root, retdest
+    PUSH 64 PUSH @SEGMENT_KERNEL_GENERAL
+    // stack: addr, len, prev_block_root, retdest
+    KECCAK_GENERAL
+    // stack: slot, prev_block_root, retdest
     %write_scalable_storage
     // stack: retdest
 
