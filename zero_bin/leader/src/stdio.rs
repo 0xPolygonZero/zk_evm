@@ -8,9 +8,6 @@ use prover::{BlockProverInput, ProverConfig};
 use tokio::sync::mpsc;
 use tracing::info;
 
-// Use some arbitrary number for the channel size, adjust if needed.
-const BLOCK_CHANNEL_SIZE: usize = 16;
-
 /// The main function for the stdio mode.
 pub(crate) async fn stdio_main(
     runtime: Runtime,
@@ -27,7 +24,8 @@ pub(crate) async fn stdio_main(
         .into_iter()
         .collect::<Vec<_>>();
 
-    let (block_tx, block_rx) = mpsc::channel::<(BlockProverInput, bool)>(BLOCK_CHANNEL_SIZE);
+    let (block_tx, block_rx) =
+        mpsc::channel::<(BlockProverInput, bool)>(zero_bin_common::BLOCK_CHANNEL_SIZE);
 
     let runtime_ = runtime.clone();
     let prover_config_ = prover_config.clone();

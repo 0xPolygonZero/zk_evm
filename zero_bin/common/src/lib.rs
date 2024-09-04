@@ -6,3 +6,9 @@ pub mod pre_checks;
 pub mod prover_state;
 pub mod provider;
 pub mod version;
+
+/// Size of the channel used to send block prover inputs to the per block
+/// proving task. If the proving task is slow and can not consume inputs fast
+/// enough retrieval of the block prover inputs will block until the proving
+/// task consumes some of the inputs.
+pub const BLOCK_CHANNEL_SIZE: usize = 16;

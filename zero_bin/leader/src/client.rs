@@ -12,9 +12,6 @@ use tracing::info;
 use zero_bin_common::block_interval::{BlockInterval, BlockIntervalStream};
 use zero_bin_common::pre_checks::check_previous_proof_and_checkpoint;
 
-// Use some arbitrary number for the channel size, adjust if needed.
-const BLOCK_CHANNEL_SIZE: usize = 16;
-
 #[derive(Debug)]
 pub struct RpcParams {
     pub rpc_url: Url,
@@ -65,7 +62,8 @@ pub(crate) async fn client_main(
     // Create a channel for block prover input and use it to send prover input to
     // the proving task. The second element of the tuple is a flag indicating
     // whether the block is the last one in the interval.
-    let (block_tx, block_rx) = mpsc::channel::<(BlockProverInput, bool)>(BLOCK_CHANNEL_SIZE);
+    let (block_tx, block_rx) =
+        mpsc::channel::<(BlockProverInput, bool)>(zero_bin_common::BLOCK_CHANNEL_SIZE);
     let test_only = leader_config.prover_config.test_only;
 
     // Run proving task
