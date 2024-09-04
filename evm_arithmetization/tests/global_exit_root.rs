@@ -12,8 +12,7 @@ use evm_arithmetization::testing_utils::{
     ger_contract_from_storage, init_logger, preinitialized_state_and_storage_tries,
     scalable_account_nibbles, scalable_contract_from_storage, update_beacon_roots_account_storage,
     update_ger_account_storage, update_scalable_account_storage,
-    ADDRESS_SCALABLE_L2_ADDRESS_HASHED, BEACON_ROOTS_ACCOUNT, GLOBAL_EXIT_ROOT_ACCOUNT,
-    GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
+    ADDRESS_SCALABLE_L2_ADDRESS_HASHED, GLOBAL_EXIT_ROOT_ACCOUNT, GLOBAL_EXIT_ROOT_ADDRESS_HASHED,
 };
 use evm_arithmetization::verifier::testing::verify_all_proofs;
 use evm_arithmetization::{AllStark, Node, StarkConfig};
