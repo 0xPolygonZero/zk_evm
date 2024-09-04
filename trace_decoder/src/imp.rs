@@ -186,7 +186,7 @@ fn start(
 /// Break `txns` into batches of length `hint`, prioritising creating at least
 /// two batches.
 fn batch(mut txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<TxnInfo>> {
-    let hint = cmp::min(hint, 1);
+    let hint = cmp::max(hint, 1);
     let n_batches = txns.iter().chunks(hint).into_iter().count();
     match (txns.len(), n_batches) {
         // enough
@@ -208,6 +208,27 @@ fn batch(mut txns: Vec<TxnInfo>, hint: usize) -> Vec<Vec<TxnInfo>> {
             .map(|it| vec![it])
             .collect(),
     }
+}
+
+#[test]
+fn test_batch() {
+    #[track_caller]
+    fn do_test(n: usize, hint: usize, exp: impl IntoIterator<Item = usize>) {
+        itertools::assert_equal(
+            exp,
+            batch(vec![TxnInfo::default(); n], hint)
+                .iter()
+                .map(Vec::len),
+        )
+    }
+
+    do_test(0, 0, [1, 1]); // pad2
+    do_test(1, 0, [1, 1]); // pad1
+    do_test(2, 0, [1, 1]); // exact
+    do_test(3, 0, [1, 1, 1]);
+    do_test(3, 1, [1, 1, 1]);
+    do_test(3, 2, [2, 1]); // leftover after hint
+    do_test(3, 3, [1, 2]); // big hint
 }
 
 #[derive(Debug)]
