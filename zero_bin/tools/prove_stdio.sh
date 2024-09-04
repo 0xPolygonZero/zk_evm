@@ -138,6 +138,8 @@ echo "Success!"
 echo "Proving duration:" $duration_sec " seconds"
 echo "Note, this duration is inclusive of circuit handling and overall process initialization";
 
+# Clean up in case of success
+rm $OUTPUT_LOG
 
 
 
