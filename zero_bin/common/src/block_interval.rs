@@ -47,7 +47,7 @@ impl BlockInterval {
     ///    assert_eq!(BlockInterval::new("0..10").unwrap(), BlockInterval::Range(0..10));
     ///    assert_eq!(BlockInterval::new("0..=10").unwrap(), BlockInterval::Range(0..11));
     ///    assert_eq!(BlockInterval::new("32141").unwrap(), BlockInterval::SingleBlockId(BlockId::Number(32141.into())));
-    ///    assert_eq!(BlockInterval::new("100..").unwrap(), BlockInterval::FollowFrom{start_block: 100, block_time: None});
+    ///    assert_eq!(BlockInterval::new("100..").unwrap(), BlockInterval::FollowFrom{start_block: 100});
     /// ```
     pub fn new(s: &str) -> anyhow::Result<BlockInterval> {
         if (s.starts_with("0x") && s.len() == 66) || s.len() == 64 {
