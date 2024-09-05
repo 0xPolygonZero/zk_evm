@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
             },
         )| {
             entrypoint(block_trace, other_data, batch_size, use_burn_addr)
-                .context(format!("couldn't prove input at {ix}"))
+                .context(format!("couldn't decode input at {ix}"))
         },
     )
     .map_ok(|it| {

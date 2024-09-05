@@ -294,8 +294,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
     let mut out = vec![];
 
-    let mut curr_txn_ix = 0;
-    let len_txns = batches.iter().flatten().count();
+    let mut curr_txn_ix = 0; // incremented for non-dummy transactions
+    let mut loop_ix = 0; // always incremented
+    let loop_len = batches.iter().flatten().count();
     for batch in batches {
         let batch_first_txn_ix = curr_txn_ix; // GOTCHA: if there are no transactions in this batch
         let mut batch_gas_used = 0;
@@ -457,6 +458,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
             if increment_txn_ix {
                 curr_txn_ix += 1;
             }
+            loop_ix += 1;
         } // txn in batch
 
         out.push(Batch {
@@ -464,7 +466,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
             gas_used: batch_gas_used,
             contract_code: batch_contract_code,
             byte_code: batch_byte_code,
-            withdrawals: match curr_txn_ix == len_txns {
+            withdrawals: match loop_ix == loop_len {
                 true => {
                     for (addr, amt) in &withdrawals {
                         state_mask.insert(TrieKey::from_address(*addr));

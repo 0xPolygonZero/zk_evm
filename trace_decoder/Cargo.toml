@@ -46,6 +46,7 @@ alloy = { workspace = true }
 alloy-compat = "0.1.0"
 assert2 = "0.3.15"
 camino = "1.1.9"
+clap.workspace = true
 criterion = { workspace = true }
 glob = "0.3.1"
 libtest-mimic = "0.7.3"
