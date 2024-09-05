@@ -483,11 +483,9 @@ fn middle<StateTrieT: StateTrie + Clone>(
                 false => vec![],
             },
             before: {
-                before.state.trim_to(state_mask)?;
-                before.receipt.trim_to(batch_first_txn_ix..curr_txn_ix)?;
-                before
-                    .transaction
-                    .trim_to(batch_first_txn_ix..curr_txn_ix)?;
+                before.state.mask(state_mask)?;
+                before.receipt.mask(batch_first_txn_ix..curr_txn_ix)?;
+                before.transaction.mask(batch_first_txn_ix..curr_txn_ix)?;
 
                 let keep = storage_masks
                     .keys()
@@ -497,7 +495,7 @@ fn middle<StateTrieT: StateTrie + Clone>(
 
                 for (addr, mask) in storage_masks {
                     if let Some(it) = before.storage.get_mut(&keccak_hash::keccak(addr)) {
-                        it.trim_to(mask)?
+                        it.mask(mask)?
                     } // TODO(0xaatif): why is this fallible?
                 }
                 before
