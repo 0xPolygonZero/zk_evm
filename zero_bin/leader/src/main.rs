@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{env, io};
 use std::{fs::File, path::PathBuf};
 
@@ -17,7 +18,7 @@ use zero_bin_common::{
 };
 use zero_bin_common::{prover_state::persistence::CIRCUIT_VERSION, version};
 
-use crate::client::{client_main, ProofParams};
+use crate::client::{client_main, LeaderConfig};
 
 mod cli;
 mod client;
@@ -37,8 +38,8 @@ fn get_previous_proof(path: Option<PathBuf>) -> Result<Option<GeneratedBlockProo
     Ok(Some(proof))
 }
 
-const SEGMENT_PROOF_ROUTING_KEY: &str = "segment_proof";
-const BLOCK_PROOF_ROUTING_KEY: &str = "block_proof";
+const SEGMENT_PROOF_ROUTING_KEY: &str = "segment-proof";
+const BLOCK_PROOF_ROUTING_KEY: &str = "block-proof";
 const DEFAULT_ROUTING_KEY: &str = paladin::runtime::DEFAULT_ROUTING_KEY;
 
 #[tokio::main]
@@ -79,7 +80,16 @@ async fn main() -> Result<()> {
     let block_proof_runtime = Runtime::from_config(&block_proof_paladin_args, register()).await?;
     let segment_proof_runtime =
         Runtime::from_config(&segment_proof_paladin_args, register()).await?;
+    if let Command::Clean = args.command {
+        return zero_bin_common::prover_state::persistence::delete_all();
+    }
 
+    let proof_runtime = ProofRuntime {
+        block_proof_runtime,
+        segment_proof_runtime,
+    };
+
+    let proof_runtime = Arc::new(proof_runtime);
     let prover_config: ProverConfig = args.prover_config.into();
 
     // If not in test_only mode and running in emulation mode, we'll need to
@@ -92,16 +102,10 @@ async fn main() -> Result<()> {
         }
     }
 
-    let proof_runtime = ProofRuntime {
-        block_proof_runtime,
-        segment_proof_runtime,
-    };
-
     match args.command {
-        Command::Clean => zero_bin_common::prover_state::persistence::delete_all()?,
         Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            stdio::stdio_main(proof_runtime, previous_proof, prover_config).await?;
+            stdio::stdio_main(proof_runtime, previous_proof, Arc::new(prover_config)).await?;
         }
         Command::Http { port, output_dir } => {
             // check if output_dir exists, is a directory, and is writable
@@ -113,7 +117,7 @@ async fn main() -> Result<()> {
                 panic!("output-dir is not a writable directory");
             }
 
-            http::http_main(proof_runtime, port, output_dir, prover_config).await?;
+            http::http_main(proof_runtime, port, output_dir, Arc::new(prover_config)).await?;
         }
         Command::Rpc {
             rpc_url,
@@ -121,22 +125,12 @@ async fn main() -> Result<()> {
             block_interval,
             checkpoint_block_number,
             previous_proof,
-            proof_output_dir,
             block_time,
-            keep_intermediate_proofs,
             backoff,
             max_retries,
         } => {
             let previous_proof = get_previous_proof(previous_proof)?;
-            let mut block_interval = BlockInterval::new(&block_interval)?;
-
-            if let BlockInterval::FollowFrom {
-                start_block: _,
-                block_time: ref mut block_time_opt,
-            } = block_interval
-            {
-                *block_time_opt = Some(block_time);
-            }
+            let block_interval = BlockInterval::new(&block_interval)?;
 
             info!("Proving interval {block_interval}");
             client_main(
@@ -146,18 +140,18 @@ async fn main() -> Result<()> {
                     rpc_type,
                     backoff,
                     max_retries,
+                    block_time,
                 },
                 block_interval,
-                ProofParams {
+                LeaderConfig {
                     checkpoint_block_number,
                     previous_proof,
-                    proof_output_dir,
                     prover_config,
-                    keep_intermediate_proofs,
                 },
             )
             .await?;
         }
+        Command::Clean => unreachable!("Flushing has already been handled."),
     }
 
     Ok(())

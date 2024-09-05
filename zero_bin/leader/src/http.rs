@@ -12,15 +12,14 @@ use zero_bin_common::proof_runtime::ProofRuntime;
 
 /// The main function for the HTTP mode.
 pub(crate) async fn http_main(
-    proof_runtime: ProofRuntime,
+    proof_runtime: Arc<ProofRuntime>,
     port: u16,
     output_dir: PathBuf,
-    prover_config: ProverConfig,
+    prover_config: Arc<ProverConfig>,
 ) -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     debug!("listening on {}", addr);
 
-    let proof_runtime = Arc::new(proof_runtime);
     let app = Router::new().route(
         "/prove",
         post(move |body| prove(body, proof_runtime, output_dir.clone(), prover_config)),
@@ -62,7 +61,7 @@ async fn prove(
     Json(payload): Json<HttpProverInput>,
     proof_runtime: Arc<ProofRuntime>,
     output_dir: PathBuf,
-    prover_config: ProverConfig,
+    prover_config: Arc<ProverConfig>,
 ) -> StatusCode {
     debug!("Received payload: {:#?}", payload);
 
@@ -72,7 +71,7 @@ async fn prove(
         payload
             .prover_input
             .prove_test(
-                &proof_runtime,
+                proof_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
@@ -81,7 +80,7 @@ async fn prove(
         payload
             .prover_input
             .prove(
-                &proof_runtime,
+                proof_runtime,
                 payload.previous.map(futures::future::ok),
                 prover_config,
             )
