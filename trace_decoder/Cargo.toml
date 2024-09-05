@@ -43,16 +43,27 @@ zk_evm_common = { workspace = true }
 
 [dev-dependencies]
 alloy = { workspace = true }
-clap.workspace = true
+alloy-compat = "0.1.0"
+assert2 = "0.3.15"
+camino = "1.1.9"
 criterion = { workspace = true }
+glob = "0.3.1"
+libtest-mimic = "0.7.3"
 plonky2_maybe_rayon = { workspace = true }
 pretty_assertions = "1.4.0"
 pretty_env_logger = { workspace = true }
 prover = { workspace = true }
-rstest = "0.21.0"
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
 
 [[bench]]
 name = "block_processing"
+harness = false
+
+[[test]]
+name = "consistent-with-header"
+harness = false
+
+[[test]]
+name = "simulate-execution"
 harness = false

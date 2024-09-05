@@ -264,9 +264,10 @@ pub async fn prove(
                 // `keep_intermediate_proofs` is set, output all block proofs to disk.
                 let is_block_batch_finished =
                     block_counter % prover_config.block_batch_size as u64 == 0;
-                if is_last_block
-                    || prover_config.keep_intermediate_proofs
-                    || is_block_batch_finished
+                if !prover_config.test_only
+                    && (is_last_block
+                        || prover_config.keep_intermediate_proofs
+                        || is_block_batch_finished)
                 {
                     write_proof_to_dir(&prover_config.proof_output_dir, proof.clone())
                         .await

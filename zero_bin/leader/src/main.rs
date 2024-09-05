@@ -55,6 +55,11 @@ async fn main() -> Result<()> {
     }
 
     let args = cli::Cli::parse();
+
+    if let Command::Clean = args.command {
+        return zero_bin_common::prover_state::persistence::delete_all();
+    }
+
     let runtime = Arc::new(Runtime::from_config(&args.paladin, register()).await?);
     let prover_config: ProverConfig = args.prover_config.into();
 
@@ -69,7 +74,6 @@ async fn main() -> Result<()> {
     }
 
     match args.command {
-        Command::Clean => zero_bin_common::prover_state::persistence::delete_all()?,
         Command::Stdio { previous_proof } => {
             let previous_proof = get_previous_proof(previous_proof)?;
             stdio::stdio_main(runtime, previous_proof, Arc::new(prover_config)).await?;
@@ -118,6 +122,7 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
+        Command::Clean => unreachable!("Flushing has already been handled."),
     }
 
     Ok(())
